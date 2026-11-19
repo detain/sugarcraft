@@ -1,98 +1,300 @@
-<p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colors, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the center-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
+<p class="lede" style="margin-top: 28px;">candy-tetris is Tetris for the terminal, built on the SugarCraft runtime. It uses the Super Rotation System with its wall kicks, a uniform seven-piece bag, a ghost piece, hold and a gravity curve that speeds up with the level. The scoring starts from the NES base points and adds the modern Guideline bonuses: T-Spin, back-to-back, combo and perfect clear. It also has a VS mode against a computer opponent. The design antecedent is <a href="https://github.com/Broderick-Westrope/tetrigo">tetrigo</a>, a Go game.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <p>Requires <code>php-cli</code> 8.3+ with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are hard-required transitively by sugar-core, whose cell-width math segments through ICU — on a bare php-cli machine <code>composer install</code> is the step that refuses, naming sugar-core.</p>
-    <pre class="code"><code class="language-shell"># As a Composer consumer (run from your own project):
-composer require sugarcraft/candy-tetris
-./vendor/bin/candy-tetris          # single player
-./vendor/bin/candy-tetris --vs     # VS the computer
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-tetris
+./vendor/bin/candy-tetris            # single player
+./vendor/bin/candy-tetris --vs       # VS the computer</code></pre>
+    <p>Requires <code>php-cli</code> 8.3 or newer, with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are declared in the manifest, and the launcher checks them before it starts, so a missing extension is refused with one plain line that names it. From a clone of the monorepo, run <code>composer install</code> in the <code>candy-tetris/</code> directory and then <code>./bin/candy-tetris</code>.</p>
+    <p>A rolling <code>candy-tetris.phar</code> is published under the <code>candy-tetris/latest</code> release, with a <code>.sha256</code> digest and a <code>.phar.commit</code> file that names the tested build. Verify the download before you run it:</p>
+    <pre class="code"><code class="language-shell">sha256sum -c candy-tetris.phar.sha256
+php candy-tetris.phar              # single player, no install needed</code></pre>
+    <p>Stable cuts are tagged <code>candy-tetris/v*</code>. The launcher detects that it is running from inside a phar and loads the bundled autoloader, so the file still boots after a rename.</p>
 
-# From a monorepo clone (run from the candy-tetris/ library directory):
-cd candy-tetris && composer install
-./bin/candy-tetris                 # single player
+    <h2 style="margin-top: 40px;">Quickstart</h2>
+    <p>Run it in a real terminal. The game needs a terminal of at least 40 columns by 24 rows, and the full single-player frame is 40 by 33. The commands below show what the launcher answers without a terminal, and what its flags do.</p>
+    <pre class="code"><code class="language-shell">./bin/candy-tetris                 # single player, in a terminal
 ./bin/candy-tetris --vs            # VS the computer
+./bin/candy-tetris --seed=1234     # reproducible pieces and garbage
+./bin/candy-tetris --version       # print the version and exit 0</code></pre>
+    <pre class="code"><code class="language-text">$ ./bin/candy-tetris --version
+candy-tetris dev-master
+$ ./bin/candy-tetris &lt; /dev/null
+candy-tetris needs an interactive terminal: run it from a TTY (not a pipe or redirect) with TERM set to something other than dumb.
+$ echo $?
+1</code></pre>
+    <p>The refusal is one plain line on stderr, with no escape bytes, and it exits 1. The version prints <code>dev-master</code> from a checkout. A release phar prints its build stamp instead.</p>
+    <p>The <code>--help</code> screen repeats the shipped keys and the terminal floor, and it reads them from the same tables the game uses, so the help and the code cannot drift apart.</p>
 
-# As a standalone binary: the rolling latest phar, no install
-curl -LO https://github.com/detain/sugarcraft/releases/download/candy-tetris/latest/candy-tetris.phar
-php candy-tetris.phar              # single player
-php candy-tetris.phar --vs         # VS the computer</code></pre>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>The game is a Model in the SugarCraft TEA style. It holds an immutable state, which is a <code>Game</code> with a <code>Board</code>, a falling <code>Piece</code>, a <code>Bag</code>, a <code>Score</code> and the hold slot. Each message that arrives, whether a key, a gravity tick or a lock-delay tick, yields a new state and an optional command. The renderer is a pure function from the state to a string, and it never changes the game.</p>
+    <p>The pure parts stand alone. <code>Tetromino</code>, <code>Piece</code>, <code>Board</code>, <code>Bag</code> and <code>Score</code> are value objects with no runtime, so each one can be tested or driven from a script. The rotation tables live in <code>Rotation\SrsKickTable</code>, and the scoring rules live in <code>Scoring\TSpin</code> and <code>Score</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># From the candy-tetris/ library directory:
-./bin/candy-tetris
-./bin/candy-tetris --vs    # VS the computer</code></pre>
+    <h3 style="margin-top: 24px;">The bag and the seed</h3>
+    <p>The seven pieces are shuffled uniformly into a bag, and the bag is drawn until it is empty, then refilled. The shuffle takes an injectable random source. A seed makes the whole run replayable: the bag and the garbage holes both come from the seed. Without <code>--seed</code>, the launch takes fresh entropy and does not stamp a seed on the screen.</p>
 
-    <h3 style="margin-top: 32px;">Controls</h3>
-    <p>The shipped default keys. The on-screen help card, the versus strip, the intro card's key line, the one-row sidebar pointer, the confirm prompts and the <code>--help</code> screen are all derived from this one table — a remap (via <code>$XDG_CONFIG_HOME/candy-tetris/keys.json</code>) shows up wherever the game teaches its own keys. The key reference <code>h</code> paints the full card over the frame from any posture, even a floor-sized terminal where the sidebar card cannot fit.</p>
+    <h3 style="margin-top: 24px;">Single player and VS are two models</h3>
+    <p><code>Game</code> is one player's field. <code>VsGame</code> wraps two <code>Game</code> instances, one for you and one for the computer, and the two exchange garbage rows. The VS model is the pattern to copy for a third mode. A new mode should wrap <code>Game</code> rather than branch inside it.</p>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+
+    <h3 style="margin-top: 24px;">Play a reproducible run</h3>
+    <pre class="code"><code class="language-shell">./bin/candy-tetris --seed=1234</code></pre>
+    <p>The same seed with the same key presses produces the same pieces and the same garbage holes. The score card then carries a <code>SEED 1234</code> stamp, which is the replay handle. A run with no seed captures fresh entropy, and it shows no stamp.</p>
+
+    <h3 style="margin-top: 24px;">Remap a key</h3>
+    <p>Put overrides in <code>$XDG_CONFIG_HOME/candy-tetris/keys.json</code>, or in <code>$HOME/.config/candy-tetris/keys.json</code> when <code>XDG_CONFIG_HOME</code> is not set. The file is a JSON object that maps an action id to a non-empty list of key tokens:</p>
+    <pre class="code"><code class="language-text">{ "hold": ["b"], "hard-drop": ["enter"] }</code></pre>
+    <p>An override replaces that action's whole list. The actions you do not name keep their shipped keys. The remapped keys show up on the help card, the intro card and the confirm prompts, so the game teaches the keys you actually use. See the table in Remapping keys below for what a malformed file does.</p>
+
+    <h3 style="margin-top: 24px;">Start from a known state in code</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Tetris\Bag;
+use SugarCraft\Tetris\Game;
+
+$game = Game::startWithLockDelay(Bag::seeded(42), lockDelayMs: 500);
+$game = $game->addGarbageRows(2);     // push two garbage rows from the bottom</code></pre>
+    <p><code>Game::start()</code> takes a seed and a bag, and <code>startWithLockDelay()</code> also sets the grounded window in milliseconds. <code>addGarbageRows()</code> is the same door the VS opponent uses, so a test can build any board it needs.</p>
+
+    <h3 style="margin-top: 24px;">Drive the game without a terminal</h3>
+    <pre class="code"><code class="language-shell">php examples/headless-game.php &lt; /dev/null</code></pre>
+    <p>The example seeds a game, sends a list of key messages to <code>update()</code>, and prints the frame and the score. It is the fastest way to see what the model does with a sequence of keys.</p>
+
+    <h3 style="margin-top: 24px;">Reset the best score</h3>
+    <p>The record lives in <code>$XDG_CONFIG_HOME/candy-tetris/scores.json</code>, or in <code>~/.config/candy-tetris/scores.json</code>. Delete the file to clear the solo best, the game count and the versus tally. A corrupt record is announced on stderr, and the game starts fresh without zeroing the old file.</p>
+
+    <h3 style="margin-top: 24px;">Play the computer in VS mode</h3>
+    <pre class="code"><code class="language-shell">./bin/candy-tetris --vs
+./bin/candy-tetris -v</code></pre>
+    <p>Each line you clear pushes one row at the opponent, and each line the opponent clears pushes one row back. Every garbage row has exactly one hole. The opponent runs on its own clock, so its difficulty comes from its board's pace, not from your level. The VS board needs a terminal of at least 54 by 33.</p>
+
+    <h2 style="margin-top: 40px;">Controls and keybindings</h2>
+    <p>The shipped default keys are below. The help card, the versus strip, the intro card, the one-row sidebar pointer, the confirm prompts and the <code>--help</code> screen all draw from this table, so a remap is visible wherever the game teaches its keys.</p>
     <table class="api-table">
     <tr><th>Key</th><th>Action</th></tr>
-    <tr><td>← / →</td><td>Move left / right</td></tr>
+    <tr><td>← / →</td><td>Move left or right</td></tr>
     <tr><td>↑ / x</td><td>Rotate clockwise</td></tr>
-    <tr><td>z</td><td>Rotate counter-cw</td></tr>
-    <tr><td>a</td><td>Rotate 180</td></tr>
+    <tr><td>z</td><td>Rotate counter-clockwise</td></tr>
+    <tr><td>a</td><td>Rotate 180 degrees</td></tr>
     <tr><td>↓</td><td>Soft drop</td></tr>
     <tr><td>Space</td><td>Hard drop</td></tr>
-    <tr><td>c</td><td>Hold piece</td></tr>
-    <tr><td>p</td><td>Pause / resume</td></tr>
-    <tr><td>h</td><td>Key reference — opens/closes the live card</td></tr>
-    <tr><td>r</td><td>New game (asks first during play, instant after game over)</td></tr>
-    <tr><td>q</td><td>Quit (asks first during play, instant on menus and after game over; <code>Ctrl+C</code> leaves in one press)</td></tr>
+    <tr><td>c</td><td>Hold the piece</td></tr>
+    <tr><td>p</td><td>Pause or resume</td></tr>
+    <tr><td>h</td><td>Open or close the key reference card, from any posture</td></tr>
+    <tr><td>r</td><td>New game. It asks first during play, and it is instant after game over</td></tr>
+    <tr><td>q</td><td>Quit. It asks first during play, and <code>Ctrl+C</code> leaves in one press</td></tr>
     </table>
+    <p>In VS mode, <code>r</code> starts a new game only after game over, because a live forfeit belongs to the solo confirm. <code>q</code> quits at once, with no confirm, and the help card does not open in the duel.</p>
 
-    <h3 style="margin-top: 32px;">Terminal contracts</h3>
+    <h3 style="margin-top: 24px;">Remapping keys</h3>
+    <p>An action id is one of <code>quit</code>, <code>pause</code>, <code>restart</code>, <code>hold</code>, <code>move-left</code>, <code>move-right</code>, <code>soft-drop</code>, <code>rotate-cw</code>, <code>rotate-ccw</code>, <code>rotate-180</code>, <code>hard-drop</code>, <code>begin</code> and <code>help</code>. A token is a single character such as <code>"b"</code>, a key name such as <code>"left"</code>, <code>"space"</code> or <code>"enter"</code>, or a <code>ctrl+</code> chord such as <code>"ctrl+c"</code>. Tokens are case-folded when the file loads.</p>
+    <table class="api-table">
+    <tr><th>Edge</th><th>What happens</th></tr>
+    <tr><td>No file</td><td>The defaults apply, and the game reads nothing at boot.</td></tr>
+    <tr><td>Malformed file, or a bad shape</td><td>One stderr line names the file, and the session boots on the defaults. One bad entry discards the whole file, so the game never applies half a map.</td></tr>
+    <tr><td>A directory, symlink or socket at the path</td><td>Refused the same way. The file is checked with <code>lstat</code>, so the game never follows it or blocks on it.</td></tr>
+    <tr><td>An unknown key name, such as <code>"spce"</code></td><td>A load-time error, so a typo does not leave a binding deaf with no trace.</td></tr>
+    <tr><td>An unknown action id</td><td>Loads without complaint and stays inert, because the registry does not know the screens.</td></tr>
+    <tr><td>One token bound to two actions</td><td>Allowed. Each screen dispatches in one context, so <code>space</code> can be both hard drop and begin.</td></tr>
+    <tr><td>Modifiers</td><td>A <code>ctrl</code> press fires only <code>ctrl+</code> tokens, and a plain press fires only plain tokens. A bare <code>q</code> binding does not answer <code>Ctrl+Q</code>.</td></tr>
+    </table>
+    <p>The key reference <code>h</code> paints the full card over the frame, even on a floor-sized terminal, and the world freezes while the card is open. <code>docs/ACCESSIBILITY.md</code> lists the same key vocabulary for screen-reader and colour-free use.</p>
+
+    <h3 style="margin-top: 24px;">Terminal contracts</h3>
     <ul>
-      <li><strong>The frame</strong> — the full single-player frame is 40×33; the honest floor is 40×24. Between them the sidebar reflows by budget, not by scroll: the help card gives way first and a one-row key pointer (the live <code>h</code> press) replaces it, so a floor terminal never loses every key at once. Below the floor a resize notice paints instead and play freezes until the terminal is big enough again — rows, not columns, are what the notice waits for.</li>
-      <li><strong>The duel</strong> — the VS board has one posture: 54×33, exact. There is no compact versus frame; anything smaller answers the resize notice.</li>
-      <li><strong>No TTY, no game</strong> — a launch with no terminal to play on (stdin or stdout a pipe or redirect, or <code>TERM=dumb</code>) is refused before anything paints: one plain line on stderr, zero escape bytes, exit code 1.</li>
-      <li><strong>No color, still playable</strong> — <code>NO_COLOR</code> and <code>CLICOLOR=0</code> re-render the whole frame with zero SGR; shape carries every fact color used to carry, and empty cells render as <code>·</code> so the grid stays readable. The escape hatches <code>CLICOLOR_FORCE=1</code> and <code>FORCE_COLOR</code> vouch for the terminal and skip the no-TTY refusal — under either one escapes are painted into a redirect as if the terminal were there.</li>
+      <li><strong>The frame.</strong> The full single-player frame is 40 columns by 33 rows, and the floor is 40 by 24. Between the two the sidebar reflows by budget, not by scrolling. The help card goes first, and a one-row key pointer replaces it, so a floor terminal never loses every key at once. Below the floor a resize notice paints, and play freezes until the terminal is tall enough. Widening the columns does not restore a short frame.</li>
+      <li><strong>The duel.</strong> The VS board has a floor of 54 by 33. There is no compact versus frame, so a smaller terminal shows the resize notice.</li>
+      <li><strong>No terminal, no game.</strong> A launch with stdin or stdout redirected, or with <code>TERM=dumb</code>, is refused before anything paints. It writes one line to stderr, no escape bytes, and it exits 1.</li>
+      <li><strong>No colour, still playable.</strong> <code>NO_COLOR</code> and <code>CLICOLOR=0</code> redraw the frame with no SGR codes. Shape carries every fact that colour carried, and empty cells draw as <code>·</code>.</li>
     </ul>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>SRS rotation</strong><span>Full Super Rotation System — kick tables from the Tetris Company Guideline lineage (the code cites tetris.fandom.com/wiki/SRS), two of them: J/L/S/T/Z and I piece. Each transition tries the naive rotation plus the table's five offsets — up to 6 candidates, first fit wins (the list's own first entry repeats the naive `(0, 0)`). The board y-axis is inverted exactly once, in Piece::rotationsWithKicks.</span></div>
-      <div class="feature"><strong>7-bag RNG</strong><span>Uniform shuffle of the seven pieces; an injectable RNG closure makes tests and replays reproducible. Value-semantic: next() returns the piece plus an advanced bag, peek() is a pure preview that consumes neither state nor draws.</span></div>
-      <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
-      <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines. Lock delay (500 ms window, 15-reset cap) in single player; VS boards lock on the grounding tick.</span></div>
-      <div class="feature"><strong>Line-clear scoring</strong><span>NES-style base points — 1 → 40, 2 → 100, 3 → 300, 4 → 1200 — multiplied by (level + 1); the T-Spin and B2B bonuses follow the modern Guideline.</span></div>
-      <div class="feature"><strong>T-Spin (3-corner rule)</strong><span>Guideline detection on the diagonals of the T's center: 3+ filled corners (wall/floor count as filled) score a full T-Spin (400 × level+1); exactly 2 with one on the nub side score a Mini (100 × level+1); 2 back corners score nothing. A Mini clearing 2+ lines is promoted to full.</span></div>
-      <div class="feature"><strong>Back-to-Back (B2B)</strong><span>1.5× multiplier carried by consecutive difficult CLEARS (Tetris, or a full T-Spin that cleared lines). Resets on an ordinary 1–3 line clear; a clear-less lock — spin or quiet — leaves the chain untouched.</span></div>
-      <div class="feature"><strong>Combo counter</strong><span>Consecutive line clears add combo × 10 × (level+1) bonus points; resets to 0 on a zero-line lock.</span></div>
-      <div class="feature"><strong>Perfect clear</strong><span>Clearing the full board awards +5000 × (level+1) bonus — detected via Board::isPerfectClear().</span></div>
-      <div class="feature"><strong>Pure-state classes</strong><span>Tetromino, Piece, Board, Bag, Score, Game — immutable value semantics throughout, each individually testable without booting the runtime.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Scoring</h2>
+    <h3 style="margin-top: 24px;">Line clears and levels</h3>
+    <table class="api-table">
+    <tr><th>Lines cleared</th><th>Base points, times (level + 1)</th></tr>
+    <tr><td>1</td><td>40</td></tr>
+    <tr><td>2</td><td>100</td></tr>
+    <tr><td>3</td><td>300</td></tr>
+    <tr><td>4 (Tetris)</td><td>1200</td></tr>
+    </table>
+    <pre class="code"><code class="language-shell">php examples/scorecard.php &lt; /dev/null</code></pre>
+    <pre class="code"><code class="language-text">lines    level 0    level 9
+1        40         400
+2        100        1000
+3        300        3000
+4        1200       12000
 
-    <h3 style="margin-top: 40px;">Source</h3>
+gravity (frames per row):
+  level 0   48
+  level 9   6
+  level 29  1</code></pre>
+    <p>The level rises every 10 lines. The gravity interval is an absolute deadline on a monotonic clock. A slow terminal can delay a piece's arrival, but it never compresses the next one. Level 9 falls one row every 6 frames, about 100 ms, and level 29 and above fall one row per frame.</p>
+
+    <h3 style="margin-top: 24px;">Drop points</h3>
+    <p>Soft drop pays 1 point per cell moved, and hard drop pays 2 points per cell fallen. These awards are flat, so they are not multiplied by the level. A soft drop that cannot move the piece pays nothing.</p>
+
+    <h3 style="margin-top: 24px;">T-Spin</h3>
+    <p>A T-Spin counts when the last successful input before the T locks was a rotation, and at least three of the four diagonal cells around the T's centre are filled. The walls and the floor count as filled, and both corners on the nub side must be among them. A full T-Spin scores 400 times (level + 1). A Mini scores 100 times (level + 1), and a Mini that clears two or more lines is promoted to a full T-Spin.</p>
+
+    <h3 style="margin-top: 24px;">Back-to-back and combo</h3>
+    <p>A back-to-back chain multiplies the bonus of a difficult clear by 1.5. A difficult clear is a four-line Tetris, or a full T-Spin that cleared at least one line. An ordinary one-to-three-line clear breaks the chain. A lock with no clear leaves the chain alone. Each combo step adds the combo count times 10 times (level + 1), and a lock that clears nothing resets the combo.</p>
+
+    <h3 style="margin-top: 24px;">Perfect clear</h3>
+    <p>If a clear leaves the board empty, the game adds 5000 times (level + 1).</p>
+
+    <h3 style="margin-top: 24px;">What shows on screen</h3>
+    <table class="api-table">
+    <tr><th>Row on the card</th><th>Means</th></tr>
+    <tr><td><code>T-SPIN</code>, <code>T-SPIN MINI</code></td><td>A full or mini spin locked</td></tr>
+    <tr><td><code>T-SPIN+PC</code></td><td>A spin that also emptied the board</td></tr>
+    <tr><td><code>TETRIS</code>, <code>TETRIS+PC</code></td><td>A four-line clear, with or without a perfect clear</td></tr>
+    <tr><td><code>PERFECT CLEAR</code></td><td>A plain clear that emptied the board</td></tr>
+    <tr><td><code>combo xN</code></td><td>The chain is at N clears, shown from 2 up</td></tr>
+    <tr><td><code>B2B armed</code></td><td>The back-to-back chain is live</td></tr>
+    <tr><td><code>SEED n</code></td><td>The run replays with <code>--seed=n</code>, shown only under <code>--seed</code></td></tr>
+    </table>
+    <p>Single, double and triple clears stay silent. Only the named moments paint.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\Tetris\</code>, with the kick table under <code>Rotation\</code>, the T-Spin rule under <code>Scoring\</code>, and the stores under <code>Support\</code>. Every value object is immutable, so each method returns a new value.</p>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Tetromino</td><td><code>cases()</code>, <code>color()</code>, <code>rgbColor()</code>, <code>cells(int $rotation)</code></td><td>The seven shapes as a backed enum. <code>color()</code> is the 256-colour code, and <code>rgbColor()</code> is the 24-bit value.</td></tr>
+    <tr><td>Piece</td><td><code>rotated(int $delta = 1)</code>, <code>moved(int $dx, int $dy)</code>, <code>withX()</code>, <code>withY()</code></td><td>Immutable transforms of a placed piece.</td></tr>
+    <tr><td>Piece</td><td><code>rotationsWithKicks(int $delta = 1)</code></td><td>The candidate positions in SRS kick order, with the naive rotation first. It does not look at the board, so callers filter the list with <code>Board::fits()</code>.</td></tr>
+    <tr><td>Board</td><td><code>__construct(?array $cells = null)</code>, <code>place(Piece $piece)</code>, <code>fits(Piece $piece)</code>, <code>dropPiece(Piece $piece)</code></td><td>The grid, which is ten wide with four hidden rows above the twenty visible ones. Placement is legal only where <code>fits()</code> says so, and <code>dropPiece()</code> gives the resting position.</td></tr>
+    <tr><td>Board</td><td><code>clearLines()</code>, <code>isPerfectClear()</code>, <code>isOccupied()</code>, <code>cellAt()</code>, <code>rows()</code></td><td>Clear the completed rows. <code>isPerfectClear()</code> is true only when the grid ends empty.</td></tr>
+    <tr><td>Bag</td><td><code>static seeded(int $seed)</code>, <code>next()</code>, <code>peek(int $n = 1)</code></td><td><code>next()</code> returns the piece and an advanced bag. <code>peek()</code> is a pure preview that consumes no draws.</td></tr>
+    <tr><td>Score</td><td><code>withLines(int $cleared)</code>, <code>withDropPoints(int $points)</code>, <code>framesPerRow()</code>, <code>gravityIntervalUs()</code></td><td>The NES base times the level plus one, with the level re-derived from the lines. Drop points are added flat.</td></tr>
+    <tr><td>Game</td><td><code>static start(?Bag $bag = null, ..., ?int $seed = null, bool $reproducible = false)</code>, <code>static startWithLockDelay(?Bag $bag = null, int $lockDelayMs = ...)</code></td><td>Start a new game. The lock-delay variant also arms the grounded window.</td></tr>
+    <tr><td>Game</td><td><code>update(Msg $msg)</code>, <code>view()</code>, <code>addGarbageRows(int $count)</code>, <code>withNotice(string $line)</code></td><td>The TEA model: each message yields <code>[Game, ?Cmd]</code>. Garbage enters from the bottom, and a notice goes on the frame.</td></tr>
+    <tr><td>Renderer</td><td><code>static render(Game $game)</code></td><td>A pure function from the state to the ANSI frame.</td></tr>
+    <tr><td>Rotation\SrsKickTable</td><td><code>static kicks(Tetromino $piece, int $from, int $to)</code>, <code>static allKicks(Tetromino $piece)</code></td><td>The offsets for one rotation transition, or every transition table for a piece.</td></tr>
+    <tr><td>Scoring\TSpin</td><td><code>static detect(Board $board, Piece $piece, bool $lastActionWasRotation)</code>, <code>T_SPIN_POINTS</code>, <code>T_SPIN_MINI_POINTS</code></td><td>The three-corner rule. It returns the spin type, and the constants are the base points, 400 and 100.</td></tr>
+    <tr><td>LaunchMode</td><td><code>static resolve(array $argv)</code>, <code>static resolveSeed(array $argv)</code>, <code>static helpText()</code></td><td>The argv parser, the seed parser and the usage screen.</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <h3 style="margin-top: 24px;">Options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Effect</th></tr>
+    <tr><td>(none)</td><td>Start single player.</td></tr>
+    <tr><td><code>-v</code>, <code>--vs</code></td><td>Start VS mode against the computer.</td></tr>
+    <tr><td><code>--seed=N</code></td><td>Make the run reproducible, and stamp the seed on the score card. The grammar is a single <code>--seed=</code> token, and negative numbers are accepted.</td></tr>
+    <tr><td><code>-h</code>, <code>--help</code></td><td>Print the usage screen, with the keys and the terminal floor, and exit 0.</td></tr>
+    <tr><td><code>--version</code></td><td>Print the version and exit 0. It wins over any other flag in the same argv.</td></tr>
+    </table>
+    <p>At most one mode flag is accepted. A second one, such as <code>-v -h</code>, is refused with exit 1, and the refusal names the surplus flag.</p>
+
+    <h3 style="margin-top: 24px;">Environment and files</h3>
+    <table class="api-table">
+    <tr><th>Name</th><th>Effect</th></tr>
+    <tr><td><code>XDG_CONFIG_HOME</code>, <code>HOME</code></td><td>The base for <code>keys.json</code> and <code>scores.json</code>. With neither resolvable, nothing persists, and the game plays as if no record existed.</td></tr>
+    <tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>The interface locale, read in that order. An empty value, <code>C</code> or <code>POSIX</code> does not count, and an unknown value falls back to English.</td></tr>
+    <tr><td><code>NO_COLOR</code>, <code>CLICOLOR=0</code></td><td>Turn the colour off.</td></tr>
+    <tr><td><code>CLICOLOR_FORCE=1</code>, <code>FORCE_COLOR</code></td><td>Vouch for the terminal's colour support, and let stdout be redirected. Escapes are then painted into a redirect as if a terminal were there. Stdin must still be a terminal, so a redirected stdin still refuses the launch.</td></tr>
+    <tr><td><code>TERM</code></td><td>Set to <code>dumb</code> to refuse the launch.</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Theme and colour</h2>
+    <p>The frame uses SugarStyle rounded borders, and each piece has its own colour. <code>Tetromino::color()</code> gives the 256-colour code, and <code>Tetromino::rgbColor()</code> gives the 24-bit value. The playfield is a <code>sugar-cellbuffer</code> grid, and the sidebar and the VS panels are <code>sugar-style</code> cards.</p>
+    <p>The palette is fixed. There is no theme file. The colour is decorative, because shape carries every fact that colour used to carry. Turn it off with <code>NO_COLOR=1</code> and the game stays fully playable, with empty cells drawn as <code>·</code>.</p>
+    <pre class="code"><code class="language-shell">NO_COLOR=1 ./bin/candy-tetris           # no SGR at all
+CLICOLOR_FORCE=1 ./bin/candy-tetris    # colour even when stdout is not a terminal</code></pre>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds two PHP programs. They load the Composer autoloader, so run them from a checkout after <code>composer install</code>. Neither needs a terminal.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-tetris">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-tetris/blob/master/candy-tetris/README.md">Full README</a></li>
-      <li>Originally inspired by <a href="https://github.com/Broderick-Westrope/tetrigo">tetrigo</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/scorecard.php</code> prints the line-clear table at two levels and the gravity interval at three levels. It computes each row from <code>Score</code>, so the numbers in the README and in this page follow the code.</li>
+      <li><code>examples/headless-game.php</code> seeds a game with <code>Game::start(seed: 42, reproducible: true)</code>, sends six key messages through <code>update()</code>, and prints the plain-text frame with the score. Run it twice and the output is the same, because the seed fixes the pieces.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/scorecard.php &lt; /dev/null
+php examples/headless-game.php &lt; /dev/null</code></pre>
+    <pre class="code"><code class="language-text">seed 42 deals: L I O J S T Z
+╭────────────╮  ┌──────────────────────┐
+│ ···█······ │  │ hold:                │
+│ ···███···· │  │ ────────             │
+│ ·········· │  │ ────────             │
+│ ·········· │  └──────────────────────┘
+│ ·········· │  ┌──────────────────────┐
+│ ·········· │  │ next:                │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ·········· │  │                      │
+│ ···▒······ │  └──────────────────────┘
+│ ···▒▒▒···· │  ┌──────────────────────┐
+│ ····███··· │  │ score:  100          │
+│ ····███··· │  │ lines:  0            │
+│ ····█·█··· │  │ level:  0            │
+│ ··███·█··· │  │ SEED 42              │
+╰────────────╯  │ press h for keys     │
+                └──────────────────────┘
+points 100, lines 0, level 0</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected:</p>
+    <pre class="code"><code class="language-shell">cd candy-tetris &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests are grouped by layer. <code>BoardTest</code>, <code>PieceTest</code>, <code>BagTest</code>, <code>TetrominoTest</code> and <code>ScoreTest</code> cover the value objects. <code>GameTest</code>, <code>GameGravityChainTest</code>, <code>KeyActuationTest</code> and <code>VsGameTest</code> drive the models with scripted messages. <code>SeedReproducibilityTest</code> checks the replay contract. <code>ColourPostureTest</code> and <code>PaintContractTest</code> check the colour and terminal rules. <code>GoldenRenderTest</code> compares rendered frames against fixtures, and <code>LocaleParityTest</code> checks that every catalog has the same keys. <code>PharBuildScriptTest</code> covers the phar build.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;">The launcher refuses to start</h3>
+    <p>There is no terminal on stdin or stdout, or <code>TERM</code> is <code>dumb</code>. Run the game from an interactive terminal. In a pipe, a cron job or a CI log, use the examples instead, because they need no terminal.</p>
+
+    <h3 style="margin-top: 24px;">A resize notice replaces the board</h3>
+    <p>The terminal is below the floor, 40 by 24 for single player, or 54 by 33 for VS. Make the terminal taller, because widening the columns alone does not restore a short frame. Play freezes until the size is enough.</p>
+
+    <h3 style="margin-top: 24px;">A keys file is ignored</h3>
+    <p>One stderr line names the file and the reason, and the game starts on the defaults. The usual causes are invalid JSON, a token that is not a single key name, an unknown key name such as <code>"spce"</code>, or a path that is a directory rather than a regular file. Fix the file and restart.</p>
+
+    <h3 style="margin-top: 24px;">The best score does not save</h3>
+    <p>Neither <code>XDG_CONFIG_HOME</code> nor <code>HOME</code> resolves to an absolute path, so there is no place to write. The game then plays as if no record existed, and the run is not remembered. The same happens when the directory cannot be written. Set <code>HOME</code> to an absolute path to fix it.</p>
+
+    <h3 style="margin-top: 24px;">Escape codes appear in a redirected file</h3>
+    <p><code>CLICOLOR_FORCE=1</code> or <code>FORCE_COLOR</code> is set, and those variables vouch for a terminal that is not there. Unset them, or set <code>NO_COLOR=1</code>, to keep the output plain.</p>
+
+    <h3 style="margin-top: 24px;">The interface is in English, not my language</h3>
+    <p>The locale is read from <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>, and the first value that is set and is not <code>C</code> or <code>POSIX</code> wins. Set one of them to a shipped locale, such as <code>de_DE.UTF-8</code>. The shipped catalogs are ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr and zh-cn.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The launcher is <code>bin/candy-tetris</code>. It checks the launch environment, resolves the mode and the seed, then runs either <code>Game</code> or <code>VsGame</code> on the SugarCraft runtime. Each layer depends only on the layers below it.</p>
+    <table class="api-table">
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td><code>src/Game.php</code></td><td>The single-player model: gravity, lock delay, hold, scoring and the score record.</td></tr>
+    <tr><td><code>src/VsGame.php</code>, <code>src/Computer.php</code></td><td>The VS model that wraps two games, and the computer opponent with its weighted heuristics.</td></tr>
+    <tr><td><code>src/Board.php</code>, <code>src/Piece.php</code>, <code>src/Tetromino.php</code></td><td>The grid, the falling piece with its kicks, and the seven shapes.</td></tr>
+    <tr><td><code>src/Bag.php</code></td><td>The seven-piece bag, with an injectable random source.</td></tr>
+    <tr><td><code>src/Score.php</code>, <code>src/Scoring/TSpin.php</code></td><td>The score value, the level and gravity, and T-Spin detection.</td></tr>
+    <tr><td><code>src/Rotation/SrsKickTable.php</code></td><td>The SRS offsets for the J, L, S, T and Z pieces, and the I piece.</td></tr>
+    <tr><td><code>src/Renderer.php</code>, <code>src/VsRenderer.php</code></td><td>The pure views from the state to a string.</td></tr>
+    <tr><td><code>src/LaunchMode.php</code>, <code>src/Lang.php</code></td><td>The argv parser and the localized interface.</td></tr>
+    <tr><td><code>src/Support/Scores.php</code>, <code>src/Support/Bindings.php</code></td><td>The score record on disk, and the key map loaded from <code>keys.json</code>.</td></tr>
+    </table>
+    <p>Game state is immutable. A key is a message, and <code>update()</code> returns a new state. The seams are listed on the README: the bag takes a closure, the kick table is data, and the renderer never changes the game.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream</th><th>Where it shows up here</th></tr>
+    <tr><td><a href="https://github.com/Broderick-Westrope/tetrigo">Broderick-Westrope/tetrigo</a> (Go)</td><td>The design antecedent. The game is a native PHP port of the idea, not a line-for-line port.</td></tr>
+    <tr><td>The Tetris Guideline and the SRS wall kicks</td><td>The kick tables in <code>SrsKickTable</code>, the three-corner T-Spin rule, the back-to-back and combo bonuses, and the perfect clear are taken from the Guideline lineage. The code cites the SRS reference where it uses the tables.</td></tr>
+    <tr><td>NES base scoring</td><td>The 40, 100, 300 and 1200 base points, times the level plus one.</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The version is printed by <code>--version</code>. A checkout prints <code>dev-master</code>, and a release phar prints its build stamp. Stable cuts are tagged <code>candy-tetris/v*</code>, and the rolling phar is published under <code>candy-tetris/latest</code>, with a <code>.phar.commit</code> file that names the tested build. The published asset may lag the source until the next green build.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a>: the runtime, the Model and the key messages the game runs on.</li>
+      <li><a href="sugar-style.html">sugar-style</a>: the rounded borders and the cards for the sidebar and the VS panels.</li>
+      <li><a href="sugar-cellbuffer.html">sugar-cellbuffer</a>: the cell grid the playfield is painted into.</li>
+      <li><a href="sugar-colorprofile.html">sugar-colorprofile</a>: the colour depth detection behind the colour rules.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Tetromino</td><td>cases() / color()</td><td>Backed enum of the seven kinds; 256-color code per kind</td></tr>
-<tr><td>Piece</td><td>rotated(delta) / moved(dx, dy)</td><td>Immutable transforms (withX/withY for placement)</td></tr>
-<tr><td>Piece</td><td>rotationsWithKicks(delta)</td><td>Candidate positions in SRS kick order (naive first); board-free — callers filter with Board::fits()</td></tr>
-<tr><td>Board</td><td>__construct(cells?)</td><td>10-wide grid (4 hidden + 20 visible rows; dims fixed by class constants, not settable)</td></tr>
-<tr><td>Board</td><td>place(piece)</td><td>Lock a piece's cells into the grid</td></tr>
-<tr><td>Board</td><td>fits(piece) / dropPiece(piece)</td><td>Legality gate and resting-position query</td></tr>
-<tr><td>Board</td><td>clearLines() / isPerfectClear()</td><td>Clear completed rows; true iff the grid ends empty</td></tr>
-<tr><td>Bag</td><td>next()</td><td>Returns [Tetromino, advanced Bag] — value semantics</td></tr>
-<tr><td>Bag</td><td>peek(n)</td><td>Pure preview; mutates nothing and consumes no draws</td></tr>
-<tr><td>Score</td><td>withLines(count)</td><td>New Score: NES base × (level+1), lines, level re-derived</td></tr>
-<tr><td>Game</td><td>start() / update(msg)</td><td>TEA model: every message yields [Game, ?Cmd] — the literal wire type is <code>array{0: Game, 1: ?\Closure}</code></td></tr>
-<tr><td>SrsKickTable</td><td>kicks(piece, from, to)</td><td>Return kick offsets for a rotation transition</td></tr>
-<tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all transition tables for a piece</td></tr>
-<tr><td>Scoring\TSpin</td><td>detect(board, piece, lastActionWasRotation)</td><td>Center-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
-<tr><td>Scoring\TSpin</td><td>T_SPIN_POINTS / T_SPIN_MINI_POINTS</td><td>Base score constants (400 / 100, scaled by level+1)</td></tr>
-<tr><td>Game</td><td>startWithLockDelay()</td><td>Seed a game with a custom lock-delay window (SRS QoL knob)</td></tr>
-<tr><td>Game</td><td>addGarbageRows(count)</td><td>Push incoming garbage in from the bottom; versus mode's opponent channel</td></tr>
-<tr><td>Tetromino</td><td>rgbColor()</td><td>The piece's 24-bit truecolor value as an int</td></tr>
-<tr><td>Score</td><td>withDropPoints(points)</td><td>Add drop points to the score; lines and level stay put (the game feeds 1 per soft cell, 2 per hard cell)</td></tr>
-</table>
   </div>
 </section>
 
@@ -119,7 +321,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/vs-computer-simple.gif" alt="VS computer, simple">
                 <h3>VS Computer (simple)</h3>
-                <span class="demo-caption">The versus match from its opening seconds — the same command as above, filmed shorter; there is no starting-level flag to set.</span>
+                <span class="demo-caption">The versus match from its opening seconds, filmed shorter. There is no starting-level flag to set.</span>
             </div>
         </div>
     </div>

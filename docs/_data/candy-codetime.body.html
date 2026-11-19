@@ -1,64 +1,261 @@
-<p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor integrations can record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
+<p class="lede" style="margin-top: 28px;">candy-codetime is a privacy-first coding-time tracker. It records only the heartbeats you give it, one activity sample per call, such as <em>I was working on this file, in this language, for this many seconds</em>. It stores them locally as one append-only JSONL file per day, or in an optional embedded SQLite database, and it draws a seven-day dashboard with <a href="sugar-charts.html">SugarCharts</a>. Nothing watches the editor, nothing leaves the machine, and there is no daemon and no database server. The design antecedent is TakaTime, a Go tool whose always-on daemon was replaced here by an explicit <code>push</code>.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codetime</code></pre>
-    <p>A signed single-file build ships with every release: download
-    <code>candy-codetime.phar</code> with its <code>.sha256</code> (and
-    minisig) sidecars, verify the digest, and run
-    <code>php candy-codetime.phar</code> on stock PHP — the app never
-    rewrites its own archive and there is no self-update channel, so an
-    upgrade is a new download. Inside an archive <code>--version</code>
-    prints the release build stamp (the frozen <code>vendor/</code> would
-    otherwise report the build root's dev guess), and
-    <code>SOURCE_DATE_EPOCH</code> keeps rebuilds of a tag byte-stable.</p>
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer global require sugarcraft/candy-codetime
+# the global bin dir varies by composer version and platform; ask composer:
+BIN="$(composer global config bin-dir --absolute)"
+export PATH="$BIN:$PATH"   # keep this line in your shell profile</code></pre>
+    <p>Requires PHP 8.3 or newer. The SQLite backend and the <code>milestone</code> command also need the <code>sqlite3</code> extension, and the dashboard needs a terminal. A project-local install works the same way through <code>vendor/bin/candy-codetime</code>.</p>
+    <p>Every <code>candy-codetime/v*</code> release also ships a single-file build, <code>candy-codetime.phar</code>, with a <code>.sha256</code> digest and minisig sidecars. Verify the digest, then run <code>php candy-codetime.phar</code> on stock PHP. The app never rewrites its own archive and has no self-update channel, so an upgrade is a new download. Inside an archive, <code>--version</code> prints the release build stamp.</p>
+    <pre class="code"><code class="language-shell">sha256sum -c candy-codetime.phar.sha256   # integrity before first run
+php candy-codetime.phar --version</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># Editor plugin / cron / git hook pushes a heartbeat:
-vendor/bin/candy-codetime push sugarcraft php src/App.php 60
+    <h2 style="margin-top: 40px;">Quickstart</h2>
+    <p>Record two beats, check for untracked time, and read the digest. The first line is a real run against an empty data directory. The date in the summary is the day you run it.</p>
+    <pre class="code"><code class="language-shell">candy-codetime push sugarcraft php src/App.php 60     # one heartbeat: project, language, file, seconds
+candy-codetime push myproj php src/Main.php 120
+candy-codetime gaps                                  # untracked stretches of 5 minutes or more
+candy-codetime summary                               # per-project and per-language digest, last 7 days</code></pre>
+    <pre class="code"><code class="language-text">recorded 60s of sugarcraft (php)
+recorded 120s of myproj (php)
+No gaps found.
+summary: 2026-11-13 – 2026-11-19
+total: 0h 03m
+by project:
+  myproj  0h 02m
+  sugarcraft  0h 01m
+by language:
+  php  0h 03m</code></pre>
+    <p>Three replies are worth knowing. <code>gaps: no tracked data for that period</code> means no tracked data matches that period and any <code>--project</code> or <code>--tag</code> filter, either because nothing is recorded there yet or because a filter excludes all of it. <code>No gaps found.</code> means the window is covered. Running <code>candy-codetime dashboard &lt; /dev/null</code> prints <code>the dashboard needs an interactive terminal</code> and exits 1, with the headless commands named as the alternative, so a script cannot hang on a missing terminal.</p>
+    <p>Open the dashboard in a real terminal with <code>candy-codetime</code>, or <code>candy-codetime dashboard 30</code> for a 30-day window. Use <code>export csv 30</code> for a plain-text dump of the same data.</p>
 
-# Open the dashboard:
-vendor/bin/candy-codetime
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>A <strong>heartbeat</strong> is one activity sample with six fields: <code>time</code>, <code>project</code>, <code>language</code>, <code>file</code>, <code>duration</code> in seconds and <code>tags</code>. The CLI never sets <code>tags</code> itself. A heartbeat becomes a <em>beat</em> once it is stored, and the two words are used interchangeably below.</p>
+    <p>Storage is local and plain. The file backend writes one <code>YYYY-MM-DD.jsonl</code> per day inside the data directory, and the file is append-only, so an editor hook can add a line without coordinating with the dashboard. The SQLite backend stores the same heartbeats in <code>candy-codetime.db</code>, indexed on time, for range queries. Milestones exist only in SQLite. The CLI reads whichever backend you select, and it can auto-select SQLite when the database holds records and the JSONL store does not.</p>
 
-# Override the data dir:
-CANDY_CODETIME_DIR=/var/data/codetime vendor/bin/candy-codetime</code></pre>
-<p>Formerly shipped as <code>sugar-tick</code>: two separate compat mechanisms
-remain. Any <code>SUGARTICK_*</code> env export is imported under the
-<code>CANDY_CODETIME_*</code> name on <em>every</em> launch (new name wins, each
-import prints a deprecation notice on stderr). The one-time data-directory move
-from <code>~/.local/share/sugar-tick</code> runs on first launch only, and only
-when <code>CANDY_CODETIME_DIR</code> is unset — an explicit directory
-outranks the migration.</p> <!-- @rename-keep -->
+    <h3 style="margin-top: 24px;">Recording is explicit</h3>
+    <p>candy-codetime does not watch files, windows or keystrokes. It records what it is told, by a hand-typed <code>push</code>, a save hook, a cron entry or an editor binding that calls the CLI. No editor plugins ship. The binding is one command line, and the worked example in <code>examples/plugin-heartbeat.example.sh</code> is the recommended starting point.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration, tags}</code> — JSONL, one beat per line; <code>tags</code> is never set by the CLI; a plugin-written tag is honored on read and export.</span></div>
-      <div class="feature"><strong>Per-day files</strong><span>Storage is one <code>YYYY-MM-DD.jsonl</code> per day — append-only, easy to ship to cold storage.</span></div>
-      <div class="feature"><strong>Top projects + languages</strong><span>Two ranking panes side-by-side from 62 columns up (they stack below that), sorted by total time descending.</span></div>
-      <div class="feature"><strong>Daily timeline</strong><span>SugarCharts <code>Sparkline</code> driven by one bucket per day, shown in minutes.</span></div>
-      <div class="feature"><strong>Window navigation</strong><span><code>←</code> / <code>→</code> shift the 7-day window one day per press; <code>r</code> reloads.</span></div>
-      <div class="feature"><strong>Milestones</strong><span><code>milestone add|list</code> markers — sqlite-only, and the dashboard never shows them.</span></div>
-      <div class="feature"><strong>Pure folding</strong><span><code>Stats::compute</code> is total-input deterministic — every dashboard test runs against fixed beats.</span></div>
-    </div>
+    <h3 style="margin-top: 24px;">Reading is pure</h3>
+    <p><code>Stats::compute()</code> folds a list of beats over a date window into totals per project and per language, plus one bucket per day. It takes no I/O and uses no clock, so the same beats always give the same answer. The dashboard, the exporters and the gaps report all read through the same <code>HeartbeatReader</code> contract.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h2 style="margin-top: 40px;">Tasks</h2>
+
+    <h3 style="margin-top: 24px;">Wire a save hook</h3>
+    <pre class="code"><code class="language-shell"># vim: one heartbeat per save, using the worked example script
+autocmd BufWritePost * silent! !sh /path/to/examples/plugin-heartbeat.example.sh "$EXPANDEF"
+
+# or feed a batch of JSON lines through the stdin door, which applies ignore rules, clamps and the lock
+printf '%s\n' '{"time": 1795100000, "project": "myproj", "language": "php", "file": "src/Main.php", "duration": 300, "tags": []}' | candy-codetime push --</code></pre>
+    <p>The script prefers <code>push --</code>, so the ignore door, the duration clamps and the advisory lock all apply. It falls back to a raw append under <code>flock</code> whenever <code>push --</code> exits nonzero, which includes a binary missing from <code>PATH</code> and a refusal such as an oversized ignore file. The raw append skips the ignore door, the duration clamps and the lock, so a file the ignore rules would skip is recorded by the fallback. Set <code>CODETIME_HOOK_DURATION</code> to change the seconds credited per save, which defaults to 60.</p>
+
+    <h3 style="margin-top: 24px;">Backfill a past beat</h3>
+    <pre class="code"><code class="language-shell">candy-codetime push --time=1795000000 myproj php src/Main.php 900   # one beat at a past instant
+candy-codetime push --time=1795000000 myproj php src/Main.php 900 review,work   # with tags</code></pre>
+    <p><code>--time</code> takes a Unix timestamp and files a single beat at that instant. A malformed value is refused rather than coerced. A raw JSON line written by hand has no default time, so a line without <code>time</code> is a corrupt record and is dropped on read. Use <code>push --</code> or <code>--time</code> to backfill, because both stamp the real instant.</p>
+
+    <h3 style="margin-top: 24px;">Skip files with an ignore file</h3>
+    <pre class="code"><code class="language-shell">printf '%s\n' 'secret.log' 'vendor/*' > .sugartrackignore
+candy-codetime push src/Main.php 120      # tracked
+candy-codetime push vendor/lib/a.php 60   # skipped: reported, never stored</code></pre>
+    <p>The <code>.sugartrackignore</code> file in the current directory, or else in the tracked file's own directory, holds one glob per line. A bare pattern matches a file name at any depth, a full path matches exactly, and a path pattern matches below any matching directory. The sibling <code>.sugartrackallow</code> file re-enables a path that an ignore file would skip. Both files are capped at 1 MiB. Ignore files often live inside a checked-out repository, so a bare <code>*</code> pattern, which would silently zero a project, is reported on stderr with the file's path.</p>
+
+    <h3 style="margin-top: 24px;">Find untracked time</h3>
+    <pre class="code"><code class="language-shell">candy-codetime gaps 14                    # untracked stretches of 300 seconds or more, last 14 days
+candy-codetime gaps --min=1800 2026-11-01 2026-11-19   # only gaps of 30 minutes or more, in a dated window</code></pre>
+    <p><code>Report\GapsReport</code> reads the sorted beats and reports each stretch between them that is at least the threshold. The default threshold is 300 seconds. It is a question of whether your tracking is honest, not a judgement about the work.</p>
+
+    <h3 style="margin-top: 24px;">Export for a spreadsheet, a JSON pipeline or a calendar</h3>
+    <pre class="code"><code class="language-shell">candy-codetime export csv 30 --project=myproj > week.csv
+candy-codetime export json 2026-10 2026-10 > october.json
+candy-codetime export ics 7 --tag=review > review.ics</code></pre>
+    <p>Output goes to stdout, so redirect it to save it. <code>--project</code> and <code>--tag</code> filter the rows on either backend. The <code>ics</code> format writes one <code>VEVENT</code> per heartbeat, with UTC stamps whose difference is the beat's duration. Every exported path is verbatim, so do not send an export somewhere shared without thinking about what the file paths reveal.</p>
+
+    <h3 style="margin-top: 24px;">Move to SQLite and keep milestones</h3>
+    <pre class="code"><code class="language-shell">candy-codetime --backend=sqlite push myproj php src/Main.php 120
+candy-codetime milestone add "v1.0 shipped" "first stable tag"
+candy-codetime milestone list
+CANDY_CODETIME_BACKEND=sqlite candy-codetime dashboard 30</code></pre>
+    <p>The SQLite backend tunes the database on open with WAL journaling, and a five-second busy timeout. Once WAL is confirmed, it also sets <code>synchronous=NORMAL</code>; on a filesystem that refuses WAL, synchronous stays at the FULL default. A milestone always writes to SQLite, even when <code>--backend</code> is not given, and the SQLite dashboard marks milestone days with <code>*</code> under the weekday row. The file backend never shows milestones.</p>
+
+    <h3 style="margin-top: 24px;">Remove a project, safely</h3>
+    <pre class="code"><code class="language-shell">candy-codetime backup                                   # archive day files older than 30 days first
+candy-codetime forget --project=old-experiment          # dry run: counts matches, changes nothing
+candy-codetime forget --project=old-experiment --apply  # removes them from both stores</code></pre>
+    <p><code>forget</code> is a dry run unless <code>--apply</code> is given. Lines that fail to parse are never removed. Run <code>backup</code> first, because the archive is the undo path, and plain <code>backup</code> does not copy a live SQLite database. Use <code>backup --sqlite</code> for that, which writes a consistent snapshot with <code>VACUUM INTO</code>.</p>
+
+    <h3 style="margin-top: 24px;">Set a daily goal</h3>
+    <pre class="code"><code class="language-shell">CANDY_CODETIME_GOAL=6h candy-codetime dashboard</code></pre>
+    <p>The goal shows as <code>today 2h01 / 1h00</code> in the header, and every day that reaches it is drawn as a shaded block in the activity band. It is presentation only, so it records nothing and gates nothing.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\CodeTime\</code>, with the storage, export, report, backup, ignore and support classes in sub-namespaces that follow the same names. The table gives the members a host program is most likely to call. The file layout is in the Architecture section below.</p>
+
+    <h3 style="margin-top: 24px;">Recording and reading</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>Heartbeat</code></td><td><code>__construct(int $time, string $project, string $language, string $file, int $duration = 60, array $tags = [])</code></td><td>One activity sample. Throws <code>InvalidArgumentException</code> on a negative time or duration.</td></tr>
+    <tr><td><code>Heartbeat</code></td><td><code>fromArray(array $row)</code>, <code>toArray()</code>, <code>withTags(array $tags)</code></td><td>Build from or convert to a JSONL row. <code>withTags()</code> returns a new instance.</td></tr>
+    <tr><td><code>Store</code></td><td><code>__construct(string $dir, int $rangeBeatBudget)</code></td><td>The JSONL store over one data directory. It implements <code>HeartbeatReader</code>.</td></tr>
+    <tr><td><code>Store</code></td><td><code>append(Heartbeat $hb, ?CancellationToken $token = null)</code></td><td>Record one heartbeat under an advisory lock. The directory and file modes are private.</td></tr>
+    <tr><td><code>Store</code></td><td><code>loadRange(DateTimeImmutable $from, DateTimeImmutable $to)</code>, <code>loadDay(DateTimeImmutable $day)</code></td><td>Read the beats in a window, or on one day. Corrupt lines are dropped and counted, never invented into beats.</td></tr>
+    <tr><td><code>Store</code></td><td><code>clampRangeDays(int $days)</code>, <code>MAX_RANGE_DAYS</code></td><td>Clamp a requested window to 1 through 3660 days.</td></tr>
+    <tr><td><code>SqliteBackend</code></td><td><code>__construct(string $dbPath)</code>, <code>insert(Heartbeat $hb)</code></td><td>The optional indexed backend. It implements <code>HeartbeatReader</code> and owns the milestones.</td></tr>
+    <tr><td><code>SqliteBackend</code></td><td><code>insertMilestone()</code>, <code>milestones()</code>, <code>forget()</code>, <code>countMatched()</code></td><td>Milestone markers and the parameterized delete behind <code>forget --apply</code>.</td></tr>
+    <tr><td><code>Milestone</code></td><td>value object</td><td>A named marker on one day, carried to the view. Only a SQLite reader fills it.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;">Folding, rendering and the dashboard</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>Stats</code></td><td><code>compute(array $beats, DateTimeImmutable $from, DateTimeImmutable $to, array $milestones = [])</code></td><td>A pure fold into day buckets, with totals per project and per language.</td></tr>
+    <tr><td><code>Stats</code></td><td><code>perProject()</code>, <code>perLanguage()</code>, <code>perTag()</code>, <code>timeline()</code>, <code>totalSeconds()</code>, <code>formatHours(int $seconds)</code></td><td>The folded views. <code>perProject()</code> and <code>perLanguage()</code> sort by time, largest first.</td></tr>
+    <tr><td><code>Dashboard</code></td><td><code>start(HeartbeatReader $source, ?DateTimeImmutable $endDay = null, int $days = 7, ...)</code></td><td>The SugarCraft <code>Model</code> for the TUI. It is a window over any reader, and it reloads with <code>r</code>.</td></tr>
+    <tr><td><code>Renderer</code></td><td><code>render(Dashboard $d)</code></td><td>Draws the header, the two ranking panes and the Sparkline timeline. It honours the detected colour profile.</td></tr>
+    <tr><td><code>Theme</code></td><td><code>default()</code>, <code>named(string $name)</code>, <code>NAMES</code></td><td>The six shipped palettes. <code>named()</code> returns <code>null</code> for an unknown name.</td></tr>
+    <tr><td><code>Support\Detect</code></td><td><code>language(string $file)</code>, <code>project(string $file, string|false|null $cwd)</code></td><td>The extension map and the project-name rule behind <code>push</code> without explicit slots.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;">Exporters, reports, backup and ignore rules</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>Export\CsvExporter</code>, <code>Export\JsonExporter</code></td><td>Tabular exporters behind <code>TabularExporterInterface</code></td><td>The <code>csv</code> and <code>json</code> formats. Free-text cells pass the formula-injection guard in CSV.</td></tr>
+    <tr><td><code>Export\IcalExporter</code></td><td>exporter behind <code>ExporterInterface</code></td><td>The <code>ics</code> format, one <code>VEVENT</code> per heartbeat.</td></tr>
+    <tr><td><code>Report\GapsReport</code></td><td><code>__construct(array $heartbeats, int $minGapSeconds = 300)</code>, <code>gaps()</code>, <code>totalUntrackedSeconds()</code></td><td>Pure gap detection over sorted beats.</td></tr>
+    <tr><td><code>Backup\AutoBackup</code></td><td><code>rotate(int $keepDays = 30)</code>, <code>archiveSqliteDatabase(string $dbPath)</code>, <code>listBackups()</code></td><td>Copy-only archiver. It never deletes, and it throws loudly on any failure.</td></tr>
+    <tr><td><code>Ignore\SugarTrackIgnore</code></td><td><code>load(string $path)</code>, <code>isIgnored(string $path)</code>, <code>isAllowed(string $path)</code></td><td>The <code>.sugartrackignore</code> matcher used by <code>push</code>.</td></tr>
+    <tr><td><code>Ignore\IgnoreFileTooLargeException</code></td><td>exception</td><td>Thrown for an ignore or allow file over 1 MiB.</td></tr>
+    <tr><td><code>Support\Version</code></td><td><code>CURRENT</code></td><td>The single-source version constant, <code>0.1.0</code>.</td></tr>
+    <tr><td><code>Lang</code></td><td><code>t($key, $params)</code></td><td>The i18n facade over the 16 locale catalogs in <code>lang/</code>.</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>Options are accepted before or after the command. Environment variables are read on every invocation, and an explicit flag always outranks the environment.</p>
+    <h3 style="margin-top: 24px;">Options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Effect</th></tr>
+    <tr><td><code>--backend=file|sqlite</code></td><td>Storage for <code>push</code>, <code>export</code>, <code>gaps</code>, <code>summary</code> and <code>dashboard</code>. Both <code>--backend=sqlite</code> and <code>--backend sqlite</code> work. Without the flag, the CLI auto-selects SQLite when the database holds records and the JSONL store does not. The choice is made per invocation and never saved.</td></tr>
+    <tr><td><code>--theme=&lt;name&gt;</code></td><td>Dashboard palette: <code>default</code>, <code>light</code>, <code>dracula</code>, <code>solarized</code>, <code>gruvbox</code> or <code>high-contrast</code>. A junk name is refused with the list of choices.</td></tr>
+    <tr><td><code>--project=&lt;name&gt;</code>, <code>--tag=&lt;label&gt;</code></td><td>For <code>export</code> and <code>gaps</code>, keep only the rows that match.</td></tr>
+    <tr><td><code>--min=&lt;secs&gt;</code></td><td>For <code>gaps</code>, the minimum untracked stretch to report. The default is 300 seconds.</td></tr>
+    <tr><td><code>--format=text|md</code></td><td>For <code>summary</code>. <code>md</code> prints Markdown for a README or a badge.</td></tr>
+    <tr><td><code>--time=&lt;unix&gt;</code></td><td>For <code>push</code>, files one beat at a past or future instant.</td></tr>
+    <tr><td><code>--sqlite</code></td><td>For <code>backup</code>, archives the SQLite database with <code>VACUUM INTO</code>.</td></tr>
+    <tr><td><code>--apply</code></td><td>For <code>forget</code>, turns the dry run into a real removal.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;">Environment</h3>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>CANDY_CODETIME_DIR</code></td><td>The data directory. The default is <code>$XDG_DATA_HOME/candy-codetime</code>, falling back to <code>~/.local/share/candy-codetime</code>. If it is unset and <code>XDG_DATA_HOME</code> and <code>HOME</code> are both unset too, the CLI refuses rather than writing next to the working directory.</td></tr>
+    <tr><td><code>CANDY_CODETIME_BACKEND</code></td><td>The default backend, <code>file</code> or <code>sqlite</code>. An explicit <code>--backend</code> outranks it, and a junk value is refused.</td></tr>
+    <tr><td><code>CANDY_CODETIME_GOAL</code></td><td>The daily goal, as whole seconds or whole hours such as <code>6h</code>. It is presentation only.</td></tr>
+    <tr><td><code>CANDY_CODETIME_THEME</code></td><td>The palette name, the same as <code>--theme</code>. The flag outranks it.</td></tr>
+    <tr><td><code>CODETIME_HOOK_DURATION</code>, <code>CODETIME_HOOK_BIN</code></td><td>Read by the worked hook script only, for the seconds per save and the binary path.</td></tr>
+    <tr><td><code>SUGARTICK_*</code></td><td>Legacy names from the tool's earlier life. Each one is imported under its <code>CANDY_CODETIME_*</code> name on every launch, with a deprecation notice on stderr. The new name wins.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;">Storage details</h3>
+    <p>Each day file line is one JSON object with the keys <code>time</code>, <code>project</code>, <code>language</code>, <code>file</code>, <code>duration</code> and <code>tags</code>. Readers ignore unknown keys. The SQLite schema is versioned with <code>user_version</code> set to 1, and a file stamped with a version this build does not know is refused on open. Nothing is pruned automatically: neither the live database nor the archives are trimmed.</p>
+    <p>Day files are keyed by the calendar date in PHP's effective timezone. Since PHP 8.3 the <code>TZ</code> variable no longer sets that zone, so set <code>date.timezone</code> in <code>php.ini</code> to choose it.</p>
+
+    <h2 style="margin-top: 40px;">Keys and keybindings</h2>
+    <p>The dashboard reacts to these keys. Keys cannot be rebound. Letter commands answer unmodified keys only, so <kbd>Ctrl+q</kbd> does not quit and <kbd>Ctrl+r</kbd> does not reload.</p>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>←</kbd> / <kbd>h</kbd></td><td>Move the window back one day</td></tr>
+    <tr><td><kbd>→</kbd> / <kbd>l</kbd></td><td>Move the window forward one day</td></tr>
+    <tr><td><kbd>g</kbd></td><td>Jump the window end back to today</td></tr>
+    <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Widen or narrow the window through 7, 14, 30 and 90 days</td></tr>
+    <tr><td><kbd>t</kbd></td><td>Toggle the lower pane between languages and tags</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Reload from disk</td></tr>
+    <tr><td><kbd>q</kbd>, <kbd>Esc</kbd>, <kbd>Ctrl+C</kbd></td><td>Quit</td></tr>
+    </table>
+    <p>The dashboard subscribes to no timers and does not animate. It redraws only when a key changes the view, and it does not refresh by itself while it is open.</p>
+
+    <h2 style="margin-top: 40px;">Theme and colour</h2>
+    <p>The <code>--theme</code> flag and <code>CANDY_CODETIME_THEME</code> pick one of six palettes. <code>default</code> is the shipped palette. <code>light</code> is for a white terminal, where the pastel tones of the default wash out. The palettes apply only where the terminal answers with 256-colour or TrueColor support. The frames are identical everywhere else.</p>
+    <pre class="code"><code class="language-shell">candy-codetime --theme=light dashboard
+CANDY_CODETIME_THEME=gruvbox candy-codetime</code></pre>
+    <p>Colour is decorative only. Bars are drawn by height, every coloured value carries a text label, and the milestone mark is the text <code>*</code>. <code>NO_COLOR=1</code>, <code>CLICOLOR=0</code> and <code>TERM=dumb</code> all turn the tints off. A <code>light</code> or <code>high-contrast</code> choice never removes a label.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds two PHP programs and one shell script. The PHP programs load the Composer autoloader, so run them from a checkout after <code>composer install</code>.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-codetime">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codetime/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codetime/tree/master/candy-codetime/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/Rtarun3606k/TakaTime">TakaTime</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/dashboard.php</code> seeds a demo data directory at a fixed path under the system temp directory, which other local users can also reach, with a pretend week of beats and opens the dashboard. It refuses with exit 1 unless both stdin and stdout are terminals. This is the program behind the demo GIF below.</li>
+      <li><code>examples/headless-report.php</code> seeds two days of beats into a temporary directory, reads them back with <code>Store::loadRange()</code>, folds them with <code>Stats::compute()</code> and prints the totals. It needs no terminal and is the library version of <code>summary</code>.</li>
+      <li><code>examples/plugin-heartbeat.example.sh</code> is a POSIX shell hook of about 35 lines. It sends one heartbeat per save through <code>push --</code>, falling back to a locked append. It is a worked example, not a shipped plugin.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/headless-report.php &lt; /dev/null
+php examples/dashboard.php &lt; /dev/null     # exits 1: stdin is not a terminal</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected:</p>
+    <pre class="code"><code class="language-shell">cd candy-codetime &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests cover the CLI, the dashboard, the renderer, the store and its privacy modes, the SQLite backend under <code>tests/Storage/</code>, the exporters under <code>tests/Export/</code>, the gaps report, the ignore rules, the backup archiver and the locale parity check in <code>LangParityTest</code>. <code>PharBuildScriptTest</code> covers the phar build. The fold in <code>Stats</code> is pure, so most dashboard tests run against fixed beats.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;">The dashboard prints an error and exits 1</h3>
+    <p>Stdin or stdout is not a terminal. This is expected in a cron job, a pipe or a CI log. Use the headless commands instead: <code>export csv</code>, <code>export json</code>, <code>summary</code> or <code>gaps</code>, which write plain lines to stdout.</p>
+
+    <h3 style="margin-top: 24px;">A beat I pushed by hand does not appear</h3>
+    <p>There are three usual causes. A raw line written with <code>&gt;&gt;</code> and no <code>time</code> key is a corrupt record, and it is dropped on read and counted in the day-file warning. A <code>--backend=sqlite</code> dashboard never reads a raw JSONL line, because raw lines land in the file backend only. And a <code>.sugartrackignore</code> match skips the push, which is reported on stdout. Run the push through <code>candy-codetime push</code> to see which case applies.</p>
+
+    <h3 style="margin-top: 24px;">The sqlite backend is used but my records are in the file store</h3>
+    <p>Auto-selection looks at what each store holds. When the database has records and the JSONL store does not, the CLI picks SQLite. Set <code>--backend=file</code> or <code>CANDY_CODETIME_BACKEND=file</code> to pin the choice. When both stores hold records, the CLI prints a one-line pointer on stderr naming the other store.</p>
+
+    <h3 style="margin-top: 24px;">A push is refused, or an ignore file is refused</h3>
+    <p>A duration that is negative or not a whole number is refused with exit 1. A duration above one year is clamped rather than refused. An ignore or allow file over 1 MiB, or one that exists but cannot be read, makes <code>push</code> exit 1, because tracking with an unknown opt-out is the failure the file exists to prevent. Shrink the file, or fix its permissions.</p>
+
+    <h3 style="margin-top: 24px;">A file mode warning, or the run aborts</h3>
+    <p>A directory or file left world-readable is tightened on the next CLI run, whatever the command. If the tightening fails, the run aborts instead of printing over data that is still exposed. Write plugin and cron output under <code>umask 077</code> so the files are private from the start.</p>
+
+    <h3 style="margin-top: 24px;">The CLI refuses to start a write</h3>
+    <p>With <code>CANDY_CODETIME_DIR</code> unset and neither <code>XDG_DATA_HOME</code> nor <code>HOME</code> set, the CLI has no safe place to write and refuses. Set <code>CANDY_CODETIME_DIR</code> to an absolute path for that run.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The CLI lives in <code>bin/candy-codetime</code>. It parses the global flags, then dispatches each command to the library. The library splits along the data flow: the storage layer reads and writes beats, the fold and the report layers turn beats into numbers, and the view layer draws them. Each layer depends only on the one before it.</p>
+    <table class="api-table">
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td><code>src/Heartbeat.php</code></td><td>The value object for one activity sample.</td></tr>
+    <tr><td><code>src/Store.php</code></td><td>The JSONL store. It implements <code>HeartbeatReader</code>, takes the advisory lock and enforces the private modes.</td></tr>
+    <tr><td><code>src/Storage/SqliteBackend.php</code>, <code>src/Storage/HeartbeatReader.php</code></td><td>The indexed SQLite backend, and the read contract that both backends satisfy.</td></tr>
+    <tr><td><code>src/Stats.php</code></td><td>The pure fold into totals and day buckets.</td></tr>
+    <tr><td><code>src/Report/GapsReport.php</code></td><td>Gap detection over sorted beats.</td></tr>
+    <tr><td><code>src/Dashboard.php</code>, <code>src/Renderer.php</code>, <code>src/Theme.php</code></td><td>The SugarCraft <code>Model</code>, its view and the palettes.</td></tr>
+    <tr><td><code>src/Export/*</code></td><td>The <code>csv</code>, <code>json</code> and <code>ics</code> exporters.</td></tr>
+    <tr><td><code>src/Backup/AutoBackup.php</code></td><td>The copy-only archiver for day files and the database.</td></tr>
+    <tr><td><code>src/Ignore/SugarTrackIgnore.php</code>, <code>src/Support/Detect.php</code></td><td>The ignore matcher, and the project and language detection used by <code>push</code>.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;">Writes are append-only, and reads degrade loudly</h3>
+    <p>The file store is append-only at the file level, so a hook can append with <code>&gt;&gt;</code>. Raw appends skip the advisory lock and the privacy checks, which is why plugins should call <code>push</code>. A day file that exists but cannot be opened is named in a stderr warning and counted as an empty day. It is never skipped in silence.</p>
+
+    <h3 style="margin-top: 24px;">Privacy is a launch invariant</h3>
+    <p>Directories are <code>0700</code>, and day files, the database and its sidecars are <code>0600</code>. Stored names are swept of escape sequences and control characters before they are drawn, so a doctored file cannot inject a sequence into the dashboard. Shared foundations: the cooperative cancellation token from <a href="sugar-async.html">sugar-async</a> is checked before each write.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream</th><th>Where it shows up here</th></tr>
+    <tr><td><a href="https://github.com/Rtarun3606k/TakaTime">Rtarun3606k/TakaTime</a> (Go)</td><td>The design antecedent. The heartbeat model, the project, language and file tracking, the dashboard and the ignore file are ported. The always-on daemon became an explicit <code>push</code>, and MongoDB became JSONL day files plus an optional SQLite backend.</td></tr>
+    <tr><td>TakaTime's <code>taka-report</code> binary</td><td>Not ported. The <code>summary</code> command folds the same data in the CLI, and it has no GitHub Action.</td></tr>
+    <tr><td>TakaTime's <code>.takatrack</code> allowlist</td><td>Not ported. The <code>.sugartrackallow</code> file plays that role.</td></tr>
+    <tr><td>TakaTime's <code>editor</code> field</td><td>Not carried. Upstream heartbeats carry it, and this schema omits it, so a plugin-written value survives the round trip but nothing reads it.</td></tr>
+    </table>
+    <p>SugarCraft is a native PHP project. This app is not a line-for-line port, and the rename from <code>sugar-tick</code> is covered in the Changelog section.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The version is <code>Support\Version::CURRENT</code>, <code>0.1.0</code>, and the release tags use the <code>candy-codetime/v</code> prefix. Inside a phar, <code>--version</code> prints the build stamp instead, and <code>SOURCE_DATE_EPOCH</code> keeps rebuilds of a tag byte-stable. The package was published as <code>sugarcraft/sugar-tick</code> until the 2026-10 rename. The namespace moved from <code>SugarCraft\Tick\</code> to <code>SugarCraft\CodeTime\</code>. The old <code>SUGARTICK_*</code> environment names and the old data directory still work through one-time compatibility paths.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-charts.html">sugar-charts</a>: the <code>Sparkline</code> that draws the daily timeline.</li>
+      <li><a href="sugar-async.html">sugar-async</a>: the cancellation token that <code>Store::append()</code> checks before it writes.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the <code>Model</code> and <code>Program</code> runtime the dashboard runs on.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">Key Classes</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Store</td><td>append(heartbeat)</td><td>Record one heartbeat (fail-loud, private file modes)</td></tr>
-<tr><td>SqliteBackend</td><td>insert(heartbeat)</td><td>Record via the optional indexed backend</td></tr>
-<tr><td>Stats</td><td>compute(heartbeats, from, to)</td><td>Pure fold of totals and day buckets</td></tr>
-<tr><td>Heartbeat</td><td>__construct(time, project, language, file, duration)</td><td>Create a heartbeat</td></tr>
-<tr><td>Dashboard</td><td>start(reader)</td><td>Load the window over any HeartbeatReader</td></tr>
-</table>
   </div>
 </section>
 
