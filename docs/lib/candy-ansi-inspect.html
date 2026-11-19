@@ -256,7 +256,7 @@ echo Inspector::report("\e[1;31mboom\e[0m");   // the three report lines, as the
     <p>The report never replays a control byte. Control bytes are printed as named tokens, so a capture that contains a title change or a clipboard write shows only its label and cannot move your cursor or retitle your window.</p>
 
     <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
-    <p>The library lives in <code>SugarCraft\AnsiInspect\</code>. The tables below list the classes a caller uses directly. <code>AnsiHandler</code>, the parser callback behind both entry points, and <code>Lang</code>, the message catalog, are described in the Architecture section and are not repeated here. The CLI is a thin layer over these.</p>
+    <p>The library lives in <code>SugarCraft\AnsiInspect\</code>. The tables below list the classes a caller uses directly. <code>AnsiHandler</code>, the parser callback behind both entry points, is described in the Architecture section, and <code>Lang</code>, the message catalog, under Configuration, in the Locale subsection. Neither is repeated here. The CLI is a thin layer over these.</p>
 
     <h3 id="inspector-and-reports" style="margin-top: 24px;">Inspector and reports</h3>
     <table class="api-table">

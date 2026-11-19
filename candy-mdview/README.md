@@ -106,12 +106,10 @@ Flags:
   flags are given and name different themes, `--style` wins and a
   `note: --style … overrides --theme …` line lands on stderr.
 - `--version` — handled by the Symfony Console application (no row in the
-  command's own flags). A release-tagged phar reports its build stamp; every
-  other install — a rolling dev phar, `vendor/bin/candy-mdview`, a bare
-  checkout — reports the fallback `0.1.0`, because a dev build deliberately
-  keeps its `dev-build` sentinel out of the answer. `--version` therefore
-  separates a tagged phar from a checkout, but never a dev phar from a
-  checkout.
+  command's own flags). A release-tagged phar reports its release stamp, and a
+  rolling dev phar reports `dev-<short commit>`, so two dev builds differ by
+  commit. A bare checkout or `vendor/bin/candy-mdview` reports the fallback
+  `0.1.0`, and so does a phar stamped only with the `dev-build` sentinel.
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
   block with nested element/chroma maps — *chroma* is the Go syntax-token

@@ -8,12 +8,13 @@ declare(strict_types=1);
  * uses). Keeps the demo self-contained — no binary GIFs in-repo. The
  * temporary file is removed again on shutdown.
  *
- * Any extra arguments are passed to the CLI, so a run with no terminal can
- * stop by itself: the synthetic GIF has no loop count, so it would otherwise
- * repeat until a key quits it.
+ * Any extra arguments are passed to the CLI. The synthetic GIF has no loop
+ * count, so it repeats until something stops it. Stdin at end of file ends
+ * playback at once, and --duration times the run only when stdin is a
+ * terminal, so a timed run goes under a pseudo-terminal:
  *
  *   php examples/view.php
- *   php examples/view.php --duration=1 < /dev/null
+ *   COLUMNS=80 LINES=24 script -qfec 'php examples/view.php --duration=1' /dev/null
  */
 require __DIR__ . '/../vendor/autoload.php';
 

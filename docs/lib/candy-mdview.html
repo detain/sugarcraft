@@ -393,7 +393,7 @@ php examples/theme-json.php</code></pre>
     <p>The reload tick is fixed at 0.5 seconds. Each tick does one non-blocking <code>pollTuple()</code> probe, so the pager never waits on the filesystem and keystrokes keep flowing during a save burst.</p>
 
     <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
-    <p>The rolling <code>candy-mdview.phar</code> is the version that tracks master. Its <code>.sha256</code> and <code>.phar.commit</code> sidecars name the exact build. A tagged phar reports its build stamp through <code>--version</code>. Every other install, including a bare checkout, reports the fallback <code>0.1.0</code>, because a dev build keeps its <code>dev-build</code> sentinel out of the answer. Compare the sidecar commit, not <code>--version</code>, to tell two dev phars apart.</p>
+    <p>The rolling <code>candy-mdview.phar</code> is the version that tracks master. Its <code>.sha256</code> and <code>.phar.commit</code> sidecars name the exact build. A tagged phar reports its release stamp through <code>--version</code>, and a rolling phar reports <code>dev-</code> followed by its short commit, so <code>--version</code> tells two dev builds apart by commit. A bare checkout or a vendor install reports the fallback <code>0.1.0</code>, and so does a phar stamped only with the <code>dev-build</code> sentinel.</p>
 
     <h2 id="related" style="margin-top: 40px;">Related</h2>
     <ul>

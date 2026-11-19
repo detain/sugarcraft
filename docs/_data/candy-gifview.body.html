@@ -18,7 +18,7 @@ candy-gifview --fps=12 --paused clip.gif # a uniform 12 fps, starting on the fir
     <p>Both presets emit 24-bit truecolor SGR. <code>solid</code> paints the cell background (<code>48;2</code>) with a space glyph. <code>density</code> paints the foreground (<code>38;2</code>) on a luminance ramp of characters. The viewer paints with escape sequences rather than a terminal graphics protocol such as kitty, sixel or iTerm2, so it works anywhere 24-bit color does. Inline graphics are a different route, offered by <a href="sugar-image.html">sugar-image</a>.</p>
 
     <h3 style="margin-top: 24px;">Sizing the viewport</h3>
-    <p>The viewer sizes the frame grid through sugar-core's terminal façade. An explicit <code>COLUMNS</code> and <code>LINES</code> pair, both positive integers, wins first. Otherwise stdout is probed. Off a terminal, such as piped output or CI, the grid falls back to a deterministic 60 by 24 cells. A probe failure therefore cannot crash the run, and the worst answer is the fallback grid.</p>
+    <p>The viewer sizes the frame grid through sugar-core's terminal façade. Each axis is read on its own. A positive-integer <code>COLUMNS</code> or <code>LINES</code> wins for its axis, and an axis left unset is probed from stdout. Off a terminal, such as piped output or CI, an unset axis falls back to a deterministic 60 by 24 cells. A probe failure therefore cannot crash the run, and the worst answer is the fallback grid.</p>
 
     <h3 style="margin-top: 24px;">Frames are decoded once, at the launch size</h3>
     <p>Growing the window reveals no extra detail, because frames were decoded at the launch size. Shrinking the window re-clamps the grid and crops the frame. Only a restart re-queries the terminal, and a <code>--watch</code> reload also re-decodes at the frozen launch budget.</p>
@@ -33,9 +33,10 @@ candy-gifview --fps=10 --speed=2 clip.gif   # plays at 20 fps: the multiplier co
     <p>The rate arithmetic runs on three slots. A rate slot is written by <code>--fps=N</code> and by <code>--speed=Nfps</code>, so the last of those wins. A multiplier from <code>--speed=N</code> composes onto whatever the rate slot holds, so the flag order does not matter. <code>--speed=max</code> is a latch: once seen, it overrides every other rate flag and a later flag cannot clear it.</p>
 
     <h3 style="margin-top: 24px;">Stop by itself, for scripts and CI</h3>
-    <pre class="code"><code class="language-shell">candy-gifview --duration=5 clip.gif &lt; /dev/null     # stop after five seconds of playback
-timeout 5 candy-gifview loop.gif &lt; /dev/null      # or let timeout(1) end it; exit 124 when the timer fires</code></pre>
-    <p>An animation with no finite loop count repeats forever. With stdin at end of file, a run with no <code>--duration</code> never ends on its own. <code>--duration</code> counts playback time, not wall time, so paused time does not count. It needs at least two frames, and a single-frame file with <code>--duration</code> is refused.</p>
+    <pre class="code"><code class="language-shell">COLUMNS=80 LINES=24 script -qfec 'candy-gifview --duration=5 clip.gif' /dev/null   # five seconds of playback under a pseudo-terminal
+timeout 5 candy-gifview loop.gif                 # stdin held open by a terminal or a pipe: exit 124 when the timer fires
+candy-gifview clip.gif &lt; /dev/null               # stdin at end of file: exits at once with status 0</code></pre>
+    <p>An animation with no finite loop count repeats forever, so something outside the animation has to end the run. Stdin at end of file is one such thing, and it ends playback at once. A run with stdin from <code>/dev/null</code> therefore never plays for its <code>--duration</code>. <code>--duration=N</code> times the run only when stdin is a terminal, which is why the first command runs under <code>script</code>. The <code>COLUMNS</code> and <code>LINES</code> pair sizes the grid there, because a pseudo-terminal opened by <code>script</code> may report no size. Over an open pipe that is not a terminal, <code>--duration</code> does not stop the run, so use <code>timeout(1)</code> instead. <code>--duration</code> counts playback time, not wall time, so paused time does not count. It needs at least two frames, and a single-frame file with <code>--duration</code> is refused.</p>
 
     <h3 style="margin-top: 24px;">Reload the file when it changes</h3>
     <pre class="code"><code class="language-shell">candy-gifview --watch frames.gif</code></pre>
@@ -124,13 +125,13 @@ candy-gifview clip.gif density</code></pre>
     <h2 style="margin-top: 40px;">Examples</h2>
     <p>The <code>examples/</code> directory holds three PHP programs. They load the Composer autoloader, so run them from a checkout after <code>composer install</code>.</p>
     <ul>
-      <li><code>examples/view.php</code> builds a small synthetic animated GIF in a temporary file and plays it through <code>Cli::main()</code>, the same entry point the binary uses. The file is removed on exit. Any extra arguments are passed to the CLI, so <code>php examples/view.php --duration=1 &lt; /dev/null</code> finishes by itself. This is the program behind the demo GIF below.</li>
+      <li><code>examples/view.php</code> builds a small synthetic animated GIF in a temporary file and plays it through <code>Cli::main()</code>, the same entry point the binary uses. The file is removed on exit. Any extra arguments are passed to the CLI, so a timed run needs a pseudo-terminal, as the command below shows. This is the program behind the demo GIF below.</li>
       <li><code>examples/refusals.php</code> runs <code>Cli::main()</code> on four argument vectors, <code>--help</code>, <code>--version</code>, a bad preset and a missing file, with memory streams and a stub player. It prints each exit code and the first line of output, so you can see the exit-code contract without a terminal.</li>
       <li><code>examples/version-stamp.php</code> shows how <code>Version::normalizeStamp()</code> and <code>isStampable()</code> treat a release tag, a bare release, a development build and an unrecognized string.</li>
     </ul>
     <pre class="code"><code class="language-shell">php examples/refusals.php &lt; /dev/null
 php examples/version-stamp.php &lt; /dev/null
-php examples/view.php --duration=1 &lt; /dev/null</code></pre>
+COLUMNS=80 LINES=24 script -qfec 'php examples/view.php --duration=1' /dev/null</code></pre>
 
     <h2 style="margin-top: 40px;">Testing</h2>
     <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected:</p>
@@ -140,7 +141,7 @@ php examples/view.php --duration=1 &lt; /dev/null</code></pre>
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 style="margin-top: 24px;">The process never exits</h3>
-    <p>The GIF has no loop count, so it repeats forever, and with stdin at end of file nothing quits it. Pass <code>--duration=N</code>, or run the viewer under <code>timeout(1)</code>. Under <code>timeout</code>, exit 124 means the timer stopped the run.</p>
+    <p>The GIF has no loop count, so it repeats forever. The run keeps going while stdin stays open, such as at a terminal or a pipe that nothing closes. Quit it with a key, stop it with a signal, or let <code>timeout(1)</code> end it, and <code>timeout</code> then exits 124. With stdin at end of file the run exits at once instead, so a job that expects a long playback and gets a quick exit should check its stdin. <code>--duration=N</code> times the run only under a pseudo-terminal.</p>
 
     <h3 style="margin-top: 24px;">Exit 1 when <code>ext-gd</code> is missing, or a file fails to decode</h3>
     <p>The CLI needs <code>ext-gd</code> to decode GIFs. Install it, for example with <code>apt install php-gd</code> on Debian-based systems, and check it with <code>php -m</code>. A file that fails to decode also exits 1. Either way the message is written to stderr.</p>
@@ -183,7 +184,7 @@ php examples/view.php --duration=1 &lt; /dev/null</code></pre>
       <li>Playback can start paused with <code>--paused</code>, and it can be stepped one frame at a time with the arrow keys. Motion is never required to see the content.</li>
       <li>The frame rate is capped at the player's own scheduler floors. <code>--speed=max</code> is opt-in and is never the default.</li>
       <li>Reduced motion is not detected automatically. The viewer does not read <code>REDUCE_MOTION</code> or <code>PREFERS_REDUCED_MOTION</code>, so motion-averse users should pass <code>--paused</code>. This is a known gap against the fleet convention.</li>
-      <li>CLI messages are localized into 16 locales. The status line during playback is English only.</li>
+      <li>CLI messages are localized into 16 locales, and the playback status line follows the same locale, so <code>--lang</code> changes both.</li>
     </ul>
 
     <h2 style="margin-top: 40px;">Upstream mapping</h2>
