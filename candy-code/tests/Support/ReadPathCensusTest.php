@@ -42,8 +42,8 @@ use PHPUnit\Framework\TestCase;
  * `SELF_LOCATED`, which an execute path may not take.
  *
  * WHAT A VERDICT IS. A word from {@see VERDICTS} plus a sentence saying which
- * boundary applies. Four of the words are MEASURED rather than trusted:
- * `CONTAINED` and `CONTAINED_UPSTREAM` are checked against
+ * boundary applies. Five of the words are MEASURED rather than trusted:
+ * `CONTAINED`, `CONTAINED_UPSTREAM` and `CONTAINED_EXTERNAL` are checked against
  * {@see ContainedPathInventoryTest::ROUTED_CALL_SITES} — the derived, asserted map
  * of which files actually hold an enforcing {@see \SugarCraft\Core\Util\PathJail}
  * call — and `PATH_JAIL` and `OWNED_HOME` are checked against the file naming the
@@ -88,7 +88,7 @@ final class ReadPathCensusTest extends TestCase
 
     /**
      * The verdict vocabulary. Each key is a word a row may use; each value says what
-     * claiming it MEANS, and the four marked MEASURED are checked rather than
+     * claiming it MEANS, and the five marked MEASURED are checked rather than
      * believed.
      *
      * @var array<string, string>
@@ -98,6 +98,10 @@ final class ReadPathCensusTest extends TestCase
         'CONTAINED' => 'this file holds an enforcing sugar-core PathJail compare that bounds this read',
         // MEASURED: the named upstream file must hold one.
         'CONTAINED_UPSTREAM' => 'the path arrives already bounded from the file named after the colon',
+        // MEASURED: the file named after the colon, under the sugar-plugins source tree
+        // (the containment moved out of candy-code/src with the plugin discovery, PL-3a),
+        // must hold the enforcing PathJail call {@see EXTERNAL_CONTAINMENT_CALLS} names for it.
+        'CONTAINED_EXTERNAL' => 'the path arrives already bounded by a sibling package outside candy-code/src, named after the colon',
         // MEASURED: the file must reference PathJail.
         'PATH_JAIL' => 'a model-supplied path resolved through Tools\PathJail',
         // MEASURED: the file must reference the owned-home resolution.
@@ -113,6 +117,18 @@ final class ReadPathCensusTest extends TestCase
         // USER typed is enforced where the text comes from - Chat::submit()
         // never reads a file-based command's (repository-authored) expansion.
         'USER_TYPED' => 'a path the person at the terminal typed, dropped or pasted into their own prompt',
+    ];
+
+    /**
+     * The containment `CONTAINED_EXTERNAL` claims, keyed by the file it names (relative
+     * to the repository root). Each value is the call token that must appear in that
+     * file for the claim to hold, so a row can only point at a file that really bounds
+     * the read, and the file must be named here before any row may use it.
+     *
+     * @var array<string, string>
+     */
+    private const EXTERNAL_CONTAINMENT_CALLS = [
+        'sugar-plugins/src/Discovery/PluginDiscovery.php' => 'PathJail::below(',
     ];
 
     /**
@@ -298,12 +314,14 @@ final class ReadPathCensusTest extends TestCase
                 . 'the memo keys on the resolved root, so caching never widens containment',
         ],
         'Bundles/Bundle.php|file_get_contents' => [
-            'CONTAINED_UPSTREAM:Bundles/BundleDiscovery.php — a bundle\'s manifest.json, read by '
+            // PL-3a moved the container scan and its guard() out of BundleDiscovery.php into
+            // sugar-plugins, so the gate is the sugar-plugins file that now holds the PathJail call.
+            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — a bundle\'s manifest.json, read by '
                 . 'fromDir() and readManifest() only at paths that ride the directory discovery '
-                . 'accepted through guard()\'s containment',
-            'CONTAINED_UPSTREAM:Bundles/BundleDiscovery.php — the second of the two manifest '
+                . 'accepted through guard()\'s containment (PathJail::below() in PluginDiscovery)',
+            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — the second of the two manifest '
                 . 'reads above; a bundle dir is never user-supplied content, only a name under '
-                . 'a container the tier\'s boundary admitted',
+                . 'a container the tier\'s boundary admitted (PathJail::below() in PluginDiscovery)',
         ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
@@ -1784,6 +1802,46 @@ final class ReadPathCensusTest extends TestCase
                         "{$key} is bounded upstream by {$upstream}, which holds no enforcing call",
                     );
                 }
+            }
+        }
+    }
+
+    /**
+     * MEASURED, not trusted, for a containment that lives in a sibling package: a row
+     * claiming `CONTAINED_EXTERNAL:<file>` must name a file in the sugar-plugins source
+     * tree that is declared in {@see EXTERNAL_CONTAINMENT_CALLS}, exists, and holds the
+     * enforcing call that map names for it.
+     *
+     * The call is checked as text rather than by {@see ContainedPathInventoryTest::ROUTED_CALL_SITES},
+     * because that derivation is over candy-code/src only and cannot see a compare that
+     * a sibling package owns. A file that stops holding the call reds here, so the claim
+     * cannot outlive the gate it cites.
+     */
+    public function testEveryContainedExternalClaimIsBackedByItsNamedCallInSugarPlugins(): void
+    {
+        $repoRoot = \dirname(__DIR__, 3);
+
+        foreach (self::READ_PATHS as $key => $verdicts) {
+            foreach ($verdicts as $entry) {
+                [$word, $upstream] = $this->parse($entry);
+
+                if ($word !== 'CONTAINED_EXTERNAL') {
+                    continue;
+                }
+
+                $this->assertNotNull($upstream, "{$key} must name the sugar-plugins file it is bounded by");
+                $this->assertArrayHasKey(
+                    $upstream,
+                    self::EXTERNAL_CONTAINMENT_CALLS,
+                    "{$key} is bounded by {$upstream}, which is not a declared external containment",
+                );
+                $this->assertFileExists($repoRoot . '/' . $upstream, "{$key} names {$upstream}");
+                $this->assertStringContainsString(
+                    self::EXTERNAL_CONTAINMENT_CALLS[$upstream],
+                    (string) file_get_contents($repoRoot . '/' . $upstream),
+                    "{$key} is bounded by {$upstream}, which no longer holds "
+                        . self::EXTERNAL_CONTAINMENT_CALLS[$upstream],
+                );
             }
         }
     }
