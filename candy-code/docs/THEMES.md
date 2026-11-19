@@ -99,8 +99,9 @@ Each problem produces a notice at launch and costs only what it affects:
 - An `extends` naming something other than a built-in base, such as `adaptive`
   or a misspelling, starts from `dark`.
 - A `tokens` value that is not an object is ignored.
-- A file that is not a JSON object, or that is empty, paints its `extends` base
-  with nothing overridden, and the notice says why.
+- A file that is not a JSON object, or that is empty, paints the `dark` base
+  with nothing overridden, and the notice says why. A file with a syntax error
+  is the same case, because its `extends` cannot be read.
 - A file that cannot be read paints the default theme, and the notice says so.
 
 A file whose real path leaves the theme directory, for example through a symlink
@@ -139,8 +140,9 @@ Then select it:
 }
 ```
 
-or, in a running session, `/theme midnight-amber`. The file is listed at the next
-launch, so a file added during a session is not offered until then.
+or, in a session started after the file was saved, `/theme midnight-amber`. The
+list of themes is read at launch, so a file saved during a session is not offered
+until you relaunch.
 
 To check a file, run `/theme` with no argument: it lists the current theme and
 every name the app can use, custom files included. A file the app refuses
