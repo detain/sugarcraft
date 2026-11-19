@@ -170,6 +170,32 @@ final class ResendPayloadTest extends TestCase
         }
     }
 
+    public function testInlineRefusalNamesTheTransportsThatCarryCid(): void
+    {
+        // The refusal must point at the transports that really send inline
+        // parts (SMTP and Mailgun), not claim SMTP is the only one.
+        $transport = new ResendTransport('test_key');
+        $tmp = \tempnam(\sys_get_temp_dir(), 'sp-inline-');
+        \file_put_contents($tmp, 'PNGFAKE');
+        try {
+            $email = (new Email(
+                from:     ['sender@example.com'],
+                to:       ['recipient@example.com'],
+                htmlBody: '<p><img src="cid:hero"></p>',
+            ))->withInlineAttachment($tmp, 'hero');
+
+            try {
+                $this->invokeBuildPayload($transport, $email);
+                $this->fail('An inline attachment must be refused on the Resend transport');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('SMTP', $e->getMessage());
+                $this->assertStringContainsString('Mailgun', $e->getMessage());
+            }
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
     public function testPayloadNoCcWhenCcEmpty(): void
     {
         $transport = new ResendTransport('test_key');

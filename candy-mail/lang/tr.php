@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'SMTP ana makinesi {host} geçerli bir ana makinesi adı veya adresi değil (yalnızca harf, rakam, nokta ve tire)',
     'smtp.invalid_port' => 'SMTP bağlantı noktası {port} kapsam dışında (1 ile 65535 arasında olmalı)',
     'smtp.invalid_timeout' => 'SMTP zaman aşımı {timeout}, 1 ile 3600 arasında bir saniye sayısı değil',
-    'resend.cid_unsupported' => 'Resend API yükü Content-ID alanı içermiyor: {filename} eki satır içi — satır içi görseller yalnızca SMTP ile gönderilir.',
+    'resend.cid_unsupported' => 'Resend API yükü Content-ID alanı içermiyor: {filename} eki satır içi — satır içi görseller yalnızca SMTP veya Mailgun ile gönderilir.',
     'smtp.incomplete_credentials' => 'SMTP kimlik bilgileri eksik: kullanıcı adı ve parolayı birlikte verin veya anonim gönderim için ikisini de boş bırakın',
     'email.non_ascii_address' => 'E-posta adresi {addr} ASCII dışı karakter içeriyor: SMTPUTF8 desteklenmiyor — ASCII zarf adresi kullanın',
     'smtp.openssl_missing' => 'SMTP bağlantısını güvenceye almak için ext-openssl gereklidir (STARTTLS/SMTPS) — eklentiyi kurun; kanal şifrelenemeden hiçbir şey gönderilmez',
