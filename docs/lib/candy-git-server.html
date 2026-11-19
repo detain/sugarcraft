@@ -154,84 +154,380 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#visibility-and-access">Visibility and access</a></li>
+            <li class="toc-h3"><a href="#accounts-persist-and-the-store-is-refused-when-corrupt">Accounts persist, and the store is refused when corrupt</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#create-a-repo-from-php-and-check-who-may-write">Create a repo from PHP and check who may write</a></li>
+            <li class="toc-h3"><a href="#let-anonymous-clients-read-a-public-repo">Let anonymous clients read a public repo</a></li>
+            <li class="toc-h3"><a href="#mint-a-proxy-token-for-a-trusted-front-end">Mint a proxy token for a trusted front end</a></li>
+            <li class="toc-h3"><a href="#mirror-an-upstream-repository-on-a-schedule">Mirror an upstream repository on a schedule</a></li>
+            <li class="toc-h3"><a href="#watch-the-counters-on-a-loopback-endpoint">Watch the counters on a loopback endpoint</a></li>
+            <li class="toc-h3"><a href="#put-tls-in-front-of-the-listener">Put TLS in front of the listener</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration-repositories-and-accounts">Configuration, repositories and accounts</a></li>
+            <li class="toc-h3"><a href="#transports">Transports</a></li>
+            <li class="toc-h3"><a href="#lfs-jobs-stats-and-support">LFS, jobs, stats and support</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#keys-that-take-effect">Keys that take effect</a></li>
+            <li class="toc-h3"><a href="#keys-that-are-read-by-nothing">Keys that are read by nothing</a></li>
+            <li class="toc-h3"><a href="#example-file">Example file</a></li>
+            <li class="toc-h3"><a href="#environment">Environment</a></li>
+            <li class="toc-h2"><a href="#run">Run</a></li>
+            <li class="toc-h3"><a href="#admin-and-account-commands">Admin and account commands</a></li>
+            <li class="toc-h2"><a href="#keys-and-signals">Keys and signals</a></li>
+            <li class="toc-h2"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#the-repo-create-command-fails-with-a-class-not-found-error">The repo create command fails with a class not found error</a></li>
+            <li class="toc-h3"><a href="#clone-prompts-for-a-password-then-refuses-on-a-public-repo">Clone prompts for a password, then refuses, on a public repo</a></li>
+            <li class="toc-h3"><a href="#a-push-of-a-large-file-answers-413">A push of a large file answers 413</a></li>
+            <li class="toc-h3"><a href="#every-identity-header-is-ignored-or-every-request-is-refused-in-proxy-mode">Every identity header is ignored, or every request is refused in proxy mode</a></li>
+            <li class="toc-h3"><a href="#the-server-stops-on-a-sighup-or-exits-with-130-or-143">The server stops on a SIGHUP, or exits with 130 or 143</a></li>
+            <li class="toc-h3"><a href="#the-cli-says-repository-not-found">The CLI says Repository not found</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#every-subprocess-is-bounded-and-reaped">Every subprocess is bounded and reaped</a></li>
+            <li class="toc-h3"><a href="#workers-isolate-connections">Workers isolate connections</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;"><strong>Status: smart-HTTP transport live.</strong> <code>serve --http</code> runs a real <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> over smart HTTP, plus the LFS batch and object routes — a shared pkt-line codec plus git's own <code>--stateless-rpc</code> engine, e2e-tested against the system git binary — the launched <code>serve --http</code> process itself is driven over a live socket — behind fail-closed access gates. The SSH <code>ForceCommand</code> dispatcher and the git-daemon advertisement exist at class level; the sshd host recipe and a fetch-completing daemon are open work. See the README &quot;Known gaps&quot; inventory.</p>
+<p class="lede" style="margin-top: 28px;">candy-git-server is a self-hostable Git server in PHP 8.3+. It is a port of parts of charmbracelet/soft-serve. The smart-HTTP transport is live: <code>serve --http</code> runs a listener that real <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> work against, with the Git LFS batch and object routes beside it. The SSH and git-daemon transports exist as classes that a host has to wire up. There is no terminal UI.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git-server</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git-server
+vendor/bin/candy-git-server help</code></pre>
+    <p>Requires PHP 8.3 or newer and the system <code>git</code> binary on <code>PATH</code>. Both the read path and the push path run through <code>git upload-pack</code> and <code>git receive-pack --stateless-rpc</code>, and the protocol tests run against git 2.43. Without <code>git</code>, <code>serve --http</code> still starts, but every request answers 500.</p>
+    <p><code>ext-sockets</code> is a hard requirement, because the blocking <code>GitDaemon::serve()</code> loop calls <code>socket_create()</code> directly. <code>ext-pcntl</code> is optional, and it enables the graceful SIGINT and SIGTERM exit and the one-process-per-connection HTTP worker. Without it the listener still runs, and a stop signal ends the process with status 130 or 143.</p>
+    <p>A single-file <code>candy-git-server.phar</code> is built on each push to master. It needs only PHP on the host, and it is started the same way: <code>php candy-git-server.phar serve --http --repo-root /srv/git/repositories</code>.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <p>This run takes a fresh data directory from init to a clone. The output is trimmed from a real run: the data path is shortened to <code>/var/lib/candy-git-server</code>, and the listener is shown on its default port. The password for the first admin is read from stdin, never from argv.</p>
+    <pre class="code"><code class="language-shell">D=/var/lib/candy-git-server
+
+# 1. initialize the data directory and mint the first admin
+printf '%s\n' 'correct horse battery staple' |
+    candy-git-server init "$D" --admin alice --admin-password-stdin
+
+# 2. add a least-privilege account: non-admin unless --admin is passed
+printf '%s\n' 'hunter2hunter2' | candy-git-server user add bob "$D" --password
+
+# 3. create a repository: private by default, --public marks it public
+candy-git-server repo create myrepo "$D"
+candy-git-server repo collaborator myrepo add bob "$D"
+
+# 4. serve it over smart HTTP
+candy-git-server serve --http --repo-root "$D/repositories" --config "$D/config.yaml"
+
+# 5. from another shell, clone and push as a collaborator
+git clone http://bob@localhost:23232/myrepo.git</code></pre>
+    <pre class="code"><code class="language-text">User 'bob' created (admin: false)
+Password stored as a hash.
+Persisted to /var/lib/candy-git-server/users.json
+Repository 'myrepo' created at /var/lib/candy-git-server/repositories/myrepo
+Note: start a listener to serve it: candy-git-server serve --http --repo-root /var/lib/candy-git-server/repositories (private until --public; anonymous-read needs git.allow_anonymous_read).
+Repo 'myrepo': collaborator 'bob' added (plane now: bob)
+
+candy-git-server: smart-HTTP listener on 127.0.0.1:23232 (2 repos, 1 published; 2 accounts; anonymous-read=off; push is served too — hook declines ride in-band)
+access 127.0.0.1 GET /myrepo.git/info/refs 401 23 1.6ms
+access 127.0.0.1 GET /myrepo.git/info/refs 200 288 69.0ms
+access 127.0.0.1 POST /myrepo.git/git-receive-pack 200 50 72.4ms</code></pre>
+    <p>The first <code>info/refs</code> request answers 401 because git has no credentials yet. The retry with Basic auth answers 200. Two more facts matter here. Anonymous reads of a public repo still answer 401 unless <code>git.allow_anonymous_read</code> is turned on, which it is not by default. And a plain <code>init</code> or <code>user add</code> run on a directory under the system temp directory prints a warning, because local users can read it there. Set <code>CANDY_GIT_SERVER_DATA_PATH</code> to a real path before a deployment.</p>
+
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The package is organized around four nouns. A <strong>Repo</strong> is an immutable description of a bare Git repository on disk, with its visibility, collaborators, push setting and optional mirror source. A <strong>User</strong> is an immutable account, with a password hash and any authorized SSH keys. <strong>AccessControl</strong> answers whether a user, or an anonymous caller, may read, write or administer a repo. A <strong>transport</strong> is the way bytes reach Git: the smart-HTTP listener, the SSH dispatcher or the git-daemon class.</p>
+    <p>Every access check runs before any Git child is spawned or any ref byte is written. A request that fails authorization is refused with no repository data sent. Hook declines from a push ride back in-band, in the report-status stream that the Git client expects.</p>
+
+    <h3 id="visibility-and-access" style="margin-top: 24px;">Visibility and access</h3>
+    <p>A repo has one of three visibilities, and the enum <code>Visibility</code> holds them. <code>Visibility::Public</code> is readable without credentials, but only while <code>git.allow_anonymous_read</code> is on. <code>Visibility::CollaboratorOnly</code> admits only collaborators and admins. <code>Visibility::Private</code> admits the same people, and it is the default for a repo created without <code>--public</code>. Authenticated collaborators can push. <code>allowPush</code> widens push to every authenticated user, and it never admits an anonymous caller.</p>
+    <p>Visibility is a marker on disk, and directory presence alone never publishes a repository. Every path that resolves a repo consults the marker and falls back to private when it is absent.</p>
+
+    <h3 id="accounts-persist-and-the-store-is-refused-when-corrupt" style="margin-top: 24px;">Accounts persist, and the store is refused when corrupt</h3>
+    <p>Accounts live in <code>&lt;data_path&gt;/users.json</code>. Writes are atomic, through a temporary file and a rename, and the file is mode <code>0600</code>. A corrupt store refuses to load rather than silently starting with zero accounts. Passwords are stored only as <code>password_hash</code> digests, so cleartext never reaches disk.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="create-a-repo-from-php-and-check-who-may-write" style="margin-top: 24px;">Create a repo from PHP and check who may write</h3>
     <pre class="code"><code class="language-php">use SugarCraft\GitServer\{AccessControl, Config, Repo, User};
-use SugarCraft\GitServer\Git\GitDaemon;
 
-$config = Config::fromDefaults();        // CANDY_GIT_SERVER_DATA_PATH env var, else defaults
-                                         // (Config::load($yamlPath) reads a config file)
-
-// Describe a repository and create it as a bare git repo on disk
+$config = Config::fromDefaults();   // reads CANDY_GIT_SERVER_DATA_PATH, else defaults
 $repo = Repo::new('my-project', $config-&gt;reposPath() . '/my-project.git')
     -&gt;withDescription('Greeting service')
     -&gt;withPublic(true)
     -&gt;addCollaborator('alice')
-    -&gt;init();
+    -&gt;init();                          // creates the bare repository on disk
 
-// Ask the permission matrix
 $acl = AccessControl::instance();
-$acl-&gt;canWrite(User::new('alice'), $repo);   // true  (collaborator)
-$acl-&gt;canWrite(User::new('bob'), $repo);     // false
-$acl-&gt;canRead(null, $repo);                  // false (anonymous reads are opt-in:
-$acl-&gt;setAllowAnonymousRead(true);        //   git.allow_anonymous_read in config)
+$acl-&gt;canWrite(User::new('alice'), $repo);   // true: collaborator
+$acl-&gt;canWrite(User::new('bob'), $repo);     // false: not a collaborator
+$acl-&gt;canRead(null, $repo);                  // false: anonymous reads are off</code></pre>
+    <p>Each <code>with*()</code> call returns a new immutable <code>Repo</code>, so keep the result of the chain. The <code>init()</code> call is the only one that touches the filesystem. <code>examples/repo.php</code> runs this flow end to end without writing to a real data path.</p>
 
-// Library surface (not assembled): a future host would drive the daemon
-// like this — the serve() method exists; no shipped entrypoint calls it.
-$daemon = new GitDaemon($config);
-$daemon-&gt;registerRepo($repo);</code></pre>
+    <h3 id="let-anonymous-clients-read-a-public-repo" style="margin-top: 24px;">Let anonymous clients read a public repo</h3>
+    <pre class="code"><code class="language-ini">; config.yaml
+git:
+  allow_anonymous_read: true</code></pre>
+    <p>Anonymous reads need both the repo marked public and the <code>git.allow_anonymous_read</code> lever on. Either one alone refuses. The same lever is consulted by the smart-HTTP router and by the daemon. Leave it off on a host that serves private work.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>SSH front end (class)</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack for the single request a host sshd <code>ForceCommand</code> hands it. No SSH wire protocol, no shipped entrypoint.</span></div>
-      <div class="feature"><strong>Git daemon (class)</strong><span><code>GitDaemon</code> answers the git:// <code>git-upload-pack</code> advertisement via a real <code>git upload-pack --advertise-refs</code> child — read-only by design, pushes refused at dispatch; completing fetches over git:// is open work (see README Known gaps) and nothing constructs it yet.</span></div>
-      <div class="feature"><strong>Smart-HTTP transport</strong><span><code>HttpSmartProtocol\Server</code> + <code>HttpListener</code> serve <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> behind <code>serve --http</code>; identity resolution and access gates answer before a git child is spawned or a response byte written (the router reads size-bounded request bodies before dispatching them), hook declines ride in-band, and the LFS batch + object routes share the router with validated oids, sizes and atomic storage. Identity arrives via HTTP Basic or the paired <code>X-CandyGitServer-User</code> + <code>X-CandyGitServer-User-Sig</code> token headers.</span></div>
-      <div class="feature"><strong>Access control</strong><span><code>AccessControl</code> answers read / write / admin for a user (or anonymous) against a repo's visibility and collaborators.</span></div>
-      <div class="feature"><strong>LFS support</strong><span>Git LFS over HTTP through <code>LFSHandler</code> and a pluggable storage backend.</span></div>
-      <div class="feature"><strong>Config file</strong><span>YAML server configuration via <code>Config::load()</code>, or env + defaults via <code>Config::fromDefaults()</code>.</span></div>
-    </div>
+    <h3 id="mint-a-proxy-token-for-a-trusted-front-end" style="margin-top: 24px;">Mint a proxy token for a trusted front end</h3>
+    <pre class="code"><code class="language-shell">candy-git-server user token alice 3600 "$D"   # TTL in seconds, then the data path</code></pre>
+    <p>The command prints an expiring <code>&lt;expiry-unix&gt;.&lt;hex-hmac&gt;</code> value. It needs <code>http.auth_secret</code> set in <code>config.yaml</code>, and the TTL is capped by <code>http.token_max_ttl</code>. Under <code>http.user_trust_mode: token</code>, the value is sent in the <code>X-CandyGitServer-User-Sig</code> header together with <code>X-CandyGitServer-User</code>. The HMAC is checked against <code>http.auth_secret</code>, and it expires. Under <code>proxy</code> mode a trusted reverse proxy sets the identity header instead, and the proxy must replace any header a client sends.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="mirror-an-upstream-repository-on-a-schedule" style="margin-top: 24px;">Mirror an upstream repository on a schedule</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\GitServer\Config;
+use SugarCraft\GitServer\Jobs\MirrorPuller;
+use SugarCraft\GitServer\Repo;
+
+$mirror = Repo::new('linux', $config-&gt;reposPath() . '/linux.git')
+    -&gt;withMirrorFrom('https://github.com/torvalds/linux.git');
+
+$puller = new MirrorPuller($config);   // reads jobs.mirror_pull
+$puller-&gt;registerRepo($mirror);
+$puller-&gt;runOnce();                  // from cron: pull every due mirror now
+// or, in a ReactPHP host: $puller-&gt;attach($loop);</code></pre>
+    <p>Each due mirror is fetched with <code>git fetch --prune</code> and the full <code>+refs/*:refs/*</code> refspec, so refs deleted upstream are removed locally. The schedule accepts <code>@every</code> with a Go-style duration such as <code>10m</code> or <code>1h30m</code>, and the aliases <code>@hourly</code>, <code>@daily</code>, <code>@weekly</code>, <code>@monthly</code> and <code>@yearly</code>. Full cron expressions are refused.</p>
+
+    <h3 id="watch-the-counters-on-a-loopback-endpoint" style="margin-top: 24px;">Watch the counters on a loopback endpoint</h3>
+    <pre class="code"><code class="language-shell">curl -s localhost:23233/stats
+{"uptime_seconds":42.1,"connections":7,"pack_uploads":1,"pack_downloads":4,
+  "lfs_batch_requests":2,"lfs_object_downloads":2,"lfs_object_uploads":1}</code></pre>
+    <p><code>StatsServer</code> runs only on a ReactPHP loop, so a host has to start it. The endpoint is unauthenticated. A hostless <code>stats.listen_addr</code>, such as the default <code>:23233</code>, binds to loopback, and only an explicit non-loopback host makes the counters reachable from the network. Set <code>stats.persist_path</code> to keep counters across restarts, since the default is volatile.</p>
+
+    <h3 id="put-tls-in-front-of-the-listener" style="margin-top: 24px;">Put TLS in front of the listener</h3>
+    <p>The library never terminates TLS. Setting <code>http.tls_key_path</code> or <code>http.tls_cert_path</code> refuses the config at load. Put a reverse proxy in front, as shown under Deployment, and point <code>http.public_url</code> at the <code>https://</code> origin, so the LFS batch hrefs never downgrade a client to cleartext.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\GitServer\</code>. Sub-namespaces follow the directory layout in the Architecture section. The tables give the members a host is most likely to call. Constructors and methods that take a stream or a loop have the same types as the source.</p>
+
+    <h3 id="configuration-repositories-and-accounts" style="margin-top: 24px;">Configuration, repositories and accounts</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>Config</code></td><td><code>static fromDefaults()</code>, <code>static load(string $path)</code></td><td>Configuration from env and defaults, or from a YAML file parsed by symfony/yaml.</td></tr>
+    <tr><td><code>Config</code></td><td><code>reposPath()</code>, <code>sshPath()</code>, <code>lfsPath()</code>, <code>ensureReposPath()</code></td><td>The data directories. The <code>ensure*</code> variants create the directory.</td></tr>
+    <tr><td><code>Repo</code></td><td><code>static new(string $name, string $path)</code></td><td>An immutable repo description. A fresh handle is private.</td></tr>
+    <tr><td><code>Repo</code></td><td><code>withDescription()</code>, <code>withVisibility(Visibility $v)</code>, <code>withPublic(bool $v = true)</code>, <code>withPrivate()</code>, <code>withAllowPush()</code>, <code>withMirrorFrom(?string $url)</code>, <code>withHighlightLanguage()</code></td><td>Each returns a new instance.</td></tr>
+    <tr><td><code>Repo</code></td><td><code>addCollaborator(string $username)</code>, <code>removeCollaborator()</code>, <code>collaborators()</code>, <code>isCollaborator()</code></td><td>The collaborator list, kept in the repo's metadata plane.</td></tr>
+    <tr><td><code>Repo</code></td><td><code>init()</code>, <code>exists()</code>, <code>path()</code>, <code>branches()</code>, <code>tags()</code>, <code>refs(string $prefix)</code>, <code>readFile(string $commitHash, string $path)</code>, <code>readme()</code></td><td>Create the bare repository and inspect it. <code>init()</code> is the only call that writes.</td></tr>
+    <tr><td><code>Repo</code></td><td><code>isPrivate()</code>, <code>isVisiblePublic()</code>, <code>isMirror()</code></td><td>Visibility and mirror predicates.</td></tr>
+    <tr><td><code>Visibility</code></td><td><code>Public</code>, <code>CollaboratorOnly</code>, <code>Private</code></td><td>The enum on each repo. <code>fromBools()</code> maps the legacy pair.</td></tr>
+    <tr><td><code>User</code></td><td><code>static new(string $username)</code>, <code>withAdmin()</code>, <code>withActive()</code>, <code>withPasswordHash(?string $hash)</code>, <code>withAuthorizedKeys(string $keys)</code>, <code>addAuthorizedKey(string $pubKey)</code>, <code>verifyPublicKey(string $presentedKey)</code></td><td>An immutable account and its SSH key matching.</td></tr>
+    <tr><td><code>UserStore</code></td><td><code>static forDataPath(string $dataPath)</code>, <code>find()</code>, <code>all()</code>, <code>add()</code>, <code>put()</code>, <code>remove()</code>, <code>deactivate()</code>, <code>transaction(callable $mutator)</code></td><td>The atomic <code>users.json</code> store.</td></tr>
+    <tr><td><code>AccessControl</code></td><td><code>static instance()</code>, <code>setAllowAnonymousRead(bool $allowed)</code></td><td>The process-global posture, shared with the daemon and SSH transports.</td></tr>
+    <tr><td><code>AccessControl</code></td><td><code>canRead(?User $user, Repo $repo)</code>, <code>canWrite()</code>, <code>canAdmin()</code>, <code>canCreateRepos()</code></td><td>Permission checks. A <code>null</code> user is anonymous, and <code>canWrite()</code> refuses it unconditionally.</td></tr>
+    </table>
+
+    <h3 id="transports" style="margin-top: 24px;">Transports</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>HttpSmartProtocol\Server</code></td><td><code>__construct(Config $config, ?AccessControl $accessControl = null)</code>, <code>registerRepo()</code>, <code>registerUser()</code>, <code>setAllowAnonymousRead()</code>, <code>handleRequest()</code>, <code>static mintUserToken(string $username, int $expiry, string $secret)</code></td><td>The smart-HTTP and LFS router. It enforces the same gates as the listener.</td></tr>
+    <tr><td><code>HttpSmartProtocol\HttpListener</code></td><td><code>start(?LoopInterface $loop = null)</code>, <code>stop()</code>, <code>isRunning()</code>, <code>listenAddress()</code>, <code>activeConnectionCount()</code></td><td>The HTTP/1.1 socket listener behind <code>serve --http</code>.</td></tr>
+    <tr><td><code>Git\GitDaemon</code></td><td><code>__construct(Config $config)</code>, <code>registerRepo()</code>, <code>registerRepos()</code>, <code>serve(string $pidFile = '')</code>, <code>serveAsync(?LoopInterface $loop = null, string $pidFile = '')</code>, <code>shutdown()</code></td><td>The <code>git://</code> advertisement daemon. It is read-only, and it is not started by the shipped CLI.</td></tr>
+    <tr><td><code>SSH\SSHServer</code></td><td><code>__construct(Config $config)</code>, <code>registerUser()</code>, <code>registerRepo()</code>, <code>handleConnection($stream, string $username, string $command, ?string $publicKey = null)</code></td><td>A <code>ForceCommand</code>-style gate for host sshd. It does not implement the SSH wire protocol.</td></tr>
+    <tr><td><code>Git\PktLine</code></td><td><code>static encode(string $payload)</code>, <code>static flush()</code>, <code>static decode(string $bytes)</code>, <code>static isServiceHeader(string $payload, string $service)</code></td><td>The one pkt-line codec, with 4-hex length prefixes.</td></tr>
+    <tr><td><code>Git\StatelessRpc</code></td><td><code>static advertise(string $service, string $repoPath, ?float $deadlineSeconds = null)</code>, <code>static negotiate()</code>, <code>static binaryFor(string $service)</code></td><td>The <code>--stateless-rpc</code> git children, with a bounded drain and a TERM-to-KILL reap.</td></tr>
+    </table>
+
+    <h3 id="lfs-jobs-stats-and-support" style="margin-top: 24px;">LFS, jobs, stats and support</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td><code>LFS\LFSHandler</code></td><td><code>handleBatch(array $request)</code>, <code>handleBatchAsync(array $request, ?LoopInterface $loop = null)</code>, <code>withStorageBackend(LFSStorageBackendInterface $backend)</code></td><td>The Git LFS batch API, synchronous and promise-based.</td></tr>
+    <tr><td><code>LFS\LocalStorageBackend</code></td><td>implements <code>LFSStorageBackendInterface</code></td><td>The default object store, in the <code>aa/bb/oid</code> layout under <code>lfsPath()</code>.</td></tr>
+    <tr><td><code>Jobs\MirrorPuller</code></td><td><code>__construct(Config $config, ?\Closure $exec = null)</code>, <code>registerRepo(Repo $repo)</code>, <code>runOnce(?int $now = null, ?float $budgetSeconds = null)</code>, <code>attach(?LoopInterface $loop = null)</code></td><td>The mirror-pull job, driven by cron or by the event loop.</td></tr>
+    <tr><td><code>Jobs\Schedule</code></td><td>parses <code>@every</code> and the aliases</td><td>The job schedule grammar. Cron expressions are not supported.</td></tr>
+    <tr><td><code>StatsServer</code></td><td><code>__construct(Config $config)</code>, <code>start(?LoopInterface $loop = null)</code>, <code>stop()</code>, <code>listenAddress()</code></td><td>The JSON counters endpoint. It runs only on a ReactPHP loop.</td></tr>
+    <tr><td><code>Stats</code></td><td><code>static instance()</code>, <code>recordConnection()</code>, <code>recordPackUpload()</code>, <code>connections()</code>, <code>snapshot()</code>, <code>toJson()</code>, <code>flushNow()</code></td><td>The shared counters, persisted when <code>stats.persist_path</code> is set.</td></tr>
+    <tr><td><code>Support\BoundedCommand</code></td><td><code>static run(array $argv, float $timeoutSeconds = ...)</code>, <code>runRaw()</code></td><td>The argv-only subprocess runner with caps, a deadline and reaping. It takes no shell string.</td></tr>
+    <tr><td><code>Support\PromisePool</code></td><td>bounded-concurrency helper</td><td>Caps how many promises run at once. It bounds LFS transfers.</td></tr>
+    <tr><td><code>Support\Version</code></td><td><code>CURRENT</code>, phar build-stamp resolver</td><td>The version string, <code>0.1.0</code>, and the stamp inside a phar.</td></tr>
+    </table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>Create <code>config.yaml</code> in the data directory. <code>candy-git-server init</code> writes a skeleton with every key. The census below is the authoritative list of which keys <code>Config</code> parses and which code path consults each one. A key marked <em>dead</em> is accepted and held on the object, but nothing reads it yet. Changing it changes nothing.</p>
+
+    <h3 id="keys-that-take-effect" style="margin-top: 24px;">Keys that take effect</h3>
+    <table class="api-table">
+    <tr><th>Key</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>git.allow_anonymous_read</code></td><td><code>false</code></td><td>Turns on anonymous reads of public repos, over HTTP and through the daemon.</td></tr>
+    <tr><td><code>git.max_timeout</code></td><td><code>0</code></td><td>Deadline for a stateless git child on the smart-HTTP path.</td></tr>
+    <tr><td><code>git.listen_addr</code>, <code>git.idle_timeout</code>, <code>git.max_connections</code></td><td><code>:9418</code></td><td>The daemon's bind address, its idle timer, and its connection cap. Newcomers are refused past the cap, and an established transfer is never evicted.</td></tr>
+    <tr><td><code>http.max_pack_bytes</code></td><td>268435456</td><td>The one request-body cap, shared by pack POSTs and LFS object PUTs. Larger bodies answer 413.</td></tr>
+    <tr><td><code>http.public_url</code></td><td><code>http://localhost:23232</code></td><td>The origin used in LFS batch hrefs. Set it to the <code>https://</code> origin behind a proxy.</td></tr>
+    <tr><td><code>http.user_trust_mode</code></td><td><code>off</code></td><td>Selects one of <code>off</code>, <code>proxy</code> or <code>token</code> for the identity headers.</td></tr>
+    <tr><td><code>http.trusted_proxies</code></td><td>empty</td><td>For <code>proxy</code> mode. Exact IPv4 or IPv6 addresses, or CIDR ranges, as a YAML list or a comma-separated string.</td></tr>
+    <tr><td><code>http.auth_secret</code></td><td>empty</td><td>The HMAC key for <code>token</code> mode. Generate it with <code>php -r "echo bin2hex(random_bytes(32));"</code>.</td></tr>
+    <tr><td><code>lfs.enabled</code></td><td><code>true</code></td><td>Gates the LFS routes.</td></tr>
+    <tr><td><code>jobs.mirror_pull</code></td><td><code>@every 10m</code></td><td>The mirror-pull schedule. Cron expressions are refused.</td></tr>
+    <tr><td><code>stats.listen_addr</code></td><td><code>:23233</code></td><td>The stats endpoint bind. A hostless value resolves to loopback.</td></tr>
+    <tr><td><code>stats.persist_path</code></td><td>empty</td><td>Keeps counter history across restarts. Empty means the counters reset on each start.</td></tr>
+    <tr><td><code>stats.flush_interval_seconds</code></td><td><code>60</code></td><td>How often to flush the counters, as an integer from 1 to 86400.</td></tr>
+    </table>
+
+    <h3 id="keys-that-are-read-by-nothing" style="margin-top: 24px;">Keys that are read by nothing</h3>
+    <table class="api-table">
+    <tr><th>Key</th><th>What happens</th></tr>
+    <tr><td><code>http.listen_addr</code></td><td>Parsed, but <code>serve --http</code> binds from its <code>--http-host</code> and <code>--http-port</code> flags only.</td></tr>
+    <tr><td><code>http.tls_key_path</code>, <code>http.tls_cert_path</code></td><td>Validated only. Setting either refuses the config at load, with <code>config.tls_not_supported</code>.</td></tr>
+    <tr><td><code>ssh.*</code>, <code>lfs.ssh_enabled</code>, <code>log_format</code></td><td>Parsed and held, and used by no shipped code path.</td></tr>
+    <tr><td><code>name</code></td><td>Reaches only the example script.</td></tr>
+    <tr><td><code>db</code></td><td>Not parsed. <code>Config</code> has no database concept, so a <code>db:</code> block is silently ignored.</td></tr>
+    </table>
+
+    <h3 id="example-file" style="margin-top: 24px;">Example file</h3>
+    <pre class="code"><code class="language-yaml">name: "My Git Server"
+git:
+  listen_addr: ":9418"           # daemon bind, if a host runs the class
+  allow_anonymous_read: false    # default off
+http:
+  public_url: "http://localhost:23232"
+  max_pack_bytes: 268435456
+  user_trust_mode: "off"
+lfs:
+  enabled: true
+jobs:
+  mirror_pull: "@every 10m"
+stats:
+  listen_addr: ":23233"          # hostless bind stays on loopback</code></pre>
+    <p>Quote values that start with a YAML indicator, such as listen addresses like <code>":23232"</code> and schedules like <code>"@every 10m"</code>. The data path is set by <code>--config F</code>, which makes its directory the data path, or by <code>CANDY_GIT_SERVER_DATA_PATH</code>. Without either, the default is <code>sys_get_temp_dir()/candy-git-server</code>, which is for trials only.</p>
+
+    <h3 id="environment" style="margin-top: 24px;">Environment</h3>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>CANDY_GIT_SERVER_DATA_PATH</code></td><td>The data path. The explicit command-line argument outranks it.</td></tr>
+    <tr><td><code>CANDY_GIT_SERVER_LANG</code></td><td>The CLI message locale. An unknown value falls back to English.</td></tr>
+    <tr><td><code>CANDY_GIT_SERVER_BOOTSTRAP_ADMIN</code></td><td>Does the same as <code>init --admin &lt;name&gt;</code>. It applies to <code>init</code> only.</td></tr>
+    <tr><td><code>CANDY_SERVE_*</code></td><td>Legacy names from the package's earlier life. They are still honored through <code>LegacyEnv</code>, with a deprecation notice on stderr.</td></tr>
+    </table>
+
+    <h2 id="run" style="margin-top: 40px;">Run</h2>
+    <p><code>serve --http</code> is the only long-running entry point. It runs in the foreground, and it has no daemon mode. Its flags are listed below.</p>
+    <table class="api-table">
+    <tr><th>Flag</th><th>Meaning</th><th>Default</th></tr>
+    <tr><td><code>--repo-root DIR</code></td><td>The directory whose subdirectories are served. Required.</td><td>none</td></tr>
+    <tr><td><code>--http-port N</code></td><td>The listen port. <code>--port</code> is a deprecated alias.</td><td><code>23232</code></td></tr>
+    <tr><td><code>--http-host H</code></td><td>The listen host.</td><td><code>127.0.0.1</code></td></tr>
+    <tr><td><code>--config F</code></td><td>The YAML config, whose directory is the data path.</td><td>defaults applied</td></tr>
+    <tr><td><code>--daemon</code>, <code>--pid-file</code>, <code>--verbose</code></td><td>Refused on this path, because the listener always stays in the foreground.</td><td>n/a</td></tr>
+    </table>
+    <p>The bare command <code>serve</code> refuses with exit 1 and an honest message, because the SSH and git-daemon transports are not wired. The exit codes are <code>0</code> for success and graceful shutdown, and <code>1</code> for any refusal. A refusal covers a bad flag, a bind failure, an unknown user or repo, an existing admin, a corrupt store and a bare <code>serve</code>.</p>
+    <pre class="code"><code class="language-shell">candy-git-server serve
+candy-git-server: 'serve' refuses to start: the ssh and git listeners are not wired yet, only 'serve --http' runs (see the README, Known gaps)
+$ echo $?
+1</code></pre>
+
+    <h3 id="admin-and-account-commands" style="margin-top: 24px;">Admin and account commands</h3>
+    <pre class="code"><code class="language-shell">candy-git-server init /var/lib/candy-git-server --admin alice --admin-password-stdin
+candy-git-server user add bob /var/lib/candy-git-server --password
+candy-git-server user key bob ~/.ssh/id_ed25519.pub
+candy-git-server user token alice 3600 /var/lib/candy-git-server
+candy-git-server user deactivate bob /var/lib/candy-git-server
+candy-git-server repo collaborator myrepo add bob /var/lib/candy-git-server
+candy-git-server repo list /var/lib/candy-git-server</code></pre>
+    <p><code>init --admin</code> refuses when an admin already exists, unless <code>--force</code> replaces the named account. A <code>--password</code> with no value reads stdin. An account with no password and no key is warned about, because it authenticates nothing. <code>user add</code> without flags creates a non-admin, and <code>--admin</code> raises a global admin that passes every check.</p>
+
+    <h2 id="keys-and-signals" style="margin-top: 40px;">Keys and signals</h2>
+    <p>There are no keybindings, because there is no terminal interface. The signals are the only control surface. <code>serve --http</code> arms SIGINT and SIGTERM when <code>ext-pcntl</code> is loaded, and both stop the listener and exit 0. It has no reload path, and SIGHUP keeps its default disposition, which kills the process. The <code>GitDaemon</code> class routes SIGTERM, SIGINT and SIGHUP into one shutdown handler, so a daemon you host yourself also stops on SIGHUP.</p>
+
+    <h2 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h2>
+    <p>This package draws nothing. It has no TUI, and no theme. The <code>Clipboard\Osc52</code> class encodes OSC 52 clipboard sequences, but no code path consumes it, so it does nothing in this release. Output from the CLI is plain text, localized through the same catalogs used for errors.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds two PHP programs. They load the Composer autoloader, so run them from a checkout after <code>composer install</code>. Both are safe to run without a server.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-git-server">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git-server/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git-server/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/soft-serve">charmbracelet/soft-serve</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/config.php</code> prints the default configuration and the values from a sample YAML file, using <code>Config::fromDefaults()</code> and <code>Config::load()</code>.</li>
+      <li><code>examples/repo.php</code> builds a repo description in a private temporary directory, prints its metadata, and prints the access matrix for three callers: a collaborator, a second user and an anonymous caller.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/config.php &lt; /dev/null
+php examples/repo.php &lt; /dev/null</code></pre>
+    <pre class="code"><code class="language-text">=== Access matrix ===
+  alice    read=yes write=yes admin=no
+  bob      read=yes write=yes admin=no
+  guest    read=no  (anonymous read = off)</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected:</p>
+    <pre class="code"><code class="language-shell">cd candy-git-server &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests are grouped by the transport they cover. <code>tests/HttpSmartProtocol/</code> covers the clone, fetch, push and LFS routes, the trust modes and the listener's hardening. It includes <code>BinServeLiveE2ETest</code>, which drives the launched <code>bin/candy-git-server</code> over a live socket. <code>tests/Git/</code> covers the pkt-line codec, the stateless-rpc children and the daemon. <code>tests/SSH/</code> covers the dispatcher. <code>tests/Jobs/</code> covers the mirror schedule. <code>UserStoreTwoProcessTest</code> checks the account store across two processes.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="the-repo-create-command-fails-with-a-class-not-found-error" style="margin-top: 24px;">The repo create command fails with a class not found error</h3>
+    <p>This means the sugar-core in <code>vendor/</code> is older than the one candy-git-server was written against. Run <code>composer update</code> in the package, or rebuild the monorepo wiring with <code>php scripts/refresh-deps.php --mode=linked</code> when you develop inside the monorepo.</p>
+
+    <h3 id="clone-prompts-for-a-password-then-refuses-on-a-public-repo" style="margin-top: 24px;">Clone prompts for a password, then refuses, on a public repo</h3>
+    <p>Anonymous reads need two things: the repo's visibility is public, and <code>git.allow_anonymous_read</code> is <code>true</code>. The listener logs the 401 it returns. Set the lever in <code>config.yaml</code> and restart the listener so it loads the new config. An authenticated clone works either way.</p>
+
+    <h3 id="a-push-of-a-large-file-answers-413" style="margin-top: 24px;">A push of a large file answers 413</h3>
+    <p><code>http.max_pack_bytes</code> caps the request body, and the default is 256 MiB. Raise it in <code>config.yaml</code> and restart. Behind nginx, set <code>client_max_body_size</code> to at least the same value, or nginx refuses the push before the server sees it.</p>
+
+    <h3 id="every-identity-header-is-ignored-or-every-request-is-refused-in-proxy-mode" style="margin-top: 24px;">Every identity header is ignored, or every request is refused in proxy mode</h3>
+    <p><code>off</code> is the default, and it ignores the identity headers entirely. <code>proxy</code> mode trusts a header only from a peer listed in <code>http.trusted_proxies</code>, so an empty list refuses everything. List the proxy's exact address or its CIDR range. Under <code>token</code> mode, a header with an expired or wrong HMAC is refused, so mint a new value with <code>user token</code>.</p>
+
+    <h3 id="the-server-stops-on-a-sighup-or-exits-with-130-or-143" style="margin-top: 24px;">The server stops on a SIGHUP, or exits with 130 or 143</h3>
+    <p><code>serve --http</code> has no reload. SIGHUP kills it, so do not write an <code>ExecReload</code> line. Without <code>ext-pcntl</code>, a stop signal is not caught, and the shell reports 130 or 143 instead of 0. Install the extension in the container image, or accept that the exit code is not clean.</p>
+
+    <h3 id="the-cli-says-repository-not-found" style="margin-top: 24px;">The CLI says Repository not found</h3>
+    <p>The name you passed does not match a repository under the data path. Check the spelling and the data path argument. Create the repo first with <code>repo create</code>, or point the command at the data directory where it lives.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <p>The CLI is <code>bin/candy-git-server</code>. It parses commands and flags, then calls into the library. The library is organized around the transports, and each transport reuses the same access checks, the same pkt-line codec and the same bounded subprocess runner.</p>
+    <table class="api-table">
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td><code>src/Config.php</code></td><td>The YAML loader and its typed accessors.</td></tr>
+    <tr><td><code>src/Repo.php</code>, <code>src/Visibility.php</code></td><td>The bare-repository model and its visibility enum.</td></tr>
+    <tr><td><code>src/User.php</code>, <code>src/UserStore.php</code></td><td>The account model and the atomic <code>users.json</code> store.</td></tr>
+    <tr><td><code>src/AccessControl.php</code></td><td>Read, write and admin decisions.</td></tr>
+    <tr><td><code>src/HttpSmartProtocol/Server.php</code>, <code>HttpListener.php</code></td><td>The smart-HTTP and LFS router, and the socket listener that hosts it.</td></tr>
+    <tr><td><code>src/Git/StatelessRpc.php</code>, <code>PktLine.php</code>, <code>StdioPipe.php</code></td><td>The stateless-rpc children, the pkt-line codec and the bounded stdio pump.</td></tr>
+    <tr><td><code>src/Git/GitDaemon.php</code>, <code>UploadPack.php</code>, <code>ReceivePack.php</code></td><td>The <code>git://</code> daemon class and the daemon-shape handlers.</td></tr>
+    <tr><td><code>src/SSH/SSHServer.php</code></td><td>The <code>ForceCommand</code> gate for host sshd.</td></tr>
+    <tr><td><code>src/LFS/LFSHandler.php</code>, <code>LocalStorageBackend.php</code></td><td>The LFS batch API and the default object store.</td></tr>
+    <tr><td><code>src/Jobs/Schedule.php</code>, <code>MirrorPuller.php</code></td><td>The schedule grammar and the mirror-pull job.</td></tr>
+    <tr><td><code>src/Stats.php</code>, <code>StatsServer.php</code></td><td>The counters and their JSON endpoint.</td></tr>
+    <tr><td><code>src/Support/BoundedCommand.php</code>, <code>PromisePool.php</code>, <code>Version.php</code></td><td>The subprocess runner, the concurrency cap and the version resolver.</td></tr>
+    </table>
+
+    <h3 id="every-subprocess-is-bounded-and-reaped" style="margin-top: 24px;">Every subprocess is bounded and reaped</h3>
+    <p>Each served request spawns a <code>git</code> child through <code>BoundedCommand</code>. That runner takes an argv array, never a shell string. It enforces a cap on the output bytes and a deadline, and it reaps the child with TERM and then KILL. A child that outlives its deadline is killed, not waited on.</p>
+
+    <h3 id="workers-isolate-connections" style="margin-top: 24px;">Workers isolate connections</h3>
+    <p>By default the HTTP listener forks one worker per connection, when <code>ext-pcntl</code> is present and <code>http.worker_per_request</code> is not set to false. Each worker serves its connection to completion and exits, so one stalled request cannot delay the others. With the knob off, or without pcntl, connections are served one at a time, and the CLI says so on stderr at startup.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream</th><th>Where it shows up here</th></tr>
+    <tr><td><a href="https://github.com/charmbracelet/soft-serve">charmbracelet/soft-serve</a> (Go)</td><td>The design antecedent. The repo, user and access model, the smart-HTTP serving and the LFS routes are ported in part. Soft-serve's TUI is not ported.</td></tr>
+    <tr><td>soft-serve's default ports, <code>8022</code> and <code>8080</code></td><td>Not used. The defaults here are <code>23231</code> for the reserved SSH slot, <code>23232</code> for HTTP, <code>23233</code> for stats and <code>9418</code> for git.</td></tr>
+    </table>
+    <p>SugarCraft is a native PHP project. The classes in <code>src/</code> carry docblocks that cite the soft-serve source where a behavior was taken from it.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The version is <code>Support\Version::CURRENT</code>, <code>0.1.0</code>. Inside a phar, the build stamp replaces it. The package was published as <code>sugarcraft/candy-serve</code> until the 2026-10 rename, and its namespace moved from <code>SugarCraft\Serve\</code> to <code>SugarCraft\GitServer\</code>. The <code>CANDY_SERVE_*</code> environment names still work through <code>LegacyEnv</code>, with a stderr notice. Known gaps are listed in the README, and they are the authority on what is not yet built.</p>
+    <p>The gaps in short. <code>git://</code> completes no fetch past the advertisement, no shipped SSH deployment recipe exists, nothing starts the mirror job or the stats endpoint on its own, and there is no TLS termination. Locale coverage is machine-assisted and not reviewed by a native speaker.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-ssh-server.html">sugar-ssh-server</a>: a general SSH middleware and session framework, also run under host sshd. Its auth model differs, because it trusts sshd and allowlists by username and key fingerprint.</li>
+      <li><a href="sugar-async.html">sugar-async</a>: the <code>Subscriptions</code> machinery that the daemon uses for shutdown.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the runtime and the <code>Util\Proc</code> helpers that the bounded runner builds on.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Config</td><td>static fromDefaults() / static load(path)</td><td>Configuration from env + defaults, or from a YAML file</td></tr>
-<tr><td>Config</td><td>reposPath() / sshPath() / lfsPath()</td><td>Data directories</td></tr>
-<tr><td>Repo</td><td>static new(name, path) / withDescription() / withPublic() / withPrivate() / withVisibility() / withAllowPush() / addCollaborator()</td><td>Immutable repository description</td></tr>
-<tr><td>Repo</td><td>init() / path() / branches()</td><td>Create the bare repository; inspect it</td></tr>
-<tr><td>User</td><td>static new(username) / withAdmin() / withPasswordHash() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable account: hashed password + SSH keys (accounts persist via UserStore)</td></tr>
-<tr><td>AccessControl</td><td>static instance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
-<tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, ?publicKey = null)</td><td>SSH command dispatcher</td></tr>
-<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / registerRepos() / serve(pidFile = '') / serveAsync(?loop, pidFile = '') / shutdown()</td><td>git:// advertisement daemon (read-only)</td></tr>
-<tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP router: clone, fetch, auth-gated push, LFS</td></tr>
-<tr><td>Git\PktLine</td><td>static encode(payload) / static flush() / static decode(bytes) / static isServiceHeader(payload, service)</td><td>Shared pkt-line codec (4-hex length prefix)</td></tr>
-<tr><td>Git\StatelessRpc</td><td>static advertise(service, repoPath, ?deadlineSeconds = null) / static negotiate(service, repoPath, body, maxBytes, ?deadlineSeconds = null)</td><td>git --stateless-rpc children: capped drain, TERM-to-KILL reap</td></tr>
-<tr><td>HttpSmartProtocol\HttpListener</td><td>__construct(Server, host, port, ?loop) / start() / stop() / listenAddress()</td><td>Smart-HTTP socket listener behind serve --http</td></tr>
-</table>
     </div>
   </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="demos">Demos.</h2>
+        <p class="lede">This package has no terminal interface, so there is no recording to show. The quickstart above and the live listener log are the demonstration.</p>
+    </div>
 </section>
 </main>
 
