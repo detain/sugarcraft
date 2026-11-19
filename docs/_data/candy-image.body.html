@@ -7,7 +7,7 @@
     <pre class="code"><code class="language-shell">curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar
 curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/latest/candy-image.phar.sha256
 sha256sum -c candy-image.phar.sha256
-php candy-image.phar photo.png
+php candy-image.phar photo.png</code></pre>
     <h2 style="margin-top: 40px;">Quickstart</h2>
     <p>Run the viewer on an image, or ask it why an image looks wrong. The bare form auto-detects the protocol. The flags after it fix the box and the protocol by hand.</p>
     <pre class="code"><code class="language-shell">candy-image photo.png                          # auto-detect the protocol and render
@@ -37,7 +37,7 @@ detect: summary=Sixel</code></pre>
     <h2 style="margin-top: 40px;">Tasks</h2>
 
     <h3 style="margin-top: 24px;">Fit an image into a fixed box</h3>
-    <pre class="code"><code class="language-shell">candy-image --size=80x24 --scale=fit photo.png
+    <pre class="code"><code class="language-shell">candy-image --size=80x24 --scale=fit photo.png</code></pre>
     <p><code>--scale</code> takes <code>fit</code>, <code>shrink</code>, <code>fill</code>, <code>stretch</code>, <code>none</code> or <code>crop</code>, and maps straight onto sugar-image's <code>Scale</code> enum. <code>--width</code> and <code>--height</code> set one leg each and cannot be mixed with <code>--size</code>.</p>
 
     <h3 style="margin-top: 24px;">Pick a protocol by hand</h3>
@@ -63,7 +63,7 @@ candy-image --format=symbols --symbols=ascii logo.png        # ASCII-art glyph t
 
     <h2 style="margin-top: 40px;">API reference</h2>
     <p>The library surface is <code>SugarCraft\CandyImage\Cli</code>, a static class that the bin and the tests both call. Rendering belongs to sugar-image and is documented there.</p>
-    <pre class="code"><code class="language-php">public static function main(array $argv, $stdout, $stderr, ?\Closure $play = null): int</code></pre>
+    <pre class="code"><code class="language-text">public static function main(array $argv, $stdout, $stderr, ?\Closure $play = null): int</code></pre>
     <p><code>main()</code> returns the exit code. <code>$play</code> is a seam for the animation loop, so a test can drive the wired <code>Player</code> without a terminal.</p>
     <table class="api-table">
     <tr><th>Class</th><th>Method</th><th>Description</th></tr>
