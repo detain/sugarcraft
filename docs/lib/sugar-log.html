@@ -310,16 +310,14 @@ $hooks-&gt;remove($id);</code></pre>
 
     <h3 id="order-the-parts-of-a-text-line" style="margin-top: 24px;">Order the parts of a text line</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Log\{Logger, PartsOrder};
-use SugarCraft\Log\Formatter\TextFormatter;
 
-$log = Logger::new(formatter: new TextFormatter(partsOrder: PartsOrder::syslog()));
-$order = new PartsOrder([PartsOrder::PART_MESSAGE, PartsOrder::PART_LEVEL, PartsOrder::PART_FIELDS]);</code></pre>
+$log = Logger::new(partsOrder: PartsOrder::syslog());</code></pre>
     <p><code>PartsOrder</code> applies only to <code>TextFormatter</code>. A JSON object has no member order, and a logfmt record is fixed-shape, so both ignore it. The constructor refuses unknown or duplicated parts and names the offenders, so a typo such as <code>msg</code> cannot silently delete the message from every line.</p>
 
     <h3 id="install-a-panic-handler" style="margin-top: 24px;">Install a panic handler</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Log\{Log, PanicFormatter};
 
-Log::installPanicHandler();                               // default formatter, styled only on a color terminal
+Log::installPanicHandler();                               // default formatter, styled on a color terminal or when CLICOLOR_FORCE is set
 Log::installPanicHandler(PanicFormatter::plain(true, ['/etc/secrets']));   // or force plain text with redaction</code></pre>
     <p>The handler catches uncaught exceptions and fatal PHP errors, restores the terminal from alternate-screen mode, and prints a report with the error class, message and backtrace. <code>Log::removePanicHandler()</code> undoes the install and restores whatever handling existed before it. Pass the formatter itself, not extra options: a call that passes both a formatter and <code>showLocals</code> or <code>redactPaths</code> throws, rather than dropping them.</p>
 
@@ -466,7 +464,7 @@ Logger::new()-&gt;setStyles($styles);</code></pre>
     <p>The examples live in <code>examples/</code> and need <code>composer install</code> first. None of them takes arguments.</p>
 
     <h3 id="examples-demo-php" style="margin-top: 24px;">examples/demo.php</h3>
-    <p>Exercises every level, the structured fields, the child loggers, the three formatters and the stdlog adapter. It exits with status 0. The end of its output is the stdlog adapter's fatal record, which is caught and printed as <code>(fatal contract: ...)</code>.</p>
+    <p>Exercises every level, the structured fields, the child loggers, the three formatters and the stdlog adapter. It exits with status 0. The stdlog adapter's fatal record is caught and printed as <code>(fatal contract: ...)</code>, and the output ends with a <code>Done.</code> line after it.</p>
     <pre class="code"><code class="language-shell">php examples/demo.php</code></pre>
 
     <h3 id="examples-panic-handler-php" style="margin-top: 24px;">examples/panic-handler.php</h3>
