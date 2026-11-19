@@ -15,6 +15,8 @@ use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Async\Await;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\Backend\RemoteBackend;
@@ -355,30 +357,23 @@ final class Attach
     /**
      * Run the loop until $promise settles or $seconds pass: its value, its
      * rejection, or null on the timeout.
+     *
+     * A rejection is handed back as a value (the caller tells it from a
+     * session by its type), so the only exception {@see Await::until()} can
+     * throw here is its own budget's {@see TimeoutException}, which is the one
+     * caught: a rejection that happens to be a TimeoutException stays a value.
      */
     private static function await(PromiseInterface $promise, float $seconds): mixed
     {
-        $done = false;
-        $result = null;
-        $promise->then(
-            static function (mixed $value) use (&$done, &$result): void {
-                $done = true;
-                $result = $value;
-                Loop::stop();
-            },
-            static function (\Throwable $e) use (&$done, &$result): void {
-                $done = true;
-                $result = $e;
-                Loop::stop();
-            },
+        $settled = $promise->then(
+            null,
+            static fn (\Throwable $e): \Throwable => $e,
         );
-        if (!$done) {
-            $timer = Loop::addTimer($seconds, static fn () => Loop::stop());
-            Loop::run();
-            Loop::cancelTimer($timer);
+        try {
+            return Await::until($settled, $seconds);
+        } catch (TimeoutException) {
+            return null;
         }
-
-        return $done ? $result : null;
     }
 
     /** The server's own words for a refused upgrade, when it sent JSON. */

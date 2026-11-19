@@ -6,7 +6,9 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Code\Cli\Attach;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Host\SessionEvent;
@@ -326,6 +328,35 @@ final class AttachResumeTest extends TestCase
         $this->fixture->run(0.05);
 
         return $host;
+    }
+
+    /**
+     * The connect wait now rides Await::until. It must still hand back the
+     * value, hand a rejection back as a value (even a TimeoutException, which
+     * is a session outcome, not the wait's own budget), and give up as null
+     * once the budget elapses.
+     */
+    public function testTheConnectWaitKeepsItsBudgetAndHandsBackEveryOtherOutcome(): void
+    {
+        $await = new \ReflectionMethod(Attach::class, 'await');
+
+        $resolved = new Deferred();
+        $resolved->resolve('session');
+        self::assertSame('session', $await->invoke(null, $resolved->promise(), 1.0));
+
+        $refusal = new \RuntimeException('refused');
+        $refused = new Deferred();
+        $refused->reject($refusal);
+        self::assertSame($refusal, $await->invoke(null, $refused->promise(), 1.0));
+
+        $inner = new TimeoutException('the server never answered', seconds: 1.0);
+        $timedOutInside = new Deferred();
+        $timedOutInside->reject($inner);
+        self::assertSame($inner, $await->invoke(null, $timedOutInside->promise(), 1.0));
+
+        $started = \microtime(true);
+        self::assertNull($await->invoke(null, (new Deferred())->promise(), 0.05));
+        self::assertLessThan(5.0, \microtime(true) - $started, 'the budget bounds the wait');
     }
 
     private function pumpUntil(\Closure $condition, float $timeout = 10.0): bool
