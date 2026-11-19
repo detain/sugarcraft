@@ -85,6 +85,43 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertNull($this->router->channelFor('other:acc:x'));
     }
 
+    /**
+     * An in-process host settles a refused create at once. The memo must be set before that
+     * settlement clears it, or the refused create poisons the conversation for good.
+     */
+    public function testASynchronouslyRefusedCreateDoesNotPoisonTheNextMessage(): void
+    {
+        $this->build();
+        $this->serve->createRefusals = 1;
+
+        $this->bindWithPrompt('first', 'm1');
+        $this->assertNull($this->store->bindings[self::KEY] ?? null, 'a refused create leaves nothing bound');
+
+        $this->bindWithPrompt('second', 'm2');
+
+        $this->assertCount(2, $this->serve->createdNames, 'the next message creates again');
+        $this->assertSame('s1', $this->store->bindings[self::KEY]);
+    }
+
+    /**
+     * A ServeClient that throws from createSession instead of rejecting must not strand the
+     * single-flight memo: the next message for the conversation has to create again.
+     */
+    public function testASynchronouslyThrownCreateDoesNotPoisonTheNextMessage(): void
+    {
+        $this->build();
+        $this->serve->createThrows = 1;
+
+        $this->bindWithPrompt('first', 'm1');
+        $this->assertNull($this->store->bindings[self::KEY] ?? null, 'a thrown create leaves nothing bound');
+
+        $this->bindWithPrompt('second', 'm2');
+
+        $this->assertCount(2, $this->serve->createdNames, 'the next message creates again after a synchronous throw');
+        $this->assertSame('s1', $this->store->bindings[self::KEY]);
+        $this->assertSame(['<fenced>second</fenced>'], \array_column($this->serve->sent, 'text'));
+    }
+
     public function testIdleInboundMintsASessionNamedByTheGrammarAndSendsAFencedQueuedPrompt(): void
     {
         $this->build();

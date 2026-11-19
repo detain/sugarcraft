@@ -6,7 +6,6 @@ namespace CandyCode\Bundles\MsTeams\Tests\Fixture;
 
 use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
 use CandyCode\Bundles\MsTeams\MsTeams\Rest;
 use CandyCode\Bundles\MsTeams\MsTeams\TokenBroker;
@@ -47,7 +46,7 @@ trait FaceHarness
 
     protected ?FakeServe $served = null;
 
-    protected ?ServeBridge $bridge = null;
+    protected ?\SugarCraft\Plugins\Bridge\ServeClient $bridge = null;
 
     protected function bootFixtures(): void
     {
@@ -66,8 +65,7 @@ trait FaceHarness
         if (isset($this->face)) {
             $this->face->cancelAllTimers();
         }
-        $this->bridge?->stop();
-        $this->served?->stop();
+        $this->served?->disconnect();
         $this->api->stop();
         foreach (\glob($this->tempDir . '/*') ?: [] as $file) {
             @\unlink($file);
@@ -78,7 +76,7 @@ trait FaceHarness
     /**
      * @param \Closure(): float|null $clock injected throttle clock; null = wall time
      */
-    protected function buildFace(array $cfg, ?\Closure $clock = null, ?ServeBridge $serve = null): void
+    protected function buildFace(array $cfg, ?\Closure $clock = null, ?\SugarCraft\Plugins\Bridge\ServeClient $serve = null): void
     {
         $rest = new Rest(new TokenBroker(
             ['appId' => self::HARNESS_APP_ID, 'appPassword' => 'p', 'tenantId' => 't'],
@@ -86,7 +84,7 @@ trait FaceHarness
             'http://127.0.0.1:' . $this->api->port,
         ), Log::silent(), true, $this->loop, $this->safety);
         $router = new ConversationRouter(
-            $serve ?? new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            $serve ?? (new FakeServe($this->loop))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             $this->safety,
@@ -101,11 +99,10 @@ trait FaceHarness
     /** Dial a real FakeServe and keep the bridge for the test's lifetime. */
     protected function startServe(): FakeServe
     {
-        $this->served = new FakeServe($this->loop, 'tok-serve');
-        $port = $this->served->listen();
-        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $this->served = new FakeServe($this->loop);
+        $this->bridge = $this->served->client();
         $started = false;
-        $this->bridge->start()->then(static function () use (&$started): void {
+        $this->served->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {

@@ -6,7 +6,6 @@ namespace CandyCode\Bundles\MsTeams\Tests\Bridge;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
@@ -93,7 +92,7 @@ final class ConversationRouterTest extends TestCase
 
     private FakeServe $serve;
 
-    private ServeBridge $bridge;
+    private \SugarCraft\Plugins\Bridge\ServeClient $bridge;
 
     private SessionMap $map;
 
@@ -110,9 +109,8 @@ final class ConversationRouterTest extends TestCase
     protected function setUp(): void
     {
         $this->loop = new StreamSelectLoop();
-        $this->serve = new FakeServe($this->loop, 'tok-123456');
-        $port = $this->serve->listen();
-        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-123456', 'subprotocol', Log::silent(), $this->loop);
+        $this->serve = new FakeServe($this->loop);
+        $this->bridge = $this->serve->client();
 
         $this->tempDir = sys_get_temp_dir() . '/p3-router-' . getmypid() . '-' . uniqid('', true);
         $this->map = new SessionMap($this->tempDir . '/map/map.sqlite');
@@ -121,8 +119,7 @@ final class ConversationRouterTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->bridge->stop();
-        $this->serve->stop();
+        $this->serve->disconnect();
         if ($this->tempDir !== '') {
             $this->removeTree($this->tempDir);
         }
@@ -175,6 +172,29 @@ final class ConversationRouterTest extends TestCase
         $this->inboundDm('retry', false, 'm-2');
 
         self::assertSame(2, $this->serve->createSeen, 'the next inbound mints a fresh attempt — a rejected promise is never memoized');
+        self::assertSame(1, $this->serve->sendSeen);
+        self::assertSame('retry', $this->serve->seenText);
+    }
+
+    /**
+     * A host that throws from session.create instead of rejecting must not strand the
+     * single-flight memo: the next inbound has to mint a fresh attempt, not ride a promise
+     * that nothing will ever settle.
+     */
+    public function testASynchronouslyThrownSessionCreateLeavesNoMemoBehind(): void
+    {
+        $this->boot();
+        $this->serve->createThrows = true;
+        $this->inboundDm('thrown', false, 'm-1');
+
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertSame(0, $this->serve->sendSeen, 'a create that threw materialized nothing to prompt');
+        self::assertNotEmpty($this->face->delivered, 'the thrown create still answers in the chat (failWith arm)');
+
+        $this->serve->createThrows = false;
+        $this->inboundDm('retry', false, 'm-2');
+
+        self::assertSame(2, $this->serve->createSeen, 'the next inbound mints a fresh attempt after a synchronous throw');
         self::assertSame(1, $this->serve->sendSeen);
         self::assertSame('retry', $this->serve->seenText);
     }
@@ -536,7 +556,7 @@ final class ConversationRouterTest extends TestCase
     public function testARefusedPromptAnswersInTheChatNotOnlyTheLog(): void
     {
         $this->boot();
-        $this->bridge->stop();
+        $this->serve->disconnect();
         self::runFor($this->loop, 50);
 
         $sendPrompt = new \ReflectionMethod(ConversationRouter::class, 'sendPrompt');
@@ -636,7 +656,7 @@ final class ConversationRouterTest extends TestCase
         $this->router->addChannel($face ?? $this->face, 'default');
 
         $started = false;
-        $this->bridge->start()->then(static function () use (&$started): void {
+        $this->serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         // msteams-27: handshake admission awaited at 5 ms granularity instead

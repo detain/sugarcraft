@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
-use SugarCraft\ServeProtocol\Protocol;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
 use CandyCode\Bundles\MsTeams\Bridge\StreamingFace;
 use CandyCode\Bundles\MsTeams\Support\Keys;
@@ -246,7 +246,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at Protocol::ASK_EXPIRY_SECONDS no matter what this
+     * refuses the ask at AskExpiry::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -259,7 +259,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = Protocol::ASK_EXPIRY_SECONDS;
+        $ceiling = AskExpiry::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,
@@ -1324,16 +1324,6 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             'textFormat' => 'markdown',
             'text' => $content,
         ])->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
-    }
-
-    /**
-     * The serve-dial state machine rebuilds the router whenever the local
-     * serve endpoint (re)appears; the faces outlive the dial, so they take
-     * the new router here instead of being re-constructed.
-     */
-    public function rebindRouter(ConversationRouter $router): void
-    {
-        $this->router = $router;
     }
 
     public function accountName(): string

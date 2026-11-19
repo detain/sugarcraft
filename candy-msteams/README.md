@@ -440,8 +440,11 @@ with `why` set to `no bearer` or `token refused`). For a refused token, check:
 - `channels.msteams ... tenantId is not a directory GUID ... refusing to start`
   means the stored or env `tenantId` is `common`, `organizations`, a domain, or
   malformed. Replace it with the Directory (tenant) ID GUID.
-- `channels.msteams.serve_down` / `serve_dial_failed`: the bundle cannot reach
-  the local serve. A session is not created until it can.
+- `channels.msteams.serve_dial_failed`: the in-process hello to the serve was
+  refused. The bundle redials on a ladder (0.25 s doubling, capped at 30 s).
+- `channels.msteams.serve_giveup`: 60 hellos in a row were refused, so the bundle
+  stopped redialling. Fix the serve side, then restart `candy-code serve`. A
+  session is not created until the hello lands.
 - The service URL. Replies go to the activity's `serviceUrl`, which must be
   HTTPS on a Bot Framework host (`botframework.com`, `smba.trafficmanager.net`,
   `msg.teams.microsoft.com`). Other hosts are refused before any token is sent

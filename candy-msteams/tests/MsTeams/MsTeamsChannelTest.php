@@ -16,8 +16,8 @@ use GuzzleHttp\Psr7\Utils;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
-use SugarCraft\ServeProtocol\Auth\TokenFile;
-use SugarCraft\ServeProtocol\Discovery\LiveRecord;
+use SugarCraft\Plugins\Bridge\HostServicesServeClient;
+use SugarCraft\Plugins\Host\HostServices;
 
 /**
  * Policy-door pins for the channel root, bundle-local (the marketplace
@@ -426,84 +426,93 @@ final class MsTeamsChannelTest extends TestCase
     }
 
     /**
-     * msteams-02: the 5 s discovery poll must dial ONE router per serve,
-     * not one per tick. Two ticks over an unchanged discovery + token keep
-     * the ServeBridge/ConversationRouter objects; flipping the token rotates
-     * them. This is the finding's evidence gap: nothing on disk ever touched
-     * dialIdentity/pollServe before this pin.
+     * PL-5d: the channel calls the serve through the host it is given, in process. Start
+     * connects that host once and routes through a client over it. No discovery record is read.
      */
-    public function testAnUnchangedDiscoveryKeepsTheRouterAcrossPollTicks(): void
+    public function testTheChannelConnectsTheInjectedHostOnceAndRoutesThroughIt(): void
     {
-        $serve = new FakeServe($this->loop, 'tick-token');
-        $port = $serve->listen();
-        $serverDir = $this->homeRoot . '/server-state';
-        putenv('CANDY_CODE_SERVER_DIR=' . $serverDir);
-        mkdir($serverDir, 0o700, true);
-        $dir = $serverDir;
-        // A live record for this process; a null start time reads as "this pid, alive".
-        file_put_contents($dir . '/server.json', (string) json_encode([
-            'pid' => getmypid(),
-            'url' => 'http://127.0.0.1:' . $port,
-            'procStartTime' => null,
-            'version' => '0.0.0-test',
-            'host' => '127.0.0.1',
-            'port' => $port,
-        ]));
-        $tokenPath = $dir . '/' . TokenFile::FILE;
-        file_put_contents($tokenPath, 'tick-token');
-        chmod($tokenPath, 0o600);
-
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
         $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
-            'appId' => 'app-tick', 'appPassword' => 'tick-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+            'appId' => 'app-host', 'appPassword' => 'host-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
         ]);
+        $host = new FakeServe($this->loop);
         $channel = new MsTeamsChannel();
         $channel->start($this->context(static function (string $line): void {
-        }));
-
-        $dialProp = new \ReflectionProperty(MsTeamsChannel::class, 'dialIdentity');
-        $dialProp->setAccessible(true);
-        $serveProp = new \ReflectionProperty(MsTeamsChannel::class, 'serve');
-        $serveProp->setAccessible(true);
-        $routerProp = new \ReflectionProperty(MsTeamsChannel::class, 'router');
-        $routerProp->setAccessible(true);
-        $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServe');
-        $poll->setAccessible(true);
+        }, $host));
 
         try {
-            // Boot already fired one pollServe; pump until that dial lands
-            // (a rejected/never-dial serve would leave dialIdentity '' and
-            // rebuild for the wrong reason).
-            $deadline = microtime(true) + 5.0;
-            while ($dialProp->getValue($channel) === '' && microtime(true) < $deadline) {
-                $this->pump(100);
-            }
-            self::assertNotSame('', $dialProp->getValue($channel), 'the first dial never succeeded');
+            $this->pump(50);
+            self::assertSame(1, $host->helloSeen, 'the channel connects its host exactly once');
 
-            $serveBefore = $serveProp->getValue($channel);
-            $routerBefore = $routerProp->getValue($channel);
-            self::assertNotNull($serveBefore);
-            self::assertNotNull($routerBefore);
-
-            $poll->invoke($channel);
-            self::assertSame($serveBefore, $serveProp->getValue($channel), 'an unchanged discovery must not rebuild the serve bridge');
-            self::assertSame($routerBefore, $routerProp->getValue($channel), 'an unchanged discovery must not rebuild the router');
-
-            // A rotated token is a new dial: the objects must turn over.
-            file_put_contents($tokenPath, 'tick-token-rotated');
-            chmod($tokenPath, 0o600);
-            $poll->invoke($channel);
-            self::assertNotSame($serveBefore, $serveProp->getValue($channel), 'a rotated serve token must re-dial');
-            self::assertNotSame($routerBefore, $routerProp->getValue($channel), 'a rotated serve token must rebuild the router');
+            $serve = new \ReflectionProperty(MsTeamsChannel::class, 'serve');
+            $serve->setAccessible(true);
+            self::assertInstanceOf(HostServicesServeClient::class, $serve->getValue($channel));
+            $router = new \ReflectionProperty(MsTeamsChannel::class, 'router');
+            $router->setAccessible(true);
+            self::assertNotNull($router->getValue($channel));
         } finally {
             $channel->dispose();
-            $serve->stop();
-            @unlink($tokenPath);
-            @unlink($dir . '/' . LiveRecord::FILE);
-            @rmdir($serverDir);
-            putenv('CANDY_CODE_SERVER_DIR');
         }
+    }
+
+    /**
+     * A hello refused at boot is dialled again on the retry ladder, so the channel is not dead
+     * until a serve restart (the pre-5d ServeBridge kept that ladder). The refusal lifts after the
+     * first attempt; the second hello, 0.25 s later, lands and the channel says so.
+     */
+    public function testARefusedBootHelloIsRetriedUntilTheServeAnswers(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-retry', 'appPassword' => 'retry-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $host = new FakeServe($this->loop);
+        $host->refuseHello = true;
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }, $host));
+
+        try {
+            $this->loop->addTimer(0.1, static function () use ($host): void {
+                $host->refuseHello = false;
+            });
+            $this->pump(1500);
+
+            self::assertGreaterThanOrEqual(2, $host->helloSeen, 'the refused hello is dialled again');
+            $connected = false;
+            $host->isConnected()->then(static function (bool $answer) use (&$connected): void {
+                $connected = $answer;
+            });
+            self::assertTrue($connected, 'the retried hello lands');
+            $log = implode("\n", $lines);
+            self::assertStringContainsString('channels.msteams.serve_dial_failed', $log);
+            self::assertStringContainsString('channels.msteams.serve_connected', $log);
+            self::assertStringNotContainsString('channels.msteams.serve_giveup', $log);
+        } finally {
+            $channel->dispose();
+        }
+    }
+
+    /** PL-5d: a channel started with no host starts nothing and says so. */
+    public function testWithoutAHostTheChannelStartsNothing(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-nohost', 'appPassword' => 'nohost-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }, null, false));
+
+        self::assertContains('channels.msteams: no serve host wired in, nothing started', $lines);
+        $channel->dispose();
     }
 
     /**
@@ -546,10 +555,6 @@ final class MsTeamsChannelTest extends TestCase
             $warned = \array_values(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'prune_tick_failed')));
             self::assertGreaterThanOrEqual(2, count($warned), 'each failed tick must name itself');
 
-            // The poll fence holds the same contract on a clean tick.
-            $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServeGuarded');
-            $poll->setAccessible(true);
-            $poll->invoke($channel);
         } finally {
             $channel->dispose();
         }
@@ -706,15 +711,15 @@ final class MsTeamsChannelTest extends TestCase
     }
 
     /** @param \Closure(string):void $sink */
-    private function context(\Closure $sink): PluginContext
+    private function context(\Closure $sink, ?HostServices $host = null, bool $withHost = true): PluginContext
     {
-        return $this->ctx('candy-msteams', 'msteams', $this->homeRoot, $this->loop, $sink);
+        return $this->ctx('candy-msteams', 'msteams', $this->homeRoot, $this->loop, $sink, $host, $withHost);
     }
 
     /** @param \Closure(string):void $sink */
-    private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink): PluginContext
+    private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink, ?HostServices $host = null, bool $withHost = true): PluginContext
     {
-        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir());
+        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir(), $withHost ? ($host ?? new FakeServe($loop)) : null);
     }
 
     /** @param array<string,mixed> $tree */

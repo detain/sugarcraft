@@ -278,8 +278,8 @@ final class InProcessHostServicesTest extends TestCase
         $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $heard = [];
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
-            if ($envelope->sessionId === $inId) {
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$heard, $inId): void {
+            if ($envelope['sessionId'] === $inId) {
                 $heard[] = $envelope;
             }
         }));
@@ -306,10 +306,10 @@ final class InProcessHostServicesTest extends TestCase
             \array_filter($this->wire->events(), static fn (array $event): bool => ($event['sessionId'] ?? null) === $wireId),
         ));
         self::assertNotSame([], $heard, 'the in-process listener heard the turn');
-        self::assertContainsOnlyInstancesOf(EventEnvelope::class, $heard);
-        self::assertSame($wireTypes, \array_map(static fn (EventEnvelope $e): string => $e->type, $heard));
+        self::assertContainsOnly('array', $heard);
+        self::assertSame($wireTypes, \array_map(static fn (array $e): string => $e['type'], $heard));
 
-        $seqs = \array_values(\array_filter(\array_map(static fn (EventEnvelope $e): ?int => $e->seq, $heard), static fn (?int $seq): bool => $seq !== null));
+        $seqs = \array_values(\array_filter(\array_map(static fn (array $e): ?int => $e['seq'] ?? null, $heard), static fn (?int $seq): bool => $seq !== null));
         for ($i = 1; $i < \count($seqs); $i++) {
             self::assertGreaterThan($seqs[$i - 1], $seqs[$i], 'per-session seq order, nothing reordered');
         }
@@ -324,8 +324,8 @@ final class InProcessHostServicesTest extends TestCase
             throw new \RuntimeException('listener broke');
         }));
         $heard = 0;
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
-            if ($envelope->sessionId === $inId) {
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$heard, $inId): void {
+            if ($envelope['sessionId'] === $inId) {
                 $heard++;
             }
         }));
@@ -342,7 +342,7 @@ final class InProcessHostServicesTest extends TestCase
         $this->connect();
         $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = [];
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$heard): void {
             $heard[] = $envelope;
         }));
         $this->call($this->host->subscribeSession($inId, null, null));
@@ -411,8 +411,8 @@ final class InProcessHostServicesTest extends TestCase
     }
 
     /**
-     * The wire fires follow results only from the reconnect re-follow (ServeBridge::follow never
-     * fires them), and this door has no re-follow. So neither the first subscribe nor a manual
+     * The wire fires follow results only from the reconnect re-follow (the channel-bridge copy at
+     * scripts/channel-bridge/src/Candy/ServeBridge.php, follow(), never fires them), and this door has no re-follow. So neither the first subscribe nor a manual
      * re-subscribe reaches a follow listener: the first answer is subscribeSession()'s return value.
      * Registering a listener, even a throwing one, never refuses and never runs.
      */
@@ -447,9 +447,9 @@ final class InProcessHostServicesTest extends TestCase
         $this->connect();
         $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = [];
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
-            if ($envelope->sessionId === $inId) {
-                $heard[] = $envelope->type;
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$heard, $inId): void {
+            if ($envelope['sessionId'] === $inId) {
+                $heard[] = $envelope['type'];
             }
         }));
         $this->call($this->host->subscribeSession($inId, null, null));
@@ -495,14 +495,14 @@ final class InProcessHostServicesTest extends TestCase
         $this->fixture->run();
         $first = [];
         $second = [];
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$first): void {
-            $first[] = $envelope->type;
-            if ($envelope->type === 'first') {
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$first): void {
+            $first[] = $envelope['type'];
+            if ($envelope['type'] === 'first') {
                 $this->host->disconnect();
             }
         }));
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$second): void {
-            $second[] = $envelope->type;
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$second): void {
+            $second[] = $envelope['type'];
         }));
 
         // Two events emitted in one synchronous run: the first listener's disconnect must not
@@ -775,7 +775,7 @@ final class InProcessHostServicesTest extends TestCase
         $this->connect();
         $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = [];
-        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
+        $this->call($this->host->subscribeEvents(function (array $envelope) use (&$heard): void {
             $heard[] = $envelope;
         }));
         $this->call($this->host->subscribeSession($inId, null, null));
@@ -789,10 +789,10 @@ final class InProcessHostServicesTest extends TestCase
         }
         $this->fixture->run();
 
-        $overflow = \array_values(\array_filter($heard, static fn (EventEnvelope $e): bool => $e->type === EventType::SERVER_OVERFLOW));
+        $overflow = \array_values(\array_filter($heard, static fn (array $e): bool => $e['type'] === EventType::SERVER_OVERFLOW));
         self::assertCount(1, $overflow, 'the stale notice reaches the in-process listener exactly once');
-        self::assertSame(['sessionId' => $inId, 'dropped' => $cap + 1, 'action' => 'resubscribe'], $overflow[0]->data);
-        $progress = \array_filter($heard, static fn (EventEnvelope $e): bool => $e->type === 'tool.progress');
+        self::assertSame(['sessionId' => $inId, 'dropped' => $cap + 1, 'action' => 'resubscribe'], $overflow[0]['data']);
+        $progress = \array_filter($heard, static fn (array $e): bool => $e['type'] === 'tool.progress');
         self::assertSame([], $progress, 'the hoard is discarded, not delivered late');
     }
 
@@ -859,7 +859,26 @@ final class InProcessHostServicesTest extends TestCase
     /**
      * The settled answer of an in-process call: its value, or the refusal it rejected with, thrown
      * the way the synchronous call threw it.
+     *
+     * PL-5d: the host the serve hands each channel bundle answers through the primary root's
+     * dispatcher. A bundle that calls before its hello is refused with the wire's not_initialized,
+     * and once connected a session it creates is one the wire client sees on the same dispatcher.
      */
+    public function testTheBundleFactoryAnswersThroughThePrimaryDispatcher(): void
+    {
+        $bundleHost = InProcessHostServices::bundleFactory($this->fixture->dispatcher, Loop::get())('candy-msteams');
+        self::assertInstanceOf(InProcessHostServices::class, $bundleHost);
+
+        $early = $this->refusalOf(fn () => $this->call($bundleHost->createSession('early', null)));
+        self::assertSame(ErrorCode::NotInitialized, $early->errorCode);
+
+        self::assertNull($this->fixture->await($bundleHost->connect()));
+        $id = $this->call($bundleHost->createSession('factory', null))['id'];
+        self::assertIsArray($this->wire->call('session.get', ['sessionId' => $id, 'limit' => 10]));
+
+        $this->call($bundleHost->disconnect());
+    }
+
     private function call(PromiseInterface $promise): mixed
     {
         $value = $this->fixture->await($promise);

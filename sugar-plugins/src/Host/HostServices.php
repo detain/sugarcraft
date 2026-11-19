@@ -130,6 +130,9 @@ interface HostServices
     /**
      * Delivers each session event to the listener, in per-session seq order (row 11).
      *
+     * The listener receives the event envelope as the wire carries it in a `event` notification's
+     * params (`sessionId`, `seq`, `type`, `ts`, `turnId`, `durable`, `data`), as an array.
+     *
      * No event is dropped silently. A host that cannot keep up with a listener delivers an
      * overflow notice in its place, carrying `dropped` and `action: 'resubscribe'` as the wire
      * protocol does, and the listener re-follows the session to recover the gap.

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Bridge;
 
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\Candy\ServeError;
 use CandyCode\Bundles\MsTeams\MsTeams\Commands;
 use CandyCode\Bundles\MsTeams\Support\Keys;
@@ -16,6 +15,7 @@ use CandyCode\Bundles\MsTeams\Lang;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Plugins\Bridge\ConversationRouterCore;
+use SugarCraft\Plugins\Bridge\ServeClient;
 
 /**
  * The Teams router: the shared {@see ConversationRouterCore} routing with the
@@ -42,7 +42,7 @@ final class ConversationRouter extends ConversationRouterCore
     private readonly SessionMap $teamsMap;
 
     public function __construct(
-        ServeBridge $serve,
+        ServeClient $serve,
         SessionMap $map,
         Log $log,
         TextSafety $safety,
@@ -147,33 +147,40 @@ final class ConversationRouter extends ConversationRouterCore
             return $pending;
         }
 
-        $memo = $this->serve->createSession($this->sessionName($key))
-            ->then(function (array $created) use ($key, $ref): string {
-                $sessionId = (string) ($created['id'] ?? '');
-                if ($sessionId === '') {
-                    throw new \RuntimeException('session.create returned no id');
-                }
-                $this->map->bind($key, $sessionId);
-                $this->map->rememberConversation($sessionId, $key, $ref);
-                $this->followNow($sessionId, $key);
-
-                return $sessionId;
-            })
-            ->then(
-                function (string $sessionId) use ($key): string {
+        // The memo is set before the create can settle: an in-process host settles at once, and
+        // a settle that ran first would unset a memo not yet set (PL-5d).
+        $deferred = new \React\Promise\Deferred();
+        $this->creating[$key] = $deferred->promise();
+        try {
+            $this->serve->createSession($this->sessionName($key))->then(
+                function (array $created) use ($key, $ref, $deferred): void {
                     unset($this->creating[$key]);
-
-                    return $sessionId;
+                    try {
+                        $sessionId = (string) ($created['id'] ?? '');
+                        if ($sessionId === '') {
+                            throw new \RuntimeException('session.create returned no id');
+                        }
+                        $this->map->bind($key, $sessionId);
+                        $this->map->rememberConversation($sessionId, $key, $ref);
+                        $this->followNow($sessionId, $key);
+                        $deferred->resolve($sessionId);
+                    } catch (\Throwable $e) {
+                        $deferred->reject($e);
+                    }
                 },
-                function (\Throwable $e) use ($key): never {
+                function (\Throwable $e) use ($key, $deferred): void {
                     unset($this->creating[$key]);
-
-                    throw $e;
-                }
+                    $deferred->reject($e);
+                },
             );
-        $this->creating[$key] = $memo;
+        } catch (\Throwable $e) {
+            // A ServeClient that throws instead of returning a rejected promise must not strand
+            // the memo: every later first-contact would ride a promise nothing will settle.
+            unset($this->creating[$key]);
+            $deferred->reject($e);
+        }
 
-        return $memo;
+        return $deferred->promise();
     }
 
     /**

@@ -2136,3 +2136,4 @@ candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
 candy-code/tests/Chat/HeadlessTickCancelTest.php	0.050	2
 candy-code/tests/Tools/ShellSendRelayReadyTest.php	2.100	3
 candy-code/tests/Support/ProcessIdentityParityTest.php	0.05	3
+candy-code/tests/Protocol/RpcErrorRefusalTest.php	0.005	4

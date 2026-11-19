@@ -415,6 +415,8 @@ trait ServeStartup
                             return null;
                         }
                     })(),
+                    // PL-5d: each channel calls this serve in process, one client per bundle, with no loopback dial.
+                    self::channelHostFactory($protocol, $loop),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.
@@ -573,6 +575,19 @@ trait ServeStartup
         Loop::run();
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * PL-5d: the host factory the serve hands ChannelRegistry::boot(), one in-process client per
+     * bundle over this serve's dispatcher. The result is the factory itself, not a host: boot()
+     * calls it once per bundle, so a wrapper here that returned the factory would fail every
+     * channel's start with a TypeError.
+     *
+     * @return \Closure(string): \SugarCraft\Plugins\Host\HostServices
+     */
+    public static function channelHostFactory(Dispatcher $protocol, LoopInterface $loop): \Closure
+    {
+        return \SugarCraft\Code\Host\InProcessHostServices::bundleFactory($protocol, $loop);
     }
 
     /**

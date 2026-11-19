@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
 use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
-use SugarCraft\ServeProtocol\Protocol;
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\Discord\Discord\Buttons;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
 use CandyCode\Bundles\Discord\Discord\Gateway;
@@ -199,13 +199,13 @@ final class DiscordAccountTest extends TestCase
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_clamp', 'tool' => 'Bash', 'arguments' => []]);
         $this->settled(1000, fn(): bool => $this->approvalArmed('ask_clamp'));
-        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
+        self::assertSame((float) AskExpiry::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
             'the card window must never outlive the core expiry that governs the answer');
         $clamps = \array_values(\array_filter($lines,
             static fn (string $line): bool => \str_contains($line, '"event":"approval_ttl_clamped"')));
         self::assertCount(1, $clamps, 'a clamped posture is announced exactly once');
         self::assertStringContainsString('"configuredMinutes":120', $clamps[0]);
-        self::assertStringContainsString('"armedSeconds":' . Protocol::ASK_EXPIRY_SECONDS, $clamps[0]);
+        self::assertStringContainsString('"armedSeconds":' . AskExpiry::ASK_EXPIRY_SECONDS, $clamps[0]);
         self::assertNull($this->api->lastCallFor('/channels/c1/messages/msg_out'),
             'clamping arms a shorter clock, it does not retire the card early');
     }
@@ -221,7 +221,7 @@ final class DiscordAccountTest extends TestCase
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
         $this->settled(1000, fn(): bool => $this->approvalArmed('ask_default'));
-        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame((float) AskExpiry::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
         self::assertSame([], \array_filter($lines,
             static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')),
             'a co-TTL default needs no announcement');
@@ -709,7 +709,8 @@ final class DiscordAccountTest extends TestCase
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort(), $mediaConnector);
         $this->faceGateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
         $router = new ConversationRouter(
-            new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            // No serve answers a create: the face's "could not open a session" wall.
+            (new FakeServe($this->loop, refuseCreates: true))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             new TextSafety(),
