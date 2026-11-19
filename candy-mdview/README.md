@@ -126,8 +126,10 @@ Flags:
   as empty. Every other field follows `StyleGuide`. Output changes for edge
   glamour files (owner decision, P1-12c-mdview, option b): `uppercase` or
   `lowercase` on a heading block now sets the heading case, `inline_image` and
-  `block_image` now style the image alt text, and the string `"false"` now reads
-  as off for a boolean flag. A file that uses none of these renders as before,
+  `block_image` now style the image alt text, and a flag set to `"false"`,
+  `"no"` or `"off"` (any letter case), to a non-zero float, or to a non-empty
+  array now reads as off. The full list is under "Accepted edge changes" below.
+  A file that uses none of these renders as before,
   and the three bundled themes and every built-in name render byte-identically.
   The legacy flat
   color map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
@@ -455,15 +457,19 @@ the four slots. Mapping the table and image blocks would change what existing
 style files render.
 
 Accepted edge changes (P1-12c-mdview, owner option b). The byte-identical rule
-is waived for these edge files only, and each change is listed here and in the
-commit message:
+is waived for these edge files only, and each change is listed here:
 
 - `uppercase` / `lowercase` on a heading block now sets `headingCase`. The
   former door ignored both flags.
 - `inline_image` / `block_image` now style the image alt text (`imageText`).
   The former door dropped them.
-- The string `"false"` now reads as off for a boolean flag. The former door
-  read any non-empty string as on.
+- A boolean flag (`bold`, `italic`, `underline`, `strikethrough`, `faint`) now
+  reads as off for the string `"false"`, `"no"` or `"off"` in any letter case,
+  for a non-zero float such as `1.0`, and for a non-empty array. The former
+  door tested `!empty()`, so each of these read as on. Booleans, integers,
+  `""`, `"0"` and the other strings read as they did before. The heading
+  `uppercase` / `lowercase` flags use the same reading, which the former door
+  ignored altogether.
 
 Together with the three JSON presets in `themes/`, this is the only way to
 extend the fixed built-in theme set. `GlamourDecorationGateTest` pins the gate
