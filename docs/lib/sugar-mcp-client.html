@@ -301,7 +301,7 @@ $server = new StdioMcpServer(
 <table class="api-table">
 <caption>API surface</caption>
 <thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
-<tr><td>McpMessage</td><td>parse(string $json): ?self</td><td>Decode a wire frame; null when it cannot be read as a JSON-RPC 2.0 message; an id that is neither string, int nor null is DROPPED and the message still parses (parsePreservingId() refuses such frames instead); nesting past the 64-level bound yields null, depth 64 itself parses</td></tr>
+<tr><td>McpMessage</td><td>parse(string $json): ?self</td><td>Decode a wire frame; null when it cannot be read as a JSON-RPC 2.0 message; an id that is neither string, int nor null is DROPPED and the message still parses (parsePreservingId() refuses such frames instead); nesting of 64 levels or more yields null, so the largest accepted nesting is 63</td></tr>
 <tr><td>McpMessage</td><td>request(string $id, string $method, ?array $params) / notification(string $method, ?array $params): self</td><td>Outbound request and notification envelopes</td></tr>
 <tr><td>McpMessage</td><td>success(string $id, mixed $result) / error(string $id, int $code, string $message, mixed $data = null): self</td><td>Outbound response envelopes; result is mixed by design; an explicit "data": null is indistinguishable from an absent one on round-trip</td></tr>
 <tr><td>McpMessage</td><td>toJson(): string / isRequest() / isResponse() / isNotification() / isError(): bool</td><td>Wire serialization + role predicates; toJson() throws InvalidArgumentException for an envelope JSON cannot carry (INF/NAN, invalid UTF-8) instead of emitting a blank frame</td></tr>

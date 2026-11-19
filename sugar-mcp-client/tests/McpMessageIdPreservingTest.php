@@ -92,4 +92,18 @@ final class McpMessageIdPreservingTest extends TestCase
         self::assertNull($null->wireId);
         self::assertTrue($null->wireIdSet);
     }
+
+    public function testTheLargestAcceptedNestingIsSixtyThreeLevels(): void
+    {
+        // The envelope object and its params object are two of the levels,
+        // so 61 inner arrays make the 63rd and last level json_decode accepts;
+        // 62 inner arrays make the 64th, which both parsers refuse.
+        $message = static fn (int $arrays): string => '{"jsonrpc":"2.0","id":1,"method":"x","params":{"d":'
+            . str_repeat('[', $arrays) . str_repeat(']', $arrays) . '}}';
+
+        self::assertNotNull(McpMessage::parse($message(61)), 'parse() accepts 63 levels');
+        self::assertNotNull(McpMessage::parsePreservingId($message(61)), 'parsePreservingId() accepts 63 levels');
+        self::assertNull(McpMessage::parse($message(62)), 'parse() refuses 64 levels');
+        self::assertNull(McpMessage::parsePreservingId($message(62)), 'parsePreservingId() refuses 64 levels');
+    }
 }
