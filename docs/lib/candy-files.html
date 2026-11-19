@@ -227,7 +227,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 <p>A missing or unreadable start directory refuses before the interface opens, with <code>left/right directory does not exist: &lt;dir&gt;</code> and exit status 1. The interface needs a terminal. Frame, status line and prompts are windowed to the live terminal size, so they stay on screen at any size.</p>
 
 <h3 id="what-the-screen-looks-like" style="margin-top: 32px;">What the screen looks like</h3>
-<p>The example below is the real renderer output for two in-memory panes, captured with <code>php examples/browse.php</code>. Each pane has its own working directory, cursor and sort; the status line on the last row names the focused pane and the keys it accepts.</p>
+<p>The example below is the real renderer output for two in-memory panes, captured with <code>php examples/browse.php</code> and clipped to 84 columns for the page, so the status line ends in an ellipsis where the live example prints it in full. Each pane has its own working directory, cursor and sort; the status line on the last row names the focused pane and the keys it accepts.</p>
 <pre class="code"><code class="language-text">┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌──────────────────────────────────────┐
 ┃ /work/left  [Name ↑]                 ┃  │ /work/right  [Name ↑]                │
 ┃ ──────────────────────────────────── ┃  │ ──────────────────────────────────── │
@@ -302,7 +302,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 </table>
 
 <h3 id="constructing-manager" style="margin-top: 32px;">Constructing Manager</h3>
-<p>Prefer the builder to the 26-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, such as recursive search results, the in-flight copy count, and the help overlay, takes safe defaults and is not exposed on the builder.</p>
+<p>Prefer the builder to the 32-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, such as recursive search results, the in-flight copy count, and the help overlay, takes safe defaults and is not exposed on the builder.</p>
 <pre class="code"><code class="language-php">use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\FsLister;
 use SugarCraft\Files\Manager;

@@ -44,7 +44,7 @@ $git = new Git(getcwd());
 
 <h3 style="margin-top: 32px;">Trust boundary</h3>
 <p>Opening a repository executes its configuration unless told otherwise, and git has several config keys that name <em>executables</em>. CandyGit runs every git call through a fixed argument prelude, <code>-c core.quotepath=off -c core.fsmonitor=false</code>, plus <code>--no-ext-diff</code> on diffs. That disarms the repository-controlled execution channels it can neutralize without breaking legitimate tooling. Merge drivers are enumerated on the merged config scope and each one is overridden with <code>false</code> before any merge-capable command. A driver shape that cannot be re-expressed makes the merge refuse outright.</p>
-<p>Filter drivers (<code>clean</code>, <code>smudge</code>, <code>process</code>) are detected and announced on stderr rather than silently disarmed, because git-lfs-class tooling depends on them. Set <code>CANDY_GIT_STRICT_FILTERS=1</code> to turn that announcement into a refusal. Child processes start through a single <code>proc_open</code> site with a pinned environment, including <code>GIT_TERMINAL_PROMPT=0</code>.</p>
+<p>Filter drivers (<code>clean</code>, <code>smudge</code>, <code>process</code>) are detected and announced on stderr rather than silently disarmed, because git-lfs-class tooling depends on them. Set <code>CANDY_GIT_STRICT_FILTERS=1</code> to turn that announcement into a refusal. Git and other child processes start through <code>Process::run()</code>, which pins the environment, including <code>GIT_TERMINAL_PROMPT=0</code>. The one other <code>proc_open</code> caller is the Windows process-tree teardown in <code>Platform</code>, which spawns <code>taskkill</code> and the MSYS group-kill script under a bounded drain without that pinned environment.</p>
 <p>A hostile clone can still reach a trusted global git-lfs driver through its <code>.gitattributes</code>. Operate only on repositories you trust. The full disclosure is in the README's Trust boundary section.</p>
 
 <h2 style="margin-top: 40px;">Tasks</h2>
@@ -87,7 +87,7 @@ $git = new Git(getcwd());
 <tr><td>GitDriver</td><td>interface</td><td>The contract that <code>App</code> consumes. Tests inject a fixture-backed implementation.</td></tr>
 <tr><td>App</td><td>start(GitDriver): self</td><td>Builds the app model for a driver.</td></tr>
 <tr><td>DiffViewer</td><td>currentHunkPatch(): string, hunkCount(): int</td><td>The selected hunk as a patch, and the number of hunks. The patch is empty when the diff has no hunks.</td></tr>
-<tr><td>StashManager</td><td>fuzzyFilter(query): self</td><td>Ranks stash entries by message and branch through <a href="sugar-fuzzy.html">sugar-fuzzy</a>. The stash overlay does not call it yet.</td></tr>
+<tr><td>StashManager</td><td>fuzzyFilter(query): self</td><td>Ranks stash entries by message and branch through <a href="sugar-fuzzy.html">sugar-fuzzy</a>. The stash overlay's <code>/</code> search calls it when Enter commits the query.</td></tr>
 <tr><td>HistoryManager</td><td>push(HistoryEntry): self</td><td>Adds an undoable entry and clears the redo lane. The cap is <code>MAX_HISTORY = 100</code>.</td></tr>
 <tr><td>Pane</td><td>Status, Branches, Log; next()</td><td>The pane enum, with <code>next()</code> for <code>Tab</code> cycling.</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translation lookup in the <code>git</code> namespace. See Internationalization.</td></tr>
@@ -216,9 +216,6 @@ $git = new Git(getcwd());
 <h3 style="margin-top: 32px;">git: command timed out after 30s</h3>
 <p>A git call ran past its 30-second budget, usually a slow remote or a fetch waiting on credentials. Git calls run on the UI thread, so the screen pauses until the call returns or times out. Check the network or the remote, then retry. The timed-out child is stopped with <code>TERM</code>, then <code>KILL</code>.</p>
 
-<h3 style="margin-top: 32px;">The stash overlay does not filter by fuzzy match</h3>
-<p><code>StashManager::fuzzyFilter()</code> is a tested API, but the stash overlay does not call it yet. Filtering the overlay by fuzzy match is on the roadmap.</p>
-
 <h2 style="margin-top: 40px;">Upstream mapping</h2>
 <p>lazygit is the design antecedent. CandyGit mirrors its three-pane workflow and its single-key verbs, and it is native PHP rather than a port, so there is no class-for-class table. Each verb maps to a <code>git</code> subcommand, which is why the git documentation is the reference for behavior. The table in the API reference lists the classes that carry it.</p>
 
@@ -228,7 +225,7 @@ $git = new Git(getcwd());
 <tr><th>Class</th><th>Role</th></tr>
 <tr><td><code>App</code></td><td>The TEA model. Owns the lists, cursors, focus and overlays. Each key returns a fresh instance.</td></tr>
 <tr><td><code>Git</code>, <code>GitDriver</code></td><td>The concrete shell-out driver, and the interface every operation goes through. Tests inject a fixture-backed driver.</td></tr>
-<tr><td><code>Process</code></td><td>The only <code>proc_open</code> site. It runs a bounded drain loop, pins the child environment, isolates stdin from the terminal, and tears down with TERM, a grace period, then KILL.</td></tr>
+<tr><td><code>Process</code></td><td>The main <code>proc_open</code> site. It runs a bounded drain loop, pins the child environment, isolates stdin from the terminal, and tears down with TERM, a grace period, then KILL. <code>Platform::runBounded()</code> is the other caller (Windows teardown only) and does not pin the environment.</td></tr>
 <tr><td><code>Platform</code></td><td>The OS seam: the null device, PATH lookup, and process-tree kill on Windows. Both branches are unit-tested on any host.</td></tr>
 <tr><td><code>HistoryEntry</code>, <code>HistoryManager</code></td><td>One undoable operation with its inverse or a refusal marker, and the bounded undo and redo stacks.</td></tr>
 <tr><td><code>DiffViewer</code>, <code>DiffHighlighter</code></td><td>The immutable diff overlay state with hunk navigation, and the per-line highlight spans.</td></tr>
