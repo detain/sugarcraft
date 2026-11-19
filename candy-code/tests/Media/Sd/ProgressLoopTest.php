@@ -385,6 +385,48 @@ final class ProgressLoopTest extends TestCase
         self::assertSame([0.001], $sleeps, 'the millisecond backoff base floors at 1 ms, so the pause never rounds to zero');
     }
 
+    public function testCancelDuringAFlappingReadoutReturnsTheDoneSummaryWithoutAPause(): void
+    {
+        $beats = 0;
+        $sleeps = [];
+        $summary = $this->runLoop(
+            $this->clientQueuing([new \RuntimeException('blip')]),
+            static fn (): bool => true,
+            $beats,
+            $sleeps,
+        );
+
+        self::assertSame(ProgressSummary::TERMINATION_DONE, $summary->termination);
+        self::assertSame(0, $summary->polls, 'no readout ever succeeded, so no poll is counted');
+        self::assertSame(1, $this->attempts, 'the cancel lands after the first failed dial and no retry follows');
+        self::assertSame([], $sleeps, 'cancel wins before the retry pause');
+        self::assertSame(1, $beats, 'the watchdog is fed on the tolerated failure before the cancel is honored');
+    }
+
+    public function testANonMillisecondIntervalIsPacedAtItsRoundedWholeMillisecond(): void
+    {
+        // Backoff holds whole milliseconds: 0.2505 s rounds to 251 ms, so the
+        // sleeper receives 0.251 and not the exact float. Pinned so the
+        // quantization stays a documented behavior rather than a drift.
+        $done = 0;
+        $sleeps = [];
+        ProgressLoop::run(
+            $this->clientQueuing([['progress' => 0.1], ['progress' => 0.2]]),
+            static function (): void {
+            },
+            static function () use (&$done): bool {
+                return ++$done >= 2;
+            },
+            null,
+            0.2505,
+            static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([0.251], $sleeps);
+    }
+
     public function testAnIntervalAboveThePollCeilingIsRefusedUpFront(): void
     {
         $this->expectException(SdException::class);

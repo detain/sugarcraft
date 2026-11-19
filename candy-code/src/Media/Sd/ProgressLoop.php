@@ -86,7 +86,9 @@ final class ProgressLoop
         $wantsPreview = $onPreviewFrame !== null;
 
         // One poll per attempt; Poll::until paces the attempts on the
-        // synchronous loop, so each pause is the same interval sleep as before.
+        // synchronous loop. Backoff holds whole milliseconds, so each pause is
+        // the interval rounded to the nearest ms (floored at 1 ms): a 0.2505 s
+        // interval reaches the sleeper as 0.251 s, not the exact float.
         $attempt = static function () use (
             $c,
             $heartbeat,
