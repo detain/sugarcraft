@@ -284,6 +284,21 @@ final class HtmlToMarkdownTest extends TestCase
         $this->assertSame("After bom\n", $markdown);
     }
 
+    public function testByteOrderMarkDoesNotCountTowardTheParseCap(): void
+    {
+        // The parser reads MAX_PARSE_BYTES after the BOM is stripped, so a
+        // body that is exactly the cap converts whether or not it carries a BOM.
+        $body = str_repeat('a', HtmlToMarkdown::MAX_PARSE_BYTES);
+
+        $this->assertNotNull(HtmlToMarkdown::convert("\xEF\xBB\xBF" . $body, 'http://example.test/'));
+        $this->assertNull(HtmlToMarkdown::convert("\xEF\xBB\xBF" . $body . 'a', 'http://example.test/'));
+    }
+
+    public function testByteOrderMarkAloneIsRefusedLikeEmptyInput(): void
+    {
+        $this->assertNull(HtmlToMarkdown::convert("\xEF\xBB\xBF", 'http://example.test/'));
+    }
+
     public function testCommentsSurviveAsInertLiteralText(): void
     {
         $markdown = HtmlToMarkdown::convert('<p>a<!-- keep me -->b</p>', '');

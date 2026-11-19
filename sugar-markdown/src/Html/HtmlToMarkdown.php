@@ -149,7 +149,7 @@ final class HtmlToMarkdown
      */
     public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
-        if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
+        if ($html === '') {
             return null;
         }
         if (!class_exists(DOMDocument::class)) {
@@ -161,9 +161,12 @@ final class HtmlToMarkdown
         // encoding it was never told; undeclared BOMs are common in the wild.
         if (str_starts_with($html, "\xEF\xBB\xBF")) {
             $html = substr($html, 3);
-            if ($html === '') {
-                return null;
-            }
+        }
+
+        // Measured after the BOM strip: the cap bounds what reaches the parser,
+        // and a BOM is not content the parser ever reads.
+        if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
+            return null;
         }
 
         // Without any declaration the HTML parser reads bytes as its
