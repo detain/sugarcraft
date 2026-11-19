@@ -242,7 +242,7 @@ $resend  = new ResendTransport();                              // reads RESEND_A
 $mailgun = new MailgunTransport(domain: 'mg.example.com', region: MailgunTransport::REGION_EU);
 
 (new Mailer($resend))->send($email);</code></pre>
-    <p>A transport constructed with an empty key falls back to the environment. A key that contains whitespace or a control character is refused at construction, before any request is made. The API transports never send without a key.</p>
+    <p>A transport constructed with an empty key falls back to the environment. A key that contains whitespace or a control character is refused at construction, before any request is made. One gap remains: a single trailing line feed passes that check, so trim a key read from a file before you pass it. The API transports never send without a key.</p>
 
     <h3 id="embed-an-inline-image-and-reference-it-by-content-id" style="margin-top: 24px;">Embed an inline image and reference it by content ID</h3>
     <pre class="code"><code class="language-php">$html = $email
@@ -326,7 +326,7 @@ candy-mail --from ops@example.com --to you@example.com --attach build.zip --rend
     </table>
 
     <h2 id="examples" style="margin-top: 40px;">Examples</h2>
-    <p>The <code>examples/</code> directory holds six runnable programs. Each one prints an offline MIME preview unless it finds the credentials it needs, so none of them sends mail by accident.</p>
+    <p>The <code>examples/</code> directory holds six runnable programs. Five of them print an offline MIME preview unless they find the credentials they need, so none of them sends mail by accident. <code>showcase.php</code> prints a field summary instead of a MIME message.</p>
     <ul>
       <li><code>examples/showcase.php</code> builds <code>Email</code> and attachment values and prints their fields. It needs no SMTP or Resend access.</li>
       <li><code>examples/basic.php</code> sends through the Resend API when <code>RESEND_API_KEY</code> is set. Without a key it prints the composed MIME message.</li>

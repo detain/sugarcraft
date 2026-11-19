@@ -1,7 +1,7 @@
 <p class="lede" style="margin-top: 28px;">candy-flappy is a terminal flap game. The bird's vertical motion is a SugarSpring <code>Projectile</code> (gravity plus an upward velocity kick on each flap), pipes slide left one cell per tick, and collision is tested per cell. The game state is a pure value: <code>Game</code> is a SugarCraft Model, so every key, tick and resize returns a new <code>Game</code>, and <code>Renderer</code> paints one frame from it. The design is a native PHP take on <a href="https://github.com/kbrgl/flapioca">flapioca</a>; the Go original ticks at 5 Hz, and this port runs the same one-column-per-tick rule at 30 ticks per second.</p>
 
     <h2 style="margin-top: 40px;">Install</h2>
-    <p>Requires PHP 8.3 or newer. The package is pre-1.0 and publishes a dev branch only, so Composer needs the explicit <code>@dev</code> constraint:</p>
+    <p>Requires PHP 8.3 or newer with the <code>intl</code> and <code>mbstring</code> extensions. The package is pre-1.0 and publishes a dev branch only, so Composer needs the explicit <code>@dev</code> constraint:</p>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flappy:@dev   # the game binary lands in vendor/bin/candy-flappy</code></pre>
     <p>A standalone <code>.phar</code> is published with the GitHub releases and runs with <code>php candy-flappy.phar</code>. A monorepo checkout needs only <code>composer install</code> inside <code>candy-flappy/</code>.</p>
 
@@ -113,7 +113,7 @@ FORCE_COLOR=1 php examples/play.php   # draws into a pipe on purpose; use a real
     <tr><td><code>PipeGenerator::GAP_SHRINK_INTERVAL</code>, <code>GAP_SHRINK_STEP</code></td><td>5, 1</td><td>The gap loses one cell every five points</td></tr>
     <tr><td><code>Game::MAX_HIGH_SCORES</code></td><td>10</td><td>Entries kept on the board</td></tr>
     <tr><td><code>Game::MAX_SCORE_FILE_BYTES</code></td><td>65536</td><td>Larger score files are quarantined, not read</td></tr>
-    <tr><td><code>Game::SCORE_CEILING</code></td><td>100000</td><td>Highest whole score the board accepts on read and write</td></tr>
+    <tr><td><code>Game::SCORE_CEILING</code></td><td>100000</td><td>Scores at or above this are refused on read and write, so 99999 is the highest score the board keeps</td></tr>
     </table>
 
     <h2 style="margin-top: 40px;">Keys and input</h2>

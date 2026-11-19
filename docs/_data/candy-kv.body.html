@@ -33,12 +33,12 @@ candy-kv delete 'tmp-*' --dry-run    # reports how many entries would go, writes
 candy-kv prune                       # removes expired residue from the default database
 candy-kv export json &gt; backup.json
 candy-kv import json backup.json     # atomic within one database; a file spanning databases needs --no-atomic</code></pre>
-    <p>Exit codes: <code>0</code> on success, <code>1</code> for a miss, no match or a runtime failure, and <code>2</code> for usage errors. Unknown flags and commands are refused before anything is written. <code>candy-kv --help</code> prints the full flag list.</p>
+    <p>Exit codes: <code>0</code> on success, <code>1</code> for a miss, no match or a runtime failure, and <code>2</code> for usage errors. Unknown flags and commands are refused before anything is written. A data directory that cannot be resolved (see the relative <code>XDG_CONFIG_HOME</code> entry under Troubleshooting) is not caught, so it exits <code>255</code>. <code>candy-kv --help</code> prints the full flag list.</p>
 
     <h2 style="margin-top: 40px;">Concepts</h2>
     <p>A <strong>store</strong> is a directory of SQLite files, one per database, named <code>&lt;dir&gt;/&lt;dbname&gt;.db</code>. Unsuffixed keys land in <code>default.db</code>. <code>Store</code> is the facade: it routes each key to a <code>Database</code> through <code>Store::splitKey()</code>, which reads the <code>key@db</code> suffix, and the <code>Database</code> does the row work. Database files are created with mode 0600, and the data directory is 0700.</p>
     <p>An <strong>Entry</strong> is one stored row: the key, its value, the binary flag, the created and modified times, and an optional expiry. An expired row is invisible to readers at once and stays on disk until <code>pruneExpired()</code> or <code>prune</code> reclaims it. <code>Database::raw()</code> is the one reader that still sees an expired row.</p>
-    <p>A <strong>binary</strong> value is stored base64-encoded with the binary flag. <code>Entry::rawValue()</code> returns the decoded bytes. The CLI picks binary mode for you when a value contains a NUL byte or invalid UTF-8, and <code>--text</code> refuses such a value outright.</p>
+    <p>A <strong>binary</strong> value is stored base64-encoded with the binary flag. <code>Entry::rawValue()</code> returns the decoded bytes. The CLI picks binary mode for you when a value contains a NUL byte or invalid UTF-8, and <code>--text</code> refuses a value containing a NUL byte outright. Under <code>--text</code>, a value that is not valid UTF-8 is still stored in binary mode.</p>
 
     <h3 style="margin-top: 24px;">Listing and fuzzy search</h3>
     <p><code>Store::list()</code> takes a glob pattern, a database name, a reverse flag and a mode of <code>all</code>, <code>keys</code> or <code>values</code>. Any other mode throws, so a typo cannot quietly yield the wrong shape. <code>Store::fuzzyFilter()</code> ranks the keys of a database against a query with a Smith-Waterman local-alignment matcher, which finds <code>usr1</code> inside <code>user:1</code>.</p>
@@ -61,13 +61,15 @@ candy-kv prune --all                # sweep expired rows from every listed datab
     <p><code>--ttl</code> must be a positive whole number of seconds, from 1 to 999999999. <code>--ttl 0</code> is a usage error, not "expire now" and not "forever". Leave <code>--ttl</code> off for an entry that never expires.</p>
 
     <h3 style="margin-top: 24px;">Run several transactions on one database</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Kv\{Database, Store};
+    <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
 
 $store = new Store();
-$store->transaction('work', function (Database $db): void {
+$store->transaction('work', function () use ($store): void {
     // every write in this closure commits together, or none of them does
+    $store->set('a@work', 'one');
+    $store->set('b@work', 'two');
 });</code></pre>
-    <p><code>Store::transaction()</code> creates the target database on demand, because a transaction may write. A transaction aimed at <code>settings</code> throws <code>InvalidArgumentException</code>, and so does a single write to a key routed there.</p>
+    <p><code>Store::transaction()</code> creates the target database on demand, because a transaction may write. The closure takes no argument. Keep every write on the same database name: a write routed to another database opens its own connection and commits outside the transaction. A transaction aimed at <code>settings</code> throws <code>InvalidArgumentException</code>, and so does a single write to a key routed there.</p>
 
     <h3 style="margin-top: 24px;">Import a YAML document across several databases</h3>
     <pre class="code"><code class="language-shell">candy-kv import yaml secrets.yml --no-atomic --max-bytes=0</code></pre>
@@ -148,10 +150,10 @@ php examples/multidb.php</code></pre>
     <p>Those values cannot round-trip as stored text, so the whole import is refused before anything is written. Convert the value to a string in the source document.</p>
 
     <h3 style="margin-top: 24px;">A write to <code>key@settings</code> throws <code>InvalidArgumentException</code></h3>
-    <p><code>settings</code> is reserved, so a listing-driven backup never misses a half-written values database. Write to a different database name. Reads of a planted <code>key@settings</code> still work.</p>
+    <p><code>settings</code> is reserved for a config database, which a list-driven backup must not mistake for a value database, so <code>listDatabases()</code> leaves it out. Write to a different database name. Reads of a planted <code>key@settings</code> still work.</p>
 
     <h3 style="margin-top: 24px;">A relative XDG_CONFIG_HOME or HOME is refused</h3>
-    <p>A relative path would move the store with the working directory, so candy-kv refuses it. Set the variable to an absolute path.</p>
+    <p>A relative path would move the store with the working directory, so candy-kv refuses it. Set the variable to an absolute path. The refusal is an uncaught error, so the process exits <code>255</code> rather than <code>1</code>.</p>
 
     <h3 style="margin-top: 24px;">A value with a NUL byte refuses under <code>--text</code></h3>
     <p>Every reader truncates at the first NUL, so <code>--text</code> refuses the value with exit 2. Store it with <code>--binary</code>, or drop the <code>--text</code> flag and let the CLI choose binary mode.</p>
