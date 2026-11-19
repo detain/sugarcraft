@@ -220,6 +220,22 @@ final class InProcessHostServicesTest extends TestCase
     }
 
     /**
+     * An answer nested 512 levels or more does not encode under the wire's flags at all, so the
+     * in-process door refuses it as it refuses any unexpected failure: `internal` with that code's
+     * own kind, never `too_deep`. The wire encodes its answers under the same flags, so it fails alike.
+     */
+    public function testAnAnswerNestedPastTheValueEncoderIsAnInternalRefusalNotTooDeep(): void
+    {
+        $dispatcher = $this->probeDispatcher(static fn (): array => self::nested(512));
+
+        $refusal = $this->refusalOf(fn () => $this->probeInProcess($dispatcher));
+
+        self::assertSame(ErrorCode::Internal, $refusal->errorCode);
+        self::assertSame(ErrorCode::Internal->kind(), $refusal->kind);
+        self::assertNotSame('too_deep', $refusal->kind);
+    }
+
+    /**
      * A host that cannot open the client (here the dispatcher's timers cannot be armed while
      * the client opens) rejects connect() with the failure. A synchronous throw would skip
      * the bundle's start() retry and give-up handling, which read the rejection.
@@ -467,7 +483,9 @@ final class InProcessHostServicesTest extends TestCase
     /**
      * The routing limit (PL-5c-B): the in-process door serves the primary root only. A session
      * that lives on another root is refused session_not_found here, the refusal the primary wire
-     * gives an id it does not hold. Step (A) of Phase 5 lifts this limit; this pins it until then.
+     * gives an id it does not hold, except permission.respond, which answers ask_not_found: it
+     * finds no hosted session and no relayed question to answer. Step (A) of Phase 5 lifts this
+     * limit; this pins it until then.
      */
     public function testANonPrimarySessionIsRefusedSessionNotFoundOnTheInProcessDoor(): void
     {
@@ -495,6 +513,13 @@ final class InProcessHostServicesTest extends TestCase
             $this->assertSameRefusal(
                 $inSnapshot,
                 $this->wire->request('session.get', ['sessionId' => $otherId, 'limit' => 10]),
+            );
+
+            $inRespond = $this->refusalOf(fn () => $this->call($this->host->respondPermission($otherId, 'ask-1', 'once', null)));
+            self::assertSame('ask_not_found', $inRespond->kind);
+            $this->assertSameRefusal(
+                $inRespond,
+                $this->wire->request('permission.respond', ['sessionId' => $otherId, 'askId' => 'ask-1', 'reply' => 'once']),
             );
 
             self::assertSame([], $this->call($this->host->followedSessions()));

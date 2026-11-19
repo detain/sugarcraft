@@ -49,10 +49,12 @@ use function React\Promise\resolve;
  *   wire would send with a null id, not the request's id. A wire answer to a long
  *   request id can therefore cross the ceiling where this door does not. A bundle
  *   that needs byte-exact parity with the wire should keep its answers well under
- *   {@see Dispatcher::MAX_SERVER_FRAME_BYTES}. An answer nested 63 levels or more is
+ *   {@see Dispatcher::MAX_SERVER_FRAME_BYTES}. An answer nested 63 to 511 levels is
  *   refused `too_deep` here: the bundle's wire client (sugar-mcp-client's
  *   `JsonRpc::MAX_DEPTH`, 64 with the envelope) drops that frame undecoded, and the
- *   call times out there instead.
+ *   call times out there instead. An answer nested 512 or more does not encode under
+ *   the wire's flags at all, so it is refused `internal` (the kind any unexpected
+ *   failure gets), not `too_deep`.
  * - Rate meters are not spent. {@see Dispatcher::invoke()} skips the per-client
  *   `rate_limited` budgets the wire applies to each frame, because the caller is the
  *   host itself, so a bundle's own loop is never refused `rate_limited`.
@@ -73,9 +75,12 @@ use function React\Promise\resolve;
  * root only). Session calls go to the primary host's dispatcher alone. This door never sends
  * `root`, and the wire's workspace routing (`root`, and sessionId-only requests through
  * {@see \SugarCraft\Code\Server\Workspace\Gateway::routeOf()}) is not applied. A session the
- * gateway bound to a non-primary root is therefore refused `session_not_found` here, the same
- * refusal the primary dispatcher gives any id it does not hold, and a bundle that follows such
- * a session gets that refusal from {@see subscribeSession()}. No socket, loopback WebSocket or
+ * gateway bound to a non-primary root is therefore refused here by each method's own refusal
+ * for an id the primary dispatcher does not hold: `session_not_found` for session.send,
+ * session.subscribe, session.get, session.cancel and command.exec, and `ask_not_found` for
+ * permission.respond, which finds no hosted session and no relayed question to answer. A bundle
+ * that follows such a session gets the `session_not_found` refusal from {@see subscribeSession()}.
+ * No socket, loopback WebSocket or
  * JSON-RPC frame carries these calls. The later step (A) of Phase 5 lifts this limit by routing
  * through the gateway and the child-process socket hop, and it waits for the event sink design.
  */
