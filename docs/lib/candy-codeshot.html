@@ -156,11 +156,44 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#two-renderers-one-fluent-surface">Two renderers, one fluent surface</a></li>
+            <li class="toc-h3"><a href="#concepts-ansi">ANSI input becomes styled text</a></li>
+            <li class="toc-h3"><a href="#concepts-language">Language detection</a></li>
+            <li class="toc-h3"><a href="#themes-and-palettes">Themes and palettes</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#screenshot-a-source-file-for-a-readme">Screenshot a source file for a README</a></li>
+            <li class="toc-h3"><a href="#colour-a-terminal-transcript">Colour a terminal transcript</a></li>
+            <li class="toc-h3"><a href="#load-a-theme-from-a-file">Load a theme from a file</a></li>
+            <li class="toc-h3"><a href="#highlight-a-range-of-lines">Highlight a range of lines</a></li>
+            <li class="toc-h3"><a href="#embed-a-font-in-the-svg">Embed a font in the SVG</a></li>
+            <li class="toc-h3"><a href="#write-a-png">Write a PNG</a></li>
+            <li class="toc-h3"><a href="#build-screenshots-from-a-script">Build screenshots from a script</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#exit-codes">Exit codes</a></li>
+            <li class="toc-h3"><a href="#path-confinement">Path confinement</a></li>
+            <li class="toc-h3"><a href="#messages-and-locale">Messages and locale</a></li>
+            <li class="toc-h2"><a href="#keys-and-standard-input">Keys and standard input</a></li>
+            <li class="toc-h2"><a href="#theme-and-colour">Theme and colour</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#theme-dracula-is-refused-as-an-unknown-flag">--theme=dracula is refused as an unknown flag</a></li>
+            <li class="toc-h3"><a href="#png-output-exits-2-with-no-image-on-the-terminal">PNG output exits 2 with no image on the terminal</a></li>
+            <li class="toc-h3"><a href="#a-path-is-refused-with-exit-2-even-though-the-file-exists">A path is refused with exit 2 even though the file exists</a></li>
+            <li class="toc-h3"><a href="#a-file-has-no-colour">A file has no colour</a></li>
+            <li class="toc-h3"><a href="#a-warning-says-the-extension-and-the-format-disagree">A warning says the extension and the format disagree</a></li>
+            <li class="toc-h3"><a href="#highlight-is-refused-with-exit-2">--highlight is refused with exit 2</a></li>
+            <li class="toc-h3"><a href="#ligatures-or-highlight-does-nothing-in-a-png">--ligatures or --highlight does nothing in a PNG</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#known-limitations">Known limitations</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
+            <li class="toc-h2"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#screenshot">Screenshot</a></li>
             <li class="toc-h3"><a href="#ansi-input">ANSI input</a></li>
@@ -168,12 +201,30 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. The one base requirement is <code>ext-mbstring</code>; the SVG path needs no raster extension (no <code>ext-gd</code>, no Imagick) — plain text output suitable for git diffs and CI artifacts; PNG renders through <code>ext-gd</code>. ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes per-segment <code>&lt;text&gt;</code> color and font attributes plus <code>&lt;rect&gt;</code> background bands in the SVG; the PNG canvas paints the same foreground colors and background bands.</p>
+<p class="lede" style="margin-top: 28px;">candy-codeshot turns code or terminal output into a screenshot. The default output is a plain-text SVG, which is diffable and fine for git and CI artifacts. PNG output goes through <code>ext-gd</code>. ANSI colour input is honoured: SGR foreground and background colours, in 16, 256 and 24-bit forms, plus bold, italic and underline, become per-segment <code>&lt;text&gt;</code> fills and <code>&lt;rect&gt;</code> background bands. It is a PHP port of the idea behind <a href="https://github.com/charmbracelet/freeze">charmbracelet/freeze</a>, reimplemented in PHP with its own flag spellings.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot:dev-master</code></pre>
+    <p>Requires PHP 8.3 or newer and <code>ext-mbstring</code>. The SVG path needs no raster extension, so there is no <code>ext-gd</code> or Imagick requirement there. PNG output needs <code>ext-gd</code>. The package requires its <code>sugarcraft/</code> siblings at <code>dev-master</code>, so a project on the default <code>stable</code> minimum stability must add <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code>.</p>
+    <p>A rolling standalone phar is published as <code>candy-codeshot.phar</code> on the <code>candy-codeshot/latest</code> release. Run it through PHP, because a release download is not executable. Check the digest before the first run:</p>
+    <pre class="code"><code class="language-shell">curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/latest/candy-codeshot.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/latest/candy-codeshot.phar.sha256
+sha256sum -c candy-codeshot.phar.sha256
+grep -m1 . candy-codeshot.phar.commit      # which build you hold
+php candy-codeshot.phar --version</code></pre>
+    <p>The <code>.sig</code> and <code>.minisig</code> sidecars carry a fleet-wide minisign signature over the <code>.sha256</code> body. Until an anchored public key ships for this app, treat the digest and the commit as a statement of what you hold, not a cryptographic attestation of who built it.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <p>Pipe any text in, or name a file. The bare form writes SVG to stdout, and <code>-o</code> writes it to a file.</p>
+    <pre class="code"><code class="language-shell">echo "function hello() { return 'world'; }" \
+    | candy-codeshot --theme dracula --line-numbers > out.svg
+
+candy-codeshot input.php \
+    --theme tokyo-night --no-window --output screenshot.svg
+
+candy-codeshot notes.md --format png -o notes.png</code></pre>
+    <p>The last line renders without syntax colour. The detector names <code>notes.md</code> as Markdown, the lexer has no Markdown grammar, and a name with no grammar renders plain. See <a href="#concepts-language">language detection</a>.</p>
+    <p>From PHP, the library is one fluent chain. Every <code>with*()</code> call returns a new renderer, so a configured renderer can be shared safely:</p>
     <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;
 
 $code = &lt;&lt;&lt;'PHP'
@@ -185,63 +236,234 @@ $svg = SvgRenderer::dracula()
     -&gt;withLineNumbers(true)
     -&gt;withWindow(true)
     -&gt;withPadding(24)
+    -&gt;withLigatures(true)
     -&gt;render($code);
 
-file_put_contents('out.svg', $svg);
+file_put_contents('out.svg', $svg);</code></pre>
 
-// ANSI input is honoured — SGR colours become per-segment &lt;text&gt; fills
-// and &lt;rect&gt; background bands.
-$svg = SvgRenderer::dark()
-    -&gt;render("\x1b[31merror:\x1b[0m something broke");</code></pre>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>A screenshot is three steps: parse the input into styled segments, lay them out on a grid, and paint the grid with window chrome. The parser reads SGR escape sequences and the highlighter reads source code. Layout and window geometry are pure functions of the segment list and the options. The renderers then emit text (SVG) or pixels (PNG).</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Pure-PHP SVG</strong><span>The SVG path has no raster pipeline — its output is a text file, diffable, grep-able. PNG is a separate renderer behind ext-gd.</span></div>
-      <div class="feature"><strong>Window chrome</strong><span>macOS-style traffic-light controls, optional drop shadow, configurable border radius.</span></div>
-      <div class="feature"><strong>Line numbers</strong><span>Optional left-gutter line counter.</span></div>
-      <div class="feature"><strong>Five themes + file import</strong><span>dark, light, dracula, tokyo-night, nord — or <code>--theme &lt;path.json&gt;</code> / the theme loaders for VS Code and flat-palette files.</span></div>
-      <div class="feature"><strong>ANSI honored</strong><span>Pipe colored terminal output through; SGR sequences become per-segment text colors, bold / italic / underline and background bands.</span></div>
-      <div class="feature"><strong>Per-segment background</strong><span>ANSI background colors render as &lt;rect&gt; fills behind text.</span></div>
-      <div class="feature"><strong>Ligatures (SVG only)</strong><span>Enable font-variant-ligatures for code ligature rendering (→, &gt;=, !==, etc.).</span></div>
-      <div class="feature"><strong>Language detection</strong><span>Heuristic detection from filename extension, then shebang, then content signatures; sixteen grammars get color, other detected names render plain.</span></div>
-      <div class="feature"><strong>CLI + library</strong><span><code>candy-codeshot input.php -o out.svg</code>, or <code>SvgRenderer::dracula()->render($code)</code>.</span></div>
-    </div>
+    <h3 id="two-renderers-one-fluent-surface" style="margin-top: 24px;">Two renderers, one fluent surface</h3>
+    <p><code>SvgRenderer</code> and <code>PngRenderer</code> share the same setters: padding, window chrome, shadow, border, line numbers, the corner radius and the window style. The SVG-only setters are <code>withLigatures()</code>, <code>withFont()</code>, <code>withHighlight()</code> and <code>withTitle()</code>, and PNG has no counterpart for them. <code>withBorderRadius()</code> exists on both, but on PNG it is accepted and inert, because PNG corners stay square.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CodeShot\PngRenderer;
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+$png = PngRenderer::dracula()
+    -&gt;withLineNumbers(true)
+    -&gt;render($code); // requires ext-gd</code></pre>
+
+    <h3 id="concepts-ansi" style="margin-top: 24px;">ANSI input becomes styled text</h3>
+    <p>ANSI input is parsed rather than stripped. SGR state carries across lines, so an unterminated colour keeps painting the following lines, as it would in a terminal. Colours are read in both spellings xterm allows: the flat <code>38;2;R;G;B</code> and the grouped <code>38:2::R:G:B</code>, for foreground and background alike. Both spellings resolve to the same <code>#rrggbb</code>.</p>
+    <p>Codes the renderers deliberately do not map are parsed and ignored. Those include <code>reverse</code> (7), <code>hidden</code> (8), <code>strikethrough</code> (9), <code>dim</code> (2), <code>blink</code> (5), <code>rapid blink</code> (6), <code>double underline</code> (21) and <code>overlined</code> (53). An out-of-range palette index, such as <code>38;5;N</code> with N above 255, changes no colour, as in xterm.</p>
+    <pre class="code"><code class="language-php">$svg = SvgRenderer::dark()-&gt;render("\x1b[31merror:\x1b[0m something broke");
+
+// With a background colour
+$svg = SvgRenderer::dark()-&gt;render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");</code></pre>
+
+    <h3 id="concepts-language" style="margin-top: 24px;">Language detection</h3>
+    <p>Syntax colour needs a language. The detector looks at the filename extension first, then the shebang, then content signatures. It reads at most the first 8 KB for signatures. Content over 1 MB is not inspected and is treated as plain text. A detected name with no grammar renders plain rather than failing. The lexer covers sixteen keyword grammars in pure PHP. Any other name still reaches the same code path and renders uncoloured.</p>
+    <p>The <code>-t</code> or <code>--type</code> flag forces a language and skips detection. The value is not validated, so an unknown name is harmless.</p>
+
+    <h3 id="themes-and-palettes" style="margin-top: 24px;">Themes and palettes</h3>
+    <p>A <code>Theme</code> is a palette: the background, the chrome, the text and the token colours. Five themes ship built in, and the library also takes a theme from a VS Code theme file or a flat JSON palette. The highlighter reads the token colours from the theme, so swapping the theme changes both the frame and the syntax colours.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="screenshot-a-source-file-for-a-readme" style="margin-top: 24px;">Screenshot a source file for a README</h3>
+    <pre class="code"><code class="language-shell">candy-codeshot src/Greeter.php --theme nord --line-numbers -o docs/greeter.svg</code></pre>
+    <p>Input and output paths must resolve inside the working directory. Run the command from the project root, or pass <code>--unsafe-paths</code> to lift the rule on purpose.</p>
+
+    <h3 id="colour-a-terminal-transcript" style="margin-top: 24px;">Colour a terminal transcript</h3>
+    <p>Pipe the output of a coloured program straight in. The SGR escapes become coloured text in the SVG, so the screenshot matches what the terminal showed.</p>
+    <pre class="code"><code class="language-shell">phpunit --colors=always 2&gt;&amp;1 | candy-codeshot --window-style iterm --no-shadow -o run.svg</code></pre>
+
+    <h3 id="load-a-theme-from-a-file" style="margin-top: 24px;">Load a theme from a file</h3>
+    <p>A value that contains a path separator or ends in <code>.json</code> takes the file route. The file is confined like every other path and must parse as a theme. Both a VS Code theme and a flat palette are accepted.</p>
+    <pre class="code"><code class="language-shell">candy-codeshot input.php --theme ./themes/brand.json -o brand.svg</code></pre>
+    <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;
+use SugarCraft\CodeShot\Theme\FlatPaletteThemeLoader;
+
+$theme = FlatPaletteThemeLoader::load('themes/brand.json');
+$svg = SvgRenderer::dark()->withTheme($theme)->render($code);</code></pre>
+
+    <h3 id="highlight-a-range-of-lines" style="margin-top: 24px;">Highlight a range of lines</h3>
+    <p><code>--highlight start:end[:colour]</code> band-highlights the lines in an inclusive range. The range is checked at parse time, whatever the output format. <code>start</code> must be at least 1, and <code>end</code> must not be below <code>start</code>. The highlight is drawn in SVG only.</p>
+    <pre class="code"><code class="language-shell">candy-codeshot src/Bug.php --highlight 12:14:#ffd33d -o bug.svg</code></pre>
+
+    <h3 id="embed-a-font-in-the-svg" style="margin-top: 24px;">Embed a font in the SVG</h3>
+    <p><code>--font</code> embeds a TTF, OTF, WOFF or WOFF2 file as base64, so the screenshot keeps its typeface when it is viewed away from the machine. The CLI checks the file's signature and refuses anything else with exit 2. The library's <code>withFont()</code> only checks that the file exists.</p>
+    <pre class="code"><code class="language-shell">candy-codeshot input.php --font fonts/FiraCode-Regular.woff2 -o embedded.svg</code></pre>
+
+    <h3 id="write-a-png" style="margin-top: 24px;">Write a PNG</h3>
+    <p>PNG renders through the GD bitmap fonts, so theme font sizes and embedded fonts do not apply. Give it an output file. Writing PNG bytes to an interactive terminal is refused.</p>
+    <pre class="code"><code class="language-shell">candy-codeshot script.php --theme dracula --format png -o shot.png</code></pre>
+
+    <h3 id="build-screenshots-from-a-script" style="margin-top: 24px;">Build screenshots from a script</h3>
+    <p>The library does no I/O of its own. <code>render()</code> returns the full bytes, and the caller writes them. <code>StringOutputWriter</code> and <code>FileOutputWriter</code> exist for code that streams chunks, and the CLI does not use them.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CodeShot\StringOutputWriter;
+
+$writer = new StringOutputWriter();
+$writer->write(SvgRenderer::nord()->render($code));
+$writer->flush();
+$svg = $writer->result();</code></pre>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public surface is the renderers, the theme and its loaders, the highlighter and detector, and the output helpers. The parser and the SGR classes are public for callers that want the segments themselves.</p>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>SvgRenderer</td><td>dark(), light(), dracula(), tokyoNight(), nord()</td><td>Create a renderer with a built-in theme.</td></tr>
+    <tr><td>SvgRenderer</td><td>withLineNumbers(bool), withWindow(bool), withShadow(bool), withBorder(bool)</td><td>Toggle the line counter, the window chrome, the drop shadow and the frame outline.</td></tr>
+    <tr><td>SvgRenderer</td><td>withPadding(int), withBorderRadius(int)</td><td>Set the padding and the corner radius. The padding is clamped to 0 to 4096, and the radius to 0 to 256. The CLI refuses a radius above 64.</td></tr>
+    <tr><td>SvgRenderer</td><td>withWindowStyle(WindowStyle|string)</td><td>Chrome style: <code>macos</code>, <code>windows-terminal</code>, <code>iterm</code>, <code>hyper</code> or <code>none</code>.</td></tr>
+    <tr><td>SvgRenderer</td><td>withLigatures(bool)</td><td>Sets <code>font-variant-ligatures</code> to <code>normal</code>.</td></tr>
+    <tr><td>SvgRenderer</td><td>withFont(?string)</td><td>Embeds a TTF, OTF, WOFF or WOFF2 file. The library checks that the file exists. The CLI also checks the signature.</td></tr>
+    <tr><td>SvgRenderer</td><td>withHighlight(int, int, ?string)</td><td>Band-highlights lines start to end, inclusive. SVG only.</td></tr>
+    <tr><td>SvgRenderer</td><td>withTitle(string)</td><td>Sets the document's accessible name through a child <code>&lt;title&gt;</code>. It is not a visible caption.</td></tr>
+    <tr><td>SvgRenderer</td><td>withTheme(Theme), render(string)</td><td>Swap the whole palette, then render the code or ANSI text to an SVG string.</td></tr>
+    <tr><td>PngRenderer</td><td>dark(), light(), dracula(), tokyoNight(), nord(), render(string)</td><td>The GD raster sibling with the same fluent setters, minus the four SVG-only ones. Requires <code>ext-gd</code>.</td></tr>
+    <tr><td>Theme</td><td>dark(), light(), dracula(), tokyoNight(), nord(), new Theme(...)</td><td>Built-in palettes, or a custom palette through the constructor.</td></tr>
+    <tr><td>VsCodeThemeLoader, FlatPaletteThemeLoader</td><td>load(path), fromArray(data)</td><td>Build a Theme from a VS Code theme file or a flat JSON palette. <code>load()</code> reads a file, and <code>fromArray()</code> takes decoded data.</td></tr>
+    <tr><td>CodeHighlighter</td><td>forTheme(Theme), highlight(code, language)</td><td>Turn source code into ANSI-styled tokens using the theme's palette. An unknown language returns the input unchanged.</td></tr>
+    <tr><td>LanguageDetector</td><td>detect(content), detectFromFilename(name)</td><td>Detect a language from content (shebang, then signatures, reading at most 8 KB), or from the filename extension.</td></tr>
+    <tr><td>AnsiParser</td><td>parse(line, ?SgrState &amp;$carry), xterm256ToHex(int)</td><td>Parse one line of ANSI text into segments, carrying SGR state across lines. The hex helper refuses an index outside 0 to 255 with <code>InvalidArgumentException</code>.</td></tr>
+    <tr><td>SgrStateHandler</td><td>csiDispatch(...), printChar(string)</td><td>The parser handler that applies SGR parameters to the running state. Sub-parameter forms are read here.</td></tr>
+    <tr><td>Segment</td><td>withBg(?string)</td><td>Return the segment with a different background colour. Segments are immutable.</td></tr>
+    <tr><td>WindowStyle</td><td>enum cases</td><td><code>Macos</code>, <code>WindowsTerminal</code>, <code>ITerm2</code>, <code>Hyper</code> and <code>None</code>, with the string values used on the CLI.</td></tr>
+    <tr><td>OutputWriter, StringOutputWriter, FileOutputWriter</td><td>write(chunk), flush(), result() or close()</td><td>Chunked output helpers for library callers. The renderers return complete bytes, and the CLI writes them with <code>file_put_contents</code> or <code>echo</code>.</td></tr>
+    </table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>candy-codeshot reads no configuration file. Everything is a flag. Flag values are separate arguments: <code>--theme dracula</code>, not <code>--theme=dracula</code>, which is rejected as an unknown flag. A lone <code>-</code> names stdin, and a lone <code>--</code> ends option parsing, so every later token is an operand.</p>
+    <table>
+    <tr><th>Option</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>--theme &lt;name|file&gt;</code></td><td><code>dark</code></td><td><code>dark</code>, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code> or <code>nord</code>. Names match case-insensitively, and <code>_</code> reads as <code>-</code>. A path is also accepted.</td></tr>
+    <tr><td><code>--padding &lt;n&gt;</code></td><td>24</td><td>Padding inside the frame, in pixels.</td></tr>
+    <tr><td><code>--no-window</code></td><td>off</td><td>Drops the window chrome entirely.</td></tr>
+    <tr><td><code>--window-style &lt;style&gt;</code></td><td><code>macos</code></td><td>The chrome style. <code>none</code> removes the title-bar band, so no empty strip is left.</td></tr>
+    <tr><td><code>--no-shadow</code>, <code>--no-border</code></td><td>off</td><td>Drop the drop shadow or the frame outline.</td></tr>
+    <tr><td><code>--line-numbers</code></td><td>off</td><td>Renders a left gutter with a line counter.</td></tr>
+    <tr><td><code>--border-radius &lt;n&gt;</code></td><td>8</td><td>Corner radius of the frame. The CLI refuses values above 64.</td></tr>
+    <tr><td><code>--ligatures</code></td><td>off</td><td>Enables font ligatures. SVG only.</td></tr>
+    <tr><td><code>--font &lt;path&gt;</code></td><td>none</td><td>Embeds a font file. SVG only.</td></tr>
+    <tr><td><code>--highlight &lt;start:end[:colour]&gt;</code></td><td>none</td><td>Highlights a line range. SVG only.</td></tr>
+    <tr><td><code>--format &lt;svg|png&gt;</code></td><td><code>svg</code></td><td>The output format. <code>png</code> needs <code>ext-gd</code>. WebP is not offered.</td></tr>
+    <tr><td><code>-t</code>, <code>--type &lt;lang&gt;</code></td><td>detected</td><td>Forces the syntax language. The default order is filename, shebang, then content.</td></tr>
+    <tr><td><code>-o</code>, <code>--output &lt;path&gt;</code></td><td>stdout</td><td>Writes the screenshot to a file instead of stdout.</td></tr>
+    <tr><td><code>--unsafe-paths</code></td><td>off</td><td>Lets the input, <code>--font</code> and <code>--output</code> paths resolve outside the working directory.</td></tr>
+    <tr><td><code>-h</code>, <code>--help</code> / <code>-v</code>, <code>--version</code></td><td>off</td><td>Prints the usage or the version, then exits 0.</td></tr>
+    </table>
+
+    <h3 id="exit-codes" style="margin-top: 24px;">Exit codes</h3>
+    <table>
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>Success.</td></tr>
+    <tr><td>1</td><td>An I/O failure: an unreadable input, an unwritable output, or no <code>autoload.php</code>. The last one means a broken install, and the message tells you to run <code>composer install</code>.</td></tr>
+    <tr><td>2</td><td>A usage or input error. That covers flags and values, names and paths (including confinement and a refused font), and output refusals such as PNG without <code>ext-gd</code>, PNG to a terminal, or a PNG pixel ceiling.</td></tr>
+    </table>
+
+    <h3 id="path-confinement" style="margin-top: 24px;">Path confinement</h3>
+    <p>The input, <code>--font</code> and <code>--output</code> paths must resolve inside the current working directory. Anything outside, including a <code>..</code> traversal, exits 2 before any byte is written. A destination that does not exist yet is checked through its nearest existing ancestor. This stops an untrusted command line, or a script that builds paths from outside data, from reading arbitrary files or writing outside the project. <code>--unsafe-paths</code> is the deliberate override.</p>
+
+    <h3 id="messages-and-locale" style="margin-top: 24px;">Messages and locale</h3>
+    <p>The CLI speaks sixteen languages: the English baseline plus fifteen translations. The catalogues live under <code>lang/</code>. The locale is chosen once at startup by <code>T::detect()</code>, which checks <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>. The encoding suffix is dropped, so <code>de_DE.UTF-8</code> becomes <code>de</code>, and <code>en</code> is the fallback. The <code>LANGUAGE</code> variable is not consulted.</p>
+    <pre class="code"><code class="language-shell">LANG=de_DE.UTF-8 candy-codeshot --help             # usage in German
+LC_ALL=fr candy-codeshot --padding abc script.php  # refusal in French</code></pre>
+    <p>Only messages are translated. Flag names, theme and format identifiers, file paths and the content of lines always appear exactly as typed.</p>
+
+    <h2 id="keys-and-standard-input" style="margin-top: 40px;">Keys and standard input</h2>
+    <p>candy-codeshot is not interactive, so it has no keys to bind. Its input is either a file argument or standard input. A lone <code>-</code> reads stdin explicitly, and when no file is named the input is read from the pipe.</p>
+    <pre class="code"><code class="language-shell">cat src/App.php | candy-codeshot -t php --theme light -o app.svg
+git show HEAD:README.md | candy-codeshot -t markdown -o readme.svg</code></pre>
+
+    <h2 id="theme-and-colour" style="margin-top: 40px;">Theme and colour</h2>
+    <p>A theme has two jobs. It paints the frame, which covers the window chrome, the shadow, the border and the line-number gutter. It also supplies the token colours for the highlighter, which the source code is painted with. Five built-in themes ship: <code>dark</code>, the default, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code> and <code>nord</code>.</p>
+    <p>A custom theme is either a <code>Theme</code> built with its constructor, or a file. VS Code theme files and flat JSON palettes both load through their loaders. The SVG and PNG outputs share the same theme, so a palette that looks right in one looks right in the other. The PNG font is the GD bitmap font, so a theme's font size and line height are not honoured there.</p>
+    
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>Both examples live in <code>examples/</code> and render the same sample under each of the five built-in themes. Each one writes into <code>examples/out/</code>, which the repo ignores.</p>
+    <table>
+    <tr><th>Example</th><th>What it does</th><th>Run it</th></tr>
+    <tr><td><code>examples/screenshot.php</code></td><td>Writes one SVG per built-in theme, with line numbers on, and prints one <code>wrote</code> line for each.</td><td><code>php examples/screenshot.php</code></td></tr>
+    <tr><td><code>examples/codeshot_to_png.php</code></td><td>Writes one PNG per theme, then an ANSI demo with a window and a border radius, then one PNG per window style, named <code>window_style_&lt;style&gt;.png</code>. Needs <code>ext-gd</code>.</td><td><code>php examples/codeshot_to_png.php</code></td></tr>
+    </table>
+    <pre class="code"><code class="language-shell">composer install
+php examples/screenshot.php        # one "wrote examples/out/<theme>.svg" line per theme
+php examples/codeshot_to_png.php   # needs ext-gd; writes PNG files into the same out/ directory</code></pre>
+    <p>Both examples load <code>vendor/autoload.php</code>, so run <code>composer install</code> in the checkout first.</p>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite covers the renderers by byte, not by eye. Snapshot tests assert the exact SVG and the exact SGR bytes. <code>SvgInjectionTest</code> checks that untrusted input cannot break out of the markup, and <code>ConfinedIoTest</code> checks the path rules. <code>LanguageDetectorTest</code>, <code>AnsiParserTest</code> and <code>AnsiParserColonSubparametersTest</code> pin the detector and the two colour spellings. <code>LangParityTest</code> checks that every locale catalogue carries the same keys as the English one.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="theme-dracula-is-refused-as-an-unknown-flag" style="margin-top: 24px;">--theme=dracula is refused as an unknown flag</h3>
+    <p>Flag values are separate arguments. Write <code>--theme dracula</code>, with a space, rather than the <code>=</code> form. The same holds for <code>--padding</code>, <code>--window-style</code> and <code>--border-radius</code>.</p>
+
+    <h3 id="png-output-exits-2-with-no-image-on-the-terminal" style="margin-top: 24px;">PNG output exits 2 with no image on the terminal</h3>
+    <p>PNG bytes are refused for an interactive terminal, so the shell is not flooded. Add <code>-o shot.png</code>, or redirect stdout to a file. A PNG request without <code>ext-gd</code> also exits 2.</p>
+
+    <h3 id="a-path-is-refused-with-exit-2-even-though-the-file-exists" style="margin-top: 24px;">A path is refused with exit 2 even though the file exists</h3>
+    <p>The input, <code>--font</code> and <code>--output</code> paths must resolve inside the working directory. Run the command from the project root, use a relative path, or pass <code>--unsafe-paths</code> when the path is intentional.</p>
+
+    <h3 id="a-file-has-no-colour" style="margin-top: 24px;">A file has no colour</h3>
+    <p>The language is not known. The detector checks the filename extension, the shebang and the content signatures in that order. Name the language with <code>-t</code>, for example <code>-t php</code>. A name with no grammar renders as plain text, and that is not an error.</p>
+
+    <h3 id="a-warning-says-the-extension-and-the-format-disagree" style="margin-top: 24px;">A warning says the extension and the format disagree</h3>
+    <p>Writing SVG to a <code>.png</code> name, or PNG to a <code>.svg</code> name, still writes the bytes of the format you asked for. The warning is on stderr. Match the extension to <code>--format</code>, or drop one of them.</p>
+
+    <h3 id="highlight-is-refused-with-exit-2" style="margin-top: 24px;">--highlight is refused with exit 2</h3>
+    <p>The range is validated at parse time, in every output format. <code>start</code> must be at least 1, and <code>end</code> must be at least <code>start</code>. Swap the numbers if the range reads backwards.</p>
+
+    <h3 id="ligatures-or-highlight-does-nothing-in-a-png" style="margin-top: 24px;">--ligatures or --highlight does nothing in a PNG</h3>
+    <p>The SVG-only options are dropped for <code>--format png</code>, and the CLI names each one it drops on stderr. The font is validated before it is dropped, so a bad <code>--font</code> path still exits 2 in PNG mode.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <p>The idea comes from <a href="https://github.com/charmbracelet/freeze">charmbracelet/freeze</a>, a Go tool that turns code into an image. candy-codeshot is a PHP reimplementation with its own flag spellings, so the mapping below is conceptual and not a class-for-class port.</p>
+    <table>
+    <tr><th>freeze concept</th><th>candy-codeshot</th><th>Notes</th></tr>
+    <tr><td>Code to image</td><td><code>SvgRenderer</code>, <code>PngRenderer</code></td><td>Two renderers, SVG as the default output.</td></tr>
+    <tr><td>Window chrome and margin</td><td><code>--window-style</code>, <code>--no-window</code>, <code>--padding</code></td><td>The chrome styles are <code>macos</code>, <code>windows-terminal</code>, <code>iterm</code>, <code>hyper</code> and <code>none</code>.</td></tr>
+    <tr><td>Language</td><td><code>-t</code> / <code>--type</code>, <code>LanguageDetector</code></td><td>The default order is filename, shebang, then content.</td></tr>
+    <tr><td>Output format</td><td><code>--format svg|png</code></td><td>WebP export is not offered. The format list stays at two.</td></tr>
+    <tr><td>Ligatures</td><td><code>--ligatures</code></td><td>The flag is renamed here. It is SVG only.</td></tr>
+    <tr><td>Themes</td><td><code>--theme</code>, <code>Theme</code>, the VS Code and flat palette loaders</td><td>Five built-in themes, plus file themes.</td></tr>
+    </table>
+    <p>SugarCraft is developed as a native PHP project, so the upstream is cited for the idea and the feature set, and no code is shared.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <p>The pipeline has five stages, and each one is a separate class you can use on its own:</p>
+    <ol>
+      <li><code>AnsiParser</code> reads the input line by line, with <code>SgrStateHandler</code> applying SGR parameters to the running state. It emits <code>Segment</code> values.</li>
+      <li><code>CodeHighlighter</code> colours plain source code through sugar-core's <code>RegexHighlighter</code>, using the token colours of the theme.</li>
+      <li><code>LayoutCalculator</code> and <code>WindowChromeGeometry</code> turn the segments and the options into a box: the window, the gutter and the padding.</li>
+      <li><code>SvgRenderer</code> or <code>PngRenderer</code> paints the box. SVG is text, and PNG is GD.</li>
+      <li>The CLI writes the bytes with <code>file_put_contents</code> or <code>echo</code>. The writer classes are for library callers.</li>
+    </ol>
+    <p>The theme loaders and <code>Lang</code> are off to one side. The loaders build a <code>Theme</code> from a file, and <code>Lang</code> holds the message catalogue.</p>
+
+    <h3 id="known-limitations" style="margin-top: 24px;">Known limitations</h3>
+    <p>PNG paints the foreground colours and the background bands, but it drops bold, italic and underline. The PNG font is the GD bitmap font, so a theme's font size and line height are not honoured, and fonts cannot be embedded. Ligatures, highlights, the font and the title are SVG only.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>candy-codeshot was published as <code>sugarcraft/candy-freeze</code> until the 2026-10 rename. The namespace changed from <code>SugarCraft\Freeze\</code> to <code>SugarCraft\CodeShot\</code>, and some flag spellings changed with it, such as the ligatures flag. Stable <code>candy-codeshot/v*</code> tags are reserved for maintainers. Until one is cut, the rolling phar at <code>candy-codeshot/latest</code> is the artifact to use, and <code>php candy-codeshot.phar --version</code> names the build.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-codeshot">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codeshot/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codeshot/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/freeze">freeze</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the regex highlighter and the i18n lookup the app uses.</li>
+      <li><a href="candy-ansi-inspect.html">candy-ansi-inspect</a>: inspects the same ANSI sequences this app parses.</li>
+      <li><a href="candy-mdview.html">candy-mdview</a>: renders Markdown in the terminal. candy-codeshot has no Markdown grammar, so its Markdown screenshots are plain.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>SvgRenderer</td><td>dracula(), dark(), light(), tokyoNight(), nord()</td><td>Create renderer with theme</td></tr>
-<tr><td>SvgRenderer</td><td>withLineNumbers(bool)</td><td>Show line numbers</td></tr>
-<tr><td>SvgRenderer</td><td>withWindow(bool)</td><td>Show window chrome</td></tr>
-<tr><td>SvgRenderer</td><td>withPadding(pixels)</td><td>Set padding</td></tr>
-<tr><td>SvgRenderer</td><td>withLigatures(bool)</td><td>Enable font-variant-ligatures</td></tr>
-<tr><td>SvgRenderer</td><td>withBorderRadius(int)</td><td>Set corner radius (0..256; the CLI refuses above 64)</td></tr>
-<tr><td>SvgRenderer</td><td>withShadow(bool) / withBorder(bool)</td><td>Toggle the drop shadow / the frame outline</td></tr>
-<tr><td>SvgRenderer</td><td>withWindowStyle(string|WindowStyle)</td><td>Chrome style: macos, windows-terminal, iterm, hyper, none</td></tr>
-<tr><td>SvgRenderer</td><td>withTheme(Theme)</td><td>Swap the whole palette</td></tr>
-<tr><td>SvgRenderer</td><td>withFont(?string)</td><td>Embed a TTF/OTF/WOFF/WOFF2 file (library checks existence only; the CLI additionally validates the signature)</td></tr>
-<tr><td>SvgRenderer</td><td>withHighlight(int, int, ?string)</td><td>Band-highlight lines start..end (SVG only)</td></tr>
-<tr><td>SvgRenderer</td><td>withTitle(string)</td><td>Set the document's accessible name (child <code>&lt;title&gt;</code> only — no <code>aria-labelledby</code> anchor; not a visual caption)</td></tr>
-<tr><td>SvgRenderer</td><td>render(code)</td><td>Render code to SVG</td></tr>
-<tr><td>PngRenderer</td><td>dark(), light(), dracula(), tokyoNight(), nord(), render(code)</td><td>GD raster sibling — same fluent surface minus the SVG-only setters; requires ext-gd, and withBorderRadius() is accepted but corners stay square</td></tr>
-<tr><td>Theme</td><td>dark(), light(), dracula(), tokyoNight(), nord()</td><td>Built-in palettes; new Theme(...) for custom colors</td></tr>
-<tr><td>VsCodeThemeLoader / FlatPaletteThemeLoader</td><td>load(path), fromArray(data)</td><td>Build a Theme from a VS Code theme or flat JSON palette</td></tr>
-<tr><td>CodeHighlighter</td><td>forTheme(Theme), highlight(code, language)</td><td>Turn plain code into ANSI-styled tokens using the theme palette</td></tr>
-<tr><td>LanguageDetector</td><td>detect(content)</td><td>Detect language from content (shebang or signatures; reads at most 1 MB)</td></tr>
-<tr><td>LanguageDetector</td><td>detectFromFilename(filename)</td><td>Detect language from filename extension</td></tr>
-<tr><td>Segment</td><td>withBg(?string)</td><td>Return segment with different background color</td></tr>
-<tr><td>FileOutputWriter / StringOutputWriter</td><td>write(chunk), flush(), close() / result()</td><td>Caller-chunked buffer/forward helpers — library-side only; the renderers return complete bytes and the CLI writes via <code>file_put_contents</code>/<code>echo</code>, never through these</td></tr>
-</table>
+    <h2 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h2>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-codeshot">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-codeshot/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-codeshot/tree/master/examples">Runnable examples</a></li>
+    </ul>
     </div>
   </div>
 </section>
