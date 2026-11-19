@@ -102,4 +102,33 @@ final class SiteBodyTruthTest extends TestCase
             'run() belongs to the sugar-core dependency; the API table must say so',
         );
     }
+
+    public function testTheCronSectionDescribesTheCooperativeEofQuit(): void
+    {
+        $body = $this->body();
+        if ($body === null) {
+            $this->markTestSkipped('monorepo docs tree not present in this clone');
+        }
+
+        $this->assertStringNotContainsString(
+            'does not exit at end of input',
+            $body,
+            'exitOnStdinEof defaults to true: piped stdin quits with exit 0, so the page must not describe a hang as current behavior',
+        );
+        $this->assertStringNotContainsString(
+            'The app hangs when run from cron or CI',
+            $body,
+            'the troubleshooting entry must not describe a hang as current behavior under the default options',
+        );
+        $this->assertStringNotContainsString(
+            'Do not expect a clean exit 0',
+            $body,
+            'a cron or CI run of bin/start exits 0 at end of input under the default options',
+        );
+        $this->assertStringContainsString(
+            'exitOnStdinEof: true',
+            $body,
+            'the cron section must name the default that makes the EOF quit cooperative',
+        );
+    }
 }
