@@ -142,7 +142,7 @@ const images = ref<PastedImage[]>([]);
 const documents = ref<PastedDocument[]>([]);
 /** The hidden `<input type=file>` behind the Attach button (C-WEB-4.e). */
 const fileInput = ref<HTMLInputElement | null>(null);
-const { files, mcpMentions, agentMentions, mentionPartial, completeFile, completeMcp, completeAgent } =
+const { files, mcpMentions, agentMentions, completeFile, completeMcp, completeAgent } =
     useMentionSearch({
         modelValue: toRef(props, "modelValue"),
         slashCount: computed(() => suggestions.value.length),
