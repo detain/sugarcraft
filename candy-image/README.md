@@ -152,6 +152,13 @@ are the only apps that carry it, to verify their own self-updates.
 | `--dump-detect`         | Print the resolved terminal state. When set, the file path is optional — the dump prints the version banner and the full evidence table the detection chain consulted (every `TermDb::ENV_KEYS` roster entry — TERM, TERM_PROGRAM, TMUX, emulator-version variables, ComSpec — each `(unset)`/`(empty)`/value), then the detection report (TermDb chain/claims/passthrough/mux fields, Detect capabilities sixel/kitty/iterm2/halfblock/chafa/tmux and summary, cell pixel size, default fg/bg, DA1 reply (`(none)` also when the terminal only echoed the query silently), `auto()` selection, tmux transaction, palette report). The dump happens *before* the file argument is required, so a supplied path is ignored and the run exits 0. |
 | `--version` / `--help` (`-h`) | Print the version / usage and exit 0.         |
 
+`--format=auto` confirms Kitty with an APC query, so it needs a tty on stdin and
+stdout. Redirected output (`candy-image --format=auto photo.png > frame.txt`)
+gets symbols text, not Kitty bytes, even inside a Kitty terminal. Use
+`--format=kitty` to write the Kitty bytes without a probe. See sugar-image's
+README (Kitty is confirmed, not assumed) for the 300 ms reply window and the
+remote-session cost.
+
 ## Chafa flag-compat map (what this viewer honors and why)
 
 | chafa flag       | status here | reason |

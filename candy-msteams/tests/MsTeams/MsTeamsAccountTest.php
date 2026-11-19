@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
+use SugarCraft\ServeProtocol\Protocol;
 use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
@@ -21,7 +23,6 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * The account face driven through its public intake with fixture activities
@@ -61,7 +62,7 @@ final class MsTeamsAccountTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeTeamsApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->safety = new TextSafety();
         $this->pairing = new PairingCodes($this->store, $this->safety);
     }
@@ -255,12 +256,12 @@ final class MsTeamsAccountTest extends TestCase
         $this->settle();
         // The card can only keep the ask alive as long as the core honors it:
         // a 120-minute posture must arm the 1800-second ceiling, not 7200.
-        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'));
+        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'));
         $clamped = \array_values(\array_filter($lines, static fn (string $line): bool =>
             \str_contains($line, '"event":"approval_ttl_clamped"')));
         self::assertCount(1, $clamped, 'the clamp announces itself exactly once');
         self::assertStringContainsString('"configuredMinutes":120', $clamped[0]);
-        self::assertStringContainsString('"armedSeconds":' . PendingAsk::EXPIRY_SECONDS, $clamped[0]);
+        self::assertStringContainsString('"armedSeconds":' . Protocol::ASK_EXPIRY_SECONDS, $clamped[0]);
         // Clamping the window must NOT retire the live card early: the ask is
         // answerable until the armed (clamped) timer fires.
         self::assertNull($this->api->lastCallFor('/v3/conversations/conv-1/activities/act_out_1', 'PUT'));
@@ -275,7 +276,7 @@ final class MsTeamsAccountTest extends TestCase
         $this->face->promptApproval(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'sess_1',
             ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
         $this->settle();
-        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
         self::assertSame([], \array_filter($lines, static fn (string $line): bool =>
             \str_contains($line, 'approval_ttl_clamped')), 'the default pair needs no announcement');
     }

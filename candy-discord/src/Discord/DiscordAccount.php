@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Discord;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\ServeProtocol\Protocol;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
 use CandyCode\Bundles\Discord\Support\Keys;
@@ -14,7 +15,6 @@ use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * One Discord account's face: gateway dispatches in, REST out (docs/SPEC.md §7).
@@ -229,7 +229,7 @@ final class DiscordAccount implements PlatformFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
+     * refuses the ask at Protocol::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -242,7 +242,7 @@ final class DiscordAccount implements PlatformFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = PendingAsk::EXPIRY_SECONDS;
+        $ceiling = Protocol::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,
@@ -265,7 +265,7 @@ final class DiscordAccount implements PlatformFace
     public function approvalExpiryNotice(): string
     {
         $line = Lang::t('channels.discord.approval.expired');
-        $expiredEarly = $this->approvalTtlSeconds() < PendingAsk::EXPIRY_SECONDS;
+        $expiredEarly = $this->approvalTtlSeconds() < Protocol::ASK_EXPIRY_SECONDS;
 
         return $expiredEarly ? $line . ' ' . Lang::t('channels.discord.approve.usage') : $line;
     }

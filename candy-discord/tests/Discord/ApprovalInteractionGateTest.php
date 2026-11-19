@@ -18,6 +18,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
@@ -57,7 +58,7 @@ final class ApprovalInteractionGateTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeDiscordApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->pairing = new PairingCodes($this->store, new TextSafety());
     }
 

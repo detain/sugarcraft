@@ -23,7 +23,7 @@ final class CheckPluginDepsToolTest extends TestCase
     protected function setUp(): void
     {
         $this->tmpDir = $this->makeTmpTree('plugin_deps_');
-        foreach (['sugar-plugins', 'sugar-serve-protocol'] as $lib) {
+        foreach (['sugar-plugins', 'sugar-serve-protocol', 'candy-discord', 'candy-msteams'] as $lib) {
             $this->writeManifest($lib, ['sugarcraft/sugar-core' => 'dev-master']);
             \mkdir("$this->tmpDir/$lib/src", 0777, true);
             \mkdir("$this->tmpDir/$lib/tests", 0777, true);
@@ -46,7 +46,7 @@ final class CheckPluginDepsToolTest extends TestCase
         [$out, $err, $code] = $this->runTool(\dirname(__DIR__, 2));
 
         $this->assertSame(0, $code, "tool was red on its own repo:\n$out$err");
-        $this->assertMatchesRegularExpression('/check-plugin-deps: 2 libs, \d{2,} php files, 0 problems/', $out);
+        $this->assertMatchesRegularExpression('/check-plugin-deps: 4 libs, \d{2,} php files, 0 problems/', $out);
     }
 
     /**
@@ -60,7 +60,7 @@ final class CheckPluginDepsToolTest extends TestCase
         [$out, $err, $code] = $this->runTool($this->tmpDir);
 
         $this->assertSame(0, $code, "a clean plugin tree was red:\n$out$err");
-        $this->assertStringContainsString('2 libs, 2 php files, 0 problems', $out);
+        $this->assertStringContainsString('4 libs, 2 php files, 0 problems', $out);
     }
 
     public function testARequireOfCandyCodeInTheManifestReds(): void
@@ -147,6 +147,47 @@ final class CheckPluginDepsToolTest extends TestCase
 
         $this->assertSame(2, $code, 'a roster lib without a manifest passed as clean');
         $this->assertStringContainsString('cannot read sugar-serve-protocol/composer.json', $err);
+    }
+
+    /**
+     * A bundle may keep candy-code for Lang: its manifest and its `Lang` import
+     * are the whole allowance, and both pass.
+     */
+    public function testABundleMayRequireCandyCodeAndImportOnlyLang(): void
+    {
+        $this->writeManifest('candy-discord', ['sugarcraft/candy-code' => 'dev-master']);
+        $this->writeFile('candy-discord', 'src/Commands.php', "use SugarCraft\\Code\\Lang;\n\nfinal class Commands\n{\n    public function label(): string\n    {\n        return Lang::t('x');\n    }\n}\n");
+
+        [$out, $err, $code] = $this->runTool($this->tmpDir);
+
+        $this->assertSame(0, $code, "the Lang allowance was judged:\n$out$err");
+    }
+
+    /**
+     * The allowance is exact: a bundle reaching past Lang into the host reds.
+     */
+    public function testABundleReachingPastLangReds(): void
+    {
+        $this->writeFile('candy-msteams', 'src/Probe.php', "use SugarCraft\\Code\\Cli\\Bootstrap;\n\nfinal class Probe\n{\n    public function dir(): string\n    {\n        return Bootstrap::trustedConfigDirPath();\n    }\n}\n");
+
+        [$out, $err, $code] = $this->runTool($this->tmpDir);
+
+        $this->assertSame(1, $code, 'a bundle reaching into Bootstrap passed the gate');
+        $this->assertStringContainsString('candy-msteams/src/Probe.php:', $err);
+    }
+
+    /**
+     * A plugin library gets no allowance: candy-code in its manifest reds even
+     * when the bundles keep theirs.
+     */
+    public function testTheBundleAllowanceDoesNotReachTheLibraries(): void
+    {
+        $this->writeManifest('sugar-serve-protocol', ['sugarcraft/candy-code' => 'dev-master']);
+
+        [$out, $err, $code] = $this->runTool($this->tmpDir);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('sugar-serve-protocol/composer.json lists sugarcraft/candy-code in require', $err);
     }
 
     /**

@@ -26,7 +26,18 @@
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-code": "dev-master"
+        "psr/http-message": "^1.1 || ^2.0",
+        "ratchet/pawl": "^0.4",
+        "ratchet/rfc6455": "^0.4",
+        "react/event-loop": "^1.6",
+        "react/http": "^1.11",
+        "react/promise": "^3.3",
+        "react/socket": "^1.16",
+        "react/stream": "^1.4",
+        "sugarcraft/candy-code": "dev-master",
+        "sugarcraft/sugar-mcp-client": "dev-master",
+        "sugarcraft/sugar-plugins": "dev-master",
+        "sugarcraft/sugar-serve-protocol": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

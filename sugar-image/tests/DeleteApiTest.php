@@ -12,6 +12,7 @@ use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * Tests for the Renderer::delete() API across all backends.
@@ -80,6 +81,8 @@ final class DeleteApiTest extends TestCase
         putenv('TERM_PROGRAM=WezTerm');
         try {
             \SugarCraft\Image\Detect::reset();
+            // The env claim stands only once the terminal answers the Kitty query (P1-13b).
+            KittyTerminal::answer();
             $cap = \SugarCraft\Image\Detect::probe();
 
             // WezTerm must be detected as Kitty (supports Kitty protocol).
@@ -87,6 +90,7 @@ final class DeleteApiTest extends TestCase
             // WezTerm must NOT be detected as iTerm2.
             $this->assertFalse($cap->iterm2, 'WezTerm must NOT be detected as iterm2 capability');
         } finally {
+            KittyTerminal::clear();
             putenv('TERM_PROGRAM');
             \SugarCraft\Image\Detect::reset();
         }

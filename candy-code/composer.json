@@ -113,8 +113,7 @@
     "extra": {
         "sugarcraft": {
             "deferred-wiring": {
-                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept).",
-                "sugarcraft/sugar-plugins": "PL-1c-i: candy-code wiring to sugar-plugins lands with the loader, registry, ledger and manifest adapters (plan_plugin.md Phase 1c-i)."
+                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept)."
             }
         }
     }

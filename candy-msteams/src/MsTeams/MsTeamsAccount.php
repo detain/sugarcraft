@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
+use SugarCraft\ServeProtocol\Protocol;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
 use CandyCode\Bundles\MsTeams\Bridge\StreamingFace;
 use CandyCode\Bundles\MsTeams\Support\Keys;
@@ -16,7 +17,6 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Lang;
 
 /**
@@ -246,7 +246,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
+     * refuses the ask at Protocol::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -259,7 +259,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = PendingAsk::EXPIRY_SECONDS;
+        $ceiling = Protocol::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,

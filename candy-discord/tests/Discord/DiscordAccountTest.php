@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
+use SugarCraft\ServeProtocol\Protocol;
 use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Discord\Buttons;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
@@ -23,7 +25,6 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * The account face driven through its private intake with fixture
@@ -55,7 +56,7 @@ final class DiscordAccountTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeDiscordApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->pairing = new PairingCodes($this->store, new TextSafety());
     }
 
@@ -198,13 +199,13 @@ final class DiscordAccountTest extends TestCase
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_clamp', 'tool' => 'Bash', 'arguments' => []]);
         $this->settled(1000, fn(): bool => $this->approvalArmed('ask_clamp'));
-        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
+        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
             'the card window must never outlive the core expiry that governs the answer');
         $clamps = \array_values(\array_filter($lines,
             static fn (string $line): bool => \str_contains($line, '"event":"approval_ttl_clamped"')));
         self::assertCount(1, $clamps, 'a clamped posture is announced exactly once');
         self::assertStringContainsString('"configuredMinutes":120', $clamps[0]);
-        self::assertStringContainsString('"armedSeconds":' . PendingAsk::EXPIRY_SECONDS, $clamps[0]);
+        self::assertStringContainsString('"armedSeconds":' . Protocol::ASK_EXPIRY_SECONDS, $clamps[0]);
         self::assertNull($this->api->lastCallFor('/channels/c1/messages/msg_out'),
             'clamping arms a shorter clock, it does not retire the card early');
     }
@@ -220,7 +221,7 @@ final class DiscordAccountTest extends TestCase
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
         $this->settled(1000, fn(): bool => $this->approvalArmed('ask_default'));
-        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
         self::assertSame([], \array_filter($lines,
             static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')),
             'a co-TTL default needs no announcement');

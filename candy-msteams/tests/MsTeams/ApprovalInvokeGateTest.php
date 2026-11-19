@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
@@ -59,7 +60,7 @@ final class ApprovalInvokeGateTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeTeamsApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->pairing = new PairingCodes($this->store, new TextSafety());
         $this->safety = new TextSafety();
     }
