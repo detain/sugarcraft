@@ -69,7 +69,12 @@ final class ResendTransportTest extends TestCase
         // loudly. The English catalog must steer the caller to SMTP or Mailgun,
         // the two transports that carry CID; it is read from en.php so the
         // assertion does not depend on the host locale.
-        $tmp = \tempnam(\sys_get_temp_dir(), 'cid-');
+        // send() checks ext-curl before it builds the payload, so on a curl-less
+        // build it throws resend.curl_missing instead of the CID refusal.
+        if (!\function_exists('curl_init')) {
+            $this->markTestSkipped('ext-curl unavailable');
+        }
+        $tmp =\tempnam(\sys_get_temp_dir(), 'cid-');
         \file_put_contents((string) $tmp, "\x89PNG\r\n\x1a\n");
         try {
             $email = Email::new('sender@example.com', 'them@example.com')
