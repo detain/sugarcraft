@@ -79,4 +79,18 @@ final class FrontmatterFenceGrammarTest extends TestCase
         $this->assertNotSame('Does X', $skill->description);
         $this->assertSame("---\x0B\ndescription: Does X\n---\nbody", $skill->content);
     }
+
+    /**
+     * The closing-side half of the same divergence: the regex's `\s` also
+     * matched a vertical tab after the closing `---`, so `---<VT>` closed the
+     * block. Split's fence does not, so this block never closes and the whole
+     * document is body.
+     */
+    public function testVerticalTabOnTheClosingFenceLineDoesNotCloseTheBlock(): void
+    {
+        $skill = Skill::parse("---\nname: a\ndescription: Does X\n---\x0B\nbody\n", 'x');
+
+        $this->assertNotSame('Does X', $skill->description);
+        $this->assertSame("---\nname: a\ndescription: Does X\n---\x0B\nbody", $skill->content);
+    }
 }

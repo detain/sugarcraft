@@ -188,6 +188,26 @@ final class SkillFileReaderTest extends TestCase
         (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
     }
 
+    /**
+     * The head is cut at a byte, so a line that runs past the window can end
+     * the head as a bare `---`. Here the real line is `----`, so the fence
+     * never closes: the window ends on `\n---` with no line break after it,
+     * and the manifest must refuse rather than read that fragment as a closer.
+     */
+    public function testAFenceFragmentCutAtTheWindowEdgeIsNotAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/fragment';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "----\nBody.\n");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('frontmatter does not close within its first 65,536 bytes');
+
+        (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+    }
+
     public function testTheBodyStageRefusesAFileOverTheCeiling(): void
     {
         $file = $this->sparseSkill($this->tempDir . '/body', SkillFileReader::MAX_FILE_BYTES + 1) . '/SKILL.md';
