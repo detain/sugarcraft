@@ -330,12 +330,10 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — fromDir() reads the manifest manifestPath() resolved for a bundle directory; '
                 . 'escapesBundle() in this file gates that path with a \SugarCraft\Core\Util\PathJail::below() '
                 . 'compare against the bundle directory, and a real path that leaves it is refused before the read',
-            // NOT CONTAINED_EXTERNAL: readManifest() is reached from the installer's staged trees
-            // (Cli\Subcommands), which PluginDiscovery::guard() never sees. The escape refusal in
-            // manifestPath() covers the file, but no sugar-plugins compare bounds the staged directory.
-            'CALLER_SUPPLIED — readManifest() reads the manifest of a staged installer tree the installer built '
-                . 'for the caller-chosen source; no PluginDiscovery::guard() admits that directory, and '
-                . 'manifestPath() refuses a manifest whose real path leaves that tree',
+            'CONTAINED — readManifest() reads the manifest manifestPath() resolved for a bundle directory, the same '
+                . 'gate fromDir() rides: escapesBundle() in this file runs a \SugarCraft\Core\Util\PathJail::below() '
+                . 'compare against the bundle directory, and a real path that leaves it is refused before the read. '
+                . 'The staged installer trees (Cli\Subcommands) reach it through that same in-file gate',
         ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
