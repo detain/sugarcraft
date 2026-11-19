@@ -313,4 +313,58 @@ final class BundleManifestTest extends TestCase
         self::assertNotNull($entrypoints);
         self::assertSame(['channel'], array_keys($entrypoints));
     }
+
+    public function testASymlinkedHiddenManifestIsRefusedBeforeAnyRead(): void
+    {
+        $outside = $this->tempDir . '/outside-plugin.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+
+        // A real bare manifest sits beside the link: the refusal covers the whole bundle, not one spelling.
+        $dir = $this->bundle('linked-hidden', [], hidden: false);
+        mkdir($dir . '/.claude-plugin', 0777, true);
+        symlink($outside, $dir . '/.claude-plugin/plugin.json');
+
+        self::assertFalse(Bundle::hasManifest($dir));
+        self::assertNull(Bundle::manifestPath($dir));
+        self::assertNull(Bundle::fromDir($dir, 'user'));
+        self::assertSame([], Bundle::readManifest($dir));
+    }
+
+    public function testASymlinkedBareManifestIsRefusedBeforeAnyRead(): void
+    {
+        $outside = $this->tempDir . '/outside-bare.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+
+        $dir = $this->tempDir . '/linked-bare';
+        mkdir($dir, 0777, true);
+        symlink($outside, $dir . '/plugin.json');
+
+        self::assertFalse(Bundle::hasManifest($dir));
+        self::assertNull(Bundle::fromDir($dir, 'user'));
+        self::assertSame([], Bundle::readManifest($dir));
+    }
+
+    public function testADanglingSymlinkedManifestIsRefused(): void
+    {
+        $dir = $this->bundle('dangling-hidden', [], hidden: false);
+        mkdir($dir . '/.claude-plugin', 0777, true);
+        symlink($this->tempDir . '/nowhere.json', $dir . '/.claude-plugin/plugin.json');
+
+        self::assertNull(Bundle::manifestPath($dir));
+        self::assertNull(Bundle::fromDir($dir, 'user'));
+    }
+
+    public function testASymlinkedManifestContainerIsRefusedEvenWhenTheFileBehindItIsReal(): void
+    {
+        $elsewhere = $this->tempDir . '/elsewhere-container';
+        mkdir($elsewhere, 0777, true);
+        file_put_contents($elsewhere . '/plugin.json', json_encode(['name' => 'leaked']));
+
+        $dir = $this->tempDir . '/linked-container';
+        mkdir($dir, 0777, true);
+        symlink($elsewhere, $dir . '/.claude-plugin');
+
+        self::assertFalse(Bundle::hasManifest($dir));
+        self::assertNull(Bundle::fromDir($dir, 'user'));
+    }
 }

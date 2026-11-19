@@ -145,15 +145,42 @@ final class Bundle
         return self::manifestPath($dir) !== null;
     }
 
+    /**
+     * The manifest $dir carries, or null. A symlink anywhere on the way to a
+     * manifest refuses the whole bundle before any read: discovery's guard()
+     * bounds the bundle DIRECTORY, and is_file() would otherwise follow a link
+     * planted at the manifest file or at its `.claude-plugin` container out to a
+     * file nothing bounded.
+     */
     public static function manifestPath(string $dir): ?string
     {
         foreach ([self::MANIFEST_RELATIVE_PATH, self::BARE_MANIFEST_RELATIVE_PATH] as $relative) {
+            if (self::reachesThroughSymlink($dir, $relative)) {
+                return null;
+            }
+
             if (is_file($dir . '/' . $relative)) {
                 return $dir . '/' . $relative;
             }
         }
 
         return null;
+    }
+
+    /** True when any component of $dir/$relative below the bundle root is a symlink, dangling or not. */
+    private static function reachesThroughSymlink(string $dir, string $relative): bool
+    {
+        $path = $dir;
+
+        foreach (explode('/', $relative) as $segment) {
+            $path .= '/' . $segment;
+
+            if (is_link($path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return list<string> the `skills` directories this bundle contributes, existing only */
