@@ -859,8 +859,7 @@ final class InProcessHostServicesTest extends TestCase
     /**
      * The settled answer of an in-process call: its value, or the refusal it rejected with, thrown
      * the way the synchronous call threw it.
-     */
-    /**
+     *
      * PL-5d: the host the serve hands each channel bundle answers through the primary root's
      * dispatcher. A bundle that calls before its hello is refused with the wire's not_initialized,
      * and once connected a session it creates is one the wire client sees on the same dispatcher.
