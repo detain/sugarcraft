@@ -14,6 +14,7 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\StyleGuide;
 use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -47,7 +48,7 @@ final class RenderCommand extends Command
      * or runaway file (or an attacker-controlled path) from being slurped
      * whole into memory. Mirrors sugar-markdown's MAX_HIGHLIGHT_BYTES.
      */
-    private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
+    private const MAX_THEME_CONFIG_BYTES = StyleGuide::MAX_CONFIG_BYTES;
 
     /** glow's own default document width — the ceiling of the auto ladder. */
     public const AUTO_WIDTH_MAX = 80;
@@ -778,7 +779,7 @@ final class RenderCommand extends Command
      *
      * Two JSON schemas are accepted: a top-level `document` OBJECT marks a
      * glamour style file and routes through
-     * {@see GlamourTheme::toMarkdownTheme()} via the sniff below; anything
+     * {@see StyleGuide::theme()} behind the {@see GlamourDecorationGate} via the sniff below; anything
      * else keeps the historic flat per-element shape. The signatures cannot
      * collide — the flat schema has no `document` key.
      */
@@ -806,8 +807,8 @@ final class RenderCommand extends Command
         }
 
         $decoded = json_decode($raw, associative: true);
-        if (is_array($decoded) && GlamourTheme::isGlamourSchema($decoded)) {
-            return GlamourTheme::fromDecoded($decoded)->toMarkdownTheme();
+        if (is_array($decoded) && StyleGuide::isGlamourSchema($decoded)) {
+            return StyleGuide::fromDecoded(GlamourDecorationGate::admit($decoded))->theme();
         }
 
         // Explicit means explicit (finding 020): an object that feeds

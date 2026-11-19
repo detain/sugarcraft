@@ -119,12 +119,17 @@ Flags:
   library glamour styles through, so its map is keyed by token family — the
   shape of
   [charmbracelet/glamour's style files](https://github.com/charmbracelet/glamour/tree/master/styles))
-  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`. `GlamourTheme`
-  stays in candy-mdview as an accepted exception to the theme move (P1-12c-mdview,
-  narrowed scope): sugar-markdown's `StyleGuide` differs from it in four pinned
-  places: the whitespace-only affix refusal, flag parsing of the string `false`,
-  `headingCase` and `imageText` projection, and sanitizing versus refusing
-  affixes. The legacy flat
+  is loaded by sugar-markdown's `StyleGuide` onto a SugarMarkdown `Theme`,
+  behind one refusal candy-mdview keeps in front of it: `GlamourDecorationGate`
+  rejects any document or paragraph `block_prefix` / `block_suffix` that is not
+  inert whitespace (`glamour.decoration_unsafe`), and reads a non-string affix
+  as empty. Every other field follows `StyleGuide`. Output changes for edge
+  glamour files (owner decision, P1-12c-mdview, option b): `uppercase` or
+  `lowercase` on a heading block now sets the heading case, `inline_image` and
+  `block_image` now style the image alt text, and the string `"false"` now reads
+  as off for a boolean flag. A file that uses none of these renders as before,
+  and the three bundled themes and every built-in name render byte-identically.
+  The legacy flat
   color map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
   *path* and is used for the three bundled JSON themes.) In the flat shape the
   accepted top-level keys are exactly the `Theme` element slots —
@@ -368,7 +373,7 @@ autoloader found), which fire before the catalogue is even reachable.
 Beyond the CLI, candy-mdview exposes three public pieces for integrating its
 behavior into other PHP projects: the pager's TEA model (a The-Elm-
 Architecture update loop, `MdViewModel`) and
-two utility helpers (`FileWatcher`, `GlamourTheme`). The deprecated
+two utility helpers (`FileWatcher`, `GlamourDecorationGate`). The deprecated
 `RenderCommand::set*Callback()` test seams are deliberately not part of the
 supported API; they remain for the package's own tests, and any integrator
 using them does so at their own risk. The document input door is the
@@ -430,29 +435,39 @@ tick: FileWatcher loops, sleeps and backs off nothing — the old generator
 `watch()` and its unwired idle-backoff ladder were deleted with it, leaving
 one watcher per session (the `ReloadTickMsg` chain in `MdViewModel`).
 
-### GlamourTheme
+### Glamour style files
 
-`GlamourTheme` parses charmbracelet/glamour style JSON (a `"document"`
-block, per-element `StylePrimitive` maps, and a `chroma` token map) and
-projects it onto SugarMarkdown's `Theme` via `toMarkdownTheme()`: document block affixes, indent and
-margin, heading/paragraph/inline element styles, and the Keyword /
-LiteralString / LiteralNumber / Comment chroma families. `isGlamourSchema()`
-detects the shape; `fromFile()` / `fromJsonString()` parse it, and
-`fromDecoded()` is the entry the CLI's `--theme-config` path actually takes.
-Parsing is hygiene-gated: decoration slots are whitespace-only, decoration
-ints are capped at `Theme::MAX_DOCUMENT_DECORATION`. What is DELIBERATELY
-DROPPED, in full: line-control `block_prefix` / `block_suffix` on
-non-document, non-paragraph elements (vertical spacing SugarMarkdown manages
-itself), the `image` / `table_header` / `table_row` / `table_cell` /
-`table_separator` styles (no mapping is decided for them — mapping would
-silently change what existing style files render, so they stay disclosed and
-addressable instead), per-heading-level prefixes, and chroma families beyond
-the four slots. Unmappable fields are exposed verbatim through `element()` /
-`chroma()` /
-`indentToken()` for integrations that need them — no silent loss. Together
-with the three JSON presets in `themes/`, this is the only way to extend
-the fixed built-in theme set.
+Glamour style JSON (a `"document"` block, per-element `StylePrimitive` maps,
+and a `chroma` token map) is loaded by sugar-markdown's `StyleGuide`, which
+projects it onto SugarMarkdown's `Theme`. The `--theme-config` path sniffs the
+shape with `StyleGuide::isGlamourSchema()`, runs `GlamourDecorationGate::admit()`
+over the decoded document, and then calls `StyleGuide::fromDecoded()` and
+`theme()`. The gate's one refusal is the whitespace-only affix law. The loader
+refuses document indent or margin values over
+`Theme::MAX_DOCUMENT_DECORATION` by name, and the file is read under the 1 MB
+cap `StyleGuide::MAX_CONFIG_BYTES`.
 
+Element blocks the Theme has no slot for stay unmapped, and that is deliberate:
+the `image`, `table_header`, `table_row`, `table_cell` and `table_separator`
+styles, line-control `block_prefix` / `block_suffix` on non-document and
+non-paragraph elements, per-heading-level prefixes, and chroma families beyond
+the four slots. Mapping the table and image blocks would change what existing
+style files render.
+
+Accepted edge changes (P1-12c-mdview, owner option b). The byte-identical rule
+is waived for these edge files only, and each change is listed here and in the
+commit message:
+
+- `uppercase` / `lowercase` on a heading block now sets `headingCase`. The
+  former door ignored both flags.
+- `inline_image` / `block_image` now style the image alt text (`imageText`).
+  The former door dropped them.
+- The string `"false"` now reads as off for a boolean flag. The former door
+  read any non-empty string as on.
+
+Together with the three JSON presets in `themes/`, this is the only way to
+extend the fixed built-in theme set. `GlamourDecorationGateTest` pins the gate
+and the path through `StyleGuide`.
 ## Shared foundations
 
 candy-mdview declares its direct dependencies: **sugar-markdown** (renderer +
