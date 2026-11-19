@@ -620,4 +620,29 @@ final class PathJailTest extends TestCase
         $this->assertFalse(PathJail::within('', $this->root));
         $this->assertFalse(PathJail::below('', $this->root));
     }
+
+    /**
+     * The Windows lexical verdict runs on any platform. Each spelling of an
+     * inside path is accepted, and each escape or unprovable form is refused.
+     *
+     * @return iterable<string, array{string, string, ?string}>
+     */
+    public static function windowsLexicalRows(): iterable
+    {
+        yield 'drive and backslashes' => ["C:\\ws", "C:\\ws\\a.txt", "C:\\ws\\a.txt"];
+        yield 'lower-case drive and forward slashes' => ["c:\\ws", "c:/ws/a.txt", "C:\\ws\\a.txt"];
+        yield 'traversal through .. that stays inside' => ["C:\\ws", "C:\\ws\\sub\\..\\a.txt", "C:\\ws\\a.txt"];
+        yield 'UNC share' => ["\\\\server\\share", "\\\\server\\share\\a.txt", "\\\\server\\share\\a.txt"];
+        yield 'escaping traversal refused' => ["C:\\ws", "C:\\ws\\..\\secret.txt", null];
+        yield 'sibling sharing a prefix refused' => ["C:\\ws", "C:\\wsx\\a.txt", null];
+        yield 'alternate data stream refused' => ["C:\\ws", "C:\\ws\\a.txt:hidden", null];
+        yield 'reserved device name refused' => ["C:\\ws", "C:\\ws\\NUL", null];
+        yield 'rooted path refused' => ["C:\\ws", "\\secret.txt", null];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('windowsLexicalRows')]
+    public function testWindowsLexicalNormalisesOrRefusesOnAnyPlatform(string $root, string $path, ?string $expected): void
+    {
+        $this->assertSame($expected, PathJail::windowsLexical($root, $path));
+    }
 }

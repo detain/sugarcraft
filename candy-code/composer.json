@@ -66,7 +66,9 @@
         "sugarcraft/sugar-focus": "@dev",
         "sugarcraft/sugar-cli": "@dev",
         "sugarcraft/sugar-pty": "@dev",
-        "sugarcraft/sugar-video": "@dev"
+        "sugarcraft/sugar-video": "@dev",
+        "sugarcraft/sugar-plugins": "@dev",
+        "sugarcraft/sugar-serve-protocol": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
@@ -111,7 +113,8 @@
     "extra": {
         "sugarcraft": {
             "deferred-wiring": {
-                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept)."
+                "sugarcraft/sugar-colorprofile": "P1-10a: ColorProfile::detect() delegates to sugarcraft/sugar-colorprofile's DetectionChain when that package is installed, behind a class_exists guard, so src/ never names its namespace. The require is what makes the chain answer colour; without it the call falls back to Ascii (no colour, text kept).",
+                "sugarcraft/sugar-plugins": "PL-1c-i: candy-code wiring to sugar-plugins lands with the loader, registry, ledger and manifest adapters (plan_plugin.md Phase 1c-i)."
             }
         }
     }

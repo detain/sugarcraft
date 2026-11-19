@@ -410,13 +410,12 @@ final class ProcessContainment
         // S-L02 (R4): the witness read is sugar-async's ChildPump — both pipes,
         // 2 s, stopped once a stream holds the 4 KiB report ceiling (the
         // witness is one short line; anything longer is not a witness).
-        $drain = ChildPump::drain(
-            [1 => $pipes[1], 2 => $pipes[2]],
-            Clock::monotonicSeconds() + 2.0,
-            4_096,
-            stopAtCap: true,
-            running: WindowsPipes::runningProbe($probe),
-        );
+        $drain = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
+            ->withDeadline(Clock::monotonicSeconds() + 2.0)
+            ->withCap(4_096)
+            ->withStopAtCap(true)
+            ->withRunning(WindowsPipes::runningProbe($probe))
+            ->pump();
         $report = $drain->buffer(1) . $drain->buffer(2);
 
         \fclose($pipes[0]);

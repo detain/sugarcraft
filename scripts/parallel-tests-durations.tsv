@@ -1066,6 +1066,7 @@ candy-code/tests/ChatScrollTest.php	0.081	18
 candy-code/tests/Channels/ChannelsStoreTest.php	0.080	15
 candy-code/tests/Skills/SlashSkillInvocationTest.php	0.080	14
 candy-code/tests/Config/CandyCodeBodyClaimDriftTest.php	0.080	10
+candy-code/tests/Server/DiscoveryReaderParityTest.php	0.080	6
 candy-code/tests/Bundles/BundleInstallTest.php	0.079	20
 candy-code/tests/Permissions/PlanModePlansDirExceptionTest.php	0.079	22
 candy-code/tests/Providers/SseDecodeFrameBoundTest.php	0.079	4
@@ -1393,6 +1394,7 @@ candy-code/tests/Tools/BuiltIn/ReadNotebookTest.php	0.020	7
 candy-code/tests/Tools/CapabilityAwareDescriptionTest.php	0.020	11
 candy-code/tests/Tools/IgnoreRulesAdapterTest.php	0.020	3
 candy-code/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.020	16
+candy-code/tests/Protocol/ConstantsPinTest.php	0.020	5
 candy-code/tests/App/PaneAutoEnableTest.php	0.019	16
 candy-code/tests/Chat/ContextReminderDedupTest.php	0.019	7
 candy-code/tests/Cli/LaunchEffortNoticeTest.php	0.019	4

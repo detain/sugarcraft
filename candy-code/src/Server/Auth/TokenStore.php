@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Server\Auth;
 
 use SugarCraft\Code\Support\PrivateRetainedDir;
+use SugarCraft\ServeProtocol\Auth\TokenFile;
 
 /**
  * The server's long-lived owner token (Appendix O §8.2).
@@ -29,7 +30,7 @@ use SugarCraft\Code\Support\PrivateRetainedDir;
  */
 final class TokenStore
 {
-    public const FILE = 'token';
+    public const FILE = TokenFile::FILE;
 
     public const MIN_OVERRIDE_LENGTH = 32;
 
@@ -90,19 +91,11 @@ final class TokenStore
             return $this->cached;
         }
 
-        $path = $this->dir() . '/' . self::FILE;
-        $stored = '';
-        if (@\lstat($path) !== false && \is_file($path) && !\is_link($path)) {
-            // Fail CLOSED: a present file that cannot be read right now (a
-            // transient EACCES/EIO) is not a malformed token, and rotating
-            // would destroy a good one and sign every client out.
-            $raw = @\file_get_contents($path);
-            if ($raw === false) {
-                throw new \RuntimeException(\sprintf('the server token file %s exists but cannot be read; refusing to replace it', $path));
-            }
-            $stored = \trim($raw);
-        }
-        if (\preg_match('/^[0-9a-f]{64}$/', $stored) === 1) {
+        // TokenFile::read() fails CLOSED: a present file that cannot be read
+        // right now (a transient EACCES/EIO) throws rather than reading as a
+        // malformed token, because rotating would destroy a good one.
+        $stored = TokenFile::read($this->dir());
+        if ($stored !== null) {
             return $this->cached = $stored;
         }
 
