@@ -262,6 +262,31 @@ final class SkillFileReaderTest extends TestCase
         $this->assertSame('x', $manifest['description']);
     }
 
+    /**
+     * The key audit reads the same bounded text as the manifest parse, so a
+     * closer straddling the window edge keeps its keys in the audit too: the
+     * skill loads, and `allowed-tools` must still be reported as ignored.
+     */
+    public function testTheKeyAuditReadsAClosingFenceStraddlingTheWindowEdge(): void
+    {
+        $dir = $this->tempDir . '/straddle-audit';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: from frontmatter\nallowed-tools: Bash\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($dir . '/SKILL.md', 'SKILL.md', $after);
+        $keys = array_keys(\SugarCraft\Code\Support\FrontmatterKeyAudit::metaOf(SkillFileReader::frontmatterText($head, $truncated, $after)));
+
+        $this->assertSame(['description', 'allowed-tools'], $keys);
+    }
+
+    public function testFrontmatterTextIsTheWholeHeadWhenTheFileFitsTheWindow(): void
+    {
+        $this->assertSame("---\ndescription: x\n---\nBody.", SkillFileReader::frontmatterText("---\ndescription: x\n---\nBody.", false, ''));
+    }
+
     public function testHeadHandsBackTheRestOfTheLineTheWindowCut(): void
     {
         $path = $this->tempDir . '/after-line.md';

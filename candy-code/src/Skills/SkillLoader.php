@@ -746,10 +746,7 @@ final class SkillLoader
         // closer whose `---` straddles the window edge is in the tail, not in
         // $content, so splitting $content alone dropped the whole frontmatter
         // while the guard passed.
-        $parsable = $truncated && $lastBreak !== false
-            ? substr($probe, 0, $lastBreak + 1)
-            : $content;
-        $parsable = Utf8Scrub::clean($parsable);
+        $parsable = Utf8Scrub::clean(SkillFileReader::frontmatterText($content, $truncated, $next));
 
         // Parse frontmatter only (stage 1 - don't load body)
         $split = MarkdownFrontmatter::split($parsable);
