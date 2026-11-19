@@ -768,12 +768,13 @@ reply arrives, and that reply has to cross tmux to reach the program. With
 dropped and the ladder falls to symbols or sixel. The probe runs before
 `TmuxPassthrough::ensure()` flips the option (that happens when the renderer
 is built), so the automatic flip cannot rescue the first probe. Setting
-`allow-passthrough` to `on` (`set -g allow-passthrough on`) is the tmux setting
-that governs passthrough and is worth trying first, but this library has not
-measured whether tmux forwards a raw, unwrapped APC query to the outer terminal
-or relays its reply. Until that is verified, treat Kitty inside tmux as
-unconfirmed: if no reply arrives, the claim is dropped as described above, and
-symbols or sixel is the expected result. The query is written raw: there is
+`allow-passthrough` to `on` (`set -g allow-passthrough on`) governs passthrough
+in general, but it may not change this outcome: the query is written raw, not
+wrapped, and this library has not measured whether tmux forwards a raw,
+unwrapped APC query to the outer terminal or relays its reply. No tested path
+currently confirms Kitty inside tmux. Treat it as unconfirmed: if no reply
+arrives, the claim is dropped as described above, and symbols or sixel is the
+expected result whatever the option is set to. The query is written raw: there is
 no tmux exception to the reply rule and no DCS passthrough wrap around the
 query.
 

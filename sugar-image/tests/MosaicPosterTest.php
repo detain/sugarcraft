@@ -8,10 +8,13 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use ReflectionMethod;
+use SugarCraft\Image\Capability;
 use SugarCraft\Image\DiskCache;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Renderer\IncrementalRenderer;
+use SugarCraft\Image\Renderer\Renderer;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\Tests\Support\LoopbackHttpServer;
 
@@ -213,6 +216,104 @@ final class MosaicPosterTest extends TestCase
 
         $this->assertNotSame('', $async);
         $this->assertSame($sync, $async);
+    }
+
+    /**
+     * Pins the routing, not just the bytes: a renderer whose rows each cost
+     * more than one 8 ms slice must be driven row by row, with the loop
+     * handing control back between rows. A synchronous poster would run the
+     * whole encode inside one callback and show no tick between the rows.
+     */
+    public function testPosterAsyncYieldsTheLoopBetweenRowsOfASlowEncode(): void
+    {
+        $this->startServer();
+        $log      = [];
+        $renderer = new class ($log) implements Renderer, IncrementalRenderer {
+            /** @param array<int, string> $log passed by reference */
+            public function __construct(private array &$log) {}
+
+            public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
+            {
+                foreach (['row0', 'row1', 'row2'] as $row) {
+                    usleep(10_000); // > 8 ms slice budget, so each row ends a slice
+                    $this->log[] = 'row';
+                    yield $row;
+                }
+                $this->log[] = 'end';
+            }
+
+            public function render(ImageSource $image, int $width, ?int $height = null): string
+            {
+                $this->log[] = 'sync';
+
+                return 'row0row1row2';
+            }
+
+            public function name(): string
+            {
+                return 'slow-row-spy';
+            }
+
+            public function supportsAlpha(): bool
+            {
+                return false;
+            }
+
+            public function isInline(): bool
+            {
+                return true;
+            }
+
+            public function delete(string $imageId): string
+            {
+                return '';
+            }
+
+            public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string
+            {
+                return '';
+            }
+
+            public function present(ImageSource $image, int $width, ?int $height, string $imageId, ?string $prevId): string
+            {
+                return '';
+            }
+
+            public function supportsIdDelete(): bool
+            {
+                return false;
+            }
+        };
+        $mosaic = new Mosaic($renderer, Capability::universal(), null, null, null);
+        $url    = "http://127.0.0.1:{$this->port}/poster.png";
+
+        $settled = false;
+        $promise = $mosaic->posterAsync($url, 8, 4, null, ['127.0.0.1']);
+        $promise->then(static function () use (&$settled): void {
+            $settled = true;
+        });
+        $probe = static function () use (&$probe, &$log, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $log[] = 'tick';
+            Loop::futureTick($probe);
+        };
+        Loop::futureTick($probe);
+
+        $out = $this->await($promise);
+
+        $this->assertSame('row0row1row2', $out);
+        $this->assertNotContains('sync', $log, 'posterAsync must not take the synchronous render path');
+        $first = array_search('row', $log, true);
+        $end   = array_search('end', $log, true);
+        $this->assertIsInt($first, 'rows must be pulled through the paced session');
+        $this->assertIsInt($end);
+        $this->assertContains(
+            'tick',
+            array_slice($log, $first + 1, $end - $first - 1),
+            'the loop must run between slices of a multi-slice encode',
+        );
     }
 
     public function testPosterAsyncRejectsOnBlockedPrivateHost(): void
