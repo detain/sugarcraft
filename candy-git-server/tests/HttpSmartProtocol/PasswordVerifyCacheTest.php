@@ -108,4 +108,37 @@ final class PasswordVerifyCacheTest extends TestCase
             self::assertSame('dave' . "\n" . \hash('sha256', $password), $key);
         }
     }
+
+    public function testDefaultConstructionMemoizesWithoutAnInjectedClock(): void
+    {
+        // Production builds the cache with no clock (Server::verifyCache()), so
+        // the default path must memoize too, not only the injected-clock one.
+        $hash = \password_hash('sword', \PASSWORD_BCRYPT, ['cost' => 4]);
+        $cache = new PasswordVerifyCache();
+
+        self::assertTrue($cache->verify('sword', $hash, 'alice'));
+        // A hit on the default clock must skip the poisoned digest entirely.
+        self::assertTrue($cache->verify('sword', 'not-a-digest', 'alice'));
+        self::assertSame(1, $cache->size());
+    }
+
+    public function testDefaultConstructionWiresTtlAndMonotonicClock(): void
+    {
+        // Expiry cannot be waited out on the real clock (120 s), so pin the
+        // wiring instead: the TTL is TTL_SECONDS and no test clock is injected,
+        // which leaves LruMap on its monotonic hrtime default.
+        $cache = new PasswordVerifyCache();
+        $prop = new \ReflectionProperty(PasswordVerifyCache::class, 'entries');
+        $prop->setAccessible(true);
+        /** @var LruMap<bool> $map */
+        $map = $prop->getValue($cache);
+
+        $ttl = new \ReflectionProperty(LruMap::class, 'ttl');
+        $ttl->setAccessible(true);
+        $clock = new \ReflectionProperty(LruMap::class, 'clock');
+        $clock->setAccessible(true);
+
+        self::assertSame(PasswordVerifyCache::TTL_SECONDS, $ttl->getValue($map));
+        self::assertNull($clock->getValue($map));
+    }
 }

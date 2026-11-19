@@ -18,10 +18,13 @@ use SugarCraft\Core\Util\LruMap;
  * exactly the repeat pattern being fixed, and persisting auth RESULTS to
  * disk would be a far worse trade than a per-connection re-verify.
  *
- * Freshness bound: the TTL. A password changed out from under a warm
- * entry is honored (or refused, for a revoked credential) at most
- * self::TTL_SECONDS late — the ceiling the old per-request shape paid
- * zero of, since only a process restart cleared it.
+ * Freshness bound: the TTL plus one verify. The expiry is stamped when the
+ * outcome is stored, which is after password_verify() returns, so an entry
+ * outlives self::TTL_SECONDS by the bcrypt run that produced it. A password
+ * changed out from under a warm entry is therefore honored (or, for a
+ * revoked credential, still accepted) at most self::TTL_SECONDS plus that
+ * one verify late. The old per-request shape paid zero of this, since only
+ * a process restart cleared it.
  *
  * Only REAL digests are cached. The unknown-user and key-only decoy
  * burns stay outside (their uniform refusal timing is the enumeration
