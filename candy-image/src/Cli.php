@@ -146,25 +146,6 @@ final class Cli
         'symbols', 'symbol', 'sym',
     ];
 
-    /**
-     * chicle-style --scale spellings mapped onto the Scale enum.
-     *
-     * Kept in candy-image. The upstream plan conflicts with itself: one line
-     * says "scale names mapped in the lib", and a later line says "scale and
-     * viewport names from sugar-image (P1-13)". This map follows the first,
-     * because sugar-image exposes no name-to-Scale mapping. The conflict is
-     * an open question for the owner to resolve; the plan file is not shipped
-     * with this package, so it is not cited by path here.
-     */
-    private const SCALES = [
-        'fit'     => Scale::Fit,
-        'shrink'  => Scale::ShrinkToFit,
-        'fill'    => Scale::Fill,
-        'stretch' => Scale::Stretch,
-        'none'    => Scale::None,
-        'crop'    => Scale::Crop,
-    ];
-
     private function __construct()
     {
     }
@@ -312,7 +293,7 @@ final class Cli
                         $sizeSeen = true;
                         break;
                     case 'scale':
-                        $case = self::SCALES[strtolower($raw)] ?? null;
+                        $case = Scale::fromName(strtolower($raw));
                         if ($case === null) {
                             return $bad();
                         }
