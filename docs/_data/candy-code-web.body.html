@@ -1,48 +1,230 @@
-<p class="lede" style="margin-top: 28px;">The browser face of <a href="candy-code.html">CandyCode</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>candy-code serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
+<p class="lede" style="margin-top: 28px;">candy-code-web is the browser face of <a href="candy-code.html">candy-code</a>'s WebSocket server mode. It is a Vite, Vue 3, TypeScript and Pinia app that is built once and committed as <code>dist/</code>, plus a one-class PHP shim, <code>SugarCraft\CodeWeb\Assets</code>, that tells <code>candy-code serve</code> where the bundle lives. PHP users get the UI from <code>composer require</code> alone and never need Node to run it. Node is needed only to change the UI.</p>
 
-    <p><strong>Multi-session.</strong> Over the <code>candy-code.v1</code> protocol: a sessions sidebar, a virtualised transcript with tool cards and diffs, permission cards, a composer that queues, steers or interrupts, and a status bar with a changeable permission mode; tabs and a tiled grid of up to nine live sessions; a server-wide approvals drawer; a settings form generated from the server's schema with a diff preview before saving; the Agents (with an agent view to message, pause or cancel a run), Todo, Background, Workflows, Memory, Rules, Catalog, Changes, Files, Context, Generate and Usage panels; a command palette (Ctrl+K); a folder picker for a new session's project directory when the server runs with <code>--allow-dir-browse</code>; and reconnect-and-resume from a gap-free event cursor.</p>
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-code-web:@dev</code></pre>
+    <p>Requires PHP 8.3 or newer. The package has no release tag yet, and Packagist serves <code>dev-master</code> only. A project on the default <code>minimum-stability: stable</code> must add the <code>:@dev</code> suffix, or the install will not resolve.</p>
+    <p>Install it in the PHP project that hosts <code>candy-code</code>, in the same vendor tree that <code>candy-code serve</code> resolves at startup. A project-local install and <code>composer global require</code> both qualify, as long as the two packages land in one autoloader. <code>candy-code</code> lists this package under <code>suggest</code>, not <code>require</code>, so headless installs stay lean.</p>
+    <p>The <code>candy-code</code> phar cannot host this UI. A packaged phar freezes its own vendor as the only autoload root, and this package is only a suggestion, so a phar install never finds it. The browser UI is a Composer-channel feature.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-code-web</code></pre>
-
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h2 style="margin-top: 40px;">Quickstart</h2>
+    <p>Start the server and open the sign-in URL it prints. The browser takes over from there, and users never write a line of PHP.</p>
     <pre class="code"><code class="language-shell">candy-code serve</code></pre>
-    <p>It prints a one-time sign-in URL; open it and the browser UI takes over — users never write a line of PHP. The locator class exists so the server can find the bundle and a distributor can verify a build's identity:</p>
+    <p>The server binds to <code>127.0.0.1</code> by default, so the URL works on the same machine. Exposing the server is a separate decision, covered under Configuration below.</p>
+    <p>The locator class exists so the server can find the bundle, and so a distributor can verify a build's identity:</p>
     <pre class="code"><code class="language-php">use SugarCraft\CodeWeb\Assets;
 
 $root = Assets::distPath();      // absolute, realpath()-resolved dist/ directory
 $manifest = Assets::manifest();  // Vite manifest: 'index.html' => ['file' => 'assets/index-….js', …]
 echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.json</code></pre>
 
-    <h3 style="margin-top: 32px;">How it ships</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Committed dist/</strong><span>The built bundle is part of the package, like the committed demo GIFs. Content-hashed file names and no timestamps make a clean rebuild byte-identical.</span></div>
-      <div class="feature"><strong>CI parity gate</strong><span>The web workflow runs npm ci, lint, typecheck, unit tests and a build, then fails if the committed dist/ differs from what the source produces.</span></div>
-      <div class="feature"><strong>One-class shim</strong><span>Assets::distPath() / tryDistPath() / manifest() / version() / diagnose(). candy-code lists the package under suggest, so headless installs stay lean.</span></div>
-      <div class="feature"><strong>Lean Packagist dist</strong><span>archive.exclude drops src-web/, tests/, phpunit.xml, node_modules/ and the Node config, so the Composer download is the built bundle and the one-class PHP shim.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>The package has two halves that never mix at runtime. The PHP half is a single class that answers one question: where is the bundle, and is it intact. The TypeScript half is the UI itself, which speaks the <code>candy-code.v1</code> protocol over one WebSocket. Between them sits a committed build, so a PHP install never runs a Node toolchain.</p>
 
-    <h3 style="margin-top: 40px;">Developing the UI</h3>
+    <h3 style="margin-top: 24px;">The wire, not the UI, is the contract</h3>
+    <p>The page trades a one-time code for an HttpOnly session cookie, then holds one WebSocket that speaks <code>candy-code.v1</code>. The protocol and the UI are documented in candy-code's <code>docs/SERVER.md</code>. Nothing in this package defines a second protocol. The generated protocol mirror and the string catalogue are regenerated from candy-code's sources, so the UI cannot drift from the server silently.</p>
+
+    <h3 style="margin-top: 24px;">Committed bundle, checked build</h3>
+    <p>The built bundle is part of the package, in the same way as the committed demo GIFs. Content-hashed file names and the absence of timestamps keep a rebuild stable. CI runs <code>npm ci</code>, lint, typecheck, the unit tests and a build, then fails if the committed <code>dist/</code> differs from what the source produces. A UI change is therefore one commit that carries the source and the bundle together.</p>
+
+    <h3 style="margin-top: 24px;">The PHP shim is for location, not rendering</h3>
+    <p><code>Assets</code> finds <code>dist/</code>, parses the Vite manifest and the build stamp, and reports on them. It never serves a file, never reads a request, and never renders HTML. The server does the serving, behind its own security headers and path jail.</p>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+
+    <h3 style="margin-top: 24px;">Open a session from the browser</h3>
+    <p>Open the sign-in URL. Each session opens as a tab, and the sessions sidebar lists every session on the server, newest first, with a filter and a status for each. A badge marks a session that is waiting on a question. Rows for another workspace carry a Close action that asks first, and retries with force when the server refuses because a turn is running.</p>
+
+    <h3 style="margin-top: 24px;">Start a session in another directory</h3>
+    <p>Start the server with <code>--allow-dir-browse</code>. New session then opens a folder picker over the server's browse root, with a breadcrumb, child directories with a project badge, a show-hidden toggle and a path box. Without the flag, New session starts on the server's own root.</p>
+
+    <h3 style="margin-top: 24px;">Answer a permission card</h3>
+    <p>A permission card offers once, always for this session, always and save, reject, and reject and stop. Press <code>y</code>, <code>a</code> or <code>n</code> on a focused card. <em>Always (save)</em> is the only answer that writes a durable grant to the config, so it takes two steps. The first click spells out what it saves, and the second commits. A card whose answer never settles re-arms its buttons after ten seconds.</p>
+
+    <h3 style="margin-top: 24px;">Watch several sessions at once</h3>
+    <p>Open sessions stay as tabs, and the grid tiles up to nine of them, three by three. Each tile shows its status, step, spend and the last few events. The focused tile streams in full, and the others are narrated by the server with a tail every two seconds. A screen reader hears only the focused tile. The layout is remembered per browser.</p>
+
+    <h3 style="margin-top: 24px;">Share a read-only snapshot</h3>
+    <p>On a write-scoped connection, a session row offers Share page. It publishes a snapshot and shows the full link, its expiry, and a copy button. A share is the only read-only door to a session, so the viewer of the link cannot prompt, answer or steer it. Any browser of the same server can revoke a share, because every signed-in browser is the same operator.</p>
+
+    <h3 style="margin-top: 24px;">Answer from the approvals drawer</h3>
+    <p>The warning count in the top bar opens the approvals drawer. It lists every open question in every session of the server, oldest first, grouped by session, and answerable in place. A question appears the moment it is put, whether or not the page follows its session. Opt-in desktop notifications also say when a turn finishes out of sight.</p>
+
+    <h3 style="margin-top: 24px;">Turn on device notifications</h3>
+    <p>Settings has a toggle, Notify me on this device. It subscribes the browser through the service worker at <code>/sw.js</code>, so a question or a finished turn still raises a notification when the page is closed. The toggle needs a secure context, which means HTTPS or localhost. Switching it off unsubscribes both the browser and the server.</p>
+
+    <h3 style="margin-top: 24px;">Dictate a prompt</h3>
+    <p>The mic button on the composer dictates through one of two engines, and its title says which one is live. The server engine is used when the server advertises <code>transcribe</code>, and it sends the audio to the server's own voice endpoint. The browser engine hands audio to the browser vendor's speech service, and Firefox has no such engine. Both need a secure context, so on a plain-HTTP LAN address the mic button is absent.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The whole PHP surface is <code>SugarCraft\CodeWeb\Assets</code>, a <code>final</code> class with static methods and no instances. Every method reads from the package's <code>dist/</code> directory, and the first three throw when the bundle is broken. <code>diagnose()</code> never throws, which makes it the one to call from a health check.</p>
+    <pre class="code"><code class="language-php">Assets::distPath();     // absolute, realpath()-resolved dist/ — throws RuntimeException
+                        // when dist/index.html is missing (a broken install)
+Assets::tryDistPath();  // soft probe: null instead of throwing
+Assets::manifest();     // decoded Vite manifest: entry => {file, css, …}
+Assets::version();      // bundle version, stamped into dist/build-info.json
+Assets::diagnose($packageRoot);  // {dist, manifest, version, error}, never an exception</code></pre>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Assets</td><td>static distPath(): string</td><td>Absolute, realpath()-resolved path of the committed bundle. Throws <code>RuntimeException</code> when <code>dist/index.html</code> is missing, which is a broken install.</td></tr>
+    <tr><td>Assets</td><td>static tryDistPath(): ?string</td><td>The soft probe of the same location. It returns null instead of throwing, for callers that degrade. A server with no UI keeps the API and the WebSocket up.</td></tr>
+    <tr><td>Assets</td><td>static manifest(): array</td><td>The decoded Vite manifest from <code>dist/manifest.json</code>. Each source entry maps to its <code>file</code>, <code>css</code> and <code>isEntry</code>.</td></tr>
+    <tr><td>Assets</td><td>static version(): string</td><td>The bundle's release version from <code>dist/build-info.json</code>. The <code>package.json</code> file is not shipped to Packagist, so the version travels inside <code>dist/</code>.</td></tr>
+    <tr><td>Assets</td><td>static diagnose(string $packageRoot): array</td><td>A structured <code>{dist, manifest, version, error}</code> report for any package root, which is the directory that holds <code>src/</code> and <code>dist/</code>. It is the failure surface of the three methods above, made observable.</td></tr>
+    </table>
+    <p>The class holds two constants, <code>MANIFEST = 'manifest.json'</code> and <code>BUILD_INFO = 'build-info.json'</code>. Both are public, so a distributor can read the same files without going through the class.</p>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>The package reads no configuration file, and it has no options of its own. Two settings decide what the server does with the bundle, and both belong to <code>candy-code</code>.</p>
+    <table>
+    <tr><th>Setting</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>--web-root &lt;dir&gt;</code> (<code>candy-code serve</code>)</td><td>path</td><td>the packaged <code>dist/</code></td><td>Serves a custom build of the bundle. It is the only documented way to serve your own <code>dist/</code>.</td></tr>
+    <tr><td><code>CANDY_CODE_SERVER_WEB_ROOT</code></td><td>path</td><td>unset</td><td>The environment form of <code>--web-root</code>.</td></tr>
+    <tr><td><code>--allow-dir-browse</code> (<code>serve</code>)</td><td>flag</td><td>off</td><td>Lets New session open a folder picker over the server's browse root.</td></tr>
+    <tr><td><code>--allow-remote</code>, <code>--tls-cert</code>, <code>--tls-key</code>, <code>--allowed-ips</code></td><td>flags</td><td>loopback only</td><td>Exposure. The server refuses a non-loopback host without <code>--allow-remote</code>. The TLS flags terminate TLS in the server, and <code>--allowed-ips</code> bounds who may connect.</td></tr>
+    </table>
+    <p>The Settings form in the UI is generated from the server's own schema. Each value shows where it came from, whether an environment variable or a flag locks it, and how it applies. A diff of the file is previewed before anything is saved.</p>
+
+    <h3 style="margin-top: 24px;">Deployment and the front proxy</h3>
+    <p>Decide exposure before headers. The UI is as public as the server behind it. The Dockerfile's shipped <code>serve --host 0.0.0.0 --allow-remote</code> posture makes that decision for you, so read it before you use it.</p>
+    <p>The server ships <code>dist/assets</code> uncompressed, at about 690 KB cold. Compression is the front proxy's job, so turn gzip or brotli on for <code>/assets/</code>. The file names are content-hashed and served as immutable, so proxy-compressed copies stay valid across deploys.</p>
+    <p><code>candy-code serve</code> already sends a Content-Security-Policy, along with <code>nosniff</code>, <code>Referrer-Policy: no-referrer</code>, frame denial and same-origin COOP and CORP headers. The policy is applied to every response, including the bundle and the share pages, except the WebSocket handshake:</p>
+    <pre class="code"><code class="language-text">default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'</code></pre>
+
+    <h3 style="margin-top: 24px;">Browser storage</h3>
+    <p>Everything the UI keeps in the browser lives in <code>localStorage</code> under the <code>candy-code-web:</code> prefix. Sign-out clears the credential, the transcript caches and the tab-restore keys. Device preferences such as the theme survive it. The keys that matter most are these:</p>
+    <table>
+    <tr><th>Key</th><th>Contents</th><th>Bound</th><th>Cleared by</th></tr>
+    <tr><td><code>login-secret</code></td><td>The sign-in secret. It is a credential.</td><td>one</td><td>Sign-out, or any 401 from the server.</td></tr>
+    <tr><td><code>promptHistory</code></td><td>Recently sent prompts, newest first.</td><td>50 entries of 16 Ki characters</td><td>Sign-out in every tab, or the palette's Clear prompt history.</td></tr>
+    <tr><td><code>drafts</code></td><td>Unsent composer text, per session.</td><td>50 sessions of 16 Ki characters</td><td>Sign-out, a session leaving the index, or first-in first-out eviction.</td></tr>
+    <tr><td><code>theme</code>, <code>notify</code>, <code>diffStyle</code></td><td>UI preferences.</td><td>enum values</td><td>Kept across sign-out.</td></tr>
+    </table>
+    <p>The sign-in secret stays in storage while you are signed in, so anything that can run script on this origin can read it. Keep the host page clean, and treat browser storage as holding a credential. The table is checked by a spec that derives every key from the sources, so a key that ships without a row fails the test run.</p>
+
+    <h2 style="margin-top: 40px;">Keys and shortcuts</h2>
+    <p>The UI is keyboard first. Press <code>?</code> for the help overlay, which lists the live chords. It opens only when the composer is empty or focus sits outside an editable field. Three actions can be rebound and are kept per browser: the command palette, the help overlay and the tab chord. The defaults in this table are the shipped ones.</p>
+    <table>
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><code>?</code></td><td>Open the help overlay, which lists every live chord.</td></tr>
+    <tr><td><code>Ctrl+K</code> / <code>⌘K</code></td><td>Open the command palette: sessions, slash commands, panels, a new session and the theme.</td></tr>
+    <tr><td><code>Alt+1</code> to <code>Alt+9</code></td><td>Pick an open tab. This is the tab chord, and the tab strip cycles it.</td></tr>
+    <tr><td><code>Enter</code></td><td>Send the prompt. While a turn runs, the server's queue mode decides whether it steers, queues or interrupts.</td></tr>
+    <tr><td><code>Esc</code> <code>Esc</code></td><td>Stop the running turn.</td></tr>
+    <tr><td><code>Ctrl+↑</code> / <code>Ctrl+↓</code></td><td>Walk the prompt history back and forth.</td></tr>
+    <tr><td><code>Ctrl+G</code></td><td>Search the prompt history. Enter fills the draft, and Esc restores yours.</td></tr>
+    <tr><td><code>y</code>, <code>a</code>, <code>n</code></td><td>Answer a focused permission card.</td></tr>
+    <tr><td><code>/</code> and <code>@</code></td><td>Complete a server command, or a mention such as a file, an MCP resource or a sub-agent.</td></tr>
+    <tr><td><code>↑</code> / <code>↓</code>, <code>Enter</code> / <code>→</code>, <code>Backspace</code> / <code>←</code>, <code>Home</code> / <code>End</code></td><td>In the folder picker: move, open, go up, and jump to the first or last entry.</td></tr>
+    </table>
+    <p>The chords quoted elsewhere in this page are defaults, not law. A rebinding saved in this browser wins.</p>
+
+    <h2 style="margin-top: 40px;">Theme and accessibility</h2>
+    <p>The theme is a per-browser preference, stored under the <code>theme</code> key. The command palette has a theme action that changes it. The UI reads <code>prefers-reduced-motion</code>, and when the user asks for reduced motion it turns off all animations and transitions globally.</p>
+    <p>Keyboard focus rings are set globally on buttons, links, selects, inputs and text areas. They show on keyboard focus and not on a click. Every dialog runs through one shared focus spine: focus enters the panel on open, Tab stays inside it, Esc dismisses it, and the trigger regains focus on close. A test fails if a dialog bypasses the spine.</p>
+    <p>Screen readers hear a newly arrived question through a polite live region, with where it came from and what it offers. A completed reply is announced once at the tail of the transcript. Token deltas are not announced, because that would flood the reader. Diff rows never rely on colour alone: each row has a plus or minus glyph and a kind class, and its old and new line numbers are read out.</p>
+    <p>The tab title carries a <code>(N)</code> count of pending questions, so a waiting ask is visible without reading the page.</p>
+
+    <h2 style="margin-top: 40px;">Developing the UI</h2>
+    <p>The TypeScript lives in <code>src-web/</code>, which keeps it out of the PSR-4 <code>src/</code> tree. Node is pinned in <code>.nvmrc</code>. Every command below runs in the package directory.</p>
     <pre class="code"><code class="language-shell">cd candy-code-web
 npm ci
-npm run dev        # Vite dev server; proxies /ws and /api to 127.0.0.1:7420
-npm run build      # rewrites dist/ — commit it with the source change</code></pre>
+npm run dev           # Vite dev server; proxies /ws and /api to 127.0.0.1:7420
+npm run typecheck     # vue-tsc
+npm run lint          # eslint
+npm test              # vitest (happy-dom): protocol client, reducer, stores, components
+npm run build         # writes dist/ — commit it with the source change
+npm run check:dist    # CI law: dist/ must be byte-identical to a clean build of the source</code></pre>
+    <p>The dev server forwards <code>/ws</code> and <code>/api</code> to a running <code>candy-code serve</code> on <code>127.0.0.1:7420</code>, so start the server first. Two generators keep the UI in step with the server. <code>npm run gen:protocol</code> regenerates the protocol types from the wire schema, and <code>npm run gen:strings</code> regenerates the string mirror from candy-code's catalogue. Neither file is edited by hand.</p>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 style="margin-top: 24px;">Adding a user-facing string</h3>
+    <p>Every sentence in the UI is an i18n string. The English copy lives in candy-code, and this package keeps a committed mirror of it. A new string follows one direction. Add the key to candy-code's catalogue and its locale twins, all or none. The sibling regenerates the JSON that the mirror reads from, and then <code>npm run gen:strings</code> rewrites the mirror, which is committed with the change. Call sites use <code>t('web.&lt;area&gt;.&lt;name&gt;')</code>, and the key must carry the <code>web.</code> prefix. The server sends its own strings at runtime, so the mirror is only the offline fallback. Never edit the mirror by hand.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p>The package ships two PHP examples in <code>examples/</code>. They read the committed bundle, and they need only <code>composer install</code> in this checkout. Neither one starts a server.</p>
+    <table>
+    <tr><th>Example</th><th>What it does</th><th>Exit code</th></tr>
+    <tr><td><code>examples/diagnose.php</code></td><td>Prints the <code>Assets::diagnose()</code> report for this checkout, or for a package root passed as the first argument.</td><td>0 when the bundle is intact, 1 when the report carries an error.</td></tr>
+    <tr><td><code>examples/locate.php</code></td><td>Shows the soft probe that <code>candy-code serve</code> uses. It prints the web root, the index entry and the version, or says that no bundle is present.</td><td>0 in both cases.</td></tr>
+    </table>
+    <pre class="code"><code class="language-shell">composer install
+php examples/diagnose.php
+php examples/locate.php
+php examples/diagnose.php /path/to/another/package-root</code></pre>
+    <p>A healthy checkout prints a <code>dist:</code> line with the absolute bundle path, a <code>version:</code> line, and an <code>entries:</code> count. The values below are from a real run, and the path is shown as a placeholder.</p>
+    <pre class="code"><code class="language-text">dist:    /home/you/candy-code-web/dist
+version: 0.1.0
+entries: 3</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <p>The PHP side has one suite, and the UI has four checks. Run them in this order.</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit        # tests/AssetsTest.php
+npm ci &amp;&amp; npm test                           # vitest, happy-dom
+npm run typecheck &amp;&amp; npm run lint
+npm run e2e                                  # Playwright (Chromium) against a real candy-code serve</code></pre>
+    <p><code>tests/AssetsTest.php</code> checks the committed bundle itself. The manifest's files exist and are content-hashed. <code>index.html</code> loads the entry by a relative URL. The version matches <code>package.json</code>. No source map or <code>.env</code> file has leaked into <code>dist/</code>.</p>
+    <p>CI runs the web leg in <code>.github/workflows/web.yml</code>. It runs <code>npm ci</code>, the audit, lint, typecheck, the unit tests, the build, and the dist check, and then the end-to-end suite.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;">candy-code serve runs, but the browser shows no UI</h3>
+    <p>The bundle is missing or incomplete, and the server is serving the API and the WebSocket without a page. <code>Assets::distPath()</code> throws a <code>RuntimeException</code> that reads <code>dist/index.html is missing</code>. Run <code>php examples/diagnose.php</code> to see the verdict, then reinstall the package with <code>composer require sugarcraft/candy-code-web:@dev</code> so the <code>dist/</code> directory is restored.</p>
+
+    <h3 style="margin-top: 24px;">The report names a broken manifest or build stamp</h3>
+    <p><code>diagnose()</code> reports <code>dist/manifest.json</code> or <code>dist/build-info.json</code> as missing or not valid JSON, and it names the file. A broken stamp means a damaged download or a hand-edited bundle. Reinstall the package rather than repairing the file by hand.</p>
+
+    <h3 style="margin-top: 24px;">The mic button or the device-notification toggle is missing</h3>
+    <p>Both need a secure context, which means HTTPS or <code>localhost</code>. On a plain-HTTP address that is not localhost, the browser refuses the microphone and the push APIs, so the controls are hidden. Serve the UI over TLS with <code>--tls-cert</code> and <code>--tls-key</code>, or through a TLS front proxy.</p>
+
+    <h3 style="margin-top: 24px;">The folder picker is missing from New session</h3>
+    <p>The picker needs the server to run with <code>--allow-dir-browse</code>. Without it, New session starts on the server's own root, which is the intended behaviour.</p>
+
+    <h3 style="margin-top: 24px;">The page says the server is gone</h3>
+    <p>The reconnect ladder ran out. The client retries six times, with the delay doubling from half a second to fifteen seconds, plus or minus thirty per cent jitter. Click <em>Try again</em> to spend a fresh ladder. If the server is still down, start <code>candy-code serve</code> again.</p>
+
+    <h3 style="margin-top: 24px;">The browser asks you to sign in again after a reload</h3>
+    <p>Sign-out clears the stored secret, and so does any 401 from the server. Sign in again from the URL the server printed.</p>
+
+    <h3 style="margin-top: 24px;">npm run dev cannot reach the API</h3>
+    <p>The dev server proxies <code>/ws</code> and <code>/api</code> to <code>127.0.0.1:7420</code>. Start <code>candy-code serve</code> on that port before <code>npm run dev</code>, or the proxy has nothing to forward to.</p>
+
+    <h3 style="margin-top: 24px;">CI fails with "dist/ is stale"</h3>
+    <p>A source change was committed without its bundle. Run <code>npm ci &amp;&amp; npm run build</code> in <code>candy-code-web/</code>, then commit <code>dist/</code> with the source change in the same commit. <code>npm run check:dist</code> reproduces the CI verdict locally before you push.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <p>There is no upstream to mirror. The UI is first-party, and the PHP shim is too. The nearest analogues are the opencode web UI and the OpenClaw Control UI, which ship the same way: a static bundle served by the agent's own server. Its protocol is candy-code's own <code>candy-code.v1</code>, documented in candy-code's <code>docs/SERVER.md</code>.</p>
+    <table>
+    <tr><th>Concern</th><th>Where it lives</th></tr>
+    <tr><td>Bundle location and identity</td><td><code>src/Assets.php</code>, the whole PHP surface</td></tr>
+    <tr><td>UI source</td><td><code>src-web/</code>, Vue 3, Pinia and Vite</td></tr>
+    <tr><td>Committed build</td><td><code>dist/</code>, checked by <code>npm run check:dist</code> in CI</td></tr>
+    <tr><td>Wire protocol</td><td>candy-code's <code>candy-code.v1</code>, mirrored by <code>npm run gen:protocol</code></td></tr>
+    <tr><td>Strings</td><td>candy-code's catalogue, mirrored by <code>npm run gen:strings</code></td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The package has three layers that meet at two files. The PHP layer is <code>src/Assets.php</code>. It resolves the path of <code>dist/</code>, checks that <code>index.html</code> is there, and reads the manifest and the build stamp. The UI layer is <code>src-web/</code>, a Vue 3 application with Pinia stores and a single WebSocket client. The build layer is <code>vite.config.ts</code>, which writes the manifest, stamps the build with its version, and produces the content-hashed files in <code>dist/</code>.</p>
+    <p>The Composer archive is the built bundle and the PHP shim, nothing else. The archive excludes <code>src-web/</code>, <code>tests/</code>, <code>phpunit.xml</code>, <code>node_modules/</code>, the Node configuration and the Playwright files. A Composer install therefore carries the bundle and the one-class locator, and no build tooling.</p>
+
+    <h3 style="margin-top: 24px;">Path safety</h3>
+    <p><code>Assets</code> resolves <code>dist/</code> through <code>realpath()</code>. A server that confines requests to that directory can then compare the request path against the same canonical prefix the kernel reports, even when <code>vendor/</code> is a symlink farm, as path repositories make it.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>No release is tagged yet. The version is the build stamp in <code>dist/build-info.json</code>, currently <code>0.1.0</code>, and <code>Assets::version()</code> reads it. The stamp travels inside <code>dist/</code> because <code>package.json</code> is excluded from the Packagist archive. Until a tag exists, install with <code>:@dev</code> and check the stamp to know which build you have.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="candy-code.html">candy-code</a>: the server this UI is served by, and the owner of the protocol and the strings.</li>
+      <li><a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SERVER.md">candy-code SERVER.md</a>: the protocol, the server flags and the trust model.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h2 style="margin-top: 40px;">Source &amp; links</h2>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-code-web">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-code-web/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-code-web/tree/master/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-code-web/tree/master/examples">Runnable examples</a></li>
     </ul>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Assets</td><td>static distPath(): string</td><td>Absolute, realpath()-resolved path of the committed bundle; throws RuntimeException when dist/index.html is missing (a broken install)</td></tr>
-<tr><td>Assets</td><td>static tryDistPath(): ?string</td><td>Soft probe of the same location: null instead of a throw, for callers that degrade (a UI-less serve keeps the API + WebSocket up)</td></tr>
-<tr><td>Assets</td><td>static manifest(): array</td><td>The decoded Vite manifest (dist/manifest.json): source entry => file, css, isEntry</td></tr>
-<tr><td>Assets</td><td>static version(): string</td><td>The bundle's release version from dist/build-info.json (package.json is not shipped to Packagist)</td></tr>
-<tr><td>Assets</td><td>static diagnose(string $packageRoot): array</td><td>Structured {dist, manifest, version, error} health report for any package root (the directory holding src/ and dist/) — the failure surface of the three above made observable, never an exception</td></tr>
-</table>
   </div>
 </section>
