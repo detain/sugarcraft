@@ -13,19 +13,41 @@ use React\Promise\PromiseInterface;
  * are the wire calls a bundle makes today, and rows 11 to 16 are the lifecycle and event
  * hooks around them. An in-process host implements this directly, so a plugin no longer
  * dials its own host over a loopback WebSocket. The wire protocol stays for external clients.
+ *
+ * The contract is asynchronous (owner decision 2026-11-19, option a). Every method returns
+ * a promise. It resolves to the value the call answers with, or to nothing for the void
+ * calls, and it rejects with the same error the host raises for the same refusal (the
+ * wire's RpcError kinds), so a caller handles a refusal in its rejection handler. A method
+ * whose answer is not a value (the subscriptions) resolves to null once it is registered.
  */
 interface HostServices
 {
-    /** Mirrors the wire call server.hello (inventory row 1). */
-    public function hello(): array;
+    /**
+     * Mirrors the wire call server.hello (inventory row 1).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function hello(): PromiseInterface;
 
-    /** Mirrors the wire call session.subscribe (row 2). */
-    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): array;
+    /**
+     * Mirrors the wire call session.subscribe (row 2).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): PromiseInterface;
 
-    /** Mirrors the wire call session.unsubscribe (row 3). */
-    public function unsubscribeSession(string $sessionId): void;
+    /**
+     * Mirrors the wire call session.unsubscribe (row 3).
+     *
+     * @return PromiseInterface<null>
+     */
+    public function unsubscribeSession(string $sessionId): PromiseInterface;
 
-    /** Mirrors the wire call session.send (row 4). */
+    /**
+     * Mirrors the wire call session.send (row 4).
+     *
+     * @return PromiseInterface<array>
+     */
     public function sendTurn(
         string $sessionId,
         string $text,
@@ -33,41 +55,77 @@ interface HostServices
         ?string $idempotencyKey,
         array $images,
         array $documents,
-    ): array;
+    ): PromiseInterface;
 
-    /** Mirrors the wire call session.create (row 5). The result carries the new session id. */
-    public function createSession(?string $name, ?string $permissionMode): array;
+    /**
+     * Mirrors the wire call session.create (row 5). The resolved result carries the new session id.
+     *
+     * @return PromiseInterface<array>
+     */
+    public function createSession(?string $name, ?string $permissionMode): PromiseInterface;
 
-    /** Mirrors the wire call permission.respond (row 6). */
-    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): array;
+    /**
+     * Mirrors the wire call permission.respond (row 6).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): PromiseInterface;
 
-    /** Mirrors the wire call session.cancel (row 7). */
-    public function cancelSession(string $sessionId, string $mode): array;
+    /**
+     * Mirrors the wire call session.cancel (row 7).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function cancelSession(string $sessionId, string $mode): PromiseInterface;
 
-    /** Mirrors the wire call session.get (row 8). */
-    public function sessionSnapshot(string $sessionId, int $limit): array;
+    /**
+     * Mirrors the wire call session.get (row 8).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function sessionSnapshot(string $sessionId, int $limit): PromiseInterface;
 
-    /** Mirrors the wire call command.exec (row 9). */
-    public function execCommand(string $sessionId, string $name, string $args): array;
+    /**
+     * Mirrors the wire call command.exec (row 9).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function execCommand(string $sessionId, string $name, string $args): PromiseInterface;
 
-    /** Mirrors the wire call permission.pending (row 10). */
-    public function pendingPermissions(): array;
+    /**
+     * Mirrors the wire call permission.pending (row 10).
+     *
+     * @return PromiseInterface<array>
+     */
+    public function pendingPermissions(): PromiseInterface;
 
-    /** Opens the host connection; the promise resolves once the host is ready to serve calls (row 13). */
+    /**
+     * Opens the host connection (row 13). Resolves once the host is ready to serve calls.
+     *
+     * @return PromiseInterface<null>
+     */
     public function connect(): PromiseInterface;
 
-    /** Closes the host connection (row 13). */
-    public function disconnect(): void;
+    /**
+     * Closes the host connection (row 13).
+     *
+     * @return PromiseInterface<null>
+     */
+    public function disconnect(): PromiseInterface;
 
-    /** Whether the host connection is currently open (row 14). */
-    public function isConnected(): bool;
+    /**
+     * Whether the host connection is currently open (row 14).
+     *
+     * @return PromiseInterface<bool>
+     */
+    public function isConnected(): PromiseInterface;
 
     /**
      * The session ids this plugin currently follows (row 15).
      *
-     * @return list<string>
+     * @return PromiseInterface<list<string>>
      */
-    public function followedSessions(): array;
+    public function followedSessions(): PromiseInterface;
 
     /**
      * Delivers each session event to the listener, in per-session seq order (row 11).
@@ -75,9 +133,15 @@ interface HostServices
      * No event is dropped silently. A host that cannot keep up with a listener delivers an
      * overflow notice in its place, carrying `dropped` and `action: 'resubscribe'` as the wire
      * protocol does, and the listener re-follows the session to recover the gap.
+     *
+     * @return PromiseInterface<null>
      */
-    public function subscribeEvents(\Closure $listener): void;
+    public function subscribeEvents(\Closure $listener): PromiseInterface;
 
-    /** Delivers each follow result to the listener after a re-follow (row 12). */
-    public function subscribeFollowResults(\Closure $listener): void;
+    /**
+     * Delivers each follow result to the listener after a re-follow (row 12).
+     *
+     * @return PromiseInterface<null>
+     */
+    public function subscribeFollowResults(\Closure $listener): PromiseInterface;
 }

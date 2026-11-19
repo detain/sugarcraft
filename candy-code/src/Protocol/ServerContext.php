@@ -338,11 +338,7 @@ final class ServerContext
             if (!$client->isInitialized()) {
                 continue;
             }
-            if ($mustArrive) {
-                $client->send(JsonRpc::encode($event->notification()));
-            } else {
-                $client->outbox()->pushEphemeral($event->notification());
-            }
+            $client->emit($event, $mustArrive);
         }
     }
 

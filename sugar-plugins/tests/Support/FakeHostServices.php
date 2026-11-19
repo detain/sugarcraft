@@ -6,38 +6,42 @@ namespace SugarCraft\Plugins\Tests\Support;
 
 use React\Promise\PromiseInterface;
 use SugarCraft\Plugins\Host\HostServices;
+use function React\Promise\reject;
 use function React\Promise\resolve;
 
 /**
  * A {@see HostServices} that records every call in order and answers from a script.
  *
- * A method not named in the script returns its default: an empty array, a resolved
- * promise, `false` for isConnected, or nothing for the void calls. Each call is
- * recorded under its method name with the arguments it received.
+ * Every method returns a promise, as the contract does. A method named in the script
+ * resolves to its scripted value, and a scripted {@see \Throwable} rejects with it, so a
+ * test can drive both the answer and the refusal of a call. A method not named in the
+ * script resolves to its default: an empty array, `false` for isConnected, an empty list
+ * for followedSessions, or null for the void calls. Each call is recorded under its method
+ * name with the arguments it received.
  */
 final class FakeHostServices implements HostServices
 {
     /** @var list<array{method: string, args: list<mixed>}> */
     public array $calls = [];
 
-    /** @param array<string, mixed> $results scripted return values keyed by method name */
+    /** @param array<string, mixed> $results scripted answers keyed by method name; a \Throwable rejects */
     public function __construct(private array $results = [])
     {
     }
 
-    public function hello(): array
+    public function hello(): PromiseInterface
     {
         return $this->record('hello', [], []);
     }
 
-    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): array
+    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): PromiseInterface
     {
         return $this->record('subscribeSession', [$sessionId, $afterSeq, $cursor], []);
     }
 
-    public function unsubscribeSession(string $sessionId): void
+    public function unsubscribeSession(string $sessionId): PromiseInterface
     {
-        $this->record('unsubscribeSession', [$sessionId], null);
+        return $this->record('unsubscribeSession', [$sessionId], null);
     }
 
     public function sendTurn(
@@ -47,7 +51,7 @@ final class FakeHostServices implements HostServices
         ?string $idempotencyKey,
         array $images,
         array $documents,
-    ): array {
+    ): PromiseInterface {
         return $this->record(
             'sendTurn',
             [$sessionId, $text, $delivery, $idempotencyKey, $images, $documents],
@@ -55,73 +59,75 @@ final class FakeHostServices implements HostServices
         );
     }
 
-    public function createSession(?string $name, ?string $permissionMode): array
+    public function createSession(?string $name, ?string $permissionMode): PromiseInterface
     {
         return $this->record('createSession', [$name, $permissionMode], []);
     }
 
-    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): array
+    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): PromiseInterface
     {
         return $this->record('respondPermission', [$sessionId, $askId, $reply, $note], []);
     }
 
-    public function cancelSession(string $sessionId, string $mode): array
+    public function cancelSession(string $sessionId, string $mode): PromiseInterface
     {
         return $this->record('cancelSession', [$sessionId, $mode], []);
     }
 
-    public function sessionSnapshot(string $sessionId, int $limit): array
+    public function sessionSnapshot(string $sessionId, int $limit): PromiseInterface
     {
         return $this->record('sessionSnapshot', [$sessionId, $limit], []);
     }
 
-    public function execCommand(string $sessionId, string $name, string $args): array
+    public function execCommand(string $sessionId, string $name, string $args): PromiseInterface
     {
         return $this->record('execCommand', [$sessionId, $name, $args], []);
     }
 
-    public function pendingPermissions(): array
+    public function pendingPermissions(): PromiseInterface
     {
         return $this->record('pendingPermissions', [], []);
     }
 
     public function connect(): PromiseInterface
     {
-        return $this->record('connect', [], resolve(null));
+        return $this->record('connect', [], null);
     }
 
-    public function disconnect(): void
+    public function disconnect(): PromiseInterface
     {
-        $this->record('disconnect', [], null);
+        return $this->record('disconnect', [], null);
     }
 
-    public function isConnected(): bool
+    public function isConnected(): PromiseInterface
     {
         return $this->record('isConnected', [], false);
     }
 
-    public function followedSessions(): array
+    public function followedSessions(): PromiseInterface
     {
         return $this->record('followedSessions', [], []);
     }
 
-    public function subscribeEvents(\Closure $listener): void
+    public function subscribeEvents(\Closure $listener): PromiseInterface
     {
-        $this->record('subscribeEvents', [$listener], null);
+        return $this->record('subscribeEvents', [$listener], null);
     }
 
-    public function subscribeFollowResults(\Closure $listener): void
+    public function subscribeFollowResults(\Closure $listener): PromiseInterface
     {
-        $this->record('subscribeFollowResults', [$listener], null);
+        return $this->record('subscribeFollowResults', [$listener], null);
     }
 
     /**
      * @param list<mixed> $args
      */
-    private function record(string $method, array $args, mixed $default): mixed
+    private function record(string $method, array $args, mixed $default): PromiseInterface
     {
         $this->calls[] = ['method' => $method, 'args' => $args];
 
-        return array_key_exists($method, $this->results) ? $this->results[$method] : $default;
+        $answer = array_key_exists($method, $this->results) ? $this->results[$method] : $default;
+
+        return $answer instanceof \Throwable ? reject($answer) : resolve($answer);
     }
 }
