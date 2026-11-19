@@ -5451,11 +5451,14 @@ public static function useMaxCost(?string $maxCost): void
                 continue;
             }
 
+            $after = '';
             try {
-                [$head] = \SugarCraft\Code\Skills\SkillFileReader::head($skill->sourcePath, 'SKILL.md');
+                [$head, $truncated] = \SugarCraft\Code\Skills\SkillFileReader::head($skill->sourcePath, 'SKILL.md', $after);
             } catch (\Throwable) {
                 continue;
             }
+            // The text the manifest parse judged, so a closer straddling the window edge is audited too.
+            $head = \SugarCraft\Code\Skills\SkillFileReader::frontmatterText($head, $truncated, $after);
 
             LaunchContext::putIgnoredFrontmatter($audit::SKILL, $identity, [
                 $skill->name,
