@@ -398,9 +398,6 @@ final class ProcessReaper
     }
 
     /**
-     * Poll $isGone until it answers true or the budget runs out.
-     */
-    /**
      * Monotonic seconds for every grace deadline. The wall clock (microtime)
      * would let an NTP step stretch or cut the TERM/KILL window, the same
      * reason sugar-core's BoundedShutdown measures on hrtime().
@@ -410,6 +407,9 @@ final class ProcessReaper
         return \hrtime(true) / 1_000_000_000;
     }
 
+    /**
+     * Poll $isGone until it answers true or the budget runs out.
+     */
     private static function waitBounded(callable $isGone, float $budgetSeconds): bool
     {
         $deadline = self::monotonic() + $budgetSeconds;

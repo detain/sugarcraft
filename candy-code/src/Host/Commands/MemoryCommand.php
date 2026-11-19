@@ -17,11 +17,11 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Memory\UnreadableNotes;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Core\Util\AtomicTextFile;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -381,14 +381,11 @@ final class MemoryCommand implements HostCommand
             return Lang::t('host.memory.sentinel.escaped');
         }
 
-        $tmp = $dir . '/sentinel-tmp-' . bin2hex(random_bytes(6));
-        $written = @file_put_contents(
-            $tmp,
-            "{$imported} {$target} memories imported by /memory import at " . date('c') . "\n"
-        );
-        if ($written === false || !@rename($tmp, $sentinel)) {
-            @unlink($tmp);
-
+        try {
+            AtomicTextFile::at($sentinel)->write(
+                "{$imported} {$target} memories imported by /memory import at " . date('c') . "\n"
+            );
+        } catch (\RuntimeException) {
             return Lang::t('host.memory.sentinel.unwritten');
         }
 
@@ -794,7 +791,7 @@ final class MemoryCommand implements HostCommand
      * history commit, no scope mutation, and no jail escape — the path is
      * anchored like `/export`'s, inside the project root or inside the
      * `~/.candy-code` shelf, and the file lands mode 0600 through
-     * {@see AtomicFileWriter} because a memory bundle is the user's own
+     * {@see AtomicTextFile} because a memory bundle is the user's own
      * words with no regeneration story.
      */
     private static function export(
@@ -865,7 +862,7 @@ final class MemoryCommand implements HostCommand
         }
 
         try {
-            AtomicFileWriter::write($target, $body, 0600);
+            AtomicTextFile::at($target)->withPermissions(0600)->write($body);
         } catch (\Throwable $e) {
             return self::respond($inputText, Lang::t('host.memory.error', ['error' => $e->getMessage()]));
         }
