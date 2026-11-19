@@ -241,7 +241,7 @@ candy-mdview --width 0 table-heavy.md  # no wrap: long lines are cut, and the pa
     <p>A theme file is read as a regular file of at most 1 MB. Two shapes are detected automatically: a Glamour-style document with a top-level <code>"document"</code> block, which <code>GlamourTheme</code> maps onto a SugarMarkdown theme, and the flat shape, one style object per element slot, which <code>Theme::fromJsonString()</code> reads. <code>themes/solarized.json</code> in the repository is a worked flat starting point. A payload that matches neither shape refuses with exit 2 instead of quietly rendering the stock theme.</p>
 
     <h3 id="persist-preferences-and-remap-pager-keys" style="margin-top: 24px;">Persist preferences and remap pager keys</h3>
-    <pre class="code"><code class="language-json">{
+    <pre class="code"><code class="language-text">{
   "theme": "dracula",
   "width": 80,
   "pager": false,
