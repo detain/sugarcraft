@@ -214,7 +214,7 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
     <ul>
       <li><code>examples/record.php</code>: records a tiny counter Program. Usage: <code>php examples/record.php /tmp/session.cas</code>. With no argument it writes to the system temporary directory, never into the checkout.</li>
       <li><code>examples/replay.php</code>: replays a cassette into a fresh Program and asserts the 80 by 24 cell grid. Usage: <code>php examples/replay.php examples/cassettes/counter.cas</code>.</li>
-      <li><code>examples/inspect.php</code>: reads a cassette with <code>JsonlFormat</code> and prints each event with its decoded message. It runs no model. Usage: <code>php examples/inspect.php examples/cassettes/counter.cas</code>.</li>
+      <li><code>examples/inspect.php</code>: reads a cassette with <code>JsonlFormat</code> and prints each event: the size for a resize, the byte count for output and for input, and the decoded message class when an input event carries a <code>msg</code> envelope. The shipped cassette has no envelopes, so its input lines show byte counts. It runs no model. Usage: <code>php examples/inspect.php examples/cassettes/counter.cas</code>.</li>
       <li><code>examples/cassettes/counter.cas</code>: a real six-event recording of the counter. Do not overwrite it.</li>
     </ul>
     <p>The tape <code>.vhs/smoke.tape</code> is the render example. It types <code>php examples/inspect.php examples/cassettes/counter.cas</code> and renders the result with the TokyoNight theme.</p>
@@ -225,9 +225,9 @@ vendor/bin/phpunit                    # the test suite
 vendor/bin/phpstan analyze            # static analysis at level max
 vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php</code></pre>
     <p>Rendering output is covered by golden-file snapshot tests. Fixtures live in <code>tests/fixtures/</code> as <code>.golden</code> files, and <code>Assertions::assertGoldenAnsi()</code> compares them with the actual ANSI bytes. The assertion is create-only: a missing golden is written and the test passes, and an existing golden is only compared. After an intentional change, delete the stale golden, rerun the test and review the new file with <code>git diff</code>.</p>
-    <pre class="code"><code class="language-shell">rm tests/fixtures/session.roundtrip.golden
-vendor/bin/phpunit --filter session.roundtrip
-git diff tests/fixtures/session.roundtrip.golden</code></pre>
+    <pre class="code"><code class="language-shell">rm tests/fixtures/renderer-frame.golden
+vendor/bin/phpunit --filter testRendererProducesFrameStream
+git diff tests/fixtures/renderer-frame.golden</code></pre>
     <p>To use candy-vcr in your own tests, replay a recorded cassette through <code>Player::play()</code> and assert on the returned <code>ReplayResult</code>. This needs no terminal, so it runs in the normal PHP unit-test process.</p>
 
     <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
