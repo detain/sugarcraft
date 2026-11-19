@@ -258,7 +258,7 @@ final class Counter implements Model
 
     <h3 id="terminal-ownership-and-signals" style="margin-top: 24px;">Terminal ownership and signals</h3>
     <p><code>Program::run()</code> switches the terminal to raw mode and restores it in a <code>finally</code> block. A <code>die()</code> or <code>exit()</code> that skips those blocks is caught by a shutdown backstop armed in <code>setupTerminal()</code>. Pass <code>catchPanics: false</code> only when your own code restores the terminal on bailout paths. While raw mode is active, Ctrl+C is an ordinary key, so <code>update()</code> decides what it means.</p>
-    <p>SIGWINCH, SIGTSTP and SIGCONT arrive as <code>Msg\WindowSizeMsg</code>, <code>Msg\SuspendMsg</code> and <code>Msg\ResumeMsg</code>. SIGINT, SIGTERM and SIGHUP unwind the loop cleanly and record the signal number N, which <code>Program::stopSignal()</code> returns. The entry point maps it to the shell's 128+N exit code, so SIGINT exits 130.</p>
+    <p>SIGWINCH, SIGTSTP and SIGCONT arrive as <code>Msg\WindowSizeMsg</code>, <code>Msg\SuspendMsg</code> and <code>Msg\ResumeMsg</code>. SIGINT, SIGTERM and SIGHUP unwind the loop cleanly and record the signal number N, which <code>Program::stopSignal()</code> returns. <code>run()</code> then returns normally, and the script sets the shell's 128+N exit code itself: <code>exit($program-&gt;stopSignal() === null ? 0 : 128 + $program-&gt;stopSignal())</code>. After SIGINT that is 130. A script that returns from <code>run()</code> without that line exits 0.</p>
 
     <h3 id="untrusted-input" style="margin-top: 24px;">Untrusted input</h3>
     <p>Bracketed paste is sanitized by default. Escape sequences, C1 controls and the two zone sentinels (U+E000 and U+E001) are stripped before the payload reaches <code>update()</code> as a <code>Msg\PasteMsg</code>, so paste is not guaranteed to be byte-identical to what was copied. Set <code>sanitizePaste: false</code> only when your app contains the payload itself. Processes launched from user data use the argv form of <code>proc_open()</code>, never a shell string.</p>
@@ -339,7 +339,7 @@ final class Clock implements Model
     <p>For a single delayed Msg, return <code>Cmd::tick(float $seconds, \Closure $produce)</code>. <code>Cmd::cancellableTick()</code> returns a <code>TickHandle</code> whose <code>cancel()</code> stops the timer before it fires.</p>
 
     <h3 id="run-cpu-bound-work-off-the-loop" style="margin-top: 24px;">Run CPU-bound work off the loop</h3>
-    <p><code>WorkerPool</code> runs tasks in child processes, four at a time by default. A task must be a serializable callable, such as the static method array <code>[Thumbnailer::class, 'render']</code> or an invokable object. A string, which names a global function, is refused with an <code>InvalidArgumentException</code> when dispatched. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise. <code>Cmd\WorkerCmd::run()</code> turns each outcome into exactly one message: a <code>SugarCraft\Core\Msg\WorkerResultMsg</code> on success or a <code>SugarCraft\Core\Msg\ExceptionMsg</code> on failure.</p>
+    <p><code>WorkerPool</code> runs tasks in child processes, four at a time by default. A task must be a serializable callable, such as the static method array <code>[Thumbnailer::class, 'render']</code> or an invokable object. A string, which names a global function, is refused with an <code>InvalidArgumentException</code> when dispatched. A <code>Closure</code> cannot cross the process boundary, so dispatching one rejects its promise with a serialization error: at once when a worker is free, or later, when the queued job leaves the queue because every worker is busy. <code>Cmd\WorkerCmd::run()</code> turns each outcome into exactly one message: a <code>SugarCraft\Core\Msg\WorkerResultMsg</code> on success or a <code>SugarCraft\Core\Msg\ExceptionMsg</code> on failure.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Cmd\WorkerCmd;
 use SugarCraft\Core\WorkerPool;
 
@@ -347,15 +347,15 @@ use SugarCraft\Core\WorkerPool;
 return [$this, WorkerCmd::run($pool, [Thumbnailer::class, 'render'])];</code></pre>
 
     <h3 id="navigate-with-a-screen-stack" style="margin-top: 24px;">Navigate with a screen stack</h3>
-    <p>Implement <code>ScreenStackCapable</code> on your root model, or use <code>RootModelWithScreenStack</code>, a final class that routes the screen messages and delegates <code>init()</code>, <code>update()</code> and <code>view()</code> to the active screen. A screen is a <code>Screen</code> value holding a Model, an optional title and optional enter and exit hooks. Navigate with the invokable Cmds <code>PushScreenCmd</code> and <code>PopScreenCmd</code>, both in <code>SugarCraft\Core\Cmd</code>:</p>
+    <p>Implement <code>ScreenStackCapable</code> on your root model, or use <code>RootModelWithScreenStack</code>, a final class that routes the screen messages and delegates <code>init()</code>, <code>update()</code> and <code>view()</code> to the active screen. A screen is a <code>Screen</code> value holding a Model, an optional title and optional enter and exit hooks. Navigate with the invokable Cmds <code>PushScreenCmd</code> and <code>PopScreenCmd</code>, both in <code>SugarCraft\Core\Cmd</code>. <code>Program</code> runs only <code>Closure</code> commands, so wrap each object with <code>\Closure::fromCallable()</code> before returning it from <code>update()</code>; returning the bare object throws a <code>TypeError</code>:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Screen;
 use SugarCraft\Core\Cmd\{PopScreenCmd, PushScreenCmd};
 
 // Inside a root model that implements ScreenStackCapable or uses RootModelWithScreenStack:
-return [$this, new PushScreenCmd(new Screen($detail, title: 'Item 1'))];
+return [$this, \Closure::fromCallable(new PushScreenCmd(new Screen($detail, title: 'Item 1')))];
 
 // From the detail screen, to go back one level:
-return [$this, new PopScreenCmd()];</code></pre>
+return [$this, \Closure::fromCallable(new PopScreenCmd())];</code></pre>
 
     <h3 id="map-keys-to-actions" style="margin-top: 24px;">Map keys to actions</h3>
     <p><code>Keys\KeyBindings</code> maps action names to key tokens, so one registry answers "did this press trigger this action", and user overrides hang off the registry rather than off each call site. Tokens are lowercase: a letter is its rune, a space is <code>space</code>, and other keys use their <code>KeyType</code> value, such as <code>up</code>. Matching looks at press events only and ignores case. Modifier chords are not part of the vocabulary, so a bare <code>q</code> binding also matches Ctrl+Q.</p>
@@ -446,7 +446,7 @@ echo ColorProfile::detect(null, STDOUT)-&gt;name, "\n";</code></pre>
         <tr><td><code>Msg\MouseMsg</code> and subclasses</td><td>Mouse press, release, motion and wheel</td><td><code>x</code>, <code>y</code>, <code>button</code>, <code>action</code>, modifiers</td></tr>
         <tr><td><code>Cmd</code></td><td>Factory of Cmds, each a closure returning <code>?Msg</code></td><td><code>quit()</code> · <code>batch(...$cmds)</code> · <code>sequence(...$cmds)</code> · <code>tick(float, \Closure)</code> · <code>cancellableTick(float, \Closure): TickHandle</code> · <code>every(float, \Closure)</code> · <code>send(Msg)</code> · <code>promise(\Closure, ?float)</code> · <code>exec(string|array, bool, ?\Closure)</code></td></tr>
         <tr><td><code>TickHandle</code></td><td>A cancellable one-shot timer</td><td><code>cmd(): \Closure</code> · <code>cancel(): void</code> · <code>isCancelled(): bool</code></td></tr>
-        <tr><td><code>Cmd\PushScreenCmd</code>, <code>Cmd\PopScreenCmd</code></td><td>Screen-stack navigation as invokable Cmds</td><td><code>new PushScreenCmd(Screen)</code> · <code>new PopScreenCmd()</code></td></tr>
+        <tr><td><code>Cmd\PushScreenCmd</code>, <code>Cmd\PopScreenCmd</code></td><td>Screen-stack navigation as invokable Cmds</td><td><code>\Closure::fromCallable(new PushScreenCmd(Screen))</code> · <code>\Closure::fromCallable(new PopScreenCmd())</code></td></tr>
       </tbody>
     </table>
 
@@ -584,6 +584,9 @@ echo ColorProfile::detect(null, STDOUT)-&gt;name, "\n";</code></pre>
         <tr><td><code>PATH</code>, <code>PATHEXT</code></td><td><code>Util\Executable\Locator</code></td><td>The search path for executables; <code>PATHEXT</code> lists the Windows extensions.</td></tr>
         <tr><td><code>TMUX</code>, <code>DISPLAY</code>, <code>WAYLAND_DISPLAY</code></td><td><code>Util\Clipboard</code></td><td>Select the clipboard backends to try.</td></tr>
         <tr><td><code>WSL_DISTRO_NAME</code>, <code>WSL_INTEROP</code>, <code>MSYSTEM</code>, <code>OSTYPE</code></td><td><code>Util\Tty\EnvDetect</code></td><td>Identify WSL, MSYS2 and Cygwin hosts.</td></tr>
+        <tr><td><code>STY</code>, <code>GOOGLE_CLOUD_SHELL</code></td><td><code>Util\ColorProfile</code></td><td>Terminal hints in the color-profile detection chain: a GNU screen session and Google Cloud Shell.</td></tr>
+        <tr><td><code>MINTTY_SHORTCUT</code></td><td><code>Util\Tty\EnvDetect</code></td><td>Identifies a mintty terminal started from its launcher shortcut.</td></tr>
+        <tr><td><code>HOME</code></td><td><code>WorkerPool</code></td><td>Worker processes run with <code>HOME=/tmp</code> when <code>HOME</code> is empty.</td></tr>
       </tbody>
     </table>
 
