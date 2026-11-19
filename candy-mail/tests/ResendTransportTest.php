@@ -7,6 +7,7 @@ namespace SugarCraft\Mail\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Mail\Email;
+use SugarCraft\Mail\Lang;
 use SugarCraft\Mail\ResendTransport;
 use SugarCraft\Mail\Tests\Support\DialogueGate;
 
@@ -60,6 +61,39 @@ final class ResendTransportTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('at least one recipient');
         $transport->send(new Email(from: ['sender@example.com'], to: []));
+    }
+
+    public function testInlineAttachmentIsRefusedWithTheCidKeyBeforeAnyHttpWork(): void
+    {
+        // Resend's payload has no Content-ID field, so an inline part is refused
+        // loudly. The English catalog must steer the caller to SMTP or Mailgun,
+        // the two transports that carry CID; it is read from en.php so the
+        // assertion does not depend on the host locale.
+        $tmp = \tempnam(\sys_get_temp_dir(), 'cid-');
+        \file_put_contents((string) $tmp, "\x89PNG\r\n\x1a\n");
+        try {
+            $email = Email::new('sender@example.com', 'them@example.com')
+                ->withInlineAttachment((string) $tmp, 'logo-cid');
+            $filename = $email->attachments[0]->filename;
+
+            $en = require \dirname(__DIR__) . '/lang/en.php';
+            $this->assertStringContainsString('SMTP', $en['resend.cid_unsupported']);
+            $this->assertStringContainsString('Mailgun', $en['resend.cid_unsupported']);
+
+            // The unreachable URL proves nothing was dialled before the refusal.
+            $transport = new ResendTransport('re_test_key_123', 'http://127.0.0.1:1/emails');
+            try {
+                $transport->send($email);
+                $this->fail('an inline attachment must be refused, not posted without its Content-ID');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertSame(
+                    Lang::t('resend.cid_unsupported', ['filename' => $filename]),
+                    $e->getMessage()
+                );
+            }
+        } finally {
+            @\unlink((string) $tmp);
+        }
     }
 
     public function testCurlOptionsSetConnectTimeoutAndExplicitTlsVerification(): void
