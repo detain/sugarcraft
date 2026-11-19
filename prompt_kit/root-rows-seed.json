@@ -933,6 +933,20 @@
                 ],
                 "dead": []
             }
+        },
+        "sugar-ws-rpc": {
+            "readme": {
+                "needles": [
+                    "WebSocket RPC transport for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "WebSocket RPC transport — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
         }
     }
 }

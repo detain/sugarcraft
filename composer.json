@@ -76,6 +76,7 @@
         "sugarcraft/sugar-vterm": "dev-master",
         "sugarcraft/sugar-ssh-server": "dev-master",
         "sugarcraft/sugar-serve-protocol": "dev-master",
+        "sugarcraft/sugar-ws-rpc": "dev-master",
         "sugarcraft/sugar-plugins": "dev-master",
         "sugarcraft/sugar-plugin-installer": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
@@ -359,6 +360,13 @@
         {
             "type": "path",
             "url": "sugar-serve-protocol",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-ws-rpc",
             "options": {
                 "symlink": true
             }

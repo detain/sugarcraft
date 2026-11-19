@@ -1,0 +1,8 @@
+<p class="lede" style="margin-top: 28px;">The WebSocket transport that a SugarCraft host uses to exchange request and response messages with a remote peer, and to receive server-pushed frames on the same connection. This library is a skeleton: its namespace and packaging exist, and the transport classes arrive in a later change. There is no Charmbracelet upstream; this library is first-party.</p>
+
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ws-rpc</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The package has no runtime dependencies beyond PHP.</p>
+
+    <h2 style="margin-top: 40px;">Status</h2>
+    <p>The package currently ships only its PSR-4 wiring under <code>SugarCraft\WsRpc\</code>. No public API exists yet, so there is no quickstart to show. The channel bundles keep their own serve-bridge socket code until the transport lands here.</p>
