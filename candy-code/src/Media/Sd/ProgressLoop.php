@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Media\Sd;
 
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Poll;
+use SugarCraft\Async\SynchronousLoop;
+
 /**
  * Heartbeat progress loop (plan W1.5) — mystage fact (a) made executable.
  *
@@ -70,7 +74,21 @@ final class ProgressLoop
         $last = null;
         $wantsPreview = $onPreviewFrame !== null;
 
-        while (true) {
+        // One poll per attempt; Poll::until paces the attempts on the
+        // synchronous loop, so each pause is the same interval sleep as before.
+        $attempt = static function () use (
+            $c,
+            $heartbeat,
+            $isCancelled,
+            $onPreviewFrame,
+            $onFrame,
+            $wantsPreview,
+            &$polls,
+            &$beats,
+            &$previews,
+            &$failures,
+            &$last,
+        ): ?ProgressSummary {
             try {
                 $payload = $c->progress($wantsPreview);
                 $failures = 0;
@@ -90,9 +108,8 @@ final class ProgressLoop
                 if ($isCancelled()) {
                     return ProgressSummary::new($polls, $beats, $previews, $last, ProgressSummary::TERMINATION_DONE);
                 }
-                $sleep($intervalSeconds);
 
-                continue;
+                return null;
             }
 
             $polls++;
@@ -116,8 +133,34 @@ final class ProgressLoop
                 return ProgressSummary::new($polls, $beats, $previews, $last, ProgressSummary::TERMINATION_SERVER_FINISHED);
             }
 
-            $sleep($intervalSeconds);
+            return null;
+        };
+
+        $loop = SynchronousLoop::new($sleep);
+        $summary = null;
+        $error = null;
+        Poll::until(
+            $attempt,
+            Backoff::new((float) max(1, (int) round($intervalSeconds * 1000)), 1.0),
+            null,
+            $loop,
+        )->then(
+            static function (ProgressSummary $settled) use (&$summary): void {
+                $summary = $settled;
+            },
+            static function (\Throwable $failure) use (&$error): void {
+                $error = $failure;
+            },
+        );
+
+        // Pauses run here, on the calling thread, one interval at a time.
+        $loop->run();
+
+        if ($error !== null) {
+            throw $error;
         }
+
+        return $summary ?? throw SdException::protocol('progress-loop', 'poll ended without a terminal summary');
     }
 
     /**

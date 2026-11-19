@@ -541,6 +541,31 @@ final class JobClientTest extends TestCase
         JobPollLoop::run($client, 'job-77', static function (): void {}, static fn (): bool => false, 0.0);
     }
 
+    public function testACancelDuringAFlappingStatusReturnsTheDoneSummaryWithoutAPause(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient([
+            'GET /v1/videos/job-77' => [['status' => 500, 'body' => '{"error":"boom"}']],
+        ], calls: $calls);
+
+        $sleeps = [];
+        $summary = JobPollLoop::run(
+            $client,
+            'job-77',
+            static function (): void {
+            },
+            static fn (): bool => true,
+            sleeper: static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame(JobPollSummary::TERMINATION_DONE, $summary->termination);
+        self::assertSame(0, $summary->polls, 'no status ever succeeded, so no poll is counted');
+        self::assertCount(1, $calls, 'the cancel lands after the first failed dial and no retry follows');
+        self::assertSame([], $sleeps, 'cancel wins before the retry pause');
+    }
+
     public function testAnEmptyTaskIdCannotAddressAJobRoute(): void
     {
         $calls = [];

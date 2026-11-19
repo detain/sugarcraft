@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Media\Video;
 
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Poll;
+use SugarCraft\Async\SynchronousLoop;
 use SugarCraft\Code\Media\Sd\SdException;
 
 /**
@@ -67,7 +70,19 @@ final class JobPollLoop
         $failures = 0;
         $last = null;
 
-        while (true) {
+        // One poll per attempt; Poll::until paces the attempts on the
+        // synchronous loop, so each pause is the same interval sleep as before.
+        $attempt = static function () use (
+            $client,
+            $taskId,
+            $heartbeat,
+            $isCancelled,
+            $onFrame,
+            &$polls,
+            &$beats,
+            &$failures,
+            &$last,
+        ): ?JobPollSummary {
             try {
                 $snapshot = $client->status($taskId);
                 $failures = 0;
@@ -83,7 +98,7 @@ final class JobPollLoop
 
                 // Same doctrine as the image loop: keep the watchdog fed
                 // while the status route flaps; cancel still wins before the
-                // retry sleep.
+                // retry pause.
                 $heartbeat();
                 $beats++;
 
@@ -91,9 +106,7 @@ final class JobPollLoop
                     return new JobPollSummary($polls, $beats, $last, JobPollSummary::TERMINATION_DONE);
                 }
 
-                $sleep($intervalSeconds);
-
-                continue;
+                return null;
             }
 
             $polls++;
@@ -114,7 +127,33 @@ final class JobPollLoop
                 return new JobPollSummary($polls, $beats, $last, JobPollSummary::TERMINATION_SERVER_FINISHED);
             }
 
-            $sleep($intervalSeconds);
+            return null;
+        };
+
+        $loop = SynchronousLoop::new($sleep);
+        $summary = null;
+        $error = null;
+        Poll::until(
+            $attempt,
+            Backoff::new((float) max(1, (int) round($intervalSeconds * 1000)), 1.0),
+            null,
+            $loop,
+        )->then(
+            static function (JobPollSummary $settled) use (&$summary): void {
+                $summary = $settled;
+            },
+            static function (\Throwable $failure) use (&$error): void {
+                $error = $failure;
+            },
+        );
+
+        // Pauses run here, on the calling thread, one interval at a time.
+        $loop->run();
+
+        if ($error !== null) {
+            throw $error;
         }
+
+        return $summary ?? throw SdException::protocol('job-poll-loop', 'poll ended without a terminal summary');
     }
 }
