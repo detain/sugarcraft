@@ -120,6 +120,44 @@ $manager = Manager::builder()
     -&gt;withTermRows(0)
     -&gt;build();</code></pre>
 
+<h2 style="margin-top: 40px;">Configuration</h2>
+<p>candy-files has no configuration file. Its behavior comes from the command line, the environment, and the start directories. Bookmarks are state, not configuration, and live in the data directory.</p>
+
+<h3 style="margin-top: 32px;">Command-line options</h3>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>[LEFT_DIR] [RIGHT_DIR]</code></td><td>path, positional</td><td>cwd, then <code>$HOME</code></td><td>Start directories for the two panes. Both must exist and be readable at start.</td></tr>
+<tr><td><code>--version</code></td><td>flag</td><td>off</td><td>Prints the build stamp and exits. A stamped phar reports its own stamp; a source checkout reports <code>dev-master</code>.</td></tr>
+<tr><td><code>--help</code>, <code>-h</code></td><td>flag</td><td>off</td><td>Prints usage and exits.</td></tr>
+<tr><td><code>--print-cd</code></td><td>flag</td><td>off</td><td>Draws on <code>/dev/tty</code> and writes only the final active-pane directory to stdout. Refuses to run without a controlling terminal.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Environment</h3>
+<table class="api-table">
+<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>VISUAL</code>, <code>EDITOR</code></td><td>unset</td><td>Editor for <code>Enter</code> on a file. The chain falls back to <code>vi</code> (<code>notepad</code> on Windows), then <code>nano</code>.</td></tr>
+<tr><td><code>PAGER</code></td><td>unset</td><td>Pager for <code>l</code>. The chain falls back to <code>less</code> and <code>more</code>, then the built-in viewer.</td></tr>
+<tr><td><code>LC_ALL</code>, <code>LANG</code></td><td>English</td><td>Selects one of the 16 catalogs under <code>lang/</code>. Confirm gates accept the affirmative that the locale's prompt teaches, and <code>y</code> always works.</td></tr>
+<tr><td><code>TERM</code></td><td>unset</td><td><code>dumb</code> and <code>linux</code> refuse the OSC 52 clipboard. The Linux console and CJK locales use the ASCII glyph tier.</td></tr>
+<tr><td><code>CANDY_FILES_GLYPHS</code></td><td>auto</td><td><code>ascii</code> or <code>unicode</code> forces the chrome glyph tier.</td></tr>
+<tr><td><code>XDG_DATA_HOME</code></td><td><code>~/.local/share</code></td><td>Bookmarks are written atomically, mode <code>0600</code>, to <code>$XDG_DATA_HOME/candy-files/bookmarks.json</code>. When <code>XDG_DATA_HOME</code> is unset, Windows uses <code>APPDATA</code> when it is set.</td></tr>
+<tr><td><code>HOME</code>, <code>USERPROFILE</code>, <code>HOMEDRIVE</code> + <code>HOMEPATH</code></td><td>first set</td><td>The home directory cascade for the default right pane and bookmarks. <code>/</code> is the last resort.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Built-in limits</h3>
+<p>These caps are fixed in the source. Hitting one shows a status message; it never truncates silently.</p>
+<table class="api-table">
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Recursive copy depth</td><td>256 levels</td></tr>
+<tr><td>Recursive search walk</td><td>depth 8, 20 000 names examined, four screens of hits; breadth-first</td></tr>
+<tr><td>Undo stack</td><td>50 operations</td></tr>
+<tr><td>Remembered selections (per directory)</td><td>128 directories, oldest dropped first</td></tr>
+<tr><td>Cached directory listings</td><td>256 paths, oldest dropped first; invalidated by mtime</td></tr>
+<tr><td>Pager</td><td>refuses binary files and files over 32&nbsp;MiB</td></tr>
+<tr><td>Built-in viewer</td><td>first 256&nbsp;KiB, sanitized lines</td></tr>
+<tr><td>Archive scan and extraction</td><td>256&nbsp;MiB scan, 512&nbsp;MiB extraction</td></tr>
+</table>
+
 <h2 style="margin-top: 40px;">Keys</h2>
 <p>Keys are the same in every mode unless a mode owns the keyboard. The help overlay (<code>?</code>) lists the full roster for your build.</p>
 <table class="api-table">
@@ -160,44 +198,6 @@ $manager = Manager::builder()
 <tr><td><code>?</code></td><td>Help overlay: every binding, one per row</td></tr>
 </table>
 <p>Mouse input uses SGR cell-motion reporting. The wheel scrolls the pane under the pointer, a click activates the pane and parks the cursor, <code>Ctrl</code>+click toggles a mark, a double-click opens, and a click on a tab label switches tabs. Modal frames swallow the pointer, so a click cannot answer a prompt.</p>
-
-<h2 style="margin-top: 40px;">Configuration</h2>
-<p>candy-files has no configuration file. Its behavior comes from the command line, the environment, and the start directories. Bookmarks are state, not configuration, and live in the data directory.</p>
-
-<h3 style="margin-top: 32px;">Command-line options</h3>
-<table class="api-table">
-<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>[LEFT_DIR] [RIGHT_DIR]</code></td><td>path, positional</td><td>cwd, then <code>$HOME</code></td><td>Start directories for the two panes. Both must exist and be readable at start.</td></tr>
-<tr><td><code>--version</code></td><td>flag</td><td>off</td><td>Prints the build stamp and exits. A stamped phar reports its own stamp; a source checkout reports <code>dev-master</code>.</td></tr>
-<tr><td><code>--help</code>, <code>-h</code></td><td>flag</td><td>off</td><td>Prints usage and exits.</td></tr>
-<tr><td><code>--print-cd</code></td><td>flag</td><td>off</td><td>Draws on <code>/dev/tty</code> and writes only the final active-pane directory to stdout. Refuses to run without a controlling terminal.</td></tr>
-</table>
-
-<h3 style="margin-top: 32px;">Environment</h3>
-<table class="api-table">
-<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>VISUAL</code>, <code>EDITOR</code></td><td>unset</td><td>Editor for <code>Enter</code> on a file. The chain falls back to <code>vi</code> (<code>notepad</code> on Windows), then <code>nano</code>.</td></tr>
-<tr><td><code>PAGER</code></td><td>unset</td><td>Pager for <code>l</code>. The chain falls back to <code>less</code> and <code>more</code>, then the built-in viewer.</td></tr>
-<tr><td><code>LC_ALL</code>, <code>LANG</code></td><td>English</td><td>Selects one of the 16 catalogs under <code>lang/</code>. Confirm gates accept the affirmative that the locale's prompt teaches, and <code>y</code> always works.</td></tr>
-<tr><td><code>TERM</code></td><td>unset</td><td><code>dumb</code> and <code>linux</code> refuse the OSC 52 clipboard. The Linux console and CJK locales use the ASCII glyph tier.</td></tr>
-<tr><td><code>CANDY_FILES_GLYPHS</code></td><td>auto</td><td><code>ascii</code> or <code>unicode</code> forces the chrome glyph tier.</td></tr>
-<tr><td><code>XDG_DATA_HOME</code></td><td><code>~/.local/share</code></td><td>Bookmarks are written atomically, mode <code>0600</code>, to <code>$XDG_DATA_HOME/candy-files/bookmarks.json</code>. When <code>XDG_DATA_HOME</code> is unset, Windows uses <code>APPDATA</code> when it is set.</td></tr>
-<tr><td><code>HOME</code>, <code>USERPROFILE</code>, <code>HOMEDRIVE</code> + <code>HOMEPATH</code></td><td>first set</td><td>The home directory cascade for the default right pane and bookmarks. <code>/</code> is the last resort.</td></tr>
-</table>
-
-<h3 style="margin-top: 32px;">Built-in limits</h3>
-<p>These caps are fixed in the source. Hitting one shows a status message; it never truncates silently.</p>
-<table class="api-table">
-<tr><th>Limit</th><th>Value</th></tr>
-<tr><td>Recursive copy depth</td><td>256 levels</td></tr>
-<tr><td>Recursive search walk</td><td>depth 8, 20 000 names examined, four screens of hits; breadth-first</td></tr>
-<tr><td>Undo stack</td><td>50 operations</td></tr>
-<tr><td>Remembered selections (per directory)</td><td>128 directories, oldest dropped first</td></tr>
-<tr><td>Cached directory listings</td><td>256 paths, oldest dropped first; invalidated by mtime</td></tr>
-<tr><td>Pager</td><td>refuses binary files and files over 32&nbsp;MiB</td></tr>
-<tr><td>Built-in viewer</td><td>first 256&nbsp;KiB, sanitized lines</td></tr>
-<tr><td>Archive scan and extraction</td><td>256&nbsp;MiB scan, 512&nbsp;MiB extraction</td></tr>
-</table>
 
 <h2 style="margin-top: 40px;">Theme, styling and glyph tiers</h2>
 <p>The interface is monochrome by construction. The renderer emits no color or font styling, so emphasis rides on text and shape: the <code>▸</code> cursor, the <code>✓</code> selection mark, the thick border, the localized focus label, and the <code>↑ N more</code> and <code>↓ N more</code> fold hints. A <code>NO_COLOR</code>, high-contrast or inverted terminal palette shows the full interface.</p>

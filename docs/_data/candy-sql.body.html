@@ -287,30 +287,6 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>CommitPlanner</td><td>isDirty()</td><td>True if any tracked model is dirty.</td></tr>
 </table>
 
-<h2 style="margin-top: 40px;">Keys</h2>
-<p>The <code>?</code> overlay shows the bindings of the pane you are in, generated from the same routing table as the status-line legends. Any key closes it.</p>
-<table class="api-table">
-<tr><th>Key</th><th>Action</th></tr>
-<tr><td><code>Tab</code></td><td>Cycle the pane: Tables, Rows, Query, Admin</td></tr>
-<tr><td><code>↑</code>/<code>↓</code>, <code>j</code>/<code>k</code></td><td>Move the cursor in the active list. In the Query pane the arrows move between lines.</td></tr>
-<tr><td><code>←</code>/<code>→</code>, <code>h</code>/<code>l</code></td><td>Move the cell cursor between columns in the Rows pane, scrolling the grid to keep it in view</td></tr>
-<tr><td><code>Enter</code>, <code>Space</code> (Tables)</td><td>Load the highlighted table into the Rows pane</td></tr>
-<tr><td><code>e</code> (Rows)</td><td>Edit the cell under the cursor. Shows the <code>UPDATE</code> and writes on <code>Enter</code></td></tr>
-<tr><td><code>o</code> (Rows)</td><td>Insert a row. Prompts for each column, then shows the <code>INSERT</code></td></tr>
-<tr><td><code>D</code> (Rows)</td><td>Delete the row under the cursor. Shows the <code>DELETE</code> and writes on <code>Enter</code></td></tr>
-<tr><td><code>y</code> (Rows)</td><td>Yank the cell to the terminal clipboard over OSC 52. Dumb and Linux-console terminals never receive the sequence</td></tr>
-<tr><td><code>Ctrl+R</code>, <code>Ctrl+E</code>, <code>Ctrl+Enter</code></td><td>Run the SQL in the Query pane</td></tr>
-<tr><td><code>Ctrl+F</code></td><td>Save the Query pane's text to the favorites list. <code>Ctrl+Shift+F</code> removes it</td></tr>
-<tr><td><code>x</code>, <code>Ctrl+S</code>, <code>i</code></td><td>Open the export or import line (Tables or Rows)</td></tr>
-<tr><td><code>H</code></td><td>Read the recorded status history</td></tr>
-<tr><td><code>:tx</code>, <code>:tx begin</code>, <code>:tx commit</code>, <code>:tx rollback</code></td><td>Transaction control on the sync session, typed in the Query pane. <code>:tx</code> and <code>:tx begin</code> open, <code>commit</code> closes, and <code>rollback</code> closes and discards the work</td></tr>
-<tr><td><code>[p]</code> (Admin)</td><td>Pause or resume the admin auto-refresh</td></tr>
-<tr><td><code>?</code></td><td>Toggle the key-help overlay</td></tr>
-<tr><td><code>q</code>, <code>Esc</code></td><td>Cancel a running query first when one is in flight. Otherwise <code>q</code> and <code>Esc</code> quit from the Tables and Rows panes. Inside Admin, <code>q</code> returns to Tables and <code>Esc</code> closes an open dialog</td></tr>
-<tr><td><code>Ctrl+C</code></td><td>Cancel the running query when one is in flight. Quits when idle</td></tr>
-</table>
-<p>While a text line owns the keyboard, <code>q</code>, <code>Tab</code> and <code>x</code> are ordinary letters.</p>
-
 <h2 style="margin-top: 40px;">Configuration</h2>
 <p>Connection details come from a DSN, from individual flags, or from a saved connection. Each one is a route into the same <code>ConnectionFactory</code>.</p>
 <h3 style="margin-top: 32px;">Command-line flags</h3>
@@ -357,6 +333,30 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <h3 style="margin-top: 32px;">Status-snapshot history</h3>
 <p>The launcher records the admin poll snapshots to SQLite by default. The file is <code>$HOME/.candy-sql/history.db</code>, or the path given to <code>--history</code>. It is created with mode 0600 inside a 0700 directory. A snapshot is a timestamped map of server status variables, and SQL statement text is never persisted.</p>
 <p>Recording applies to MySQL and PostgreSQL only. A SQLite session has no status feed, so the history file stays empty for it. Retention is bounded by two caps, the newest 10 000 rows and the last 72 hours, and whichever discards more wins. The sweep runs at open and after every insert.</p>
+
+<h2 style="margin-top: 40px;">Keys</h2>
+<p>The <code>?</code> overlay shows the bindings of the pane you are in, generated from the same routing table as the status-line legends. Any key closes it.</p>
+<table class="api-table">
+<tr><th>Key</th><th>Action</th></tr>
+<tr><td><code>Tab</code></td><td>Cycle the pane: Tables, Rows, Query, Admin</td></tr>
+<tr><td><code>↑</code>/<code>↓</code>, <code>j</code>/<code>k</code></td><td>Move the cursor in the active list. In the Query pane the arrows move between lines.</td></tr>
+<tr><td><code>←</code>/<code>→</code>, <code>h</code>/<code>l</code></td><td>Move the cell cursor between columns in the Rows pane, scrolling the grid to keep it in view</td></tr>
+<tr><td><code>Enter</code>, <code>Space</code> (Tables)</td><td>Load the highlighted table into the Rows pane</td></tr>
+<tr><td><code>e</code> (Rows)</td><td>Edit the cell under the cursor. Shows the <code>UPDATE</code> and writes on <code>Enter</code></td></tr>
+<tr><td><code>o</code> (Rows)</td><td>Insert a row. Prompts for each column, then shows the <code>INSERT</code></td></tr>
+<tr><td><code>D</code> (Rows)</td><td>Delete the row under the cursor. Shows the <code>DELETE</code> and writes on <code>Enter</code></td></tr>
+<tr><td><code>y</code> (Rows)</td><td>Yank the cell to the terminal clipboard over OSC 52. Dumb and Linux-console terminals never receive the sequence</td></tr>
+<tr><td><code>Ctrl+R</code>, <code>Ctrl+E</code>, <code>Ctrl+Enter</code></td><td>Run the SQL in the Query pane</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Save the Query pane's text to the favorites list. <code>Ctrl+Shift+F</code> removes it</td></tr>
+<tr><td><code>x</code>, <code>Ctrl+S</code>, <code>i</code></td><td>Open the export or import line (Tables or Rows)</td></tr>
+<tr><td><code>H</code></td><td>Read the recorded status history</td></tr>
+<tr><td><code>:tx</code>, <code>:tx begin</code>, <code>:tx commit</code>, <code>:tx rollback</code></td><td>Transaction control on the sync session, typed in the Query pane. <code>:tx</code> and <code>:tx begin</code> open, <code>commit</code> closes, and <code>rollback</code> closes and discards the work</td></tr>
+<tr><td><code>[p]</code> (Admin)</td><td>Pause or resume the admin auto-refresh</td></tr>
+<tr><td><code>?</code></td><td>Toggle the key-help overlay</td></tr>
+<tr><td><code>q</code>, <code>Esc</code></td><td>Cancel a running query first when one is in flight. Otherwise <code>q</code> and <code>Esc</code> quit from the Tables and Rows panes. Inside Admin, <code>q</code> returns to Tables and <code>Esc</code> closes an open dialog</td></tr>
+<tr><td><code>Ctrl+C</code></td><td>Cancel the running query when one is in flight. Quits when idle</td></tr>
+</table>
+<p>While a text line owns the keyboard, <code>q</code>, <code>Tab</code> and <code>x</code> are ordinary letters.</p>
 
 <h2 style="margin-top: 40px;">Theming and styling</h2>
 <p>candy-sql ships no theme file. Its colors come from the terminal profile that sugar-core detects, so <code>NO_COLOR</code>, <code>TERM=dumb</code> and <code>COLORTERM</code> decide what you see. The focus marker is a bold <code>▶</code> on the pane's frame title. That glyph survives <code>NO_COLOR</code>, where a hue change would vanish, and the status-line legends and the <code>error:</code> word stay readable without color.</p>

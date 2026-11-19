@@ -171,11 +171,11 @@
             <li class="toc-h3"><a href="#cherry-pick-or-merge-a-ref">Cherry-pick or merge a ref</a></li>
             <li class="toc-h3"><a href="#create-a-branch-at-a-commit">Create a branch at a commit</a></li>
             <li class="toc-h2"><a href="#api-reference">API reference</a></li>
-            <li class="toc-h2"><a href="#keys">Keys</a></li>
             <li class="toc-h2"><a href="#configuration">Configuration</a></li>
             <li class="toc-h3"><a href="#command-line-flags">Command-line flags</a></li>
             <li class="toc-h3"><a href="#environment">Environment</a></li>
             <li class="toc-h3"><a href="#fixed-limits">Fixed limits</a></li>
+            <li class="toc-h2"><a href="#keys">Keys</a></li>
             <li class="toc-h2"><a href="#theme-styling-and-accessibility">Theme, styling and accessibility</a></li>
             <li class="toc-h2"><a href="#internationalization">Internationalization</a></li>
             <li class="toc-h2"><a href="#examples">Examples</a></li>
@@ -297,6 +297,33 @@ $git = new Git(getcwd());
 <tr><td>Lang</td><td>t(key, params)</td><td>Translation lookup in the <code>git</code> namespace. See Internationalization.</td></tr>
 </table>
 
+<h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+<p>CandyGit has no configuration file. Its behavior comes from the command line, the environment, and the repository's own git configuration.</p>
+<h3 id="command-line-flags" style="margin-top: 32px;">Command-line flags</h3>
+<table class="api-table">
+<tr><th>Flag</th><th>Effect</th></tr>
+<tr><td><code>--version</code></td><td>Prints the version line and the phar build stamp, then exits 0. Works outside a repository.</td></tr>
+<tr><td><code>--help</code>, <code>-h</code></td><td>Prints usage, then exits 0. Works outside a repository.</td></tr>
+<tr><td>any other argument</td><td>Refused. The program exits 2 and names the argument, pointing at <code>--help</code>.</td></tr>
+</table>
+
+<h3 id="environment" style="margin-top: 32px;">Environment</h3>
+<table class="api-table">
+<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>CANDY_GIT_STRICT_FILTERS</code></td><td>unset</td><td>Set to <code>1</code>, <code>true</code> or <code>yes</code> to refuse repositories whose filter drivers would run. Unset, filter drivers are announced on stderr and allowed to run.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read at launch through the color-profile detection. <code>NO_COLOR</code> strips color. <code>TERM=dumb</code> boots in inline mode, with no alternate screen and no cursor addressing.</td></tr>
+<tr><td><code>PATH</code></td><td>system</td><td>Locates the <code>git</code> binary. A launch failure that is not a missing git prints the OS reason.</td></tr>
+</table>
+
+<h3 id="fixed-limits" style="margin-top: 32px;">Fixed limits</h3>
+<table class="api-table">
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Git call timeout</td><td>30 seconds, per call</td></tr>
+<tr><td>Log page size</td><td>20 commits per fetch</td></tr>
+<tr><td>Undo and redo history</td><td>100 entries (<code>HistoryManager::MAX_HISTORY</code>)</td></tr>
+<tr><td>Minimum git version</td><td>2.23 (<code>GitRequirement::MINIMUM</code>)</td></tr>
+</table>
+
 <h2 id="keys" style="margin-top: 40px;">Keys</h2>
 <p>Keys work in the pane where they are listed. The <code>?</code> overlay shows the verbs for the focused pane.</p>
 <table class="api-table">
@@ -330,33 +357,6 @@ $git = new Git(getcwd());
 <tr><td><code>Ctrl+C</code></td><td>Acts like <code>q</code> while idle, and like <code>Esc</code> while typing, where it drops the half-typed draft</td></tr>
 </table>
 <p>Inside a text buffer every printable key is typed, so <code>q</code> is just a letter. <code>Ctrl+W</code> and <code>Ctrl+U</code> delete a word or the line, and a bracketed paste inserts the whole sanitized blob with its line structure. Remote-tracking branches appear with divergence badges such as <code>[↑2 ↓1]</code>, or <code>[!]</code> when the upstream has vanished. Those are read-only for <code>D</code>.</p>
-
-<h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
-<p>CandyGit has no configuration file. Its behavior comes from the command line, the environment, and the repository's own git configuration.</p>
-<h3 id="command-line-flags" style="margin-top: 32px;">Command-line flags</h3>
-<table class="api-table">
-<tr><th>Flag</th><th>Effect</th></tr>
-<tr><td><code>--version</code></td><td>Prints the version line and the phar build stamp, then exits 0. Works outside a repository.</td></tr>
-<tr><td><code>--help</code>, <code>-h</code></td><td>Prints usage, then exits 0. Works outside a repository.</td></tr>
-<tr><td>any other argument</td><td>Refused. The program exits 2 and names the argument, pointing at <code>--help</code>.</td></tr>
-</table>
-
-<h3 id="environment" style="margin-top: 32px;">Environment</h3>
-<table class="api-table">
-<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>CANDY_GIT_STRICT_FILTERS</code></td><td>unset</td><td>Set to <code>1</code>, <code>true</code> or <code>yes</code> to refuse repositories whose filter drivers would run. Unset, filter drivers are announced on stderr and allowed to run.</td></tr>
-<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read at launch through the color-profile detection. <code>NO_COLOR</code> strips color. <code>TERM=dumb</code> boots in inline mode, with no alternate screen and no cursor addressing.</td></tr>
-<tr><td><code>PATH</code></td><td>system</td><td>Locates the <code>git</code> binary. A launch failure that is not a missing git prints the OS reason.</td></tr>
-</table>
-
-<h3 id="fixed-limits" style="margin-top: 32px;">Fixed limits</h3>
-<table class="api-table">
-<tr><th>Limit</th><th>Value</th></tr>
-<tr><td>Git call timeout</td><td>30 seconds, per call</td></tr>
-<tr><td>Log page size</td><td>20 commits per fetch</td></tr>
-<tr><td>Undo and redo history</td><td>100 entries (<code>HistoryManager::MAX_HISTORY</code>)</td></tr>
-<tr><td>Minimum git version</td><td>2.23 (<code>GitRequirement::MINIMUM</code>)</td></tr>
-</table>
 
 <h2 id="theme-styling-and-accessibility" style="margin-top: 40px;">Theme, styling and accessibility</h2>
 <p>Every state the interface needs you to know is carried by text, not by color alone. Status rows show git's porcelain <code>XY</code> codes, and diff lines keep their leading <code>+</code> and <code>-</code>. The rebase todo spells its actions as words: <code>pick</code>, <code>reword</code>, <code>edit</code>, <code>squash</code>, <code>drop</code>. The ahead-and-behind summary is git's own header. The panes stay readable under <code>NO_COLOR</code>, under <code>TERM=dumb</code>, or with an ASCII-only palette.</p>
