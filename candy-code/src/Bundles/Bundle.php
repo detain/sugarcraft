@@ -146,41 +146,71 @@ final class Bundle
     }
 
     /**
-     * The manifest $dir carries, or null. A symlink anywhere on the way to a
-     * manifest refuses the whole bundle before any read: discovery's guard()
-     * bounds the bundle DIRECTORY, and is_file() would otherwise follow a link
-     * planted at the manifest file or at its `.claude-plugin` container out to a
-     * file nothing bounded.
+     * The manifest $dir carries, or null. The first manifest shape that is a
+     * file decides: when its real path escapes the bundle directory, the whole
+     * bundle is refused (a real bare manifest beside a linked hidden one does not
+     * rescue it). A link that resolves inside the bundle loads like any file.
+     * discovery's guard() bounds the bundle DIRECTORY, and is_file() would
+     * otherwise follow a link planted at the manifest or at its `.claude-plugin`
+     * container out to a file nothing bounded.
      */
     public static function manifestPath(string $dir): ?string
     {
-        foreach ([self::MANIFEST_RELATIVE_PATH, self::BARE_MANIFEST_RELATIVE_PATH] as $relative) {
-            if (self::reachesThroughSymlink($dir, $relative)) {
-                return null;
+        foreach (self::manifestCandidates($dir) as $candidate) {
+            if (!is_file($candidate)) {
+                continue;
             }
 
-            if (is_file($dir . '/' . $relative)) {
-                return $dir . '/' . $relative;
+            return self::escapesBundle($dir, $candidate) ? null : $candidate;
+        }
+
+        return null;
+    }
+
+    /**
+     * The bundle-relative path of the manifest $dir carries that
+     * {@see manifestPath()} refused for resolving outside the bundle, or null.
+     * Lets the installer and discovery name the link instead of reporting the
+     * manifest as absent.
+     */
+    public static function refusedManifest(string $dir): ?string
+    {
+        if (self::manifestPath($dir) !== null) {
+            return null;
+        }
+
+        foreach (self::manifestCandidates($dir) as $relative => $candidate) {
+            if (is_file($candidate) && self::escapesBundle($dir, $candidate)) {
+                return $relative;
             }
         }
 
         return null;
     }
 
-    /** True when any component of $dir/$relative below the bundle root is a symlink, dangling or not. */
-    private static function reachesThroughSymlink(string $dir, string $relative): bool
+    /** @return array<string, string> bundle-relative manifest path => absolute candidate, in precedence order */
+    private static function manifestCandidates(string $dir): array
     {
-        $path = $dir;
+        $candidates = [];
 
-        foreach (explode('/', $relative) as $segment) {
-            $path .= '/' . $segment;
-
-            if (is_link($path)) {
-                return true;
-            }
+        foreach ([self::MANIFEST_RELATIVE_PATH, self::BARE_MANIFEST_RELATIVE_PATH] as $relative) {
+            $candidates[$relative] = $dir . '/' . $relative;
         }
 
-        return false;
+        return $candidates;
+    }
+
+    /** True when the real path of $file is not strictly inside the real path of $dir, or either cannot be resolved. */
+    private static function escapesBundle(string $dir, string $file): bool
+    {
+        $realDir = realpath($dir);
+        $realFile = realpath($file);
+
+        if ($realDir === false || $realFile === false) {
+            return true;
+        }
+
+        return !\SugarCraft\Core\Util\PathJail::below($realFile, $realDir);
     }
 
     /** @return list<string> the `skills` directories this bundle contributes, existing only */

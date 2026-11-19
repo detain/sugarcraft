@@ -140,6 +140,29 @@ final class BundleInstallTest extends TestCase
         self::assertSame(['clonely'], $this->entriesUnderRoot());
     }
 
+    /**
+     * A clone whose manifest links OUTSIDE its checkout is refused, and nothing
+     * is installed. The clone leg is the only install path that can reach this
+     * (the path leg's copy refuses every link first). The refusal names the link
+     * as `link_refused` rather than reporting the manifest as absent, so the
+     * verb's stderr does not send the operator looking for a file that is there.
+     */
+    public function testAClonedManifestLinkedOutsideTheCheckoutIsRefusedNotInstalled(): void
+    {
+        $outside = $this->tempDir . '/clone-outside-plugin.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+
+        $this->armFakeClone(static function (string $url, string $scratch) use ($outside): array {
+            mkdir($scratch . '/.claude-plugin', 0777, true);
+            symlink($outside, $scratch . '/.claude-plugin/plugin.json');
+
+            return ['ok' => true, 'detail' => ''];
+        });
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', 'https://example.invalid/linked.git'));
+        self::assertSame([], $this->entriesUnderRoot());
+    }
+
     public function testAFailedCloneIsReportedAndLeavesNeitherInstallNorScratch(): void
     {
         $this->armFakeClone(static fn (): array => ['ok' => false, 'detail' => 'repository not found']);

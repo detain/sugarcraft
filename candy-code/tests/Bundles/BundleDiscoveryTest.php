@@ -127,6 +127,39 @@ final class BundleDiscoveryTest extends TestCase
         self::assertStringContainsString($outside, $refused[$link], 'the reason names where it really resolves');
     }
 
+    public function testAManifestLinkedOutsideItsBundleIsWarnedByNameNotDroppedSilently(): void
+    {
+        $root = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
+        $leak = $this->tempDir . '/dotfiles/plugin.json';
+        mkdir(dirname($leak), 0777, true);
+        file_put_contents($leak, json_encode(['name' => 'acme']));
+        mkdir($root . '/acme/.claude-plugin', 0777, true);
+        symlink($leak, $root . '/acme/.claude-plugin/plugin.json');
+        $this->writeBundleRoot($root . '/healthy', ['name' => 'healthy']);
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project');
+        $bundles = $discovery->discover();
+
+        self::assertSame(['healthy'], array_map(static fn (Bundle $b): string => $b->name, $bundles));
+        self::assertCount(1, $discovery->warnings(), 'a refused link must not vanish from launch notices');
+        self::assertStringContainsString('acme', $discovery->warnings()[0]);
+    }
+
+    public function testAnInBundleSymlinkedManifestStillLoads(): void
+    {
+        $root = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/shared-manifest';
+        mkdir($root . '/shared', 0777, true);
+        file_put_contents($root . '/shared/plugin.json', json_encode(['name' => 'shared-manifest']));
+        mkdir($root . '/.claude-plugin', 0777, true);
+        symlink('../shared/plugin.json', $root . '/.claude-plugin/plugin.json');
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project');
+        $bundles = $discovery->discover();
+
+        self::assertSame(['shared-manifest'], array_map(static fn (Bundle $b): string => $b->name, $bundles));
+        self::assertSame([], $discovery->warnings());
+    }
+
     public function testAUserBundleMayReachAnywhereInsideHome(): void
     {
         $target = $this->home . '/src/plugins/real-deal';

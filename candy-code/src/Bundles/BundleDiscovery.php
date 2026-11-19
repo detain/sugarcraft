@@ -46,8 +46,11 @@ final class BundleDiscovery
         private readonly string $projectRoot,
         private readonly array $configPaths = [],
     ) {
+        // A manifest that links outside its bundle counts as present, so the scan
+        // reaches Bundle::fromDir(), which refuses it and is recorded by name
+        // like any unreadable manifest. Answering "absent" would drop it silently.
         $this->scanner = new PluginDiscovery(
-            Bundle::hasManifest(...),
+            static fn (string $dir): bool => Bundle::hasManifest($dir) || Bundle::refusedManifest($dir) !== null,
             static fn (string $dir, string $tier, ?string $boundary): ?Bundle
                 => Bundle::fromDir($dir, $tier, self::ownerOf($tier, $boundary)),
             static fn (string $dir, string $real, string $tier, string $boundary): string

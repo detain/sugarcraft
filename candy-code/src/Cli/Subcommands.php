@@ -4141,6 +4141,21 @@ final class Subcommands
     }
 
     /**
+     * The refusal for a staged tree that carries no usable manifest. A manifest
+     * that links outside the tree is named as the link it is, not reported as
+     * absent: "carries no plugin.json" would send the operator looking for a
+     * file that is present.
+     */
+    private static function bundlesNotBundle(string $staged, string $source): void
+    {
+        $link = Bundle::refusedManifest($staged);
+
+        self::bundlesLine($link === null
+            ? Lang::t('cli.bundles.install.not_bundle', ['source' => $source])
+            : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $link]));
+    }
+
+    /**
      * Wall-clock ceiling for `bundles install`'s git clone. A ceiling on
      * ONE named child the user asked for, escalated through
      * {@see BoundedShutdown} with its process group — not a blanket timeout
@@ -4284,7 +4299,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $source]));
+            self::bundlesNotBundle($staged, $source);
             self::removeTree($scratch);
 
             return NonInteractive::EXIT_FAILURE;
@@ -5059,7 +5074,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $entryName . '@' . $marketplaceName]));
+            self::bundlesNotBundle($staged, $entryName . '@' . $marketplaceName);
             self::removeTree($staged);
 
             return NonInteractive::EXIT_FAILURE;
@@ -5357,7 +5372,7 @@ final class Subcommands
             }
 
             if (!Bundle::hasManifest($staged)) {
-                self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $name]));
+                self::bundlesNotBundle($staged, $name);
                 self::removeTree($staged);
                 $status = NonInteractive::EXIT_FAILURE;
 

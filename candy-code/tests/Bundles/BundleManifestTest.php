@@ -344,13 +344,15 @@ final class BundleManifestTest extends TestCase
         self::assertSame([], Bundle::readManifest($dir));
     }
 
-    public function testADanglingSymlinkedManifestIsRefused(): void
+    public function testADanglingSymlinkedManifestLoadsNothing(): void
     {
-        $dir = $this->bundle('dangling-hidden', [], hidden: false);
+        $dir = $this->tempDir . '/dangling-hidden';
         mkdir($dir . '/.claude-plugin', 0777, true);
         symlink($this->tempDir . '/nowhere.json', $dir . '/.claude-plugin/plugin.json');
 
+        self::assertFalse(Bundle::hasManifest($dir));
         self::assertNull(Bundle::manifestPath($dir));
+        self::assertNull(Bundle::refusedManifest($dir), 'a dangling link never resolved to a file, so nothing was refused');
         self::assertNull(Bundle::fromDir($dir, 'user'));
     }
 
@@ -366,5 +368,61 @@ final class BundleManifestTest extends TestCase
 
         self::assertFalse(Bundle::hasManifest($dir));
         self::assertNull(Bundle::fromDir($dir, 'user'));
+        self::assertSame('.claude-plugin/plugin.json', Bundle::refusedManifest($dir), 'the refusal names the link, not an absent manifest');
+    }
+
+    public function testTheRefusalNamesTheLinkThatEscapes(): void
+    {
+        $outside = $this->tempDir . '/outside-named.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+
+        $hidden = $this->bundle('named-hidden', [], hidden: false);
+        mkdir($hidden . '/.claude-plugin', 0777, true);
+        symlink($outside, $hidden . '/.claude-plugin/plugin.json');
+
+        $bare = $this->tempDir . '/named-bare';
+        mkdir($bare, 0777, true);
+        symlink($outside, $bare . '/plugin.json');
+
+        self::assertSame('.claude-plugin/plugin.json', Bundle::refusedManifest($hidden));
+        self::assertSame('plugin.json', Bundle::refusedManifest($bare));
+    }
+
+    public function testADanglingHiddenLinkDoesNotBlockARealBareManifest(): void
+    {
+        // Only a link that resolves OUTSIDE the bundle refuses it; a dangling one
+        // names no file, so the real bare manifest beside it loads as before.
+        $dir = $this->bundle('dangling-beside-bare', [], hidden: false);
+        mkdir($dir . '/.claude-plugin', 0777, true);
+        symlink($this->tempDir . '/nowhere-at-all.json', $dir . '/.claude-plugin/plugin.json');
+
+        self::assertSame($dir . '/plugin.json', Bundle::manifestPath($dir));
+        self::assertNull(Bundle::refusedManifest($dir));
+    }
+
+    public function testASymlinkedManifestThatResolvesInsideTheBundleLoads(): void
+    {
+        $dir = $this->tempDir . '/in-bundle-hidden';
+        mkdir($dir . '/shared', 0777, true);
+        file_put_contents($dir . '/shared/plugin.json', json_encode(['name' => 'shared-one']));
+        mkdir($dir . '/.claude-plugin', 0777, true);
+        symlink('../shared/plugin.json', $dir . '/.claude-plugin/plugin.json');
+
+        self::assertTrue(Bundle::hasManifest($dir));
+        self::assertSame($dir . '/.claude-plugin/plugin.json', Bundle::manifestPath($dir));
+        self::assertNull(Bundle::refusedManifest($dir));
+        self::assertSame('shared-one', Bundle::fromDir($dir, 'user')?->name);
+        self::assertSame('shared-one', Bundle::readManifest($dir)['name'] ?? null);
+    }
+
+    public function testABareManifestLinkedInsideTheBundleLoads(): void
+    {
+        $dir = $this->tempDir . '/in-bundle-bare';
+        mkdir($dir . '/docs', 0777, true);
+        file_put_contents($dir . '/docs/manifest.json', json_encode(['name' => 'bare-linked']));
+        symlink('docs/manifest.json', $dir . '/plugin.json');
+
+        self::assertSame($dir . '/plugin.json', Bundle::manifestPath($dir));
+        self::assertSame('bare-linked', Bundle::fromDir($dir, 'user')?->name);
     }
 }

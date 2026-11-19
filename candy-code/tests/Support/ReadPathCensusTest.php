@@ -329,14 +329,14 @@ final class ReadPathCensusTest extends TestCase
             // is never a link out of that directory.
             'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — fromDir() reads the manifest of a '
                 . 'bundle directory discovery chose; PluginDiscovery::guard() admits that directory through '
-                . 'PathJail::below() against its boundary, and manifestPath() refuses any symlink on the way to the '
-                . 'manifest before the read',
+                . 'PathJail::below() against its boundary, and manifestPath() refuses a manifest whose real path '
+                . 'leaves the bundle directory before the read',
             // NOT CONTAINED_EXTERNAL: readManifest() is reached from the installer's staged trees
-            // (Cli\Subcommands), which PluginDiscovery::guard() never sees. The symlink refusal in
+            // (Cli\Subcommands), which PluginDiscovery::guard() never sees. The escape refusal in
             // manifestPath() covers the file, but no sugar-plugins compare bounds the staged directory.
             'CALLER_SUPPLIED — readManifest() reads the manifest of a staged installer tree the installer built '
                 . 'for the caller-chosen source; no PluginDiscovery::guard() admits that directory, and '
-                . 'manifestPath() refuses a symlink on the way to the manifest',
+                . 'manifestPath() refuses a manifest whose real path leaves that tree',
         ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
