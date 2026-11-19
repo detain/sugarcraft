@@ -325,8 +325,8 @@ final class ReadPathCensusTest extends TestCase
         'Bundles/Bundle.php|file_get_contents' => [
             // CONTAINED_EXTERNAL holds for fromDir() only because its sole caller is
             // BundleDiscovery, which hands every directory to PluginDiscovery::guard() first.
-            // manifestPath() refuses a symlink on the way to the manifest, so the file read
-            // is never a link out of that directory.
+            // manifestPath() refuses a manifest whose real path leaves the bundle directory,
+            // so the file read is never a link out of that directory. An in-bundle link loads.
             'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — fromDir() reads the manifest of a '
                 . 'bundle directory discovery chose; PluginDiscovery::guard() admits that directory through '
                 . 'PathJail::below() against its boundary, and manifestPath() refuses a manifest whose real path '
