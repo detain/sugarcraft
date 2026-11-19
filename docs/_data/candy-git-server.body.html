@@ -67,7 +67,7 @@ $acl = AccessControl::instance();
 $acl-&gt;canWrite(User::new('alice'), $repo);   // true: collaborator
 $acl-&gt;canWrite(User::new('bob'), $repo);     // false: not a collaborator
 $acl-&gt;canRead(null, $repo);                  // false: anonymous reads are off</code></pre>
-    <p>Each <code>with*()</code> call returns a new immutable <code>Repo</code>, so keep the result of the chain. The <code>init()</code> call is the only one that touches the filesystem. <code>examples/repo.php</code> runs this flow end to end without writing to a real data path.</p>
+    <p>Each <code>with*()</code> call returns a new immutable <code>Repo</code>, so keep the result of the chain. The <code>init()</code> call is the only one that touches the filesystem. <code>examples/repo.php</code> exercises the same metadata and permission calls in a private temporary directory. It does not call <code>init()</code>, so no git repository is created.</p>
 
     <h3 style="margin-top: 24px;">Let anonymous clients read a public repo</h3>
     <pre class="code"><code class="language-ini">; config.yaml
