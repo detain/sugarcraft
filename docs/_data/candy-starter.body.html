@@ -80,7 +80,7 @@ final class Greeter implements Model
 
     <h3 style="margin-top: 40px;">Tasks and how-to</h3>
     <h3 style="margin-top: 16px;">Replace the demo Model</h3>
-    <p>Write your own Model with the four methods, then point <code>bin/start</code> at it. The starter keeps one import in <code>bin/start</code>, so the change is a single line:</p>
+    <p>Write your own Model with the four methods, then point <code>bin/start</code> at it. The starter names the demo Model in two places in <code>bin/start</code>, the <code>use App\Counter;</code> import and the <code>new Program(new Counter())</code> call, so change both lines:</p>
     <pre class="code"><code class="language-php">// bin/start
 use App\Counter;             // before
 use App\Dashboard;           // after: your own final class implementing Model
@@ -231,7 +231,7 @@ vendor/bin/phpunit</code></pre>
     <p>These six edits are what you do after <code>create-project</code>:</p>
     <ol>
       <li><strong><code>composer.json</code></strong>: rename <code>name</code> and <code>description</code> to your app.</li>
-      <li><strong><code>bin/start</code></strong>: swap the <code>use App\Counter;</code> import for your own Model.</li>
+      <li><strong><code>bin/start</code></strong>: swap the <code>use App\Counter;</code> import, and the <code>new Counter()</code> in the <code>new Program(...)</code> call, for your own Model.</li>
       <li><strong><code>src/</code> and <code>tests/</code></strong>: replace the demo Model and its matrix. Keep the <code>App\</code> and <code>App\Tests\</code> namespaces, or update the PSR-4 prefixes to match. Adapt or delete the three documentation guards.</li>
       <li><strong><code>composer.lock</code></strong>: the shipped <code>.gitignore</code> ignores the lock, which suits this template but not the app you fork it into. Delete the ignore line and commit the lock for reproducible builds.</li>
       <li><strong>Sibling dependencies</strong>: <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-style</code> ride <code>dev-master</code>. Switch to released constraints once tags exist.</li>

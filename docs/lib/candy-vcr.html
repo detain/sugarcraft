@@ -246,7 +246,14 @@ foreach ($cassette->events as $event) {
 use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Recorder;
 
-$header = new CassetteHeader(timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE);
+$header = new CassetteHeader(
+    version: 1,
+    createdAt: '2026-05-07T10:00:00Z',
+    cols: 80,
+    rows: 24,
+    runtime: 'sugarcraft/candy-vcr@dev',
+    timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+);
 $recorder = Recorder::open('/tmp/session.cas', $header)->withFormat(new RelativeFormat());</code></pre>
 
     <h3 id="gzip-and-asciinema" style="margin-top: 24px;">Gzip and asciinema</h3>
