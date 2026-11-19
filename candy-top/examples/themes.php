@@ -21,4 +21,4 @@ $names = ThemeRegistry::fromDirs(ThemeRegistry::bundledDir())->names();
 foreach ($names as $name) {
     echo $name, "\n";
 }
-echo count($names), " bundled themes\n";
+echo count($names), " selectable themes\n";
