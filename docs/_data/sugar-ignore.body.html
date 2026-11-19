@@ -1,9 +1,10 @@
-<p class="lede" style="margin-top: 28px;">The gitignore engine a repository-walking tool needs, extracted from candy-code so every app answers "is this path ignored?" the same way. <strong>It never touches the filesystem</strong>: the caller injects each ignore file's contents, so a TUI, a git server and a tree browser share one engine. A cloned repository supplies both the patterns and the paths, so patterns are treated as hostile input. First-party — there is no upstream Go port.</p>
+<p class="lede" style="margin-top: 28px;">The gitignore engine a repository-walking tool needs, so every app answers "is this path ignored?" the same way. It never touches the filesystem: the caller injects each ignore file's contents as a path-to-text map, so a TUI, a git server and a tree browser can share one engine. A cloned repository supplies both the patterns and the paths, so patterns are treated as hostile input. The semantics follow git's <a href="https://git-scm.com/docs/gitignore">gitignore(5)</a>. There is no Charmbracelet upstream; this library is first-party.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ignore</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The package has no runtime dependencies beyond PHP.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Ignore\IgnoreRules;
 
 $rules = IgnoreRules::fromPaths([
@@ -15,31 +16,39 @@ $rules = IgnoreRules::fromPaths([
 $rules-&gt;ignores('app/debug.log', false);  // ".gitignore: *.log" (the deciding rule) or null
 $rules-&gt;isIgnored('pkg/keep.log', false); // false
 $rules-&gt;ignores('build', true);           // directory-only rules need $isDir</code></pre>
+    <p style="color: var(--ink-2);">Paths are root-relative. The map keys name the ignore files, and each file applies only beneath its own directory.</p>
 
-    <h3 style="margin-top: 32px;">The laws</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>No IO</strong><span>Contents are injected as a path =&gt; text map; each file is scoped to its own directory and deeper files override shallower ones.</span></div>
-      <div class="feature"><strong>git semantics</strong><span>Negation, trailing-slash directory rules, anchoring, <code>*</code> <code>?</code> classes, <code>**</code> forms, escapes, <code>.git/info/exclude</code> below every file, and no re-including under an ignored directory.</span></div>
-      <div class="feature"><strong>Bounded cost</strong><span>Simple shapes run on PCRE; anything that could backtrack runs on a lazily built DFA. A PCRE limit error is never read as "no match".</span></div>
-      <div class="feature"><strong>Fails closed</strong><span>A rule too costly to decide hides (a negation does not re-include) and is reported on <code>undecidableRules()</code>, not logged under a TUI.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>The caller owns all IO. <code>IgnoreRules::fromPaths()</code> takes a map of ignore-file path to contents, and the engine never reads a file itself. Each file is scoped to its own directory, a deeper file overrides a shallower one, and <code>.git/info/exclude</code> ranks below every <code>.gitignore</code>, as it does in git.</p>
+    <p>Ancestors decide first. <code>ignores()</code> tests every ancestor directory before the path itself, shallowest first, and the first ignored ancestor wins outright. Nothing under an ignored directory can be re-included, and a nested ignore file inside an ignored directory never applies.</p>
+    <p>The answer is the rule. <code>ignores()</code> returns the deciding <code>&lt;file&gt;: &lt;pattern&gt;</code> string, which is what a UI shows when it explains why a file is hidden. <code>isIgnored()</code> is the boolean form of the same question.</p>
+    <p>Every call passes <code>$isDir</code>. A pattern with a trailing slash matches only directories, and a path string alone cannot say whether it names one.</p>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Use it for</h3>
     <ul>
-      <li><strong>Agent file tools</strong> — candy-code's Glob, Grep and repo map.</li>
-      <li><strong>File browsers and git tooling</strong> — candy-files, candy-git and candy-git-server.</li>
+      <li><strong>Agent file tools</strong>: candy-code's Glob, Grep and repo map skip the same paths a git checkout would.</li>
+      <li><strong>File browsers and git tooling</strong>: candy-files, candy-git and candy-git-server share one answer to "hidden?".</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-ignore">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ignore/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ignore/blob/master/tests">Test suite</a></li>
-    </ul>
+    <h3 style="margin-top: 24px;">Add one ignore file after construction</h3>
+    <p><code>withFile()</code> returns a new instance that carries one more file, or replaces an existing one. The receiver is unchanged.</p>
+    <pre class="code"><code class="language-php">$rules = IgnoreRules::fromPaths(['.gitignore' =&gt; "*.log\n"]);
+$rules = $rules-&gt;withFile('pkg/.gitignore', "*.tmp\n");   // a new instance</code></pre>
 
-    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <h3 style="margin-top: 24px;">Explain why a path is hidden</h3>
+    <pre class="code"><code class="language-php">if (($why = $rules-&gt;ignores($path, $isDir)) !== null) {
+    $status = "hidden by {$why}";   // e.g. "hidden by .gitignore: *.log"
+}</code></pre>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 24px;">Pass absolute paths with a root</h3>
+    <p>Give <code>fromPaths()</code> a root and absolute paths under it are stripped to root-relative. An absolute path outside the root has no jurisdiction, so it answers "not ignored".</p>
+    <pre class="code"><code class="language-php">$rules = IgnoreRules::fromPaths(['.gitignore' =&gt; "*.log\n"], '/srv/repo');
+
+$rules-&gt;ignores('/srv/repo/app/debug.log', false); // ".gitignore: *.log"
+$rules-&gt;ignores('/etc/passwd', false);             // null</code></pre>
+
+    <h2 style="margin-top: 40px;">API</h2>
 <table class="api-table">
 <caption>API surface</caption>
 <thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
@@ -52,5 +61,84 @@ $rules-&gt;ignores('build', true);           // directory-only rules need $isDir
 <tr><td>Pattern</td><td>static parse(string $line): ?self / pcreMatch(string $subject): ?bool</td><td>One compiled ignore line and its PCRE fast path (null on a PCRE limit error)</td></tr>
 <tr><td>Automaton</td><td>static for(Pattern $pattern): self / match(string $subject): ?bool</td><td>Backtrack-free matcher; null when over budget</td></tr>
 </table>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>The engine has no environment variables and no config file. Its only knobs are the root argument and two public constants.</p>
+<table class="api-table">
+<caption>Options</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>$root</code> (on <code>new()</code> and <code>fromPaths()</code>)</td><td><code>?string</code></td><td><code>null</code></td><td>Trailing slashes are trimmed. Absolute paths under the root are stripped to root-relative. With a root set, an absolute path outside it is "not ignored". With <code>null</code>, a leading slash is trimmed and the path is matched as given.</td></tr>
+<tr><td><code>$isDir</code> (on <code>ignores()</code> and <code>isIgnored()</code>)</td><td><code>bool</code></td><td>required</td><td>Decides whether trailing-slash (directory-only) patterns apply to the final path segment.</td></tr>
+<tr><td><code>IgnoreRules::INFO_EXCLUDE</code></td><td>constant</td><td><code>.git/info/exclude</code></td><td>The one ignore-file path that ranks below every <code>.gitignore</code>.</td></tr>
+<tr><td><code>Automaton::MATCH_BUDGET</code></td><td>constant</td><td><code>1000000</code></td><td>Upper bound on path length times (pattern tokens + 1). A match over budget is undecidable and resolves toward hiding.</td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Semantics</h2>
+    <p>The engine supports <code>#</code> comments and <code>\#</code>, blank lines, trailing whitespace unless escaped, <code>!</code> negation (the later rule wins), trailing <code>/</code> for directory-only rules, leading or inner <code>/</code> for anchoring, bare patterns that match at any depth, <code>*</code> <code>?</code> <code>[...]</code> and <code>[!...]</code>, the <code>**/</code>, <code>/**</code> and <code>a/**/b</code> forms, backslash escapes, nested ignore files, and git's rule that nothing under an ignored directory can be re-included.</p>
+    <p>It deliberately does not support global excludes, git config, case folding, or the index. A tracked file still counts as ignored when a pattern matches it. Matching is case-sensitive.</p>
+
+    <h2 style="margin-top: 40px;">Hostile patterns</h2>
+    <p>A cloned repository supplies both the ignore file and the paths, so a pattern is hostile input. Simple shapes such as <code>*.log</code>, <code>**/foo</code> and <code>foo/**</code> run on PCRE. Anything that could backtrack runs on a lazily built automaton (<code>Automaton</code>) that never backtracks.</p>
+    <p>A rule whose cost still exceeds the budget is undecidable. It fails closed: a hide rule hides, and a negation does not re-include. Each such rule is recorded on <code>undecidableRules()</code> instead of being logged, because stderr under a TUI is nowhere a user reads.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p><code>examples/ignore-check.php</code> builds one ruleset from literal ignore files and prints the deciding rule for eight probe paths. It touches no files and exits 0.</p>
+    <pre class="code"><code class="language-shell">php examples/ignore-check.php</code></pre>
+    <pre class="code"><code class="language-text">app/debug.log      .gitignore: *.log
+pkg/keep.log       not ignored
+build              .gitignore: build/
+build/out.o        .gitignore: build/
+secret.env         .gitignore: /secret.env
+pkg/secret.env     not ignored
+scratch.txt        .git/info/exclude: scratch.txt
+src/main.php       not ignored
+undecidable rules: 0</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-ignore &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite has five test classes. They cover the parser (<code>PatternTest</code>), the token model (<code>TokenTest</code>), the backtrack-free matcher (<code>AutomatonTest</code>), the hostile-pattern cases (<code>BacktrackingTest</code>) and the end-to-end rules (<code>IgnoreRulesTest</code>).</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 style="margin-top: 24px;">A pattern I wrote does not match</h3>
+    <p>A leading or inner slash anchors the rule to its ignore file's directory, so <code>/secret.env</code> matches only at the root. A bare name such as <code>*.log</code> matches at any depth. A trailing slash matches only directories, so pass <code>$isDir = true</code> for the directory itself.</p>
+
+    <h3 style="margin-top: 24px;">A file stays hidden after a <code>!</code> negation</h3>
+    <p>Git cannot re-include a file while a parent directory is excluded, and the engine follows that rule. Negate the directory itself, not the file beneath it.</p>
+
+    <h3 style="margin-top: 24px;">undecidableRules() is not empty</h3>
+    <p>A pattern exceeded the matching budget, so it resolved toward hiding. Shorten or split the rule. The list names the ignore file and the pattern.</p>
+    <pre class="code"><code class="language-php">foreach ($rules-&gt;undecidableRules() as [$file, $pattern]) {
+    error_log("undecidable in {$file}: {$pattern}");   // log it outside the TUI
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">An absolute path is never ignored</h3>
+    <p>Pass the same root to <code>fromPaths()</code>, or give paths relative to it. With a root set, an absolute path outside that root has no jurisdiction and answers "not ignored". With no root, the leading slash is trimmed and the rest is matched, so <code>/abs/app/x.log</code> is matched as <code>abs/app/x.log</code>.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>Four classes make up the engine. <code>IgnoreRules</code> is the public facade: it scopes each file, ranks the rule files, and caches verdicts per directory. Its public fields are readonly, and every <code>with*()</code> method returns a new instance. <code>Pattern</code> parses one ignore line into tokens and a PCRE regex, and carries the directory-only and negation flags. <code>Automaton</code> matches a pattern's tokens with a lazily built, backtrack-free automaton. <code>Token</code> names the token kinds: literal, single character, character class, star, globstar and directory separator.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <p>There is no Charmbracelet upstream for this library. The reference is git's <a href="https://git-scm.com/docs/gitignore">gitignore(5)</a> documentation, and the table maps each rule to the class that enforces it.</p>
+<table class="api-table">
+<caption>git rule to SugarCraft class</caption>
+<thead><tr><th scope="col">git rule (gitignore(5))</th><th scope="col">Where it lives</th></tr></thead>
+<tr><td>Ancestors are tested first; an excluded directory cannot be re-included</td><td><code>IgnoreRules::ignores()</code></td></tr>
+<tr><td>A deeper ignore file overrides a shallower one; <code>.git/info/exclude</code> ranks lowest</td><td><code>IgnoreRules::fromPaths()</code> ranking and <code>IgnoreRules::INFO_EXCLUDE</code></td></tr>
+<tr><td>Negation, trailing-slash directory rules, anchoring, escapes</td><td><code>Pattern::parse()</code></td></tr>
+<tr><td>Wildcards and globstars</td><td><code>Token</code>, <code>Pattern::pcreMatch()</code> and <code>Automaton::match()</code></td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>This page does not record a release history. The commit history on GitHub is the change record, and the library's public surface is the API table above.</p>
+
+    <h2 style="margin-top: 40px;">Source and demos</h2>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
