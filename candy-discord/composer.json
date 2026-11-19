@@ -34,8 +34,7 @@
         "react/socket": "^1.16",
         "react/stream": "^1.4",
         "sugarcraft/sugar-mcp-client": "dev-master",
-        "sugarcraft/sugar-plugins": "dev-master",
-        "sugarcraft/sugar-serve-protocol": "dev-master"
+        "sugarcraft/sugar-plugins": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
