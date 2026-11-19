@@ -14,7 +14,7 @@ use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Channels\BundleChannelLoader;
 use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Channels\ChannelInterface;
+use SugarCraft\Plugins\Channel\ChannelInterface;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;

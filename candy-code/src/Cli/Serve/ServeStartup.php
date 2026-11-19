@@ -399,6 +399,14 @@ trait ServeStartup
                     $loop,
                     $log,
                     ChannelInboundLog::new(),
+                    // Each channel's settings section, frozen at launch, and the
+                    // config directory it may use as its state directory (plan 4.14).
+                    static fn (string $bundle): array => match ($bundle) {
+                        'candy-discord' => Bootstrap::channelsDiscordSettings(),
+                        'candy-msteams' => Bootstrap::channelsMsteamsSettings(),
+                        default => [],
+                    },
+                    self::channelStateDir(),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.
@@ -892,5 +900,19 @@ trait ServeStartup
         $path = $assets::tryDistPath();
 
         return \is_string($path) && \is_dir($path) ? $path : null;
+    }
+
+    /**
+     * The candy-code configuration directory a channel reads as its state
+     * directory, or null when none can be resolved; a channel then starts
+     * without one and refuses what it cannot place.
+     */
+    private static function channelStateDir(): ?string
+    {
+        try {
+            return Bootstrap::trustedConfigDirPath();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
