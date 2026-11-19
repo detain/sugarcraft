@@ -1043,13 +1043,14 @@ final class CliTest extends TestCase
     }
 
     /**
-     * Argv validation of --format=auto must not run the terminal probe: the
-     * probe's memo would be taken before --passthrough is applied, and a
-     * tmux pane could get allow-passthrough toggled against the user's
-     * --passthrough=none. The file is missing, so the run stops after
-     * validation and nothing renders.
+     * Argv validation of --format=auto keeps the pre-change probe order: the
+     * default auto() probe runs during argv, and its memo is set before the
+     * --passthrough choice is applied. That order is an accepted exception
+     * (see the --format check in Cli.php), so this pins it: a silent move of
+     * the probe, in either direction, goes red. The file is missing, so the
+     * run stops after validation and nothing renders.
      */
-    public function testFormatValidationDoesNotRunTheTerminalProbe(): void
+    public function testFormatAutoValidationKeepsTheArgvProbeOrder(): void
     {
         $memo = new \ReflectionProperty(Mosaic::class, 'autoMemo');
         $memo->setAccessible(true);
@@ -1060,7 +1061,7 @@ final class CliTest extends TestCase
 
             $this->assertSame(Cli::EXIT_INPUT, $exit, 'auto is a known spelling, so argv passes and the missing file stops the run: ' . $err);
             $this->assertStringNotContainsString('unknown render format', $err, 'explicit --format=auto must be accepted');
-            $this->assertNull($memo->getValue(), 'argv validation must not memoise the auto() probe');
+            $this->assertNotNull($memo->getValue(), 'argv validation runs the default auto() probe, as before');
         } finally {
             Mosaic::resetAutoMemo();
         }

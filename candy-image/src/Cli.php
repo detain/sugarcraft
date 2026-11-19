@@ -265,16 +265,12 @@ final class Cli
 
                             return self::EXIT_USAGE;
                         }
-                        // Validation only needs to know the spelling is known: probe:false
-                        // keeps the terminal probe (and its tmux passthrough toggle) out of
-                        // argv parsing, before the --passthrough choice is applied below.
-                        // User-visible consequence: under tmux with --passthrough=none, the
-                        // auto() probe now runs at render, after allow-passthrough is left
-                        // off. The Kitty APC query and wrapped sixel then reach tmux with
-                        // passthrough off, so tmux may drop them and the image can fall back
-                        // to symbols. Before this change, argv ran the probe first and turned
-                        // passthrough on.
-                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw, probe: false) === null) {
+                        // Accepted exception: argv validation runs the default auto() probe
+                        // before --passthrough is applied, so under tmux it can turn
+                        // allow-passthrough on. probe:false moves that probe to render, after
+                        // passthrough is left off, which drops the Kitty and sixel bytes in
+                        // tmux. That render change is not accepted, so the probe stays here.
+                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw) === null) {
                             self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 
                             return self::EXIT_USAGE;
