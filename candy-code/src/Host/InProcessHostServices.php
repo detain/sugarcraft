@@ -37,14 +37,17 @@ use function React\Promise\resolve;
  *
  * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
  *
- * Four deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * Five deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Each answer's value is encoded under the wire's flags and decoded back, with no
  *   envelope. That keeps the wire's UTF-8 substitution, so a bundle gets the same
  *   values on both doors, and the `too_large` refusal is computed as the frame the
  *   wire would send with a null id, not the request's id. A wire answer to a long
  *   request id can therefore cross the ceiling where this door does not. A bundle
  *   that needs byte-exact parity with the wire should keep its answers well under
- *   {@see Dispatcher::MAX_SERVER_FRAME_BYTES}.
+ *   {@see Dispatcher::MAX_SERVER_FRAME_BYTES}. An answer nested 63 levels or more is
+ *   refused `too_deep` here: the bundle's wire client (sugar-mcp-client's
+ *   `JsonRpc::MAX_DEPTH`, 64 with the envelope) drops that frame undecoded, and the
+ *   call times out there instead.
  * - Session calls go to the primary host's dispatcher. The wire's workspace routing
  *   (`root`, {@see \SugarCraft\Code\Server\Workspace\Gateway}) is not applied, so a
  *   session bound to a non-primary root is not found here. No bundle sends `root`.
@@ -55,6 +58,14 @@ use function React\Promise\resolve;
  *   The wire fires them only from the reconnect re-follow, and this door never
  *   reconnects. The first follow's answer is the return value of
  *   {@see subscribeSession()}, which is the only delivery a bundle needs.
+ * - Request-side refusals are the schema's, not the transport's. There is no frame, so
+ *   the wire's pre-hello ceiling ({@see Dispatcher::MAX_PRE_HELLO_BYTES}) and frame
+ *   ceiling ({@see \SugarCraft\Code\Server\ServerConfig::MAX_CLIENT_FRAME_BYTES}), which
+ *   close the socket with `CLOSE_TOO_BIG`, do not apply, and neither do the id, method
+ *   and params-shape checks of JsonRpc::decode. A request the wire would close the socket
+ *   for is refused here by its published schema instead: a `text` past
+ *   `ServerConfig::MAX_CLIENT_MESSAGE_BYTES` is `invalid_params`. Invalid UTF-8 is
+ *   `parse_error` on both doors.
  */
 final class InProcessHostServices implements HostServices
 {
@@ -90,7 +101,8 @@ final class InProcessHostServices implements HostServices
 
     /**
      * Open the in-process client: the hello the wire makes first. Resolves once
-     * the host has answered it; a hello that is refused rejects with its RpcError.
+     * the host has answered it; a hello that is refused rejects with its RpcError, and any
+     * other failure while opening the client rejects with the throwable itself.
      */
     public function connect(): PromiseInterface
     {
@@ -99,7 +111,9 @@ final class InProcessHostServices implements HostServices
         }
         try {
             $this->hello();
-        } catch (RpcError $e) {
+        } catch (\Throwable $e) {
+            // A failure opening the client (the host's boot, not only a refused hello) rejects too,
+            // so a bundle's start() takes its retry and give-up path instead of a synchronous throw.
             return reject($e);
         }
 

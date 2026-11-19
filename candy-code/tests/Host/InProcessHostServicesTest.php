@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
 use SugarCraft\Code\Host\InProcessPeer;
 use SugarCraft\Code\Host\SessionEvent;
@@ -191,6 +192,53 @@ final class InProcessHostServicesTest extends TestCase
         $refusal = $this->refusalOf(fn () => $this->probeInProcess($dispatcher));
         self::assertSame(ErrorCode::Internal, $refusal->errorCode);
         self::assertSame('too_large', $refusal->kind);
+    }
+
+    /**
+     * The bundle's wire client decodes a frame at JsonRpc::MAX_DEPTH and drops a deeper one
+     * undecoded, so the in-process door refuses an answer nested 63 levels or more as
+     * `too_deep` and hands back one nested 62 levels, the deepest the wire client reads.
+     */
+    public function testAnAnswerDeeperThanTheWireClientReadsIsATooDeepRefusal(): void
+    {
+        $levels = 62;
+        $dispatcher = $this->probeDispatcher(static function () use (&$levels): array {
+            return self::nested($levels);
+        });
+
+        $deepest = $this->probeInProcess($dispatcher);
+        self::assertSame(self::nested(62), $deepest);
+        self::assertNotNull(\json_decode(JsonRpc::result(null, $deepest), true, JsonRpc::MAX_DEPTH), 'the wire client decodes the deepest answer');
+
+        $levels = 63;
+        $refusal = $this->refusalOf(fn () => $this->probeInProcess($dispatcher));
+
+        self::assertSame(ErrorCode::Internal, $refusal->errorCode);
+        self::assertSame('too_deep', $refusal->kind);
+        self::assertNull(\json_decode(JsonRpc::result(null, self::nested(63)), true, JsonRpc::MAX_DEPTH), 'the wire client cannot decode a 63-level answer');
+    }
+
+    /**
+     * A host that cannot open the client (here the dispatcher's timers cannot be armed while
+     * the client opens) rejects connect() with the failure. A synchronous throw would skip
+     * the bundle's start() retry and give-up handling, which read the rejection.
+     */
+    public function testAHostThatCannotOpenTheClientRejectsConnect(): void
+    {
+        $loop = $this->createMock(LoopInterface::class);
+        $loop->method('addPeriodicTimer')->willThrowException(new \RuntimeException('boot failed'));
+        $broken = ProtocolFixture::new(loop: $loop);
+        try {
+            $host = InProcessHostServices::new($broken->dispatcher, Loop::get());
+
+            $rejection = $broken->await($host->connect());
+
+            self::assertInstanceOf(\RuntimeException::class, $rejection);
+            self::assertSame('boot failed', $rejection->getMessage());
+            self::assertFalse($host->isConnected());
+        } finally {
+            $broken->tearDown();
+        }
     }
 
     public function testCreateAndSubscribeAnswerTheWireShape(): void
@@ -694,6 +742,17 @@ final class InProcessHostServicesTest extends TestCase
         ]);
 
         return $dispatcher->invoke($client, 'probe.raw', []);
+    }
+
+    /** A list nested $levels arrays deep around the string `x`. */
+    private static function nested(int $levels): array
+    {
+        $value = ['x'];
+        for ($i = 1; $i < $levels; $i++) {
+            $value = [$value];
+        }
+
+        return $value;
     }
 
     /** @param \Closure(): mixed $call */

@@ -625,7 +625,25 @@ final class Dispatcher implements MessageHandler
             throw self::tooLarge();
         }
 
-        return \json_decode($text, true, JsonRpc::MAX_DEPTH_VALUE, \JSON_THROW_ON_ERROR);
+        // The bundle's wire client decodes the whole frame at JsonRpc::MAX_DEPTH. The value sits
+        // inside the frame's envelope, and PHP counts the envelope's own level too, so decoding
+        // the bare value at MAX_DEPTH - 1 accepts exactly the nesting the frame does. Deeper, the
+        // wire client drops the frame undecoded.
+        try {
+            return \json_decode($text, true, JsonRpc::MAX_DEPTH - 1, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw self::tooDeep();
+        }
+    }
+
+    /** The refusal an answer the wire client cannot decode gets, in-process only: the wire drops such a frame. */
+    private static function tooDeep(): RpcError
+    {
+        return RpcError::of(
+            ErrorCode::Internal,
+            \sprintf('the answer nests deeper than %d levels; ask for less', JsonRpc::MAX_DEPTH - 2),
+            'too_deep',
+        );
     }
 
     /** The refusal an answer past the frame ceiling gets, on the wire and in-process alike. */
