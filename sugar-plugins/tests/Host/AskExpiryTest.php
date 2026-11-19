@@ -11,8 +11,8 @@ final class AskExpiryTest extends TestCase
 {
     public function testTheApprovalCeilingIsThirtyMinutes(): void
     {
-        // Pinned to the host's approval expiry (the host's wire constant ASK_EXPIRY_SECONDS);
-        // sugar-plugins cannot read that constant, so the literal is the contract.
+        // A literal copy of the host's ASK_EXPIRY_SECONDS. sugar-plugins cannot read that
+        // constant, so this assertion checks only the copy, not agreement with the host.
         $this->assertSame(1800, AskExpiry::ASK_EXPIRY_SECONDS);
     }
 }
