@@ -91,6 +91,13 @@ final class Dispatcher implements MessageHandler
     /** Appendix O §6.1: the largest message this server sends. */
     public const MAX_SERVER_FRAME_BYTES = Protocol::MAX_SERVER_FRAME_BYTES;
 
+    /**
+     * The bytes a result frame adds around its value when the id is null:
+     * `{"jsonrpc":"2.0","id":null,"result":` plus the closing brace. The in-process door
+     * measures a result by this rather than building the frame.
+     */
+    private const FRAME_OVERHEAD_BYTES = 37;
+
     /** Appendix O §6.2: `limits.tickIntervalMs`. */
     public const TICK_INTERVAL_SECONDS = 15.0;
 
@@ -440,9 +447,9 @@ final class Dispatcher implements MessageHandler
      * answer as the wire carries it. The rate meters are not spent, because the caller is
      * the host itself.
      *
-     * The answer is encoded and decoded again by {@see wireAnswer()}: invalid UTF-8 is
-     * substituted and a result past {@see MAX_SERVER_FRAME_BYTES} is refused `too_large`,
-     * so a caller holds the values a wire client decodes. No request envelope is built.
+     * The answer's value is encoded and decoded again by {@see wireAnswer()}: invalid UTF-8
+     * is substituted and a result past {@see MAX_SERVER_FRAME_BYTES} is refused `too_large`,
+     * so a caller holds the values a wire client decodes. No JSON-RPC frame is built.
      *
      * A refusal throws the RpcError the wire would answer with, carrying the same code,
      * kind and data. Any other failure is logged the way the wire logs it and surfaces as
@@ -604,21 +611,21 @@ final class Dispatcher implements MessageHandler
     }
 
     /**
-     * A result the wire would send, as the in-process door hands it on: encoded the way
-     * {@see answer()} encodes it (so invalid UTF-8 is substituted, as JsonRpc::encode does),
-     * refused `too_large` past the frame ceiling, then decoded back so a caller holds the
-     * values a wire client decodes.
+     * A result as the in-process door hands it on: its value encoded under the wire's
+     * flags (so invalid UTF-8 is substituted, as JsonRpc::encode does), refused `too_large`
+     * when the frame the wire would send for it would pass the ceiling, then decoded back so
+     * a caller holds the values a wire client decodes. Nothing is framed here.
      *
      * @throws RpcError
      */
     private static function wireAnswer(mixed $result): mixed
     {
-        $text = JsonRpc::result(null, $result);
-        if (\strlen($text) > self::MAX_SERVER_FRAME_BYTES) {
+        $text = JsonRpc::encodeValue($result, JsonRpc::MAX_DEPTH_VALUE);
+        if (\strlen($text) + self::FRAME_OVERHEAD_BYTES > self::MAX_SERVER_FRAME_BYTES) {
             throw self::tooLarge();
         }
 
-        return \json_decode($text, true, 512, \JSON_THROW_ON_ERROR)['result'];
+        return \json_decode($text, true, JsonRpc::MAX_DEPTH_VALUE, \JSON_THROW_ON_ERROR);
     }
 
     /** The refusal an answer past the frame ceiling gets, on the wire and in-process alike. */

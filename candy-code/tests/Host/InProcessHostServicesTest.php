@@ -14,6 +14,7 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
+use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Message;
@@ -168,6 +169,28 @@ final class InProcessHostServicesTest extends TestCase
         $this->assertSameRefusal($inProcess, $wireResponse);
         self::assertSame(ErrorCode::Internal, $inProcess->errorCode);
         self::assertSame('too_large', $inProcess->kind);
+    }
+
+    /**
+     * The door measures a result as the frame the wire would send with a null id, without
+     * building that frame: a result whose frame is exactly the ceiling is answered, and one
+     * byte more is the wire's `too_large` refusal. Pins the envelope overhead the measure adds.
+     */
+    public function testTheFrameCeilingIsMeasuredWithoutBuildingAFrame(): void
+    {
+        $fits = Dispatcher::MAX_SERVER_FRAME_BYTES - \strlen(JsonRpc::result(null, ['blob' => '']));
+        $size = $fits;
+        $dispatcher = $this->probeDispatcher(static function () use (&$size): array {
+            return ['blob' => \str_repeat('x', $size)];
+        });
+
+        $answer = $this->probeInProcess($dispatcher);
+        self::assertSame(Dispatcher::MAX_SERVER_FRAME_BYTES, \strlen(JsonRpc::result(null, $answer)), 'the answer sits exactly at the ceiling');
+
+        $size = $fits + 1;
+        $refusal = $this->refusalOf(fn () => $this->probeInProcess($dispatcher));
+        self::assertSame(ErrorCode::Internal, $refusal->errorCode);
+        self::assertSame('too_large', $refusal->kind);
     }
 
     public function testCreateAndSubscribeAnswerTheWireShape(): void
