@@ -115,6 +115,18 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests, Wri
     /** Shutdown window for in-flight Teams posts (dispose law). */
     private const DRAIN_SECONDS = 5.0;
 
+    /**
+     * The boot hello's retry ladder. The pre-5d ServeBridge kept it (0.25 s doubling, 30 s cap,
+     * 60 attempts); a hello refused at boot must not leave the channel dead until a serve restart.
+     */
+    private const DIAL_BACKOFF_BASE_SECONDS = 0.25;
+    private const DIAL_BACKOFF_MAX_SECONDS = 30.0;
+    private const DIAL_MAX_ATTEMPTS = 60;
+
+    private int $dialAttempts = 0;
+
+    private ?TimerInterface $dialTimer = null;
+
     public function __construct()
     {
         $this->webhookLimit = new RateLimiter(30.0, 0.5);
@@ -322,18 +334,47 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests, Wri
         }
 
         // The host is in process, so connecting is the hello and nothing more. A refused hello
-        // leaves the faces up with no serve, and the router answers what it cannot route.
-        $this->host->connect()->then(function () use ($router): void {
-            $router->adoptBindings();
-            $this->log?->info('channels.msteams.serve_connected');
-        }, function (\Throwable $e): void {
-            $this->log?->warn('channels.msteams.serve_dial_failed', ['error' => $e->getMessage()]);
-        });
+        // leaves the faces up with no serve, and the router answers what it cannot route, until
+        // the retry ladder gets a hello through.
+        $this->dialServe();
 
         // The dedupe ledger stays bounded without a platform-side sweep
         // (docs/SPEC.md §9.5); 6 h is amply frequent for a 7-day keep.
         $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
             $this->pruneSeenGuarded();
+        });
+    }
+
+    /**
+     * One boot hello, and on refusal the next one after the ladder's delay, up to DIAL_MAX_ATTEMPTS.
+     * The router adopts its bindings on the first hello that lands.
+     */
+    private function dialServe(): void
+    {
+        if ($this->disposed || $this->host === null) {
+            return;
+        }
+        $this->dialAttempts++;
+        $this->host->connect()->then(function (): void {
+            $this->dialTimer = null;
+            $this->router?->adoptBindings();
+            $this->log?->info('channels.msteams.serve_connected');
+        }, function (\Throwable $e): void {
+            $this->dialTimer = null;
+            $this->log?->warn('channels.msteams.serve_dial_failed', ['error' => $e->getMessage(), 'attempt' => $this->dialAttempts]);
+            if ($this->disposed) {
+                return;
+            }
+            if ($this->dialAttempts >= self::DIAL_MAX_ATTEMPTS) {
+                $this->log?->warn('channels.msteams.serve_giveup', ['attempts' => $this->dialAttempts]);
+
+                return;
+            }
+            $delay = \min(
+                self::DIAL_BACKOFF_MAX_SECONDS,
+                self::DIAL_BACKOFF_BASE_SECONDS * (2 ** \min(8, $this->dialAttempts - 1)),
+            );
+            $this->dialTimer = $this->loop?->addTimer($delay, fn () => $this->dialServe());
         });
     }
 
@@ -450,12 +491,13 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests, Wri
         }
         $this->disposed = true;
 
-        foreach ([$this->pruneTimer] as $timer) {
+        foreach ([$this->pruneTimer, $this->dialTimer] as $timer) {
             if ($timer !== null && $this->loop !== null) {
                 $this->loop->cancelTimer($timer);
             }
         }
         $this->pruneTimer = null;
+        $this->dialTimer = null;
 
         // Drain before the router and serve go: a reply already on the wire
         // should land, and anything still open after the window is cancelled.

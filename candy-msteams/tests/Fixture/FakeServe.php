@@ -45,6 +45,9 @@ final class FakeServe implements HostServices
 
     public bool $createRefuses = false;
 
+    /** Refuse the hello, so connect() rejects. */
+    public bool $refuseHello = false;
+
     /** Answer session.create without an id (the core's "returned no id" arm). */
     public bool $createWithoutId = false;
 
@@ -133,6 +136,9 @@ final class FakeServe implements HostServices
     public function hello(): PromiseInterface
     {
         $this->helloSeen++;
+        if ($this->refuseHello) {
+            return reject(new FakeRefusal('fixture_refused', 'fixture refuses hello'));
+        }
         $this->connected = true;
 
         return resolve([

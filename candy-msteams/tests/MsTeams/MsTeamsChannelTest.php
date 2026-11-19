@@ -456,6 +456,47 @@ final class MsTeamsChannelTest extends TestCase
         }
     }
 
+    /**
+     * A hello refused at boot is dialled again on the retry ladder, so the channel is not dead
+     * until a serve restart (the pre-5d ServeBridge kept that ladder). The refusal lifts after the
+     * first attempt; the second hello, 0.25 s later, lands and the channel says so.
+     */
+    public function testARefusedBootHelloIsRetriedUntilTheServeAnswers(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-retry', 'appPassword' => 'retry-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $host = new FakeServe($this->loop);
+        $host->refuseHello = true;
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }, $host));
+
+        try {
+            $this->loop->addTimer(0.1, static function () use ($host): void {
+                $host->refuseHello = false;
+            });
+            $this->pump(1500);
+
+            self::assertGreaterThanOrEqual(2, $host->helloSeen, 'the refused hello is dialled again');
+            $connected = false;
+            $host->isConnected()->then(static function (bool $answer) use (&$connected): void {
+                $connected = $answer;
+            });
+            self::assertTrue($connected, 'the retried hello lands');
+            $log = implode("\n", $lines);
+            self::assertStringContainsString('channels.msteams.serve_dial_failed', $log);
+            self::assertStringContainsString('channels.msteams.serve_connected', $log);
+            self::assertStringNotContainsString('channels.msteams.serve_giveup', $log);
+        } finally {
+            $channel->dispose();
+        }
+    }
+
     /** PL-5d: a channel started with no host starts nothing and says so. */
     public function testWithoutAHostTheChannelStartsNothing(): void
     {

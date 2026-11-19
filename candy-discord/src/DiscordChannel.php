@@ -75,6 +75,18 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
 
     private ?TimerInterface $pruneTimer = null;
 
+    /**
+     * The boot hello's retry ladder. The pre-5d ServeBridge kept it (0.25 s doubling, 30 s cap,
+     * 60 attempts); a hello refused at boot must not leave the channel dead until a serve restart.
+     */
+    private const DIAL_BACKOFF_BASE_SECONDS = 0.25;
+    private const DIAL_BACKOFF_MAX_SECONDS = 30.0;
+    private const DIAL_MAX_ATTEMPTS = 60;
+
+    private int $dialAttempts = 0;
+
+    private ?TimerInterface $dialTimer = null;
+
     private ?SessionMap $map = null;
 
     private ?TextSafety $safety = null;
@@ -251,13 +263,9 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
         }
 
         // The host is in process, so connecting is the hello and nothing more. A refused
-        // hello leaves the faces up with no serve: the router answers nothing it cannot route.
-        $this->host->connect()->then(function (): void {
-            $this->router?->adoptBindings();
-            $this->log?->info('channels.discord.serve_connected');
-        }, function (\Throwable $e): void {
-            $this->log?->warn('channels.discord.serve_dial_failed', ['error' => $e->getMessage()]);
-        });
+        // hello leaves the faces up with no serve: the router answers nothing it cannot route,
+        // until the retry ladder gets a hello through.
+        $this->dialServe();
 
         $threads = (array) ($cfg['threads'] ?? []);
         if (($threads['enabled'] ?? false) === true) {
@@ -279,6 +287,39 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
         });
     }
 
+    /**
+     * One boot hello, and on refusal the next one after the ladder's delay, up to DIAL_MAX_ATTEMPTS.
+     * The router adopts its bindings on the first hello that lands.
+     */
+    private function dialServe(): void
+    {
+        if ($this->disposed || $this->host === null) {
+            return;
+        }
+        $this->dialAttempts++;
+        $this->host->connect()->then(function (): void {
+            $this->dialTimer = null;
+            $this->router?->adoptBindings();
+            $this->log?->info('channels.discord.serve_connected');
+        }, function (\Throwable $e): void {
+            $this->dialTimer = null;
+            $this->log?->warn('channels.discord.serve_dial_failed', ['error' => $e->getMessage(), 'attempt' => $this->dialAttempts]);
+            if ($this->disposed) {
+                return;
+            }
+            if ($this->dialAttempts >= self::DIAL_MAX_ATTEMPTS) {
+                $this->log?->warn('channels.discord.serve_giveup', ['attempts' => $this->dialAttempts]);
+
+                return;
+            }
+            $delay = \min(
+                self::DIAL_BACKOFF_MAX_SECONDS,
+                self::DIAL_BACKOFF_BASE_SECONDS * (2 ** \min(8, $this->dialAttempts - 1)),
+            );
+            $this->dialTimer = $this->loop?->addTimer($delay, fn () => $this->dialServe());
+        });
+    }
+
     public function dispose(): void
     {
         if ($this->disposed) {
@@ -286,13 +327,14 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
         }
         $this->disposed = true;
 
-        foreach ([$this->sweepTimer, $this->pruneTimer] as $timer) {
+        foreach ([$this->sweepTimer, $this->pruneTimer, $this->dialTimer] as $timer) {
             if ($timer !== null && $this->loop !== null) {
                 $this->loop->cancelTimer($timer);
             }
         }
         $this->sweepTimer = null;
         $this->pruneTimer = null;
+        $this->dialTimer = null;
 
         $this->queueGate?->cancelAll();
         foreach ($this->faces as $face) {
