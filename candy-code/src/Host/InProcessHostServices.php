@@ -140,12 +140,19 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Mirrors session.subscribe (row 2). $cursor is accepted for the interface and
-     * never called: the host keeps each subscriber's own sequence, so the resume
-     * point is the $afterSeq the caller holds.
+     * Mirrors session.subscribe (row 2). A $cursor is read on every call and its value
+     * is the resume point, as the wire's reconnect re-follow reads it (ServeBridge::follow):
+     * a re-follow after a `server.overflow` notice resumes from the seq the bundle has
+     * applied, not from the $afterSeq it first followed with. $afterSeq is the resume
+     * point only when no cursor is given. A cursor of null or 0 opens from a snapshot.
      */
     public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): array
     {
+        if ($cursor !== null) {
+            $resume = $cursor();
+            $afterSeq = $resume === null || $resume === 0 ? null : $resume;
+        }
+
         $params = ['sessionId' => $sessionId];
         if ($afterSeq !== null) {
             $params['afterSeq'] = $afterSeq;

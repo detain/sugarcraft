@@ -458,6 +458,35 @@ final class InProcessHostServicesTest extends TestCase
         self::assertSame(ErrorCode::InvalidParams, $inRefusal->errorCode);
     }
 
+    /**
+     * A re-follow after an overflow notice passes the afterSeq the bundle first followed with (null)
+     * and a cursor that reads the seq it has applied. The cursor is the resume point: the wire
+     * replays from it, so the in-process door must replay too, not answer a snapshot reset.
+     */
+    public function testSubscribeSessionResumesFromTheCursorOnARefollow(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+
+        $this->wire->call('session.send', ['sessionId' => $wireId, 'text' => 'tidy up', 'delivery' => 'queue', 'idempotencyKey' => 'k1']);
+        $this->fixture->run(0.08);
+        $this->fixture->backend->settle(Message::assistant('done'));
+        $this->fixture->run(0.08);
+        $this->host->sendTurn($inId, 'tidy up', 'queue', 'k2', [], []);
+        $this->fixture->run(0.08);
+        $this->fixture->backend->settle(Message::assistant('done'));
+        $this->fixture->run(0.08);
+
+        $wireResume = $this->wire->call('session.subscribe', ['sessionId' => $wireId, 'afterSeq' => 1]);
+        $inResume = $this->host->subscribeSession($inId, null, static fn (): int => 1);
+
+        self::assertArrayHasKey('fromSeq', $wireResume, 'the wire replays from the cursor');
+        self::assertArrayNotHasKey('reset', $inResume, 'the cursor resumes the replay instead of a snapshot reset');
+        self::assertSame(self::shape($wireResume), self::shape($inResume));
+        self::assertSame($wireResume['fromSeq'], $inResume['fromSeq']);
+    }
+
     /** The reserved `agent:` prefix and an unknown permission mode are refused by name, so both must reach the host. */
     public function testCreateSessionForwardsNameAndPermissionMode(): void
     {
