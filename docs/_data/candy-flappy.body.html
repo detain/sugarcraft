@@ -57,8 +57,8 @@ $pinned = Game::start(rand: static fn (int $max): int => intdiv($max, 2));</code
 
     <h3 style="margin-top: 24px;">Read and merge the leaderboard</h3>
     <pre class="code"><code class="language-php">$game = Game::start();
-$game->highScores();              // the kept top-ten list, best first
-$game->highScore();               // the current best, 0 when the board is empty
+$game->highScores();              // the kept top-ten list, lowest first (ascending)
+$game->highScore();               // the best score, 0 when the board is empty; read this, not highScores()[0]
 $merged = $game->withHighScore(42);   // a new Game with 42 merged in; nothing is written to disk</code></pre>
     <p><code>withHighScore()</code> only changes the in-memory board. The write happens through the <code>Cmd</code> the game returns on a finish, so a test or a script can check a score without touching the score file.</p>
 
@@ -77,7 +77,7 @@ FORCE_COLOR=1 php examples/play.php   # draws into a pipe on purpose; use a real
     <tr><th>Class</th><th>Method</th><th>Description</th></tr>
     <tr><td>Game</td><td><code>start(?Closure $rand = null, ?string $configDir = null)</code></td><td>Build the ready board, world frozen until the first flap. Loads the leaderboard from the config directory.</td></tr>
     <tr><td>Game</td><td><code>init()</code>, <code>update(Msg)</code>, <code>view()</code></td><td>The TEA contract. <code>update()</code> returns <code>[Game, ?Cmd]</code>; <code>view()</code> delegates to <code>Renderer::render()</code>.</td></tr>
-    <tr><td>Game</td><td><code>subscriptions()</code></td><td>The single source of the game cadence: a stable 30 Hz tick subscription. Returns <code>null</code> when crashed, when the viewport is too small, or when the terminal cannot play.</td></tr>
+    <tr><td>Game</td><td><code>subscriptions()</code></td><td>The single source of the game cadence: a stable 30 Hz tick subscription. Returns <code>null</code> when crashed, before the first flap (the ready card), while blurred, when the viewport is too small, or when the terminal cannot play.</td></tr>
     <tr><td>Game</td><td><code>tickN(int $n)</code></td><td>Apply <code>$n</code> ticks in sequence. The deterministic test helper.</td></tr>
     <tr><td>Game</td><td><code>highScore()</code>, <code>highScores()</code>, <code>withHighScore(int $score)</code></td><td>The best score, the kept top-ten list, and an in-memory merge that returns a new <code>Game</code>.</td></tr>
     <tr><td>Game</td><td><code>tooSmall()</code>, <code>rand()</code></td><td>Whether the live viewport is under 62 by 21, and the PRNG closure in use.</td></tr>
@@ -172,7 +172,7 @@ php examples/play.php --help    # usage, exit 0</code></pre>
     <h2 style="margin-top: 40px;">Architecture</h2>
 
     <h3 style="margin-top: 24px;">Pure state, one frame per update</h3>
-    <p><code>Game</code> never mutates. Every transition builds a new instance through <code>mutate()</code>, so the field list lives in one place and a restart cannot drop the live viewport. <code>view()</code> is a pure function of the state, so a test can compare two frames without a terminal.</p>
+    <p><code>Game</code> never mutates. Carry-through transitions (flaps, ticks, resizes, blur, settling) build a new instance through <code>mutate()</code>, so their field list lives in one place. <code>start()</code> and the two restart arms reset the board and call the constructor directly, so a new field must also be listed in those constructor calls; the restart arms pass the live viewport explicitly, so a restart cannot drop it. <code>view()</code> is a pure function of the state, so a test can compare two frames without a terminal.</p>
 
     <h3 style="margin-top: 24px;">Subscriptions drive the clock</h3>
     <p>The tick cadence is a subscription with a stable id, not a loop inside the Model. Program reconciles the subscription each cycle, which keeps exactly one tick chain alive across restarts and cancels it when the game stands down, so a dead bird or a frozen ready card burns no timer.</p>
