@@ -52,7 +52,7 @@ final class Counter implements Model
 
     <h3 style="margin-top: 24px;">Terminal ownership and signals</h3>
     <p><code>Program::run()</code> switches the terminal to raw mode and restores it in a <code>finally</code> block. A <code>die()</code> or <code>exit()</code> that skips those blocks is caught by a shutdown backstop armed in <code>setupTerminal()</code>. Pass <code>catchPanics: false</code> only when your own code restores the terminal on bailout paths. While raw mode is active, Ctrl+C is an ordinary key, so <code>update()</code> decides what it means.</p>
-    <p>SIGWINCH, SIGTSTP and SIGCONT arrive as <code>Msg\WindowSizeMsg</code>, <code>Msg\SuspendMsg</code> and <code>Msg\ResumeMsg</code>. SIGINT, SIGTERM and SIGHUP unwind the loop cleanly and record the 128+N exit code for the entry point to propagate.</p>
+    <p>SIGWINCH, SIGTSTP and SIGCONT arrive as <code>Msg\WindowSizeMsg</code>, <code>Msg\SuspendMsg</code> and <code>Msg\ResumeMsg</code>. SIGINT, SIGTERM and SIGHUP unwind the loop cleanly and record the signal number N, which <code>Program::stopSignal()</code> returns. The entry point maps it to the shell's 128+N exit code, so SIGINT exits 130.</p>
 
     <h3 style="margin-top: 24px;">Untrusted input</h3>
     <p>Bracketed paste is sanitized by default. Escape sequences, C1 controls and the two zone sentinels (U+E000 and U+E001) are stripped before the payload reaches <code>update()</code> as a <code>Msg\PasteMsg</code>, so paste is not guaranteed to be byte-identical to what was copied. Set <code>sanitizePaste: false</code> only when your app contains the payload itself. Processes launched from user data use the argv form of <code>proc_open()</code>, never a shell string.</p>
@@ -221,7 +221,7 @@ echo '[' . $row . "] cells=", Width::string($row), "\n";
 
 $accent = Color::hex('#ff6b6b');
 echo $accent-&gt;toHex(), ' ', var_export($accent-&gt;isDark(), true), "\n";
-echo ColorProfile::detect()-&gt;name, "\n";</code></pre>
+echo ColorProfile::detect(null, STDOUT)-&gt;name, "\n";</code></pre>
 
     <h3 style="margin-top: 24px;">Test a model without a terminal</h3>
     <p>Drive <code>update()</code> directly with scripted messages and assert on the returned Model and Cmd. The runtime is not involved, so state-machine tests stay fast and deterministic. The end of the key-binding example above shows the pattern.</p>
@@ -382,10 +382,10 @@ echo ColorProfile::detect()-&gt;name, "\n";</code></pre>
     </table>
 
     <h3 style="margin-top: 24px;">How color is detected</h3>
-    <p><code>Util\ColorProfile::detect()</code> reads the process environment and the stdout stream. A non-terminal stdout answers <code>NoTty</code>, which emits no escape bytes at all, unless a force variable is set. A terminal is then classified by sugar-colorprofile's <code>DetectionChain</code> when that package is installed, and answers <code>Ascii</code> (color off, decoration kept) when it is not. The <code>colorProfile</code> option and the <code>override</code> argument of <code>fromEnvironment()</code> outrank the environment. <code>detectTerminal()</code> additionally maps an unforced <code>TERM=dumb</code> terminal to <code>NoTty</code>, so full-screen features stay off on terminals that cannot address the cursor.</p>
+    <p><code>Util\ColorProfile::detect()</code> reads the process environment and the stream it is given. A non-terminal stream answers <code>NoTty</code>, which emits no escape bytes at all, unless a force variable is set. With no stream argument, <code>detect()</code> assumes a terminal, so a program whose output may be piped passes the stream: <code>detect(null, STDOUT)</code>. A terminal is then classified by sugar-colorprofile's <code>DetectionChain</code> when that package is installed, and answers <code>Ascii</code> (color off, decoration kept) when it is not. The <code>colorProfile</code> option and the <code>override</code> argument of <code>fromEnvironment()</code> outrank the environment. <code>detectTerminal()</code> additionally maps an unforced <code>TERM=dumb</code> terminal to <code>NoTty</code>, so full-screen features stay off on terminals that cannot address the cursor.</p>
 
     <h2 style="margin-top: 40px;">Keys and input</h2>
-    <p>Keystrokes reach <code>update()</code> as <code>Msg\KeyMsg</code>, or a subclass such as <code>KeyPressMsg</code>, each with a <code>KeyType</code>, a <code>rune</code> for printable keys, and the <code>alt</code>, <code>ctrl</code> and <code>shift</code> flags. Mouse events arrive as <code>Msg\MouseMsg</code> subclasses when <code>mouseMode</code> is set. Bracketed paste arrives as <code>Msg\PasteMsg</code>.</p>
+    <p>Keystrokes reach <code>update()</code> as <code>Msg\KeyMsg</code>, each with a <code>KeyType</code>, a <code>rune</code> for printable keys, and the <code>alt</code>, <code>ctrl</code> and <code>shift</code> flags. Mouse events arrive as <code>Msg\MouseMsg</code> subclasses when <code>mouseMode</code> is set. Bracketed paste arrives as <code>Msg\PasteMsg</code>. Under the Kitty keyboard protocol, keys arrive as the <code>KeyMsg</code> subclasses <code>KeyPressMsg</code>, <code>KeyRepeatMsg</code> and <code>KeyReleaseMsg</code>, which carry the event kind. Legacy keys arrive as plain <code>KeyMsg</code>, so match on <code>KeyMsg</code> and check the subclass only when you need the event kind.</p>
     <p>A lone ESC byte is held for <code>escapeDelay</code> seconds, in case it starts a longer sequence. Raise the value for slow SSH or multiplexer links that split escape sequences, and lower it for a snappier Escape key. A negative or non-finite value is refused with <code>\InvalidArgumentException</code>.</p>
     <p>Paste is bounded. A payload over <code>InputReader::MAX_PASTE_BYTES</code> (1 MiB) is delivered in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1.0 seconds) of silence, so the keyboard comes back.</p>
 
