@@ -135,9 +135,9 @@ final class ReadPathCensusTest extends TestCase
      * @var array<string, string>
      */
     private const EXTERNAL_CONTAINMENT_CALLS = [
-        'sugar-plugins/src/Discovery/PluginDiscovery.php' => 'PathJail::below(',
-        'sugar-plugins/src/Loader/PluginLoader.php' => 'PathJail::below(',
-        'sugar-plugins/src/Provenance/SourceRecord.php' => 'PathJail::below(',
+        'sugar-plugins/src/Discovery/PluginDiscovery.php' => 'SugarCraft\\Core\\Util\\PathJail::below(',
+        'sugar-plugins/src/Loader/PluginLoader.php' => 'SugarCraft\\Core\\Util\\PathJail::below(',
+        'sugar-plugins/src/Provenance/SourceRecord.php' => 'SugarCraft\\Core\\Util\\PathJail::below(',
     ];
 
     /**
@@ -323,14 +323,15 @@ final class ReadPathCensusTest extends TestCase
                 . 'the memo keys on the resolved root, so caching never widens containment',
         ],
         'Bundles/Bundle.php|file_get_contents' => [
-            // PL-3a moved the container scan and its guard() out of BundleDiscovery.php into
-            // sugar-plugins, so the gate is the sugar-plugins file that now holds the PathJail call.
-            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — a bundle\'s manifest.json, read by '
-                . 'fromDir() and readManifest() only at paths that ride the directory discovery '
-                . 'accepted through guard()\'s containment (PathJail::below() in PluginDiscovery)',
-            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — the second of the two manifest '
-                . 'reads above; a bundle dir is never user-supplied content, only a name under '
-                . 'a container the tier\'s boundary admitted (PathJail::below() in PluginDiscovery)',
+            // NOT CONTAINED_EXTERNAL: PluginDiscovery::guard() bounds the bundle DIRECTORY, but
+            // Bundle::manifestPath() takes manifest.json with is_file() and no realpath compare
+            // of the file itself, so a symlinked manifest.json is read. Same gap as the
+            // sugar-plugins PluginManifest.php rows; the census records it rather than certifying it.
+            'CALLER_SUPPLIED — fromDir() reads the manifest of a bundle directory discovery chose; discovery admits '
+                . 'that directory through guard() in sugar-plugins, but the manifest file itself is taken with '
+                . 'is_file() and no realpath compare of its own, so a symlinked manifest.json is read here',
+            'CALLER_SUPPLIED — readManifest() reads the same manifest for the same caller-chosen directory, with '
+                . 'the same missing compare on the file',
         ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
@@ -1836,8 +1837,11 @@ final class ReadPathCensusTest extends TestCase
      */
     public function testEveryVerdictIsFromTheVocabularyAndEveryWordIsUsed(): void
     {
+        // The vocabulary is shared by both ledgers, so a word is "used" if either one holds a
+        // row for it: CONTAINED_EXTERNAL lives only in the sibling ledger since the Bundle rows
+        // stopped claiming it.
         $used = [];
-        foreach (self::READ_PATHS as $key => $verdicts) {
+        foreach ([...self::READ_PATHS, ...self::SIBLING_READ_PATHS] as $key => $verdicts) {
             foreach ($verdicts as $entry) {
                 [$word] = $this->parse($entry);
                 $this->assertArrayHasKey($word, self::VERDICTS, "unknown verdict on {$key}: {$word}");
@@ -1948,21 +1952,30 @@ final class ReadPathCensusTest extends TestCase
     public static function externalCallShapes(): array
     {
         return [
-            'a real static call' => ['<?php PathJail::below($real, $boundary);', true],
+            'a real static call through a use import' => ['<?php use SugarCraft\\Core\\Util\\PathJail; PathJail::below($real, $boundary);', true],
             'a fully-qualified static call' => ['<?php \\SugarCraft\\Core\\Util\\PathJail::below($a, $b);', true],
+            'a call through an aliased use import' => ['<?php use SugarCraft\\Core\\Util\\PathJail as Jail; Jail::below($a, $b);', true],
+            'a bare call inside the sugar-core namespace' => ['<?php namespace SugarCraft\\Core\\Util; PathJail::below($a, $b);', true],
+            'a bare call with no import resolves to the global class' => ['<?php PathJail::below($real, $boundary);', false],
+            'a bare call in another namespace' => ['<?php namespace Acme\\Tools; PathJail::below($a, $b);', false],
+            'a fully-qualified call into another namespace' => ['<?php \\Some\\Stub\\PathJail::below($a, $b);', false],
+            'a use import of a same-named class from another namespace' => ['<?php use Some\\Stub\\PathJail; PathJail::below($a, $b);', false],
             'the call in a docblock only' => ["<?php /** guarded by PathJail::below( here */\n\$x = 1;", false],
             'the call in a line comment only' => ["<?php // PathJail::below(\$a, \$b);\n\$x = 1;", false],
             'the call in a block comment only' => ['<?php /* PathJail::below($a, $b); */ $x = 1;', false],
             'the call inside a string literal' => ['<?php $s = \'PathJail::below(\';', false],
-            'a different method on the same class' => ['<?php PathJail::within($a, $b);', false],
-            'a method of another class sharing the method name' => ['<?php Other::below($a, $b);', false],
+            'a different method on the same class' => ['<?php use SugarCraft\\Core\\Util\\PathJail; PathJail::within($a, $b);', false],
+            'a method of another class sharing the method name' => ['<?php use SugarCraft\\Core\\Util\\PathJail; Other::below($a, $b);', false],
         ];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('externalCallShapes')]
     public function testAContainedExternalCallIsMatchedAsCodeNotAsText(string $source, bool $holds): void
     {
-        $this->assertSame($holds, $this->containsCodeCall($source, 'PathJail::below('));
+        $this->assertSame(
+            $holds,
+            $this->containsCodeCall($source, 'SugarCraft\\Core\\Util\\PathJail::below('),
+        );
     }
 
     /**
@@ -2261,13 +2274,17 @@ final class ReadPathCensusTest extends TestCase
     }
 
     /**
-     * Whether $source holds $call (`Class::method(`) as executable code. Comments and
-     * string literals are dropped before the match, so a docblock that names a deleted
-     * compare cannot keep a MEASURED containment claim green.
+     * Whether $source holds $call (`Fully\Qualified\Class::method(`) as executable code,
+     * where the class name must RESOLVE to that FQN the way PHP resolves it: a
+     * fully-qualified name as written, a qualified or bare name through the file's `use`
+     * imports, and an unimported bare name in the file's namespace. Comments and string
+     * literals are dropped before the match, so a docblock that names a deleted compare
+     * cannot keep a MEASURED containment claim green, and a same-named class from another
+     * namespace cannot stand in for the sugar-core one.
      */
     private function containsCodeCall(string $source, string $call): bool
     {
-        [$class, $method] = explode('::', rtrim($call, '('), 2);
+        [$fqClass, $method] = explode('::', rtrim($call, '('), 2);
 
         $significant = [];
         foreach (token_get_all($source) as $token) {
@@ -2284,24 +2301,72 @@ final class ReadPathCensusTest extends TestCase
             $significant[] = [null, $token];
         }
 
+        $namespace = '';
+        $aliases = [];
+        foreach ($significant as $i => [$id, $text]) {
+            $next = $significant[$i + 1] ?? [null, null];
+
+            if ($id === \T_NAMESPACE && \in_array($next[0], [\T_NAME_QUALIFIED, \T_STRING], true)) {
+                $namespace = $next[1];
+
+                continue;
+            }
+
+            // `use X\Y;` and `use X\Y as Z;` at file or trait scope. Closure `use (...)`
+            // and `use function` / `use const` do not start with a class name, so they fall through.
+            if ($id !== \T_USE || !\in_array($next[0], [\T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED, \T_STRING], true)) {
+                continue;
+            }
+
+            $target = ltrim($next[1], '\\');
+            $segments = explode('\\', $target);
+            $alias = end($segments);
+            if (($significant[$i + 2][0] ?? null) === \T_AS && ($significant[$i + 3][0] ?? null) === \T_STRING) {
+                $alias = $significant[$i + 3][1];
+            }
+
+            $aliases[$alias] = $target;
+        }
+
         foreach ($significant as $i => [$id, $text]) {
             if (!\in_array($id, [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED], true)) {
                 continue;
             }
 
-            $parts = explode('\\', $text);
-            if (end($parts) !== $class
-                || ($significant[$i + 1][1] ?? null) !== '::'
+            if (($significant[$i + 1][1] ?? null) !== '::'
                 || ($significant[$i + 2][1] ?? null) !== $method
                 || ($significant[$i + 3][1] ?? null) !== '('
             ) {
                 continue;
             }
 
-            return true;
+            if (self::resolveClassName($id, $text, $namespace, $aliases) === $fqClass) {
+                return true;
+            }
         }
 
         return false;
+    }
+
+    /**
+     * The class a name token refers to, under PHP's own rules: a leading `\` is absolute,
+     * the first segment of a qualified name is looked up in the `use` imports, and anything
+     * else is relative to the file's namespace.
+     *
+     * @param array<string, string> $aliases
+     */
+    private static function resolveClassName(int $id, string $text, string $namespace, array $aliases): string
+    {
+        if ($id === \T_NAME_FULLY_QUALIFIED) {
+            return ltrim($text, '\\');
+        }
+
+        $parts = explode('\\', $text, 2);
+        if (isset($aliases[$parts[0]])) {
+            return $aliases[$parts[0]] . (isset($parts[1]) ? '\\' . $parts[1] : '');
+        }
+
+        return $namespace === '' ? $text : $namespace . '\\' . $text;
     }
 
     /**
