@@ -128,14 +128,41 @@ final class PaletteSupersetDispatchTest extends TestCase
     }
 
     /**
+     * The export notice names its file with a second-resolution UTC stamp, so
+     * the typed leg and the palette leg differ by it whenever they straddle a
+     * second. The stamp is the only thing normalized; any other byte difference
+     * still fails the comparison.
+     *
      * @param  array<int, Message>  $rows
      * @return list<string>
      */
     private function rowShapes(array $rows): array
     {
         return array_map(
-            static fn(Message $m): string => $m->role->value . ':' . preg_replace('/\s+/u', ' ', $m->content),
+            static fn(Message $m): string => $m->role->value . ':'
+                . preg_replace('/\d{8}T\d{6}Z/', '<stamp>', preg_replace('/\s+/u', ' ', $m->content)),
             $rows,
+        );
+    }
+
+    /**
+     * REGRESSION: the stamp normalization must not hide a real divergence. Only
+     * the export timestamp may be rewritten; the role and the rest of the text
+     * still have to match byte for byte.
+     */
+    public function testTheRowShapeNormalizesOnlyTheExportStamp(): void
+    {
+        $at = static fn(string $text): Message => Message::assistant($text);
+
+        self::assertSame(
+            $this->rowShapes([$at('Exported to `transcript-s1-20261119T024202Z.txt`.')]),
+            $this->rowShapes([$at('Exported to `transcript-s1-20261119T024203Z.txt`.')]),
+            'two exports that differ only by the second must compare equal',
+        );
+        self::assertNotSame(
+            $this->rowShapes([$at('Exported to `transcript-s1-20261119T024202Z.txt`.')]),
+            $this->rowShapes([$at('Exported to `transcript-s2-20261119T024202Z.txt`.')]),
+            'a different session id in the export name must still diverge',
         );
     }
 
