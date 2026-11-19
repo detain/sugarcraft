@@ -156,6 +156,21 @@ final class ContainedPathInventoryTest extends TestCase
      */
     private const COMPARE_FUNCTIONS = ['str_starts_with', 'strncmp', 'strncasecmp', 'substr_compare'];
 
+    /** The class every routed call must resolve to, however it is spelled. */
+    private const SUGAR_CORE_PATH_JAIL = 'SugarCraft\Core\Util\PathJail';
+
+    /**
+     * The compare calls the sugar-core PathJail predicate holds, pinned by
+     * {@see testThePathJailPredicateHoldsItsCompareCount()}. Each is named so a
+     * failure says where the new compare landed:
+     *  - `candidate()`: the absolute-path test (`str_starts_with($path, '/')`),
+     *    which is not a containment compare at all;
+     *  - `insideBeneath()`: the containment compare `inside()` delegates to;
+     *  - `relation()`: the containment compare `compare()` delegates to, with
+     *    the boundary suffix taken from the separator it is handed.
+     */
+    private const PATH_JAIL_COMPARE_CALLS = 3;
+
     /**
      * Which `src/` files hold an ENFORCING containment call, and how many.
      *
@@ -681,7 +696,9 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string, 1: bool}>
+     * A null expectation means the shape must produce NO routed call at all.
+     *
+     * @return array<string, array{0: string, 1: ?bool}>
      */
     public static function routedShapes(): array
     {
@@ -755,16 +772,113 @@ final class ContainedPathInventoryTest extends TestCase
                 'if (\\SugarCraft\\Core\\Util\\PathJail /* c */ :: within($a, $b)) { }',
                 true,
             ],
+            // The bare spellings a file reaches the class by, which the FQN-only
+            // matcher counted as ZERO. A zero is never recorded in
+            // ROUTED_CALL_SITES, so a gate written this way passed unseen.
+            'a use-imported bare name, negated' => ['use SugarCraft\Core\Util\PathJail; if (!PathJail::below($a, $b)) { return null; }', true],
+            'a use-imported bare name, discarded' => ['use SugarCraft\Core\Util\PathJail; PathJail::within($a, $b);', false],
+            'an aliased import, returned' => ['use SugarCraft\Core\Util\PathJail as Jail; return Jail::within($a, $b);', true],
+            'an aliased import, discarded' => ['use SugarCraft\Core\Util\PathJail as Jail; Jail::within($a, $b);', false],
+            'a leading-backslash import' => ['use \SugarCraft\Core\Util\PathJail; return PathJail::below($a, $b);', true],
+            // A different class that shares the short name is not sugar-core's gate,
+            // and a method other than within()/below() is not a routed call at all.
+            'another PathJail, method not routed' => ['use SugarCraft\Code\Tools\PathJail; return PathJail::resolve($root, $path);', null],
         ];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('routedShapes')]
-    public function testTheInstrumentTellsAGateFromADiscardedCall(string $code, bool $used): void
+    public function testTheInstrumentTellsAGateFromADiscardedCall(string $code, ?bool $used): void
     {
         $calls = $this->routedCallsIn("<?php\n" . $code . "\n");
 
+        if ($used === null) {
+            $this->assertSame([], $calls);
+
+            return;
+        }
+
         $this->assertCount(1, $calls);
         $this->assertSame($used, $calls[0]['used']);
+    }
+
+    /**
+     * A spelling the instrument cannot resolve is REFUSED, not counted as zero.
+     * Each row names a PathJail-shaped call that does not resolve to sugar-core's
+     * class, so each must throw with the line named.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function unresolvedSpellings(): array
+    {
+        return [
+            'a namespace import reaching the class' => ['use SugarCraft\Core\Util; return Util\PathJail::within($a, $b);'],
+            'an alias of another class' => ['use SugarCraft\Code\Tools\PathJail as Jail; return Jail::within($a, $b);'],
+            'the fully qualified other class' => ['return \SugarCraft\Code\Tools\PathJail::below($a, $b);'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unresolvedSpellings')]
+    public function testAnUnresolvedSpellingIsRefusedLoudlyNotCountedAsZero(string $code): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('does not resolve to sugar-core');
+
+        $this->routedCallsIn("<?php\n" . $code . "\n");
+    }
+
+    /**
+     * THE PREDICATE'S OWN COMPARE COUNT. The deleted testTheClassItselfHoldsExactlyOneCompare
+     * pinned ContainedPath's single hand-spelled prefix compare. Its successor is the
+     * sugar-core PathJail predicate that replaced the class. A second boundary compare added
+     * there (in inside(), relation(), or anywhere else in the file) reaches no candy-code src
+     * file, so no other test here would see it.
+     *
+     * The count is EVERY call to COMPARE_FUNCTIONS in the file, not only the boundary-suffixed
+     * ones: sugar-core's separator is a variable ($separator), which handSpelledComparesIn()
+     * cannot see by design.
+     */
+    public function testThePathJailPredicateHoldsItsCompareCount(): void
+    {
+        $path = \dirname(__DIR__, 3) . '/sugar-core/src/Util/PathJail.php';
+        $this->assertFileExists($path);
+
+        $this->assertCount(
+            self::PATH_JAIL_COMPARE_CALLS,
+            $this->compareCallsIn((string) file_get_contents($path)),
+            'sugar-core PathJail holds a different number of prefix compares than its three named predicates '
+                . '(candidate, insideBeneath, relation). A new one is a second containment predicate; '
+                . 'route it through the existing compare or re-pin this count deliberately.',
+        );
+    }
+
+    /**
+     * The lines of every call to one of {@see COMPARE_FUNCTIONS} in $code, with the same
+     * method-and-declaration exclusions {@see handSpelledComparesIn()} applies.
+     *
+     * @return list<int>
+     */
+    private function compareCallsIn(string $code): array
+    {
+        $tokens = self::significantTokens($code);
+        $lines = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!$this->isToken($token, \T_STRING)
+                || !\in_array(strtolower((string) $token[1]), self::COMPARE_FUNCTIONS, true)
+            ) {
+                continue;
+            }
+
+            if ($this->isToken($tokens[$i - 1] ?? null, \T_OBJECT_OPERATOR, \T_DOUBLE_COLON, \T_FUNCTION)) {
+                continue;
+            }
+
+            if (($tokens[$i + 1] ?? null) === '(') {
+                $lines[] = (int) $token[2];
+            }
+        }
+
+        return $lines;
     }
 
     /**
@@ -913,6 +1027,15 @@ final class ContainedPathInventoryTest extends TestCase
      * function's identically-named variable vouch for this one, which is the
      * false-green direction.
      *
+     * WHICH SPELLINGS RESOLVE TO THE CLASS. The class name is resolved the way PHP binds it:
+     * the fully qualified name, or a `use` import of it under its alias or its short name
+     * ({@see useImportsIn()}). The earlier matcher took only the fully qualified token, so a
+     * `use`-imported gate counted as zero and was never recorded in ROUTED_CALL_SITES.
+     * Any other name whose short form is `PathJail`, or that is an import of some other
+     * class, throws rather than counting as zero. Nothing else is a routed call. The one
+     * unimported bare name that would resolve to sugar-core is `PathJail` inside namespace
+     * SugarCraft\Core\Util, and no candy-code file lives there, so it throws like any other.
+     *
      * A VARIABLE class expression counts, because `$c = \SugarCraft\Core\Util\PathJail::class;
      * $c::within(…)` is a real call this class's own inventory used to miss.
      * There is no other `::within(`/`::below(` in the package for it to
@@ -923,6 +1046,7 @@ final class ContainedPathInventoryTest extends TestCase
     private function routedCallsIn(string $code): array
     {
         $tokens = self::significantTokens($code);
+        $imports = $this->useImportsIn($tokens);
         $calls = [];
 
         foreach ($tokens as $i => $token) {
@@ -939,11 +1063,31 @@ final class ContainedPathInventoryTest extends TestCase
                 continue;
             }
 
-            $isPathJail = $this->isToken($subject, \T_NAME_FULLY_QUALIFIED)
-                && $subject[1] === '\\SugarCraft\\Core\\Util\\PathJail';
+            if (!$this->isToken($subject, \T_VARIABLE)) {
+                $name = $this->isToken($subject, \T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED)
+                    ? \ltrim((string) $subject[1], '\\')
+                    : null;
 
-            if (!$isPathJail && !$this->isToken($subject, \T_VARIABLE)) {
-                continue;
+                if ($name === null) {
+                    continue;
+                }
+
+                if (($imports[$name] ?? $name) !== self::SUGAR_CORE_PATH_JAIL) {
+                    // A name that LOOKS like PathJail but does not resolve to sugar-core's
+                    // is refused loudly. Skipping it would let a spelling the instrument
+                    // cannot read count as zero, which is the silent green this guards.
+                    if (\str_ends_with($name, 'PathJail') || \array_key_exists($name, $imports)) {
+                        throw new \LogicException(\sprintf(
+                            'line %d calls %s::%s(), which does not resolve to sugar-core\'s PathJail; '
+                            . 'write the fully qualified name or a use import of it',
+                            (int) $subject[2],
+                            $name,
+                            (string) $method[1],
+                        ));
+                    }
+
+                    continue;
+                }
             }
 
             $calls[] = [
@@ -953,6 +1097,44 @@ final class ContainedPathInventoryTest extends TestCase
         }
 
         return $calls;
+    }
+
+    /**
+     * The class imports of $tokens, as alias => fully qualified name with no
+     * leading backslash, the way PHP binds them: `use A\B;` binds `B`, and
+     * `use A\B as C;` binds `C`.
+     *
+     * Function and constant imports are not class imports and are skipped by
+     * their keyword. A closure's `use (...)` is followed by `(`, so it binds
+     * nothing either. A trait `use` in a class body is recorded too, which is
+     * harmless: it names a trait, never sugar-core's PathJail.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return array<string, string>
+     */
+    private function useImportsIn(array $tokens): array
+    {
+        $imports = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!$this->isToken($token, \T_USE)) {
+                continue;
+            }
+
+            $name = $tokens[$i + 1] ?? null;
+            if (!$this->isToken($name, \T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED)) {
+                continue;
+            }
+
+            $fqn = \ltrim((string) $name[1], '\\');
+            $aliased = $this->isToken($tokens[$i + 2] ?? null, \T_AS)
+                && $this->isToken($tokens[$i + 3] ?? null, \T_STRING);
+            $alias = $aliased ? (string) $tokens[$i + 3][1] : \substr((string) \strrchr('\\' . $fqn, '\\'), 1);
+
+            $imports[$alias] = $fqn;
+        }
+
+        return $imports;
     }
 
     /**
