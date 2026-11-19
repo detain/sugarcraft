@@ -47,7 +47,7 @@ autocmd BufWritePost * silent! !sh /path/to/examples/plugin-heartbeat.example.sh
 
 # or feed a batch of JSON lines through the stdin door, which applies ignore rules, clamps and the lock
 printf '%s\n' '{"time": 1795100000, "project": "myproj", "language": "php", "file": "src/Main.php", "duration": 300, "tags": []}' | candy-codetime push --</code></pre>
-    <p>The script prefers <code>push --</code>, so the ignore door, the duration clamps and the advisory lock all apply. It falls back to a raw append under <code>flock</code> only when no binary is on <code>PATH</code>. Set <code>CODETIME_HOOK_DURATION</code> to change the seconds credited per save, which defaults to 60.</p>
+    <p>The script prefers <code>push --</code>, so the ignore door, the duration clamps and the advisory lock all apply. It falls back to a raw append under <code>flock</code> whenever <code>push --</code> exits nonzero, which includes a binary missing from <code>PATH</code> and a refusal such as an oversized ignore file. The raw append skips the ignore door, the duration clamps and the lock, so a file the ignore rules would skip is recorded by the fallback. Set <code>CODETIME_HOOK_DURATION</code> to change the seconds credited per save, which defaults to 60.</p>
 
     <h3 style="margin-top: 24px;">Backfill a past beat</h3>
     <pre class="code"><code class="language-shell">candy-codetime push --time=1795000000 myproj php src/Main.php 900   # one beat at a past instant
