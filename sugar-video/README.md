@@ -121,7 +121,7 @@ Reel::ambient('art.mp4')->play();                 // silent open-time loop, auto
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
 | `quarterblock` | 24-bit quarter-block characters, 2×2 sub-cell resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
-| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognized via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
+| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — `TERM=xterm-kitty` is only a hypothesis; the terminal must answer the APC `a=q` query on a tty (P1-13b), otherwise `kitty` is refused or skipped by `auto` |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognized as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
 | `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
 
@@ -137,7 +137,8 @@ so a host that persisted the lower-cased enum name re-imports verbatim with
 eight case tokens — is the single source the CLI validates against; there
 are no further aliases.
 
-Auto mode does not negotiate with the terminal. `Mosaic::diagnose()` (for
+Auto mode negotiates with the terminal only to confirm a Kitty claim (below).
+`Mosaic::diagnose()` (for
 sixel/kitty/iTerm2) delegates to sugar-colorprofile's `TerminalProbe`: a
 lookup table over `TERM_PROGRAM`/`TERM` and friends that, despite the
 historical name, issues no raw OSC query round-trips; the ANSI fallback
@@ -148,13 +149,14 @@ xterm, contour, kitty under tmux) never auto-ascend to a graphics rung — and W
 which IS in the table, is listed there for its TrueColor upgrade only: the probe
 never answers `Capability::ITerm2` for it, so the iTerm2 rung stays as closed
 to WezTerm auto as to foot.
-The kitty rung is environment-driven: `RendererFactory::supports()`
-consults sugar-colorprofile's `Capability::KittyKeyboard`, which its probe sets
-only when `TERM` equals `xterm-kitty` — the player never negotiates the Kitty
-graphics protocol itself. For the live variant, sugar-image's
-`Mosaic::probe()`/`Mosaic::auto()` run the real negotiation (sixel query and
-XTWINOPS round-trips via `Detect::probe()`) — an explicit opt-in, outside
-the player's auto path.
+The kitty rung needs a confirmed claim. `RendererFactory::diagnose()` starts
+from sugar-colorprofile's `Capability::KittyKeyboard`, which its probe sets
+when `TERM` equals `xterm-kitty`, and drops that claim unless sugar-image's
+`Detect::probe()` gets the Kitty APC `a=q` reply on a tty (P1-13b). The same
+contract applies to `supports()`, `support()`, `auto()` and the explicit door,
+so a TERM-only Kitty seat that never answers is not handed APC frames. With no
+tty the claim is dropped and `auto` falls back to the palette ladder. The
+sixel and iTerm2 rungs still use sugar-colorprofile's table as before.
 
 ### Luminance ramp selection
 

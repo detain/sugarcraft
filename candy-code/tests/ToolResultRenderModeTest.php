@@ -18,9 +18,11 @@ use SugarCraft\Image\Mosaic;
  * switch re-derives instead of returning the stale probe of whichever mode was
  * asked for first, while `'auto'` keeps the pre-W2.2 detect-based behaviour
  * byte-identically (golden pin below). Detection is faked through sugar-image's
- * own env table (`KITTY_WINDOW_ID` answers `Detect::probe()` without any TTY —
- * the DA1/`setProbeStdin` path needs an interactive ctty a piped suite never
- * has), and every test restores the process statics in tearDown — a leaked
+ * own env table. `KITTY_WINDOW_ID` only makes a Kitty CLAIM; sugar-image's
+ * `Detect::probe()` confirms it through the APC `a=q` reply (P1-13b), which
+ * needs a tty a piped suite never has. {@see answerAsKittyTerminal()} stands in
+ * for that reply through the probe-stdin seams, so a faked Kitty env without it
+ * drops to the non-Kitty ladder. Every test restores the process statics in tearDown — a leaked
  * render mode or memo entry across the suite is the MAJOR the review brief
  * names (HomeSandbox-style snapshot/restore discipline).
  *
