@@ -111,6 +111,8 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-image.png" width="48" alt=""> | **[CandyImage](candy-image/)** | Terminal image viewer — the chafa-independent CLI over sugar-image: protocol tiers (sixel/kitty/iTerm2), half/quarter block and text tiers with colored-character modes, cell sizing with `--scale`, `--canvas`/`--work` dials, GIF animation, `--dump-detect`. |
 | <img src="media/icons/candy-top.png" width="48" alt=""> | **[CandyTop](candy-top/)** | Terminal system monitor — cpu / mem+disks / net / process boxes with braille, block and sextant graphs, gradient meters; up to six AMD/Intel GPU and Intel/AMD NPU boxes, an ipmi BMC band and a VM dashboard; battery readouts, menus, presets, 43 themes (42 ported from btop plus candy-top's own pastel), and btop-compatible config with save/reload, over Linux `/proc` + `/sys` and FreeBSD collectors. |
 | <img src="media/icons/candy-flappy.png" width="48" alt=""> | **[CandyFlappy](candy-flappy/)** | Flappy-Bird-style game — bird motion is a SugarSpring projectile, pipes scroll left at a fixed cell rate. |
+|  | **[CandyDiscord](candy-discord/)** | Channel bundle for `candy-code serve` — Discord bot conversations become served sessions. Original work; no upstream port. Outside the package matrix in `docs/MATCHUPS.md`. |
+|  | **[CandyMsteams](candy-msteams/)** | Channel bundle for `candy-code serve` — Microsoft Teams chats and channels become served sessions. Original work; no upstream port. Outside the package matrix in `docs/MATCHUPS.md`. |
 
 **Renamed packages (2026-10):** every package moved to the two-prefix
 scheme above — `candy-` for runnable apps and CLI tools, `sugar-` for
