@@ -2203,34 +2203,45 @@ final class ReadPathCensusTest extends TestCase
     /** @return array<string, int> `src/`-relative file + `|` + sink spelling => occurrences */
     private function sinksPerFile(): array
     {
-        return $this->sinksUnder($this->srcDir, $this->srcDir);
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->srcDir, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        return $this->sinksUnder($walk, $this->srcDir);
     }
 
-    /** @return array<string, int> repository-relative file + `|` + sink spelling => occurrences */
+    /**
+     * The walk is built here rather than handed a directory parameter: the
+     * package-root census (TreeWideGuardRosterTest) traces a walked directory to
+     * its root anchor in the same expression, and a bare `$base` parameter has no
+     * anchor, so the census reds on this file.
+     *
+     * @return array<string, int> repository-relative file + `|` + sink spelling => occurrences
+     */
     private function siblingSinksPerFile(): array
     {
         $repoRoot = \dirname(__DIR__, 3);
         $counts = [];
 
         foreach (self::SIBLING_SOURCE_ROOTS as $root) {
-            $counts += $this->sinksUnder($repoRoot . '/' . $root, $repoRoot);
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator(\dirname(__DIR__, 3) . '/' . $root, \FilesystemIterator::SKIP_DOTS),
+            );
+
+            $counts += $this->sinksUnder($walk, $repoRoot);
         }
 
         return $counts;
     }
 
     /**
-     * @param string $base       the directory to walk
-     * @param string $relativeTo the directory the reported file names are relative to
+     * @param \Traversable<\SplFileInfo> $walk       every entry under the directory to scan
+     * @param string                     $relativeTo the directory the reported file names are relative to
      * @return array<string, int> file relative to $relativeTo + `|` + sink spelling => occurrences
      */
-    private function sinksUnder(string $base, string $relativeTo): array
+    private function sinksUnder(\Traversable $walk, string $relativeTo): array
     {
         $counts = [];
-
-        $walk = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
-        );
 
         /** @var \SplFileInfo $file */
         foreach ($walk as $file) {
