@@ -565,7 +565,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 
 <h2 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h2>
 <p>candy-sql ships no theme file. Its colors come from the terminal profile that sugar-core detects, so <code>NO_COLOR</code>, <code>TERM=dumb</code> and <code>COLORTERM</code> decide what you see. The focus marker is a bold <code>▶</code> on the pane's frame title. That glyph survives <code>NO_COLOR</code>, where a hue change would vanish, and the status-line legends and the <code>error:</code> word stay readable without color.</p>
-<p>The result grid uses a reverse-video cursor on styling terminals. JSON cells pretty-print with a two-space indent, and long rows scroll horizontally. The renderer does not offer a high-contrast mode or a reduced-motion toggle. The 2-second admin poll, the loading spinner and the dashboard gauges keep running, and nothing turns them off.</p>
+<p>The result grid uses a reverse-video cursor on styling terminals. JSON cells pretty-print with a two-space indent, and long rows scroll horizontally. The renderer does not offer a high-contrast mode or a reduced-motion toggle. The 1-second admin poll, the loading spinner and the dashboard gauges keep running, and nothing turns them off.</p>
 
 <h2 id="examples" style="margin-top: 40px;">Examples</h2>
 <p><code>examples/play.php</code> seeds an in-memory SQLite database with two tables, <code>users</code> and <code>posts</code>, and opens the dashboard over it. It takes no arguments. Run it in a terminal with <code>php examples/play.php</code>, and quit with <code>q</code> or <code>Ctrl+C</code>. Non-interactively, <code>printf 'q' | php examples/play.php</code> starts the app, reads the quit key and exits 0. With stdin at <code>/dev/null</code> it exits 0 at once, because end of file on stdin ends the run. It keeps running only while stdin is an open stream, so write a key to an open pipe to drive it.</p>
@@ -653,7 +653,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sql/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
                 <h3 id="play">Play</h3>
-                <span class="demo-caption">A seeded SQLite database opened in the dashboard — cycle tables, Tab to the query pane, run a SELECT, Ctrl+R to refresh.</span>
+                <span class="demo-caption">A seeded SQLite database opened in the dashboard — cycle tables, Tab to the query pane, run a SELECT, Ctrl+R to run.</span>
             </div>
         </div>
     </div>
