@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Support;
 
-use SugarCraft\Code\Context\PromptFence;
+use SugarCraft\Plugins\Support\PromptFence;
 
 /**
  * The trust floor for inbound platform text (docs/SPEC.md §6.4 trust law, docs/SPEC.md §9.5):

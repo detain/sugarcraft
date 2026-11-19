@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\Support;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Support\CredentialStore;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -36,14 +37,14 @@ final class CredentialStoreTest extends TestCase
 
     public function testAnAbsentStoreReadsAsEmptyAndStaysDark(): void
     {
-        self::assertSame([], (new CredentialStore($this->path))->read());
-        self::assertNull((new CredentialStore($this->path))->msteamsCredentials('default'));
-        self::assertSame([], (new CredentialStore($this->path))->msteamsAccounts());
+        self::assertSame([], (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->read());
+        self::assertNull((new CredentialStore($this->path, new FileCredentialWriter($this->path)))->msteamsCredentials('default'));
+        self::assertSame([], (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->msteamsAccounts());
     }
 
     public function testTheWriteLandsZeroSixZeroZeroAndCarriesTheShapeBack(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => ' app-1 ', 'appPassword' => ' shh-secret ', 'tenantId' => ' ten-9 ',
         ]);
@@ -51,7 +52,7 @@ final class CredentialStoreTest extends TestCase
         clearstatcache();
         self::assertSame(0o600, fileperms($this->path) & 0o777);
 
-        $again = new CredentialStore($this->path);
+        $again = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         self::assertSame(
             ['appId' => 'app-1', 'appPassword' => 'shh-secret', 'tenantId' => 'ten-9'],
             $again->msteamsCredentials('default'),
@@ -71,7 +72,7 @@ final class CredentialStoreTest extends TestCase
 
     public function testAnIncompleteTripleReadsAsNull(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         // appId + tenant but no secret: cannot mint a token, must not half-load.
         $store->writeMsteamsPairing('partial', [], [], ['appId' => 'a', 'tenantId' => 't']);
         $store->writeMsteamsPairing('empty', [], [], ['appId' => 'a', 'appPassword' => '  ', 'tenantId' => 't']);
@@ -83,14 +84,14 @@ final class CredentialStoreTest extends TestCase
 
     public function testAGroupReadableFileIsRefusedWithTheChmodInstruction(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $store->writeMsteamsPairing('default', [], [], ['appId' => 'a']);
         chmod($this->path, 0o640);
         clearstatcache();
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('chmod 600');
-        (new CredentialStore($this->path))->read();
+        (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->read();
     }
 
     public function testAForeignVersionNumberIsRefused(): void
@@ -101,19 +102,19 @@ final class CredentialStoreTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('unsupported version');
-        (new CredentialStore($this->path))->read();
+        (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->read();
     }
 
     public function testAPathThatIsNotARegularFileIsRefused(): void
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('is not a regular file');
-        (new CredentialStore($this->dir))->read();
+        (new CredentialStore($this->dir, new FileCredentialWriter($this->dir)))->read();
     }
 
     public function testTheMutateGuardsRefuseHalfRecords(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $thrown = null;
         try {
             $store->mutate(static fn (): string => 'nope');
@@ -133,7 +134,7 @@ final class CredentialStoreTest extends TestCase
 
     public function testThePairingWriteReplacesTheLedgerAndKeepsForeignKeys(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         // Simulate P1 having already written its ledger — and the discord
         // bundle having written its rows: one store, several platforms, and
         // neither writer may shave the other.
@@ -160,18 +161,18 @@ final class CredentialStoreTest extends TestCase
         self::assertSame(['p0', '42'], $store->msteamsAllowUsers('work'), 'deduped, string-cast');
 
         $store->writeMsteamsPairing('work', [], ['p0']);
-        self::assertSame([], (new CredentialStore($this->path))->read()['platforms']['msteams']['accounts']['work']['pairingPending']);
+        self::assertSame([], (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->read()['platforms']['msteams']['accounts']['work']['pairingPending']);
         self::assertSame(
             ['appId' => 'wa', 'appPassword' => 'wp', 'tenantId' => 'wt'],
-            (new CredentialStore($this->path))->msteamsCredentials('work'),
+            (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->msteamsCredentials('work'),
             'untouched credentials ride on',
         );
-        self::assertSame(['work'], (new CredentialStore($this->path))->msteamsAccounts());
+        self::assertSame(['work'], (new CredentialStore($this->path, new FileCredentialWriter($this->path)))->msteamsAccounts());
     }
 
     public function testAccountsAreSortedAndPairingOnlyRowsStillCount(): void
     {
-        $store = new CredentialStore($this->path);
+        $store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $store->writeMsteamsPairing('zeta', [], []);
         $store->writeMsteamsPairing('alpha', [], [], ['appId' => '']);
         $store->writeMsteamsPairing('mid', [], [], ['appId' => 'm', 'appPassword' => 'm', 'tenantId' => 'm']);

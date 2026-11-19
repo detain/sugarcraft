@@ -41,6 +41,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\Candy;
 
 use CandyCode\Bundles\MsTeams\Support\Log;
+use SugarCraft\ServeProtocol\Protocol;
 use Ratchet\RFC6455\Messaging\CloseFrameChecker;
 use Ratchet\RFC6455\Messaging\Frame;
 use Ratchet\RFC6455\Messaging\FrameInterface;
@@ -52,9 +53,7 @@ use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
-use SugarCraft\Code\Protocol\Dispatcher;
-use SugarCraft\Code\Protocol\JsonRpc;
-use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 use function React\Promise\reject;
 
@@ -125,7 +124,7 @@ final class ServeBridge
      */
     public static function wsUrlFrom(string $url): ?string
     {
-        return \SugarCraft\Code\Cli\Attach::websocketUrl($url);
+        return \SugarCraft\ServeProtocol\Url\WebsocketUrl::from($url);
     }
 
     // ── lifecycle ───────────────────────────────────────────────────────
@@ -220,8 +219,8 @@ final class ServeBridge
     public function hello(): PromiseInterface
     {
         return $this->call('server.hello', [
-            'minProtocol' => Dispatcher::PROTOCOL,
-            'maxProtocol' => Dispatcher::PROTOCOL,
+            'minProtocol' => Protocol::MAJOR,
+            'maxProtocol' => Protocol::MAJOR,
             'client' => (object) [
                 'name' => 'candy-code-msteams-bundle',
                 'version' => '0.1',
@@ -359,8 +358,8 @@ final class ServeBridge
 
         $key = \base64_encode(\random_bytes(16));
         $subprotocols = $this->authDoor === 'subprotocol'
-            ? [ServerConfig::SUBPROTOCOL, ServerConfig::AUTH_SUBPROTOCOL_PREFIX . $this->token]
-            : [ServerConfig::SUBPROTOCOL];
+            ? [Protocol::SUBPROTOCOL, Protocol::AUTH_SUBPROTOCOL_PREFIX . $this->token]
+            : [Protocol::SUBPROTOCOL];
 
         $headers = "GET {$uri['path']} HTTP/1.1\r\n"
             . 'Host: ' . $host . ':' . $port . "\r\n"
@@ -416,8 +415,8 @@ final class ServeBridge
                         return;
                     }
                     $echo = \preg_match('/^Sec-WebSocket-Protocol:\s*(.+)$/mi', $head, $m) === 1 ? \trim($m[1]) : '';
-                    if ($echo !== ServerConfig::SUBPROTOCOL) {
-                        $fail("server echoed subprotocol '{$echo}', expected " . ServerConfig::SUBPROTOCOL);
+                    if ($echo !== Protocol::SUBPROTOCOL) {
+                        $fail("server echoed subprotocol '{$echo}', expected " . Protocol::SUBPROTOCOL);
 
                         return;
                     }
@@ -512,8 +511,8 @@ final class ServeBridge
             },
             false,
             null,
-            Dispatcher::MAX_SERVER_FRAME_BYTES,
-            Dispatcher::MAX_SERVER_FRAME_BYTES,
+            Protocol::MAX_SERVER_FRAME_BYTES,
+            Protocol::MAX_SERVER_FRAME_BYTES,
             function (string $bytes) use ($epoch): void {
                 if ($epoch === $this->epoch && $this->stream !== null) {
                     $this->stream->write($bytes);

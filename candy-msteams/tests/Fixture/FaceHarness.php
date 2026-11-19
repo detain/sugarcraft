@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\Fixture;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
@@ -55,7 +56,7 @@ trait FaceHarness
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeTeamsApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->safety = new TextSafety();
         $this->pairing = new PairingCodes($this->store, $this->safety);
     }
