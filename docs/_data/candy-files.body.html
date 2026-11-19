@@ -95,7 +95,11 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 
 <h3 id="constructing-manager" style="margin-top: 32px;">Constructing Manager</h3>
 <p>Prefer the builder to the 26-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, such as recursive search results, the in-flight copy count, and the help overlay, takes safe defaults and is not exposed on the builder.</p>
-<pre class="code"><code class="language-php">$manager = Manager::builder()
+<pre class="code"><code class="language-php">use SugarCraft\Files\ConfirmState;
+use SugarCraft\Files\FsLister;
+use SugarCraft\Files\Manager;
+
+$manager = Manager::builder()
     -&gt;withLeft($leftPane)
     -&gt;withRight($rightPane)
     -&gt;withActiveIdx(0)
@@ -195,7 +199,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 <tr><td>Archive scan and extraction</td><td>256&nbsp;MiB scan, 512&nbsp;MiB extraction</td></tr>
 </table>
 
-<h2 style="margin-top: 40px;">Theming and glyphs</h2>
+<h2 style="margin-top: 40px;">Theme, styling and glyph tiers</h2>
 <p>The interface is monochrome by construction. The renderer emits no color or font styling, so emphasis rides on text and shape: the <code>▸</code> cursor, the <code>✓</code> selection mark, the thick border, the localized focus label, and the <code>↑ N more</code> and <code>↓ N more</code> fold hints. A <code>NO_COLOR</code>, high-contrast or inverted terminal palette shows the full interface.</p>
 <p>The chrome glyphs (<code>▸ ✓ ─ ↑ ↓ ·</code>) are East Asian Width "Ambiguous": some terminals draw them one cell wide and some two. candy-files draws them one cell wide unless it detects a surface that doubles them: a <code>zh</code>, <code>ja</code> or <code>ko</code> locale, a legacy CJK codepage (<code>CP932</code>, <code>GBK</code>, <code>EUC-JP</code>, <code>BIG5</code>), or the Linux console. Those surfaces get the ASCII tier (<code>&gt; v - ^ v |</code> and plain <code>+--+</code> borders). Set <code>CANDY_FILES_GLYPHS=ascii</code> or <code>unicode</code> to choose the tier yourself. File names are data and are never rewritten by the tier.</p>
 <p>The layout follows the live terminal size. Each pane box is <code>(cols - 2) / 2</code> cells wide, and every status and search line is clipped to the width, so nothing wraps.</p>

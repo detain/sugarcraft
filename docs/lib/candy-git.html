@@ -176,7 +176,7 @@
             <li class="toc-h3"><a href="#command-line-flags">Command-line flags</a></li>
             <li class="toc-h3"><a href="#environment">Environment</a></li>
             <li class="toc-h3"><a href="#fixed-limits">Fixed limits</a></li>
-            <li class="toc-h2"><a href="#theming-and-accessibility">Theming and accessibility</a></li>
+            <li class="toc-h2"><a href="#theme-styling-and-accessibility">Theme, styling and accessibility</a></li>
             <li class="toc-h2"><a href="#internationalization">Internationalization</a></li>
             <li class="toc-h2"><a href="#examples">Examples</a></li>
             <li class="toc-h2"><a href="#testing">Testing</a></li>
@@ -359,7 +359,7 @@ $git = new Git(getcwd());
 <tr><td>Minimum git version</td><td>2.23 (<code>GitRequirement::MINIMUM</code>)</td></tr>
 </table>
 
-<h2 id="theming-and-accessibility" style="margin-top: 40px;">Theming and accessibility</h2>
+<h2 id="theme-styling-and-accessibility" style="margin-top: 40px;">Theme, styling and accessibility</h2>
 <p>Every state the interface needs you to know is carried by text, not by color alone. Status rows show git's porcelain <code>XY</code> codes, and diff lines keep their leading <code>+</code> and <code>-</code>. The rebase todo spells its actions as words: <code>pick</code>, <code>reword</code>, <code>edit</code>, <code>squash</code>, <code>drop</code>. The ahead-and-behind summary is git's own header. The panes stay readable under <code>NO_COLOR</code>, under <code>TERM=dumb</code>, or with an ASCII-only palette.</p>
 <p>The focused pane shows two signals: the accent border and a <code>▸</code> text marker before its title. The selected row uses reverse video on styling terminals. Because <code>TERM=dumb</code> emits no escape sequences, the frame also carries a plain-text <code>cursor:</code> line that names the selected file, branch, commit or overlay entry.</p>
 <p>The palette is not tuned for WCAG conformance. Its hint strip lands near 3.4:1 against the dark background of the demos, and the unfocused border near 2.1:1. Actual ratios depend on your terminal palette.</p>
