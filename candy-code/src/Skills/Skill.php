@@ -8,6 +8,7 @@ use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * A skill loaded from a SKILL.md file.
@@ -63,7 +64,7 @@ final readonly class Skill
         $content = SkillFileReader::read($path, 'skill file');
 
         // Require frontmatter - SKILL.md files must have valid frontmatter
-        if (!preg_match('/^---\s*\n.*?\n---\s*\n/s', $content)) {
+        if (MarkdownFrontmatter::split($content) === null) {
             throw new \InvalidArgumentException("Skill file must have frontmatter: $path");
         }
 
@@ -91,9 +92,10 @@ final readonly class Skill
         $content = Utf8Scrub::announced($content, "the SKILL.md of skill \"{$name}\"");
 
         // Split frontmatter from content
-        if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
-            $body = substr($content, strlen($matches[0]));
-            $parsed = Frontmatter::parse($matches[1]);
+        $split = MarkdownFrontmatter::split($content);
+        if ($split !== null) {
+            $body = $split->body;
+            $parsed = Frontmatter::parse($split->meta);
         } else {
             $parsed = null;
             $body = $content;

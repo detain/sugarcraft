@@ -204,10 +204,6 @@ final class ContainedPathInventoryTest extends TestCase
         // The entrypoints reader bounds every declared file with one
         // \SugarCraft\Core\Util\PathJail::below() compare before the loader may touch it.
         'Bundles/Bundle.php' => 1,
-        'Bundles/BundleDiscovery.php' => 1,
-        // C-EXT-4.a: the provenance record is read inside the boundary the
-        // caller names, never through a link out of it.
-        'Bundles/BundleSource.php' => 1,
         // C-EXT-4.a: the catalog file and every relative source inside its
         // checkout are bounded by one compare each — the read gate in
         // read(), the path gate in resolveRelative().
@@ -347,7 +343,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "SEVENTY-TWO call sites in THIRTY-NINE files", per file — the sum and the key
+     * "SEVENTY call sites in THIRTY-SEVEN files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",

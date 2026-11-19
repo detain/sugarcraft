@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Bundles;
 
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Plugins\Discovery\PluginDiscovery;
+use SugarCraft\Plugins\Discovery\Root;
 
 /**
  * Finds installed plugin bundles on disk. Three source roots, scanned in this
@@ -36,20 +38,26 @@ final class BundleDiscovery
     /** The layered setting naming extra container/bundle directories. */
     public const SETTING_KEY = 'pluginPaths';
 
-    /** @var list<Bundle> */
-    private array $bundles = [];
-
-    /** @var list<string> */
-    private array $warnings = [];
-
-    /** @var array<string, string> directory as spelled => why it was refused */
-    private array $refusedDirectories = [];
+    /** The generic walk: containment, manifest detection, warnings and refusals. */
+    private readonly PluginDiscovery $scanner;
 
     /** @param list<string> $configPaths the user-tier pluginPaths entries */
     public function __construct(
         private readonly string $projectRoot,
         private readonly array $configPaths = [],
     ) {
+        $this->scanner = new PluginDiscovery(
+            Bundle::hasManifest(...),
+            static fn (string $dir, string $tier, ?string $boundary): ?Bundle
+                => Bundle::fromDir($dir, $tier, self::ownerOf($tier, $boundary)),
+            static fn (string $dir, string $real, string $tier, string $boundary): string
+                => Lang::t('bundles.dir-outside', [
+                    'dir' => $dir,
+                    'real' => $real,
+                    'tier' => $tier,
+                    'anchor' => $boundary,
+                ]),
+        );
     }
 
     /**
@@ -57,9 +65,7 @@ final class BundleDiscovery
      */
     public function discover(): array
     {
-        $this->bundles = [];
-        $this->warnings = [];
-        $this->refusedDirectories = [];
+        $this->scanner->reset();
 
         $home = HomeDirectory::owned();
         $userFloor = $home === null ? null : $home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
@@ -70,11 +76,11 @@ final class BundleDiscovery
         // and hand the user's own hooks to the project-tier trust path, so the user
         // tier wins — the same first-root-wins rule `bundles update` applies.
         if (!self::isSameDirectory($projectFloor, $userFloor)) {
-            $this->scanTier($projectFloor, 'project', $this->projectRoot);
+            $this->scanner->scan([new Root($projectFloor, 'project', $this->projectRoot)]);
         }
 
         if ($home !== null) {
-            $this->scanTier($userFloor, 'user', $home);
+            $this->scanner->scan([new Root($userFloor, 'user', $home)]);
         }
 
         foreach ($this->configPaths as $path) {
@@ -87,28 +93,27 @@ final class BundleDiscovery
             $real = realpath($path);
 
             if ($real === false || !is_dir($real)) {
-                $this->warnings[] = 'plugin path "' . $path . '" is not a directory and was skipped';
+                $this->scanner->addWarning('plugin path "' . $path . '" is not a directory and was skipped');
                 continue;
             }
 
-            if (Bundle::hasManifest($real)) {
-                // An operator-named path is trusted as given — the same
-                // verdict every other user-tier path setting draws — so it
-                // carries no owner anchor even though it is badged `user`.
-                $this->record($real, 'user', null);
-                continue;
-            }
-
-            $this->scanContainer($real, 'user', null);
+            // An operator-named path is trusted as given — the same verdict every
+            // other user-tier path setting draws — so it carries no boundary even
+            // though it is badged `user`. A bundle directory and a container both
+            // resolve through the generic scan with that null boundary.
+            $this->scanner->scan([new Root($real, 'user', null)]);
         }
 
-        return $this->bundles;
+        /** @var list<Bundle> $bundles */
+        $bundles = $this->scanner->bundles();
+
+        return $bundles;
     }
 
     /** @return list<string> per-bundle problems, worded for a launch notice */
     public function warnings(): array
     {
-        return $this->warnings;
+        return $this->scanner->warnings();
     }
 
     /**
@@ -123,29 +128,7 @@ final class BundleDiscovery
      */
     public function refusedDirectories(): array
     {
-        return $this->refusedDirectories;
-    }
-
-    /**
-     * Scan a conventional install root: a manifest on the root itself makes it
-     * a single bundle; otherwise its direct children, sorted so two identical
-     * trees discover identically, are judged one by one.
-     */
-    private function scanTier(string $root, string $tier, string $boundary): void
-    {
-        $real = realpath($root);
-
-        if ($real === false || !is_dir($real)) {
-            return;
-        }
-
-        if (Bundle::hasManifest($real)) {
-            $this->guard($real, $tier, $boundary);
-
-            return;
-        }
-
-        $this->scanContainer($real, $tier, $boundary);
+        return $this->scanner->refusedDirectories();
     }
 
     /**
@@ -174,91 +157,8 @@ final class BundleDiscovery
      * needs no owner widening — the checkout is its whole boundary — and a
      * `pluginPaths` bundle is trusted as given, so both carry null.
      */
-    private function ownerOf(string $tier, ?string $boundary): ?string
+    private static function ownerOf(string $tier, ?string $boundary): ?string
     {
         return $tier === 'user' ? $boundary : null;
-    }
-
-    /**
-     * @param ?string $boundary confinement anchor, or null for operator-named
-     *                          paths, which are trusted as given
-     */
-    private function scanContainer(string $container, string $tier, ?string $boundary = null): void
-    {
-        $children = glob($container . '/*');
-
-        if ($children === false) {
-            return;
-        }
-
-        sort($children);
-
-        foreach ($children as $child) {
-            if (!is_dir($child)) {
-                continue;
-            }
-
-            if (!Bundle::hasManifest($child)) {
-                continue;
-            }
-
-            $this->guard($child, $tier, $boundary);
-        }
-    }
-
-    /**
-     * Apply the tier's confinement promise, then record. A bundle whose real
-     * path has escaped the tree it was found in is refused by name — for the
-     * project tier that is the same argument the cloned skills trees get:
-     * "inside the checkout" is the boundary a repository cannot forge. A null
-     * boundary is an operator-named path, trusted as given.
-     */
-    private function guard(string $dir, string $tier, ?string $boundary): void
-    {
-        $real = realpath($dir);
-
-        if ($real === false) {
-            return;
-        }
-
-        if ($boundary === null) {
-            $this->record($real, $tier, null);
-
-            return;
-        }
-
-        $boundaryReal = realpath($boundary);
-
-        if ($boundaryReal === false) {
-            return;
-        }
-
-        if ($real !== $boundaryReal && !\SugarCraft\Core\Util\PathJail::below($real, $boundaryReal)) {
-            $this->refusedDirectories[$dir] = Lang::t('bundles.dir-outside', [
-                'dir' => $dir,
-                'real' => $real,
-                'tier' => $tier,
-                'anchor' => $boundary,
-            ]);
-            $this->warnings[] = 'bundle "' . basename($dir) . '" resolves outside the '
-                . $tier . ' tree it was found in and was skipped: ' . $dir;
-
-            return;
-        }
-
-        $this->record($real, $tier, $this->ownerOf($tier, $boundary));
-    }
-
-    private function record(string $dir, string $tier, ?string $ownedBy): void
-    {
-        $bundle = Bundle::fromDir($dir, $tier, $ownedBy);
-
-        if ($bundle === null) {
-            $this->warnings[] = 'bundle manifest under ' . $dir . ' could not be read or parsed and was skipped';
-
-            return;
-        }
-
-        $this->bundles[] = $bundle;
     }
 }
