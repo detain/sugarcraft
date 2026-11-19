@@ -178,6 +178,40 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertContains('[turn.nothing_running]', $this->face->delivered);
     }
 
+    /** @return array<string,mixed> the params of the one command.exec the router sent */
+    private function commandExecParams(): array
+    {
+        $execs = \array_values(\array_filter($this->serve->calls, static fn (array $c): bool => $c['method'] === 'command.exec'));
+        self::assertCount(1, $execs, 'exactly one command.exec call');
+
+        return $execs[0]['params'];
+    }
+
+    public function testAnArgumentlessModelCommandSendsNoArgsKey(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->serve->callReplies['command.exec'] = ['rows' => [], 'effects' => []];
+        $this->router->runCommand('fake', self::KEY, self::REF, ['name' => 'model', 'args' => []]);
+
+        $params = $this->commandExecParams();
+        self::assertSame(['sessionId' => 's1', 'name' => 'model'], $params);
+        self::assertArrayNotHasKey('args', $params);
+    }
+
+    public function testAModelCommandWithArgumentsStillSendsThemJoined(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->serve->callReplies['command.exec'] = ['rows' => [], 'effects' => []];
+        $this->router->runCommand('fake', self::KEY, self::REF, ['name' => 'model', 'args' => ['claude', 'sonnet']]);
+
+        self::assertSame(
+            ['sessionId' => 's1', 'name' => 'model', 'args' => 'claude sonnet'],
+            $this->commandExecParams(),
+        );
+    }
+
     public function testNewRebindsTheConversationToAFreshSession(): void
     {
         $this->build();
