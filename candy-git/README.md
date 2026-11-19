@@ -335,11 +335,12 @@ named.
   blob — with a tail window under the caret for anything longer than the bar,
   so screen readers and keyboard-only flows never need arrow navigation
   inside an input and nothing you type is ever rendered invisible.
-- **Palette contrast (design note)** — the hint strip (`#7d6e98`) lands at
-  roughly 3.4:1 and the blurred unfocused border (`#4a3868`) at roughly
-  2.1:1 against the dark background the demos ship with; actual ratios move
-  with the user's terminal palette. These are observations queued for a
-  future palette pass — no WCAG conformance is claimed here.
+- **Palette contrast (design note)** — the hint strip (`#7d6e98`) and the
+  blurred unfocused border (`#4a3868`) are the two colors to check against
+  the dark background the demos ship with; actual contrast moves with the
+  user's terminal palette. No measured contrast ratio is claimed here, and
+  no WCAG conformance is claimed either: these are observations queued for
+  a future palette pass.
 
 ## Architecture
 
