@@ -19,7 +19,7 @@ $term-&gt;feed("\x1b]2;Demo\x07");
 $term-&gt;windowTitle();                 // 'Demo'
 
 $term-&gt;feed("\x1b[?1049h");
-$term-&gt;mode()-&gt;altScreen;             // true</code></pre>
+$term-&gt;isAltScreen();                 // true</code></pre>
     <p>The stream is parsed incrementally, so a sequence split across two <code>feed()</code> calls is handled correctly. The runnable version of a feed-and-inspect flow is <code>examples/feed-and-screenshot.php</code>.</p>
 
     <h3 style="margin-top: 32px;">Concepts</h3>
@@ -50,7 +50,7 @@ foreach ($term-&gt;screen()-&gt;lines() as $row =&gt; $line) {
 $term-&gt;feed(str_repeat("line\r\n", 300));
 $history = $term-&gt;screen()-&gt;scrollback();</code></pre>
 
-    <p><strong>Feed captured output safely.</strong> Text captured from a pipe or a file has bare LF line endings, which the emulator treats as a cursor move without a carriage return. <code>feedCaptured()</code> normalises them first:</p>
+    <p><strong>Feed captured output safely.</strong> Text captured from a pipe or a file has bare LF line endings, which the emulator treats as a cursor move without a carriage return. <code>feedCaptured()</code> normalizes them first:</p>
     <pre class="code"><code class="language-php">$term = Terminal::new(cols: 80, rows: 24);
 $term-&gt;feedCaptured(file_get_contents('session.log'));</code></pre>
 
@@ -67,10 +67,10 @@ $pasteWrapped = $term-&gt;mode()-&gt;bracketedPaste; // true</code></pre>
       <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg. The emulator pen tracks bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles and SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed). The renderer paints the five cell-attribute bits (bold, italic, underline, reverse, strikethrough). Blink, dim and hidden are tracked but not painted. BCE is always on: erase fills inherit the current background, and there is no <code>?12</code> gate.</span></div>
       <div class="feature"><strong>Cursor, erase and scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
       <div class="feature"><strong>DEC modes</strong><span>1049 alt screen with cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue, flushed on disable), 7 auto-wrap (DECAWM).</span></div>
-      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write and read events. Every payload is attacker-supplied text kept verbatim, and consumers sanitise it before display or onward propagation.</span></div>
+      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write and read events. Every payload is attacker-supplied text kept verbatim, and consumers sanitize it before display or onward propagation.</span></div>
       <div class="feature"><strong>Width-aware and combining</strong><span>CJK and most emoji take 2 cells with a continuation marker. Zero-width runes (combining diacritics, variation selectors, joiners) attach to the preceding cell through <code>Cell::$combining</code>, so composed graphemes render in a single column.</span></div>
       <div class="feature"><strong>Scrollback buffer</strong><span>A ring buffer (default 1000 rows) captures scrolled-off content. Read it with <code>Screen::scrollback()</code>, resize it with <code>Terminal::withScrollbackSize()</code>, and erase it with <code>CSI 3 J</code>.</span></div>
-      <div class="feature"><strong>Trust boundary</strong><span>Engineered for hostile byte streams. Stored strings cap at 64 KiB, event logs at 1024 entries (drop-oldest rings), and the DEC 2026 queue replays past 16384 pending cells. Stored side-channels (window titles, OSC 8 hyperlinks, OSC 52 payloads) are kept verbatim, so consumers sanitise before display.</span></div>
+      <div class="feature"><strong>Trust boundary</strong><span>Engineered for hostile byte streams. Stored strings cap at 64 KiB, event logs at 1024 entries (drop-oldest rings), and the DEC 2026 queue replays past 16384 pending cells. Stored side-channels (window titles, OSC 8 hyperlinks, OSC 52 payloads) are kept verbatim, so consumers sanitize before display.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -84,7 +84,7 @@ $pasteWrapped = $term-&gt;mode()-&gt;bracketedPaste; // true</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Terminal</td><td><code>new(cols, rows, scrollbackSize, buffer, cursor, mode, onFocusEvent)</code></td><td>Create a virtual terminal. The <code>Terminal::create()</code> factory is deprecated: it accepts no <code>scrollbackSize</code></td></tr>
-<tr><td>Terminal</td><td><code>feed(bytes)</code>, <code>feedCaptured(bytes)</code></td><td>Feed ANSI bytes to the terminal. <code>feedCaptured()</code> normalises bare LF to CRLF first</td></tr>
+<tr><td>Terminal</td><td><code>feed(bytes)</code>, <code>feedCaptured(bytes)</code></td><td>Feed ANSI bytes to the terminal. <code>feedCaptured()</code> normalizes bare LF to CRLF first</td></tr>
 <tr><td>Terminal</td><td><code>flush()</code></td><td>Drains the parser's pending state</td></tr>
 <tr><td>Terminal</td><td><code>screen()</code>, <code>cellAt(row, col)</code>, <code>rowCells(row)</code></td><td>The current cell grid, and cell or row access by position</td></tr>
 <tr><td>Terminal</td><td><code>cursor()</code>, <code>isWrapPending()</code></td><td>Cursor position and the pending-wrap flag</td></tr>
@@ -104,8 +104,8 @@ $pasteWrapped = $term-&gt;mode()-&gt;bracketedPaste; // true</code></pre>
 <tr><td>Mode</td><td><code>cursorVisible</code>, <code>bracketedPaste</code>, <code>mouseSgr</code>, <code>isMouseReporting()</code>, <code>withAutoWrap()</code>, <code>withAltScreen()</code>, <code>withSyncUpdate()</code></td><td>Public mode flags, with immutable <code>with*()</code> updates and mouse-encoding helpers</td></tr>
 <tr><td>Sgr</td><td><code>underlineStyle</code>, <code>withUnderlineStyle(UnderlineStyle)</code></td><td>SGR underline style (None, Single, Double, Curly, Dotted, Dashed), mapped from CSI 4:0 to 4:5</td></tr>
 <tr><td>Snapshot</td><td><code>Snapshot::of(Terminal $t, float $time)</code>, <code>equals()</code>, <code>equalsWithTime()</code></td><td>A frozen frame from the lightweight root <code>Terminal</code>, used by candy-vcr</td></tr>
-<tr><td>Theme</td><td><code>defaultPalette()</code>, <code>tokyoNight()</code>, <code>dracula()</code>, <code>solarizedDark()</code>, <code>tokyoNightLight()</code>, <code>tokyoNightStorm()</code></td><td>256-colour palette with default foreground and background, and named factories</td></tr>
-<tr><td>Themes</td><td><code>all()</code>, <code>v1()</code></td><td>The bundled theme catalogue, and the first-release subset</td></tr>
+<tr><td>Theme</td><td><code>defaultPalette()</code>, <code>tokyoNight()</code>, <code>dracula()</code>, <code>solarizedDark()</code>, <code>tokyoNightLight()</code>, <code>tokyoNightStorm()</code></td><td>256-color palette with default foreground and background, and named factories</td></tr>
+<tr><td>Themes</td><td><code>all()</code>, <code>v1()</code></td><td>The bundled theme catalog, and the first-release subset</td></tr>
 <tr><td>Hyperlink</td><td><code>Hyperlink</code> value object</td><td>OSC 8 target and id, recorded per cell</td></tr>
 </table>
 
@@ -122,16 +122,16 @@ $pasteWrapped = $term-&gt;mode()-&gt;bracketedPaste; // true</code></pre>
 </table>
 
     <h3 style="margin-top: 40px;">Theming</h3>
-    <p><code>Theme</code> is a 256-colour palette with a default foreground and background. Use one of the named factories, or build your own from a palette, and pass it to the root <code>Terminal::new()</code> with its <code>?Theme</code> argument:</p>
+    <p><code>Theme</code> is a 256-color palette with a default foreground and background. Use one of the named factories, or build your own from a palette, and pass it to the root <code>Terminal::new()</code> with its <code>?Theme</code> argument:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal;
 use SugarCraft\Vterm\Theme;
 
 $vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());</code></pre>
-    <p>The bundled catalogue is available through <code>Themes::all()</code>, and <code>Themes::v1()</code> returns the first-release subset. The theme supplies the 256-colour palette and the default foreground and background.</p>
+    <p>The bundled catalog is available through <code>Themes::all()</code>, and <code>Themes::v1()</code> returns the first-release subset. The theme supplies the 256-color palette and the default foreground and background.</p>
 
     <h3 style="margin-top: 40px;">Examples</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/examples/feed-and-screenshot.php"><code>examples/feed-and-screenshot.php</code></a>: feeds a scripted ANSI stream and prints the resulting cell grid, the window title, the cursor position and the hyperlink span. It sanitises the echoed title, rows and hyperlink with <code>Sanitize::untrusted()</code> first.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/examples/feed-and-screenshot.php"><code>examples/feed-and-screenshot.php</code></a>: feeds a scripted ANSI stream and prints the resulting cell grid, the window title, the cursor position and the hyperlink span. It sanitizes the echoed title, rows and hyperlink with <code>Sanitize::untrusted()</code> first.</li>
     </ul>
     <pre class="code"><code class="language-shell">php examples/feed-and-screenshot.php</code></pre>
     <p>The demo GIF further down this page is rendered in CI from the tape at <code>.vhs/snapshot-demo.tape</code>.</p>
@@ -139,14 +139,14 @@ $vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());</code></pre
     <h3 style="margin-top: 40px;">Testing</h3>
     <p>Run the suite from the library root with PHPUnit 10:</p>
     <pre class="code"><code class="language-shell">cd sugar-vterm &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
-    <p><code>SnapshotTest.php</code> pins rendered output, <code>ReadmeSnippetsTest.php</code> runs the code samples in the README so they cannot drift, and <code>AllocationTest.php</code> covers allocation behaviour. Parser behaviour that the emulator inherits is covered in <code>sugar-ansi-parser</code>.</p>
+    <p><code>SnapshotTest.php</code> pins rendered output, <code>ReadmeSnippetsTest.php</code> runs the code samples in the README so they cannot drift, and <code>AllocationTest.php</code> covers allocation behavior. Parser behavior that the emulator inherits is covered in <code>sugar-ansi-parser</code>.</p>
 
     <h3 style="margin-top: 40px;">Troubleshooting</h3>
     <table class="api-table">
 <tr><th>Symptom</th><th>Cause and fix</th></tr>
-<tr><td>Captured text stacks diagonally, each line starting further right</td><td>Bare LF moves the cursor down without returning to column 0. Use <code>feedCaptured()</code>, or normalise <code>\n</code> to <code>\r\n</code> before <code>feed()</code>. A real terminal does this translation for you (ONLCR), which a capture does not get.</td></tr>
+<tr><td>Captured text stacks diagonally, each line starting further right</td><td>Bare LF moves the cursor down without returning to column 0. Use <code>feedCaptured()</code>, or normalize <code>\n</code> to <code>\r\n</code> before <code>feed()</code>. A real terminal does this translation for you (ONLCR), which a capture does not get.</td></tr>
 <tr><td>The window title contains escape bytes or looks like another program's output</td><td><code>windowTitle()</code> returns the attacker-supplied text verbatim. Use <code>windowTitleSanitized()</code> for control bytes, and <code>Sanitize::untrusted()</code> before printing anything to a real terminal.</td></tr>
-<tr><td><code>lines()</code> output renders control sequences on a real terminal</td><td>The grid holds whatever the stream wrote. Treat the output as hostile and sanitise it before echoing, as the example does.</td></tr>
+<tr><td><code>lines()</code> output renders control sequences on a real terminal</td><td>The grid holds whatever the stream wrote. Treat the output as hostile and sanitize it before echoing, as the example does.</td></tr>
 <tr><td><code>enableAltScreen()</code> throws <code>LogicException</code></td><td>The root <code>Terminal</code> does not model the alternate screen. Use <code>SugarCraft\Vterm\Terminal\Terminal</code>, which does.</td></tr>
 <tr><td>The scrollback is empty after a long stream</td><td><code>CSI 3 J</code> erases it, and the ring holds only the last <code>scrollbackSize</code> rows. Raise the capacity with <code>withScrollbackSize()</code> if you need more history.</td></tr>
 <tr><td>A snapshot looks stale after you edit the grid directly</td><td><code>revision()</code> counts only <code>feed()</code> and <code>flush()</code> calls, so a direct <code>grid()</code> mutation is invisible to it. Go through <code>feed()</code>, or compare snapshots by value.</td></tr>
@@ -155,7 +155,7 @@ $vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());</code></pre
 </table>
 
     <h3 style="margin-top: 40px;">Trust boundary and hostile input</h3>
-    <p>The byte stream is untrusted input. The emulator bounds every buffer it fills: string payloads, event logs, the synchronized-output queue and the reply queue all have fixed caps, and the parser refuses to grow past them. Everything the stream sets as text (titles, hyperlink targets, clipboard payloads) is stored verbatim, because a faithful emulator has to report what the program sent. Sanitising is the consumer's job, and <code>Sanitize::untrusted()</code> is the function to use before display or before forwarding.</p>
+    <p>The byte stream is untrusted input. The emulator bounds every buffer it fills: string payloads, event logs, the synchronized-output queue and the reply queue all have fixed caps, and the parser refuses to grow past them. Everything the stream sets as text (titles, hyperlink targets, clipboard payloads) is stored verbatim, because a faithful emulator has to report what the program sent. Sanitizing is the consumer's job, and <code>Sanitize::untrusted()</code> is the function to use before display or before forwarding.</p>
 
     <h3 style="margin-top: 40px;">Architecture</h3>
     <table class="api-table">

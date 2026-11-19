@@ -201,7 +201,7 @@ $parser = new Parser(new HandlerAdapter($myCsiHandler, $myOscHandler));
 $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</code></pre>
 
     <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
-    <p>The parser is a state machine over bytes. It recognises where a control sequence starts and ends, and it hands each complete piece to a handler as an event: a printed rune, a C0 control, a CSI or ESC dispatch, an OSC or DCS string. It does not decide what those events mean. Screen state, cell grids and cluster assembly belong to the consumer, which is why this package stops at abstract events.</p>
+    <p>The parser is a state machine over bytes. It recognizes where a control sequence starts and ends, and it hands each complete piece to a handler as an event: a printed rune, a C0 control, a CSI or ESC dispatch, an OSC or DCS string. It does not decide what those events mean. Screen state, cell grids and cluster assembly belong to the consumer, which is why this package stops at abstract events.</p>
     <p>There are two ways to consume events. A consumer that wants every byte-level event implements the seven-method <code>Handler</code> interface. A consumer that wants the cursor, erase, SGR and mode semantics implements <code>CsiHandler</code> and <code>OscHandler</code> and receives them through <code>HandlerAdapter</code>, which is a deliberate sieve: it passes only the events those interfaces describe, and a <code>$fallback</code> handler can take the rest.</p>
 
     <h3 id="common-tasks" style="margin-top: 32px;">Common tasks</h3>
@@ -302,7 +302,7 @@ php examples/adapter.php</code></pre>
     <h3 id="testing" style="margin-top: 40px;">Testing</h3>
     <p>Run the suite from the library root with PHPUnit 10:</p>
     <pre class="code"><code class="language-shell">cd sugar-ansi-parser &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
-    <p>The tests are organised by component. <code>ParserTest.php</code> and <code>TransitionsTest.php</code> cover the state machine, <code>HandlerAdapterTest.php</code>, <code>HandlerAdapterModeDispatchTest.php</code> and <code>HandlerAdapterFallbackTest.php</code> cover the adapter, <code>SgrSubparameterTest.php</code> covers colon forms, and <code>ParserOverflowTest.php</code> and <code>DcsTruncationTest.php</code> pin the payload caps. The <code>Codec/</code> directory holds the decoder tests.</p>
+    <p>The tests are organized by component. <code>ParserTest.php</code> and <code>TransitionsTest.php</code> cover the state machine, <code>HandlerAdapterTest.php</code>, <code>HandlerAdapterModeDispatchTest.php</code> and <code>HandlerAdapterFallbackTest.php</code> cover the adapter, <code>SgrSubparameterTest.php</code> covers colon forms, and <code>ParserOverflowTest.php</code> and <code>DcsTruncationTest.php</code> pin the payload caps. The <code>Codec/</code> directory holds the decoder tests.</p>
 
     <h3 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h3>
     <table class="api-table">
@@ -311,12 +311,12 @@ php examples/adapter.php</code></pre>
 <tr><td>An OSC or DCS payload arrives truncated</td><td>Payloads cap at 64 KiB by default. Call <code>stringOverflowed()</code> inside the dispatch to detect the cut, or raise the cap with the third constructor argument.</td></tr>
 <tr><td>Invalid UTF-8 causes an error or a garbled rune</td><td>Pass <code>replaceMalformed: true</code> to turn malformed sequences into U+FFFD. The flag needs <code>ext-mbstring</code>, and the constructor fails loudly when the extension is missing.</td></tr>
 <tr><td>A fallback handler receives nothing for ESC, DCS or the C1 band</td><td><code>HandlerAdapter</code> is a sieve. It drops the whole ESC family, DCS, SOS, PM and APC payloads, and every execute except HT, LF, CR and BS. Pass the events to a <code>$fallback</code> handler, or implement <code>Handler</code> directly.</td></tr>
-<tr><td>Colon-separated colour arguments arrive as separate values</td><td>The parser flags the structure but does not interpret it. Read <code>subparams()</code> during the dispatch, or implement <code>SubparamsAwareHandler</code>. <code>groupSubparameters()</code> regroups them.</td></tr>
+<tr><td>Colon-separated color arguments arrive as separate values</td><td>The parser flags the structure but does not interpret it. Read <code>subparams()</code> during the dispatch, or implement <code>SubparamsAwareHandler</code>. <code>groupSubparameters()</code> regroups them.</td></tr>
 <tr><td>A <code>DebugHandler</code> log grows without bound</td><td>The default log is unbounded, which suits fixtures. Pass <code>maxLogRows</code> for a long-lived mirror.</td></tr>
 </table>
 
     <h3 id="limits-and-hostile-input" style="margin-top: 40px;">Limits and hostile input</h3>
-    <p>The parser is built for untrusted byte streams. Its bounds are part of the product. Payloads are capped as described above, so a hostile stream cannot grow the buffers without limit. The codecs report malformed input instead of guessing. Dropped bytes are signalled, not silent: the overflow flag, the truncation flags on the codecs, and the <code>$dropped</code> counter of a bounded <code>DebugHandler</code> all say when information was lost.</p>
+    <p>The parser is built for untrusted byte streams. Its bounds are part of the product. Payloads are capped as described above, so a hostile stream cannot grow the buffers without limit. The codecs report malformed input instead of guessing. Dropped bytes are signaled, not silent: the overflow flag, the truncation flags on the codecs, and the <code>$dropped</code> counter of a bounded <code>DebugHandler</code> all say when information was lost.</p>
 
     <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
     <pre class="code"><code class="language-text">bytes

@@ -247,7 +247,7 @@ $buf-&gt;cellAt(2, 0)-&gt;width(); // 0</code></pre>
     <p><strong>Read a style back from SGR.</strong> <code>Style::fromSgr()</code> parses an SGR parameter string into a pen, and <code>toAnsi()</code> writes the pen back out:</p>
     <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Style;
 
-$pen = Style::fromSgr('1;38;5;196');   // bold, 256-colour foreground
+$pen = Style::fromSgr('1;38;5;196');   // bold, 256-color foreground
 $pen?-&gt;hasBold();                     // true
 echo $pen?-&gt;toAnsi();                 // a full SGR sequence, reset first</code></pre>
 
@@ -261,9 +261,9 @@ $cell = Cell::new('d', null, $link);</code></pre>
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent <code>with*()</code> family plus <code>fill()</code>, <code>copy()</code> and <code>applyDiff()</code>. Every mutation returns a new instance. Bounds-checked <code>cellAt()</code> throws <code>OutOfRangeException</code>.</span></div>
-      <div class="feature"><strong>Cell</strong><span>Readonly value object: rune, style, link and width, read through bare accessors. <code>Cell::continuation()</code> marks the neighbour of a wide lead. Derive changes with <code>withRune()</code>, <code>withStyle()</code>, <code>withLink()</code> and <code>withWidth()</code>, each of which returns a new cell.</span></div>
+      <div class="feature"><strong>Cell</strong><span>Readonly value object: rune, style, link and width, read through bare accessors. <code>Cell::continuation()</code> marks the neighbor of a wide lead. Derive changes with <code>withRune()</code>, <code>withStyle()</code>, <code>withLink()</code> and <code>withWidth()</code>, each of which returns a new cell.</span></div>
       <div class="feature"><strong>Position and Region</strong><span><code>Position</code> is a 2-D coordinate that admits negative values for relative offsets. <code>Region</code> is an origin plus width and height, with <code>contains()</code> for hit-testing. Zero-area regions are no-ops in <code>fill()</code> and <code>withRegion()</code>.</span></div>
-      <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground and background as RGB <code>0xRRGGBB</code> or as palette-slot identity (0-255), an underline colour, and an attribute bitmask. <code>fromSgr()</code> parses SGR parameter strings back into styles, and <code>toAnsi()</code> writes them out.</span></div>
+      <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground and background as RGB <code>0xRRGGBB</code> or as palette-slot identity (0-255), an underline color, and an attribute bitmask. <code>fromSgr()</code> parses SGR parameter strings back into styles, and <code>toAnsi()</code> writes them out.</span></div>
       <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor with a URL and an optional id grouping field. Both are validated at construction and again on unserialization, so C0 and DEL controls, C1 introducers and semicolons in the id are refused.</span></div>
       <div class="feature"><strong>Diff pipeline</strong><span><code>Buffer::diff()</code> returns <code>DiffOp</code> objects (cursor moves, style changes, cell runs, REP and ECH runs, hyperlink changes). <code>DiffOptimiser</code> shapes that list, and <code>DiffEncoder</code> writes it as ANSI.</span></div>
     </div>
@@ -289,7 +289,7 @@ $cell = Cell::new('d', null, $link);</code></pre>
 <tr><td>Cell</td><td><code>continuation()</code>, <code>blank()</code></td><td>The width-0 partner of a wide lead, and the default padding cell</td></tr>
 <tr><td>Cell</td><td><code>rune()</code>, <code>style()</code>, <code>link()</code>, <code>width()</code>, <code>equals(Cell $other)</code></td><td>Bare accessors and value equality</td></tr>
 <tr><td>Cell</td><td><code>withRune()</code>, <code>withStyle()</code>, <code>withLink()</code>, <code>withWidth()</code></td><td>Derivations that return a new cell and re-fire the constructor checks</td></tr>
-<tr><td>Style</td><td><code>new(?int $fg = null, ?int $bg = null, int $attrs = 0)</code>, <code>bold()</code>, <code>reverse()</code></td><td>Convenience factories for RGB colours and the attribute bitmask</td></tr>
+<tr><td>Style</td><td><code>new(?int $fg = null, ?int $bg = null, int $attrs = 0)</code>, <code>bold()</code>, <code>reverse()</code></td><td>Convenience factories for RGB colors and the attribute bitmask</td></tr>
 <tr><td>Style</td><td><code>fromSgr(string $params, ?Style $carry = null)</code></td><td>SGR parameter parser. Returns <code>null</code> only when nothing was set</td></tr>
 <tr><td>Style</td><td><code>toAnsi()</code>, <code>equals()</code>, <code>valuesEqual()</code></td><td>One-shot SGR emission (via <code>SgrEmitter</code>) and value equality</td></tr>
 <tr><td>Style</td><td><code>withAttrs(int)</code>, <code>withBold()</code> to <code>withInvisible()</code>, <code>has*()</code> predicates</td><td>Bitmask replacement, nine single-bit toggles, and their predicates</td></tr>
@@ -314,20 +314,20 @@ $cell = Cell::new('d', null, $link);</code></pre>
 </table>
 
     <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
-    <p>A <code>Style</code> is a pen, not a theme. It carries the colours and attributes a cell paints with, and it does not look up colours from a palette of its own. Two colour channels are available for each of foreground, background and underline:</p>
+    <p>A <code>Style</code> is a pen, not a theme. It carries the colors and attributes a cell paints with, and it does not look up colors from a palette of its own. Two color channels are available for each of foreground, background and underline:</p>
     <ul>
-      <li><strong>RGB</strong>: <code>Style::new(0xFF0000)</code> paints a fixed colour and discards any slot identity on that channel.</li>
-      <li><strong>Palette slot</strong>: <code>withFgSlot(n)</code>, <code>withBgSlot(n)</code> and <code>withUlSlot(n)</code> keep the colour symbolic, so it follows the terminal theme and survives a delta round-trip without being baked into a hex value.</li>
+      <li><strong>RGB</strong>: <code>Style::new(0xFF0000)</code> paints a fixed color and discards any slot identity on that channel.</li>
+      <li><strong>Palette slot</strong>: <code>withFgSlot(n)</code>, <code>withBgSlot(n)</code> and <code>withUlSlot(n)</code> keep the color symbolic, so it follows the terminal theme and survives a delta round-trip without being baked into a hex value.</li>
     </ul>
     <p>The attribute bitmask uses this package's own bit layout, which does not match <code>sugar-vterm</code>'s bits:</p>
     <table class="api-table">
 <tr><th>Constant</th><th>Bit</th><th>Note</th></tr>
 <tr><td><code>Style::ATTR_BOLD</code></td><td>1</td><td></td></tr>
 <tr><td><code>Style::ATTR_ITALIC</code></td><td>2</td><td></td></tr>
-<tr><td><code>Style::ATTR_UNDERLINE</code></td><td>4</td><td>The underline colour is stored apart from this bit and emitted whenever the pen is set</td></tr>
+<tr><td><code>Style::ATTR_UNDERLINE</code></td><td>4</td><td>The underline color is stored apart from this bit and emitted whenever the pen is set</td></tr>
 <tr><td><code>Style::ATTR_STRIKE</code></td><td>8</td><td></td></tr>
 <tr><td><code>Style::ATTR_FAINT</code></td><td>16</td><td>Cleared together with bold by SGR 22</td></tr>
-<tr><td><code>Style::ATTR_BLINK</code></td><td>32</td><td>The bit is carried verbatim. The terminal decides what it means, so TUIs honouring reduced motion should substitute static emphasis</td></tr>
+<tr><td><code>Style::ATTR_BLINK</code></td><td>32</td><td>The bit is carried verbatim. The terminal decides what it means, so TUIs honoring reduced motion should substitute static emphasis</td></tr>
 <tr><td><code>Style::ATTR_REVERSE</code></td><td>64</td><td></td></tr>
 <tr><td><code>Style::ATTR_OVERLINE</code></td><td>128</td><td></td></tr>
 <tr><td><code>Style::ATTR_INVISIBLE</code></td><td>256</td><td>A display attribute, not a redaction boundary. Runes in invisible cells are still returned by <code>text()</code></td></tr>
@@ -343,7 +343,7 @@ $cell = Cell::new('d', null, $link);</code></pre>
 <tr><td><code>MoveCursorOp</code></td><td>CUP <code>ESC [row;colH</code></td><td>Repositions before a run of changes, and is skipped when the cursor is already there</td></tr>
 <tr><td><code>SetStyleOp</code></td><td>SGR <code>ESC [...m</code></td><td>The pen changes by value. This is a full reset and restatement, not a minimal delta</td></tr>
 <tr><td><code>SetCellOp</code></td><td>Raw rune bytes</td><td>One or more consecutive changed cells</td></tr>
-<tr><td><code>RepeatRunOp</code></td><td>REP <code>ESC [N b</code></td><td>The tail of a long identical run where the <code>RepeatGate</code> byte arithmetic favours REP. The gate answers <code>false</code> on ties, so plain glyphs stay literal</td></tr>
+<tr><td><code>RepeatRunOp</code></td><td>REP <code>ESC [N b</code></td><td>The tail of a long identical run where the <code>RepeatGate</code> byte arithmetic favors REP. The gate answers <code>false</code> on ties, so plain glyphs stay literal</td></tr>
 <tr><td><code>EraseRunOp</code></td><td>ECH <code>ESC [N X</code></td><td>Runs of three or more blank default cells</td></tr>
 <tr><td><code>SetHyperlinkOp</code></td><td>OSC 8</td><td>Opens or closes a hyperlink anchor</td></tr>
 </table>
@@ -368,7 +368,7 @@ ESC[0;38;2;255;0;0m  SGR: red foreground
 A                   the changed cell
 ESC[0;38;2;0;0;255;1m  SGR: blue foreground and bold
 BBB                 the repeat run is written literally, because REP would cost more here
-ESC[0m              closing reset, so a stale colour never bleeds into the next frame</code></pre>
+ESC[0m              closing reset, so a stale color never bleeds into the next frame</code></pre>
     <p>The diff round-trips: <code>$prev-&gt;applyDiff($curr-&gt;diff($prev))</code> renders byte-identically to <code>$curr</code> through <code>toAnsi()</code>, and hyperlinks, ids included, survive the trip.</p>
 
     <h3 id="examples" style="margin-top: 40px;">Examples</h3>
@@ -388,16 +388,16 @@ php examples/diff_frames.php</code></pre>
     <table class="api-table">
 <tr><th>Symptom</th><th>Cause and fix</th></tr>
 <tr><td>Output rows stack diagonally in a raw terminal</td><td><code>toAnsi()</code> joins rows with a bare LF, which a raw-mode terminal does not turn into a carriage return. Write <code>"\r\n"</code> between rows, or position each row yourself with CUP.</td></tr>
-<tr><td>A wide character leaves a gap or overwrites its neighbour</td><td>The width was not declared. Pass <code>width: 2</code> to <code>Cell::new()</code>, and write the lead with <code>withCellAt()</code>, which writes the continuation for you. <code>fromGrid()</code> skips that step, so pair the cells yourself there.</td></tr>
+<tr><td>A wide character leaves a gap or overwrites its neighbor</td><td>The width was not declared. Pass <code>width: 2</code> to <code>Cell::new()</code>, and write the lead with <code>withCellAt()</code>, which writes the continuation for you. <code>fromGrid()</code> skips that step, so pair the cells yourself there.</td></tr>
 <tr><td><code>OutOfRangeException</code> from <code>cellAt()</code></td><td>Coordinates are zero-based and bounded by <code>width()</code> and <code>height()</code>. Clamp the coordinate, or check <code>region()-&gt;contains()</code> first.</td></tr>
-<tr><td><code>InvalidArgumentException</code> from <code>Hyperlink::new()</code></td><td>The URL or id contains a C0 or DEL control, a C1 introducer, or (in the id) a semicolon. Sanitise untrusted text first. Well-formed multibyte IRIs are accepted.</td></tr>
+<tr><td><code>InvalidArgumentException</code> from <code>Hyperlink::new()</code></td><td>The URL or id contains a C0 or DEL control, a C1 introducer, or (in the id) a semicolon. Sanitize untrusted text first. Well-formed multibyte IRIs are accepted.</td></tr>
 <tr><td><code>Cell::new()</code> refuses a wide span</td><td>A width above 2 is a run-length span, and its rune must measure exactly that many display columns. Use a width-2 lead for a single wide glyph, or pad the rune to the span width.</td></tr>
 <tr><td>A diff replay leaves cells out of the grid unchanged</td><td><code>applyDiff()</code> skips positive writes past the last row or column by design, so the grid cannot grow from a diff. Check that the ops were produced from a buffer of the same dimensions.</td></tr>
 </table>
 
     <h3 id="security-and-trust-boundaries" style="margin-top: 40px;">Security and trust boundaries</h3>
     <ul>
-      <li><strong>Runes are written verbatim.</strong> <code>toAnsi()</code> and the diff encoder emit whatever rune a cell holds. Strip control bytes from untrusted text first with <code>SugarCraft\Core\Util\Sanitize::untrusted()</code>. Raw escapes in a rune desynchronise the cursor and inject live SGR.</li>
+      <li><strong>Runes are written verbatim.</strong> <code>toAnsi()</code> and the diff encoder emit whatever rune a cell holds. Strip control bytes from untrusted text first with <code>SugarCraft\Core\Util\Sanitize::untrusted()</code>. Raw escapes in a rune desynchronize the cursor and inject live SGR.</li>
       <li><strong>Hyperlinks are validated</strong> at construction and again on unserialization, so their fields cannot carry forged OSC 8 frames.</li>
       <li><strong><code>fromString()</code> is test support.</strong> It is not an emulator. It drops every CSI that is not SGR-shaped and skips OSC frames, so do not feed it untrusted input expecting a faithful parse.</li>
       <li><strong>Serialized payloads are re-validated.</strong> <code>__unserialize()</code> re-runs every constructor invariant, so a forged payload fails closed.</li>
@@ -422,7 +422,7 @@ Support\WidePairPlacement wide-pair law, shared by Buffer and BufferBuilder</cod
     <table class="api-table">
 <tr><th>Charmbracelet source</th><th>SugarCraft port</th><th>Notes</th></tr>
 <tr><td><code>charmbracelet/x/cellbuf</code> <code>buffer.go</code></td><td><code>Buffer</code>, <code>Cell</code></td><td>The grid model, with copy-on-write mutation in place of in-place edits. There is no <code>Resize</code>, <code>Scroll</code> or <code>SetSize</code></td></tr>
-<tr><td><code>charmbracelet/x/cellbuf</code> <code>hardscroll.go</code>, <code>hashmap.go</code></td><td>not ported</td><td>The scroll optimisation and line-hash map. Scrolling belongs to <code>sugar-vterm</code>'s mutable grid</td></tr>
+<tr><td><code>charmbracelet/x/cellbuf</code> <code>hardscroll.go</code>, <code>hashmap.go</code></td><td>not ported</td><td>The scroll optimization and line-hash map. Scrolling belongs to <code>sugar-vterm</code>'s mutable grid</td></tr>
 <tr><td><code>charmbracelet/lipgloss</code></td><td><code>Style</code>, <code>SgrEmitter</code></td><td>The pen and SGR vocabulary</td></tr>
 <tr><td><code>ratatui</code> <code>Buffer::diff</code></td><td><code>Buffer::diff()</code>, <code>DiffEncoder</code></td><td>The framing of the delta, cited in the <code>DiffOp</code> notes</td></tr>
 </table>
