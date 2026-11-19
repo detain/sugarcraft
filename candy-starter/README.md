@@ -151,7 +151,7 @@ Add the dep, import its classes, return them from `view()`. Most are renderers o
 The six things you actually have to change after `create-project`:
 
 1. `composer.json` — rename `name` (and `description`) to your app.
-2. `bin/start` — swap the `use App\Counter;` import, and the `new Counter()` in the `new Program(...)` call, for your own Model.
+2. `bin/start` — swap the `use App\Counter;` import for your own Model.
 3. `src/` and `tests/` — replace the demo Model and its matrix; keep the `App\` / `App\Tests\` namespaces or update the PSR-4 prefixes in `composer.json` to match. Also delete or adapt the three documentation guards that ship here (`ReadmeSnippetsTest`, `ModelContractDocumentationTest`, `SiteBodyTruthTest`): they pin *this* README and site page against the interface, and go red the moment your app stops being this tutorial.
 4. `composer.lock` — the shipped `.gitignore` ignores it, which is right for this template repo but wrong for the app you fork it into: apps ship a lockfile for reproducible, auditable builds. Delete the ignore line and commit the lock.
 5. Sibling deps (`sugarcraft/sugar-core`, `sugarcraft/sugar-style`) ride `dev-master` — deliberately bleeding-edge so the template never goes stale — and there is no released constraint to pin them to yet: every SugarCraft sibling is dev-only until its first `v*` tag is cut. Your reproducibility lever is the committed `composer.lock` from item 4; switch to released constraints only once tags exist.

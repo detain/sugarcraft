@@ -102,14 +102,10 @@ return [
     <pre class="code"><code class="language-php">use SugarCraft\Log\Log;
 Log::installPanicHandler();</code></pre>
     <p>The backtrace prints absolute paths and the arguments of every frame. That is what you want while debugging. On a shared or recorded terminal it can leak data, so ship with the uncaught errors routed to a log file or syslog, and keep on-screen backtraces for debug builds.</p>
-    <h3 style="margin-top: 16px;">Pipe the program or run it under cron</h3>
-    <p>Raw mode needs an interactive input stream. Run the app with piped stdin, as in <code>php bin/start &lt; /dev/null</code> from cron or CI, and it does not enter raw mode. It quits cleanly at end of input with exit code 0. Build the options explicitly when you need a different behaviour, for example to keep the program running at end of input:</p>
-    <pre class="code"><code class="language-php">use SugarCraft\Core\ProgramOptions;
-
-$options = ProgramOptions::builder()
-    ->withExitOnStdinEof(false)   // keep running when stdin reaches end of input
-    ->build();
-$program = new Program(new Counter(), $options);</code></pre>
+    <h3 style="margin-top: 16px;">Run it under cron or CI</h3>
+    <p>Raw mode needs an interactive input stream, so <code>bin/start</code> is not a batch job. With stdin on <code>/dev/null</code>, as in <code>php bin/start &lt; /dev/null</code>, the app does not exit at end of input. It runs until an external <code>SIGTERM</code> stops it, and only then does its exit tail report the stop as 143. Do not expect a clean exit 0 from a cron or CI run of <code>bin/start</code>. For a scripted check, drive the Model with <code>examples/headless.php</code> instead, which exits 0 under <code>&lt; /dev/null</code>. To run <code>bin/start</code> itself from a script, bound it with a timeout and treat the timeout as the end of the run:</p>
+    <pre class="code"><code class="language-shell">php examples/headless.php &lt; /dev/null      # exits 0 after printing the final frame
+timeout 5 php bin/start &lt; /dev/null      # runs until timeout sends SIGTERM (timeout exits 124)</code></pre>
     <p><code>openTty: true</code> grabs <code>/dev/tty</code> for input on piped streams. It also moves the output to the terminal, so frames stop reaching your pipe.</p>
 
     <h3 style="margin-top: 40px;">API reference</h3>
@@ -202,7 +198,7 @@ vendor/bin/phpunit</code></pre>
       <li><strong><code>create-project</code> stops with a stability error.</strong> The package is dev-only. Add <code>--stability=dev</code>, or use <code>sugarcraft/candy-starter:dev-master</code> as the package name.</li>
       <li><strong>PHP refuses the Model with <code>contains 1 abstract method</code>.</strong> A Model must implement all four methods, including <code>subscriptions()</code>. Return <code>null</code> from <code>init()</code> or <code>subscriptions()</code> when you have nothing to start or subscribe to.</li>
       <li><strong><code>bin/start: cannot find composer autoload.php</code>.</strong> Run <code>composer install</code> in the package directory. The entry point resolves the autoloader relative to its own file, so it runs from any working directory once <code>vendor/</code> exists.</li>
-      <li><strong>The app exits at once when run from cron or CI.</strong> Piped stdin reaches end of input, and the program quits with exit code 0. Build the options with <code>ProgramOptions::builder()-&gt;withExitOnStdinEof(false)-&gt;build()</code> to keep it running.</li>
+      <li><strong>The app hangs when run from cron or CI.</strong> With stdin on <code>/dev/null</code>, <code>bin/start</code> does not exit at end of input. It keeps running until an external <code>SIGTERM</code> ends it, for example from <code>timeout</code> or a supervisor. For a scripted run, use <code>php examples/headless.php &lt; /dev/null</code>, which exits 0, or wrap <code>bin/start</code> in <code>timeout</code> and treat the timeout as the end of the run.</li>
       <li><strong>The exit code is 128+N after a stop.</strong> The stop was delivered by the OS, for example <code>kill -INT</code> (130) or <code>kill</code> (143). A cooperative quit through <kbd>q</kbd>, <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> keeps exit code 0.</li>
       <li><strong>The output shows raw control sequences under <code>TERM=dumb</code>.</strong> The harness emits DEC private-mode escapes unconditionally and does not probe terminal capabilities. Run the demo in a real terminal.</li>
     </ul>
