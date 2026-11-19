@@ -296,7 +296,7 @@ $ring = FocusRing::fromJson($json)
     <p>Traversal needs at least two enabled regions. With one enabled region the ring has nowhere to move, so the call returns the receiver unchanged. The exception is focus parked on a disabled region, which moves to the nearest enabled one.</p>
 
     <h3 id="current-is-null" style="margin-top: 24px;">current() is null</h3>
-    <p>The ring is empty, or a dialog opened over an empty ring. Restore focus with <code>focusFirst()</code> rather than passing <code>null</code> to <code>focus()</code>.</p>
+    <p>The ring is empty, or a dialog opened over an empty ring. <code>focusFirst()</code> does nothing on an empty ring, so register a region before focus can land: <code>register()</code> focuses the new region when the ring is empty, and <code>of()</code> takes the ids up front. Use <code>focusFirst()</code> only when regions exist and none is focused, and never pass <code>null</code> to <code>focus()</code>.</p>
 
     <h3 id="ctrl-tab-moves-focus-like-tab" style="margin-top: 24px;">Ctrl+Tab moves focus like Tab</h3>
     <p>That is a terminal limit, not a ring bug. Ctrl+Tab is identical to Tab on terminals that do not report modifiers. The guard can only tell the two apart where the terminal reports them.</p>
