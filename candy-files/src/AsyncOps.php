@@ -6,6 +6,7 @@ namespace SugarCraft\Files;
 
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\Util\Semaphore;
 
 /**
  * Tick-deferred file operations wrapped in React\Promise.
@@ -233,10 +234,14 @@ final class AsyncOps
     /**
      * Copy multiple files/directories through a bounded tick pipeline.
      *
-     * The $concurrency window caps how many copyAsync operations are
-     * in-flight at once, but because each one runs its whole I/O synchronously
-     * inside a futureTick, batches execute SEQUENTIALLY across ticks — they do
-     * not interleave disk work in parallel. See the class docblock.
+     * The $concurrency window is a sugar-core {@see Semaphore}: at most that
+     * many copyAsync operations hold a permit at once, and the rest queue FIFO
+     * behind it. Because each one runs its whole I/O synchronously inside a
+     * futureTick, batches execute SEQUENTIALLY across ticks — they do not
+     * interleave disk work in parallel. See the class docblock.
+     *
+     * Semaphore grants permits without ordering results, so the keyed map is
+     * built here as each leg settles, not in input order.
      *
      * @param array<string, string> $map Source → Destination mapping
      * @param int $concurrency Maximum queued copy operations (default 4)
@@ -250,50 +255,31 @@ final class AsyncOps
             return $deferred->promise();
         }
 
-        $concurrency = max(1, $concurrency);
-        $keys = array_keys($map);
-        $total = \count($keys);
+        $permits = Semaphore::new(max(1, $concurrency));
         $results = [];
-        $pending = 0;
-        $index = 0;
+        $remaining = \count($map);
 
         $deferred = new Deferred();
-        $self = $this;
-
-        // Start up to $concurrency copies; when each completes, start next if any remain
-        $startNext = function () use (&$pending, &$index, $keys, $map, $concurrency, &$results, $deferred, $total, $self, &$startNext): void {
-            while ($pending < $concurrency && $index < $total) {
-                $src = $keys[$index++];
-                $dst = $map[$src];
-                ++$pending;
-
-                $self->copyAsync($src, $dst)->then(
-                    function ($value) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
-                        $results[$src] = $value;
-                        --$pending;
-                        // Continue the pipeline by starting next pending copy
-                        $startNext();
-                        if ($index >= $total && $pending === 0) {
-                            $deferred->resolve($results);
-                        }
-                    },
-                    function (\Throwable $e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
-                        // Defensive: copyAsync() catches in-tick and resolves
-                        // a reason instead of rejecting; this arm keeps the
-                        // same CF-21 contract if that polarity ever changes.
-                        $results[$src] = $e::class . ': ' . $e->getMessage();
-                        --$pending;
-                        // Continue the pipeline by starting next pending copy
-                        $startNext();
-                        if ($index >= $total && $pending === 0) {
-                            $deferred->resolve($results);
-                        }
-                    }
-                );
+        $settle = static function (mixed $src, mixed $value) use (&$results, &$remaining, $deferred): void {
+            $results[$src] = $value;
+            if (--$remaining === 0) {
+                $deferred->resolve($results);
             }
         };
 
-        $startNext();
+        foreach ($map as $src => $dst) {
+            $permits->run(fn (): PromiseInterface => $this->copyAsync($src, $dst))->then(
+                static function (mixed $value) use ($settle, $src): void {
+                    $settle($src, $value);
+                },
+                // Defensive: copyAsync() catches in-tick and resolves a reason
+                // instead of rejecting; this arm keeps the same CF-21 contract
+                // if that polarity ever changes.
+                static function (\Throwable $e) use ($settle, $src): void {
+                    $settle($src, $e::class . ': ' . $e->getMessage());
+                },
+            );
+        }
 
         return $deferred->promise();
     }

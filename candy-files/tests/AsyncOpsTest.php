@@ -509,4 +509,28 @@ final class AsyncOpsTest extends TestCase
         self::assertTrue($resolved[$ok], 'the healthy leg keeps its bool true');
         self::assertSame('RuntimeException: kaboom on doomed', $resolved[$this->tmpDir . '/doomed']);
     }
+
+    public function testCopyManyAsyncNarrowWindowStillSettlesEveryLegKeyed(): void
+    {
+        $map = [];
+        for ($i = 0; $i < 5; $i++) {
+            $src = $this->tmpDir . '/n' . $i . '.txt';
+            file_put_contents($src, 'leg ' . $i);
+            $map[$src] = $this->tmpDir . '/narrow' . $i . '.txt';
+        }
+        $calls = 0;
+        $ops = new AsyncOps(static function (string $src, string $dst) use (&$calls): bool {
+            $calls++;
+            return copy($src, $dst);
+        });
+        $resolved = null;
+        $ops->copyManyAsync($map, 1)->then(static function (mixed $results) use (&$resolved): void {
+            $resolved = $results;
+            Loop::stop();
+        });
+        Loop::run();
+        self::assertIsArray($resolved);
+        self::assertSame(5, $calls, 'a window of one still runs every leg exactly once');
+        self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
+    }
 }
