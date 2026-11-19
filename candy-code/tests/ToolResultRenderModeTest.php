@@ -137,6 +137,25 @@ final class ToolResultRenderModeTest extends TestCase
         self::assertSame('kitty', self::innerProtocol(ToolResult::mosaic()->protocol()));
     }
 
+    public function testKittyEnvironmentClaimWithoutReplyIsNotKitty(): void
+    {
+        // The negative half of P1-13b: KITTY_WINDOW_ID is only a claim. With
+        // a stdin that carries no APC a=q reply, the claim is dropped and the
+        // non-Kitty ladder decides, so tool-result images never emit Kitty APC
+        // bytes into a run that cannot confirm the terminal (a redirected
+        // one-shot, or tmux with no reply relayed).
+        putenv('KITTY_WINDOW_ID=1');
+        Detect::reset();
+        Detect::setProbeStdin(fopen('php://temp', 'r+b'));
+        Detect::setProbeStdout(fopen('php://temp', 'r+b'));
+
+        self::assertNotSame('kitty', self::innerProtocol(ToolResult::mosaic()->protocol()));
+        self::assertNotSame(
+            'kitty',
+            self::innerProtocol(ToolResult::okWithImage('shot', 'ok', 'bytes')->imageProtocol),
+        );
+    }
+
     // =========================================================================
     // Forced modes — vocabulary flows through Mosaic::fromModeString()
     // =========================================================================
@@ -161,7 +180,7 @@ final class ToolResultRenderModeTest extends TestCase
      */
     public function testForcedModeSelectsThatRenderer(string $mode, bool $isInline): void
     {
-        putenv('KITTY_WINDOW_ID=1'); // auto WOULD say kitty; the mode must win
+        putenv('KITTY_WINDOW_ID=1'); // an unconfirmed claim (no APC a=q reply): the forced mode selects
         Detect::reset();
         ToolResult::setRenderMode($mode);
 
