@@ -10,6 +10,8 @@ use SugarCraft\MdView\ReloadTickMsg;
 use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
@@ -1266,11 +1268,47 @@ final class RenderCommandTest extends TestCase
         $this->assertFalse($this->invokeStatic('terminalSupportsColor'));
     }
 
+    public function testAwaitedColorReportIsAProbeReportForAColorTerminal(): void
+    {
+        // Drives the real await (no seam). A regression that hands back the
+        // PromiseInterface instead of the settled ProbeReport would make
+        // ->has() throw, and terminalSupportsColor()'s catch would then
+        // answer color-on for every implicit run, so pin the type directly.
+        putenv('TERM=vt100');
+        $report = $this->invokeStatic('awaitTerminalReport');
+        $this->assertInstanceOf(ProbeReport::class, $report);
+        $this->assertFalse($report->has(Capability::NoColor));
+    }
+
+    public function testAwaitedColorReportCarriesNoColorVerdictThroughTheAwait(): void
+    {
+        // The env verdict short-circuits TERM=dumb before the await in
+        // production, so this calls the await directly to prove the report it
+        // returns carries the NoColor verdict the caller reads.
+        putenv('TERM=dumb');
+        $report = $this->invokeStatic('awaitTerminalReport');
+        $this->assertInstanceOf(ProbeReport::class, $report);
+        $this->assertTrue($report->has(Capability::NoColor));
+    }
+
+    public function testEmptyNoColorIsRestoredAsEmptyAfterTheAwaitedProbe(): void
+    {
+        // An EMPTY NO_COLOR takes no position, so the implicit chain must
+        // still color through the awaited report. The hide around that await
+        // has to put the empty value back afterwards: a restore that unsets
+        // the variable is visible to every later reader of the environment.
+        putenv('NO_COLOR=');
+        putenv('TERM=vt100');
+        $this->assertTrue($this->invokeStatic('terminalSupportsColor'));
+        $this->assertSame('', getenv('NO_COLOR'));
+    }
+
     public function testProbeIsConsultedAfterEnvVerdictOrder(): void
     {
         // Structural anti-regression: the environment verdict must be read
-        // BEFORE TerminalProbe::run() inside terminalSupportsColor(), and the
-        // probe must remain reachable (a verdict of null falls through).
+        // BEFORE the awaited color report (awaitTerminalReport(), which wraps
+        // AsyncProbe::report()) inside terminalSupportsColor(), and the probe
+        // must remain reachable (a verdict of null falls through).
         // 092 adds a middle leg: the cheap color-capability env facts answer
         // between the verdict and the fork (CALIBER rule-10 order).
         $src = implode('', array_slice(
@@ -1281,7 +1319,7 @@ final class RenderCommandTest extends TestCase
         ));
         $verdict    = strpos($src, 'colorDecisionFromEnvironment()');
         $capability = strpos($src, 'colorCapableFromEnvironment()');
-        $probe      = strpos($src, 'TerminalProbe::run()');
+        $probe      = strpos($src, 'awaitTerminalReport()');
         $this->assertNotFalse($verdict);
         $this->assertNotFalse($capability);
         $this->assertNotFalse($probe);
