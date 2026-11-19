@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Media\Sd;
 
 use SugarCraft\Async\Backoff;
 use SugarCraft\Async\Poll;
+use SugarCraft\Async\Retry;
 use SugarCraft\Async\SynchronousLoop;
 
 /**
@@ -50,6 +51,8 @@ final class ProgressLoop
      * @param (callable(float):void)|null $sleeper pacing seam (sugar-readline E713 pattern): tests
      *        inject a zero-real-time fake; production defaults to usleep of the interval. This paces
      *        POLL CADENCE — it is not, and may never become, a request deadline (E646).
+     *
+     * @throws SdException when the interval is non-positive or above Retry::MAX_BACKOFF_SECONDS
      */
     public static function run(
         Client $c,
@@ -62,6 +65,14 @@ final class ProgressLoop
     ): ProgressSummary {
         if ($intervalSeconds <= 0.0) {
             throw SdException::protocol('progress-loop', 'poll interval must be positive');
+        }
+        // Poll::until clamps every pause at Retry::MAX_BACKOFF_SECONDS, so a
+        // longer interval would silently sleep the ceiling instead; refuse it.
+        if ($intervalSeconds > Retry::MAX_BACKOFF_SECONDS) {
+            throw SdException::protocol(
+                'progress-loop',
+                'poll interval must not exceed ' . Retry::MAX_BACKOFF_SECONDS . ' seconds',
+            );
         }
         $sleep = $sleeper ?? static function (float $seconds): void {
             usleep(max(1, (int) round($seconds * 1_000_000)));

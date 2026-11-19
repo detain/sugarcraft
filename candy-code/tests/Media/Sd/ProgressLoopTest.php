@@ -385,6 +385,36 @@ final class ProgressLoopTest extends TestCase
         self::assertSame([0.001], $sleeps, 'the millisecond backoff base floors at 1 ms, so the pause never rounds to zero');
     }
 
+    public function testAnIntervalAboveThePollCeilingIsRefusedUpFront(): void
+    {
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('poll interval must not exceed 3600');
+        ProgressLoop::run($this->clientQueuing([]), static function (): void {
+        }, static fn (): bool => true, null, 3600.5, static function (float $s): void {
+        });
+    }
+
+    public function testAnIntervalAtThePollCeilingPausesTheFullInterval(): void
+    {
+        $done = 0;
+        $sleeps = [];
+        ProgressLoop::run(
+            $this->clientQueuing([['progress' => 0.1], ['progress' => 0.2]]),
+            static function (): void {
+            },
+            static function () use (&$done): bool {
+                return ++$done >= 2;
+            },
+            null,
+            3600.0,
+            static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([3600.0], $sleeps, 'the ceiling itself is a legal cadence: one full pause between the two polls, not shortened');
+    }
+
     public function testTheLoopFileStaysPureOfReactAndWallClockKillers(): void
     {
         $src = file_get_contents(__DIR__ . '/../../../src/Media/Sd/ProgressLoop.php');

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Media\Video;
 
 use SugarCraft\Async\Backoff;
 use SugarCraft\Async\Poll;
+use SugarCraft\Async\Retry;
 use SugarCraft\Async\SynchronousLoop;
 use SugarCraft\Code\Media\Sd\SdException;
 
@@ -46,7 +47,8 @@ final class JobPollLoop
      * @param  (callable(JobSnapshot):void)|null  $onFrame  sees each successfully-decoded snapshot
      * @param  (callable(float):void)|null  $sleeper  injectable for timing-free pins
      *
-     * @throws SdException after MAX consecutive status failures, or on an unrecognized state word (via JobSnapshot)
+     * @throws SdException after MAX consecutive status failures, on an unrecognized state word (via JobSnapshot),
+     *         or when the interval is non-positive or above Retry::MAX_BACKOFF_SECONDS
      */
     public static function run(
         JobClient $client,
@@ -59,6 +61,14 @@ final class JobPollLoop
     ): JobPollSummary {
         if ($intervalSeconds <= 0.0) {
             throw SdException::protocol('job-poll-loop', 'poll interval must be positive');
+        }
+        // Poll::until clamps every pause at Retry::MAX_BACKOFF_SECONDS, so a
+        // longer interval would silently sleep the ceiling instead; refuse it.
+        if ($intervalSeconds > Retry::MAX_BACKOFF_SECONDS) {
+            throw SdException::protocol(
+                'job-poll-loop',
+                'poll interval must not exceed ' . Retry::MAX_BACKOFF_SECONDS . ' seconds',
+            );
         }
 
         $sleep = $sleeper ?? static function (float $seconds): void {
