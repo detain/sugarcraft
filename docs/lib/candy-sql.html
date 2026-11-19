@@ -183,8 +183,8 @@
             <li class="toc-h2"><a href="#testing">Testing</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#the-launcher-says-no-such-sqlite-file">The launcher says &quot;no such SQLite file&quot;</a></li>
-            <li class="toc-h3"><a href="#a-mysql-or-postgresql-connection-fails-with-could-not-find-driver">A MySQL or PostgreSQL connection fails with &quot;could not find driver&quot;</a></li>
-            <li class="toc-h3"><a href="#the-launcher-prints-usage-and-exits-2">The launcher prints USAGE and exits 2</a></li>
+            <li class="toc-h3"><a href="#a-mysql-or-postgresql-connection-fails-because-its-pdo-driver-is-missing">A MySQL or PostgreSQL connection fails because its PDO driver is missing</a></li>
+            <li class="toc-h3"><a href="#the-launcher-prints-usage-or-refuses-a-piped-stdout-and-exits-2">The launcher prints USAGE, or refuses a piped stdout, and exits 2</a></li>
             <li class="toc-h3"><a href="#a-warning-says-history-recording-disabled">A warning says &quot;history recording DISABLED&quot;</a></li>
             <li class="toc-h3"><a href="#a-query-timeout-does-not-fire">A query timeout does not fire</a></li>
             <li class="toc-h3"><a href="#a-saved-connection-is-refused-because-of-a-pass-field">A saved connection is refused because of a pass field</a></li>
@@ -567,7 +567,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <p>The result grid uses a reverse-video cursor on styling terminals. JSON cells pretty-print with a two-space indent, and long rows scroll horizontally. The renderer does not offer a high-contrast mode or a reduced-motion toggle. The 2-second admin poll, the loading spinner and the dashboard gauges keep running, and nothing turns them off.</p>
 
 <h2 id="examples" style="margin-top: 40px;">Examples</h2>
-<p><code>examples/play.php</code> seeds an in-memory SQLite database with two tables, <code>users</code> and <code>posts</code>, and opens the dashboard over it. It takes no arguments. Run it in a terminal with <code>php examples/play.php</code>, and quit with <code>q</code> or <code>Ctrl+C</code>. Non-interactively, <code>printf 'q' | php examples/play.php</code> starts the app, reads the quit key and exits 0. Without input it keeps running, so pipe a key to it.</p>
+<p><code>examples/play.php</code> seeds an in-memory SQLite database with two tables, <code>users</code> and <code>posts</code>, and opens the dashboard over it. It takes no arguments. Run it in a terminal with <code>php examples/play.php</code>, and quit with <code>q</code> or <code>Ctrl+C</code>. Non-interactively, <code>printf 'q' | php examples/play.php</code> starts the app, reads the quit key and exits 0. With stdin at <code>/dev/null</code> it exits 0 at once, because end of file on stdin ends the run. It keeps running only while stdin is an open stream, so write a key to an open pipe to drive it.</p>
 <p>The Admin pane needs a MySQL or PostgreSQL server, so on the example's SQLite database it shows the fallback. For the headless path, see <code>ResultTable::renderPlain()</code> in the Configuration section.</p>
 
 <h2 id="testing" style="margin-top: 40px;">Testing</h2>
@@ -580,11 +580,11 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <h3 id="the-launcher-says-no-such-sqlite-file" style="margin-top: 32px;">The launcher says "no such SQLite file"</h3>
 <p>The path names a file that does not exist. candy-sql does not create SQLite files, so an empty file cannot appear and lose writes at exit. Point it at an existing file, or create the file first, for example with <code>sqlite3 fresh.sqlite &lt; dump.sql</code>. <code>:memory:</code> is exempt.</p>
 
-<h3 id="a-mysql-or-postgresql-connection-fails-with-could-not-find-driver" style="margin-top: 32px;">A MySQL or PostgreSQL connection fails with "could not find driver"</h3>
-<p>The matching PDO driver is not installed. Install <code>ext-pdo_mysql</code> for <code>mysql://</code> DSNs and <code>--driver=mysql</code>, or <code>ext-pdo_pgsql</code> for <code>pgsql://</code> DSNs and <code>--driver=pgsql</code>. The check runs before any of the app's own gates.</p>
+<h3 id="a-mysql-or-postgresql-connection-fails-because-its-pdo-driver-is-missing" style="margin-top: 32px;">A MySQL or PostgreSQL connection fails because its PDO driver is missing</h3>
+<p>The matching PDO driver is not installed. Install <code>ext-pdo_mysql</code> for <code>mysql://</code> DSNs and <code>--driver=mysql</code>, or <code>ext-pdo_pgsql</code> for <code>pgsql://</code> DSNs and <code>--driver=pgsql</code>. Without <code>pdo_mysql</code>, a MySQL DSN stops with <code>candy-sql: Undefined constant PDO::MYSQL_ATTR_SSL_CA</code> and exit status 2. Without <code>pdo_pgsql</code>, a PostgreSQL DSN stops with PDO's <code>could not find driver</code> and exit status 2.</p>
 
-<h3 id="the-launcher-prints-usage-and-exits-2" style="margin-top: 32px;">The launcher prints USAGE and exits 2</h3>
-<p>There was no DSN, no flags and no saved connection, or stdout is not a terminal. Give a DSN, use <code>--connect=NAME</code>, or run the command in a terminal. A piped or redirected stdout is refused on purpose, so use a pseudo-terminal when scripting.</p>
+<h3 id="the-launcher-prints-usage-or-refuses-a-piped-stdout-and-exits-2" style="margin-top: 32px;">The launcher prints USAGE, or refuses a piped stdout, and exits 2</h3>
+<p>With no DSN, no flags and no saved connection, the launcher prints USAGE. Give a DSN, use <code>--connect=NAME</code>, or run the command in a terminal. A piped or redirected stdout is refused with <code>this launcher drives an interactive terminal and refuses to stream ANSI onto a pipe (exit 2)</code>, even when a path is given, for example <code>candy-sql app.sqlite | cat</code>. Use a pseudo-terminal when scripting.</p>
 
 <h3 id="a-warning-says-history-recording-disabled" style="margin-top: 32px;">A warning says "history recording DISABLED"</h3>
 <p>The history file is corrupt or cannot be written. The session runs without history and says so on stderr. Relocate the file with <code>--history=PATH</code>, or turn recording off with <code>--no-history</code>.</p>

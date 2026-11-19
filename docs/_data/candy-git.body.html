@@ -160,7 +160,7 @@ $git = new Git(getcwd());
 <p>The palette is not tuned for WCAG conformance. Its hint strip lands near 3.4:1 against the dark background of the demos, and the unfocused border near 2.1:1. Actual ratios depend on your terminal palette.</p>
 
 <h2 style="margin-top: 40px;">Internationalization</h2>
-<p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The catalog is <code>lang/en.php</code>, and the other locales are under <code>lang/</code>, 16 files in all. The keys carry a <code>git.</code> prefix inside the file, and you pass the file key verbatim: <code>Lang::t('git.timeout')</code>. The facade adds the library namespace on lookup, so the shared registry sees <code>git.git.timeout</code>. <code>Lang::t('timeout')</code> does not resolve. It returns the key unchanged rather than a message, so always call through <code>SugarCraft\Git\Lang</code>.</p>
+<p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The catalog is <code>lang/en.php</code>, and the other locales are under <code>lang/</code>, 16 files in all. The keys carry a <code>git.</code> prefix inside the file, and you pass the file key verbatim: <code>Lang::t('git.timeout')</code>. The facade adds the library namespace on lookup, so the shared registry sees <code>git.git.timeout</code>. <code>Lang::t('timeout')</code> does not resolve. It returns the prefixed key <code>git.timeout</code> rather than a message, so always call through <code>SugarCraft\Git\Lang</code>.</p>
 <table class="api-table">
 <tr><th>Key</th><th>Default text</th><th>Parameters</th></tr>
 <tr><td>git.spawn_failed</td><td>git: failed to spawn: {reason}</td><td>reason</td></tr>
@@ -175,10 +175,10 @@ $git = new Git(getcwd());
 <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values. The <code>cli.not_a_repo</code> refusal fires when <code>git rev-parse --absolute-git-dir</code> fails in the working directory. Linked worktrees, where <code>.git</code> is a file, are accepted.</p>
 
 <h2 style="margin-top: 40px;">Examples</h2>
-<p>Both examples are hermetic. They render a fixture-backed driver, so they need no repository. Each one is interactive, and it runs until you quit it.</p>
+<p>Both examples are hermetic. They render a fixture-backed driver, so they need no repository. Each one is interactive. In a terminal it runs until you quit it. When stdin reaches end of file, it renders one frame and exits 0.</p>
 <ul>
-  <li><code>examples/play.php</code> is the pane tour, with status, branches and log. Run it in a terminal with <code>php examples/play.php</code>, and press <code>q</code> to quit. Non-interactively, <code>printf 'q' | php examples/play.php</code> renders one frame and exits 0. With stdin at <code>/dev/null</code> it does not quit, so give it input.</li>
-  <li><code>examples/stage.php</code> is the staging demo, where <code>s</code> stages and unstages rows that visibly change. Run it with <code>php examples/stage.php</code>. Piping <code>sq</code> into it exits 0.</li>
+  <li><code>examples/play.php</code> is the pane tour, with status, branches and log. Run it in a terminal with <code>php examples/play.php</code>, and press <code>q</code> to quit. Non-interactively, <code>printf 'q' | php examples/play.php</code> renders one frame and exits 0. With stdin at <code>/dev/null</code> it also renders one frame and exits 0, so it never blocks a script or CI job. It keeps running only while stdin is an open pipe or terminal, so write a key to an open stream to drive it.</li>
+  <li><code>examples/stage.php</code> is the staging demo, where <code>s</code> stages and unstages rows that visibly change. Run it with <code>php examples/stage.php</code>. Piping <code>sq</code> into it exits 0, and so does stdin at <code>/dev/null</code>.</li>
 </ul>
 <p>The VHS tapes drive these examples, not the live binary, so the recorded output does not depend on the state of a repository. <code>tests/ExamplesSmokeTest.php</code> compiles each example against the live driver interface and boots the app, so a driver change that breaks an example fails the suite.</p>
 
