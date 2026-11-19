@@ -157,181 +157,186 @@ final class MsTeamsBundleWeldTest extends TestCase
         require_once \dirname(__DIR__, 3) . '/candy-msteams/tests/Fixture/FakeServe.php';
         $loop = Loop::get();
         $api = new \CandyCode\Bundles\MsTeams\Tests\Fixture\FakeTeamsApi($loop);
-        $port = $api->listen();
-        $serviceUrl = 'http://127.0.0.1:' . $port;
+        $channel = null;
+        try {
+            $port = $api->listen();
+            $serviceUrl = 'http://127.0.0.1:' . $port;
 
-        // Fixture RSA key: the signer here, the file:// roster the door reads.
-        $pair = \openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
-        self::assertNotFalse($pair);
-        \openssl_pkey_export($pair, $privatePem);
-        $details = \openssl_pkey_get_details($pair);
-        self::assertIsArray($details);
-        $keysFile = $this->tempDir . '/keys.json';
-        file_put_contents($keysFile, (string) json_encode(['keys' => [Jwk::fromPublicKey($details['key'], 'kid-weld')]]));
+            // Fixture RSA key: the signer here, the file:// roster the door reads.
+            $pair = \openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+            self::assertNotFalse($pair);
+            \openssl_pkey_export($pair, $privatePem);
+            $details = \openssl_pkey_get_details($pair);
+            self::assertIsArray($details);
+            $keysFile = $this->tempDir . '/keys.json';
+            file_put_contents($keysFile, (string) json_encode(['keys' => [Jwk::fromPublicKey($details['key'], 'kid-weld')]]));
 
-        // Credentials land in the SAME 0600 store the bundle reads, through
-        // the bundle's own writer; the first approver is bootstrapped by
-        // the operator (a store write), because pairing-mode refuses /pair
-        // to the unpaired.
-        $creds = new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath()), \SugarCraft\Code\Channels\ChannelsStore::new());
-        $creds->writeMsteamsPairing('default', [], ['u-approver'], [
-            'appId' => 'app-weld',
-            'appPassword' => 'weld-secret-app',
-            'tenantId' => '00000000-0000-4000-8000-000000000a1d',
-        ]);
+            // Credentials land in the SAME 0600 store the bundle reads, through
+            // the bundle's own writer; the first approver is bootstrapped by
+            // the operator (a store write), because pairing-mode refuses /pair
+            // to the unpaired.
+            $creds = new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath()), \SugarCraft\Code\Channels\ChannelsStore::new());
+            $creds->writeMsteamsPairing('default', [], ['u-approver'], [
+                'appId' => 'app-weld',
+                'appPassword' => 'weld-secret-app',
+                'tenantId' => '00000000-0000-4000-8000-000000000a1d',
+            ]);
 
-        $configDir = \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath();
-        if (!is_dir($configDir)) {
-            mkdir($configDir, 0o700, true);
-        }
-        file_put_contents($configDir . '/config.json', (string) json_encode([
-            'channels.msteams' => [
-                'enabled' => true,
-                'transport' => [
-                    'authBaseUrl' => $serviceUrl,
-                    'jwksUrl' => 'file://' . $keysFile,
-                    'insecureLoopbackProxy' => true,
+            $configDir = \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath();
+            if (!is_dir($configDir)) {
+                mkdir($configDir, 0o700, true);
+            }
+            file_put_contents($configDir . '/config.json', (string) json_encode([
+                'channels.msteams' => [
+                    'enabled' => true,
+                    'transport' => [
+                        'authBaseUrl' => $serviceUrl,
+                        'jwksUrl' => 'file://' . $keysFile,
+                        'insecureLoopbackProxy' => true,
+                    ],
+                    'access' => ['dmPolicy' => 'pairing'],
+                    // The pairing door answers only the configured approver roster
+                    // (not the store's allowlist), so the operator names one.
+                    'approvals' => ['approvers' => ['u-approver']],
                 ],
-                'access' => ['dmPolicy' => 'pairing'],
-                // The pairing door answers only the configured approver roster
-                // (not the store's allowlist), so the operator names one.
-                'approvals' => ['approvers' => ['u-approver']],
-            ],
-        ]));
-
-        // The serve the registry hands every channel (PL-5d): the bundle refuses to start without
-        // a host, so this window wires one the way ServeStartup does. The serve refuses session
-        // creates, which is the failure the pipeline below discloses in-chat. The channel shares
-        // the shared loop, as the serve's own channels do, so its outbound token dial progresses
-        // under runFor().
-        $serve = new \CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe($loop, refuseCreates: true);
-        $channel = new $entryClass();
-        $lightLines = [];
-        $channel->start(ChannelContext::for(
-            'candy-msteams',
-            'msteams',
-            $this->tempDir . '/root',
-            $loop,
-            static function (string $line) use (&$lightLines): void {
-                $lightLines[] = $line;
-            },
-            null,
-            \SugarCraft\Code\Cli\Bootstrap::channelsMsteamsSettings(),
-            \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath(),
-            host: $serve,
-        ), \SugarCraft\Code\Channels\ChannelsStore::new());
-        self::assertSame(['default'], $channel->faceNames(), 'the store triple built exactly one face');
-
-        $registry = new ChannelRegistry();
-        $why = null;
-        self::assertTrue($registry->register('candy-msteams', $channel, $why), 'the registry takes the bare name: ' . (string) $why);
-        $router = $registry->httpRouter();
-
-        // Request door: signed activity in, canned Response out — the router
-        // closure hands the WHOLE request to the channel (P1 law), so this
-        // is the mount, not a shortcut around it.
-        $post = function (array $activity, string $jwt) use ($router): \Psr\Http\Message\ResponseInterface {
-            $request = new ServerRequest(
-                'POST',
-                '/channels/msteams/api/messages',
-                ['Authorization' => 'Bearer ' . $jwt],
-                (string) json_encode($activity),
-            );
-            $response = $router($request);
-            self::assertNotNull($response, 'the mount owns this path');
-
-            return $response;
-        };
-        $token = function (string $aud) use ($privatePem): string {
-            $encode = static fn (string $bytes): string => rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
-            $head = $encode((string) json_encode(['alg' => 'RS256', 'typ' => 'JWT', 'kid' => 'kid-weld']));
-            $claims = $encode((string) json_encode([
-                'aud' => $aud, 'iss' => 'https://api.botframework.com', 'sub' => 'sub-1',
-                'nbf' => time() - 5, 'exp' => time() + 600,
             ]));
-            $signature = '';
-            self::assertNotFalse(openssl_sign($head . '.' . $claims, $signature, $privatePem, OPENSSL_ALGO_SHA256));
 
-            return $head . '.' . $claims . '.' . $encode($signature);
-        };
-        $dm = static function (string $id, string $userId, string $text, string $convId) use (&$serviceUrl): array {
-            return [
-                'type' => 'message',
-                'id' => $id,
+            // The serve the registry hands every channel (PL-5d): the bundle refuses to start without
+            // a host, so this window wires one the way ServeStartup does. The serve refuses session
+            // creates, which is the failure the pipeline below discloses in-chat. The channel shares
+            // the shared loop, as the serve's own channels do, so its outbound token dial progresses
+            // under runFor().
+            $serve = new \CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe($loop, refuseCreates: true);
+            $channel = new $entryClass();
+            $lightLines = [];
+            $channel->start(ChannelContext::for(
+                'candy-msteams',
+                'msteams',
+                $this->tempDir . '/root',
+                $loop,
+                static function (string $line) use (&$lightLines): void {
+                    $lightLines[] = $line;
+                },
+                null,
+                \SugarCraft\Code\Cli\Bootstrap::channelsMsteamsSettings(),
+                \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath(),
+                host: $serve,
+            ), \SugarCraft\Code\Channels\ChannelsStore::new());
+            self::assertSame(['default'], $channel->faceNames(), 'the store triple built exactly one face');
+
+            $registry = new ChannelRegistry();
+            $why = null;
+            self::assertTrue($registry->register('candy-msteams', $channel, $why), 'the registry takes the bare name: ' . (string) $why);
+            $router = $registry->httpRouter();
+
+            // Request door: signed activity in, canned Response out — the router
+            // closure hands the WHOLE request to the channel (P1 law), so this
+            // is the mount, not a shortcut around it.
+            $post = function (array $activity, string $jwt) use ($router): \Psr\Http\Message\ResponseInterface {
+                $request = new ServerRequest(
+                    'POST',
+                    '/channels/msteams/api/messages',
+                    ['Authorization' => 'Bearer ' . $jwt],
+                    (string) json_encode($activity),
+                );
+                $response = $router($request);
+                self::assertNotNull($response, 'the mount owns this path');
+
+                return $response;
+            };
+            $token = function (string $aud) use ($privatePem): string {
+                $encode = static fn (string $bytes): string => rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
+                $head = $encode((string) json_encode(['alg' => 'RS256', 'typ' => 'JWT', 'kid' => 'kid-weld']));
+                $claims = $encode((string) json_encode([
+                    'aud' => $aud, 'iss' => 'https://api.botframework.com', 'sub' => 'sub-1',
+                    'nbf' => time() - 5, 'exp' => time() + 600,
+                ]));
+                $signature = '';
+                self::assertNotFalse(openssl_sign($head . '.' . $claims, $signature, $privatePem, OPENSSL_ALGO_SHA256));
+
+                return $head . '.' . $claims . '.' . $encode($signature);
+            };
+            $dm = static function (string $id, string $userId, string $text, string $convId) use (&$serviceUrl): array {
+                return [
+                    'type' => 'message',
+                    'id' => $id,
+                    'serviceUrl' => $serviceUrl,
+                    'from' => ['id' => $userId, 'aadObjectId' => $userId, 'name' => 'Welder'],
+                    'conversation' => ['id' => $convId, 'conversationType' => 'personal', 'tenantId' => '00000000-0000-4000-8000-000000000a1d'],
+                    'text' => $text,
+                    'entities' => [],
+                ];
+            };
+
+            // (a) a garbage bearer is refused BEFORE any roster or token dial.
+            $garbage = $post($dm('a-act-0', 'u-weld', 'sneak', '19:dm-conv@thread.v2'), 'junk.junk.junk');
+            self::assertSame(401, $garbage->getStatusCode());
+            self::runFor($loop, 60);
+            self::assertSame([], $api->calls, 'an unverifiable token sends nothing anywhere');
+
+            // (b) a token minted for ANOTHER bot verifies its signature and
+            // still fails the audience door — the aud check is the wall.
+            $foreign = $post($dm('a-act-0b', 'u-weld', 'sneak', '19:dm-conv@thread.v2'), $token('some-other-bot'));
+            self::assertSame(401, $foreign->getStatusCode());
+
+            // (c) the pairing ladder, end to end through the real store.
+            self::assertSame(200, $post($dm('a-act-1', 'u-weld', 'hi there', '19:dm-conv@thread.v2'), $token('app-weld'))->getStatusCode());
+            self::runFor($loop, 700);
+            self::assertStringContainsString(
+                'pairing_requested',
+                implode("\n", $lightLines),
+                'the gate logged its verdict: ' . implode(' | ', $lightLines),
+            );
+            $notice = $api->lastCallFor('/activities', 'POST');
+            self::assertNotNull($notice, 'the unpaired DM answered with its code notice, not the model');
+            self::assertStringContainsString('Pairing required', (string) $notice['body']);
+            self::assertSame(1, preg_match('/Your code: `([A-Z2-9]{8})`/', $notice['body'], $m), 'the notice carries the 8-glyph code');
+            $code = $m[1];
+            self::assertArrayHasKey($code, (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->read()['platforms']['msteams']['accounts']['default']['pairingPending'] ?? [], 'the pending row landed in the store');
+
+            // (d) the approver answers in-chat; the store gains the peer.
+            self::assertSame(200, $post($dm('a-act-2', 'u-approver', '/pair approve ' . $code, '19:dm-approver@thread.v2'), $token('app-weld'))->getStatusCode());
+            self::runFor($loop, 700);
+            self::assertStringContainsString('Paired u-weld.', (string) $api->lastCallFor('/activities', 'POST')['body'], 'the approve answer rode the same raw door');
+            self::assertContains('u-weld', (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->msteamsAllowUsers('default'), 'approval appended the allowlist atomically');
+
+            // (e) the paired prompt meets a serve that refuses the session create
+            // — the refusal is disclosed in-chat, which proves the pipeline
+            // reached the router with store, sidecar, and redaction door all live.
+            self::assertSame(200, $post($dm('a-act-3', 'u-weld', 'hello', '19:dm-conv@thread.v2'), $token('app-weld'))->getStatusCode());
+            self::runFor($loop, 900);
+            $failure = $api->lastCallFor('/activities', 'POST');
+            self::assertNotNull($failure, 'the refusing serve refuses loudly into the channel');
+            self::assertSame(1, $serve->createSeen, 'the paired prompt asked the serve for one session');
+            self::assertStringContainsString('Could not open a session', (string) $failure['body']);
+            self::assertStringContainsString('fixture refuses create', (string) $failure['body']);
+
+            // (f) an invoke fast-acks with the envelope even when the ask is
+            // unknown to the placeholder router.
+            $invoked = $post([
+                'type' => 'invoke',
+                'id' => 'a-act-4',
                 'serviceUrl' => $serviceUrl,
-                'from' => ['id' => $userId, 'aadObjectId' => $userId, 'name' => 'Welder'],
-                'conversation' => ['id' => $convId, 'conversationType' => 'personal', 'tenantId' => '00000000-0000-4000-8000-000000000a1d'],
-                'text' => $text,
-                'entities' => [],
-            ];
-        };
+                'name' => 'adaptiveCard.action',
+                'from' => ['id' => 'u-approver', 'aadObjectId' => 'u-approver', 'name' => 'Approver'],
+                'conversation' => ['id' => '19:dm-approver@thread.v2', 'conversationType' => 'personal'],
+                'value' => ['candyApproval' => 'ask-9', 'verdict' => 'once'],
+            ], $token('app-weld'));
+            self::assertSame(200, $invoked->getStatusCode());
+            self::assertStringContainsString('"status":200', (string) $invoked->getBody(), 'invoke rides the ActivityEnvelope answer');
 
-        // (a) a garbage bearer is refused BEFORE any roster or token dial.
-        $garbage = $post($dm('a-act-0', 'u-weld', 'sneak', '19:dm-conv@thread.v2'), 'junk.junk.junk');
-        self::assertSame(401, $garbage->getStatusCode());
-        self::runFor($loop, 60);
-        self::assertSame([], $api->calls, 'an unverifiable token sends nothing anywhere');
-
-        // (b) a token minted for ANOTHER bot verifies its signature and
-        // still fails the audience door — the aud check is the wall.
-        $foreign = $post($dm('a-act-0b', 'u-weld', 'sneak', '19:dm-conv@thread.v2'), $token('some-other-bot'));
-        self::assertSame(401, $foreign->getStatusCode());
-
-        // (c) the pairing ladder, end to end through the real store.
-        self::assertSame(200, $post($dm('a-act-1', 'u-weld', 'hi there', '19:dm-conv@thread.v2'), $token('app-weld'))->getStatusCode());
-        self::runFor($loop, 700);
-        self::assertStringContainsString(
-            'pairing_requested',
-            implode("\n", $lightLines),
-            'the gate logged its verdict: ' . implode(' | ', $lightLines),
-        );
-        $notice = $api->lastCallFor('/activities', 'POST');
-        self::assertNotNull($notice, 'the unpaired DM answered with its code notice, not the model');
-        self::assertStringContainsString('Pairing required', (string) $notice['body']);
-        self::assertSame(1, preg_match('/Your code: `([A-Z2-9]{8})`/', $notice['body'], $m), 'the notice carries the 8-glyph code');
-        $code = $m[1];
-        self::assertArrayHasKey($code, (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->read()['platforms']['msteams']['accounts']['default']['pairingPending'] ?? [], 'the pending row landed in the store');
-
-        // (d) the approver answers in-chat; the store gains the peer.
-        self::assertSame(200, $post($dm('a-act-2', 'u-approver', '/pair approve ' . $code, '19:dm-approver@thread.v2'), $token('app-weld'))->getStatusCode());
-        self::runFor($loop, 700);
-        self::assertStringContainsString('Paired u-weld.', (string) $api->lastCallFor('/activities', 'POST')['body'], 'the approve answer rode the same raw door');
-        self::assertContains('u-weld', (new CredentialStore(CredentialStore::pathIn(\SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath())))->msteamsAllowUsers('default'), 'approval appended the allowlist atomically');
-
-        // (e) the paired prompt meets a serve that refuses the session create
-        // — the refusal is disclosed in-chat, which proves the pipeline
-        // reached the router with store, sidecar, and redaction door all live.
-        self::assertSame(200, $post($dm('a-act-3', 'u-weld', 'hello', '19:dm-conv@thread.v2'), $token('app-weld'))->getStatusCode());
-        self::runFor($loop, 900);
-        $failure = $api->lastCallFor('/activities', 'POST');
-        self::assertNotNull($failure, 'the refusing serve refuses loudly into the channel');
-        self::assertSame(1, $serve->createSeen, 'the paired prompt asked the serve for one session');
-        self::assertStringContainsString('Could not open a session', (string) $failure['body']);
-        self::assertStringContainsString('fixture refuses create', (string) $failure['body']);
-
-        // (f) an invoke fast-acks with the envelope even when the ask is
-        // unknown to the placeholder router.
-        $invoked = $post([
-            'type' => 'invoke',
-            'id' => 'a-act-4',
-            'serviceUrl' => $serviceUrl,
-            'name' => 'adaptiveCard.action',
-            'from' => ['id' => 'u-approver', 'aadObjectId' => 'u-approver', 'name' => 'Approver'],
-            'conversation' => ['id' => '19:dm-approver@thread.v2', 'conversationType' => 'personal'],
-            'value' => ['candyApproval' => 'ask-9', 'verdict' => 'once'],
-        ], $token('app-weld'));
-        self::assertSame(200, $invoked->getStatusCode());
-        self::assertStringContainsString('"status":200', (string) $invoked->getBody(), 'invoke rides the ActivityEnvelope answer');
-
-        // Dispose closes the door; the state dir (durable bindings) outlives
-        // the dial — the §8.6 posture in one line each.
-        $channel->dispose();
-        $afterDispose = $post($dm('a-act-5', 'u-weld', 'still there?', '19:dm-conv@thread.v2'), $token('app-weld'));
-        self::assertSame(503, $afterDispose->getStatusCode());
-        self::assertStringContainsString('channel_not_started', (string) $afterDispose->getBody());
-        self::assertDirectoryExists($configDir . '/msteams');
-
-        $api->stop();
+            // Dispose closes the door; the state dir (durable bindings) outlives
+            // the dial — the §8.6 posture in one line each.
+            $channel->dispose();
+            $afterDispose = $post($dm('a-act-5', 'u-weld', 'still there?', '19:dm-conv@thread.v2'), $token('app-weld'));
+            self::assertSame(503, $afterDispose->getStatusCode());
+            self::assertStringContainsString('channel_not_started', (string) $afterDispose->getBody());
+            self::assertDirectoryExists($configDir . '/msteams');
+        } finally {
+            // A failed assertion above must not leave the listener or the channel armed on the shared loop.
+            $channel?->dispose();
+            $api->stop();
+        }
     }
 
     private function installBundle(): string
