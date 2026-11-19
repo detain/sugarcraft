@@ -154,11 +154,34 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#track-a-menu-path-and-go-back">Track a menu path and go back</a></li>
+            <li class="toc-h3"><a href="#render-an-accessible-html-trail-with-links">Render an accessible HTML trail with links</a></li>
+            <li class="toc-h3"><a href="#make-crumbs-clickable-with-mouse-zones">Make crumbs clickable with mouse zones</a></li>
+            <li class="toc-h3"><a href="#keep-a-deep-trail-readable-in-a-narrow-bar">Keep a deep trail readable in a narrow bar</a></li>
+            <li class="toc-h3"><a href="#track-a-directory-trail">Track a directory trail</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#navstack">NavStack</a></li>
+            <li class="toc-h3"><a href="#breadcrumb">Breadcrumb</a></li>
+            <li class="toc-h3"><a href="#shell-url-navigationitem-and-escape">Shell, Url, NavigationItem and Escape</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h2"><a href="#keys-and-keybindings">Keys and keybindings</a></li>
+            <li class="toc-h2"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#a-click-lands-on-the-wrong-crumb-after-the-bar-narrows">A click lands on the wrong crumb after the bar narrows</a></li>
+            <li class="toc-h3"><a href="#stray-control-characters-appear-in-the-terminal">Stray control characters appear in the terminal</a></li>
+            <li class="toc-h3"><a href="#push-throws-for-a-title-that-looks-valid">push() throws for a title that looks valid</a></li>
+            <li class="toc-h3"><a href="#the-separator-throws">The separator throws</a></li>
+            <li class="toc-h3"><a href="#the-focused-crumb-does-not-render-as-focused">The focused crumb does not render as focused</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#push-pop-back">Push / pop / back</a></li>
             <li class="toc-h3"><a href="#basic-crumb-trail">Basic crumb trail</a></li>
@@ -166,84 +189,219 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and cwd-tracked directory trails. Rendered trails carry click zones (sugar-mouse) and an accessible HTML shape (aria-label nav + aria-current).</p>
+<p class="lede" style="margin-top: 28px;">sugar-navstack is the navigation state behind a breadcrumb trail: a stack of titled items, a renderer that elides the oldest crumbs to fit a width, and click zones that map a terminal cell back to a stack position. It renders nothing by itself beyond plain text and accessible HTML, so a host decides how the trail looks. It mirrors <a href="https://github.com/KevM/bubbleo">KevM/bubbleo</a> (Go) in shape; the code is native PHP.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-navstack</code></pre>
-    <p>Packagist currently serves this package from <code>dev-master</code> only (no tagged release yet): require it with a root <code>minimum-stability: "dev"</code> plus an exact <code>sugarcraft/sugar-navstack: "dev-master"</code>.</p>
+    <p style="margin-top: 12px;">Packagist serves this package from <code>dev-master</code> only, with no tagged release yet. Require it with a root <code>minimum-stability: "dev"</code> and <code>prefer-stable: true</code>, the SugarCraft-wide convention, or pin <code>"sugarcraft/sugar-navstack": "dev-master"</code>. Requires PHP 8.3 or newer and <code>ext-mbstring</code>. Click zones depend on <code>sugarcraft/sugar-mouse</code>, which Composer installs with it.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\NavStack\NavStack;
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-php"><?php
+
+use SugarCraft\NavStack\NavStack;
 
 // NavStack is a mutable stack: push() returns the same stack for chaining.
 $nav = NavStack::new()
-    -&gt;push('Home', '/')                    // title, then any payload
-    -&gt;push('Settings', '/settings')
-    -&gt;push('Display', '/settings/display');
+    ->push('Home', '/')
+    ->push('Settings', '/settings')
+    ->push('Display', '/settings/display');
 
-echo $nav-&gt;view();          // Home › Settings › Display
-echo $nav-&gt;view(' / ');     // Home / Settings / Display
+echo $nav->view();            // Home › Settings › Display
+echo $nav->view(' / ');       // Home / Settings / Display
 
-$top = $nav-&gt;pop();         // NavigationItem: title 'Display', data '/settings/display'
-$nav-&gt;depth();              // 2</code></pre>
+$top = $nav->pop();           // NavigationItem: title 'Display', data '/settings/display'
+echo $nav->depth();           // 2</code></pre>
+    <p style="margin-top: 12px;">The payload argument is opaque to the library. It travels with the item and comes back on <code>pop()</code>, <code>current()</code> and <code>items()</code>, so a host can store a route, a screen object or an id there.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
-            <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls withDirectory() (pushDirectory() remains as a deprecated forwarder); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
-            <div class="feature"><strong>Filter</strong><span>Unicode case-folded substring filtering over titles and payload data (arrays matched by value up to 64 nesting levels — deeper payloads throw).</span></div>
-            <div class="feature"><strong>Accessible HTML</strong><span>viewHtml() emits the recommended nav[aria-label] &gt; ol shape with aria-current="page" on the live crumb — screen-reader-ready without host markup work.</span></div>
-            <div class="feature"><strong>Breadcrumb renderer</strong><span>Theme-aware plain-text rendering with width-capped left-elision, custom separators/ellipses, per-item renderer closures, and stack-indexed mouse zones that survive truncation.</span></div>
-            
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The model has three layers. <strong>NavStack</strong> owns the ordered items and a generation counter that changes on every mutation. <strong>Breadcrumb</strong> turns a stack into a painted row, elides the oldest crumbs when a width cap applies, and optionally records a click zone for each visible crumb. <strong>Shell</strong> pairs a stack with a breadcrumb through immutable operations, for hosts that prefer value semantics.</p>
+    <p>Titles are untrusted by default. Every title passes through the same display sweep before it reaches output: terminal escapes, control bytes and the library's own zone sentinels are removed, and a title that is empty after that sweep is refused. Payloads are never rendered, so they are safe to carry arbitrary data.</p>
+    <p>NavStack is the navigation-state model, not a UI. The README records zero in-repo consumers today. <code>sugar-dashboard</code>'s navigation components are the intended kind of host, rendering this kind of state.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+    <h3 id="track-a-menu-path-and-go-back" style="margin-top: 24px;">Track a menu path and go back</h3>
+    <pre class="code"><code class="language-php">$nav = NavStack::new()->push('Home', 'home');
+$nav->push('Settings', 'settings');
+$nav->push('Display', 'display');
+
+$back = $nav->canPop() ? $nav->pop() : null;   // removes Display
+$nav->popToRoot();                              // back to Home only
+echo $nav->view();                              // Home</code></pre>
+    <p><code>pop()</code> returns <code>null</code> only on an empty stack. <code>canPop()</code> is true only when a pop leaves a non-empty stack, so it is false at depth 1 even though <code>pop()</code> still returns the root and empties the stack. To pop whatever is on top, check <code>isEmpty()</code> instead.</p>
+
+    <h3 id="render-an-accessible-html-trail-with-links" style="margin-top: 24px;">Render an accessible HTML trail with links</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\NavStack\{NavStack, Url};
+
+$stack = NavStack::new()->push('Home')->push('My Settings');
+
+echo $stack->viewHtml(
+    href: static fn ($item, int $i): ?string => Url::deriveTo($stack, $i),
+    label: 'Breadcrumb',
+    allowSchemes: ['/', 'https'],
+);</code></pre>
+    <p><code>viewHtml()</code> emits <code>nav[aria-label]</code> around an <code>ol</code>, with <code>aria-current="page"</code> on the last crumb. Each ancestor becomes an anchor when the callback returns a string, and stays plain text when it returns <code>null</code>. <code>$allowSchemes</code> gates the URLs the callback returns, and rejected ones render as plain text. The <code>'/'</code> entry admits scheme-less paths such as <code>Url::deriveTo()</code> output, so leave it out and every relative link renders as plain text. The first crumb of the example therefore becomes an anchor to <code>/Home</code>.</p>
+
+    <h3 id="make-crumbs-clickable-with-mouse-zones" style="margin-top: 24px;">Make crumbs clickable with mouse zones</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Mouse\{Scan, Scanner};
+use SugarCraft\NavStack\Breadcrumb;
+
+$bc = Breadcrumb::new()->withScanner(Scanner::new())->setMaxWidth(40);
+
+$rendered = $bc->render($stack);
+$bc->scan($rendered, viewportWidth: 80, row: 1);   // scan the untouched output
+echo Scan::strip($rendered), "\n";                 // strip before painting
+
+// On a click at ($col, 1):
+$item = $bc->hitItem($stack, $col, 1);
+if ($item !== null) {
+    $stack->popTo(array_search($item, $stack->items(), true));
+}</code></pre>
+    <p>The order matters. Scan the output from <code>render()</code> untouched, then strip it for display, or the zone sentinels appear as garbage cells. Zone ids carry the stack index, so a click still resolves after elision has hidden the oldest crumbs. Re-scan after every render. A click on the <code>…</code> marker returns <code>null</code> from <code>hitItem()</code>, and <code>elisionSpan()</code> reports where the marker sits if the host wants to treat it as an expansion gesture.</p>
+
+    <h3 id="keep-a-deep-trail-readable-in-a-narrow-bar" style="margin-top: 24px;">Keep a deep trail readable in a narrow bar</h3>
+    <pre class="code"><code class="language-php">$bc = Breadcrumb::new()
+    ->setMaxWidth(24)
+    ->setTruncator('[more] ')
+    ->setItemRenderer(static fn ($item, int $i, bool $focused = false): ?string
+        => $focused ? '[' . $item->title . ']' : null);   // null keeps the default
+
+$bc->setFocusedIndex($selected);
+echo $bc->render($stack);</code></pre>
+    <p><code>setMaxWidth()</code> elides the oldest crumbs first. <code>setTruncator()</code> replaces the default <code>…</code>, which helps screen readers. A custom item renderer returns <code>null</code> for crumbs it does not style, and its strings are emitted raw, so do not put untrusted text in them. <code>setFocusedIndex()</code> is intent only. Read <code>focusedIndex()</code> afterwards to see whether the selected crumb survived the width math.</p>
+
+    <h3 id="track-a-directory-trail" style="margin-top: 24px;">Track a directory trail</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\NavStack\Shell;
+
+$shell = Shell::new();
+$shell = $shell->withDirectory('/home/user/projects/sugarcraft/src');
+echo $shell->renderBreadcrumb();</code></pre>
+    <p><code>Shell</code> never watches the filesystem. The host detects a directory change and calls <code>withDirectory()</code>, which appends the path's segments to the current trail rather than replacing it. To start a fresh trail at a new location, build it from <code>Shell::new()</code>, as in <code>Shell::new()-&gt;withDirectory($path)</code>. <code>pushDirectory()</code> still works as a deprecated forwarder. Every <code>with*()</code> returns a new <code>Shell</code>. All of them except <code>withBreadcrumb()</code> give the derived shell its own copy of the breadcrumb renderer. <code>withBreadcrumb()</code> keeps the instance you pass, so later changes to that renderer show through.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <h3 id="navstack" style="margin-top: 24px;">NavStack</h3>
+<table class="api-table">
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>new()</code> / <code>new NavStack()</code></td><td>Empty stack. Both forms work, and the class has no explicit constructor</td></tr>
+<tr><td><code>push(string $title, mixed $data = null): self</code></td><td>Push an item and return the same stack. Refuses titles that are empty after sanitizing, and growth past <code>MAX_STACK_DEPTH</code> (10000)</td></tr>
+<tr><td><code>pop(): ?NavigationItem</code> / <code>popTo(int $index)</code> / <code>popToRoot()</code></td><td>Remove the top item / truncate so the item at <code>$index</code> is the top / keep only the root. <code>popTo()</code> refuses negative indices</td></tr>
+<tr><td><code>current()</code> / <code>parent()</code> / <code>depth()</code> / <code>canPop()</code> / <code>isEmpty()</code></td><td>Top item / the item below it / item count / whether a pop leaves a non-empty stack (depth above 1) / whether the stack is empty</td></tr>
+<tr><td><code>items(): array</code> / <code>updateTop(mixed $data)</code></td><td>All items, bottom first / replace the top item's payload</td></tr>
+<tr><td><code>setItems(array $items)</code> / <code>clear()</code></td><td>Replace the whole stack / empty it</td></tr>
+<tr><td><code>generation(): int</code></td><td>Mutation counter. A breadcrumb hit is refused when its stack generation no longer matches</td></tr>
+<tr><td><code>safeTitle(string $title): string</code></td><td>The display sweep, exposed so a host can sanitize a title before pushing it</td></tr>
+<tr><td><code>view(string $separator = ' › ')</code></td><td>Plain-text trail. Titles are sanitized. CR, LF and terminal escapes in the separator throw</td></tr>
+<tr><td><code>viewHtml(?callable $href, string $label = 'Breadcrumb', ?array $allowSchemes)</code></td><td>Accessible HTML landmark. <code>$href</code> receives <code>(NavigationItem, index)</code></td></tr>
+<tr><td><code>filtered(string $term): self</code></td><td>New stack whose items match <code>$term</code> by Unicode case-folded substring over the title and scalar payloads. Indices renumber. <code>filter()</code> is a deprecated forwarder</td></tr>
+</table>
+
+    <h3 id="breadcrumb" style="margin-top: 32px;">Breadcrumb</h3>
+<table class="api-table">
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>new()</code> / <code>render(NavStack $stack): string</code></td><td>Create the renderer / paint the stack as one row</td></tr>
+<tr><td><code>renderTitles(array $titles): string</code></td><td>Render a pre-filtered title list instead of a stack. Each title is capped the same way a constructed item is</td></tr>
+<tr><td><code>setSeparator(string)</code> / <code>setTruncator(string)</code> / <code>setEmptyLabel(string)</code></td><td>Between-crumb separator (CR and LF refused) / elision marker (default <code>…</code>) / label painted at depth 0</td></tr>
+<tr><td><code>setMaxWidth(int)</code></td><td>Width cap. Oldest crumbs elide first. <code>0</code> disables the cap, and a negative value throws</td></tr>
+<tr><td><code>setItemRenderer(\Closure)</code></td><td><code>fn(NavigationItem, int $index, bool $focused): ?string</code>. <code>null</code> falls back to the default</td></tr>
+<tr><td><code>setFocusedIndex(?int)</code> / <code>focusedIndex(): ?int</code></td><td>Mark a crumb as selected / the index the last render actually reflected</td></tr>
+<tr><td><code>setZonePrefix(string)</code></td><td>Rename the <code>crumb-</code> zone id prefix, so merged dispatch tables stay unambiguous</td></tr>
+<tr><td><code>withScanner(?Scanner)</code> / <code>scanner(): ?Scanner</code></td><td>Attach a sugar-mouse scanner for click zones / read it back</td></tr>
+<tr><td><code>scan(string $rendered, int $viewportWidth, int $row = 1): self</code></td><td>Record zones for a rendered row. The viewport width is required, and zones clamp to it</td></tr>
+<tr><td><code>hit(int $col, int $row): ?Zone</code> / <code>hitItem(NavStack $stack, int $col, int $row): ?NavigationItem</code></td><td>Raw zone lookup / the clicked stack item, or <code>null</code> on a miss. Throws <code>LogicException</code> when the stack is not the generation the breadcrumb rendered</td></tr>
+<tr><td><code>visibleIndices(): array</code></td><td>Stack indices that survived the last render's truncation</td></tr>
+<tr><td><code>elisionSpan(): ?array</code></td><td><code>[start, end, row]</code> of the painted <code>…</code> marker, or <code>null</code></td></tr>
+</table>
+
+    <h3 id="shell-url-navigationitem-and-escape" style="margin-top: 32px;">Shell, Url, NavigationItem and Escape</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Shell</td><td><code>new(?Breadcrumb)</code>, <code>withPush</code>, <code>withPop</code>, <code>withPopTo</code>, <code>withDirectory</code>, <code>withBreadcrumb</code>, <code>renderBreadcrumb()</code></td><td>Immutable facade. Each <code>with*()</code> returns a new shell. <code>withBreadcrumb()</code> deliberately shares a renderer</td></tr>
+<tr><td>Url</td><td><code>derive(NavStack): string</code>, <code>deriveTo(NavStack, int $index): string</code>, <code>parse(string $path): NavStack</code></td><td>Percent-encoded path from the trail / the prefix up to and including <code>$index</code> / a stack built from path segments. Titles only; payloads do not travel</td></tr>
+<tr><td>NavigationItem</td><td><code>__construct(string $title, mixed $data = null)</code>, <code>title()</code></td><td>One stack entry. Refuses titles over <code>MAX_TITLE_BYTES</code> (65536 raw bytes)</td></tr>
+<tr><td>Escape</td><td><code>title(string, separator)</code>, <code>unescape(string, separator)</code></td><td>Escape a title for the crumb stream, so a separator inside it cannot split it, and reverse that with <code>unescape()</code>. Use it when a trail is stored as one string</td></tr>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>sugar-navstack has no config file or environment variables. Its behavior is set by the constants and the renderer setters below.</p>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>NavStack::SEPARATOR</code></td><td>string</td><td><code>' › '</code></td><td>Separator used by <code>view()</code> and the breadcrumb default</td></tr>
+<tr><td><code>NavStack::TRUNCATOR</code></td><td>string</td><td><code>'… '</code></td><td>Elision marker used by the breadcrumb default</td></tr>
+<tr><td><code>NavStack::MAX_STACK_DEPTH</code></td><td>int</td><td>10000</td><td>Refuses <code>push()</code> past this depth</td></tr>
+<tr><td><code>NavigationItem::MAX_TITLE_BYTES</code></td><td>int</td><td>65536</td><td>Refuses titles longer than this in raw bytes</td></tr>
+<tr><td><code>Breadcrumb::setMaxWidth()</code></td><td>int</td><td>0</td><td>Width cap in cells. <code>0</code> means no cap</td></tr>
+</table>
+    <p style="margin-top: 12px;">Filtering and payload walking refuse payloads nested deeper than 64 levels. Guards throw <code>\InvalidArgumentException</code> rather than truncating silently.</p>
+
+    <h2 id="keys-and-keybindings" style="margin-top: 40px;">Keys and keybindings</h2>
+    <p>sugar-navstack handles no keys. A host maps its own keys to <code>pop()</code>, <code>popTo()</code> and <code>popToRoot()</code>. A keyboard user reaches the same jumps as a mouse user: select a visible index from <code>visibleIndices()</code> and call <code>popTo()</code> on it. An index past the top of the stack is a no-op in <code>popTo()</code>, but a negative index throws <code>\InvalidArgumentException</code>.</p>
+
+    <h2 id="theme-and-styling" style="margin-top: 40px;">Theme and styling</h2>
+    <p>The library emits no ANSI and no motion. The default output is plain text, so styling belongs to the host. Wrap the item renderer's return value with your own <code>Style</code> to color the current crumb, and keep the separator and truncator plain so they stay legible in monochrome terminals.</p>
+    <p style="margin-top: 12px;">The glyphs <code>›</code> and <code>…</code> assume a UTF-8 terminal. Under <code>LANG=C</code> or <code>TERM=dumb</code>, switch to ASCII with <code>setSeparator(' > ')->setTruncator('... ')</code>.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-navstack">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-navstack/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-navstack/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/KevM/bubbleo">KevM/bubbleo</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/basic.php</code> drives a stack through <code>push()</code>, <code>depth()</code>, <code>current()</code>, <code>parent()</code> and <code>items()</code>. It then renders the trail with the default separator, a custom separator and a width-20 cap that elides the oldest crumb. Run it with <code>php examples/basic.php</code>.</li>
+      <li><code>examples/navigation.php</code> walks a push, pop and back flow, shows the filtered view, adds a <code>Shell</code> directory trail, and demonstrates the focus callback. Run it with <code>php examples/navigation.php</code>.</li>
+      <li><code>examples/mouse.php</code> is the click-zone reference. It renders a four-deep stack in a width-24 bar, prints the cell range of each crumb, dispatches synthetic clicks to <code>popTo()</code> indices, and checks that the elision marker is not navigation. Run it with <code>php examples/mouse.php</code>.</li>
+    </ul>
+    <p style="margin-top: 12px;">The examples read <code>vendor/autoload.php</code>, so run them from the library root after <code>composer install</code>.</p>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-navstack
+composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite covers the stack model, HTML output and escaping, URL derivation and parsing, title forgery, depth guards, zone geometry and the <code>Shell</code> facade. <code>AliasesTest</code> resolves the old <code>sugar-crumbs</code> class names to their canonical classes, and <code>LangCoverageTest</code> checks the localization registry against the published constants.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+    <h3 id="a-click-lands-on-the-wrong-crumb-after-the-bar-narrows" style="margin-top: 24px;">A click lands on the wrong crumb after the bar narrows</h3>
+    <p>Hit-testing must use the same stack that was rendered. Zone ids are positions in the rendered stack, so after <code>filtered()</code> they are positions in the filtered stack. Pass that exact stack to <code>hitItem()</code>, and re-scan after every render. If the stack was pushed, popped, or otherwise mutated after the last render, <code>hitItem()</code> throws <code>LogicException</code> instead of returning <code>null</code>. Re-render and re-scan the stack before dispatching a click.</p>
+
+    <h3 id="stray-control-characters-appear-in-the-terminal" style="margin-top: 24px;">Stray control characters appear in the terminal</h3>
+    <p>The painted row still carries zone sentinels. Strip the output with <code>Scan::strip()</code> before writing it, and keep the unstripped string only for <code>scan()</code>.</p>
+
+    <h3 id="push-throws-for-a-title-that-looks-valid" style="margin-top: 24px;">push() throws for a title that looks valid</h3>
+    <p>A title that is empty after trimming and sanitizing is refused. Sanitizing removes escapes and control bytes, so a title made only of those is refused too. A title over 65536 raw bytes is refused by <code>NavigationItem</code>. Trim and cap titles before pushing them, or call <code>NavStack::safeTitle()</code> to see what the sweep produces.</p>
+
+    <h3 id="the-separator-throws" style="margin-top: 24px;">The separator throws</h3>
+    <p><code>view()</code> and <code>Breadcrumb::setSeparator()</code> refuse separators that contain CR or LF, and <code>view()</code> refuses terminal escapes. Use a single-line separator.</p>
+
+    <h3 id="the-focused-crumb-does-not-render-as-focused" style="margin-top: 24px;">The focused crumb does not render as focused</h3>
+    <p><code>setFocusedIndex()</code> is intent. An index beyond the stack, a negative index, or a crumb elided off the left edge reads back as <code>null</code>. Check <code>focusedIndex()</code> after <code>render()</code>, and compare <code>visibleIndices()</code> to confirm the crumb survived the width cap.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+<table class="api-table">
+<tr><th>KevM/bubbleo (Go)</th><th>sugar-navstack (PHP)</th></tr>
+<tr><td>Navigation stack of screens</td><td><code>NavStack</code>, with <code>push()</code>, <code>pop()</code> and <code>popTo()</code></td></tr>
+<tr><td>Breadcrumb trail</td><td><code>Breadcrumb</code> with width-capped elision and per-item renderers</td></tr>
+<tr><td>Closable screen lifecycle</td><td><code>Closable</code> vocabulary. The library never dispatches the hooks; the host does</td></tr>
+<tr><td>Not ported as-is</td><td>Click zones (sugar-mouse), accessible HTML, URL derivation and the directory <code>Shell</code> are SugarCraft additions</td></tr>
+</table>
+    <p style="margin-top: 12px;">The port mapping is in <code>docs/MATCHUPS.md</code>.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <p>Every mutation on <code>NavStack</code> bumps the generation counter, so a breadcrumb hit recorded against an older stack is refused. <code>Breadcrumb::scan()</code> records zones against the stack indices it rendered. Those zones persist until the next <code>scan()</code>, so a click resolves against the render the user actually saw.</p>
+    <p>Titles pass through <code>TitleSanitizer::sanitize()</code> before they reach output. <code>Escape</code> handles the separator inside the crumb stream, so a title that contains the separator text survives a round trip only when it is escaped. Payloads are never rendered.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>sugar-navstack has no tagged release yet. It is tracked from <code>dev-master</code>, and its history is the commit log of the <code>sugar-navstack/</code> directory in the monorepo. Read the <a href="https://github.com/sugarcraft/sugar-navstack/commits/master">commit history</a> for changes. The rename of <code>pushDirectory()</code> to <code>withDirectory()</code> and of <code>filter()</code> to <code>filtered()</code> is recorded as a deprecation, and the old names still forward.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-mouse.html">sugar-mouse</a>: the <code>Scanner</code> that records click zones and <code>Scan::strip()</code>.</li>
+      <li><a href="sugar-dashboard.html">sugar-dashboard</a>: a host whose navigation components render this kind of state.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the <code>Model</code> and runtime a TUI host runs on.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
-<tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack). Refuses titles empty after trimming and sanitizing, and growth past MAX_STACK_DEPTH.</td></tr>
-<tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / popToRoot() / current() / parent() / depth()</td><td>Pop and inspect the stack; generation(): int stamps the mutation counter so cross-generation breadcrumb dispatch is refused</td></tr>
-<tr><td>NavStack</td><td>safeTitle(string): string</td><td>Public static facade over the display sweep — sanitize untrusted titles before pushing them</td></tr>
-<tr><td>NavStack</td><td>view(string $separator = ' › '): string</td><td>Plain-text crumb trail; titles sanitized and the separator control-gated (CR/LF and terminal escapes throw; zone sentinels stripped; empty is legal here)</td></tr>
-<tr><td>NavStack</td><td>viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?array $allowSchemes = null): string</td><td>Accessible HTML: nav[aria-label=&quot;…&quot;] around an ol, last item aria-current=&quot;page&quot;. $href receives (item, stack index); a string answer links that crumb, null leaves it plain text (an unlinked ancestor). $allowSchemes gates returned URLs by scheme (case-insensitive; '/' admits scheme-less paths) — rejected URLs render as plain text. $label names the landmark via aria-label.</td></tr>
-<tr><td>NavStack</td><td>filtered(string $term): self</td><td>New stack with items whose title or scalar/Stringable payload (array values up to 64 levels) contains $term — Unicode (mb_stripos) case fold; result indices renumber. filter() is a deprecated forwarder.</td></tr>
-<tr><td>Shell</td><td>withDirectory(string $cwd): self / withBreadcrumb(Breadcrumb)</td><td>New Shell per navigation mutation (derived Shells get their own breadcrumb); withBreadcrumb opts into deliberate sharing</td></tr>
-<tr><td>Url</td><td>derive(NavStack): string / deriveTo(NavStack, int $index): string</td><td>Percent-encoded path from the trail (sanitize-then-encode); deriveTo() yields the ancestor prefix up to and including $index — every prefix is a byte-identical segment slice of the full path</td></tr>
-<tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry; the constructor refuses titles empty after trim+sanitize and over 64 KiB raw</td></tr>
-<tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
-<tr><td>Breadcrumb</td><td>scan(string $rendered, int $viewportWidth, int $row = 1) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner, clamped to the REQUIRED viewport width (for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem; failure shapes follow the scan()/hit() rule table</td></tr>
-<tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
-<tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Cap trail width; oldest crumbs elide first. 0 (default) disables the cap; negative throws.</td></tr>
-<tr><td>Breadcrumb</td><td>setTruncator(string $ellipsis)</td><td>Glyph marking elided crumbs (default …); forged zone-sentinel bytes are stripped, multi-line throws</td></tr>
-<tr><td>Breadcrumb</td><td>setItemRenderer(\Closure $fn)</td><td>Per-item custom rendering fn(item, index, focused): ?string — null falls back to the default; returned strings emit RAW. A smoke call at assignment refuses non-string answers; contract errors otherwise throw at render(). 2-arg closures keep working.</td></tr>
-<tr><td>Breadcrumb</td><td>setEmptyLabel(string)</td><td>Depth-0 opt-in: paints a label through the same width pipeline; never a clickable zone</td></tr>
-<tr><td>Breadcrumb</td><td>setFocusedIndex(?int) / focusedIndex(): ?int</td><td>Hands the item renderer a third bool $focused; focus is intent — off-visible indices clamp to null and the accessor reports what the render reflected</td></tr>
-<tr><td>Breadcrumb</td><td>elisionSpan(): ?array</td><td>[start, end, row] of the painted … marker after scan(), or null; treat hits there as an expansion gesture, not navigation</td></tr>
-<tr><td>Breadcrumb</td><td>setZonePrefix(string)</td><td>Rename crumb- zone ids (alphabet [A-Za-z0-9._:-]); keeps merged dispatch tables of independent widgets unambiguous</td></tr>
-<tr><td>Breadcrumb</td><td>visibleIndices(): array</td><td>Stack indices that survived the last render's truncation — the map from display position to zone id</td></tr>
-<tr><td>Breadcrumb</td><td>renderTitles(array $titles): string</td><td>Render a pre-trimmed title list (host-owned filtering) instead of a NavStack; each title is byte-capped like a constructed item</td></tr>
-<tr><td>Breadcrumb</td><td>scanner(): ?Scanner</td><td>Read back the owned (copied-in) sugar-mouse scanner, or null when click zones are off</td></tr>
-<tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>
-</table>
     </div>
   </div>
 </section>
 
-
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the basic and navigation examples. The mouse example, the click-zone reference, has a tape but no recording yet. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/navigation.gif" alt="Terminal recording: a scripted back-navigation walk — Home, Settings, and Display pushed, then popped one by one while the trail shrinks." onerror="this.parentElement.style.display='none'">
