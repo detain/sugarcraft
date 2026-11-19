@@ -202,7 +202,7 @@ final class WorktreeIncludeContainmentTest extends TestCase
     /**
      * A checkout that ships no `.worktreeinclude` at all — the overwhelmingly
      * common case — must be SILENT. The first spelling of the containment check
-     * ran before the existence check, and since {@see \SugarCraft\Code\Support\ContainedPath}
+     * ran before the existence check, and since {@see \SugarCraft\Core\Util\PathJail}
      * answers false for anything it cannot resolve, every such run reported
      * "resolves outside the repository root" about a file that was simply not
      * there. Seven of those lines appeared in one run of
@@ -325,7 +325,7 @@ final class WorktreeIncludeContainmentTest extends TestCase
      * MEASURED ALLOWED before the fix, every row below; `/etc/passwd` was refused,
      * which is why the POSIX half read as correct. This matters more than a
      * missing case because the doc-block's argument for keeping this guard is that
-     * the LEXICAL test is the durable one — `ContainedPath::within()` is a
+     * the LEXICAL test is the durable one — `\SugarCraft\Core\Util\PathJail::within()` is a
      * two-`realpath()` snapshot and the write happens after it — so on Windows the
      * durable guard was the defeated one.
      *

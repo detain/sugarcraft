@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\TimedFileLock;
@@ -577,7 +576,7 @@ final class WorktreeManager
             : $this->config->worktreeIncludeFile;
 
         // ABSENCE IS CHECKED FIRST, and the order is the whole correctness of
-        // the refusal notice. `ContainedPath` answers false for anything it
+        // the refusal notice. `sugar-core PathJail` answers false for anything it
         // cannot resolve, so containment-then-existence reported "resolves
         // outside the repository root" for the overwhelmingly common case of a
         // checkout that simply ships no `.worktreeinclude` — measured as seven
@@ -605,12 +604,12 @@ final class WorktreeManager
         // SO THE ANCHOR IS THE TREE THE PATH IS ACTUALLY RESOLVED AGAINST: the
         // repo root when there is one, and otherwise the process CWD, which is
         // what a relative path means. `getcwd()` can fail (deleted directory,
-        // permissions); an empty anchor makes {@see ContainedPath} answer false,
+        // permissions); an empty anchor makes {@see \SugarCraft\Core\Util\PathJail} answer false,
         // so that failure REFUSES rather than skipping — the direction a gate has
         // to fail in.
         $anchor = $this->repoRoot !== '' ? $this->repoRoot : (getcwd() ?: '');
 
-        if (!ContainedPath::within($includeFile, $anchor)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($includeFile, $anchor)) {
             RuntimeNoticeSink::warn(Lang::t('agents.notice.include_file_refused', [
                 'file' => $this->config->worktreeIncludeFile,
                 'anchor_kind' => Lang::t($this->repoRoot !== '' ? 'agents.notice.anchor_repo_root' : 'agents.notice.anchor_cwd'),
@@ -709,11 +708,11 @@ final class WorktreeManager
      * BOTH ENDS ARE BOUNDED, and the two checks are different questions rather
      * than one written twice:
      *
-     *  - the SOURCE is judged by {@see ContainedPath::within()}, which resolves
+     *  - the SOURCE is judged by {@see \SugarCraft\Core\Util\PathJail::within()}, which resolves
      *    it — so a `..` pattern AND a pattern that reaches outside through a
      *    symlink inside the checkout are both refused;
      *  - the DESTINATION cannot be judged that way, because it does not exist
-     *    yet and {@see ContainedPath} refuses what it cannot resolve. It is
+     *    yet and {@see \SugarCraft\Core\Util\PathJail} refuses what it cannot resolve. It is
      *    judged on the PATTERN instead ({@see patternStaysInside()}), which is
      *    the only part of the destination path a repository chose.
      *
@@ -728,7 +727,7 @@ final class WorktreeManager
     {
         $srcPath = $srcRoot . '/' . $pattern;
 
-        if (!ContainedPath::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
             RuntimeNoticeSink::warn(Lang::t('agents.notice.include_pattern_refused', [
                 'pattern' => $pattern,
                 'source' =>
@@ -742,7 +741,7 @@ final class WorktreeManager
                 // NO `$srcRoot === ''` ARM HERE, deliberately. It would be a
                 // message branch that cannot fire: this method is private with one
                 // caller, and that caller has already refused the include file
-                // against this same anchor — `ContainedPath::within($file, '')` is
+                // against this same anchor — `\SugarCraft\Core\Util\PathJail::within($file, '')` is
                 // false — so an empty root never reaches this line. An arm guarding
                 // an unreachable state is the twin of the figure that travels
                 // without its domain, and this round found three of those.
@@ -777,7 +776,7 @@ final class WorktreeManager
      * alone?
      *
      * SEGMENT-WALKED rather than prefix-compared, and deliberately not routed
-     * through {@see ContainedPath}: the path being judged is one that does not
+     * through {@see \SugarCraft\Core\Util\PathJail}: the path being judged is one that does not
      * exist yet, which that class refuses outright (see its doc-block's
      * `BashEscapeDenyHook` entry for the same trade made for the same reason).
      * It is also not a substring test — `str_contains($pattern, '..')` would
@@ -802,7 +801,7 @@ final class WorktreeManager
      *
      * That is worse than a POSIX-only guard would be, because the doc-block
      * argument for this method's existence is that the LEXICAL guard is the
-     * durable one — {@see ContainedPath::within()} is a two-`realpath()` snapshot
+     * durable one — {@see \SugarCraft\Core\Util\PathJail::within()} is a two-`realpath()` snapshot
      * and the write happens later — so on Windows the durable guard was the
      * defeated one and the racy guard was carrying it alone. The drive-letter
      * predicate is the same one {@see \SugarCraft\Code\Support\HomeDirectory::owned()}

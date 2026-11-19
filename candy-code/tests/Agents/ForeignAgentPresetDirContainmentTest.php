@@ -131,7 +131,7 @@ final class ForeignAgentPresetDirContainmentTest extends TestCase
     }
 
     /**
-     * The strictness {@see \SugarCraft\Code\Support\ContainedPath::below()}
+     * The strictness {@see \SugarCraft\Core\Util\PathJail::below()}
      * exists for: `.claude/agents -> ..` resolves exactly ONTO the checkout root,
      * which is the developer's working tree and not a curated agent directory.
      */

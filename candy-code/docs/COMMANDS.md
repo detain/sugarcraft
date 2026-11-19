@@ -254,7 +254,7 @@ Root-**relative** references only, and only ones ending in a `.extension`:
   or `[`, so an email address never resolves as a file.
 
 A resolved reference is still containment-checked against the checkout
-(`ContainedPath::within()`) for **both** tiers, because an included file becomes
+(`\SugarCraft\Core\Util\PathJail::within()`) for **both** tiers, because an included file becomes
 prompt text. It is capped at the same `CommandSpec::MAX_SUBSTITUTION_BYTES`.
 
 This is a command **body's** include form, and it is not the `@file` mention you

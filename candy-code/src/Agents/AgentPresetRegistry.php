@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnumSpelling;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
@@ -18,8 +17,8 @@ use SugarCraft\Code\Support\FrontmatterKeyAudit;
  *
  * TWO BOUNDARIES, and this class had only the inner one. Per-ENTRY containment
  * (a `*.md` that resolves outside the directory it was listed from) is judged by
- * {@see ContainedPath::within()} below; the DIRECTORY a repository chose is
- * judged by {@see ContainedPath::below()} against $anchors, and until that
+ * {@see \SugarCraft\Core\Util\PathJail::within()} below; the DIRECTORY a repository chose is
+ * judged by {@see \SugarCraft\Core\Util\PathJail::below()} against $anchors, and until that
  * existed here the entry check was relocatable rather than binding — the same
  * defect {@see \SugarCraft\Code\Workflows\WorkflowRegistry::readableProjectDir()}
  * and {@see \SugarCraft\Code\Skills\SkillLoader::skillFilesIn()} each closed for
@@ -104,7 +103,7 @@ final class AgentPresetRegistry
      *        in precedence order
      * @param array<string, string> $anchors trust anchors keyed by the search
      *        path: that path must resolve strictly inside its anchor
-     *        ({@see ContainedPath::below()}) or the whole directory is refused.
+     *        ({@see \SugarCraft\Core\Util\PathJail::below()}) or the whole directory is refused.
      *        A path with no entry here is UNANCHORED, which this parameter used
      *        to describe as "the right answer for the user's own
      *        `~/.candy-code/agents` — nobody but the user chose where it
@@ -177,9 +176,9 @@ final class AgentPresetRegistry
      * is written against the wider behaviour.
      *
      * `rtrim($path, '/')` on its own turns a root of `/` into the empty string,
-     * which {@see ContainedPath} then refuses outright — so `/` is returned as
+     * which {@see \SugarCraft\Core\Util\PathJail} then refuses outright — so `/` is returned as
      * itself. Nothing further is normalised: `realpath()` inside
-     * {@see ContainedPath} is what resolves `.`, `..` and symlinks, and doing it
+     * {@see \SugarCraft\Core\Util\PathJail} is what resolves `.`, `..` and symlinks, and doing it
      * twice in two places is how the two answers drift apart.
      */
     private static function normalisePath(string $path): string
@@ -201,7 +200,7 @@ final class AgentPresetRegistry
             // true answer already proves this file exists — `realpath()` is
             // false for anything it cannot resolve. It is also what stops a
             // $name of `../../etc/passwd` reading through the search path.
-            if (ContainedPath::within($filePath, $path)) {
+            if (\SugarCraft\Core\Util\PathJail::within($filePath, $path)) {
                 return $this->parsePresetFile($filePath);
             }
         }
@@ -238,7 +237,7 @@ final class AgentPresetRegistry
 
             $files = glob($path . '/*.md') ?: [];
             foreach ($files as $file) {
-                if (!ContainedPath::within($file, $path)) {
+                if (!\SugarCraft\Core\Util\PathJail::within($file, $path)) {
                     continue;
                 }
 
@@ -495,7 +494,7 @@ final class AgentPresetRegistry
             }
 
             $anchor = $this->anchors[$path] ?? null;
-            if ($anchor !== null && !ContainedPath::below($path, $anchor)) {
+            if ($anchor !== null && !\SugarCraft\Core\Util\PathJail::below($path, $anchor)) {
                 // NAMES THE ANCHOR, not "the checkout". This message said "a
                 // repository chooses where this directory is" for every refusal,
                 // which stopped being true the moment

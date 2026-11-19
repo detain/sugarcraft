@@ -6,7 +6,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Memory;
 
 use SugarCraft\Code\Context\Utf8Scrub;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
@@ -346,7 +345,7 @@ final class ForeignMemoryImporter
         // a directory that simply is not there is the overwhelmingly common
         // case and says nothing worth reporting, so only a directory that
         // EXISTS and resolves out is named.
-        if (is_dir($dir) && !ContainedPath::below($dir, $projectRoot)) {
+        if (is_dir($dir) && !\SugarCraft\Core\Util\PathJail::below($dir, $projectRoot)) {
             $this->refusedDirectories[$dir] = sprintf(
                 'resolves to %s, %s the checkout it was reached from (%s), so its files are not this '
                 . "project's memory",
@@ -414,7 +413,7 @@ final class ForeignMemoryImporter
         $files = [];
         foreach ($names as $name) {
             $file = $dir . '/' . $name;
-            if (!ContainedPath::within($file, $dir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($file, $dir)) {
                 $this->refusedDirectories[$file] = sprintf(
                     'resolves outside %s, the directory it was listed from, so it is not a memory entry that '
                     . 'directory holds',

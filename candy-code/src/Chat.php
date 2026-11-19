@@ -17082,7 +17082,7 @@ final class Chat implements Model
      * never followed, and the resolved directory must still answer contained
      * after the (possibly just-made) mkdir — a pre-planted symlink out of the
      * home would otherwise be written straight through. The routed
-     * {@see \SugarCraft\Code\Support\ContainedPath::within()} asks the
+     * {@see \SugarCraft\Core\Util\PathJail::within()} asks the
      * boundary so this file holds no by-hand containment spelling.
      */
     private function personalInstructionFileForOpen(): ?string
@@ -17109,7 +17109,7 @@ final class Chat implements Model
             return null;
         }
 
-        if (!\is_dir($dir) || !\SugarCraft\Code\Support\ContainedPath::within($dir, $home)) {
+        if (!\is_dir($dir) || !\SugarCraft\Core\Util\PathJail::within($dir, $home)) {
             return null;
         }
 

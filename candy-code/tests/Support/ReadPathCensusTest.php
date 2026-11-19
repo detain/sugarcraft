@@ -45,7 +45,7 @@ use PHPUnit\Framework\TestCase;
  * boundary applies. Four of the words are MEASURED rather than trusted:
  * `CONTAINED` and `CONTAINED_UPSTREAM` are checked against
  * {@see ContainedPathInventoryTest::ROUTED_CALL_SITES} — the derived, asserted map
- * of which files actually hold an enforcing {@see \SugarCraft\Code\Support\ContainedPath}
+ * of which files actually hold an enforcing {@see \SugarCraft\Core\Util\PathJail}
  * call — and `PATH_JAIL` and `OWNED_HOME` are checked against the file naming the
  * mechanism it claims. The rest are JUDGEMENTS about where a path comes from, which
  * no scanner can make; they are written down so a reviewer can disagree with a
@@ -95,7 +95,7 @@ final class ReadPathCensusTest extends TestCase
      */
     private const VERDICTS = [
         // MEASURED against ContainedPathInventoryTest::ROUTED_CALL_SITES.
-        'CONTAINED' => 'this file holds an enforcing ContainedPath compare that bounds this read',
+        'CONTAINED' => 'this file holds an enforcing sugar-core PathJail compare that bounds this read',
         // MEASURED: the named upstream file must hold one.
         'CONTAINED_UPSTREAM' => 'the path arrives already bounded from the file named after the colon',
         // MEASURED: the file must reference PathJail.
@@ -260,7 +260,7 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — the `.worktreeinclude` list, bounded by the include-file gate',
         ],
         'Agents/WorktreeManager.php|glob' => [
-            'NAMES_ONLY — pattern expansion; the COPY of each match is what ContainedPath bounds, '
+            'NAMES_ONLY — pattern expansion; the COPY of each match is what sugar-core PathJail bounds, '
                 . 'so a `../` pattern is enumerated here and refused there',
         ],
         'Agents/WorktreeManager.php|scandir' => [
@@ -292,7 +292,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'the read is resolve()\'s, on submit',
         ],
         'Attachments/WorkspaceWalk.php|opendir' => [
-            'CONTAINED — collect() re-checks every frame with ContainedPath::within() before '
+            'CONTAINED — collect() re-checks every frame with \SugarCraft\Core\Util\PathJail::within() before '
                 . 'listing it, and every frame is built by concatenating non-link components '
                 . 'onto the resolved walk root; the sink moved out of FsMethods at C-WEB-7.c and '
                 . 'the memo keys on the resolved root, so caching never widens containment',
@@ -316,11 +316,11 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Bundles/BundleSource.php|file_get_contents' => [
             'CONTAINED — the provenance record inside a bundle directory, gated by a '
-                . 'ContainedPath::below() compare in this file against the boundary the caller '
+                . '\SugarCraft\Core\Util\PathJail::below() compare in this file against the boundary the caller '
                 . 'names; a planted link out of the tree fails the compare before any bytes are read',
         ],
         'Bundles/Marketplace.php|file_get_contents' => [
-            'CONTAINED — a checkout\'s catalog file, gated by a ContainedPath::below() compare '
+            'CONTAINED — a checkout\'s catalog file, gated by a \SugarCraft\Core\Util\PathJail::below() compare '
                 . 'in this file against that checkout; a .claude-plugin symlinked elsewhere '
                 . 'resolves outside the boundary and answers null, as does every relative '
                 . 'source through resolveRelative()\'s second compare in this same file',
@@ -350,7 +350,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'json_decode\'d into a validation verdict',
             'CONTAINED_UPSTREAM:Cli/McpDecision.php — pendingTrustMcpDeclared() (C-SEC-5.a) reading the '
                 . 'project `.mcp.json` the mcpConfigDecision() path names, for the census probe: the path '
-                . 'arrives already bounded by McpDecision\'s own ContainedPath::within compare (the same '
+                . 'arrives already bounded by McpDecision\'s own \SugarCraft\Core\Util\PathJail::within compare (the same '
                 . 'route trustProjectMcp() reads above), reached only on the UNTRUSTED or TRUSTED verdict, '
                 . 'and the bytes decode to a server-count and nothing else — never executed, never launched',
         ],
@@ -376,7 +376,7 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Cli/McpDecision.php|file_get_contents' => [
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `candy-code mcp list`. '
-                . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
+                . 'Same \SugarCraft\Core\Util\PathJail::within() compare and same trust gate mcpClient() applies, because both '
                 . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
             'CONTAINED — mcpConfigDigest() hashing the two tier files the decision path names: the project '
                 . '`.mcp.json` and, from MCP-3 on, the user tier `~/.candy-code/mcp.json` — at the '
@@ -420,7 +420,7 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Host/Commands/AgentsHostCommand.php|file_get_contents' => [
             'CONTAINED — the draft\'s frontmatter, read only for a name that passed DRAFT_NAME and whose '
-                . 'real path ContainedPath::below holds under the project root, so a grafted directory '
+                . 'real path \SugarCraft\Core\Util\PathJail::below holds under the project root, so a grafted directory '
                 . 'link reads nothing outside it',
             'CONTAINED — the accept leg\'s draft body, behind the same name/path doors, validated against '
                 . 'FrontmatterKeyAudit::KNOWN before the consent print and the rename into `.candy-code/agents/`',
@@ -487,7 +487,7 @@ final class ReadPathCensusTest extends TestCase
         'Commands/CommandSpec.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Commands/CommandLoader.php — parses a path the loader already bounded',
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
-                . 'file\'s own ContainedPath::within() compare against the checkout',
+                . 'file\'s own \SugarCraft\Core\Util\PathJail::within() compare against the checkout',
         ],
         'Commands/Specs/BuiltInCommands.php|require' => [
             'PROCESS_DERIVED — the `NNNN-<name>.php` spec files the scandir below listed, in the '
@@ -517,7 +517,7 @@ final class ReadPathCensusTest extends TestCase
             // one that is true of both.
             'CALLER_SUPPLIED — readFile() is the ONE read behind the whole settings layering, and '
                 . 'each caller bounds the path before reaching it, differently: projectLayer() only '
-                . 'past ContainedPath::below() on `<root>/.candy-code` and ContainedPath::within() '
+                . 'past \SugarCraft\Core\Util\PathJail::below() on `<root>/.candy-code` and \SugarCraft\Core\Util\PathJail::within() '
                 . 'on the file, plus a trust grant already established for that root '
                 . '(LayeredSettings::PROJECT_SETTINGS_TRUST_KEY); userLayer() takes its DIRECTORY '
                 . 'from its caller and in production is handed '
@@ -562,7 +562,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'Bootstrap::userSettingsDirOrNull() + LayeredSettings::USER_FILE (the '
                 . 'home-OWNED ~/.candy-code, deliberately not relocatable by --config), and '
                 . 'LayeredSettings::projectFiles(), which hands back only paths already '
-                . 'gated by ContainedPath::below()/within() on a root with a trust grant. '
+                . 'gated by \SugarCraft\Core\Util\PathJail::below()/within() on a root with a trust grant. '
                 . 'The bytes are hashed for comparison and dropped — never decoded or merged '
                 . 'here; the merge re-derives through Bootstrap::readUserConfig()',
         ],
@@ -584,23 +584,23 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Context/Compaction/ReinjectionPlan.php|file_get_contents' => [
             'CONTAINED — renderFiles() (roadmap 2.6): a file the conversation\'s Read/Edit/Write calls '
-                . 'touched, re-read after a compaction only when ContainedPath::below() holds it under the '
+                . 'touched, re-read after a compaction only when \SugarCraft\Core\Util\PathJail::below() holds it under the '
                 . 'project root; size-capped, never binary',
         ],
         'Context/ImportResolver.php|file_get_contents' => [
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '
-                . 'supplies (InstructionFileLoader passes one built on ContainedPath)',
+                . 'supplies (InstructionFileLoader passes one built on sugar-core PathJail)',
         ],
         // plan_comparison CTX-3: the instruction-diff tracker. BOTH reads take
         // their paths from InstructionFileLoader documents — every emitted path
-        // passed one of the loader's eight ContainedPath::within() gates on the way
+        // passed one of the loader's eight \SugarCraft\Core\Util\PathJail::within() gates on the way
         // out (loadPersonal()'s entries are gated against their own home-dir anchor,
         // see InstructionFileLoader's class doc-block) — and the tracker adds a
         // staleness gate of its own: a realpath that moved since capture is
         // REFUSED, never followed, so a re-read can never escape on the old verdict.
         'Context/InstructionDiffTracker.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Context/InstructionFileLoader.php — capture(): re-reads the bytes of a '
-                . 'loader document path, one admitted only through the loader\'s own ContainedPath gate; '
+                . 'loader document path, one admitted only through the loader\'s own sugar-core PathJail gate; '
                 . 'an over-cap document (body null) is stat-tracked and never read here',
             'CONTAINED_UPSTREAM:Context/InstructionFileLoader.php — recheck(): reads only after the stat '
                 . 'moved AND realpath still equals the path captured under the loader\'s gate — a moved '
@@ -611,7 +611,7 @@ final class ReadPathCensusTest extends TestCase
         // unchanged and each still compares its path before calling it.
         'Context/InstructionFileLoader.php|file_get_contents' => [
             'CONTAINED — readBounded(), the one size-bounded read behind all four instruction-document '
-                . 'read decisions, each of which compares its path with ContainedPath BEFORE calling it: '
+                . 'read decisions, each of which compares its path with sugar-core PathJail BEFORE calling it: '
                 . 'the root instruction file and a walked-to one against $repoRoot, a configured '
                 . '`instructions:` glob match against $repoRoot, and an ancestor (monorepo-parent) file '
                 . 'against InstructionFileLoader::ancestorRoot() rather than $repoRoot — by construction '
@@ -632,19 +632,19 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — the immediate children of the root, enumerated as CANDIDATE sub-package '
                 . 'directories. A scandir() entry cannot contain a separator, but the directory it '
                 . 'names can be a symlink out of the tree, so the name is not the gate: each '
-                . 'candidate is refused unless ContainedPath::below() puts it strictly inside the '
+                . 'candidate is refused unless \SugarCraft\Core\Util\PathJail::below() puts it strictly inside the '
                 . 'root, and the manifest read below is gated again at its own sink',
             // The source walk was a RecursiveDirectoryIterator until audit 15d-17
             // made it a sorted scandir() walk; the sink moved, the gate did not.
             'CONTAINED — the one path in this file that CONTENT steers: a manifest\'s '
                 . '`autoload.psr-4` values are written by whoever wrote the repository, and each is '
-                . 'refused by ContainedPath::within() against the root before the sorted walk '
+                . 'refused by \SugarCraft\Core\Util\PathJail::within() against the root before the sorted walk '
                 . 'lists it; the walk never enters a symlinked directory',
         ],
         'Context/RepoMapBlock.php|glob' => [
             'NAMES_ONLY — expansion of a `repositories: {type: path}` url from the ROOT manifest, '
                 . 'which is content; a match outside the root is dropped here for want of a '
-                . 'relative name and refused again by the ContainedPath::below() gate on each '
+                . 'relative name and refused again by the \SugarCraft\Core\Util\PathJail::below() gate on each '
                 . 'candidate',
         ],
         'Context/RepoMapBlock.php|file_get_contents' => [
@@ -652,7 +652,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'assembled from App::$root (`--root`) and a scandir()/glob() entry, and NONE OF '
                 . 'THAT MAKES THE READ SAFE: is_file(), is_readable() and file_get_contents() all '
                 . 'follow symlinks, so a committed link is what chooses the file. '
-                . 'ContainedPath::within() sits inside readManifest() itself, at the sink rather '
+                . '\SugarCraft\Core\Util\PathJail::within() sits inside readManifest() itself, at the sink rather '
                 . 'than at its callers, so a third caller cannot ship without it',
         ],
         'Context/InstructionFileLoader.php|glob' => [
@@ -724,7 +724,7 @@ final class ReadPathCensusTest extends TestCase
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's
         // two gates for this file are HomeDirectory::owned() (the user copy) and the
-        // hook-trust prompt (the project copy) — neither of which is a ContainedPath
+        // hook-trust prompt (the project copy) — neither of which is a sugar-core PathJail
         // compare. A verdict word that names the wrong mechanism is precisely what
         // the measured half of this instrument exists to catch, and it caught one on
         // its first run.
@@ -793,7 +793,7 @@ final class ReadPathCensusTest extends TestCase
         // WAS `CALLER_SUPPLIED — nothing in src/ builds one yet, so the first caller
         // owns the boundary`, and the first caller has now arrived:
         // Cli\Bootstrap::mcpClient() resolves `$root/.mcp.json` and refuses it
-        // through ContainedPath::within() before constructing the client. A row
+        // through \SugarCraft\Core\Util\PathJail::within() before constructing the client. A row
         // whose rationale is "nobody calls this" expires the moment somebody does,
         // which is the transition this ledger exists to make visible.
         // C-TUI-5.a: the doctor roster left this file and became Cli\DoctorChecks,
@@ -1045,7 +1045,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'executed server-side',
         ],
         'Server/Http/StaticFiles.php|file_get_contents' => [
-            'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
+            'CONTAINED — a static asset, read only for a path \SugarCraft\Core\Util\PathJail::within() keeps under the web root',
         ],
         'Server/LogTail.php|fopen' => [
             'SELF_LOCATED — tail(): the window end of server.log that both log doors read; '
@@ -1318,7 +1318,7 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — the bounded walk over a skills tree, itself capped against a grafted tree',
             'NAMES_ONLY — the C-EXT-2 resource listing under one skill\'s scripts|references|assets: '
                 . 'it announces relative names and reads no content, links are neither listed nor '
-                . 'followed, directory descent re-asks ContainedPath::within() and the skill walk\'s '
+                . 'followed, directory descent re-asks \SugarCraft\Core\Util\PathJail::within() and the skill walk\'s '
                 . 'own MAX_DEPTH, and the later read through loadSkillAsset() re-decides containment '
                 . 'per path',
         ],
@@ -1432,7 +1432,7 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Support/Directories/DirectoryBrowser.php|opendir' => [
             'NAMES_ONLY — list() reads the child DIRECTORY names of a directory resolve() confined to the browse root '
-                . '(ContainedPath::within on the real path; each linked child re-checked); no file content is ever read',
+                . '(\SugarCraft\Core\Util\PathJail::within on the real path; each linked child re-checked); no file content is ever read',
         ],
         'Support/SessionRelaunch.php|scandir' => [
             'PROCESS_DERIVED — closeInheritedOnExec() lists /proc/self/fd, this process\'s own descriptor table, to mark each close-on-exec before the restart',
@@ -1688,7 +1688,7 @@ final class ReadPathCensusTest extends TestCase
         // Plugin-support P1 step 3: the trust-gated channel loader and its 0600 ledger.
         'Channels/BundleChannelLoader.php|require_once' => [
             'CONTAINED — THE ELEVENTH EXECUTE PATH: a trusted name opts a bundle in, and the '
-                . 'loader re-asserts `ContainedPath::below()` on the manifest entry, refuses '
+                . 'loader re-asserts `\SugarCraft\Core\Util\PathJail::below()` on the manifest entry, refuses '
                 . 'world-writable or foreign-owned bytes, and quarantines a first-sighted file '
                 . 'out of this launch.',
         ],
@@ -1766,7 +1766,7 @@ final class ReadPathCensusTest extends TestCase
 
     /**
      * MEASURED, not trusted: a row claiming `CONTAINED` must sit in a file that
-     * actually holds an enforcing {@see \SugarCraft\Code\Support\ContainedPath}
+     * actually holds an enforcing {@see \SugarCraft\Core\Util\PathJail}
      * call, and a row claiming `CONTAINED_UPSTREAM:<file>` must name a file that
      * does.
      *
@@ -1789,7 +1789,7 @@ final class ReadPathCensusTest extends TestCase
                     $this->assertArrayHasKey(
                         $file,
                         $gated,
-                        "{$key} claims CONTAINED but {$file} holds no enforcing ContainedPath call",
+                        "{$key} claims CONTAINED but {$file} holds no enforcing sugar-core PathJail call",
                     );
                 }
 
@@ -1911,7 +1911,7 @@ final class ReadPathCensusTest extends TestCase
             'a method that shares a sink name' => ['<?php $this->file($p);', 0],
             'a static call to something else named glob' => ['<?php Helper::glob($p);', 0],
             // A doc-comment mention is a cross-reference, which is how the
-            // ContainedPath inventory came to list a file that never called it.
+            // sugar-core PathJail inventory came to list a file that never called it.
             'a mention in a doc-comment' => ["<?php /** calls glob() over src/ */\n\$x = 1;", 0],
             'a declaration of a same-named method' => ['<?php class C { public function file($p) {} }', 0],
             // GENERATED CODE. src/Background/BackgroundSupervisor.php builds its

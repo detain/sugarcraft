@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Bundles;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 
 /**
@@ -234,7 +233,7 @@ final class BundleDiscovery
             return;
         }
 
-        if ($real !== $boundaryReal && !ContainedPath::below($real, $boundaryReal)) {
+        if ($real !== $boundaryReal && !\SugarCraft\Core\Util\PathJail::below($real, $boundaryReal)) {
             $this->refusedDirectories[$dir] = Lang::t('bundles.dir-outside', [
                 'dir' => $dir,
                 'real' => $real,

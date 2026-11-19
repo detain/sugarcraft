@@ -5,24 +5,23 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The shared containment predicate, tested where it lives.
  *
  * Its callers -- FOUR files as measured this session
- * (`grep -rn 'ContainedPath::' src/`): {@see \SugarCraft\Code\Workflows\WorkflowRegistry},
+ * (`grep -rn '\SugarCraft\Core\Util\PathJail::' src/`): {@see \SugarCraft\Code\Workflows\WorkflowRegistry},
  * {@see \SugarCraft\Code\Skills\SkillLoader},
  * {@see \SugarCraft\Code\Agents\AgentPresetRegistry} and
  * {@see \SugarCraft\Code\Commands\CommandLoader} -- each pin it through their
  * own fixtures, and that is the right place to prove a TIER behaves. It is the
  * wrong place to prove the PREDICATE does: none of them can reach a boundary
- * of `/`, and the difference between {@see ContainedPath::within()} and
- * {@see ContainedPath::below()} is a single `bool` that only the equality case
+ * of `/`, and the difference between {@see \SugarCraft\Core\Util\PathJail::within()} and
+ * {@see \SugarCraft\Core\Util\PathJail::below()} is a single `bool` that only the equality case
  * distinguishes. Both arms of that case are asserted here, in both directions,
  * because the class doc-block's whole claim is that they differ.
  */
-final class ContainedPathTest extends TestCase
+final class PathJailContainmentTest extends TestCase
 {
     private string $dir;
 
@@ -46,18 +45,18 @@ final class ContainedPathTest extends TestCase
     {
         $root = $this->dir . '/root';
 
-        $this->assertTrue(ContainedPath::within($root . '/inner', $root));
-        $this->assertTrue(ContainedPath::below($root . '/inner', $root));
-        $this->assertTrue(ContainedPath::within($root . '/inner/deeper', $root));
-        $this->assertTrue(ContainedPath::below($root . '/inner/deeper', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($root . '/inner', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($root . '/inner', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($root . '/inner/deeper', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($root . '/inner/deeper', $root));
     }
 
     public function testAPathOutsideTheBoundaryIsContainedByNeither(): void
     {
         $root = $this->dir . '/root';
 
-        $this->assertFalse(ContainedPath::within($this->dir . '/outside', $root));
-        $this->assertFalse(ContainedPath::below($this->dir . '/outside', $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($this->dir . '/outside', $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($this->dir . '/outside', $root));
     }
 
     /**
@@ -70,8 +69,8 @@ final class ContainedPathTest extends TestCase
     {
         $root = $this->dir . '/root';
 
-        $this->assertTrue(ContainedPath::within($root, $root));
-        $this->assertFalse(ContainedPath::below($root, $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($root, $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($root, $root));
     }
 
     /**
@@ -86,14 +85,14 @@ final class ContainedPathTest extends TestCase
         symlink($root, $this->dir . '/link-to-root');
         symlink('..', $root . '/inner/up');
 
-        $this->assertTrue(ContainedPath::within($this->dir . '/link-to-root', $root));
-        $this->assertFalse(ContainedPath::below($this->dir . '/link-to-root', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($this->dir . '/link-to-root', $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($this->dir . '/link-to-root', $root));
 
         // `inner/up` resolves to `root`, so it is the boundary, not something
         // inside it -- a string comparison of the unresolved path would have
         // called it contained by both.
-        $this->assertTrue(ContainedPath::within($root . '/inner/up', $root));
-        $this->assertFalse(ContainedPath::below($root . '/inner/up', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($root . '/inner/up', $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($root . '/inner/up', $root));
     }
 
     /**
@@ -104,8 +103,8 @@ final class ContainedPathTest extends TestCase
     {
         mkdir($this->dir . '/rootevil', 0o700, true);
 
-        $this->assertFalse(ContainedPath::within($this->dir . '/rootevil', $this->dir . '/root'));
-        $this->assertFalse(ContainedPath::below($this->dir . '/rootevil', $this->dir . '/root'));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($this->dir . '/rootevil', $this->dir . '/root'));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($this->dir . '/rootevil', $this->dir . '/root'));
     }
 
     /**
@@ -120,13 +119,13 @@ final class ContainedPathTest extends TestCase
      */
     public function testTheFilesystemRootAsBoundaryContainsEveryResolvablePath(): void
     {
-        $this->assertTrue(ContainedPath::within($this->dir . '/root', '/'));
-        $this->assertTrue(ContainedPath::below($this->dir . '/root', '/'));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($this->dir . '/root', '/'));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($this->dir . '/root', '/'));
 
         // ...and is still refused as its own trust anchor, by the same
         // equality rule as any other directory.
-        $this->assertTrue(ContainedPath::within('/', '/'));
-        $this->assertFalse(ContainedPath::below('/', '/'));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within('/', '/'));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below('/', '/'));
     }
 
     /**
@@ -144,8 +143,8 @@ final class ContainedPathTest extends TestCase
         $path = $danglingPath ? $root . '/dangling' : $root . '/inner';
         $boundary = $missingBoundary ? $this->dir . '/no-such-dir' : $root;
 
-        $this->assertFalse(ContainedPath::within($path, $boundary));
-        $this->assertFalse(ContainedPath::below($path, $boundary));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($path, $boundary));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($path, $boundary));
     }
 
     /**
@@ -185,20 +184,36 @@ final class ContainedPathTest extends TestCase
 
         try {
             $cwd = (string) getcwd();
-            $this->assertTrue(ContainedPath::below($cwd . '/deeper', $cwd));
-            $this->assertTrue(ContainedPath::below($cwd, $root));
+            $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($cwd . '/deeper', $cwd));
+            $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($cwd, $root));
 
-            $this->assertFalse(ContainedPath::below($cwd . '/deeper', ''));
-            $this->assertFalse(ContainedPath::within($cwd . '/deeper', ''));
-            $this->assertFalse(ContainedPath::below('', $root));
-            $this->assertFalse(ContainedPath::within('', $root));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($cwd . '/deeper', ''));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($cwd . '/deeper', ''));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::below('', $root));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::within('', $root));
         } finally {
             chdir($originalCwd);
         }
     }
 
     /**
-     * THE THIRD LIMIT, executable. `ContainedPath` documents its TOCTOU window
+     * A NUL byte is refused by answer, not by exception. ContainedPath threw a
+     * ValueError here because realpath() does, and the PL-2b owner decision (option
+     * a) adopted sugar-core's `false` instead: every call site treats it as
+     * outside the boundary, which is the refusal branch it already takes.
+     */
+    public function testANulByteIsOutsideTheBoundaryByAnswerNotByException(): void
+    {
+        $root = $this->dir . '/root';
+
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($root . "/in\0ner", $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($root . "/in\0ner", $root));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($root . '/inner', "$root\0"));
+        $this->assertFalse(\SugarCraft\Core\Util\PathJail::below($root . '/inner', "$root\0"));
+    }
+
+    /**
+     * THE THIRD LIMIT, executable. `PathJail` documents its TOCTOU window
      * and its unresolvable-path behaviour; the hard link was the one bound not
      * written beside them, and a limit stated only in prose is a limit the next
      * reviewer rediscovers.
@@ -229,8 +244,8 @@ final class ContainedPathTest extends TestCase
             $this->markTestSkipped('this filesystem does not support hard links');
         }
 
-        $this->assertTrue(ContainedPath::within($root . '/hard.txt', $root));
-        $this->assertTrue(ContainedPath::below($root . '/hard.txt', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($root . '/hard.txt', $root));
+        $this->assertTrue(\SugarCraft\Core\Util\PathJail::below($root . '/hard.txt', $root));
         $this->assertSame(
             fileinode($this->dir . '/outside/secret.txt'),
             fileinode($root . '/hard.txt'),

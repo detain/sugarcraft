@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Channels;
 
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Server\ErrorLog;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The trust-gated loader for in-process channel code (ruling 2a+c).
@@ -100,7 +99,7 @@ final class BundleChannelLoader
 
                     $where = ['bundle' => $bundle->name, 'path' => $entry['path'], 'class' => $entry['class'], 'kind' => $kind];
 
-                    if (!ContainedPath::below($entry['path'], $bundle->dir)) {
+                    if (!\SugarCraft\Core\Util\PathJail::below($entry['path'], $bundle->dir)) {
                         // Belt over braces: the reader already refused this, but a
                         // require_once gets its own containment assertion, not a
                         // borrowed one (this compare is what the census measures).

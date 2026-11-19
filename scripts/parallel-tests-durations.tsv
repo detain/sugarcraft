@@ -1463,7 +1463,7 @@ candy-code/tests/Providers/EffortBudgetTest.php	0.015	7
 candy-code/tests/Providers/SglangProviderTest.php	0.015	45
 candy-code/tests/Providers/ToolCallRawArgumentsReplayTest.php	0.015	22
 candy-code/tests/Renderer/PaletteCaretHonoursHandoffTest.php	0.015	3
-candy-code/tests/Support/ContainedPathTest.php	0.015	11
+candy-code/tests/Support/PathJailContainmentTest.php	0.015	11
 candy-code/tests/Support/SubAgentActivityRelayTest.php	0.015	6
 candy-code/tests/Tools/BuiltIn/WorktreeJailedSearchToolsTest.php	0.015	5
 candy-code/tests/Tools/Catalog/ToolDocDriftTest.php	0.015	5

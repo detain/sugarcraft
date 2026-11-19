@@ -42,7 +42,7 @@ use SugarCraft\McpClient\RequestIdSequence;
  * half that changed is precisely the half a reader of this file would carry
  * away: Phase 2 item 2 gave {@see \SugarCraft\Code\MCP\McpClient}
  * a real caller in {@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()}, which
- * reads `$root/.mcp.json` behind a {@see \SugarCraft\Code\Support\ContainedPath}
+ * reads `$root/.mcp.json` behind a {@see \SugarCraft\Core\Util\PathJail}
  * compare AND a per-user trust grant (`trustedProjectMcp`, because starting a
  * server is code execution from cloned content), and exposes each discovered tool
  * through {@see \SugarCraft\Code\Tools\McpToolBridge} — whose CALLS are gated by
@@ -66,7 +66,7 @@ use SugarCraft\McpClient\RequestIdSequence;
  * convenience, and the factory arm refuses a bare grant before this class
  * ever sees one) and the
  * {@see \SugarCraft\Code\Tools\McpToolBridge}/PreToolUse chain in front of
- * the forwarded calls, respectively. {@see \SugarCraft\Code\Support\ContainedPath}
+ * the forwarded calls, respectively. {@see \SugarCraft\Core\Util\PathJail}
  * is deliberately NOT applied to the grant: containment answers
  * repository-chosen paths, and this path is operator-authored in the user
  * tier whose ownership the settings reader already enforces — there is no

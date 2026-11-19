@@ -304,7 +304,7 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog, \SugarCraft\C
         // emptiness. MEASURED on this tree (PHP 8.3.6, Linux): `dirname('')` is
         // `''`, not `'.'`, so loadSkillAsset('', $rel) composes a root-anchored
         // `/scripts/…` read and the refusal that follows comes from
-        // ContainedPath::within()'s empty-boundary leg (or from realpath()
+        // \SugarCraft\Core\Util\PathJail::within()'s empty-boundary leg (or from realpath()
         // missing that path first) — a filesystem-shaped accident, correct only
         // for as long as dirname() answers this way on the running version and
         // platform and no host happens to carry a `/scripts` directory. Refusing

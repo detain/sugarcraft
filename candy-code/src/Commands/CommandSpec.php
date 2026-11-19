@@ -8,7 +8,6 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Code\Skills\SkillSource;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Support\ProcessContainment;
@@ -983,7 +982,7 @@ final class CommandSpec
      * Read one `@path` and hand back its bytes, bounded to
      * {@see MAX_SUBSTITUTION_BYTES}.
      *
-     * CONTAINED IN $root, through the one {@see ContainedPath} predicate the
+     * CONTAINED IN $root, through the one {@see \SugarCraft\Core\Util\PathJail} predicate the
      * rest of this feature uses rather than a fourth prefix compare — which is
      * what stops `@../../.ssh/id_rsa.pub`, and a symlink under $root pointing at
      * the same, from becoming prompt text. The reference itself is
@@ -1027,7 +1026,7 @@ final class CommandSpec
             );
         }
 
-        if (!ContainedPath::within($resolved, $root)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($resolved, $root)) {
             return sprintf(
                 '[@%s was not included: it resolves outside %s, and an included file becomes prompt text]',
                 $reference,

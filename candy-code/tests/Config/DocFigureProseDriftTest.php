@@ -5111,7 +5111,7 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-10 (BG): the containment section's counted claim. The page
-     * spells SIX ContainedPath call sites "one per read decision" and names
+     * spells SIX sugar-core PathJail call sites "one per read decision" and names
      * five methods; the number is pinned three ways — the doc word, the token
      * census with comments stripped, and ContainedPathInventoryTest's public
      * roster row — and every census site must fall inside a method the sentence
@@ -5123,7 +5123,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/through `ContainedPath` — (\w+) call sites, one per read decision: (.*?)\. The gate closure/u', $doc, $contain),
+            preg_match('/through sugar-core\'s `PathJail` — (\w+) call sites, one per read decision: (.*?)\. The gate closure/u', $doc, $contain),
             'the containment count sentence left its pinned shape',
         );
         $wordNumbers = ['nine' => 9, 'seven' => 7, 'eight' => 8, 'six' => 6, 'five' => 5, 'four' => 4];
@@ -5150,8 +5150,8 @@ final class DocFigureProseDriftTest extends TestCase
                 && $significant[$i]['token']->text === 'within'
                 && $i >= 2
                 && $significant[$i - 1]['token']->is(T_DOUBLE_COLON)
-                && $significant[$i - 2]['token']->is(T_STRING)
-                && $significant[$i - 2]['token']->text === 'ContainedPath'
+                && $significant[$i - 2]['token']->is(T_NAME_FULLY_QUALIFIED)
+                && $significant[$i - 2]['token']->text === '\\SugarCraft\\Core\\Util\\PathJail'
                 && $significant[$i + 1]['token']->text === '('
             ) {
                 $sites[] = $significant[$i]['token']->pos;

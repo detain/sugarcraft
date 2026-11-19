@@ -15,7 +15,6 @@ use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Server\ServerConfig;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Directories\DirectoryBrowser;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
 
@@ -35,7 +34,7 @@ use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
  * popup (plan_comparison WEB-5b). It is NOT opt-in and NOT browse-rooted: it
  * lists the files of the CALLER'S OWN WORKSPACE, the same project root
  * `files.read` is jailed to ({@see FilesMethods::root()},
- * {@see ContainedPath::within()}),
+ * {@see \SugarCraft\Core\Util\PathJail::within()}),
  * and for exactly the same reason — a signed-in client that can open a
  * session in a workspace can already read any file in it, so seeing the
  * workspace's file NAMES leaks nothing the workspace grant does not already

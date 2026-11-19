@@ -17,7 +17,6 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Memory\UnreadableNotes;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Tools\PathJail;
@@ -396,7 +395,7 @@ final class MemoryCommand implements HostCommand
      * Whether the sentinel directory resolves inside this project, judging the
      * deepest EXISTING ancestor when the directory itself does not exist yet.
      *
-     * WHY NOT ASK {@see ContainedPath::below()} ABOUT THE LEAF DIRECTLY: its
+     * WHY NOT ASK {@see \SugarCraft\Core\Util\PathJail::below()} ABOUT THE LEAF DIRECTLY: its
      * containment verdict is `realpath()`-based, so a not-yet-existing path —
      * the normal state of a fresh project's `.candy-code/memory` — answers
      * false, which would refuse every legitimate first sentinel. The climb is
@@ -418,7 +417,7 @@ final class MemoryCommand implements HostCommand
             $probe = dirname($probe);
         }
 
-        return $probe === $root || ContainedPath::below($probe, $root);
+        return $probe === $root || \SugarCraft\Core\Util\PathJail::below($probe, $root);
     }
 
     /**

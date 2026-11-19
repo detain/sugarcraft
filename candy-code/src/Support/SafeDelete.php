@@ -70,7 +70,7 @@ final class SafeDelete
     /**
      * May $path be unlinked as part of sweeping $base?
      *
-     * Both arms resolve through ContainedPath::within(), which realpaths
+     * Both arms resolve through \SugarCraft\Core\Util\PathJail::within(), which realpaths
      * both sides: for a symlink that FOLLOWES to its target, so a foreign
      * escape (link → outside base) and a dangling link (no realpath at all)
      * both come back false. The regular-file arm additionally refuses
@@ -86,10 +86,10 @@ final class SafeDelete
             // The dangerous arm: is_dir() would have followed this into the
             // outside world. Only a link whose TARGET stays inside the base
             // may be swept.
-            return ContainedPath::within($path, $base);
+            return \SugarCraft\Core\Util\PathJail::within($path, $base);
         }
 
-        return ContainedPath::within($path, $base);
+        return \SugarCraft\Core\Util\PathJail::within($path, $base);
     }
 
     /**

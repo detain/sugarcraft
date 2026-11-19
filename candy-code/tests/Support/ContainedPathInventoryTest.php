@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
- * {@see ContainedPath}'s class doc-block inventory, DERIVED instead of trusted.
+ * The sugar-core PathJail call-site inventory, DERIVED instead of trusted. It used to
+ * live in ContainedPath's class doc-block, which is gone with the class (PL-2b).
  *
  * The inventory is a security argument — "one implementation, and here is every
  * place that does not use it" — and it was hand-maintained across three rounds,
@@ -22,8 +22,8 @@ use SugarCraft\Code\Support\ContainedPath;
  * regex-based instrument, and NEITHER of them is a read path without a compare:
  *
  *  (a) A NEUTERED GATE KEEPS ITS COUNT. Replacing `InstructionFileLoader::loadRoot()`'s
- *      `if (!ContainedPath::within($path, $this->repoRoot)) { continue; }` with
- *      the bare statement `ContainedPath::within($path, $this->repoRoot);` —
+ *      `if (!\SugarCraft\Core\Util\PathJail::within($path, $this->repoRoot)) { continue; }` with
+ *      the bare statement `\SugarCraft\Core\Util\PathJail::within($path, $this->repoRoot);` —
  *      call present, RESULT DISCARDED, escape fully restored — left this file at
  *      `OK (5 tests, 14 assertions)`. The escape was caught, but by
  *      {@see \SugarCraft\Code\Tests\Context\InstructionFileLoaderContainmentTest}
@@ -34,7 +34,7 @@ use SugarCraft\Code\Support\ContainedPath;
  *      `OK (5 tests, 14 assertions)` every time: arguments swapped
  *      (`str_starts_with($b . '/', $p)`), interpolated (`"$b/"`),
  *      `DIRECTORY_SEPARATOR`, `strncmp(…) === 0`, and a variable class name
- *      (`$c = ContainedPath::class; $c::within(…)`).
+ *      (`$c = \SugarCraft\Core\Util\PathJail::class; $c::within(…)`).
  *
  * So the instrument is no longer a line-regex. Both halves are derived from
  * `token_get_all()`:
@@ -54,7 +54,7 @@ use SugarCraft\Code\Support\ContainedPath;
  *      before the call, against the set `['{', '}', ';']` — while the doc-block
  *      claimed `:` was in it too. Probed directly, SEVEN discarded shapes
  *      reported `used: true`; mutating `InstructionFileLoader::loadRoot()`'s gate
- *      to `$unusedGateResult = ContainedPath::within(…);` left this file at
+ *      to `$unusedGateResult = \SugarCraft\Core\Util\PathJail::within(…);` left this file at
  *      `OK (26 tests, 39 assertions)` while `loadRoot()` returned
  *      `TOP-SECRET-AAA sk-live-DEADBEEF` out of a file symlinked out of the
  *      checkout. All seven are now data rows on
@@ -74,11 +74,11 @@ use SugarCraft\Code\Support\ContainedPath;
  *
  *  (e) TWO FALSE GREENS — the direction this instrument exists to remove. The rule
  *      was "a prefix made only of value-neutral operators is an expression
- *      statement", i.e. anything ELSE meant used; so `$x && ContainedPath::within($a,
+ *      statement", i.e. anything ELSE meant used; so `$x && \SugarCraft\Core\Util\PathJail::within($a,
  *      $b);` reported `used: true` on the strength of `$x` and `&&`, while the
  *      statement is an expression statement and the call is its LAST operand, whose
  *      value nothing reads. And a closure — `$gate = function () { return
- *      ContainedPath::within($a, $b); };`, never invoked — reported `used: true`
+ *      \SugarCraft\Core\Util\PathJail::within($a, $b); };`, never invoked — reported `used: true`
  *      because `return` genuinely consumes a value inside a function that never
  *      runs. Consumption is now NAMED rather than inferred from "not neutral"
  *      ({@see prefixConsumesTheValue()}), and when the consumer is an anonymous
@@ -88,10 +88,10 @@ use SugarCraft\Code\Support\ContainedPath;
  *  (f) TWO FALSE REDS, which fail
  *      {@see testNoRoutedContainmentCallHasItsResultDiscarded()} on correct code
  *      rather than letting an escape through — the cheaper direction, and still a
- *      defect. A NAMED ARGUMENT's `:` (`f(anchoredIn: ContainedPath::below(…))`)
+ *      defect. A NAMED ARGUMENT's `:` (`f(anchoredIn: \SugarCraft\Core\Util\PathJail::below(…))`)
  *      was the third kind of `:` and was absent from the enumeration in
  *      {@see statementStartIn()}, which listed only the ternary and the
- *      `case`/label forms. And `ContainedPath::within($a, $b) or throw new …;`
+ *      `case`/label forms. And `\SugarCraft\Core\Util\PathJail::within($a, $b) or throw new …;`
  *      has an empty prefix while being a gate — in `a OP b` with a
  *      short-circuiting `OP`, `a`'s value is read to decide whether `b` runs
  *      ({@see shortCircuitsAfter()}).
@@ -99,7 +99,7 @@ use SugarCraft\Code\Support\ContainedPath;
  *      A THIRD, found by running the corrected rule against `src/` rather than
  *      against the data provider: `)` was treated as a statement boundary, on the
  *      claim that a `)` reachable back from a class expression "can only be a
- *      control-structure header". `if (is_dir($dir) && !ContainedPath::below($dir,
+ *      control-structure header". `if (is_dir($dir) && !\SugarCraft\Core\Util\PathJail::below($dir,
  *      $projectRoot))` — inside `ForeignMemoryImporter::importOpencode()` — reaches back over `!`
  *      and `&&` to the `)` of `is_dir($dir)`, so the statement was cut mid-condition
  *      and a live gate read as discarded. A `)` is now stepped over to its matching
@@ -163,7 +163,7 @@ final class ContainedPathInventoryTest extends TestCase
      * read/execute SINKS and requires each to name its gate, and a row claiming
      * `CONTAINED` is checked against this map. Sharing the constant is what stops
      * the two instruments holding two answers to "which files hold a gate" — the
-     * same reason {@see \SugarCraft\Code\Support\ContainedPath} is one predicate.
+     * same reason {@see \SugarCraft\Core\Util\PathJail} is one predicate.
      *
      * It is a LITERAL that {@see testTheRoutedCallSiteInventory()} asserts against a
      * derivation over `src/`, not a hand-maintained list: the derivation is what
@@ -187,7 +187,7 @@ final class ContainedPathInventoryTest extends TestCase
         // with the walk into the memoized lister.
         'Attachments/WorkspaceWalk.php' => 1,
         // The entrypoints reader bounds every declared file with one
-        // ContainedPath::below() compare before the loader may touch it.
+        // \SugarCraft\Core\Util\PathJail::below() compare before the loader may touch it.
         'Bundles/Bundle.php' => 1,
         'Bundles/BundleDiscovery.php' => 1,
         // C-EXT-4.a: the provenance record is read inside the boundary the
@@ -344,14 +344,10 @@ final class ContainedPathInventoryTest extends TestCase
      * decision, so a dropped gate shows up as the file's number falling — which
      * is the half of #89 an instrument like this genuinely covers.
      *
-     * A THIRD RESTATEMENT OF THIS SENTENCE EXISTS, and it was five call sites
-     * and three files behind when this round found it: the class doc-block of
-     * {@see \SugarCraft\Code\Support\ContainedPath} itself, which still said
-     * "TWENTY-SEVEN call sites in ELEVEN files". The paragraph above says a
-     * restatement no test asserts is the defect, and then left one unasserted
-     * one file away. {@see testContainedPathsOwnDocBlockRestatesThisInventory()}
-     * now reads the sentence back out of that file and compares it to this
-     * array, so the two cannot drift apart again.
+     * The class doc-block that used to restate this sentence a third time went with
+     * `ContainedPath` (PL-2b). The sentence above is the only restatement left, and
+     * {@see testTheRoutedInventorySentenceAgreesWithTheRoster()} reads it back from this
+     * file, so it cannot drift apart from the roster.
      *
      * `Cli/McpDecision.php` holds the eleventh file's slot (it arrived as
      * `Cli/Bootstrap.php` and was re-pathed by the S1 extraction), and it arrived with the READ it
@@ -401,45 +397,43 @@ final class ContainedPathInventoryTest extends TestCase
     {
         $this->assertSame(
             self::ROUTED_CALL_SITES,
-            $this->countPerFile($this->routedCalls(...), skip: 'Support/ContainedPath.php'),
+            $this->countPerFile($this->routedCalls(...)),
         );
     }
 
     /**
-     * The sentence at the head of `ContainedPath`'s own inventory paragraph,
-     * read back out of the file and compared to {@see ROUTED_CALL_SITES}.
+     * The sentence in the routed-inventory doc-block above, read back out of THIS
+     * file and compared to {@see ROUTED_CALL_SITES}.
      *
-     * Written because that restatement drifted for three rounds while sitting
-     * six lines under "THE INVENTORY BELOW IS NOT MAINTAINED BY HAND" — it read
-     * "TWENTY-SEVEN call sites in ELEVEN files" against a derived thirty-two in
-     * fourteen. Both halves are spelled in WORDS there, which is the form that
-     * makes a stale number read as prose rather than as a figure, so both are
-     * parsed rather than eyeballed. The per-file breakdown in that paragraph is
-     * deliberately NOT asserted: it is an argument about which file gates what,
-     * and pinning its wording would make every legitimate edit red.
+     * It used to be read out of `ContainedPath`'s own class doc-block, which
+     * restated the count a third time and drifted for three rounds. That class
+     * now lives in sugar-core, so the one restatement left is this one: it is
+     * parsed rather than eyeballed, because both halves are spelled in WORDS,
+     * which is the form that makes a stale number read as prose.
      */
-    public function testContainedPathsOwnDocBlockRestatesThisInventory(): void
+    public function testTheRoutedInventorySentenceAgreesWithTheRoster(): void
     {
         $words = [
             'ELEVEN' => 11, 'TWELVE' => 12, 'THIRTEEN' => 13, 'FOURTEEN' => 14,
             'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18, 'NINETEEN' => 19, 'TWENTY' => 20,
-            'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
-            'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32,
-            'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
-            'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
-            'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
-            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-EIGHT' => 68, 'SIXTY-NINE' => 69,
-            'SEVENTY' => 70, 'SEVENTY-ONE' => 71, 'SEVENTY-TWO' => 72, 'SEVENTY-THREE' => 73, 'SEVENTY-FOUR' => 74, 'SEVENTY-FIVE' => 75,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
+            'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
+            'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32, 'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34,
+            'THIRTY-FIVE' => 35, 'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
+            'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43, 'FORTY-FOUR' => 44,
+            'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49,
+            'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67,
+            'SIXTY-EIGHT' => 68, 'SIXTY-NINE' => 69,
+            'SEVENTY' => 70, 'SEVENTY-ONE' => 71, 'SEVENTY-TWO' => 72, 'SEVENTY-THREE' => 73, 'SEVENTY-FOUR' => 74, 'SEVENTY-FIVE' => 75,
         ];
 
-        $source = (string) file_get_contents($this->srcDir . '/Support/ContainedPath.php');
+        $source = (string) file_get_contents(__FILE__);
 
         $this->assertSame(
             1,
-            preg_match('/([A-Z]+(?:-[A-Z]+)?) call sites in ([A-Z]+(?:-[A-Z]+)?) files ask this class/', $source, $m),
-            'ContainedPath must still restate its inventory in the shape this test can read',
+            preg_match('/"([A-Z]+(?:-[A-Z]+)?) call sites in ([A-Z]+(?:-[A-Z]+)?) files", per file/', $source, $m),
+            'the routed-inventory sentence left its pinned shape',
         );
 
         $this->assertArrayHasKey($m[1], $words, 'unrecognised number word for the call-site count: ' . $m[1]);
@@ -448,14 +442,15 @@ final class ContainedPathInventoryTest extends TestCase
         $this->assertSame(
             array_sum(self::ROUTED_CALL_SITES),
             $words[$m[1]],
-            'ContainedPath\'s doc-block disagrees with the derived call-site total',
+            'the inventory sentence disagrees with the derived call-site total',
         );
         $this->assertSame(
             count(self::ROUTED_CALL_SITES),
             $words[$m[2]],
-            'ContainedPath\'s doc-block disagrees with the derived file count',
+            'the inventory sentence disagrees with the derived file count',
         );
     }
+
 
     /**
      * FINDING (a), the one the old instrument could not see. A call whose result
@@ -478,7 +473,7 @@ final class ContainedPathInventoryTest extends TestCase
         $this->assertSame(
             [],
             $discarded,
-            'ContainedPath::within()/below() called for effect, which they have none of: '
+            '\SugarCraft\Core\Util\PathJail::within()/below() called for effect, which they have none of: '
             . implode(', ', $discarded),
         );
     }
@@ -531,7 +526,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
-        $counts = $this->countPerFile($this->handSpelledCompares(...), skip: 'Support/ContainedPath.php');
+        $counts = $this->countPerFile($this->handSpelledCompares(...));
 
         $this->assertSame(
             [
@@ -620,18 +615,6 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * `ContainedPath` itself holds exactly ONE prefix compare. That is the whole
-     * point of the class, and it is the number that must never rise.
-     */
-    public function testTheClassItselfHoldsExactlyOneCompare(): void
-    {
-        $this->assertCount(
-            1,
-            $this->handSpelledCompares($this->srcDir . '/Support/ContainedPath.php'),
-        );
-    }
-
-    /**
      * FINDING (b), driven: the five spellings that slipped past the line regex,
      * each parsed rather than pattern-matched. Without this, a widening that
      * quietly failed to widen would read as zero-drift.
@@ -703,64 +686,64 @@ final class ContainedPathInventoryTest extends TestCase
     public static function routedShapes(): array
     {
         return [
-            'negated in a condition' => ['if (!ContainedPath::within($a, $b)) { return null; }', true],
-            'returned' => ['return ContainedPath::below($dir, $anchor);', true],
+            'negated in a condition' => ['if (!\SugarCraft\Core\Util\PathJail::within($a, $b)) { return null; }', true],
+            'returned' => ['return \SugarCraft\Core\Util\PathJail::below($dir, $anchor);', true],
             // The READ of `$ok` is load-bearing in this row and was added with the
             // generalised assignment rule: an assignment whose target is never read
             // discards its value however the right-hand side computed it, so a
             // chain assigned to a dead variable is no longer a gate. The row's
             // subject is the CHAIN, so it keeps a live target.
-            'in a boolean chain' => ['$ok = $x !== null && ContainedPath::below($a, $b); return $ok;', true],
-            'fully qualified' => ['if (\\SugarCraft\\Code\\Support\\ContainedPath::within($a, $b)) { }', true],
+            'in a boolean chain' => ['$ok = $x !== null && \SugarCraft\Core\Util\PathJail::below($a, $b); return $ok;', true],
+            'fully qualified' => ['if (\\SugarCraft\\Core\\Util\\PathJail::within($a, $b)) { }', true],
             'through a variable class name' => ['if ($c::within($a, $b)) { }', true],
             'a ternary arm, whose `:` is NOT a statement start' => [
-                '$x = $cond ? false : ContainedPath::within($a, $b); return $x;',
+                '$x = $cond ? false : \SugarCraft\Core\Util\PathJail::within($a, $b); return $x;',
                 true,
             ],
             'assigned and then read' => [
-                'function f() { $ok = ContainedPath::within($a, $b); if (!$ok) { return; } }',
+                'function f() { $ok = \SugarCraft\Core\Util\PathJail::within($a, $b); if (!$ok) { return; } }',
                 true,
             ],
             // The neutered gate — finding (a) — and the SEVEN further shapes the
             // one-token-wide rule reported as `used: true`.
-            'result discarded' => ['ContainedPath::within($a, $b);', false],
+            'result discarded' => ['\SugarCraft\Core\Util\PathJail::within($a, $b);', false],
             'result discarded through a variable' => ['$c::below($a, $b);', false],
-            'in a switch case' => ['switch ($x) { case 1: ContainedPath::within($a, $b); }', false],
-            'in an alternative-syntax if' => ['if ($x): ContainedPath::within($a, $b); endif;', false],
-            'as a braceless else body' => ['if ($x) foo(); else ContainedPath::within($a, $b);', false],
-            'as a braceless if body' => ['if ($x) ContainedPath::within($a, $b);', false],
+            'in a switch case' => ['switch ($x) { case 1: \SugarCraft\Core\Util\PathJail::within($a, $b); }', false],
+            'in an alternative-syntax if' => ['if ($x): \SugarCraft\Core\Util\PathJail::within($a, $b); endif;', false],
+            'as a braceless else body' => ['if ($x) foo(); else \SugarCraft\Core\Util\PathJail::within($a, $b);', false],
+            'as a braceless if body' => ['if ($x) \SugarCraft\Core\Util\PathJail::within($a, $b);', false],
             'assigned and never read' => [
-                'function f() { $unusedGateResult = ContainedPath::within($a, $b); return 1; }',
+                'function f() { $unusedGateResult = \SugarCraft\Core\Util\PathJail::within($a, $b); return 1; }',
                 false,
             ],
-            'cast and discarded' => ['(bool) ContainedPath::within($a, $b);', false],
-            'double-negated and discarded' => ['!!ContainedPath::within($a, $b);', false],
+            'cast and discarded' => ['(bool) \SugarCraft\Core\Util\PathJail::within($a, $b);', false],
+            'double-negated and discarded' => ['!!\SugarCraft\Core\Util\PathJail::within($a, $b);', false],
             // THIS ROUND'S FOUR. Two false GREENS — the direction the instrument
             // exists to remove — and two false REDS, which fail
             // testNoRoutedContainmentCallHasItsResultDiscarded() on correct code.
-            'the LAST operand of a discarded boolean chain' => ['$x && ContainedPath::within($a, $b);', false],
+            'the LAST operand of a discarded boolean chain' => ['$x && \SugarCraft\Core\Util\PathJail::within($a, $b);', false],
             'returned from a closure nobody calls' => [
-                'function f() { $gate = function () { return ContainedPath::within($a, $b); }; return 1; }',
+                'function f() { $gate = function () { return \SugarCraft\Core\Util\PathJail::within($a, $b); }; return 1; }',
                 false,
             ],
             'returned from an arrow function nobody calls' => [
-                'function f() { $gate = fn () => ContainedPath::within($a, $b); return 1; }',
+                'function f() { $gate = fn () => \SugarCraft\Core\Util\PathJail::within($a, $b); return 1; }',
                 false,
             ],
             'the CONTROL: returned from a closure that IS called' => [
-                'function f() { $gate = function () { return ContainedPath::within($a, $b); }; return $gate(); }',
+                'function f() { $gate = function () { return \SugarCraft\Core\Util\PathJail::within($a, $b); }; return $gate(); }',
                 true,
             ],
             'the CONTROL: a closure passed straight to a caller' => [
-                'array_filter($x, function () { return ContainedPath::within($a, $b); });',
+                'array_filter($x, function () { return \SugarCraft\Core\Util\PathJail::within($a, $b); });',
                 true,
             ],
             'a named argument, whose `:` is the third kind' => [
-                'f(anchoredIn: ContainedPath::below($a, $b));',
+                'f(anchoredIn: \SugarCraft\Core\Util\PathJail::below($a, $b));',
                 true,
             ],
-            'used to decide a throw' => ['ContainedPath::within($a, $b) or throw new \\RuntimeException();', true],
-            'used to guard a right-hand side' => ['ContainedPath::within($a, $b) && $this->read($a);', true],
+            'used to decide a throw' => ['\SugarCraft\Core\Util\PathJail::within($a, $b) or throw new \\RuntimeException();', true],
+            'used to guard a right-hand side' => ['\SugarCraft\Core\Util\PathJail::within($a, $b) && $this->read($a);', true],
             // THE COMMENT HALF OF THE SHARED STRIP, PINNED (rule 15) — the
             // routed-call twin of the row at the end of compareSpellings().
             // This walk reads the neighbours of the `::` by index and a comment
@@ -769,7 +752,7 @@ final class ContainedPathInventoryTest extends TestCase
             // fails as a MISSED call rather than as a miscounted one — which is
             // the direction that reads as a clean tree.
             'with a comment between the class and the operator' => [
-                'if (ContainedPath /* c */ :: within($a, $b)) { }',
+                'if (\\SugarCraft\\Core\\Util\\PathJail /* c */ :: within($a, $b)) { }',
                 true,
             ],
         ];
@@ -806,7 +789,7 @@ final class ContainedPathInventoryTest extends TestCase
         // The ROUTED half's residue, in the same place, so both halves' bounds
         // are one measurement: a result parked on a PROPERTY and never read is
         // a discarded gate this reports as used.
-        $viaProperty = "<?php\nclass C { function f() { \$this->ok = ContainedPath::within(\$a, \$b); } }\n";
+        $viaProperty = "<?php\nclass C { function f() { \$this->ok = \SugarCraft\Core\Util\PathJail::within(\$a, \$b); } }\n";
         $this->assertTrue(
             $this->routedCallsIn($viaProperty)[0]['used'],
             'a result assigned to a property is reported as used whether or not it is ever read',
@@ -829,14 +812,14 @@ final class ContainedPathInventoryTest extends TestCase
             $real = (string) realpath($root);
 
             // The case the old entry cited as inverting into an allow.
-            $this->assertFalse(ContainedPath::within('/nonexistent', $real));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::within('/nonexistent', $real));
 
             // The case that actually diverges: in-root, lexically fine, not there yet.
-            $this->assertFalse(ContainedPath::within($real . '/newfile.txt', $real));
+            $this->assertFalse(\SugarCraft\Core\Util\PathJail::within($real . '/newfile.txt', $real));
 
             // The control: the same path once it exists.
             file_put_contents($real . '/newfile.txt', '');
-            $this->assertTrue(ContainedPath::within($real . '/newfile.txt', $real));
+            $this->assertTrue(\SugarCraft\Core\Util\PathJail::within($real . '/newfile.txt', $real));
         } finally {
             @unlink($root . '/newfile.txt');
             @rmdir($root . '/sub');
@@ -870,14 +853,10 @@ final class ContainedPathInventoryTest extends TestCase
      * @param  callable(string): list<mixed> $scan
      * @return array<string, int> path relative to `src/` => matches, sorted by key
      */
-    private function countPerFile(callable $scan, string $skip): array
+    private function countPerFile(callable $scan): array
     {
         $counts = [];
         foreach ($this->sourceFiles() as $relative => $path) {
-            if ($relative === $skip) {
-                continue;
-            }
-
             $n = \count($scan($path));
             if ($n > 0) {
                 $counts[$relative] = $n;
@@ -894,7 +873,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * Every `ContainedPath::within()`/`::below()` call in $code, with whether its
+     * Every `\SugarCraft\Core\Util\PathJail::within()`/`::below()` call in $code, with whether its
      * RESULT IS USED.
      *
      * THE PREVIOUS RULE WAS ONE TOKEN WIDE AND REINTRODUCED THE DEFECT IT WAS
@@ -905,13 +884,13 @@ final class ContainedPathInventoryTest extends TestCase
      * `[';', '{', '}']`. Probed directly, SEVEN discarded-result shapes reported
      * `used: true`:
      *
-     *     case 1: ContainedPath::within($a, $b);          before = ':'
-     *     if ($x): ContainedPath::within($a, $b); endif;  before = ':'
-     *     if ($x) foo(); else ContainedPath::within(…);   before = T_ELSE
-     *     if ($x) ContainedPath::within($a, $b);          before = ')'
-     *     $ok = ContainedPath::within($a, $b);            $ok never read
-     *     (bool) ContainedPath::within($a, $b);           before = T_BOOL_CAST
-     *     !!ContainedPath::within($a, $b);                before = '!'
+     *     case 1: \SugarCraft\Core\Util\PathJail::within($a, $b);          before = ':'
+     *     if ($x): \SugarCraft\Core\Util\PathJail::within($a, $b); endif;  before = ':'
+     *     if ($x) foo(); else \SugarCraft\Core\Util\PathJail::within(…);   before = T_ELSE
+     *     if ($x) \SugarCraft\Core\Util\PathJail::within($a, $b);          before = ')'
+     *     $ok = \SugarCraft\Core\Util\PathJail::within($a, $b);            $ok never read
+     *     (bool) \SugarCraft\Core\Util\PathJail::within($a, $b);           before = T_BOOL_CAST
+     *     !!\SugarCraft\Core\Util\PathJail::within($a, $b);                before = '!'
      *
      * Mutating `InstructionFileLoader::loadRoot()`'s gate to the fifth shape left
      * this whole file at `OK (26 tests, 39 assertions)` while `loadRoot()`
@@ -926,7 +905,7 @@ final class ContainedPathInventoryTest extends TestCase
      * prefix is the bare call.
      *
      * THE ASSIGNMENT SHAPE IS DIFFERENT and is handled separately: `$ok =
-     * ContainedPath::within(…);` is a legitimate gate when `$ok` is later read
+     * \SugarCraft\Core\Util\PathJail::within(…);` is a legitimate gate when `$ok` is later read
      * and a discarded result when it is not, which is a question about the rest
      * of the function rather than about the statement. The variable's other
      * occurrences are counted inside the ENCLOSING FUNCTION
@@ -934,7 +913,7 @@ final class ContainedPathInventoryTest extends TestCase
      * function's identically-named variable vouch for this one, which is the
      * false-green direction.
      *
-     * A VARIABLE class expression counts, because `$c = ContainedPath::class;
+     * A VARIABLE class expression counts, because `$c = \SugarCraft\Core\Util\PathJail::class;
      * $c::within(…)` is a real call this class's own inventory used to miss.
      * There is no other `::within(`/`::below(` in the package for it to
      * over-count, which {@see testTheRoutedCallSiteInventory()} pins.
@@ -960,10 +939,10 @@ final class ContainedPathInventoryTest extends TestCase
                 continue;
             }
 
-            $isContainedPath = $this->isToken($subject, \T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED)
-                && str_ends_with((string) $subject[1], 'ContainedPath');
+            $isPathJail = $this->isToken($subject, \T_NAME_FULLY_QUALIFIED)
+                && $subject[1] === '\\SugarCraft\\Core\\Util\\PathJail';
 
-            if (!$isContainedPath && !$this->isToken($subject, \T_VARIABLE)) {
+            if (!$isPathJail && !$this->isToken($subject, \T_VARIABLE)) {
                 continue;
             }
 
@@ -995,9 +974,9 @@ final class ContainedPathInventoryTest extends TestCase
         //
         // THE PREVIOUS VERSION REQUIRED THE PREFIX TO BE EXACTLY `$ok =`, which
         // made the rule depend on the SHAPE of the right-hand side rather than on
-        // whether the answer is ever read: `$ok = ContainedPath::within(…);` with
+        // whether the answer is ever read: `$ok = \SugarCraft\Core\Util\PathJail::within(…);` with
         // `$ok` unused was correctly discarded, while
-        // `$gate = fn () => ContainedPath::within(…);` with `$gate` unused was
+        // `$gate = fn () => \SugarCraft\Core\Util\PathJail::within(…);` with `$gate` unused was
         // reported as a gate — the closure false-green, arriving through the
         // arrow-function spelling that has no brace for
         // {@see enclosingAnonymousFunction()} to find. An assignment whose target is
@@ -1012,7 +991,7 @@ final class ContainedPathInventoryTest extends TestCase
 
         // THE VALUE GOES SOMEWHERE — but "somewhere" can be the return value of a
         // closure NOBODY CALLS, which is a discarded gate one level up. Measured
-        // false-green: `$gate = function () { return ContainedPath::within($a,
+        // false-green: `$gate = function () { return \SugarCraft\Core\Util\PathJail::within($a,
         // $b); };` with `$gate` never invoked reported `used: true`, because
         // `return` consumes a value perfectly well inside a function that never
         // runs. So when the consumer is an ANONYMOUS function, the same question is
@@ -1035,7 +1014,7 @@ final class ContainedPathInventoryTest extends TestCase
      *
      * THE PREVIOUS RULE WAS "anything at all other than a value-neutral operator",
      * and it produced a false GREEN — the direction this instrument exists to
-     * remove. Measured: `$x && ContainedPath::within($a, $b);` reported
+     * remove. Measured: `$x && \SugarCraft\Core\Util\PathJail::within($a, $b);` reported
      * `used: true` because `$x` and `&&` are not value-neutral, while the statement
      * is an expression statement whose value is thrown away and the call is its
      * LAST operand. A short-circuit chain uses every operand's value EXCEPT the
@@ -1115,7 +1094,7 @@ final class ContainedPathInventoryTest extends TestCase
      * its value to decide what happens next?
      *
      * THE OTHER HALF OF THE SHORT-CIRCUIT SYMMETRY, and a measured false RED
-     * without it: `ContainedPath::within($a, $b) or throw new \RuntimeException();`
+     * without it: `\SugarCraft\Core\Util\PathJail::within($a, $b) or throw new \RuntimeException();`
      * is a gate — the value decides whether the right-hand side runs — and the
      * prefix rule sees an empty prefix and calls it discarded. In `a OP b` with a
      * short-circuiting `OP`, `a`'s value is used and `b`'s is the expression's.
@@ -1256,7 +1235,7 @@ final class ContainedPathInventoryTest extends TestCase
      * so a `:` is only accepted as a boundary when no `?` precedes it inside the
      * same statement. Getting that backwards in either direction is a
      * false-green: a ternary arm read as a statement start would report every
-     * `$x ? … : ContainedPath::within(…)` as discarded.
+     * `$x ? … : \SugarCraft\Core\Util\PathJail::within(…)` as discarded.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      */
@@ -1275,7 +1254,7 @@ final class ContainedPathInventoryTest extends TestCase
                 }
 
                 // THE THIRD KIND OF `:`, absent from this method's own enumeration
-                // for a round: a NAMED ARGUMENT. `f(anchoredIn: ContainedPath::below(…))`
+                // for a round: a NAMED ARGUMENT. `f(anchoredIn: \SugarCraft\Core\Util\PathJail::below(…))`
                 // put a statement boundary in the middle of an argument list, so the
                 // call's prefix came out empty and a real gate was reported as a
                 // DISCARDED result — a false RED, which fails
@@ -1295,7 +1274,7 @@ final class ContainedPathInventoryTest extends TestCase
             // back from a call's class expression can only be a control-structure
             // header — `if (…) X::within();` — since no PHP expression yields a
             // class name from a call", which forgets the operand case:
-            // `if (is_dir($dir) && !ContainedPath::below($dir, $projectRoot))`
+            // `if (is_dir($dir) && !\SugarCraft\Core\Util\PathJail::below($dir, $projectRoot))`
             // (inside `ForeignMemoryImporter::importOpencode()`) reaches back over `!` and
             // `&&` to the `)` of `is_dir($dir)`, and cutting the statement there
             // left a prefix of `&& !` — no assignment, no keyword, balanced — i.e.

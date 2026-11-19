@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * One installed Claude-format plugin bundle: a directory carrying a
@@ -351,7 +350,7 @@ final class Bundle
      * The existing, contained realpath of one entrypoint item's `file`, or
      * null when it names nothing loadable: an empty or non-string file, a
      * miss on disk, a directory, or a path escaping the bundle dir. The
-     * escape door is ContainedPath::below() comparing REALPATHS, so `..`
+     * escape door is \SugarCraft\Core\Util\PathJail::below() comparing REALPATHS, so `..`
      * hops, absolute paths outside the bundle, and a symlink planted inside
      * pointing out all answer null before any file is opened.
      *
@@ -372,7 +371,7 @@ final class Bundle
             return null;
         }
 
-        return ContainedPath::below($real, $this->dir) ? $real : null;
+        return \SugarCraft\Core\Util\PathJail::below($real, $this->dir) ? $real : null;
     }
 
     /**

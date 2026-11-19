@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Core\Util\AtomicJsonFile;
 
 /**
@@ -69,7 +68,7 @@ final class BundleSource
     {
         $record = $bundleDir . '/' . self::RECORD_RELATIVE_PATH;
 
-        if (!ContainedPath::below($record, $boundary)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($record, $boundary)) {
             return null;
         }
 

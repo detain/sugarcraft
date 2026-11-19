@@ -7,7 +7,6 @@ namespace SugarCraft\Code\Tests\Bundles;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Bundles\Marketplace;
 use SugarCraft\Code\Bundles\MarketplaceRegistry;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
@@ -254,7 +253,7 @@ final class MarketplaceRegistryTest extends TestCase
         self::assertNotNull($first);
         self::assertSame($first, $registry->prepareCheckout('acme-hub'));
         self::assertNull($registry->prepareCheckout('never-added'));
-        self::assertTrue(ContainedPath::below($first, $this->checkouts));
+        self::assertTrue(\SugarCraft\Core\Util\PathJail::below($first, $this->checkouts));
     }
 
     /** A remote catalog with one beta row, under a root its sources never use. */

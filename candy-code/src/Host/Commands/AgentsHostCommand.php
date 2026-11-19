@@ -7,7 +7,6 @@ namespace SugarCraft\Code\Host\Commands;
 use SugarCraft\Code\Commands\AgentsCommand;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 
 /**
@@ -274,7 +273,7 @@ final class AgentsHostCommand implements HostCommand
             // grafted DIRECTORY link re-anchors where those bytes actually
             // live; only files whose real path stays below the project are
             // this project's drafts.
-            if (!ContainedPath::below((string) $path, $root)) {
+            if (!\SugarCraft\Core\Util\PathJail::below((string) $path, $root)) {
                 continue;
             }
             $meta = FrontmatterKeyAudit::metaOf((string) @file_get_contents((string) $path));
@@ -319,7 +318,7 @@ final class AgentsHostCommand implements HostCommand
         if (is_link($draft)) {
             return CommandResult::failure($text, Lang::t('host.agents.accept.bad_name', ['name' => PermissionsCommand::reportField($name)]), 2);
         }
-        if ($root === '' || !is_file($draft) || !ContainedPath::below($draft, $root)) {
+        if ($root === '' || !is_file($draft) || !\SugarCraft\Core\Util\PathJail::below($draft, $root)) {
             // The `below` leg catches the grafted-DIRECTORY swap: the draft
             // file is a real regular file, so `is_link` cannot see that the
             // directory under which it sits is a link out of the project.

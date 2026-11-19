@@ -10,7 +10,6 @@ use SugarCraft\Code\Channels\BundleChannelLoader;
 use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\ProjectRoot;
 
 /**
@@ -133,7 +132,7 @@ final class DoctorChannelsChecks
             }
             foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {
                 ++$entryPoints;
-                if (!ContainedPath::below($entry['path'], $bundle->dir)) {
+                if (!\SugarCraft\Core\Util\PathJail::below($entry['path'], $bundle->dir)) {
                     ++$escaping;
                     continue;
                 }

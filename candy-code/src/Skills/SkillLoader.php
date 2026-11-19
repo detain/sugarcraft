@@ -7,7 +7,6 @@ namespace SugarCraft\Code\Skills;
 
 use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
@@ -275,12 +274,12 @@ final class SkillLoader
      *
      * $anchoredIn closes it, with the same trust anchor and the same predicate:
      * $dir must resolve STRICTLY inside the checkout it was derived from
-     * ({@see ContainedPath::below()}), which is the one path in the pair a
+     * ({@see \SugarCraft\Core\Util\PathJail::below()}), which is the one path in the pair a
      * repository cannot have forged — moving it would mean a link ABOVE the
      * checkout. A link that stays inside the checkout is honoured, because
      * `.claude/skills -> shared/skills` is repository content pointing at
      * repository content; a link resolving ONTO the checkout root is not, for
-     * the reason {@see ContainedPath} states. The refusal DROPS THE TREE rather
+     * the reason {@see \SugarCraft\Core\Util\PathJail} states. The refusal DROPS THE TREE rather
      * than emptying it — the built-in and user tiers are unaffected, exactly as
      * a refused workflow tier leaves the user's own directory alone — and it is
      * recorded through {@see recordRefusedDirectory()} so the launch can say so.
@@ -332,7 +331,7 @@ final class SkillLoader
             return [];
         }
 
-        if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+        if ($anchoredIn !== null && !\SugarCraft\Core\Util\PathJail::below($dir, $anchoredIn)) {
             // NAMES THE ANCHOR, not "the checkout". Every refusal from here said
             // "a repository chooses where this directory is", which stopped being
             // true when {@see \SugarCraft\Code\Skills\ForeignSkillDiscovery}
@@ -478,7 +477,7 @@ final class SkillLoader
     /**
      * Whether $path resolves inside one of $boundaries.
      *
-     * THE PREDICATE ITSELF LIVES IN {@see ContainedPath}, which is where the
+     * THE PREDICATE ITSELF LIVES IN {@see \SugarCraft\Core\Util\PathJail}, which is where the
      * "resolve both sides, compare with a trailing separator" argument is
      * written down once — including why the separator is load-bearing, and why
      * an ENTRY resolving onto its boundary counts as contained while a
@@ -487,12 +486,12 @@ final class SkillLoader
      * directory-level half, and {@see skillFilesIn()} asks it both questions.
      *
      * BE PRECISE ABOUT THE DOMAIN: this class makes THREE containment decisions
-     * and all three ask {@see ContainedPath} now — {@see skillFilesIn()}'s
+     * and all three ask {@see \SugarCraft\Core\Util\PathJail} now — {@see skillFilesIn()}'s
      * directory anchor, this method's per-entry check, and
      * {@see loadSkillAsset()}'s asset check. That third one was a hand-spelled
      * copy over 300 lines below this doc-block while the doc-block claimed there
      * was one implementation. Package-wide the claim is narrower still, and
-     * {@see ContainedPath}'s own class doc-block carries the measured inventory of
+     * {@see \SugarCraft\Core\Util\PathJail}'s own class doc-block carries the measured inventory of
      * the spellings that remain.
      *
      * A path that will not resolve at all is NOT contained: `realpath()`
@@ -501,7 +500,7 @@ final class SkillLoader
      * skips by the caller's own arm rather than here, so the diagnostic names
      * the escape rather than the check.
      *
-     * $boundaries arrive already canonical; asking {@see ContainedPath} to
+     * $boundaries arrive already canonical; asking {@see \SugarCraft\Core\Util\PathJail} to
      * resolve them again is one cached stat per boundary and the price of the
      * predicate not living at its call sites.
      *
@@ -515,7 +514,7 @@ final class SkillLoader
         }
 
         foreach ($boundaries as $boundary) {
-            if (ContainedPath::within($path, $boundary)) {
+            if (\SugarCraft\Core\Util\PathJail::within($path, $boundary)) {
                 return true;
             }
         }
@@ -1107,13 +1106,13 @@ final class SkillLoader
             throw new \RuntimeException("Asset path does not exist: $shownPath");
         }
 
-        // Must be within skill directory (no path traversal). {@see ContainedPath}
+        // Must be within skill directory (no path traversal). {@see \SugarCraft\Core\Util\PathJail}
         // rather than a local prefix compare: this was a hand-spelled copy of that
         // idiom over 300 lines below the doc-block on {@see contained()} claiming
         // there was one implementation — and a dormant one (measured: no caller in
         // `src/` or `bin/`, only this suite), which is the shape that produced the
         // directory-level miss that doc-block describes.
-        if (!ContainedPath::within($assetPath, $skillDir)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($assetPath, $skillDir)) {
             throw new \RuntimeException("Asset path escapes skill directory: $shownPath");
         }
 
@@ -1171,7 +1170,7 @@ final class SkillLoader
      * skill does load (pinned), but announcing it would mean re-deciding its
      * containment at listing time for a name the model may never ask for.
      * Directory descent keeps the same predicate the loader itself uses —
-     * {@see ContainedPath::within()} — and the same depth cap as the skill
+     * {@see \SugarCraft\Core\Util\PathJail::within()} — and the same depth cap as the skill
      * tree walk, so a grafted real directory cannot drive this recursion.
      */
     private function collectAssetsBelow(string $skillDir, string $dir, int $depth, array &$found): void
@@ -1196,7 +1195,7 @@ final class SkillLoader
             $path = $entry->getPathname();
 
             if ($entry->isDir()) {
-                if ($depth + 1 > self::MAX_DEPTH || !ContainedPath::within($path, $skillDir)) {
+                if ($depth + 1 > self::MAX_DEPTH || !\SugarCraft\Core\Util\PathJail::within($path, $skillDir)) {
                     continue;
                 }
                 $this->collectAssetsBelow($skillDir, $path, $depth + 1, $found);

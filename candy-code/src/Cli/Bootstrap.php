@@ -74,7 +74,6 @@ use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\AtomicFileWriter;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
@@ -941,7 +940,7 @@ final class Bootstrap
      *    the user has not listed under
      *    {@see \SugarCraft\Code\Config\LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}
       *    — read as a failure in a doctor report. Both are gated
-      *    ({@see projectSettingsTrusted()} plus two `ContainedPath` compares);
+      *    ({@see projectSettingsTrusted()} plus two `sugar-core PathJail` compares);
       *    neither is reported;
       *  - `.candy-code/rules`, and with it the INT-2 foreign imports
       *    `.claude/rules` and `.cursor/rules` (the Phase 6 P6.S2 rules tier plus
@@ -949,7 +948,7 @@ final class Bootstrap
       *    {@see \SugarCraft\Code\Context\RuleLoader}) are a gap for a fourth
       *    reason: `RuleLoader` records its containment refusals LOADER-LOCAL in
       *    its own `refusedPaths()` and nothing here drains them, so this launch
-      *    reports none. It is gated on both anchors (`ContainedPath::below` on the
+      *    reports none. It is gated on both anchors (`\SugarCraft\Core\Util\PathJail::below` on the
       *    directory, `::within` on each entry) — the same discipline as
       *    `CommandLoader` — and drains only into a doctor pane when
       *    `CANDY_CODE_DEBUG_RULES` is set. Deliberate, per the split ruling; not
@@ -957,7 +956,7 @@ final class Bootstrap
       *  - `.github/copilot-instructions.md` (the INT-1(c) instruction tail
       *    alias, read per candidate level by
       *    {@see \SugarCraft\Code\Context\InstructionFileLoader}) is gated by the
-      *    very same `ContainedPath` compares as every other instruction file —
+      *    very same `sugar-core PathJail` compares as every other instruction file —
       *    the alias adds candidates, never a new read path — and its refusals
       *    land LOADER-LOCAL in `refusedPaths()`, read only by
       *    {@see instructionDeferrals()} for the launch transcript row. Nothing
@@ -8837,7 +8836,7 @@ public static function useMaxCost(?string $maxCost): void
      *
      * CONTAINMENT. `.mcp.json` is a REPOSITORY-CHOSEN path whose contents name
      * commands to execute, so it is confined the way every other
-     * repository-chosen read in this package is: {@see ContainedPath::within()},
+     * repository-chosen read in this package is: {@see \SugarCraft\Core\Util\PathJail::within()},
      * both sides `realpath()`d, so a committed `.mcp.json -> /elsewhere/evil.json`
      * is refused rather than followed. It is ONE compare rather than the
      * anchor-plus-entry PAIR {@see \SugarCraft\Code\Commands\CommandLoader}

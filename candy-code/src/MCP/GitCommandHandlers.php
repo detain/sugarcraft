@@ -6,7 +6,6 @@ namespace SugarCraft\Code\MCP;
 
 use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\WindowsShell;
@@ -1520,7 +1519,7 @@ final readonly class GitCommandHandlers
      * (the constructor's `cwd`, which `.mcp.json`'s `path` sets, else the
      * process CWD): a relative `path` is relative to that root, and anything
      * that does not resolve INSIDE it — `/`, `../other`, a symlink pointing
-     * out — is refused. {@see ContainedPath} is the
+     * out — is refused. {@see \SugarCraft\Core\Util\PathJail} is the
      * one containment predicate in this package, so it is asked rather than
      * re-spelled. The refusal does not distinguish "outside" from "missing",
      * so the tool cannot be used to probe which directories exist elsewhere.
@@ -1546,7 +1545,7 @@ final readonly class GitCommandHandlers
         $candidate = str_starts_with($path, '/') ? $path : rtrim($root, '/') . '/' . $path;
         $real = realpath($candidate);
 
-        if ($real === false || !ContainedPath::within($real, $root) || !is_dir($real)) {
+        if ($real === false || !\SugarCraft\Core\Util\PathJail::within($real, $root) || !is_dir($real)) {
             return ['error' => "Path '{$path}' is not a directory inside the repository root {$root}"];
         }
 
@@ -1584,7 +1583,7 @@ final readonly class GitCommandHandlers
 
         if (
             $name === '' || $name === '.' || $name === '..'
-            || !ContainedPath::within($parent, $bound)
+            || !\SugarCraft\Core\Util\PathJail::within($parent, $bound)
         ) {
             return "Worktree path '{$worktreePath}' must be inside {$bound} (beside or below the repository root), in a directory that already exists";
         }
