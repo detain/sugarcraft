@@ -52,7 +52,8 @@ class ServeError extends \RuntimeException
     public function userReason(): string
     {
         return Lang::t(match ($this->kind) {
-            'not_connected' => 'channels.discord.serve.not_connected',
+            // An in-process call before the client's hello is the wire's not_initialized refusal (PL-5d).
+            'not_connected', 'not_initialized' => 'channels.discord.serve.not_connected',
             'timeout' => 'channels.discord.serve.timeout',
             'dropped' => 'channels.discord.serve.dropped',
             'unreachable' => 'channels.discord.serve.unreachable',
