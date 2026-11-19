@@ -123,6 +123,18 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
+     * The factory the serve hands each channel bundle (PL-5d): one in-process client per bundle,
+     * all over the primary root's dispatcher. The bundle name does not select a root, because
+     * this door serves the primary root only (routing limit above).
+     *
+     * @return \Closure(string): HostServices
+     */
+    public static function bundleFactory(Dispatcher $dispatcher, LoopInterface $loop): \Closure
+    {
+        return static fn (string $bundle): HostServices => self::new($dispatcher, $loop);
+    }
+
+    /**
      * Open the in-process client: the hello the wire makes first. Resolves once
      * the host has answered it; a hello that is refused rejects with its RpcError, and any
      * other failure while opening the client rejects with the throwable itself.
