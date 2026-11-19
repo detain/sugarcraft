@@ -10,6 +10,8 @@ use SugarCraft\MdView\ReloadTickMsg;
 use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
@@ -1264,6 +1266,29 @@ final class RenderCommandTest extends TestCase
         // pay an infocmp fork for the same verdict).
         putenv('TERM=dumb');
         $this->assertFalse($this->invokeStatic('terminalSupportsColor'));
+    }
+
+    public function testAwaitedColorReportIsAProbeReportForAColorTerminal(): void
+    {
+        // Drives the real await (no seam). A regression that hands back the
+        // PromiseInterface instead of the settled ProbeReport would make
+        // ->has() throw, and terminalSupportsColor()'s catch would then
+        // answer color-on for every implicit run, so pin the type directly.
+        putenv('TERM=vt100');
+        $report = $this->invokeStatic('awaitTerminalReport');
+        $this->assertInstanceOf(ProbeReport::class, $report);
+        $this->assertFalse($report->has(Capability::NoColor));
+    }
+
+    public function testAwaitedColorReportCarriesNoColorVerdictThroughTheAwait(): void
+    {
+        // The env verdict short-circuits TERM=dumb before the await in
+        // production, so this calls the await directly to prove the report it
+        // returns carries the NoColor verdict the caller reads.
+        putenv('TERM=dumb');
+        $report = $this->invokeStatic('awaitTerminalReport');
+        $this->assertInstanceOf(ProbeReport::class, $report);
+        $this->assertTrue($report->has(Capability::NoColor));
     }
 
     public function testProbeIsConsultedAfterEnvVerdictOrder(): void
