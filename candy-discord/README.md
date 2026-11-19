@@ -262,15 +262,14 @@ bundle reads.
 
 ## Language
 
-User-facing copy rides the host's catalogs: every delivered string goes
-through `Lang::t()` over the `channels.discord.*` key family in
-`candy-code/lang/`, mirrored across all twelve host locales and enforced by
-`tests/I18n/UserFacingLiteralGuardTest` — a new bare literal in a
-user-facing slot, or a key missing from any locale, fails the bundle
-suite. The bundle ships no `lang/` directory of its own: it is a trusted
-bundle living inside the candy-code process, so the host's catalogs are
-its catalogs. Log rows stay content-free English by the bundle's log law:
-event names and scalars, never message bodies.
+The bundle owns its catalog: every delivered string goes through
+`Lang::t()` over the `channels.discord.*` key family in `lang/`, a
+plugin-owned catalog loaded through `SugarCraft\Plugins\Lang`. It is
+mirrored across all twelve locales and checked by `tests/I18n/LangParityTest`;
+`tests/I18n/UserFacingLiteralGuardTest` fails on a new bare literal in a
+user-facing slot. A key missing from any locale fails the bundle suite.
+Log rows stay content-free English by the bundle's log law: event names and
+scalars, never message bodies.
 
 ## Settings reference
 

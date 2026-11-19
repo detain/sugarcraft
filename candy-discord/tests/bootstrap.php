@@ -2,8 +2,8 @@
 
 /**
  * Bundle-local test bootstrap. The suite runs under the bundle's own vendor
- * tree (PL-1c-i): the plugin libraries and the candy-code Lang catalog come
- * from there, so no host vendor hop is taken. The runtime bundle's
+ * tree (PL-1c-i, PL-1c-ii): the plugin libraries, sugar-plugins' Lang included,
+ * come from there, so no host vendor hop is taken. The runtime bundle's
  * autoload.php knows only its own subtree.
  *
  * The Tests\ subtree lives beside this file, not under src/, so it gets its

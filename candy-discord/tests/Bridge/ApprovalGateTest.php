@@ -200,7 +200,7 @@ final class ApprovalGateTest extends TestCase
 
         self::assertSame(0, $this->serve->respondSeen, 'a persistent grant with no named approver must not reach the wire');
         $said = \implode("\n", $this->face->delivered);
-        self::assertStringContainsString(\SugarCraft\Code\Lang::t('channels.discord.approval.always_needs_approver'), $said);
+        self::assertStringContainsString(\CandyCode\Bundles\Discord\Lang::t('channels.discord.approval.always_needs_approver'), $said);
     }
 
     public function testAButtonAnswerWithoutANonceIsRefused(): void
@@ -376,7 +376,7 @@ final class ApprovalGateTest extends TestCase
     private function assertContainsRefusal(): void
     {
         foreach ($this->face->delivered as $chunk) {
-            if (\str_contains($chunk, \SugarCraft\Code\Lang::t('channels.discord.approval.refused'))) {
+            if (\str_contains($chunk, \CandyCode\Bundles\Discord\Lang::t('channels.discord.approval.refused'))) {
                 return;
             }
         }

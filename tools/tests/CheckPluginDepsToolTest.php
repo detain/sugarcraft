@@ -150,23 +150,26 @@ final class CheckPluginDepsToolTest extends TestCase
     }
 
     /**
-     * A bundle may keep candy-code for Lang: its manifest and its `Lang` import
-     * are the whole allowance, and both pass.
+     * Phase 1c-ii removed the bundles' last use of the host, so a bundle that
+     * requires candy-code again, or imports `Lang` from the host, reds.
      */
-    public function testABundleMayRequireCandyCodeAndImportOnlyLang(): void
+    public function testABundleMayNotRequireCandyCodeOrImportTheHostLang(): void
     {
         $this->writeManifest('candy-discord', ['sugarcraft/candy-code' => 'dev-master']);
         $this->writeFile('candy-discord', 'src/Commands.php', "use SugarCraft\\Code\\Lang;\n\nfinal class Commands\n{\n    public function label(): string\n    {\n        return Lang::t('x');\n    }\n}\n");
 
         [$out, $err, $code] = $this->runTool($this->tmpDir);
 
-        $this->assertSame(0, $code, "the Lang allowance was judged:\n$out$err");
+        $this->assertSame(1, $code, "a bundle still reached into the host:\n$out$err");
+        $this->assertStringContainsString('candy-discord/composer.json lists sugarcraft/candy-code in require', $err);
+        $this->assertStringContainsString('candy-discord/src/Commands.php:', $err);
+        $this->assertStringContainsString('references SugarCraft\\Code\\Lang', $err);
     }
 
     /**
-     * The allowance is exact: a bundle reaching past Lang into the host reds.
+     * A bundle reaching into the host, past or instead of Lang, reds.
      */
-    public function testABundleReachingPastLangReds(): void
+    public function testABundleReachingIntoTheHostReds(): void
     {
         $this->writeFile('candy-msteams', 'src/Probe.php', "use SugarCraft\\Code\\Cli\\Bootstrap;\n\nfinal class Probe\n{\n    public function dir(): string\n    {\n        return Bootstrap::trustedConfigDirPath();\n    }\n}\n");
 
@@ -177,10 +180,9 @@ final class CheckPluginDepsToolTest extends TestCase
     }
 
     /**
-     * A plugin library gets no allowance: candy-code in its manifest reds even
-     * when the bundles keep theirs.
+     * A plugin library gets no host manifest entry: candy-code in its manifest reds.
      */
-    public function testTheBundleAllowanceDoesNotReachTheLibraries(): void
+    public function testAPluginLibRequiringCandyCodeReds(): void
     {
         $this->writeManifest('sugar-serve-protocol', ['sugarcraft/candy-code' => 'dev-master']);
 

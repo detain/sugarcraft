@@ -9,7 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Every string a Discord user or the operator reads at startup rides
- * `Lang::t` over the host's `channels.discord.*` catalogs. This guard fails
+ * `Lang::t` over the bundle's own `channels.discord.*` catalog in `lang/`
+ * (plugin-owned under O4, plan_plugin.md 4.11). This guard fails
  * on a NEW bare literal in the user-facing slots (slash descriptions, message
  * `content`, thrown endpoint errors) and on a `Lang::t` key that the English
  * catalog does not carry. Diagnostic-only text (log lines, RPC error
@@ -18,7 +19,7 @@ use PHPUnit\Framework\TestCase;
 final class UserFacingLiteralGuardTest extends TestCase
 {
     private const SRC = __DIR__ . '/../../src';
-    private const LANG = __DIR__ . '/../../../candy-code/lang';
+    private const LANG = __DIR__ . '/../../lang';
 
     /** @return list<string> */
     private static function sources(): array
@@ -53,7 +54,7 @@ final class UserFacingLiteralGuardTest extends TestCase
                 }
             }
         }
-        self::assertSame([], $bad, 'route user-facing text through Lang::t with a channels.discord.* key in every candy-code/lang catalog');
+        self::assertSame([], $bad, 'route user-facing text through Lang::t with a channels.discord.* key in every lang/ catalog');
     }
 
     public function testEveryLangKeyUsedExistsInEnglishAndEveryLocale(): void
