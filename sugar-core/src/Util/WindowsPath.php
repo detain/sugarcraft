@@ -39,6 +39,10 @@ final class WindowsPath
      *
      * A relative $path is joined onto $root, which must be absolute. An absolute
      * $path is validated on its own and $root is then ignored.
+     *
+     * $root must be canonical, as realpath() answers it: its names are trusted
+     * and are not checked for 8.3 short-name aliases, so a root such as
+     * `C:\PROGRA~1` is accepted. Only the caller's own spelling is checked.
      */
     public static function absolutise(string $root, string $path): ?string
     {
@@ -147,6 +151,10 @@ final class WindowsPath
      * This is the lexical verdict only. It does not follow symbolic links or
      * junctions, so a caller on a real filesystem must also rule out a `..`
      * that follows a reparse point before it trusts the answer.
+     *
+     * $root must be canonical, as realpath() answers it: its names are trusted
+     * and are not checked for 8.3 short-name aliases, so a root such as
+     * `C:\PROGRA~1` is accepted. Only the caller's own spelling is checked.
      */
     public static function within(string $root, string $path): ?string
     {

@@ -229,6 +229,9 @@ final class PathJail
      * It takes no filesystem input, so Windows fixtures run on any platform.
      * The FS-backed methods call the same normaliser on Windows, and their link
      * checks are the part this does not cover.
+     *
+     * $root must be canonical, as realpath() answers it: its names are trusted
+     * and are not checked for 8.3 short-name aliases. Only $path is checked.
      */
     public static function windowsLexical(string $root, string $path): ?string
     {

@@ -6,6 +6,7 @@ namespace SugarCraft\Core\Tests\Util;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\PathJail;
 use SugarCraft\Core\Util\WindowsPath;
 
 /**
@@ -124,6 +125,21 @@ final class WindowsPathTest extends TestCase
         $this->assertSame("C:\\WORK\\proj~2\\a.txt", WindowsPath::absolutise("C:\\work\\proj~2", "c:\\WORK\\proj~2\\a.txt"));
         $this->assertSame("C:\\work\\PROJ~2\\sub\\a.txt", WindowsPath::absolutise("C:\\work\\proj~2", "C:\\work\\PROJ~2\\sub\\a.txt"));
         $this->assertNull(WindowsPath::absolutise("C:\\work\\proj~2", "c:\\WORK\\proj~2\\PROGRA~1\\x"));
+    }
+
+    /**
+     * A root is canonical by contract, so its 8.3-looking names are trusted: a
+     * root that realpath() answers as `PROGRA~1` names a real directory. The
+     * caller's own tail is still checked, so a short name typed below the root is
+     * refused. Pins the pure helpers, which take no filesystem input.
+     */
+    public function testAnEightThreeRootIsTrustedButTheTypedTailIsNot(): void
+    {
+        $this->assertSame("C:\\PROGRA~1\\x", WindowsPath::within("C:\\PROGRA~1", "C:\\PROGRA~1\\x"));
+        $this->assertSame("C:\\PROGRA~1\\x", WindowsPath::absolutise("C:\\PROGRA~1", "x"));
+        $this->assertSame("C:\\PROGRA~1\\x", PathJail::windowsLexical("C:\\PROGRA~1", "x"));
+        $this->assertNull(WindowsPath::absolutise("C:\\PROGRA~1", "PROGRA~1\\x"));
+        $this->assertNull(WindowsPath::within("C:\\PROGRA~1", "C:\\PROGRA~1\\PROGRA~1\\x"));
     }
 
     /**
