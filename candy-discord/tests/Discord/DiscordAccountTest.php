@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
 use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use SugarCraft\ServeProtocol\Protocol;
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Discord\Buttons;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
 use CandyCode\Bundles\Discord\Discord\Gateway;
@@ -709,7 +709,8 @@ final class DiscordAccountTest extends TestCase
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort(), $mediaConnector);
         $this->faceGateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
         $router = new ConversationRouter(
-            new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            // No serve answers a create: the face's "could not open a session" wall.
+            (new FakeServe($this->loop, refuseCreates: true))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             new TextSafety(),

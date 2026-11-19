@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
 use CandyCode\Bundles\Discord\DiscordChannel;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use PHPUnit\Framework\TestCase;
@@ -278,9 +279,9 @@ final class DiscordChannelTest extends TestCase
         $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $loop, static function (string $line): void {
         }));
 
-        // Sanity: the tree genuinely booted (poll timer armed, state dir live)
-        // — the dark path would arm nothing, so this leg passes before the fix.
-        self::assertTrue($loop->armedPeriodic(5.0), 'a bottled tree must arm the serve poll');
+        // Sanity: the tree genuinely booted (state dir live). The serve is in process
+        // (PL-5d), so no discovery poll is armed.
+        self::assertFalse($loop->armedPeriodic(5.0), 'an in-process serve arms no discovery poll');
         $db = $this->configDir() . '/discord/sessions.db';
         self::assertFileExists($db);
 
@@ -338,6 +339,6 @@ final class DiscordChannelTest extends TestCase
     /** @param \Closure(string):void $sink */
     private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink): PluginContext
     {
-        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir());
+        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir(), new FakeServe($loop));
     }
 }

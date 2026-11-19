@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Candy;
 
 use CandyCode\Bundles\Discord\Lang;
+use SugarCraft\Plugins\Host\RefusedCall;
 
 /**
  * A serve-side failure with its kind in front: the JSON-RPC error `data.kind`
@@ -22,6 +23,23 @@ class ServeError extends \RuntimeException
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);
+    }
+
+    /**
+     * The router's error for a refused in-process call (PL-5d): the host's refusal carries the
+     * wire's kind and data, so the router reads it as it reads a wire refusal. A failure that is
+     * not a refusal (the host itself failed) is kind `internal`.
+     */
+    public static function fromHost(string $method, \Throwable $e): self
+    {
+        if ($e instanceof self) {
+            return $e;
+        }
+        if ($e instanceof RefusedCall) {
+            return new self($e->refusalKind(), "channel-bridge: {$method}: " . $e->getMessage(), $e->refusalData(), $e);
+        }
+
+        return new self('internal', "channel-bridge: {$method}: " . $e->getMessage(), [], $e);
     }
 
     /** @param array<string, mixed> $error the JSON-RPC error object */

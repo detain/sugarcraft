@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Bridge;
 
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Candy\ServeError;
 use CandyCode\Bundles\Discord\Lang;
 use CandyCode\Bundles\Discord\Support\Log;
@@ -13,6 +12,7 @@ use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use SugarCraft\Plugins\Bridge\ConversationRouterCore;
+use SugarCraft\Plugins\Bridge\ServeClient;
 
 /**
  * The Discord router: the shared {@see ConversationRouterCore} routing with the
@@ -31,7 +31,7 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
 final class ConversationRouter extends ConversationRouterCore
 {
     public function __construct(
-        ServeBridge $serve,
+        ServeClient $serve,
         SessionMap $map,
         Log $log,
         TextSafety $safety,
