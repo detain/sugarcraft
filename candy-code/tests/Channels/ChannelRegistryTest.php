@@ -15,7 +15,9 @@ use SugarCraft\Plugins\Channel\ChannelInterface;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
+use SugarCraft\Code\Cli\Serve;
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
@@ -125,7 +127,8 @@ final class ChannelRegistryTest extends TestCase
     public function testBootHandsEachChannelItsBundlesInProcessHost(): void
     {
         // PL-5d regression: the host factory must reach the context a started channel receives.
-        // Dropping the host: argument in boot(), or the factory in ServeStartup, goes red here.
+        // Dropping the host: argument in boot() goes red here. The serve's own factory is pinned by
+        // testTheServeWiringHandsEachChannelAnInProcessHostInstance below.
         [$bundleA, , $trusted] = $this->twoBundleStage();
         $journal = $this->journal();
         $this->bakeHostProbe($bundleA, 'probe-chan', $journal);
@@ -154,6 +157,40 @@ final class ChannelRegistryTest extends TestCase
         self::assertSame([$bundleA->name], $asked, 'the factory is asked for the bundle that owns the channel');
         $lines = array_values(array_filter(array_map('trim', file($journal) ?: [])));
         self::assertSame(['host:wired'], $lines, 'the started channel sees the in-process host on its context');
+    }
+
+    public function testTheServeWiringHandsEachChannelAnInProcessHostInstance(): void
+    {
+        // PL-5d regression: the serve passes ChannelRegistry::boot() the factory Serve::channelHostFactory()
+        // builds. An arrow wrapper that returned that factory instead of a host threw a TypeError inside
+        // boot()'s start try, so every bundle channel was refused as start-failed on each serve launch.
+        [$bundleA, , $trusted] = $this->twoBundleStage();
+        $journal = $this->journal();
+        $this->bakeHostProbe($bundleA, 'probe-chan', $journal);
+        $bundleA = $this->refresh($bundleA);
+        $fixture = ProtocolFixture::new(loop: Loop::get());
+        try {
+            $registry = ChannelRegistry::new();
+            $registry->boot(
+                [$bundleA],
+                $trusted,
+                $this->seenLedger($bundleA),
+                $this->scratch,
+                Loop::get(),
+                $this->collector(),
+                null,
+                null,
+                null,
+                Serve::channelHostFactory($fixture->dispatcher, Loop::get()),
+            );
+
+            self::assertSame(['probe-chan'], $registry->startedNames(), 'the serve factory lets the channel start instead of refusing it as start-failed');
+            $lines = array_values(array_filter(array_map('trim', file($journal) ?: [])));
+            self::assertSame(['host:wired'], $lines, 'the channel receives a HostServices instance on its context');
+            $registry->disposeAll($this->collector());
+        } finally {
+            $fixture->tearDown();
+        }
     }
 
     public function testAChannelWhoseConstructorThrowsIsRefusedAndLogged(): void
