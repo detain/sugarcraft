@@ -69,7 +69,13 @@ interface HostServices
      */
     public function followedSessions(): array;
 
-    /** Delivers each session event to the listener, in per-session seq order (row 11). */
+    /**
+     * Delivers each session event to the listener, in per-session seq order (row 11).
+     *
+     * No event is dropped silently. A host that cannot keep up with a listener delivers an
+     * overflow notice in its place, carrying `dropped` and `action: 'resubscribe'` as the wire
+     * protocol does, and the listener re-follows the session to recover the gap.
+     */
     public function subscribeEvents(\Closure $listener): void;
 
     /** Delivers each follow result to the listener after a re-follow (row 12). */
