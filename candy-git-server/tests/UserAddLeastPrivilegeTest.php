@@ -119,6 +119,17 @@ final class UserAddLeastPrivilegeTest extends TestCase
         $this->assertFileDoesNotExist($this->tmpDir . '/--read');
     }
 
+    public function testDashPrefixedFirstWordIsRefusedAsUsageNotAnAccountName(): void
+    {
+        // Regression: `user add --help <path>` used to create an account named
+        // '--help' (the name gate accepts hyphens) and print success.
+        $r = $this->runBin(['user', 'add', '--help', $this->tmpDir]);
+        $this->assertSame(1, $r['rc']);
+        $this->assertStringContainsString('Usage: candy-git-server user add', $r['err']);
+        $this->assertStringNotContainsString('created', $r['out']);
+        $this->assertFileDoesNotExist($this->tmpDir . '/users.json', 'a refused add writes nothing');
+    }
+
     // -------------------------------------------------------------------------
     // S36 (findings 019, 096): password intake and the factor-less account
     // -------------------------------------------------------------------------

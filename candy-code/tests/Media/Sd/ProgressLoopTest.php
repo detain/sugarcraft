@@ -341,6 +341,122 @@ final class ProgressLoopTest extends TestCase
         });
     }
 
+    public function testTheFailureCapPausesBetweenTheThreeDialsAndNeverAfterTheThrow(): void
+    {
+        $beats = 0;
+        $sleeps = [];
+        $c = $this->clientQueuing([
+            new \RuntimeException('down'),
+            new \RuntimeException('down'),
+            new \RuntimeException('down'),
+        ]);
+
+        try {
+            $this->runLoop($c, static fn (): bool => false, $beats, $sleeps);
+            self::fail('the loop must give up at the third consecutive failure');
+        } catch (SdException $e) {
+            self::assertStringContainsString('3 consecutive', $e->getMessage());
+        }
+
+        self::assertSame([0.25, 0.25], $sleeps, 'two pauses separate the three dials; the throwing failure is not followed by one');
+        self::assertSame(2, $beats, 'the watchdog is fed on both tolerated failures and not on the throw');
+    }
+
+    public function testASubMillisecondCadenceFloorsAtOneMillisecondPerPause(): void
+    {
+        $beats = 0;
+        $done = 0;
+        $sleeps = [];
+        ProgressLoop::run(
+            $this->clientQueuing([['progress' => 0.1], ['progress' => 0.2]]),
+            function () use (&$beats): void {
+                $beats++;
+            },
+            static function () use (&$done): bool {
+                return ++$done >= 2;
+            },
+            null,
+            0.0004,
+            static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([0.001], $sleeps, 'the millisecond backoff base floors at 1 ms, so the pause never rounds to zero');
+    }
+
+    public function testCancelDuringAFlappingReadoutReturnsTheDoneSummaryWithoutAPause(): void
+    {
+        $beats = 0;
+        $sleeps = [];
+        $summary = $this->runLoop(
+            $this->clientQueuing([new \RuntimeException('blip')]),
+            static fn (): bool => true,
+            $beats,
+            $sleeps,
+        );
+
+        self::assertSame(ProgressSummary::TERMINATION_DONE, $summary->termination);
+        self::assertSame(0, $summary->polls, 'no readout ever succeeded, so no poll is counted');
+        self::assertSame(1, $this->attempts, 'the cancel lands after the first failed dial and no retry follows');
+        self::assertSame([], $sleeps, 'cancel wins before the retry pause');
+        self::assertSame(1, $beats, 'the watchdog is fed on the tolerated failure before the cancel is honored');
+    }
+
+    public function testANonMillisecondIntervalIsPacedAtItsRoundedWholeMillisecond(): void
+    {
+        // Backoff holds whole milliseconds: 0.2505 s rounds to 251 ms, so the
+        // sleeper receives 0.251 and not the exact float. Pinned so the
+        // quantization stays a documented behavior rather than a drift.
+        $done = 0;
+        $sleeps = [];
+        ProgressLoop::run(
+            $this->clientQueuing([['progress' => 0.1], ['progress' => 0.2]]),
+            static function (): void {
+            },
+            static function () use (&$done): bool {
+                return ++$done >= 2;
+            },
+            null,
+            0.2505,
+            static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([0.251], $sleeps);
+    }
+
+    public function testAnIntervalAboveThePollCeilingIsRefusedUpFront(): void
+    {
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('poll interval must not exceed 3600');
+        ProgressLoop::run($this->clientQueuing([]), static function (): void {
+        }, static fn (): bool => true, null, 3600.5, static function (float $s): void {
+        });
+    }
+
+    public function testAnIntervalAtThePollCeilingPausesTheFullInterval(): void
+    {
+        $done = 0;
+        $sleeps = [];
+        ProgressLoop::run(
+            $this->clientQueuing([['progress' => 0.1], ['progress' => 0.2]]),
+            static function (): void {
+            },
+            static function () use (&$done): bool {
+                return ++$done >= 2;
+            },
+            null,
+            3600.0,
+            static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([3600.0], $sleeps, 'the ceiling itself is a legal cadence: one full pause between the two polls, not shortened');
+    }
+
     public function testTheLoopFileStaysPureOfReactAndWallClockKillers(): void
     {
         $src = file_get_contents(__DIR__ . '/../../../src/Media/Sd/ProgressLoop.php');

@@ -246,7 +246,7 @@ final class SessionFeed
         if ($subscriber === null || !$subscriber['live'] || $envelope === null) {
             return false;
         }
-        $client->outbox()->pushEphemeral($envelope->notification());
+        $client->emit($envelope);
 
         return true;
     }
@@ -692,7 +692,7 @@ final class SessionFeed
         }
         foreach (\array_keys($this->subscribers) as $clientId) {
             if ($this->subscribers[$clientId]['live'] && $this->narrates($clientId)) {
-                $this->subscribers[$clientId]['client']->outbox()->pushEphemeral($envelope->notification(), $this->sessionId() . '|narration');
+                $this->subscribers[$clientId]['client']->emit($envelope, false, $this->sessionId() . '|narration');
             }
         }
     }
@@ -735,7 +735,7 @@ final class SessionFeed
 
         return $subscriber['mode'] === self::MODE_NARRATION
             || $subscriber['client']->wantsNarration($this->sessionId())
-            || ($subscriber['client']->outbox()->isAboveSoft() && !$subscriber['client']->isForeground($this->sessionId()));
+            || ($subscriber['client']->isBackedUp() && !$subscriber['client']->isForeground($this->sessionId()));
     }
 
     /** The wire frame of $envelope, encoded once however many subscribers receive it. */
@@ -758,14 +758,14 @@ final class SessionFeed
                 return;
             }
             $this->subscribers[$clientId]['lastSent'] = (int) $envelope->seq;
-            $client->send($this->frame($envelope));
+            $client->emit($envelope, true, null, fn (): string => $this->frame($envelope));
 
             return;
         }
 
         if ($envelope->durable) {
             // A store that keeps no log numbers nothing; the event must still arrive.
-            $client->send($this->frame($envelope));
+            $client->emit($envelope, true, null, fn (): string => $this->frame($envelope));
 
             return;
         }
@@ -774,12 +774,12 @@ final class SessionFeed
             if ($this->narrates($clientId)) {
                 return;
             }
-            $client->outbox()->pushEphemeral($envelope->notification(), $this->sessionId() . '|' . $envelope->type . '|' . ($envelope->turnId ?? ''));
+            $client->emit($envelope, false, $this->sessionId() . '|' . $envelope->type . '|' . ($envelope->turnId ?? ''));
 
             return;
         }
 
-        $client->outbox()->pushEphemeral($envelope->notification());
+        $client->emit($envelope);
     }
 
     /** One replay page (§6.8 step 4), then the next on a later tick, then live. */
@@ -827,10 +827,10 @@ final class SessionFeed
         $this->subscribers[$clientId]['buffer'] = [];
         $this->subscribers[$clientId]['bytes'] = 0;
         $this->subscribers[$clientId]['stale'] = true;
-        $this->subscribers[$clientId]['client']->send(JsonRpc::encode(EventEnvelope::server(
+        $this->subscribers[$clientId]['client']->emit(EventEnvelope::server(
             EventType::SERVER_OVERFLOW,
             ['sessionId' => $this->sessionId(), 'dropped' => $dropped, 'action' => 'resubscribe'],
-        )->notification()));
+        ), true);
     }
 
     /** §6.8 steps 5–6: flush what was heard meanwhile, deduped by seq, and go live. */

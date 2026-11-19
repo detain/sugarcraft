@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol;
 
 use SugarCraft\Code\Server\ServerConfig;
-use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\Outbox;
+use SugarCraft\Code\Server\Ws\Peer;
 
 /**
  * One connected client as the protocol sees it: its connection and
@@ -69,50 +69,73 @@ final class Client
     private float $bytesRefilledAt;
 
     /**
+     * A socket client passes its {@see Outbox}. An in-process client passes
+     * $deliver instead, and every event reaches it as the {@see EventEnvelope}
+     * itself, with nothing encoded (PL-5c).
+     *
      * @param list<string> $scopes
      * @param \Closure(): float $clock
+     * @param (\Closure(EventEnvelope): void)|null $deliver
      */
     public function __construct(
-        private readonly Connection $connection,
-        private readonly Outbox $outbox,
+        private readonly Peer $peer,
+        private readonly ?Outbox $outbox,
         private readonly array $scopes,
         private readonly \Closure $clock,
+        private readonly ?\Closure $deliver = null,
     ) {
+        if (($outbox === null) === ($deliver === null)) {
+            throw new \InvalidArgumentException('A client is either a socket (an outbox) or in-process (a deliver closure), never both or neither.');
+        }
         $this->refilledAt = ($this->clock)();
         $this->bytesRefilledAt = $this->refilledAt;
     }
 
     public function id(): string
     {
-        return $this->connection->id();
+        return $this->peer->id();
     }
 
-    public function connection(): Connection
+    /** Who is on the other end: a socket {@see \SugarCraft\Code\Server\Ws\Connection}, or the in-process peer. */
+    public function connection(): Peer
     {
-        return $this->connection;
+        return $this->peer;
     }
 
+    /** Whether this client is the in-process host: no socket and no outbox. */
+    public function isInProcess(): bool
+    {
+        return $this->outbox === null;
+    }
+
+    /** The socket's outbox. An in-process client has none; its events go through {@see emit()}. */
     public function outbox(): Outbox
     {
-        return $this->outbox;
+        return $this->outbox ?? throw new \LogicException('An in-process client has no outbox: its events reach it through emit().');
+    }
+
+    /** Whether a socket's queue is past the soft watermark; never true for an in-process client. */
+    public function isBackedUp(): bool
+    {
+        return $this->outbox !== null && $this->outbox->isAboveSoft();
     }
 
     /** How the socket authenticated (`cookie`, `ticket`, `bearer`, `subprotocol`, `viewer`). */
     public function principal(): string
     {
-        return $this->connection->principal();
+        return $this->peer->principal();
     }
 
     /** The viewer grant's public id on the socket's credential; null for every other door. */
     public function tokenId(): ?string
     {
-        return $this->connection->tokenId();
+        return $this->peer->tokenId();
     }
 
     /** The viewer grant's session pin list riding the socket; null when unpinned. */
     public function viewerSessions(): ?array
     {
-        return $this->connection->viewerSessions();
+        return $this->peer->viewerSessions();
     }
 
     /** @return list<string> */
@@ -248,9 +271,35 @@ final class Client
         return true;
     }
 
-    /** Queue a message that must arrive. */
+    /** Queue a message that must arrive on a socket. An in-process client has no wire: use {@see emit()}. */
     public function send(string $text): void
     {
-        $this->outbox->push($text);
+        $this->outbox()->push($text);
+    }
+
+    /**
+     * Hand one session or server event to this client, in the form its transport takes.
+     *
+     * A socket client gets the JSON-RPC notification: a $mustArrive event goes out whole
+     * ($frame, when given, is its wire text, encoded once for every subscriber), and any
+     * other event is queued ephemerally under $coalesceKey, where the outbox may shed or
+     * merge it. An in-process client gets the envelope itself and nothing is encoded, so
+     * nothing is shed either: every event is delivered, in the order it was emitted.
+     *
+     * @param (\Closure(): string)|null $frame the wire text of $envelope, computed on demand
+     */
+    public function emit(EventEnvelope $envelope, bool $mustArrive = false, ?string $coalesceKey = null, ?\Closure $frame = null): void
+    {
+        if ($this->deliver !== null) {
+            ($this->deliver)($envelope);
+
+            return;
+        }
+        if ($mustArrive) {
+            $this->send($frame !== null ? $frame() : JsonRpc::encode($envelope->notification()));
+
+            return;
+        }
+        $this->outbox()->pushEphemeral($envelope->notification(), $coalesceKey);
     }
 }

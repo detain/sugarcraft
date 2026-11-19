@@ -80,6 +80,27 @@ final class JsonRpcTest extends TestCase
         self::assertSame('{"jsonrpc":"2.0","method":"event","params":{"type":"t","data":{"path":"a/b"}}}', JsonRpc::encode($event));
     }
 
+    public function testAValueIsEncodedUnderTheWireFlagsWithNoEnvelope(): void
+    {
+        // The in-process door takes bare values through this: the wire's UTF-8
+        // substitution, and no jsonrpc/id/result frame around the value.
+        self::assertSame('{"text":"ok'."\u{FFFD}".'"}', JsonRpc::encodeValue(['text' => "ok\xFF"]));
+        self::assertSame('[]', JsonRpc::encodeValue([]));
+        self::assertSame('1.0', JsonRpc::encodeValue(1.0));
+    }
+
+    public function testAValueThatCannotBeEncodedRefusesWithTheValueWording(): void
+    {
+        $handle = \fopen('php://memory', 'r');
+        $this->expectException(\JsonException::class);
+        $this->expectExceptionMessage('cannot encode a wire value');
+        try {
+            JsonRpc::encodeValue(['handle' => $handle]);
+        } finally {
+            \fclose($handle);
+        }
+    }
+
     public function testAMessageThatCannotBeEncodedRefusesInsteadOfEmpties(): void
     {
         // CWPD-12: the old `(string) json_encode(...)` swallowed failure into

@@ -524,6 +524,7 @@ The loop-side primitives that used to be hand-rolled in each app:
 | `AsyncOps::deferred(\Closure $fn)` | Run a step on the next loop tick, off the caller's stack; a throw rejects the promise. |
 | `Await::until($promise, $seconds)` | Drive the loop until a promise settles: returns its value, rethrows its rejection, or throws `TimeoutException` (never a silent `null`). Refuses to nest inside another `Await`. |
 | `Poll::until($fn, $backoff, $token)` | Call `$fn` until it answers non-null, spacing attempts by the `Backoff` ladder; the attempt cap of the backoff bounds it. |
+| `SynchronousLoop::new($sleeper)` | A blocking `LoopInterface` for synchronous callers: `run()` pauses on the calling thread through `$sleeper` for each timer `Poll::until` arms, so a plain loop can wait on a poll. Only the timer surface is implemented; the other `LoopInterface` methods throw. |
 | `Notifier::new($loop)` | `wait($seconds)` resolves on the next `notify()`. A notify with no waiter is kept as one pending signal, so a wake-up between two waits is not lost. |
 | `RateGate::new($seconds, $clock)` | Loop-free `allow(): bool`, true at most once per interval; denied calls do not move the window. |
 | `LoopDeadline::arm($loop, $seconds, $onFire)` | One-shot deadline on the loop; `fired()` and `disarm()`. |

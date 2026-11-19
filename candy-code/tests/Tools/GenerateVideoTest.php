@@ -57,6 +57,23 @@ final class GenerateVideoTest extends TestCase
         $this->rrmdir($this->mediaRoot);
     }
 
+    public function testAPollIntervalAboveTheCeilingIsRefusedAtConfigurationNotMidRender(): void
+    {
+        // A refusal raised inside awaitJob would be read as a readout failure
+        // and cancel a job that was just queued, so it must fail up front.
+        try {
+            GenerateVideo::new()->withLoopPacing(3600.5, static function (float $seconds): void {
+            });
+            self::fail('a pacing interval past the poll ceiling must be refused when configured');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('poll interval must not exceed 3600', $e->getMessage());
+        }
+
+        $atCeiling = GenerateVideo::new()->withLoopPacing(3600.0, static function (float $seconds): void {
+        });
+        self::assertInstanceOf(GenerateVideo::class, $atCeiling, 'the ceiling itself is a legal pacing');
+    }
+
     public function testHappyJobLandsMp4AndSidecarBesideItWithPathsOnlyInResult(): void
     {
         $beats = 0;
