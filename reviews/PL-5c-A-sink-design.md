@@ -21,8 +21,8 @@ Sources read for this design (all paths relative to the repo root):
 - Today the in-process door (`InProcessHostServices`, PL-5c-B) serves the primary root only. It never sends `root`, and it never calls `Gateway::routeOf`. A session that the gateway bound to another root is refused with `session_not_found` by the primary dispatcher. That refusal is pinned by `InProcessHostServicesTest` (lines 518 to 550). PL-5c-A replaces it with routing.
 - Routing: the in-process door asks the gateway which root a call belongs to, using the same rule the wire uses (`root` param first, then the `sessionId` row in `sessionRoots`). A null answer keeps today's primary-dispatcher path. A root answer goes to that root's workspace host over the existing child socket hop, through the same bookkeeping `forward()` uses.
 - Event sink: `Gateway::relay()` fans host events out to `Connection` objects only. PL-5c-A adds a second kind of target, an in-process sink, behind a small interface. Each sink keeps its own cursor, and its own bounded FIFO queue. The sink's ordering, back-pressure and overflow rules are in section 3.
-- Ten wire methods: all ten are routed by the same rule. Only `pendingPermissions` needs a signature addition (an optional root), because the wire method has no `sessionId` to route by. Refusals from the child host pass through unchanged. The failure semantics stay those of section 5a (section 4 here).
-- The `HostServices` changes are additive and optional (`?string $root = null`), so the two bundles compile and behave the same without edits.
+- Ten wire methods: all ten are routed by the same rule. Only `pendingPermissions` needs a root argument, because the wire method has no `sessionId` to route by. The root forms of `createSession` and `pendingPermissions` go on a separate interface (section 2.6). Refusals from the child host pass through unchanged. The failure semantics stay those of section 5a, plus the door's own 20 s timer (section 4 preamble).
+- `HostServices` does not change. A new parameter on the shared interface would break every implementer, so the root forms go on `RootedHostServices`, which only the in-process door implements. The two bundles, their test fakes and `FakeHostServices` compile and behave the same without edits.
 - Eleven open questions for the owner, each with a recommended default, are in section 6. None of them blocks the implementation step if the defaults are accepted.
 
 ---
@@ -59,7 +59,7 @@ What the gateway already does on the wire (the behavior the in-process door must
 
 For each routed method, `InProcessHostServices` does this, in order:
 
-1. Build the params exactly as today (the same keys), plus `root` when the method carries one (`createSession`, `pendingPermissions`; see section 4).
+1. Build the params exactly as today (the same keys). The two root forms (`createSessionIn`, `pendingPermissionsIn`, section 2.6) add `root`.
 2. `$root = $gateway->rootFor($params)`. Null: call the primary dispatcher as today. Non-null: call `$gateway->callRoot($root, $method, $params)`, with `root` removed from the params first, as `onMessage` does (`unset($params->root)`).
 3. No socket, no loopback dial and no JSON-RPC frame is built by the in-process door. The hop to the workspace host is the gateway's existing child socket (`WorkspaceHostClient` / `RemoteSessionHost`), which is inside the host process and is not the bundle's self-dial. R10 stays retired.
 
@@ -81,6 +81,13 @@ The class-level constraint "no frame carries these calls" in `InProcessHostServi
 
 `admit()` (the scope law at the gateway's own door) takes a `Connection`, and the in-process door has none, so it never passes through `onMessage()` and `admit()` is not called. The in-process client is an owner (`Scope::owner()`, no scope list), which `admit()` would pass untouched anyway. The implementation must not weaken this: the in-process door must not gain a viewer principal. A test pins that the in-process door is never refused `viewer_session_denied` or `owner_only`.
 
+### 2.6 Root-taking methods: a separate interface
+
+- `createSession` and `pendingPermissions` are the only two methods that need a root argument (Q2). Their root forms go on a new interface, `RootedHostServices` (`sugar-plugins/src/Host/RootedHostServices.php`, one type per file), as `createSessionIn(string $root, ?string $name, ?string $permissionMode): PromiseInterface` and `pendingPermissionsIn(string $root): PromiseInterface`.
+- `HostServices` keeps every signature it has today. PHP rejects an implementation that drops a parameter the interface declares, so adding a parameter to `HostServices` would break four implementers: `candy-discord/tests/Fixture/FakeServe.php`, `candy-msteams/tests/Fixture/FakeServe.php`, `sugar-plugins/tests/Support/FakeHostServices.php` and `InProcessHostServices`. The separate interface keeps the bundles and the test fakes unchanged.
+- Only `InProcessHostServices` implements `RootedHostServices` in PL-5c-A. A bundle that needs a non-primary root for a new session checks `instanceof RootedHostServices` in a later step. Without the check it gets the primary root, as today.
+- Routing for the root forms follows section 2.2, with `root` taken from the argument instead of the params.
+
 ---
 
 ## 3. The event sink
@@ -94,7 +101,7 @@ The change is to make relay targets an interface, and keep the `Connection` path
 - `id(): string`: the key for `subscribers`, `cursors` and `rootClients`. For in-process sinks it is a prefix that cannot collide with a connection id (for example `inproc:<n>`).
 - `isOpen(): bool`.
 - `viewerSessions(): ?array`: always null for an in-process sink (an owner).
-- `deliver(array $message, string $text, ?string $coalesceKey, bool $ephemeral, ?int $seq, ?string $sessionId): void`: the one method `relay()` calls per target. `Connection`'s implementation is the current `send()` / `pushEphemeral()` logic, moved unchanged. The in-process sink's implementation is section 3.3.
+- `deliver(array $message, string $text, ?string $coalesceKey, bool $ephemeral, ?int $seq, ?string $sessionId): void`: the one method `relay()` calls per target, with the whole notification (`jsonrpc`, `method`, `params`) as `$message`. `Connection`'s implementation is the current `send()` / `pushEphemeral()` logic, moved unchanged. The in-process sink's implementation is sections 3.2 (rule 7) and 3.3.
 
 `relay()` keeps its existing order of checks (cursor, open, viewer pin, then send or queue). Only the final delivery call changes. The implementation must keep `relay()`'s output for `Connection` targets byte-identical, which the gateway suites check (section 5.1).
 
@@ -103,12 +110,12 @@ The change is to make relay targets an interface, and keep the `Connection` path
 Rules, in priority order:
 
 1. Per host, events reach the gateway in the order the host wrote them (one socket per host). The sink preserves that order.
-2. For each session, delivery order equals seq order. A durable event with `seq <= cursor` is never delivered twice. The sink's cursor is the same `cursors[sinkId][sessionId]` value the wire uses.
+2. For each session, delivery order equals seq order. A durable event with `seq <= cursor` is never delivered twice. The sink's cursor is the same `cursors[sinkId][sessionId]` value the wire uses, advanced at queue time (section 3.3).
 3. The sink's queue is FIFO. A drain never re-enters itself (the `delivering` / `draining` flags of `InProcessHostServices`, reused). A listener that calls back into the host (for example `sendTurn` from inside a listener) queues its own events behind the ones already owed. Its call is answered in the same tick, as today.
 4. Across sessions or across roots, no order is promised. This is the wire's rule too (each connection's frames come from several hosts).
 5. Shedding never reorders. A shed live-only event is removed from its position, and no later event jumps ahead of an earlier durable one.
 6. The overflow notice is inserted at the position of the first event it replaces. The listener therefore sees every event up to the cut, then the notice, then nothing for that session until it resubscribes.
-7. Every delivered envelope carries `root` (the gateway adds it to the notification params today). It is additive: a bundle keys its routing by `sessionId` and ignores extra keys (see Q3).
+7. Shape. The in-process sink delivers what `EventEnvelope::toArray()` gives for the same event, which is what primary-feed listeners get today, plus `root`. The sink takes `params` from the notification (`relay()` already sets `root` there, Gateway.php:709) and drops `jsonrpc` and `method`. Empty `data` stays the `stdClass` that `toArray()` builds, so one listener sees one shape from either path. A bundle keys its routing by `sessionId` and ignores extra keys (see Q3).
 
 ### 3.3 Back-pressure
 
@@ -118,7 +125,9 @@ Proposed bounds. The numbers are recommendations, chosen for parity with existin
 - Live-only events (`pushEphemeral`-class: deltas, no `seq`): when the queue is over a bound, coalesce by key (`sessionId|type|turnId`, the wire's key), then drop the oldest live-only event. A dropped live-only event is not counted as a durable loss.
 - Durable events (with `seq`): never dropped silently. When a durable event would exceed a bound after live-only shedding, the sink drops that session's queued events from its first undelivered durable event onward, counts them as `dropped`, enqueues one `server.overflow {sessionId, dropped: <n>, action: "resubscribe"}` envelope in their place, and stops delivering that session until the listener resubscribes. Other sessions keep flowing.
 - The overflow notice is always accepted (it reserves one slot above the bound), so the listener always learns about a loss.
-- The sink's cursor for an overflowed session is set to the last durable seq it actually delivered, not the last seq it queued. This is the rule that makes resubscribe recover exactly: the listener's `cursor()` closure (see `subscribeSession`) reports what it applied, and the gateway resumes from there. A test pins this (section 5.3).
+- Cursor, one rule. During normal flow it moves at queue time, as on the wire (section 3.2, rule 2), so a re-relayed seq is never queued twice. On overflow of a session, the cursor is reset to the last durable seq the listener actually received, not the last seq queued. This is what makes resubscribe recover exactly: the listener's `cursor()` closure (see `subscribeSession`) reports what it applied, and the gateway resumes from there. Section 5.2 pins this.
+- A stopped session (after overflow) discards its events. `deliver()` neither queues them nor moves the cursor, so nothing for that session is delivered until the listener resubscribes. Other sessions are unaffected.
+- A resubscribe clears the stop and removes that session's undelivered entries from the queue before the cursor is set (section 3.5). The host's replay from `afterSeq` supplies them again, or the answer's `reset` flag says the buffer no longer holds them, as on the wire. Without the purge, a replay from a lower cursor would queue the same seqs a second time.
 - A listener that is slow to return does not block the host: delivery runs on the loop (`futureTick`), so the host's socket keeps being read. The bound above is what protects memory when a listener stalls.
 
 ### 3.4 What a dropped subscriber sees
@@ -135,7 +144,7 @@ Proposed bounds. The numbers are recommendations, chosen for parity with existin
 
 ### 3.5 Subscriptions made through the sink
 
-- `subscribeSession` on a routed session: `callRoot()` answers the subscribe; then the door records the sink as a subscriber of that session, and sets the sink's cursor to `afterSeq` (when given) or the answer's `throughSeq`. This is the wire's rule for the Connection path.
+- `subscribeSession` on a routed session: `callRoot()` answers the subscribe; then the door records the sink as a subscriber of that session, and sets the sink's cursor to `afterSeq` (when given) or the answer's `throughSeq`. The cursor rule is the wire's. Before the cursor is set, the sink clears any stop on that session and purges its undelivered entries; that purge is the sink's addition (section 3.3).
 - `subscribeEvents` listeners stay per-client, as today. The sink is per in-process client, and it is registered in `rootClients[root]` when the client first uses a root, as `forward()` does for a connection. That is how server-scope events of a root reach it.
 - `followedSessions()` returns the union of the primary feeds (as today) and the routed sessions this sink subscribes to, in the order it subscribed. `connected()` is unchanged.
 - Last-subscriber rule: `unsubscribeSession` on a routed session removes the sink's subscription, and when it was the last one, sends `session.unsubscribe` upstream (the same as `forward()`).
@@ -148,19 +157,19 @@ Primary feeds keep delivering through the existing in-process `Client` callback 
 
 ## 4. The ten inventoried wire methods on a non-primary root
 
-Columns: how the root is chosen (`rootFor`), what a non-primary success looks like, what refusals pass through unchanged, and what changes from the 5a semantics. Row numbers match the 5a table. Timeouts: the bundle keeps its 20 s per-call timeout (5a); the gateway's 300 s forward deadline still applies inside the gateway, and it is the bundle's timeout that the bundle sees first.
+Columns: how the root is chosen (`rootFor`), what a non-primary success looks like, what refusals pass through unchanged, and what changes from the 5a semantics. Row numbers match the 5a table. Timeouts: the door carries its own per-call timer, `InProcessHostServices::CALL_TIMEOUT_SECONDS = 20.0`, the value the bundles had from `ServeBridge` (`scripts/channel-bridge/src/Candy/ServeBridge.php:68`, the only ServeBridge left after PL-5d). It wraps every call the door makes, routed and primary alike. On expiry it rejects with a `timeout`-kind error and the message `<method> got no answer in 20s`, the kind the bundles see today (5a rows 2 to 10). The gateway's 300 s forward deadline still applies inside the gateway and only frees its bookkeeping. A late answer is dropped by the single-settle guard. Before PL-5c-A the in-process path had no timeout at all, so this is a new bound on the door, not a carried-over one.
 
 | # | Method (HostServices) | Root chosen by | Non-primary success | Refusals that pass through unchanged | What changes from 5a |
 |---|---|---|---|---|---|
-| 2 | `subscribeSession(sessionId, afterSeq, cursor)` | `sessionId` via `sessionRoots` (no `root` param) | Answer as the host gave it, with `root` set. Sink subscribed; cursor set (section 3.5). | `session_not_found` when no row (from primary). `workspace_failed` from a failed host start. `busy host_timeout` after 300 s. | Before: `session_not_found`. After: a routed follow. Re-follow after host loss uses the same `cursor` closure, unchanged. |
+| 2 | `subscribeSession(sessionId, afterSeq, cursor)` | `sessionId` via `sessionRoots` (no `root` param) | Answer as the host gave it, with `root` set. Sink subscribed; cursor set (section 3.5). | `session_not_found` when no row (from primary). `workspace_failed` from a failed host start. `timeout` after 20 s (the door's timer, section 4 preamble). The gateway's `busy host_timeout` at 300 s reaches the door only after that, and is dropped. | Before: `session_not_found`. After: a routed follow. Re-follow after host loss uses the same `cursor` closure, unchanged. |
 | 3 | `unsubscribeSession(sessionId)` | `sessionId` via `sessionRoots` | `null`. Sink removed; upstream unsubscribe when last. | None raised to the caller. Upstream failure is best-effort, as in `dropSubscriber()`. | Before: `null` after a no-op. After: the sink is removed too. Still no caller in any bundle today. |
-| 4 | `sendTurn(sessionId, text, delivery, idempotencyKey, images, documents)` | `sessionId` via `sessionRoots` | The host's `session.send` answer, with `root`. | `session_not_found`, `too_many_turns` (busy, `retryAfterMs`), `refused` (-32009), `invalid_params` (image or document params), `busy` draining, `busy host_timeout`. | Media refusal retry (5a row 4) unchanged: one retry without attachments. Retry on `busy` or `workspace_failed` is NOT added (Q9): see the note below. |
-| 5 | `createSession(name, permissionMode, root)` | `root` param when set (through `canonicalRoot`), otherwise primary | The `session.create` answer with `id`, `root`. The id is bound to the root through `learn()`, so later calls find it by `sessionId` alone. | `root_not_found` (NotFound, `root` not a directory), `invalid_params` (`root` not a string). Missing-`id` RuntimeException (5a). | New optional `?string $root` (Q2). Before: `root` was not accepted. Without `root`, behavior is unchanged. |
+| 4 | `sendTurn(sessionId, text, delivery, idempotencyKey, images, documents)` | `sessionId` via `sessionRoots` | The host's `session.send` answer, with `root`. | `session_not_found`, `too_many_turns` (busy, `retryAfterMs`), `refused` (-32009), `invalid_params` (image or document params), `busy` draining, `timeout` after 20 s (the door's timer). | Media refusal retry (5a row 4) unchanged: one retry without attachments. Retry on `busy` or `workspace_failed` is NOT added (Q9): see the note below. |
+| 5 | `createSession(name, permissionMode, root)` | `root` param when set (through `canonicalRoot`), otherwise primary | The `session.create` answer with `id`, `root`. The id is bound to the root through `learn()`, so later calls find it by `sessionId` alone. | `root_not_found` (NotFound, `root` not a directory), `invalid_params` (`root` not a string). Missing-`id` RuntimeException (5a). | `createSession()` is unchanged. The root form is `RootedHostServices::createSessionIn(string $root, ...)` (Q2), and it answers the same way. Without a root, behavior is unchanged. |
 | 6 | `respondPermission(sessionId, askId, reply, note)` | `sessionId` via `sessionRoots` | The `permission.respond` answer. | `ask_expired` (NotFound), `ask_not_found`, `already_resolved` (Conflict; the core's substring match still works because the message is unchanged), `remember_refused` (Forbidden), `UnsupportedInServer` (-32030). | Before: `ask_not_found` on a routed session. After: the child host answers. The relayed-question path (`respondRelayed` on the host) is the host's own. |
 | 7 | `cancelSession(sessionId, mode)` | `sessionId` via `sessionRoots` | The `session.cancel` answer. | `session_not_found`, `busy` draining. | Before: `session_not_found`. After: the turn is cancelled on the child host. |
 | 8 | `sessionSnapshot(sessionId, limit)` | `sessionId` via `sessionRoots` | The `session.get` answer, with `root`. | `session_not_found`. | Before: `session_not_found`. After: routed. M's raw-message display (5a row 8) is unchanged. |
 | 9 | `execCommand(sessionId, name, args)` | `sessionId` via `sessionRoots` | The `command.exec` answer. | `session_not_found`, `UnsupportedInServer` (-32030), `command_refused` (Conflict), busy draining. | Before: `session_not_found`. After: routed. Empty `args` is still an absent key (PL-bridge-args, unchanged). |
-| 10 | `pendingPermissions(root)` | `root` param when set (through `canonicalRoot`), otherwise primary | The `permission.pending` answer for that root's host, with `root` set on each item. | `root_not_found` for a bad `root`. | New optional `?string $root` (Q11). Without a root, the primary answer is unchanged. The wire method has no `sessionId` to route by, so this is the only method whose routing needs a new parameter. |
+| 10 | `pendingPermissions(root)` | `pendingPermissionsIn(root)` when a root is given (through `canonicalRoot`), otherwise `pendingPermissions()` | The `permission.pending` answer for that root's host, with `root` set on the top-level result, as `forward()` does for every method except `session.list`. Items get no per-item `root`: the wire tags items only for session lists (`learn()`, Gateway.php:563), and permission items carry `sessionId`, not `id`. | `root_not_found` for a bad `root`. | New `RootedHostServices::pendingPermissionsIn(string $root)` (Q2, Q11). Without a root, the primary answer is unchanged. The wire method has no `sessionId` to route by, so this is the only method whose routing needs a root argument. |
 
 Non-method rows, unchanged in behavior:
 
@@ -181,7 +190,7 @@ Run candy-code through `scripts/parallel-tests.sh` (K=24, scratch `--out`), as t
 - `candy-code/tests/Server/GatewayTrustRoutingTest.php`, `GatewayScopeEnforcementTest.php`, `GatewayOutboxTest.php`, `GatewayForwardDeadlineTest.php`, `GatewayRecycleLoopClockTest.php`, `DirBrowseTest.php`, `WorkspaceHostTest.php`: these pin the wire behavior that the `callRoot` refactor and the `relay()` target change must not move.
 - `candy-code/tests/Host/InProcessHostServicesTest.php`: all tests except the one pinned routing-limit test (lines 518 to 550), which is replaced by 5.2.
 - `candy-discord` and `candy-msteams` suites: no bundle edits in 5c-A, so they must pass unchanged.
-- `sugar-plugins` suite: the `HostServices` change is additive and optional.
+- `sugar-plugins` suite: `HostServices` is unchanged. The `RootedHostServices` interface is new and additive, and the one test added there (section 5.2) is test-only.
 
 ### 5.2 New and changed tests in candy-code
 
@@ -195,7 +204,9 @@ Run candy-code through `scripts/parallel-tests.sh` (K=24, scratch `--out`), as t
 - Replace the pinned routing-limit test with: each of the ten methods on a non-primary session returns the routed answer (use a real workspace host, as `WorkspaceHostTest` does, to prove the socket hop).
 - An id no dispatcher holds still gets `session_not_found` from the door, and the same wire refusal.
 - `permission.respond` with an unknown `askId` on a routed session gets `ask_not_found` from the child host (not from the door).
-- `pendingPermissions()` with no root answers from the primary, unchanged. With a root it answers from that root's host.
+- `pendingPermissions()` with no root answers from the primary, unchanged. `pendingPermissionsIn(root)` answers from that root's host, with the top-level `root` set and no per-item `root`.
+- `createSessionIn(root)` answers with `root` set and binds the id to that root, so a later `sendTurn` on it needs no root argument.
+- A call that outlives `CALL_TIMEOUT_SECONDS` (routed or primary) rejects with kind `timeout` exactly once. Its late answer is dropped, and the gateway's `inFlight` returns to zero when that answer lands.
 - A `sendTurn` failure with `workspace_failed` is not replayed (section 4 note).
 - The door never receives `viewer_session_denied` or `owner_only` (section 2.5).
 
@@ -211,6 +222,11 @@ Run candy-code through `scripts/parallel-tests.sh` (K=24, scratch `--out`), as t
 - A listener that calls `sendTurn` from inside a callback: its event is delivered after the owed ones, the outer drain is not re-entered, and no order is changed.
 - A throwing listener is logged and the other listeners still receive the event.
 - Server-scope events of a root reach a sink that used that root, and no sink that never used it.
+- Shape: a routed event reaches a listener with the `toArray()` keys plus `root`, and empty `data` is the `stdClass` that `toArray()` builds (section 3.2, rule 7).
+- Resubscribe purge: a sink that still holds undelivered entries for a session, and resubscribes from a lower cursor, delivers each seq once (seq 1 and 2 queued but not drained, then a re-follow replays them).
+- Stopped session: after overflow, events for that session are discarded, the cursor does not move, and a resubscribe resumes with no gap and no duplicate.
+
+- `sugar-plugins/tests/Bridge/` (test only, no source change): a routed ask is answerable through the event path. The `permission.requested` event fills `askSession`, so `answerByAskId()` routes by `sessionId`. The same ask must stay unanswered when the primary-only fallback poll (`permission.pending`, no root) returns nothing. That pins the Q11 gap instead of leaving it silent.
 
 ### 5.3 Ordering and back-pressure property checks
 
@@ -236,10 +252,10 @@ Q1. Cold start. May a call routed to a root whose host is not running start that
 - Default: yes, same as the wire. A start that outlasts the bundle's 20 s surfaces as the bundle's timeout, and the host keeps starting in the background, so the next call finds it running. The 20 s timeout is not raised.
 
 Q2. How does a bundle name a root for a call that has no session yet? Only `createSession` and `pendingPermissions` need it, because every other call finds its root by `sessionId`.
-- Default: add `?string $root = null` to those two methods on `HostServices` (additive, optional). Null means the primary root, so no bundle changes.
+- Default: a separate optional interface, `RootedHostServices` (section 2.6), with `createSessionIn(string $root, ...)` and `pendingPermissionsIn(string $root)`, implemented only by `InProcessHostServices`. `HostServices` keeps its current signatures, so no bundle or test fake changes. The primary root stays the default through `createSession()` and `pendingPermissions()`.
 
 Q3. Does a delivered event carry `root` for a routed session?
-- Default: yes. The gateway already adds `root` to relayed notifications, and the sink delivers the same shape. Additive: the bundles' router keys by `sessionId`.
+- Default: yes. The gateway already adds `root` to relayed notifications, and the sink delivers the `toArray()` shape plus `root` (section 3.2, rule 7). Additive: the bundles' router keys by `sessionId`.
 
 Q4. Sink bounds. Are 2048 envelopes and 1 MiB the right queue bounds for a routed sink?
 - Default: yes (parity with `SessionFeed::MAX_PRELIVE_BUFFER` and `Outbox::SOFT_WATERMARK_BYTES`). Both are constants, so a later change is one edit.
@@ -260,10 +276,10 @@ Q9. Retries for routed turns: should the door retry a `session.send` that fails 
 - Default: no. The bundle keeps its current rules (one media-refusal retry only). The child host's idempotency cache is per process, so a retry can run a turn twice after a host restart.
 
 Q10. Gateway forward deadline (300 s) versus the bundle's per-call timeout (20 s).
-- Default: keep both. The bundle's 20 s wins for the bundle. The gateway's deadline only frees the gateway's bookkeeping.
+- Default: keep both. The door's 20 s timer (section 4 preamble) is what the bundle sees. The gateway's 300 s deadline only frees the gateway's bookkeeping, and its late answer is dropped.
 
 Q11. `pendingPermissions` across roots: answer for the given root only, or fan out to every running host?
-- Default: the given root only (or the primary when none is given). A fan-out needs a second round trip per running host, and the bundle only asks about the root of a session it is serving.
+- Default: the given root only (or the primary when none is given). A fan-out needs a second round trip per running host, and the bundle only asks about the root of a session it is serving. Routed asks are answered through the event path: `ConversationRouterCore::presentApproval` fills `askSession` from the `permission.requested` event, so `answerByAskId()` routes by `sessionId` and never reaches its fallback. The fallback poll (`permission.pending` with no root, `sugar-plugins/src/Bridge/ConversationRouterCore.php:573`) sees primary asks only, so a routed ask whose event was never presented stays unanswerable through it. This is a known gap for 5c-A. Closing it means the fallback passing a root, which is a bundle change and out of scope here. Section 5.2 pins the event path.
 
 ---
 
