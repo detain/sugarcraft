@@ -145,9 +145,10 @@ final class MemoryStore
      * frontmatter in half and the note vanished. The closing fence may end the
      * file, which a hand-written note with no body legitimately does.
      *
-     * Kept on this pattern until P1-12c-cc4 moves the store onto
-     * {@see \SugarCraft\Markdown\Frontmatter::split()}. The two grammars differ,
-     * and the decision is that the note's outcome is the contract: adjacent
+     * Deliberately kept on this pattern rather than the shared
+     * {@see \SugarCraft\Markdown\Frontmatter::split()} reader the other
+     * frontmatter sites use. The two grammars differ, and the decision is that
+     * the note's outcome is the contract: adjacent
      * fences and a blank-line block are refused (the split's empty meta fails
      * the mapping check), blank lines before the body are trimmed from the
      * content, and CRLF endings load. Pinned by
