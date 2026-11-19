@@ -43,7 +43,7 @@ HTML,
 // Inline part: the image referenced above as cid:company-logo.
 // withInlineAttachment() takes a path; the bytes come from a temp file so the
 // example stays self-contained. CID embedding rides the SMTP transport's MIME
-// builder - on Resend the reference is not carried (README: use SMTP or Mailgun for CID).
+// builder - on Resend the reference is not carried (README: use SMTP for CID).
 $logoPath = \sys_get_temp_dir() . '/candy-mail-example-logo.png';
 \file_put_contents($logoPath, \base64_decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
