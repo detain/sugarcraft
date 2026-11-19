@@ -114,6 +114,19 @@ ships as `App\` — called out in the table below.
 
 ---
 
+## Composer tooling (outside the catalog counts)
+
+A Composer installer that stages `sugar-plugin` packages. It has no site tile
+or `docs/lib` page, so the generator leaves it out of the library and package
+counts. Listing it under Libraries would make those counts claim a catalog
+entry that does not exist.
+
+| Package | Status | Notes |
+|---|:---:|---|
+| **SugarPluginInstaller** (`sugar-plugin-installer/`) | 🟢 ready | Composer installer for `sugar-plugin` packages (composer-plugin, `LibraryInstaller` subclass). Original work: no upstream port. |
+
+---
+
 ## Channel bundles (outside the package matrix)
 
 Two further directories ship channel plugins for `candy-code serve` rather
