@@ -771,9 +771,12 @@ final class RenderCommand extends Command
             // and not empty"), but sugar-colorprofile's probe disables on ANY
             // value including empty. Hide the empty value from the probe so
             // the spec-correct "no opinion" answer reaches it, then restore.
-            // The putenv hide spans the whole await: the child inherits the
-            // environment when it is spawned, and the replay pass reads it
-            // again when the report settles, both inside this window.
+            // The putenv hide spans the whole await. The infocmp child never
+            // sees it either way: it runs under the minimal environment from
+            // InfocmpBinary::childEnvironment() (TERM and PATH only). The
+            // ambient environment is read when the report is built and again
+            // by the replay pass when the child settles, so both reads sit
+            // inside this window.
             $noColor = getenv('NO_COLOR');
             if ($noColor === false || $noColor !== '') {
                 $report = self::awaitTerminalReport();

@@ -1291,6 +1291,18 @@ final class RenderCommandTest extends TestCase
         $this->assertTrue($report->has(Capability::NoColor));
     }
 
+    public function testEmptyNoColorIsRestoredAsEmptyAfterTheAwaitedProbe(): void
+    {
+        // An EMPTY NO_COLOR takes no position, so the implicit chain must
+        // still color through the awaited report. The hide around that await
+        // has to put the empty value back afterwards: a restore that unsets
+        // the variable is visible to every later reader of the environment.
+        putenv('NO_COLOR=');
+        putenv('TERM=vt100');
+        $this->assertTrue($this->invokeStatic('terminalSupportsColor'));
+        $this->assertSame('', getenv('NO_COLOR'));
+    }
+
     public function testProbeIsConsultedAfterEnvVerdictOrder(): void
     {
         // Structural anti-regression: the environment verdict must be read
