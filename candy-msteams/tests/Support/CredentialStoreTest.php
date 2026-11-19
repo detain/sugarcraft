@@ -138,7 +138,7 @@ final class CredentialStoreTest extends TestCase
         // Simulate P1 having already written its ledger — and the discord
         // bundle having written its rows: one store, several platforms, and
         // neither writer may shave the other.
-        $store->write([
+        (new FileCredentialWriter($this->path))->mutate(static fn (): array => [
             'seenEntrypoints' => ['x' => true],
             'platforms' => ['discord' => ['accounts' => ['default' => ['token' => 'dt']]]],
         ]);
