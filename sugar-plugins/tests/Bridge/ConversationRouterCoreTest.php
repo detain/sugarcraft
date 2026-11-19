@@ -85,6 +85,24 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertNull($this->router->channelFor('other:acc:x'));
     }
 
+    /**
+     * An in-process host settles a refused create at once. The memo must be set before that
+     * settlement clears it, or the refused create poisons the conversation for good.
+     */
+    public function testASynchronouslyRefusedCreateDoesNotPoisonTheNextMessage(): void
+    {
+        $this->build();
+        $this->serve->createRefusals = 1;
+
+        $this->bindWithPrompt('first', 'm1');
+        $this->assertNull($this->store->bindings[self::KEY] ?? null, 'a refused create leaves nothing bound');
+
+        $this->bindWithPrompt('second', 'm2');
+
+        $this->assertCount(2, $this->serve->createdNames, 'the next message creates again');
+        $this->assertSame('s1', $this->store->bindings[self::KEY]);
+    }
+
     public function testIdleInboundMintsASessionNamedByTheGrammarAndSendsAFencedQueuedPrompt(): void
     {
         $this->build();

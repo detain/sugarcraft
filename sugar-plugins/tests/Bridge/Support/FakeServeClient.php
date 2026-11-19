@@ -47,6 +47,9 @@ final class FakeServeClient implements ServeClient
     /** @var list<string|null> names passed to createSession() */
     public array $createdNames = [];
 
+    /** Creates to refuse, answered by a settled rejection the moment they are asked. */
+    public int $createRefusals = 0;
+
     public function onEvent(\Closure $listener): void
     {
         $this->eventListener = $listener;
@@ -82,6 +85,11 @@ final class FakeServeClient implements ServeClient
     public function createSession(?string $name = null, ?string $permissionMode = null): PromiseInterface
     {
         $this->createdNames[] = $name;
+        if ($this->createRefusals > 0) {
+            $this->createRefusals--;
+
+            return reject(new \RuntimeException('create refused'));
+        }
 
         return resolve(['id' => $this->nextSessionId]);
     }

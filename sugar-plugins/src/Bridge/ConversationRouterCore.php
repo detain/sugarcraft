@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Plugins\Bridge;
 
 use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 /**
@@ -682,31 +683,51 @@ abstract class ConversationRouterCore
             return $this->creating[$key];
         }
 
-        return $this->creating[$key] = $this->serve->createSession($this->sessionName($key))->then(
-            function (array $created) use ($key, $ref): string {
+        // The memo is set BEFORE the create's settlement can run: an in-process host
+        // settles at once, and a settle that ran first would unset a memo not yet set.
+        $deferred = new Deferred();
+        $this->creating[$key] = $deferred->promise();
+        $this->serve->createSession($this->sessionName($key))->then(
+            function (array $created) use ($key, $ref, $deferred): void {
                 unset($this->creating[$key]);
-                $sessionId = (string) ($created['id'] ?? '');
-                if ($sessionId === '') {
-                    throw new \RuntimeException('session.create returned no id');
+                try {
+                    $deferred->resolve($this->adoptCreated($key, $ref, $created));
+                } catch (\Throwable $error) {
+                    $deferred->reject($error);
                 }
-                // Re-check INSIDE the fulfilled arm: if the key got bound while
-                // this create rode the wire (/new, or a parallel adopter), the
-                // racer ADOPTS the live binding — never overwrites it.
-                $bound = $this->map->sessionIdFor($key);
-                if ($bound !== null) {
-                    return $bound;
-                }
-                $this->map->bind($key, $sessionId);
-                $this->map->rememberConversation($sessionId, $key, $ref);
-                $this->followNow($sessionId, $key);
-
-                return $sessionId;
             },
-            function (\Throwable $error) use ($key): never {
+            function (\Throwable $error) use ($key, $deferred): void {
                 unset($this->creating[$key]);
-                throw $error;
+                $deferred->reject($error);
             },
         );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Binds a created session to its conversation, or adopts the binding a racer made while
+     * the create rode the serve (/new, or a parallel adopter).
+     *
+     * @param array<string, mixed> $created the session.create answer
+     */
+    private function adoptCreated(string $key, array $ref, array $created): string
+    {
+        $sessionId = (string) ($created['id'] ?? '');
+        if ($sessionId === '') {
+            throw new \RuntimeException('session.create returned no id');
+        }
+        // Re-check at the bind: if the key got bound while this create rode the wire,
+        // the racer ADOPTS the live binding and never overwrites it.
+        $bound = $this->map->sessionIdFor($key);
+        if ($bound !== null) {
+            return $bound;
+        }
+        $this->map->bind($key, $sessionId);
+        $this->map->rememberConversation($sessionId, $key, $ref);
+        $this->followNow($sessionId, $key);
+
+        return $sessionId;
     }
 
     /**
