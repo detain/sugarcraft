@@ -35,7 +35,12 @@ use function React\Promise\resolve;
  * host cannot reorder or re-enter the feed that is emitting: a drain already in progress
  * is not entered again, and the outer loop delivers whatever a listener's call queued.
  *
- * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
+ * Every method is asynchronous, as the {@see HostServices} contract is (owner decision
+ * 2026-11-19, option a): it returns a promise that resolves to the value the call answers
+ * with, or to null for the void calls, and rejects with the {@see RpcError} the wire would
+ * answer with. The promise is settled before the method returns, so a caller that waits on
+ * it gets the answer in the same tick. Refusals are the wire's own {@see RpcError}s: the
+ * same code, kind and data.
  *
  * Five deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Each answer's value is encoded under the wire's flags and decoded back, with no
@@ -48,9 +53,11 @@ use function React\Promise\resolve;
  *   refused `too_deep` here: the bundle's wire client (sugar-mcp-client's
  *   `JsonRpc::MAX_DEPTH`, 64 with the envelope) drops that frame undecoded, and the
  *   call times out there instead.
- * - Session calls go to the primary host's dispatcher. The wire's workspace routing
- *   (`root`, {@see \SugarCraft\Code\Server\Workspace\Gateway}) is not applied, so a
- *   session bound to a non-primary root is not found here. No bundle sends `root`.
+ * - Session calls are served by the primary host's dispatcher only. This door never
+ *   sends `root`, and the wire's workspace routing (`root` and sessionId-only requests
+ *   through {@see \SugarCraft\Code\Server\Workspace\Gateway::routeOf()}) is not
+ *   applied, so a session the gateway bound to a non-primary root is not found here.
+ *   Reaching it in-process is open (PL-5c, see plan_plugin.md).
  * - Rate meters are not spent. {@see Dispatcher::invoke()} skips the per-client
  *   `rate_limited` budgets the wire applies to each frame, because the caller is the
  *   host itself, so a bundle's own loop is never refused `rate_limited`.
@@ -106,18 +113,15 @@ final class InProcessHostServices implements HostServices
      */
     public function connect(): PromiseInterface
     {
-        if ($this->isConnected()) {
-            return resolve(null);
-        }
-        try {
-            $this->hello();
-        } catch (\Throwable $e) {
-            // A failure opening the client (the host's boot, not only a refused hello) rejects too,
-            // so a bundle's start() takes its retry and give-up path instead of a synchronous throw.
-            return reject($e);
-        }
+        // A failure opening the client (the host's boot, not only a refused hello) rejects too,
+        // so a bundle's start() takes its retry and give-up path instead of a synchronous throw.
+        return $this->answer(function (): null {
+            if (!$this->openNow()) {
+                $this->helloNow();
+            }
 
-        return resolve(null);
+            return null;
+        });
     }
 
     /**
@@ -126,27 +130,37 @@ final class InProcessHostServices implements HostServices
      * from a listener, the owed events are delivered by the drain already running
      * (in order, to every listener) and the client still closes here.
      */
-    public function disconnect(): void
+    public function disconnect(): PromiseInterface
     {
-        $client = $this->client;
-        if ($client === null) {
-            return;
-        }
-        $this->drain();
-        $this->client = null;
-        $this->dispatcher->context()->removeClient($client);
+        return $this->answer(function (): null {
+            $client = $this->client;
+            if ($client === null) {
+                return null;
+            }
+            $this->drain();
+            $this->client = null;
+            $this->dispatcher->context()->removeClient($client);
+
+            return null;
+        });
     }
 
-    public function isConnected(): bool
+    /** Whether the in-process client is open and has said hello. */
+    public function isConnected(): PromiseInterface
     {
-        return $this->client?->isInitialized() ?? false;
+        return $this->answer(fn (): bool => $this->openNow());
     }
 
     /**
      * Mirrors server.hello (inventory row 1). Opens the client on first use; a
      * second hello on the same client is the wire's `already_initialized` conflict.
      */
-    public function hello(): array
+    public function hello(): PromiseInterface
+    {
+        return $this->answer(fn (): array => $this->helloNow());
+    }
+
+    private function helloNow(): array
     {
         $context = $this->dispatcher->context();
         $client = $this->client ??= $this->open();
@@ -159,6 +173,11 @@ final class InProcessHostServices implements HostServices
         ]);
     }
 
+    private function openNow(): bool
+    {
+        return $this->client?->isInitialized() ?? false;
+    }
+
     /**
      * Mirrors session.subscribe (row 2). A $cursor is read on every call and its value
      * is the resume point, as the wire's reconnect re-follow reads it (ServeBridge::follow):
@@ -166,21 +185,23 @@ final class InProcessHostServices implements HostServices
      * applied, not from the $afterSeq it first followed with. $afterSeq is the resume
      * point only when no cursor is given. A cursor of null or 0 opens from a snapshot.
      */
-    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): array
+    public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): PromiseInterface
     {
-        if ($cursor !== null) {
-            $resume = $cursor();
-            $afterSeq = $resume === null || $resume === 0 ? null : $resume;
-        }
+        return $this->answer(function () use ($sessionId, $afterSeq, $cursor): array {
+            if ($cursor !== null) {
+                $resume = $cursor();
+                $afterSeq = $resume === null || $resume === 0 ? null : $resume;
+            }
 
-        $params = ['sessionId' => $sessionId];
-        if ($afterSeq !== null) {
-            $params['afterSeq'] = $afterSeq;
-        } else {
-            $params['snapshotLimit'] = self::SNAPSHOT_LIMIT;
-        }
+            $params = ['sessionId' => $sessionId];
+            if ($afterSeq !== null) {
+                $params['afterSeq'] = $afterSeq;
+            } else {
+                $params['snapshotLimit'] = self::SNAPSHOT_LIMIT;
+            }
 
-        return $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
+            return $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
+        });
     }
 
     /**
@@ -188,12 +209,16 @@ final class InProcessHostServices implements HostServices
      * client has disconnected there is nothing left to unfollow, so this returns quietly
      * rather than throwing not-initialized.
      */
-    public function unsubscribeSession(string $sessionId): void
+    public function unsubscribeSession(string $sessionId): PromiseInterface
     {
-        if (!$this->isConnected()) {
-            return;
-        }
-        $this->dispatcher->invoke($this->connected(), 'session.unsubscribe', ['sessionId' => $sessionId]);
+        return $this->answer(function () use ($sessionId): null {
+            if (!$this->openNow()) {
+                return null;
+            }
+            $this->dispatcher->invoke($this->connected(), 'session.unsubscribe', ['sessionId' => $sessionId]);
+
+            return null;
+        });
     }
 
     /** Mirrors session.send (row 4). */
@@ -204,74 +229,90 @@ final class InProcessHostServices implements HostServices
         ?string $idempotencyKey,
         array $images,
         array $documents,
-    ): array {
-        $params = ['sessionId' => $sessionId, 'text' => $text, 'delivery' => $delivery];
-        if ($idempotencyKey !== null) {
-            $params['idempotencyKey'] = $idempotencyKey;
-        }
-        if ($images !== []) {
-            $params['images'] = $images;
-        }
-        if ($documents !== []) {
-            $params['documents'] = $documents;
-        }
+    ): PromiseInterface {
+        return $this->answer(function () use ($sessionId, $text, $delivery, $idempotencyKey, $images, $documents): array {
+            $params = ['sessionId' => $sessionId, 'text' => $text, 'delivery' => $delivery];
+            if ($idempotencyKey !== null) {
+                $params['idempotencyKey'] = $idempotencyKey;
+            }
+            if ($images !== []) {
+                $params['images'] = $images;
+            }
+            if ($documents !== []) {
+                $params['documents'] = $documents;
+            }
 
-        return $this->dispatcher->invoke($this->connected(), 'session.send', $params);
+            return $this->dispatcher->invoke($this->connected(), 'session.send', $params);
+        });
     }
 
     /** Mirrors session.create (row 5). */
-    public function createSession(?string $name, ?string $permissionMode): array
+    public function createSession(?string $name, ?string $permissionMode): PromiseInterface
     {
-        $params = [];
-        if ($name !== null) {
-            $params['name'] = $name;
-        }
-        if ($permissionMode !== null) {
-            $params['permissionMode'] = $permissionMode;
-        }
+        return $this->answer(function () use ($name, $permissionMode): array {
+            $params = [];
+            if ($name !== null) {
+                $params['name'] = $name;
+            }
+            if ($permissionMode !== null) {
+                $params['permissionMode'] = $permissionMode;
+            }
 
-        return $this->dispatcher->invoke($this->connected(), 'session.create', $params);
+            return $this->dispatcher->invoke($this->connected(), 'session.create', $params);
+        });
     }
 
     /** Mirrors permission.respond (row 6). */
-    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): array
+    public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): PromiseInterface
     {
-        $params = ['sessionId' => $sessionId, 'askId' => $askId, 'reply' => $reply];
-        if ($note !== null) {
-            $params['note'] = $note;
-        }
+        return $this->answer(function () use ($sessionId, $askId, $reply, $note): array {
+            $params = ['sessionId' => $sessionId, 'askId' => $askId, 'reply' => $reply];
+            if ($note !== null) {
+                $params['note'] = $note;
+            }
 
-        return $this->dispatcher->invoke($this->connected(), 'permission.respond', $params);
+            return $this->dispatcher->invoke($this->connected(), 'permission.respond', $params);
+        });
     }
 
     /** Mirrors session.cancel (row 7). */
-    public function cancelSession(string $sessionId, string $mode): array
+    public function cancelSession(string $sessionId, string $mode): PromiseInterface
     {
-        return $this->dispatcher->invoke($this->connected(), 'session.cancel', ['sessionId' => $sessionId, 'mode' => $mode]);
+        return $this->answer(fn (): array => $this->dispatcher->invoke(
+            $this->connected(),
+            'session.cancel',
+            ['sessionId' => $sessionId, 'mode' => $mode],
+        ));
     }
 
     /** Mirrors session.get (row 8). */
-    public function sessionSnapshot(string $sessionId, int $limit): array
+    public function sessionSnapshot(string $sessionId, int $limit): PromiseInterface
     {
-        return $this->dispatcher->invoke($this->connected(), 'session.get', ['sessionId' => $sessionId, 'limit' => $limit]);
+        return $this->answer(fn (): array => $this->dispatcher->invoke(
+            $this->connected(),
+            'session.get',
+            ['sessionId' => $sessionId, 'limit' => $limit],
+        ));
     }
 
     /** Mirrors command.exec (row 9). */
-    public function execCommand(string $sessionId, string $name, string $args): array
+    public function execCommand(string $sessionId, string $name, string $args): PromiseInterface
     {
-        // The wire refuses `args: ""` as invalid params; an empty argument list is an absent key.
-        $params = ['sessionId' => $sessionId, 'name' => $name];
-        if ($args !== '') {
-            $params['args'] = $args;
-        }
+        return $this->answer(function () use ($sessionId, $name, $args): array {
+            // The wire refuses `args: ""` as invalid params; an empty argument list is an absent key.
+            $params = ['sessionId' => $sessionId, 'name' => $name];
+            if ($args !== '') {
+                $params['args'] = $args;
+            }
 
-        return $this->dispatcher->invoke($this->connected(), 'command.exec', $params);
+            return $this->dispatcher->invoke($this->connected(), 'command.exec', $params);
+        });
     }
 
     /** Mirrors permission.pending (row 10). */
-    public function pendingPermissions(): array
+    public function pendingPermissions(): PromiseInterface
     {
-        return $this->dispatcher->invoke($this->connected(), 'permission.pending', []);
+        return $this->answer(fn (): array => $this->dispatcher->invoke($this->connected(), 'permission.pending', []));
     }
 
     /**
@@ -279,9 +320,11 @@ final class InProcessHostServices implements HostServices
      * {@see EventEnvelope}; {@see EventEnvelope::notification()} is the wire shape
      * for a listener that wants it.
      */
-    public function subscribeEvents(\Closure $listener): void
+    public function subscribeEvents(\Closure $listener): PromiseInterface
     {
         $this->listeners[] = $listener;
+
+        return resolve(null);
     }
 
     /**
@@ -290,8 +333,9 @@ final class InProcessHostServices implements HostServices
      * (see the class docblock). The first follow's answer is {@see subscribeSession()}'s
      * return value.
      */
-    public function subscribeFollowResults(\Closure $listener): void
+    public function subscribeFollowResults(\Closure $listener): PromiseInterface
     {
+        return resolve(null);
     }
 
     /**
@@ -299,16 +343,18 @@ final class InProcessHostServices implements HostServices
      *
      * @return list<string>
      */
-    public function followedSessions(): array
+    public function followedSessions(): PromiseInterface
     {
-        if ($this->client === null) {
-            return [];
-        }
+        return $this->answer(function (): array {
+            if ($this->client === null) {
+                return [];
+            }
 
-        return \array_values(\array_map(
-            static fn ($feed): string => $feed->sessionId(),
-            $this->dispatcher->context()->followedBy($this->client),
-        ));
+            return \array_values(\array_map(
+                static fn ($feed): string => $feed->sessionId(),
+                $this->dispatcher->context()->followedBy($this->client),
+            ));
+        });
     }
 
     /**
@@ -338,6 +384,21 @@ final class InProcessHostServices implements HostServices
     private function connected(): Client
     {
         return $this->client ?? throw RpcError::of(ErrorCode::NotInitialized, 'send server.hello first');
+    }
+
+    /**
+     * Runs one call and settles its promise: the answer resolves, and any throwable (a refusal
+     * or a failure the host raised) rejects with the same instance the synchronous call threw.
+     *
+     * @param \Closure(): mixed $call
+     */
+    private function answer(\Closure $call): PromiseInterface
+    {
+        try {
+            return resolve($call());
+        } catch (\Throwable $e) {
+            return reject($e);
+        }
     }
 
     private function enqueue(EventEnvelope $envelope): void

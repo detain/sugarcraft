@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
 use SugarCraft\Code\Host\InProcessPeer;
 use SugarCraft\Code\Host\SessionEvent;
@@ -56,7 +57,7 @@ final class InProcessHostServicesTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->host->disconnect();
+        $this->call($this->host->disconnect());
         $this->probe?->stop('test over');
         $this->fixture->tearDown();
     }
@@ -65,10 +66,10 @@ final class InProcessHostServicesTest extends TestCase
     {
         $wireHello = WireClient::open($this->fixture->dispatcher, 'wire-hello')->hello();
 
-        $hello = $this->host->hello();
+        $hello = $this->call($this->host->hello());
 
         self::assertSame(self::shape($wireHello), self::shape($hello));
-        self::assertTrue($this->host->isConnected());
+        self::assertTrue($this->call($this->host->isConnected()));
     }
 
     public function testConnectIsIdempotentAndASecondHelloIsTheWireConflict(): void
@@ -77,7 +78,7 @@ final class InProcessHostServicesTest extends TestCase
         self::assertNull($this->fixture->await($this->host->connect()));
 
         $wireAgain = $this->wire->request('server.hello', ['minProtocol' => 1, 'maxProtocol' => 1, 'client' => ['name' => 'test', 'version' => '0']]);
-        $inAgain = $this->refusalOf(fn () => $this->host->hello());
+        $inAgain = $this->refusalOf(fn () => $this->call($this->host->hello()));
 
         $this->assertSameRefusal($inAgain, $wireAgain);
         self::assertSame('already_initialized', $inAgain->kind);
@@ -89,7 +90,7 @@ final class InProcessHostServicesTest extends TestCase
         $unhelloed = WireClient::open($this->fixture->dispatcher, 'unhello');
 
         $wireSend = $unhelloed->request('session.send', ['sessionId' => $wireId, 'text' => 'hi', 'delivery' => 'queue']);
-        $inSend = $this->refusalOf(fn () => $this->host->sendTurn($wireId, 'hi', 'queue', null, [], []));
+        $inSend = $this->refusalOf(fn () => $this->call($this->host->sendTurn($wireId, 'hi', 'queue', null, [], [])));
 
         $this->assertSameRefusal($inSend, $wireSend);
         self::assertSame(ErrorCode::NotInitialized, $inSend->errorCode);
@@ -104,7 +105,7 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $this->wire->clear();
 
         $this->wire->raw('{"jsonrpc":"2.0","id":"bad","method":"session.send","params":{"sessionId":"' . $wireId . '","text":"' . "\xFF" . '","delivery":"queue"}}');
@@ -116,7 +117,7 @@ final class InProcessHostServicesTest extends TestCase
         }
         self::assertNotNull($wireResponse, 'the wire answered the frame with an error');
 
-        $inProcess = $this->refusalOf(fn () => $this->host->sendTurn($inId, "\xFF", 'queue', null, [], []));
+        $inProcess = $this->refusalOf(fn () => $this->call($this->host->sendTurn($inId, "\xFF", 'queue', null, [], [])));
 
         $this->assertSameRefusal($inProcess, $wireResponse);
         self::assertSame(ErrorCode::ParseError, $inProcess->errorCode);
@@ -127,10 +128,10 @@ final class InProcessHostServicesTest extends TestCase
     public function testNonUtf8InsideAnAttachmentIsRefusedInProcessToo(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $badDocument = ['name' => "\xC3\x28.pdf", 'mime' => 'application/pdf', 'data' => 'AAAA'];
 
-        $inProcess = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [], [$badDocument]));
+        $inProcess = $this->refusalOf(fn () => $this->call($this->host->sendTurn($inId, '/help', 'queue', null, [], [$badDocument])));
 
         self::assertSame(ErrorCode::ParseError, $inProcess->errorCode);
         self::assertSame('parse_error', $inProcess->kind);
@@ -235,7 +236,7 @@ final class InProcessHostServicesTest extends TestCase
 
             self::assertInstanceOf(\RuntimeException::class, $rejection);
             self::assertSame('boot failed', $rejection->getMessage());
-            self::assertFalse($host->isConnected());
+            self::assertFalse($this->call($host->isConnected()));
         } finally {
             $broken->tearDown();
         }
@@ -246,11 +247,11 @@ final class InProcessHostServicesTest extends TestCase
         $this->connect();
 
         $wireSession = $this->wire->call('session.create', []);
-        $inSession = $this->host->createSession(null, null);
+        $inSession = $this->call($this->host->createSession(null, null));
         self::assertSame(self::shape($wireSession), self::shape($inSession));
 
         $wireSub = $this->wire->call('session.subscribe', ['sessionId' => $wireSession['id'], 'snapshotLimit' => InProcessHostServices::SNAPSHOT_LIMIT]);
-        $inSub = $this->host->subscribeSession($inSession['id'], null, null);
+        $inSub = $this->call($this->host->subscribeSession($inSession['id'], null, null));
         self::assertSame(self::shape($wireSub), self::shape($inSub));
     }
 
@@ -258,16 +259,16 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $heard = [];
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
             if ($envelope->sessionId === $inId) {
                 $heard[] = $envelope;
             }
-        });
+        }));
         $this->wire->call('session.subscribe', ['sessionId' => $wireId]);
-        $this->host->subscribeSession($inId, null, null);
+        $this->call($this->host->subscribeSession($inId, null, null));
         $this->fixture->run();
 
         // One turn runs at a time (server.maxConcurrentTurns), so each door's turn
@@ -278,7 +279,7 @@ final class InProcessHostServicesTest extends TestCase
         $this->fixture->run(0.08);
 
         // The owner bucket is shared by every owner door, so the in-process turn needs its own key.
-        $inSend = $this->host->sendTurn($inId, 'tidy up', 'queue', 'k2', [], []);
+        $inSend = $this->call($this->host->sendTurn($inId, 'tidy up', 'queue', 'k2', [], []));
         self::assertSame(self::shape($wireSend), self::shape($inSend));
         $this->fixture->run(0.08);
         $this->fixture->backend->settle(Message::assistant('done'));
@@ -301,19 +302,19 @@ final class InProcessHostServicesTest extends TestCase
     public function testAThrowingListenerIsLoggedAndTheOthersStillHear(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
-        $this->host->subscribeSession($inId, null, null);
-        $this->host->subscribeEvents(static function (): void {
+        $inId = $this->call($this->host->createSession(null, null))['id'];
+        $this->call($this->host->subscribeSession($inId, null, null));
+        $this->call($this->host->subscribeEvents(static function (): void {
             throw new \RuntimeException('listener broke');
-        });
+        }));
         $heard = 0;
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
             if ($envelope->sessionId === $inId) {
                 $heard++;
             }
-        });
+        }));
 
-        $this->host->sendTurn($inId, 'hello', 'queue', null, [], []);
+        $this->call($this->host->sendTurn($inId, 'hello', 'queue', null, [], []));
         $this->fixture->run(0.08);
 
         self::assertGreaterThan(0, $heard);
@@ -323,31 +324,31 @@ final class InProcessHostServicesTest extends TestCase
     public function testDisconnectDeliversWhatIsOwedAndLeavesTheHost(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = [];
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
             $heard[] = $envelope;
-        });
-        $this->host->subscribeSession($inId, null, null);
-        $this->host->sendTurn($inId, 'hello', 'queue', null, [], []);
+        }));
+        $this->call($this->host->subscribeSession($inId, null, null));
+        $this->call($this->host->sendTurn($inId, 'hello', 'queue', null, [], []));
 
-        $this->host->disconnect();
+        $this->call($this->host->disconnect());
 
         self::assertNotSame([], $heard, 'events emitted before disconnect are not dropped');
-        self::assertFalse($this->host->isConnected());
-        self::assertSame([], $this->host->followedSessions());
+        self::assertFalse($this->call($this->host->isConnected()));
+        self::assertSame([], $this->call($this->host->followedSessions()));
     }
 
     public function testFollowedSessionsTracksSubscribeAndUnsubscribe(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
-        $this->host->subscribeSession($inId, null, null);
-        self::assertSame([$inId], $this->host->followedSessions());
+        $this->call($this->host->subscribeSession($inId, null, null));
+        self::assertSame([$inId], $this->call($this->host->followedSessions()));
 
-        $this->host->unsubscribeSession($inId);
-        self::assertSame([], $this->host->followedSessions());
+        $this->call($this->host->unsubscribeSession($inId));
+        self::assertSame([], $this->call($this->host->followedSessions()));
     }
 
     public function testRefusalsAreTheWireRefusals(): void
@@ -356,19 +357,19 @@ final class InProcessHostServicesTest extends TestCase
         $wireId = $this->wire->call('session.create', [])['id'];
 
         $this->assertSameRefusal(
-            $this->refusalOf(fn () => $this->host->sendTurn($wireId, 'hi', 'nope', null, [], [])),
+            $this->refusalOf(fn () => $this->call($this->host->sendTurn($wireId, 'hi', 'nope', null, [], []))),
             $this->wire->request('session.send', ['sessionId' => $wireId, 'text' => 'hi', 'delivery' => 'nope']),
         );
         $this->assertSameRefusal(
-            $this->refusalOf(fn () => $this->host->sessionSnapshot('no-such-session', 10)),
+            $this->refusalOf(fn () => $this->call($this->host->sessionSnapshot('no-such-session', 10))),
             $this->wire->request('session.get', ['sessionId' => 'no-such-session', 'limit' => 10]),
         );
         $this->assertSameRefusal(
-            $this->refusalOf(fn () => $this->host->respondPermission($wireId, 'no-such-ask', 'once', null)),
+            $this->refusalOf(fn () => $this->call($this->host->respondPermission($wireId, 'no-such-ask', 'once', null))),
             $this->wire->request('permission.respond', ['sessionId' => $wireId, 'askId' => 'no-such-ask', 'reply' => 'once']),
         );
         $this->assertSameRefusal(
-            $this->refusalOf(fn () => $this->host->execCommand($wireId, 'no-such-command', '')),
+            $this->refusalOf(fn () => $this->call($this->host->execCommand($wireId, 'no-such-command', ''))),
             $this->wire->request('command.exec', ['sessionId' => $wireId, 'name' => 'no-such-command']),
         );
     }
@@ -377,19 +378,19 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         self::assertSame(
             self::shape($this->wire->call('session.get', ['sessionId' => $wireId, 'limit' => 10])),
-            self::shape($this->host->sessionSnapshot($inId, 10)),
+            self::shape($this->call($this->host->sessionSnapshot($inId, 10))),
         );
         self::assertSame(
             self::shape($this->wire->call('permission.pending', [])),
-            self::shape($this->host->pendingPermissions()),
+            self::shape($this->call($this->host->pendingPermissions())),
         );
         self::assertSame(
             self::shape($this->wire->call('session.cancel', ['sessionId' => $wireId, 'mode' => 'hard'])),
-            self::shape($this->host->cancelSession($inId, 'hard')),
+            self::shape($this->call($this->host->cancelSession($inId, 'hard'))),
         );
     }
 
@@ -402,17 +403,17 @@ final class InProcessHostServicesTest extends TestCase
     public function testFollowResultListenersNeverFireInProcess(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = 0;
-        $this->host->subscribeFollowResults(static function (): void {
+        $this->call($this->host->subscribeFollowResults(static function (): void {
             throw new \RuntimeException('follow listener must not run');
-        });
-        $this->host->subscribeFollowResults(function () use (&$heard): void {
+        }));
+        $this->call($this->host->subscribeFollowResults(function () use (&$heard): void {
             $heard++;
-        });
+        }));
 
-        $first = $this->host->subscribeSession($inId, null, null);
-        $again = $this->host->subscribeSession($inId, $first['throughSeq'] ?? null, null);
+        $first = $this->call($this->host->subscribeSession($inId, null, null));
+        $again = $this->call($this->host->subscribeSession($inId, $first['throughSeq'] ?? null, null));
 
         self::assertIsArray($first);
         self::assertIsArray($again);
@@ -423,34 +424,34 @@ final class InProcessHostServicesTest extends TestCase
     public function testUnsubscribeAfterDisconnectIsQuietLikeTheWireWrapper(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
-        $this->host->subscribeSession($inId, null, null);
-        $this->host->disconnect();
+        $inId = $this->call($this->host->createSession(null, null))['id'];
+        $this->call($this->host->subscribeSession($inId, null, null));
+        $this->call($this->host->disconnect());
 
-        $this->host->unsubscribeSession($inId);
+        $this->call($this->host->unsubscribeSession($inId));
 
-        self::assertFalse($this->host->isConnected());
-        self::assertSame([], $this->host->followedSessions());
+        self::assertFalse($this->call($this->host->isConnected()));
+        self::assertSame([], $this->call($this->host->followedSessions()));
     }
 
     public function testADisconnectFromAListenerDoesNotReorderWhatIsStillOwed(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $client = (new \ReflectionProperty(InProcessHostServices::class, 'client'))->getValue($this->host);
         // session.created is queued by createSession(); flush it before the listeners attach.
         $this->fixture->run();
         $first = [];
         $second = [];
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$first): void {
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$first): void {
             $first[] = $envelope->type;
             if ($envelope->type === 'first') {
                 $this->host->disconnect();
             }
-        });
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$second): void {
+        }));
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$second): void {
             $second[] = $envelope->type;
-        });
+        }));
 
         // Two events emitted in one synchronous run: the first listener's disconnect must not
         // let the second event reach the listeners ahead of the first.
@@ -460,42 +461,42 @@ final class InProcessHostServicesTest extends TestCase
 
         self::assertSame(['first', 'second'], $first);
         self::assertSame(['first', 'second'], $second, 'every listener hears the owed events in emit order');
-        self::assertFalse($this->host->isConnected());
+        self::assertFalse($this->call($this->host->isConnected()));
     }
 
     public function testUnsubscribeAnswersTheWireShapeAndAnUnknownSessionIsNoRefusal(): void
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $this->wire->call('session.subscribe', ['sessionId' => $wireId]);
-        $this->host->subscribeSession($inId, null, null);
+        $this->call($this->host->subscribeSession($inId, null, null));
 
         $wireAnswer = $this->wire->call('session.unsubscribe', ['sessionId' => $wireId]);
-        $this->host->unsubscribeSession($inId);
+        $this->call($this->host->unsubscribeSession($inId));
 
         self::assertSame(['unsubscribed' => true], $wireAnswer);
-        self::assertSame([], $this->host->followedSessions());
+        self::assertSame([], $this->call($this->host->followedSessions()));
 
         // The wire answers an unknown session with unsubscribed=false, not a refusal; so does the host.
         self::assertSame(['unsubscribed' => false], $this->wire->call('session.unsubscribe', ['sessionId' => 'no-such-session']));
-        $this->host->unsubscribeSession('no-such-session');
+        $this->call($this->host->unsubscribeSession('no-such-session'));
     }
 
     public function testExecCommandAnswersTheWireShapeAndTheUiOnlyRefusal(): void
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $wireClear = $this->wire->call('command.exec', ['sessionId' => $wireId, 'name' => 'clear']);
-        $inClear = $this->host->execCommand($inId, 'clear', '');
+        $inClear = $this->call($this->host->execCommand($inId, 'clear', ''));
         self::assertSame(self::shape($wireClear), self::shape($inClear));
         self::assertSame($wireClear['effects'], $inClear['effects']);
         self::assertSame(['clear-transcript'], $inClear['effects']);
 
         $this->assertSameRefusal(
-            $this->refusalOf(fn () => $this->host->execCommand($inId, 'theme', '')),
+            $this->refusalOf(fn () => $this->call($this->host->execCommand($inId, 'theme', ''))),
             $this->wire->request('command.exec', ['sessionId' => $wireId, 'name' => 'theme']),
         );
     }
@@ -515,7 +516,7 @@ final class InProcessHostServicesTest extends TestCase
         $this->fixture->run(0.08);
 
         $wireAnswer = $this->wire->call('permission.respond', ['sessionId' => $wireId, 'askId' => $wireAsk->askId, 'reply' => 'once']);
-        $inAnswer = $this->host->respondPermission($wireId, $inAsk->askId, 'once', null);
+        $inAnswer = $this->call($this->host->respondPermission($wireId, $inAsk->askId, 'once', null));
 
         self::assertTrue($wireAnswer['applied']);
         self::assertTrue($inAnswer['applied']);
@@ -530,10 +531,10 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $wireRefusal = $this->wire->request('session.subscribe', ['sessionId' => $wireId, 'afterSeq' => -1]);
-        $inRefusal = $this->refusalOf(fn () => $this->host->subscribeSession($inId, -1, null));
+        $inRefusal = $this->refusalOf(fn () => $this->call($this->host->subscribeSession($inId, -1, null)));
 
         $this->assertSameRefusal($inRefusal, $wireRefusal);
         self::assertSame(ErrorCode::InvalidParams, $inRefusal->errorCode);
@@ -548,19 +549,19 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $this->wire->call('session.send', ['sessionId' => $wireId, 'text' => 'tidy up', 'delivery' => 'queue', 'idempotencyKey' => 'k1']);
         $this->fixture->run(0.08);
         $this->fixture->backend->settle(Message::assistant('done'));
         $this->fixture->run(0.08);
-        $this->host->sendTurn($inId, 'tidy up', 'queue', 'k2', [], []);
+        $this->call($this->host->sendTurn($inId, 'tidy up', 'queue', 'k2', [], []));
         $this->fixture->run(0.08);
         $this->fixture->backend->settle(Message::assistant('done'));
         $this->fixture->run(0.08);
 
         $wireResume = $this->wire->call('session.subscribe', ['sessionId' => $wireId, 'afterSeq' => 1]);
-        $inResume = $this->host->subscribeSession($inId, null, static fn (): int => 1);
+        $inResume = $this->call($this->host->subscribeSession($inId, null, static fn (): int => 1));
 
         self::assertArrayHasKey('fromSeq', $wireResume, 'the wire replays from the cursor');
         self::assertArrayNotHasKey('reset', $inResume, 'the cursor resumes the replay instead of a snapshot reset');
@@ -574,12 +575,12 @@ final class InProcessHostServicesTest extends TestCase
         $this->connect();
 
         $wireName = $this->wire->request('session.create', ['name' => 'agent:probe']);
-        $inName = $this->refusalOf(fn () => $this->host->createSession('agent:probe', null));
+        $inName = $this->refusalOf(fn () => $this->call($this->host->createSession('agent:probe', null)));
         $this->assertSameRefusal($inName, $wireName);
         self::assertSame('reserved_session_name', $inName->kind);
 
         $wireMode = $this->wire->request('session.create', ['permissionMode' => 'nope']);
-        $inMode = $this->refusalOf(fn () => $this->host->createSession(null, 'nope'));
+        $inMode = $this->refusalOf(fn () => $this->call($this->host->createSession(null, 'nope')));
         $this->assertSameRefusal($inMode, $wireMode);
     }
 
@@ -591,17 +592,17 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $png = ['name' => 'shot.png', 'mime' => 'image/png', 'data' => \base64_encode("\x89PNG\r\n\x1a\n" . \str_repeat("\0", 8))];
         $pdf = ['name' => 'spec.pdf', 'mime' => 'application/pdf', 'data' => \base64_encode('%PDF-1.4 ' . \str_repeat('x', 8))];
 
         $wireImage = $this->wire->request('session.send', ['sessionId' => $wireId, 'text' => '/help', 'delivery' => 'queue', 'images' => [$png]]);
-        $inImage = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [$png], []));
+        $inImage = $this->refusalOf(fn () => $this->call($this->host->sendTurn($inId, '/help', 'queue', null, [$png], [])));
         $this->assertSameRefusal($inImage, $wireImage);
         self::assertSame('images_with_command', $inImage->kind);
 
         $wireDocument = $this->wire->request('session.send', ['sessionId' => $wireId, 'text' => '/help', 'delivery' => 'queue', 'documents' => [$pdf]]);
-        $inDocument = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [], [$pdf]));
+        $inDocument = $this->refusalOf(fn () => $this->call($this->host->sendTurn($inId, '/help', 'queue', null, [], [$pdf])));
         $this->assertSameRefusal($inDocument, $wireDocument);
         self::assertSame('documents_with_command', $inDocument->kind);
     }
@@ -614,11 +615,11 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $tooLong = \str_repeat('n', 2049);
 
         $wireNote = $this->wire->request('permission.respond', ['sessionId' => $wireId, 'askId' => 'no-such-ask', 'reply' => 'once', 'note' => $tooLong]);
-        $inNote = $this->refusalOf(fn () => $this->host->respondPermission($inId, 'no-such-ask', 'once', $tooLong));
+        $inNote = $this->refusalOf(fn () => $this->call($this->host->respondPermission($inId, 'no-such-ask', 'once', $tooLong)));
 
         $this->assertSameRefusal($inNote, $wireNote);
     }
@@ -631,10 +632,10 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->connect();
         $wireId = $this->wire->call('session.create', [])['id'];
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
 
         $wireNamed = $this->wire->call('command.exec', ['sessionId' => $wireId, 'name' => 'rename', 'args' => 'Refactor notes']);
-        $inNamed = $this->host->execCommand($inId, 'rename', 'Refactor notes');
+        $inNamed = $this->call($this->host->execCommand($inId, 'rename', 'Refactor notes'));
 
         self::assertSame(self::shape($wireNamed), self::shape($inNamed));
         self::assertSame($wireNamed['effects'], $inNamed['effects']);
@@ -662,7 +663,7 @@ final class InProcessHostServicesTest extends TestCase
 
         $probe->start();
         self::assertSame($pump, $timer('pumpTimer'), 'a second start keeps the timer it already armed');
-        $host->disconnect();
+        $this->call($host->disconnect());
     }
 
     /**
@@ -672,12 +673,12 @@ final class InProcessHostServicesTest extends TestCase
     public function testAnOverflowNoticeReachesAnInProcessListener(): void
     {
         $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
+        $inId = $this->call($this->host->createSession(null, null))['id'];
         $heard = [];
-        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
             $heard[] = $envelope;
-        });
-        $this->host->subscribeSession($inId, null, null);
+        }));
+        $this->call($this->host->subscribeSession($inId, null, null));
 
         // Catch-up gets no loop tick, so everything heard meanwhile piles into the pre-live buffer.
         $session = $this->fixture->hub->get($inId);
@@ -716,7 +717,7 @@ final class InProcessHostServicesTest extends TestCase
     private function connect(): void
     {
         $this->fixture->await($this->host->connect());
-        self::assertTrue($this->host->isConnected());
+        self::assertTrue($this->call($this->host->isConnected()));
     }
 
     /** A dispatcher over the fixture's context whose roster adds one read method, `probe.raw`, answering $handler. */
@@ -756,6 +757,20 @@ final class InProcessHostServicesTest extends TestCase
     }
 
     /** @param \Closure(): mixed $call */
+    /**
+     * The settled answer of an in-process call: its value, or the refusal it rejected with, thrown
+     * the way the synchronous call threw it.
+     */
+    private function call(PromiseInterface $promise): mixed
+    {
+        $value = $this->fixture->await($promise);
+        if ($value instanceof \Throwable) {
+            throw $value;
+        }
+
+        return $value;
+    }
+
     private function refusalOf(\Closure $call): RpcError
     {
         try {
