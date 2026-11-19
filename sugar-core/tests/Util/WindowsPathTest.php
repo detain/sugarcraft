@@ -128,6 +128,33 @@ final class WindowsPathTest extends TestCase
     }
 
     /**
+     * Regression. A tilde-digit root typed with non-ASCII letters in another case
+     * must still be trusted: NTFS folds them, so the spelling is the same root.
+     */
+    public function testANonAsciiRootTypedInAnotherCaseIsStillTrusted(): void
+    {
+        $this->assertSame("C:\\données~2\\a.txt", WindowsPath::absolutise("C:\\Données~2", "c:\\données~2\\a.txt"));
+        $this->assertNull(WindowsPath::absolutise("C:\\Données~2", "c:\\données~2\\PROGRA~1\\x"));
+    }
+
+    /**
+     * @return iterable<string, array{string, string, bool}>
+     */
+    public static function sameSpellingRows(): iterable
+    {
+        yield 'ASCII case only' => ["C:\\Src", "C:\\src", true];
+        yield 'non-ASCII case only' => ["C:\\été", "C:\\Été", true];
+        yield 'different letters' => ["C:\\été", "C:\\ete", false];
+        yield 'different names sharing a prefix' => ["C:\\ws", "C:\\wsx", false];
+    }
+
+    #[DataProvider('sameSpellingRows')]
+    public function testSameSpellingFoldsCaseLikeNtfs(string $a, string $b, bool $same): void
+    {
+        $this->assertSame($same, WindowsPath::sameSpelling($a, $b));
+    }
+
+    /**
      * A root is canonical by contract, so its 8.3-looking names are trusted: a
      * root that realpath() answers as `PROGRA~1` names a real directory. The
      * caller's own tail is still checked, so a short name typed below the root is

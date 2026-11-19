@@ -652,6 +652,9 @@ final class PathJailTest extends TestCase
         yield 'same spelling' => ["C:\\ws\\src", "C:\\ws\\src", false];
         yield 'on-disk case differs' => ["C:\\ws\\Src", "C:\\ws\\src", false];
         yield 'drive letter case differs' => ["c:\\ws\\src", "C:\\ws\\src", false];
+        // Regression: NTFS folds non-ASCII letters, so a case-only difference there is not a redirect.
+        yield 'non-ASCII on-disk case differs' => ["C:\\Projets\\été", "C:\\Projets\\Été", false];
+        yield 'non-ASCII realpath lands elsewhere' => ["C:\\Projets\\été", "C:\\Projets\\autre", true];
         yield 'realpath lands elsewhere' => ["C:\\ws\\link", "D:\\data\\target", true];
         yield 'realpath lands in a sibling' => ["C:\\ws\\link", "C:\\ws\\target", true];
     }

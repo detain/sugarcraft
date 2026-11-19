@@ -472,7 +472,7 @@ final class PathJail
      */
     private static function windowsRealpathMoves(string $typed, string $real): bool
     {
-        return strcasecmp($typed, $real) !== 0;
+        return !WindowsPath::sameSpelling($typed, $real);
     }
 
     /**

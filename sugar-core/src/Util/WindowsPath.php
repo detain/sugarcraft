@@ -260,12 +260,32 @@ final class WindowsPath
         }
 
         foreach ($root as $i => $name) {
-            if (strcasecmp($segments[$i], $name) !== 0) {
+            if (!self::sameSpelling($segments[$i], $name)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Whether two Windows spellings name the same entry, ignoring case.
+     *
+     * NTFS folds non-ASCII letters too, so `Été` and `été` are one name. ASCII-only
+     * folding would call them different and refuse a path inside the root. Text
+     * that is not valid UTF-8 folds ASCII-only, because mb_strtolower() would
+     * substitute `?` and could equate two distinct byte strings.
+     */
+    public static function sameSpelling(string $a, string $b): bool
+    {
+        return self::foldName($a) === self::foldName($b);
+    }
+
+    private static function foldName(string $name): string
+    {
+        return mb_check_encoding($name, 'UTF-8')
+            ? mb_strtolower($name, 'UTF-8')
+            : strtolower($name);
     }
 
     /**
