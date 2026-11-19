@@ -1,7 +1,8 @@
-<p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. This is the VT500 state machine sugar-vterm consumes for its cell-grid rendering.</p>
+<p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured events (SGR attributes, cursor movement, erase operations, DEC private modes, OSC and DCS strings) without coupling the parser to any cell grid. sugar-ansi-parser is the VT500 byte-stream state machine behind <a href="sugar-vterm.html">sugar-vterm</a>, extracted so other consumers can share it. It follows the Paul Williams DEC parser diagram and mirrors the parser side of <a href="https://github.com/charmbracelet/x/tree/main/ansi">charmbracelet/x/ansi</a>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ansi-parser</code></pre>
+    <p>Requires PHP <code>^8.3</code>. <code>ext-mbstring</code> is a suggestion, not a requirement: it is consulted only by the <code>$replaceMalformed = true</code> UTF-8 mode. Default parsing never touches it, and constructing the parser with that flag but without the extension fails at the constructor, not in the middle of a stream.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{DebugHandler, Parser};
@@ -23,68 +24,173 @@ $handler-&gt;filter('print'); // rows with detail 'H', 'i'</code></pre>
 $parser = new Parser(new HandlerAdapter($myCsiHandler, $myOscHandler));
 $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</code></pre>
 
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The parser is a state machine over bytes. It recognizes where a control sequence starts and ends, and it hands each complete piece to a handler as an event: a printed rune, a C0 control, a CSI or ESC dispatch, an OSC or DCS string. It does not decide what those events mean. Screen state, cell grids and cluster assembly belong to the consumer, which is why this package stops at abstract events.</p>
+    <p>There are two ways to consume events. A consumer that wants every byte-level event implements the seven-method <code>Handler</code> interface. A consumer that wants the cursor, erase, SGR and mode semantics implements <code>CsiHandler</code> and <code>OscHandler</code> and receives them through <code>HandlerAdapter</code>, which is a deliberate sieve: it passes only the events those interfaces describe, and a <code>$fallback</code> handler can take the rest.</p>
+
+    <h3 style="margin-top: 32px;">Common tasks</h3>
+    <p><strong>Feed a stream in chunks.</strong> Sequences and UTF-8 runes split across <code>feed()</code> calls are reassembled. Call <code>flush()</code> once at the end so a pending string payload is dispatched:</p>
+    <pre class="code"><code class="language-php">$parser = new Parser($handler);
+foreach ($chunks as $chunk) {
+    $parser-&gt;feed($chunk);
+}
+$parser-&gt;flush();</code></pre>
+
+    <p><strong>Read colon-separated subparameters.</strong> <code>CSI 4:3 m</code> is curly underline, one slot with a subparameter, and it is not the same as <code>CSI 4;3 m</code>. <code>subparams()</code> reports which slots carry a colon, and <code>groupSubparameters()</code> regroups them. Read the flags inside <code>csiDispatch()</code>, where they describe the sequence being dispatched: the parser clears them when that dispatch returns, so a read after <code>parseComplete()</code> sees none.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\Parser;
+
+// Call this from csiDispatch(), with its $params argument.
+function groupedParams(Parser $parser, array $params): array
+{
+    return Parser::groupSubparameters($params, $parser-&gt;subparams());
+}
+// CSI 4:3 m gives [[4, 3]]; CSI 4;3 m gives [[4], [3]].</code></pre>
+
+    <p><strong>Decode an OSC 8 hyperlink.</strong> A hyperlink open carries a URI, and a close is an empty URI. <code>HandlerAdapter</code> reports both through <code>OscHandler::hyperlink()</code>, and it accepts the backtick-terminated form as well:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{HandlerAdapter, Parser, RecordingOscHandler};
+use SugarCraft\AnsiParser\Support\RecordingCsiHandler;
+
+$csi = new RecordingCsiHandler();
+$osc = new RecordingOscHandler();
+$parser = new Parser(new HandlerAdapter($csi, $osc));
+$parser-&gt;parseComplete("\x1b]8;;https://example.org\x1b\\link");
+$osc-&gt;hyperlinkUri(); // https://example.org, read while the link is open
+// A close (an empty URI) resets this to '', so read the URI before the close arrives.</code></pre>
+
+    <p><strong>Bound a long-lived log.</strong> <code>DebugHandler</code> keeps an unbounded <code>$log</code> by default, which suits test fixtures. For a long-lived mirror, pass <code>maxLogRows</code> and the log becomes a keep-newest ring that counts evictions in <code>$dropped</code>:</p>
+    <pre class="code"><code class="language-php">$debug = new DebugHandler(maxLogRows: 500);
+$parser = new Parser($debug);</code></pre>
+
+    <p><strong>Decode an inline image payload.</strong> The codecs parse the payloads of DCS, iTerm2 OSC 1337 and Kitty APC sequences into typed objects, and they report malformed input instead of guessing:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Codec\Iterm1337;
+
+$file = Iterm1337::parse($payload);   // ?Iterm1337, null when the payload is not OSC 1337
+if ($file !== null &amp;&amp; $file-&gt;isFile()) {
+    $declared = $file-&gt;declaredSize();
+}</code></pre>
+
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: printChar, execute, csiDispatch, escDispatch, oscDispatch, dcsDispatch, sosPmApcDispatch.</span></div>
-      <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles a pending OSC/DCS/SOS/PM/APC string at end of stream — an in-flight CSI or ESC, and a half-finished DCS prelude, end undispatched.</span></div>
-      <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the renderer's working CSI set (plus CR/LF routed from C0 executes): CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
+      <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: <code>printChar</code>, <code>execute</code>, <code>csiDispatch</code>, <code>escDispatch</code>, <code>oscDispatch</code>, <code>dcsDispatch</code> and <code>sosPmApcDispatch</code>.</span></div>
+      <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>. <code>flush()</code> (or <code>parseComplete()</code>) settles a pending OSC, DCS, SOS, PM or APC string at end of stream. An in-flight CSI or ESC, and a half-finished DCS prelude, end undispatched.</span></div>
+      <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the renderer's working CSI set, plus CR and LF routed from C0 executes: CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save and restore, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
       <div class="feature"><strong>Sub-parameters</strong><span><code>subparams()</code> and <code>Parser::groupSubparameters()</code> keep ECMA-48 colon groups apart, so <code>CSI 4:3 m</code> (curly underline) is not confused with <code>CSI 4;3 m</code>. Handlers can opt in through <code>SubparamsAwareHandler</code>.</span></div>
-      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument changes it — any positive int, so smaller values tighten the cap), so a hostile stream cannot grow the parser's buffers without limit. Past the cap the excess is dropped and decoders see a truncated payload; <code>Codec\Iterm1337</code> flags it as malformed only when fewer bytes arrive than its declared <code>size=</code> — a payload longer than declared passes unflagged, as the check is one-way.</span></div>
-      <div class="feature"><strong>DebugHandler</strong><span>Development mirror: records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> rows. The default shape is an unbounded public <code>$log</code> — test-fixture ergonomics on finite input; pass <code>maxLogRows:</code> for a long-lived mirror and the log becomes a keep-newest ring that counts every eviction in a public <code>$dropped</code>. <code>filter($type)</code> selects one kind; <code>resetLog()</code> clears rows and eviction counter together. Stream inspection for trusted input, never a hostile-stream sink.</span></div>
-      <div class="feature"><strong>Null sink</strong><span><code>NullHandler</code> is the shipped <code>Handler</code> that consumes everything and does nothing, with seven bare counter accessors (<code>printCount()</code> … <code>sosPmApcCount()</code>) so even a silent sink stays observable. Deliberately not a <code>BulkPrintHandler</code>: a null sink always wants byte-level truth, so <code>printCount()</code> counts runes, never runs.</span></div>
-      <div class="feature"><strong>Recording doubles (testing)</strong><span><code>Support\RecordingCsiHandler</code> ships in <code>src/</code> as a <code>final … implements CsiHandler</code> recording test double — interface growth breaks it at compile time instead of silently drifting hand-rolled stubs. Every call (grid queries included) logs a row in the <code>DebugHandler</code> vocabulary; <code>maxRows:</code> caps the log counting drops in a public <code>$dropped</code>. <code>RecordingOscHandler</code> is the ready-made <code>OscHandler</code>: it stores the window title and tracks the current hyperlink pair.</span></div>
+      <div class="feature"><strong>Bounded payloads</strong><span>DCS, OSC, SOS, PM and APC payloads are capped at 64 KiB by default. The third constructor argument changes the cap, and any positive value is accepted. Past the cap the excess is dropped, and <code>stringOverflowed()</code> reports it for the dispatch that carries it.</span></div>
+      <div class="feature"><strong>DebugHandler</strong><span>A development mirror that records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> rows. Pass <code>maxLogRows:</code> for a long-lived mirror. <code>filter($type)</code> selects one kind, and <code>resetLog()</code> clears the rows and the eviction counter together.</span></div>
+      <div class="feature"><strong>Null sink</strong><span><code>NullHandler</code> consumes every event and does nothing. Its seven counter accessors, from <code>printCount()</code> to <code>sosPmApcCount()</code>, keep even a silent sink observable.</span></div>
+      <div class="feature"><strong>Recording doubles</strong><span><code>Support\RecordingCsiHandler</code> is a final recording double that ships in <code>src/</code>, so interface growth breaks it at compile time instead of silently drifting a hand-rolled stub. <code>RecordingOscHandler</code> stores the window title and tracks the current hyperlink pair.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Limits &amp; hostile input</h3>
-    <ul>
-      <li><strong>Bounded accumulation</strong> — DCS/OSC/SOS/PM/APC payloads stop at 64 KiB (the third constructor argument changes it; smaller values tighten), CSI parameter lists cap at 32 slots with each value clamped at 65535.</li>
-      <li><strong>Byte-space fidelity</strong> — C0 bytes arriving <em>inside</em> an OSC string are dropped, so a payload can differ from the raw bytes sent; the <em>first</em> prefix byte survives and only the last intermediate is kept (disclosed parity deviations).</li>
-      <li><strong>Raw accessors are untrusted</strong> — <code>OscHandler::title()</code>/<code>hyperlink()</code>, <code>Iterm1337::name()</code>/<code>args()</code> (whose percent-decode can re-synthesize control bytes) and <code>KittyApc::control()</code> hand back wire text as dispatched; validate or reject before display or re-emission — the escape discipline is confined to <code>describe()</code>.</li>
-      <li><strong>UTF-8 policy splits by mode</strong> — completed runes pass verbatim by default; <code>$replaceMalformed</code> substitutes U+FFFD and also replaces incomplete runes dropped silently in the default mode. Lone C1 bytes never reach <code>printChar()</code>, but UTF-8-encoded C1 (<code>C2 80</code>-<code>C2 9F</code>) is legal text — consumers re-emitting printable text reject or replace U+0080-U+009F themselves.</li>
-    </ul>
+    <h3 style="margin-top: 40px;">API reference</h3>
+    <table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Parser</td><td><code>new(Handler $handler, bool $replaceMalformed = false, int $maxStringBuffer = 65536)</code></td><td>Constructs the state machine. The cap must be at least 1 byte</td></tr>
+<tr><td>Parser</td><td><code>feed(string $bytes)</code>, <code>flush()</code></td><td>Stream input, and end-of-stream settlement of a pending string payload</td></tr>
+<tr><td>Parser</td><td><code>parseComplete(string $bytes)</code></td><td><code>feed()</code> then <code>flush()</code> in one call</td></tr>
+<tr><td>Parser</td><td><code>reset()</code>, <code>discard()</code>, <code>currentState()</code></td><td><code>discard()</code> throws away pending payloads and in-progress UTF-8 and returns the machine to the ground state, without emitting them. <code>currentState()</code> reads the <code>State</code> enum</td></tr>
+<tr><td>Parser</td><td><code>subparams()</code>, <code>groupSubparameters(array $params, array $flags)</code></td><td>Colon-structure flags for the current dispatch, and their regrouping into nested lists</td></tr>
+<tr><td>Parser</td><td><code>stringOverflowed()</code>, <code>fastPathRuns()</code></td><td>Whether the current string dispatch was truncated. <code>fastPathRuns()</code> is an internal counter that tests use to confirm the ground-state fast path ran</td></tr>
+<tr><td>Handler</td><td><code>printChar</code>, <code>execute</code>, <code>csiDispatch</code>, <code>escDispatch</code>, <code>oscDispatch</code>, <code>dcsDispatch</code>, <code>sosPmApcDispatch</code></td><td>The seven-method event interface. Every parser event reaches the handler unchanged</td></tr>
+<tr><td>BulkPrintHandler</td><td><code>printRun(string $run)</code></td><td>Optional capability. A contiguous run of printable ASCII arrives as one call instead of one per byte</td></tr>
+<tr><td>SubparamsAwareHandler</td><td><code>setSubparams(array $subparams)</code></td><td>Optional capability. Receives the colon flags immediately before each CSI or DCS dispatch</td></tr>
+<tr><td>CsiHandler</td><td>29 public methods, for example <code>printable</code>, <code>cuu</code>, <code>cud</code>, <code>sgr</code>, <code>decset</code>, <code>decrst</code>, <code>gridRows</code>, <code>gridCols</code></td><td>The renderer-shaped CSI interface. It must answer <code>gridRows()</code> and <code>gridCols()</code>, which the adapter uses for DECSTBM defaults</td></tr>
+<tr><td>OscHandler</td><td><code>title(string $title)</code>, <code>hyperlink(string $uri, string $id)</code></td><td>Window title and OSC 8 hyperlink events</td></tr>
+<tr><td>HandlerAdapter</td><td><code>new(CsiHandler $csi, OscHandler $osc, ?Handler $fallback = null)</code>, <code>wired()</code>, <code>withFallback()</code></td><td>Bridges parser events onto the CSI and OSC interfaces, and sends the rest to an optional fallback</td></tr>
+<tr><td>DebugHandler</td><td><code>new(?int $maxLogRows = null)</code>, <code>filter(string $type)</code>, <code>resetLog()</code></td><td>Records every event as a log row. Pass a cap for a ring buffer</td></tr>
+<tr><td>NullHandler</td><td><code>printCount()</code> to <code>sosPmApcCount()</code></td><td>A sink that does nothing, with seven counters</td></tr>
+<tr><td>RecordingOscHandler</td><td><code>title()</code>, <code>hyperlink()</code>, <code>lastTitle()</code>, <code>hyperlinkUri()</code>, <code>hyperlinkId()</code></td><td>An <code>OscHandler</code> that records the title and the open hyperlink</td></tr>
+<tr><td>AnsiTokenizer</td><td><code>AnsiTokenizer::new()</code>, <code>parse(string $chunk)</code>, <code>pendingBytes()</code>, <code>flush()</code></td><td>A flat tokenizer that returns <code>Token</code> objects for a byte stream</td></tr>
+<tr><td>Token</td><td><code>type</code>, <code>data</code>, <code>intermediate</code>, <code>params</code>, <code>final</code>, <code>terminator</code>, <code>paramInts()</code></td><td>One classified slice of a stream</td></tr>
+<tr><td>Iterm1337</td><td><code>parse(string $data)</code>, <code>fromDcs()</code>, <code>isFile()</code>, <code>declaredSize()</code>, <code>malformed()</code>, <code>describe()</code></td><td>Decoder for iTerm2 OSC 1337 payloads, including file transfers</td></tr>
+<tr><td>KittyApc</td><td><code>parse(string $data)</code>, <code>control()</code>, <code>action()</code>, <code>imageId()</code>, <code>format()</code></td><td>Decoder for Kitty graphics APC payloads</td></tr>
+<tr><td>Dcs</td><td><code>parse(int $final, array $params = [], int $prefix = 0, int $intermediate = 0, string $data = '')</code>, <code>isSixel()</code>, <code>kind()</code></td><td>Decoder and classifier for DCS strings</td></tr>
+<tr><td>KeySequence</td><td><code>encode(string $name)</code>, <code>names()</code></td><td>Maps a key name to its byte sequence, or <code>null</code> when the name is unknown</td></tr>
+<tr><td>ControlNames</td><td><code>c0Name(int $byte)</code></td><td>The conventional name of a C0 control byte</td></tr>
+<tr><td>LabelSanitizer</td><td><code>clip(string $bytes, int $limit)</code></td><td>Internal helper that clips a label to a byte limit</td></tr>
+</table>
 
-    <h3 style="margin-top: 40px;">Assistive / text-bridge notes</h3>
-    <ul>
-      <li><code>printChar()</code> delivers <strong>codepoints, not graphemes</strong> — buffer and cluster with <code>grapheme_str_split()</code>/ICU before re-voicing a stream.</li>
-      <li>Dropped bytes produce <em>no</em> character at all, so a reconstructed transcript may be shorter than the sender's intent; U+FFFD appears only in replacement mode.</li>
-      <li>Hyperlinks pair: an OSC 8 event opens a span and one with an empty URI closes it; through <code>HandlerAdapter</code> a malformed <code>8;…</code> payload closes the current link rather than being dropped.</li>
-    </ul>
+    <h3 style="margin-top: 40px;">Configuration and limits</h3>
+    <p>The parser has no configuration file and no environment variables. Its options are constructor arguments and fixed limits:</p>
+    <table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>Parser</code> <code>$handler</code></td><td><code>Handler</code></td><td>required</td><td>Receives every event</td></tr>
+<tr><td><code>Parser</code> <code>$replaceMalformed</code></td><td>bool</td><td><code>false</code></td><td>Turns invalid or incomplete UTF-8 into U+FFFD. Requires <code>ext-mbstring</code></td></tr>
+<tr><td><code>Parser</code> <code>$maxStringBuffer</code></td><td>int, at least 1</td><td>65536 bytes</td><td>Cap on one DCS, OSC, SOS, PM or APC payload. Excess bytes are dropped</td></tr>
+<tr><td><code>DebugHandler</code> <code>$maxLogRows</code></td><td>?int</td><td><code>null</code>, unbounded</td><td>Turns the log into a keep-newest ring, with evictions counted in <code>$dropped</code></td></tr>
+<tr><td><code>HandlerAdapter</code> <code>$fallback</code></td><td>?Handler</td><td><code>null</code></td><td>Receives the events the sieve does not consume</td></tr>
+</table>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 style="margin-top: 40px;">Subparameters and multi-mode dispatch</h3>
+    <p>ECMA-48 separates parameter slots with <code>;</code> and subparameters with <code>:</code>. <code>CSI 4:3 m</code> is one slot with a subparameter, and <code>CSI ? 1000 ; 1006 h</code> sets two modes. The parser exposes both faithfully. <code>subparams()</code> returns, for each dispatch, a list of flags aligned with <code>$params</code>, with <code>true</code> at each index whose value was followed by a colon. The flags follow the upstream Go <code>Param.HasMore</code> design, so SGR consumers can handle colon forms such as <code>58:2::148:199:255</code> without re-splitting the stream.</p>
+    <p><code>HandlerAdapter</code> dispatches every parameter of <code>CSI h</code> and <code>CSI l</code> as a separate <code>decset()</code> or <code>decrst()</code> call, preserving the prefix. The parser flags the colon structure but does not interpret it, so a handler that ignores <code>subparams()</code> keeps the semicolon-split view of <code>$params</code>.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
     <ul>
-      <li><strong>ANSI stream inspection</strong> — parse escape sequences into structured events without spawning a terminal.</li>
-      <li><strong>Built into SugarVterm</strong> — give vterm raw bytes and it drives the machine for you.</li>
-      <li><strong>SGR decoding</strong> — receive every SGR parameter list, colon sub-parameters included, as the stream arrives.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/examples/debug.php"><code>examples/debug.php</code></a>: walks one stream per <code>Handler</code> event family, covering print and CSI, execute, ESC, OSC, OSC 8 raw payloads, DCS, APC and the C1 introducers. It prints each event as the parser reports it.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/examples/adapter.php"><code>examples/adapter.php</code></a>: drives <code>HandlerAdapter</code> itself. It shows the DECSET fan-out, the OSC 8 open and close pair, and the sieve with and without its <code>$fallback</code>.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/debug.php
+php examples/adapter.php</code></pre>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <p>Run the suite from the library root with PHPUnit 10:</p>
+    <pre class="code"><code class="language-shell">cd sugar-ansi-parser &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The tests are organized by component. <code>ParserTest.php</code> and <code>TransitionsTest.php</code> cover the state machine, <code>HandlerAdapterTest.php</code>, <code>HandlerAdapterModeDispatchTest.php</code> and <code>HandlerAdapterFallbackTest.php</code> cover the adapter, <code>SgrSubparameterTest.php</code> covers colon forms, and <code>ParserOverflowTest.php</code> and <code>DcsTruncationTest.php</code> pin the payload caps. The <code>Codec/</code> directory holds the decoder tests.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting</h3>
+    <table class="api-table">
+<tr><th>Symptom</th><th>Cause and fix</th></tr>
+<tr><td>A final CSI or ESC at the end of the stream never dispatches</td><td><code>flush()</code> and <code>parseComplete()</code> settle only string payloads. An in-flight CSI or ESC cannot be recovered, so it ends undispatched. Make sure the producer sends complete sequences.</td></tr>
+<tr><td>An OSC or DCS payload arrives truncated</td><td>Payloads cap at 64 KiB by default. Call <code>stringOverflowed()</code> inside the dispatch to detect the cut, or raise the cap with the third constructor argument.</td></tr>
+<tr><td>Invalid UTF-8 causes an error or a garbled rune</td><td>Pass <code>replaceMalformed: true</code> to turn malformed sequences into U+FFFD. The flag needs <code>ext-mbstring</code>, and the constructor fails loudly when the extension is missing.</td></tr>
+<tr><td>A fallback handler receives no events for the ESC family, DCS, SOS, PM or APC</td><td><code>HandlerAdapter</code> consumes the events it maps, and consumes the HT, LF, CR and BS executes. It forwards ESC, DCS, SOS, PM and APC events to <code>$fallback</code> unchanged, so pass a fallback to see them, or implement <code>Handler</code> directly.</td></tr>
+<tr><td>Colon-separated color arguments arrive as separate values</td><td>The parser flags the structure but does not interpret it. Read <code>subparams()</code> during the dispatch, or implement <code>SubparamsAwareHandler</code>. <code>groupSubparameters()</code> regroups them.</td></tr>
+<tr><td>A <code>DebugHandler</code> log grows without bound</td><td>The default log is unbounded, which suits fixtures. Pass <code>maxLogRows</code> for a long-lived mirror.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Limits and hostile input</h3>
+    <p>The parser is built for untrusted byte streams. Its bounds are part of the product. Payloads are capped as described above, so a hostile stream cannot grow the buffers without limit. The codecs report malformed input instead of guessing. Dropped bytes are signaled, not silent: the overflow flag, the truncation flags on the codecs, and the <code>$dropped</code> counter of a bounded <code>DebugHandler</code> all say when information was lost.</p>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <pre class="code"><code class="language-text">bytes
+  |
+  v
+Parser (VT500 state machine, Transitions table, State enum)
+  |  printChar / execute / csiDispatch / escDispatch / oscDispatch / dcsDispatch / sosPmApcDispatch
+  v
+Handler  ----- implement it directly, e.g. DebugHandler, NullHandler
+  |
+  v
+HandlerAdapter (sieve)  --->  CsiHandler (29 methods), OscHandler (title, hyperlink)
+  |
+  +--->  $fallback Handler (receives what the sieve does not consume)
+
+Codec\  Iterm1337, KittyApc, Dcs, KeySequence, ControlNames, LabelSanitizer
+AnsiTokenizer  a flat tokenizer for consumers that want Token objects rather than events</code></pre>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Charmbracelet source</th><th>SugarCraft port</th><th>Notes</th></tr>
+<tr><td><code>charmbracelet/x/ansi</code></td><td><code>Parser</code>, <code>CsiHandler</code>, <code>SubparamsAwareHandler</code></td><td>The parser side of the design. The <code>Param.HasMore</code> side-channel is the model for <code>subparams()</code></td></tr>
+<tr><td>Paul Williams, DEC parser state diagram</td><td><code>Parser</code>, <code>Transitions</code>, <code>State</code></td><td>The 15-state VT500 machine. The transition table is a 4096-byte lookup built at first use, indexed by state and byte</td></tr>
+</table>
+    <p>Where the port deliberately diverges, the reason is in the library README under the Credits and inspiration section.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library has no separate changelog file yet. Its history is the commit log of <code>sugar-ansi-parser/</code> in <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>. The package was renamed from <code>sugarcraft/candy-ansi</code> in 2026-10. Depend on the new name only.</p>
+
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-vterm.html"><strong>sugar-vterm</strong></a>: the emulator that consumes this parser through its renderer handler.</li>
+      <li><a href="sugar-cellbuffer.html"><strong>sugar-cellbuffer</strong></a>: the immutable cell-grid model. The parser itself has no grid.</li>
+      <li><a href="sugar-pty.html"><strong>sugar-pty</strong></a>: a PTY library that consumes the parser.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-ansi-parser">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/sugar-ansi-parser/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/tree/master/sugar-ansi-parser/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/ansi">charmbracelet/x/ansi</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/examples">Runnable examples</a></li>
     </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Parser</td><td>__construct(Handler, bool $replaceMalformed = false, int $maxStringBuffer = 65536)</td><td>Parser bound to one handler</td></tr>
-<tr><td>Parser</td><td>feed(bytes) / flush() / parseComplete(bytes) / reset()</td><td>Stream bytes, settle end of stream, one-shot parse, and reset (flushes an in-flight string first — it dispatches, then clears)</td></tr>
-<tr><td>Parser</td><td>currentState(): State / subparams(): list&lt;bool&gt;</td><td>Current state-machine state; colon flags for the last parameter list</td></tr>
-<tr><td>Parser</td><td>static groupSubparameters(params, flags)</td><td>Regroup a flat parameter list by its colon flags</td></tr>
-<tr><td>Handler</td><td>printChar / execute / csiDispatch / escDispatch / oscDispatch / dcsDispatch / sosPmApcDispatch</td><td>Parse events a handler receives</td></tr>
-<tr><td>HandlerAdapter</td><td>__construct(CsiHandler, OscHandler, ?Handler $fallback = null)</td><td>Bridges parser events to the CSI and OSC handler interfaces; unhandled and non-emulator events (ESC/DCS/SOS/PM/APC, unmapped finals, extra executes) forward to the optional fallback</td></tr>
-<tr><td>CsiHandler</td><td>printable / cuu/cud/cuf/cub / cup / sgr / ed / el / decset / decrst / decstbm / tbc / cht / cbt / …</td><td>Emulator-facing CSI actions</td></tr>
-<tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions; the adapter maps OSC 0/1/2 to title and OSC 8 (including the backtick <code>8;URI`</code> spelling) to hyperlink — a malformed <code>8;</code> payload closes the open link instead of dropping silently</td></tr>
-<tr><td>DebugHandler</td><td>$log / $dropped / filter(type) / resetLog() / ctor maxLogRows:</td><td>Development mirror — unbounded <code>$log</code> by default, keep-newest ring when <code>maxLogRows</code> is set; evictions counted in <code>$dropped</code> and <code>resetLog()</code> clears both</td></tr>
-<tr><td>NullHandler</td><td>printCount() / executeCount() / csiCount() / escCount() / oscCount() / dcsCount() / sosPmApcCount()</td><td>Shipped null <code>Handler</code> — consumes everything, stays observable; counts runes not runs (never a BulkPrintHandler)</td></tr>
-<tr><td>Support\RecordingCsiHandler</td><td>$log / $dropped / filter(type) / resetLog() / ctor maxRows: (grid default 25×80)</td><td>Final recording <code>CsiHandler</code> test double shipped in <code>src/</code> so consumers autoload it instead of hand-rolling anonymous doubles</td></tr>
-<tr><td>RecordingOscHandler</td><td>title() / hyperlink() in; lastTitle() / hyperlinkUri() / hyperlinkId() out</td><td>Ready-made <code>OscHandler</code> — stores the window title and the current hyperlink pair (raw, unvalidated; validate before re-emission)</td></tr>
-<tr><td>Codec\Dcs</td><td>static parse(final, params, prefix, intermediate, data) → kind() / isSixel() / isTruncated() / describe()</td><td>Typed DCS decoder: sixel, XTVERSION, DECRQSS/PSS, tmux, truncation</td></tr>
-<tr><td>Codec\Iterm1337</td><td>static parse(data) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; parse() returns null when the payload is not 1337; malformed() records on a rejected-as-mine payload, never throws</td></tr>
-<tr><td>Codec\KittyApc</td><td>static parse(data)</td><td>Kitty graphics frame decoder (null unless the frame opens with `G`, no space after the `G`): control pairs, geometry labels, payload size</td></tr>
-</table>
   </div>
 </section>
