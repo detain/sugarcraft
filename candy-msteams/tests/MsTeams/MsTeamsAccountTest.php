@@ -6,7 +6,7 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
-use SugarCraft\ServeProtocol\Protocol;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
 use CandyCode\Bundles\MsTeams\MsTeams\Rest;
@@ -254,12 +254,12 @@ final class MsTeamsAccountTest extends TestCase
         $this->settle();
         // The card can only keep the ask alive as long as the core honors it:
         // a 120-minute posture must arm the 1800-second ceiling, not 7200.
-        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'));
+        self::assertSame((float) AskExpiry::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'));
         $clamped = \array_values(\array_filter($lines, static fn (string $line): bool =>
             \str_contains($line, '"event":"approval_ttl_clamped"')));
         self::assertCount(1, $clamped, 'the clamp announces itself exactly once');
         self::assertStringContainsString('"configuredMinutes":120', $clamped[0]);
-        self::assertStringContainsString('"armedSeconds":' . Protocol::ASK_EXPIRY_SECONDS, $clamped[0]);
+        self::assertStringContainsString('"armedSeconds":' . AskExpiry::ASK_EXPIRY_SECONDS, $clamped[0]);
         // Clamping the window must NOT retire the live card early: the ask is
         // answerable until the armed (clamped) timer fires.
         self::assertNull($this->api->lastCallFor('/v3/conversations/conv-1/activities/act_out_1', 'PUT'));
@@ -274,7 +274,7 @@ final class MsTeamsAccountTest extends TestCase
         $this->face->promptApproval(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'sess_1',
             ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
         $this->settle();
-        self::assertSame((float) Protocol::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame((float) AskExpiry::ASK_EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
         self::assertSame([], \array_filter($lines, static fn (string $line): bool =>
             \str_contains($line, 'approval_ttl_clamped')), 'the default pair needs no announcement');
     }

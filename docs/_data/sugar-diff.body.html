@@ -1,9 +1,10 @@
-<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from candy-code's <code>BuildsUnifiedDiff</code> trait (now a delegating consumer) and the <code>DiffGutter</code> region model (D1a fold landed: the gutter's scan half delegates to <code>UnifiedScan::lines()</code>, <code>fileHeaders()</code> and <code>isHunkHeader()</code>; only the fixed-width gutter formatting stays app-side). First-party — there is no 1:1 Go counterpart.</p>
+<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. The engine was extracted from candy-code's <code>BuildsUnifiedDiff</code> trait, which now delegates to it, and the scan half of candy-code's <code>DiffGutter</code> also delegates here. Only the fixed-width gutter formatting stays in the app. First-party: there is no 1:1 Go counterpart.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff</code></pre>
+    <p style="margin-top: 12px;">The manifest requires PHP <code>^8.3</code> and <code>ext-mbstring</code>. Case folding goes through <code>mb_strtolower()</code>, with a byte-wise ASCII fallback for malformed input. There are no tagged releases yet, so consume <code>dev-master</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\Reader\UnifiedScan;
@@ -20,45 +21,144 @@ echo $patchText;
 // -Hello World
 // +Hello PHP
 
-// Immutable, fluent options — context width, folding and GNU
-// annotations are all opt-in; see the README Fidelity notes for
-// exactly which shapes the defaults pin.
+// Options are immutable and fluent. Context width, whitespace folding and the
+// GNU annotations are all opt-in.
 $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withContextLines(10)
     ->withIgnoreWhitespace()
     ->withNoNewlineAnnotation()
     ->withDevNullOnEmptySide());
 
-// None of those four options bite this one-line change: the sides differ
-// beyond whitespace, neither is empty, both end in a newline, and the single
-// hunk fits any context window — so the wide-options patch is byte-identical:
+// None of those four options changes this one-line edit, so the patch is the same:
 echo $wide->unified('file.txt') === $patchText ? "same patch\n" : "wider patch\n";
 // same patch
 
-// Number the rows of an existing patch (gutter/viewer support):
+// Number the rows of an existing patch, for gutter or viewer support:
 foreach (UnifiedScan::lines($patchText) as $row) {
     // $row->old, $row->new, $row->fileHeader, $row->kind (ScanRowKind enum)
-}
+}</code></pre>
 
-// Real files: (string) file_get_contents() both sides — a file() list side
-// is terminated by construction and hides a missing final newline (README
-// recipe).</code></pre>
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>A diff has two sides. The old side is the removed side and sits on the left. The new side is the added side and sits on the right. <code>Diff::compute()</code> trims the common prefix and suffix, runs an LCS over the lines of the middle, and groups the changes into <code>Hunk</code>s with a window of context around each one. Every row is a <code>Line</code> with a <code>LineKind</code> of <code>Equal</code>, <code>Delete</code> or <code>Insert</code>, verbatim text, and the old and new line numbers.</p>
+    <p>The row model is lazy. <code>compute()</code> materializes <code>Line</code> rows only for hunk bodies (changes plus context) and keeps the full operation sequence as one packed byte per row. A one-line change in a large file therefore retains hunk-sized state, not one object per input line. <code>lines()</code> derives the whole row sequence on demand and memoizes it. <code>addedLines()</code> and <code>removedLines()</code> count the packed bytes without building any rows.</p>
+    <p>The engine is non-visual. It emits no ANSI, draws nothing, and has no demo. Gutters, split panes and coloring are the consumer's job, and the engine supplies the numbers and the kinds those views need.</p>
 
-    <h3 style="margin-top: 32px;">The model</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Diff</strong><span>compute() entry point; lines, hunks, per-side counts and final-newline facts; isEmpty/addedLines/removedLines/unified/hunkText.</span></div>
-      <div class="feature"><strong>Hunk / Line / LineKind</strong><span>One @@ block; one numbered row; eq/del/ins. All immutable value objects.</span></div>
-      <div class="feature"><strong>Writer\UnifiedFormat</strong><span>Renders the GNU diff -u shape: headers (path labels whose text carries control bytes, a double quote or a backslash are C-quoted git core.quotePath-style), @@ ranges with GNU count elision, opt-in "\ No newline" markers and /dev/null labels.</span></div>
-      <div class="feature"><strong>Writer\SideBySideFormat / SideBySideRow</strong><span>Pairs a diff into [left?, right?] rows for split viewers — from a computed Diff or raw patch text, one shared pairing rule.</span></div>
-      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honoring each hunk's declared counts and classifying every row with ScanRowKind — row classification and numbering, no drawing. The public isHunkHeader() predicate is the walk's own recognition pattern, published so consumers gate boundaries without a second regex to drift.</span></div>
-    </div>
+    <h3 style="margin-top: 32px;">Tasks</h3>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
-    <ul>
-      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-color channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with color without ever making color carry the change alone (WCAG 1.4.1).</li>
-      <li><strong>Editing tools</strong> — the same engine candy-code's Edit, Write and ApplyPatch tools use to report changes to the model and the user.</li>
-      <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
-    </ul>
+    <h3 style="margin-top: 24px;">Diff two files on disk</h3>
+    <p>Sides take a raw string or a <code>list&lt;string&gt;</code>. For real files, cast the output of <code>file_get_contents()</code> to a string. The string channel keeps a missing final newline visible, where a <code>file()</code> list would report it as terminated. Pass relative paths as labels, because an absolute path renders as <code>a//path</code>.</p>
+    <pre class="code"><code class="language-php">$diff = Diff::compute(
+    (string) file_get_contents($oldPath),
+    (string) file_get_contents($newPath),
+    DiffOptions::new()->withNoNewlineAnnotation(),
+);
+echo $diff->unified('old/file.txt', 'new/file.txt');</code></pre>
+
+    <h3 style="margin-top: 24px;">Render the rows side by side</h3>
+    <p><code>SideBySideFormat::rows()</code> pairs one diff's changed runs into <code>[left?, right?]</code> rows for a split viewer. <code>fromUnified()</code> produces the same rows from rendered patch text. Leftover removals and additions stand alone, with one half null.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Diff\Writer\SideBySideFormat;
+
+foreach (SideBySideFormat::rows($diff) as $row) {
+    $left  = $row->left?->text;    // old column, numbered $row->left?->oldNumber
+    $right = $row->right?->text;   // new column, numbered $row->right?->newNumber
+    // $row->isPaired() separates replacements and context from leftovers.
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">Number the rows of a patch for a gutter</h3>
+    <p><code>UnifiedScan::lines()</code> walks any rendered unified diff, honors each hunk's declared counts, and classifies every row with a <code>ScanRowKind</code>. The runnable example <code>examples/unified-scan.php</code> shows the output. A patch from git, GNU diff or this library works the same way.</p>
+
+    <h3 style="margin-top: 24px;">Keep untrusted content safe</h3>
+    <p>Row text is exactly what the sides held, and the engine never strips control bytes from content. A surface that paints diffs of untrusted files must sanitize or escape those bytes for its own channel. The writer protects only the path labels: a label containing a control byte, <code>"</code> or <code>\</code> is C-quoted in the style of git's <code>core.quotePath</code>, so every header stays on one physical line. Scanning and pairing never re-emit input, so a multi-line element scans as one verbatim row.</p>
+
+    <h3 style="margin-top: 40px;">Key classes</h3>
+<table class="api-table">
+<caption>Public API surface</caption>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff. <code>degraded</code> reports the cell-budget fallback.</td></tr>
+<tr><td>Diff</td><td>unified(string $oldPath, ?string $newPath = null): string</td><td>Full <code>diff -u</code> text with <code>---</code> and <code>+++</code> headers. The second argument names the new side only.</td></tr>
+<tr><td>Diff</td><td>unifiedWithLabels(string $oldLabel, string $newLabel): string</td><td>Caller-supplied headers, with no prefixes forced. Row forgery is still guarded.</td></tr>
+<tr><td>Diff</td><td>hunkText(): string</td><td>Hunks only, with no file headers.</td></tr>
+<tr><td>Diff</td><td>lines(): list&lt;Line&gt; / isEmpty() / addedLines() / removedLines()</td><td>The full row sequence, memoized after the first call, and the summary counts.</td></tr>
+<tr><td>Hunk</td><td>header() / lines() / removedCount() / addedCount()</td><td>The <code>@@</code> block, its rows, and the <code>-</code> and <code>+</code> row tallies. Also exposes <code>oldStart</code>, <code>oldLines</code>, <code>newStart</code> and <code>newLines</code>.</td></tr>
+<tr><td>Line / LineKind</td><td>kind / text / oldNumber / newNumber; marker() / toUnifiedRow()</td><td>One numbered verbatim row. <code>LineKind</code> is <code>Equal</code> (<code>eq</code>), <code>Delete</code> (<code>del</code>) or <code>Insert</code> (<code>ins</code>).</td></tr>
+<tr><td>DiffOptions</td><td>new() and the <code>with*()</code> setters</td><td>Immutable options. Every option is also a readonly property, so <code>$diff-&gt;options</code> records which options produced a patch.</td></tr>
+<tr><td>UnifiedFormat</td><td>write(Diff, string $oldPath, ?string $newPath) / writeWithLabels() / hunksOnly(Diff): string</td><td>The writer behind <code>Diff::unified()</code>, <code>unifiedWithLabels()</code> and <code>hunkText()</code>. Path labels are control-byte safe.</td></tr>
+<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing from a computed diff or from patch text, using one pairing rule.</td></tr>
+<tr><td>SideBySideRow</td><td>left / right / isPaired()</td><td>One <code>[left?, right?]</code> row. Each side is a <code>Line</code> or null.</td></tr>
+<tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old and new numbers, the file-header flag and the <code>ScanRowKind</code>. Declared counts bound the walk, and boundaries fail closed.</td></tr>
+<tr><td>UnifiedScan</td><td>fileHeaders() / rowsOf(string) / isHunkHeader(string): bool</td><td>Which rows start a new file, the writer-compatible row split, and the single hunk-header predicate the walk uses.</td></tr>
+<tr><td>ScannedLine / ScanRowKind</td><td>old / new / fileHeader / kind; Context, Insert, Delete, HunkHeader, FileHeader, NoNewlineAnnotation, OutsideHunk; isContentRow()</td><td>The scan's region model. <code>isContentRow()</code> is true only for <code>Context</code>, <code>Insert</code> and <code>Delete</code>, so a renderer gates on the kind, not on the marker column.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Options</h3>
+    <p>Options are immutable. Every <code>with*()</code> call returns a new <code>DiffOptions</code>. Each one has a matching readonly property of the same name.</p>
+<table class="api-table">
+<caption>DiffOptions, with defaults and effects</caption>
+<thead><tr><th scope="col">Property</th><th scope="col">Setter</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>contextLines</code></td><td><code>withContextLines(int)</code></td><td><code>3</code> (<code>DEFAULT_CONTEXT_LINES</code>)</td><td>Unchanged rows kept around each change. A negative value clamps to 0.</td></tr>
+<tr><td><code>maxLcsCells</code></td><td><code>withMaxLcsCells(int)</code></td><td><code>250 000</code> (<code>DEFAULT_MAX_LCS_CELLS</code>)</td><td>Cell budget for the LCS table, counted as its real footprint. When a middle with rows on both sides exceeds it, that middle becomes one replace block and <code>degraded</code> is true. A one-sided middle is linear work and stays exact. <code>0</code> forces the fallback for any two-sided middle.</td></tr>
+<tr><td><code>ignoreWhitespace</code></td><td><code>withIgnoreWhitespace(bool)</code></td><td><code>false</code></td><td>Folds whitespace before comparing. Emitted rows keep their original bytes. A <code>\r</code> is folded away as well.</td></tr>
+<tr><td><code>ignoreCase</code></td><td><code>withIgnoreCase(bool)</code></td><td><code>false</code></td><td>Compares case-insensitively. Emitted rows keep their original bytes.</td></tr>
+<tr><td><code>noNewlineAnnotation</code></td><td><code>withNoNewlineAnnotation(bool)</code></td><td><code>false</code></td><td>Emits <code>\ No newline at end of file</code> under an unterminated string side. It has no effect on list sides, which are always terminated.</td></tr>
+<tr><td><code>devNullOnEmptySide</code></td><td><code>withDevNullOnEmptySide(bool)</code></td><td><code>false</code></td><td>Labels an empty side as <code>/dev/null</code>, as GNU does.</td></tr>
+<tr><td><code>oldOffset</code> / <code>newOffset</code></td><td><code>withOldOffset(int)</code> / <code>withNewOffset(int)</code></td><td><code>0</code></td><td>Shifts that side's hunk headers and row numbers, for relocated presentation. Negative values clamp to 0.</td></tr>
+</table>
+    <p style="margin-top: 12px;">With the default options the hunk bodies and grouping match candy-code's <code>BuildsUnifiedDiff</code> byte for byte. The header lines follow GNU, so the two can differ there.</p>
+
+    <h3 style="margin-top: 40px;">Styling and markers</h3>
+    <p>The engine never colors anything. Color should never carry a change alone, so every row arrives with two non-color channels. The first is a <code>LineKind</code> with its column-0 marker: a space, <code>-</code> or <code>+</code>. The second is, for scanned patches, a <code>ScanRowKind</code> that separates hunk headers, annotations and out-of-hunk prose from content. A viewer that tints rows should keep the sign column as well, because a red-versus-green difference alone fails WCAG 1.4.1. The candy-code-web <code>DiffView</code> renders a visible sign column from the row kind, beside its background tint: <code>+</code> for additions and <code>−</code> (U+2212, not an ASCII hyphen) for deletions.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <p>Each example runs from a checkout after <code>composer install</code>.</p>
+<ul>
+  <li><code>examples/quickstart.php</code> prints one change as a <code>diff -u</code> patch and as side-by-side rows.</li>
+  <li><code>examples/unified-scan.php</code> numbers the rows of a built-in patch, the way a gutter does, and lists the file headers.</li>
+  <li><code>examples/file-diff.php OLD NEW</code> diffs two files on disk. It exits 0 when they match, 1 when they differ, and 2 on a usage or read error.</li>
+</ul>
+    <pre class="code"><code class="language-shell">php examples/quickstart.php
+php examples/unified-scan.php
+php examples/file-diff.php old.txt new.txt</code></pre>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">Two suites compare the output against GNU <code>diff</code> and <code>patch</code>. They skip, and do not fail, when <code>/usr/bin/diff</code> or <code>patch</code> is missing. The tie-placement suite holds the honest contract: equal edit counts, and byte-exact application through <code>patch</code>.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 style="margin-top: 24px;">A change that only touches the final newline shows no hunk</h3>
+    <p>With <code>withNoNewlineAnnotation()</code> off, which is the default, <code>"a\n"</code> against <code>"a"</code> produces no hunks. The behavior is intentional and kept byte for byte. Turn the option on to see the change, and read <code>beforeHasFinalNewline</code> and <code>afterHasFinalNewline</code> to surface it yourself.</p>
+
+    <h3 style="margin-top: 24px;">Every row count is one higher than the file</h3>
+    <p>A <code>list&lt;string&gt;</code> side keeps its final element even when that element is empty, so <code>explode("\n", "a\nb\n")</code> gives three elements where the string channel counts two. Read the file with <code>file($path, FILE_IGNORE_NEW_LINES)</code>, or drop the trailing empty element before you pass the array in.</p>
+
+    <h3 style="margin-top: 24px;">The same edit lands on a different line than GNU diff</h3>
+    <p>On repeated content, the LCS may place an edit on another occurrence than GNU's Myers algorithm does. Both scripts are minimal and both apply cleanly. Do not pin hunk bodies to <code>/usr/bin/diff</code> output for repeated content. Check that the patch applies, not that it matches byte for byte.</p>
+
+    <h3 style="margin-top: 24px;">The patch is degraded</h3>
+    <p><code>$diff-&gt;degraded</code> is true when a middle section exceeded <code>maxLcsCells</code>, and that section became one replace block. Raise the budget with <code>withMaxLcsCells()</code> if the output is too coarse. Large edits spread far apart in a big file can exceed the default.</p>
+
+    <h3 style="margin-top: 24px;">Labels read as <code>a//path</code></h3>
+    <p>The writer prepends <code>a/</code> and <code>b/</code> by plain concatenation, so an absolute path gets a double slash. Pass root-relative paths. A path that already begins with <code>a/</code> doubles the prefix.</p>
+
+    <h3 style="margin-top: 24px;">Renames, mode changes and combined diffs show no content</h3>
+    <p>Git's extended headers (<code>similarity index</code>, <code>rename from</code>, <code>old mode</code>) are not modeled. The scanner reports them as <code>OutsideHunk</code> rows and never as file headers. Combined diffs from <code>git diff --cc</code> use a different <code>@@@</code> grammar, so <code>isHunkHeader()</code> rejects them. Diff against one parent, or pass the two texts to <code>Diff::compute()</code>.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>There is no Charmbracelet port. The hunk and header shapes follow GNU <code>diff -u</code>, and the path quoting follows git. The table below lists where each rule comes from.</p>
+<table class="api-table">
+<tr><th scope="col">Concern</th><th scope="col">Reference</th><th scope="col">In this library</th></tr>
+<tr><td>Hunk headers and count elision</td><td>GNU <code>diff -U0</code> output, checked against <code>/usr/bin/diff</code></td><td><code>Hunk::header()</code>, <code>UnifiedFormat</code></td></tr>
+<tr><td>Path quoting</td><td>git <code>core.quotePath</code>, with one deliberate deviation: bytes at 0x80 and above pass through raw</td><td><code>UnifiedFormat</code> label quoting</td></tr>
+<tr><td>Hunk bodies and grouping</td><td>candy-code's <code>BuildsUnifiedDiff</code> trait</td><td><code>Diff::compute()</code></td></tr>
+<tr><td>Gutter numbering</td><td>candy-code's <code>DiffGutter</code> scan half</td><td><code>UnifiedScan</code></td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p>The pipeline runs in four stages. First, <code>Diff::compute()</code> trims the common prefix and suffix and runs the LCS over the middle, within the cell budget. Second, the result is packed into one operation byte per row. Third, hunks are grouped with their context windows, and only their rows are materialized. Fourth, the writers render the hunks as text, and the scanner reads any patch back into numbered rows. Both directions share one header predicate, <code>UnifiedScan::isHunkHeader()</code>, so a consumer can gate boundaries without a second regex.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0 and has no tagged releases yet. Consume <code>dev-master</code>. Behavior changes are recorded in the commit history and in the <a href="https://github.com/sugarcraft/sugar-diff">source repository</a>.</p>
 
     <h3 style="margin-top: 40px;">Source</h3>
     <ul>
@@ -67,26 +167,12 @@ foreach (UnifiedScan::lines($patchText) as $row) {
       <li><a href="https://github.com/sugarcraft/sugar-diff/tree/master/tests">Test suite</a></li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><strong>candy-code</strong> is the consumer whose edit tools report changes through this engine.</li>
+      <li><strong>candy-code-web</strong> does not depend on this package. Its <code>src-web/lib/diff.ts</code> re-implements the <code>SideBySideFormat</code> pairing rule in TypeScript and draws its own sign column, so a change to the pairing or sign rules here must be ported there by hand.</li>
+    </ul>
 
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<caption>Public API surface</caption>
-<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
-<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff; <code>degraded</code> reports the cell-budget fallback (the exact default shapes live in the README Fidelity notes)</td></tr>
-<tr><td>Diff</td><td>unified(string $oldPath, ?string $newPath = null): string</td><td>Full diff -u text with --- / +++ headers; the second argument names the new side only</td></tr>
-<tr><td>Diff</td><td>hunkText(): string</td><td>Hunks only, no file headers</td></tr>
-<tr><td>Diff</td><td>isEmpty() / addedLines() / removedLines(): int|bool</td><td>Summary counts</td></tr>
-<tr><td>Hunk</td><td>header() / lines() / removedCount() / addedCount()</td><td>The @@ block (GNU-elided single-line ranges), its rows, and -/+ row tallies</td></tr>
-<tr><td>Line / LineKind</td><td>kind / text / oldNumber / newNumber; marker() / toUnifiedRow()</td><td>One numbered verbatim row; eq/del/ins vocabulary</td></tr>
-<tr><td>DiffOptions</td><td>withContextLines(int) / withMaxLcsCells(int)</td><td>Context window (negative clamps to 0; DEFAULT_CONTEXT_LINES = 3) and LCS cell budget (0 = a middle with rows on both sides falls back degraded, while a one-sided middle is linear work and stays exact; DEFAULT_MAX_LCS_CELLS = 250 000, counted as the table's real (n+1)×(m+1) footprint)</td></tr>
-<tr><td>DiffOptions</td><td>withIgnoreWhitespace(bool $ignore = true) / withIgnoreCase(bool $ignore = true)</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
-<tr><td>DiffOptions</td><td>withNoNewlineAnnotation(bool $on = true) / withDevNullOnEmptySide(bool $on = true)</td><td>GNU annotations, opt-in (the annotation only attaches to STRING sides)</td></tr>
-<tr><td>UnifiedFormat</td><td>write(Diff, string $oldPath, ?string $newPath) / hunksOnly(Diff): string</td><td>The writer behind Diff::unified()/hunkText(); NO_NEWLINE_ROW; path labels are control-byte-safe</td></tr>
-<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired(); list rows are taken as given (no newline refusal — unlike a compute() side), so a host printing an embedded newline into its channel owns sanitizing it</td></tr>
-<tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers, fileHeader flag, and ScanRowKind; declared-count budgets, fail-closed boundaries (MAX_LINE_NUMBER_DIGITS caps start fields); list input is not newline-refused the way compute() sides are — a "a\n+++ forged" element scans as one verbatim row and the lib never re-emits it. ScanRowKind::isContentRow() is true exactly for Context/Insert/Delete, so pairing renderers gate runs on the kind instead of re-sniffing the marker column</td></tr>
-<tr><td>UnifiedScan</td><td>fileHeaders(string|list&lt;string&gt;): list&lt;bool&gt; / rowsOf(string): list&lt;string&gt;</td><td>Which rows start a new file; the writer-compatible row split</td></tr>
-<tr><td>UnifiedScan</td><td>isHunkHeader(string): bool</td><td>Recognition of the @@ -a,b +c,d @@ boundary by the single pattern the walk itself matches — recognized even when the numbers are too large to number (they close the hunk above without counting), so a consumer gating rows on this predicate cannot drift from what lines() reports</td></tr>
-</table>
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>

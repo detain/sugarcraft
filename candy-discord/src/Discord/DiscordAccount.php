@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Discord;
 
 use CandyCode\Bundles\Discord\Lang;
-use SugarCraft\ServeProtocol\Protocol;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
 use CandyCode\Bundles\Discord\Support\Keys;
@@ -229,7 +229,7 @@ final class DiscordAccount implements PlatformFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at Protocol::ASK_EXPIRY_SECONDS no matter what this
+     * refuses the ask at AskExpiry::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -242,7 +242,7 @@ final class DiscordAccount implements PlatformFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = Protocol::ASK_EXPIRY_SECONDS;
+        $ceiling = AskExpiry::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,
@@ -265,7 +265,7 @@ final class DiscordAccount implements PlatformFace
     public function approvalExpiryNotice(): string
     {
         $line = Lang::t('channels.discord.approval.expired');
-        $expiredEarly = $this->approvalTtlSeconds() < Protocol::ASK_EXPIRY_SECONDS;
+        $expiredEarly = $this->approvalTtlSeconds() < AskExpiry::ASK_EXPIRY_SECONDS;
 
         return $expiredEarly ? $line . ' ' . Lang::t('channels.discord.approve.usage') : $line;
     }

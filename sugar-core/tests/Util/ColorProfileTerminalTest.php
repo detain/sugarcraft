@@ -25,18 +25,25 @@ final class ColorProfileTerminalTest extends TestCase
     }
 
     /**
-     * With the chain, a force variable lifts dumb above the veto. With no
-     * chain nothing lifts Ascii, so the veto applies (declared, P1-10a).
+     * A force variable overrules the dumb veto whether or not the chain is
+     * installed. The veto must not depend on the sibling set: the launcher's
+     * `TERM=dumb CLICOLOR_FORCE=1` picker keeps its rich frame either way.
      */
     public function testForceLiftsDumbAboveTheVeto(): void
     {
-        $forced = ['TERM' => 'dumb', 'FORCE_COLOR' => '1'];
+        $this->assertNotSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'FORCE_COLOR' => '1']));
+        $this->assertNotSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'CLICOLOR_FORCE' => '1']));
         if (self::chainPresent()) {
-            $this->assertTrue(ColorProfile::detectTerminal($forced)->supportsAnsi());
-            $this->assertNotSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'CLICOLOR_FORCE' => '1']));
-        } else {
-            $this->assertSame(ColorProfile::NoTty, ColorProfile::detectTerminal($forced));
+            $this->assertTrue(ColorProfile::detectTerminal(['TERM' => 'dumb', 'FORCE_COLOR' => '1'])->supportsAnsi());
         }
+    }
+
+    /** A zero or empty force value is a colour-off word, not a force: the veto holds. */
+    public function testZeroOrEmptyForceDoesNotLiftTheVeto(): void
+    {
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'CLICOLOR_FORCE' => '0']));
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'FORCE_COLOR' => '0']));
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb', 'CLICOLOR_FORCE' => '']));
     }
 
     /** For a non-dumb terminal the veto changes nothing: detectTerminal() equals detect(). */

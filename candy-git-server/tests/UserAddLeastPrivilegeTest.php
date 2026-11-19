@@ -119,7 +119,7 @@ final class UserAddLeastPrivilegeTest extends TestCase
         $this->assertFileDoesNotExist($this->tmpDir . '/--read');
     }
 
-    public function testDashPrefixedFirstWordIsRefusedAsUsageNotAnAccountName(): void
+    public function testDoubleDashFirstWordIsRefusedAsUsageNotAnAccountName(): void
     {
         // Regression: `user add --help <path>` used to create an account named
         // '--help' (the name gate accepts hyphens) and print success.
@@ -128,6 +128,25 @@ final class UserAddLeastPrivilegeTest extends TestCase
         $this->assertStringContainsString('Usage: candy-git-server user add', $r['err']);
         $this->assertStringNotContainsString('created', $r['out']);
         $this->assertFileDoesNotExist($this->tmpDir . '/users.json', 'a refused add writes nothing');
+    }
+
+    public function testSingleDashFirstWordIsRefusedAsUsageNotAnAccountName(): void
+    {
+        // Owner decision 2026-11-19: a single-dash first word ('-h') is refused
+        // the same way as a double-dash one, with the same usage message.
+        $r = $this->runBin(['user', 'add', '-h', $this->tmpDir]);
+        $this->assertSame(1, $r['rc']);
+        $this->assertStringContainsString('Usage: candy-git-server user add', $r['err']);
+        $this->assertStringNotContainsString('created', $r['out']);
+        $this->assertNull($this->store()->find('-h'), 'a refused add mints no account named -h');
+        $this->assertFileDoesNotExist($this->tmpDir . '/users.json', 'a refused add writes nothing');
+    }
+
+    public function testPlainAccountNameIsStillAcceptedAfterTheDashGuard(): void
+    {
+        $r = $this->runBin(['user', 'add', 'plain-name_1']);
+        $this->assertSame(0, $r['rc'], $r['err']);
+        $this->assertNotNull($this->store()->find('plain-name_1'), 'a hyphen or underscore inside a name is not a leading dash');
     }
 
     // -------------------------------------------------------------------------
