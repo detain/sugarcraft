@@ -221,9 +221,15 @@ cd my-app
 ├── src/
 │   ├── Counter.php       # demo Model: up, down, quit, styled border
 │   └── Lang.php          # the copyable Lang facade over sugar-core's translator
+├── examples/
+│   └── headless.php      # drives Counter::update() from a fixed key list, no terminal
 ├── tests/
+│   ├── BinStartExecutionTest.php          # runs bin/start: autoload refusal, q and SIGINT exits
 │   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
 │   ├── CounterTest.php                    # pinned behaviour matrix, the test-shape reference
+│   ├── ExamplesHeadlessTest.php           # pins examples/headless.php's transcript
+│   ├── LangTest.php                       # the Lang facade resolves and interpolates strings
+│   ├── LocaleParityTest.php               # every locale carries the en key set
 │   ├── ModelContractDocumentationTest.php # README fence against the interface
 │   ├── ReadmeSnippetsTest.php             # lint and execute every README php fence
 │   └── SiteBodyTruthTest.php              # this docs page keeps the README's claims
@@ -363,8 +369,9 @@ private static function frameStyle(): Style
     <p>The demo emits no palette, so it renders cleanly in monochrome. Add colour with the same <code>Style</code> builder, or build a palette from <code>Theme</code> in sugar-style, and keep the constant decoration memoized as shown above. Per-frame content styling can stay inline.</p>
 
     <h3 id="examples" style="margin-top: 40px;">Examples</h3>
-    <p>The starter deliberately ships no separate examples directory, so there is nothing to run beyond the app itself. The copyable references are the three files that show the pattern end to end:</p>
+    <p>Run the app with <code>./bin/start</code>. To drive the Model without a terminal, run <code>php examples/headless.php</code>. It feeds a fixed key list into <code>Counter::update()</code> and prints the count and the frame after each step, so you can check the transitions from a script or in CI. The copyable references are the files that show the pattern end to end:</p>
     <ul>
+      <li><code>examples/headless.php</code>: the headless driver. It prints one line per key, with the count and whether the step asked for a quit, then the final frame.</li>
       <li><code>bin/start</code>: the entry point, the locale selection and the exit-code tail.</li>
       <li><code>src/Counter.php</code>: a complete Model with the four methods, a readonly state, a quit matrix and a memoized style.</li>
       <li><code>tests/CounterTest.php</code>: the behaviour matrix. It drives <code>update()</code> with constructed messages and asserts the returned tuple.</li>
