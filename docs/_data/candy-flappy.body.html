@@ -87,7 +87,7 @@ FORCE_COLOR=1 php examples/play.php   # draws into a pipe on purpose; use a real
     <tr><td>PipeGenerator</td><td><code>pipe(int $score, Closure $rand)</code>, <code>gapHeightForScore(int $score)</code></td><td>Spawn a pipe pair at the right edge with a score-scaled gap.</td></tr>
     <tr><td>Renderer</td><td><code>render(Game $g)</code></td><td>Compose one full frame for any <code>Game</code> state. Static, no side effects.</td></tr>
     <tr><td>TickMsg</td><td>(a <code>Msg</code> value)</td><td>The message a tick subscription delivers to <code>update()</code>.</td></tr>
-    <tr><td>Version</td><td><code>line()</code>, <code>current()</code>, <code>fromPharMetadata(string $path)</code></td><td>The version line printed by <code>--version</code>, and the phar stamp when one is present.</td></tr>
+    <tr><td>Support\Version</td><td><code>line()</code>, <code>current()</code>, <code>fromPharMetadata(string $path)</code></td><td>The version line printed by <code>--version</code>, and the phar stamp when one is present.</td></tr>
     <tr><td>Lang</td><td><code>t($key, $params)</code></td><td>The i18n wrapper over <code>SugarCraft\Core\I18n\T</code>, with catalogs in <code>lang/</code>.</td></tr>
     </table>
 

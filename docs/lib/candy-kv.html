@@ -270,7 +270,7 @@ $store->transaction('work', function () use ($store): void {
     <p>A file that spans databases cannot run as one transaction, so <code>--no-atomic</code> is needed. <code>--max-bytes=0</code> lifts the default 256 MiB ceiling on the document, and an oversized document is otherwise refused before its bytes are read.</p>
 
     <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
-    <p>The public classes live in <code>SugarCraft\Kv\</code>. <code>Store</code> is the entry point for code, <code>Database</code> is one SQLite file, and <code>Entry</code> is the value a read returns. The CLI commands and the import and export classes sit on top of <code>Store</code>.</p>
+    <p>The core classes live in <code>SugarCraft\Kv\</code>. <code>Store</code> is the entry point for code, <code>Database</code> is one SQLite file, and <code>Entry</code> is the value a read returns. The CLI commands sit in <code>SugarCraft\Kv\Cli\</code> (<code>ArgParser</code>, <code>ImportCommand</code>, <code>ExportCommand</code>), the importers, the normaliser, the commit and the report in <code>SugarCraft\Kv\Import\</code>, and the helpers <code>Ttl</code>, <code>Version</code>, <code>SizeCap</code>, <code>PluralChooser</code> and <code>InputPath</code> in <code>SugarCraft\Kv\Support\</code>. The CLI commands and importers sit on top of <code>Store</code>.</p>
     <table class="api-table">
     <tr><th>Class</th><th>Method</th><th>Description</th></tr>
     <tr><td>Store</td><td><code>__construct(?string $dataDir = null, string $defaultDb = 'default')</code></td><td>A store over the data directory. Touches nothing on disk until a write.</td></tr>
@@ -376,7 +376,7 @@ php examples/multidb.php</code></pre>
 
     <h2 id="related" style="margin-top: 40px;">Related</h2>
     <ul>
-      <li><a href="sugar-core.html">sugar-core</a>: the Model, Program and sanitizer behind the CLI's output.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the <code>Util\Sanitize</code> helper the store uses to clean values for the terminal, and the <code>I18n\T</code> wrapper behind the CLI's messages.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
