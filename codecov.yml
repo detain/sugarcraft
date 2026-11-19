@@ -210,6 +210,9 @@ flag_management:
     - name: sugar-ws-rpc
       paths: ["sugar-ws-rpc/src/**"]
       carryforward: true
+    - name: sugar-jwt
+      paths: ["sugar-jwt/src/**"]
+      carryforward: true
     - name: sugar-plugin-installer
       paths: ["sugar-plugin-installer/src/**"]
       carryforward: true
@@ -600,6 +603,12 @@ component_management:
         - "sugar-ws-rpc/src/**"
       flag_regexes:
         - "^sugar-ws-rpc$"
+    - component_id: sugar-jwt
+      name: sugar-jwt
+      paths:
+        - "sugar-jwt/src/**"
+      flag_regexes:
+        - "^sugar-jwt$"
     - component_id: sugar-plugin-installer
       name: sugar-plugin-installer
       paths:

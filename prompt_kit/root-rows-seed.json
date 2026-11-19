@@ -934,6 +934,20 @@
                 "dead": []
             }
         },
+        "sugar-jwt": {
+            "readme": {
+                "needles": [
+                    "JWT and JWK verification — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "JWT and JWK verification — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
         "sugar-ws-rpc": {
             "readme": {
                 "needles": [
