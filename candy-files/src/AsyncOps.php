@@ -235,10 +235,12 @@ final class AsyncOps
      * Copy multiple files/directories through a bounded tick pipeline.
      *
      * The $concurrency window is a sugar-core {@see Semaphore}: at most that
-     * many copyAsync operations hold a permit at once, and the rest queue FIFO
-     * behind it. Because each one runs its whole I/O synchronously inside a
-     * futureTick, batches execute SEQUENTIALLY across ticks — they do not
-     * interleave disk work in parallel. See the class docblock.
+     * many copyAsync operations hold a permit at once. Legs not yet started
+     * stay in $map and are submitted as each in-flight leg settles, so the
+     * semaphore's queue never grows past the window. Because each one runs its
+     * whole I/O synchronously inside a futureTick, batches execute
+     * SEQUENTIALLY across ticks — they do not interleave disk work in parallel.
+     * See the class docblock.
      *
      * Semaphore grants permits without ordering results, so the keyed map is
      * built here as each leg settles, not in input order.
@@ -256,29 +258,47 @@ final class AsyncOps
         }
 
         $permits = Semaphore::new(max(1, $concurrency));
+        $keys = array_keys($map);
+        $total = \count($keys);
+        $next = 0;
         $results = [];
-        $remaining = \count($map);
+        $remaining = $total;
 
         $deferred = new Deferred();
-        $settle = static function (mixed $src, mixed $value) use (&$results, &$remaining, $deferred): void {
+        $record = static function (mixed $src, mixed $value) use (&$results, &$remaining, $deferred): void {
             $results[$src] = $value;
             if (--$remaining === 0) {
                 $deferred->resolve($results);
             }
         };
 
-        foreach ($map as $src => $dst) {
+        // Legs are handed to the semaphore one at a time, each one when a
+        // predecessor settles, so the queue never holds more than the window.
+        // Enqueueing the whole map up front parked one Deferred and one closure
+        // per file, and the FIFO's array_shift() made draining that O(n^2).
+        $submitNext = function () use (&$submitNext, &$next, $keys, $map, $permits, $record): void {
+            if ($next >= \count($keys)) {
+                return;
+            }
+            $src = $keys[$next++];
+            $dst = $map[$src];
             $permits->run(fn (): PromiseInterface => $this->copyAsync($src, $dst))->then(
-                static function (mixed $value) use ($settle, $src): void {
-                    $settle($src, $value);
+                function (mixed $value) use ($src, $record, &$submitNext): void {
+                    $record($src, $value);
+                    $submitNext();
                 },
                 // Defensive: copyAsync() catches in-tick and resolves a reason
                 // instead of rejecting; this arm keeps the same CF-21 contract
                 // if that polarity ever changes.
-                static function (\Throwable $e) use ($settle, $src): void {
-                    $settle($src, $e::class . ': ' . $e->getMessage());
+                function (\Throwable $e) use ($src, $record, &$submitNext): void {
+                    $record($src, $e::class . ': ' . $e->getMessage());
+                    $submitNext();
                 },
             );
+        };
+
+        for ($i = 0, $window = min(max(1, $concurrency), $total); $i < $window; $i++) {
+            $submitNext();
         }
 
         return $deferred->promise();

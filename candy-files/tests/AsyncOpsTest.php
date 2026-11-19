@@ -533,4 +533,30 @@ final class AsyncOpsTest extends TestCase
         self::assertSame(5, $calls, 'a window of one still runs every leg exactly once');
         self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
     }
+
+    public function testCopyManyAsyncLargeMapRunsEveryLegOnceWithSmallWindow(): void
+    {
+        // Legs are fed to the semaphore as predecessors settle, so a map much
+        // larger than the window must still run each leg exactly once and key
+        // every source, with nothing stranded in the dispatch queue.
+        $map = [];
+        for ($i = 0; $i < 300; $i++) {
+            $map['/virtual/src/' . $i] = '/virtual/dst/' . $i;
+        }
+        $seen = [];
+        $ops = new AsyncOps(static function (string $src, string $dst) use (&$seen): bool {
+            $seen[$src] = ($seen[$src] ?? 0) + 1;
+            return true;
+        });
+        $resolved = null;
+        $ops->copyManyAsync($map, 3)->then(static function (mixed $results) use (&$resolved): void {
+            $resolved = $results;
+            Loop::stop();
+        });
+        Loop::run();
+        self::assertIsArray($resolved);
+        self::assertCount(300, $seen, 'every leg ran');
+        self::assertSame(array_fill(0, 300, 1), array_values($seen), 'each leg ran exactly once');
+        self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
+    }
 }
