@@ -196,7 +196,8 @@ candy-mail tui --from me@example.com --to you@example.com
 
 Tab/Shift+Tab (or Up/Down) change field, Enter advances (newline in the body),
 Ctrl+S sends, Ctrl+P toggles an offline MIME preview, Ctrl+U clears the field, Ctrl+Q
-or Esc quits (pressed twice when there are unsent edits). Address fields are
+quits, and Esc quits on the edit screen (pressed twice when there are unsent edits; Esc
+in the preview returns to editing). Address fields are
 comma-separated; the Attachments field takes comma-separated file paths. Flags and
 `CANDY_MAIL_*` env prefill the form; the transport is resolved at send time, so a
 missing credential shows in the status line rather than blocking the form. A bare
