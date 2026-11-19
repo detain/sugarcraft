@@ -52,6 +52,14 @@ final class SkillFileReader
     public const MAX_FRONTMATTER_BYTES = 65_536;
 
     /**
+     * How far past {@see MAX_FRONTMATTER_BYTES} {@see head()} reads to finish
+     * the line the window cut. A closing fence's trailing blanks and CR fit
+     * well inside this; the cap keeps the read bounded on a file with one
+     * unbroken line.
+     */
+    public const CUT_LINE_BYTES = 512;
+
+    /**
      * The whole file, or a {@see \RuntimeException} when it is over
      * {@see MAX_FILE_BYTES} or cannot be read.
      *
@@ -84,10 +92,13 @@ final class SkillFileReader
      * be read is refused at the manifest stage rather than listed to the model
      * as a skill it cannot load.
      *
-     * @param string $after receives the single byte just past the window when
-     *        the file continues past it, and stays '' otherwise: a caller that
-     *        must tell a line that ends at the window edge from one cut there
-     *        needs the byte the window did not keep
+     * @param string $after receives the rest of the line the window cut, through
+     *        its line break, when the file continues past the window; '' when
+     *        it does not. A caller that must tell a line that ends at the
+     *        window edge from one cut there needs the bytes the window did not
+     *        keep: a closing fence can carry trailing blanks or a CR that lie
+     *        past the edge. A line longer than {@see CUT_LINE_BYTES} past the
+     *        edge comes back without its break.
      * @return array{0: string, 1: bool} the bytes read, and whether the file
      *         continues past them
      */
@@ -99,13 +110,15 @@ final class SkillFileReader
             throw new \RuntimeException(self::overCeiling($what, $size, $path));
         }
 
-        $head = @file_get_contents($path, false, null, 0, self::MAX_FRONTMATTER_BYTES + 1);
+        $head = @file_get_contents($path, false, null, 0, self::MAX_FRONTMATTER_BYTES + self::CUT_LINE_BYTES);
         if ($head === false) {
             throw new \RuntimeException("Failed to read {$what}: {$path}");
         }
 
         if (strlen($head) > self::MAX_FRONTMATTER_BYTES) {
-            $after = $head[self::MAX_FRONTMATTER_BYTES];
+            $rest = substr($head, self::MAX_FRONTMATTER_BYTES);
+            $lineEnd = strpos($rest, "\n");
+            $after = $lineEnd === false ? $rest : substr($rest, 0, $lineEnd + 1);
 
             return [substr($head, 0, self::MAX_FRONTMATTER_BYTES), true];
         }

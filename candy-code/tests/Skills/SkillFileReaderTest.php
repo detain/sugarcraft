@@ -227,6 +227,54 @@ final class SkillFileReaderTest extends TestCase
         $this->assertSame('x', $manifest['description']);
     }
 
+    /**
+     * The closer's trailing blanks lie past the window: `---` ends exactly at
+     * the edge and ` \t` follows before the line break. Master accepted this
+     * file, and the fence grammar allows the blanks, so it must still load.
+     */
+    public function testAClosingFenceWithTrailingBlanksEndingAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-blanks';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "--- \t\nBody.\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    /**
+     * A CRLF closer cut the same way: the `---` ends at the window edge and the
+     * CR and LF are past it. Master accepted this file; it must still load.
+     */
+    public function testACrlfClosingFenceEndingAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-crlf';
+        mkdir($dir, 0777, true);
+        $pre = "---\r\ndescription: x\r\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 2) . "\r\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\r\nBody.\r\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    public function testHeadHandsBackTheRestOfTheLineTheWindowCut(): void
+    {
+        $path = $this->tempDir . '/after-line.md';
+        file_put_contents($path, str_repeat('a', SkillFileReader::MAX_FRONTMATTER_BYTES - 3) . "---  \r\nZ");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($path, 'SKILL.md', $after);
+
+        $this->assertTrue($truncated);
+        $this->assertSame("---", substr($head, -3));
+        $this->assertSame("  \r\n", $after);
+    }
+
     public function testHeadHandsBackTheByteJustPastTheWindow(): void
     {
         $path = $this->tempDir . '/after.md';

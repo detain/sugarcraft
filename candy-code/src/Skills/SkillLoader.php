@@ -722,10 +722,10 @@ final class SkillLoader
         // The head is cut at a byte, so its last line may be a fragment of a
         // longer line: a `---` cut from `----` would read as a closing fence
         // with no line break after it. Only a closer ended by a line break
-        // counts as closed. That break may be the byte just past the window,
-        // which the reader kept aside: a `---` that ends exactly at the window
-        // edge with its line break there is a whole closer.
-        $probe = $truncated && $next === "\n" ? $content . "\n" : $content;
+        // counts as closed. The reader keeps the rest of the cut line, so the
+        // probe holds that line whole: a `---` that ends at the window edge
+        // with trailing blanks or a CR after it is still judged as a whole line.
+        $probe = $content . $next;
         $lastBreak = strrpos($probe, "\n");
         $closedInHead = $lastBreak !== false
             && MarkdownFrontmatter::split(substr($probe, 0, $lastBreak + 1)) !== null;
