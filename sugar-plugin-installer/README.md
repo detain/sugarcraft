@@ -39,8 +39,9 @@ The root project's `composer.json` selects the scope. Plugin packages never set 
 
 - `<name>` is the part of the package name after the vendor slash.
   `sugarcraft/candy-discord` stages to `.../bundles/candy-discord`.
-- `<project>` is the directory Composer runs in (`--working-dir` is honoured,
-  because Composer changes into it first).
+- `<project>` is the directory of the root `composer.json` that Composer loaded:
+  the file named by `COMPOSER`, or `./composer.json`. Composer does not always
+  change into that directory, so the tree follows the file, not the working directory.
 - A relative `root` is resolved against `<project>`. An absolute `root` is used
   as given. `root` applies only under `project` scope. Under `user` scope it is
   validated but unused.
@@ -54,7 +55,12 @@ Refused with an exception, before anything is written:
 - an unknown key in the section (so a typo such as `"scoep"` cannot fall back to user scope)
 - a `root` that is not a non-empty string
 - a package name that cannot be a directory name
-- a home directory that is not an absolute `HOME` or `USERPROFILE`
+- a package whose staging directory another installed `sugar-plugin` already uses.
+  Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share
+  one directory. This check sees the packages installed in this project. It does
+  not see a tree another project staged under user scope.
+- a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
+  Project scope never reads the home directory.
 
 The section is read when a `sugar-plugin` package is installed, not when Composer
 starts. A malformed section therefore breaks only the install of a plugin, not
@@ -90,7 +96,7 @@ follows.
 | `composer.json`, `phpunit.xml`, `README.md`, `CALIBER_LEARNINGS.md`, `src/`, `tests/` | Done. |
 | No `repositories[]` in the lib manifest; no candy-code require | Done. `tools/check-plugin-deps.php` and `tools/check-path-repos.php --no-lib-path-repos` pass. |
 | No per-lib `composer.lock` | Done. `/*/composer.lock` is gitignored. |
-| Root `composer.json` | `require` entry and `allow-plugins` entry only. No `repositories[]` entry: the plan's acceptance asks for a require entry alone, and the package resolves from Packagist like any other published lib. |
+| Root `composer.json` | `require`, `repositories[]` (a path entry, as the root does for every sibling) and `allow-plugins` entries. The checked-in rule in AGENTS.md and plan section 7 asks for both. |
 | Root `composer.lock` | Not refreshed in this change. A root `composer update` is needed to record the new require. |
 | `docs/MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md` table | Done. Original-work rows; no icon yet, so the README row has an empty image cell. |
 | `codecov.yml` | Done. |

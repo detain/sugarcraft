@@ -10,6 +10,9 @@ use Composer\Downloader\DownloadManager;
 use Composer\IO\NullIO;
 use Composer\Package\Package;
 use Composer\Package\RootPackage;
+use Composer\Repository\InstalledArrayRepository;
+use Composer\Repository\RepositoryManager;
+use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\PluginInstaller\PluginInstaller;
 use SugarCraft\PluginInstaller\Tests\Support\Scratch;
@@ -20,6 +23,8 @@ final class PluginInstallerTest extends TestCase
     private string $home;
     private string $cwd;
     private string|false $savedHome;
+    private string|false $savedProfile;
+    private string|false $savedComposer;
 
     protected function setUp(): void
     {
@@ -27,30 +32,48 @@ final class PluginInstallerTest extends TestCase
         $this->home = Scratch::dir('home');
         $this->cwd = (string) getcwd();
         $this->savedHome = getenv('HOME');
+        $this->savedProfile = getenv('USERPROFILE');
+        $this->savedComposer = getenv('COMPOSER');
         chdir($this->project);
         putenv('HOME=' . $this->home);
+        putenv('USERPROFILE');
+        putenv('COMPOSER');
     }
 
     protected function tearDown(): void
     {
         chdir($this->cwd);
-        if ($this->savedHome === false) {
-            putenv('HOME');
-        } else {
-            putenv('HOME=' . $this->savedHome);
-        }
+        self::restoreEnv('HOME', $this->savedHome);
+        self::restoreEnv('USERPROFILE', $this->savedProfile);
+        self::restoreEnv('COMPOSER', $this->savedComposer);
         Scratch::remove($this->project);
         Scratch::remove($this->home);
     }
 
+    private static function restoreEnv(string $name, string|false $value): void
+    {
+        if ($value === false) {
+            putenv($name);
+
+            return;
+        }
+        putenv($name . '=' . $value);
+    }
+
     /**
      * @param array<string, mixed>|null $extra the root package's `extra` map
+     * @param list<Package> $installed the packages the project already has installed
      */
-    private function installerFor(?array $extra): PluginInstaller
+    private function installerFor(?array $extra, array $installed = []): PluginInstaller
     {
         $composer = new Composer();
-        $composer->setConfig(new Config(false, $this->project));
+        $config = new Config(false, $this->project);
+        $composer->setConfig($config);
         $composer->setDownloadManager(new DownloadManager(new NullIO()));
+
+        $manager = new RepositoryManager(new NullIO(), $config, new HttpDownloader(new NullIO(), $config));
+        $manager->setLocalRepository(new InstalledArrayRepository($installed));
+        $composer->setRepositoryManager($manager);
 
         $root = new RootPackage('sugarcraft/scratch-project', '1.0.0.0', '1.0.0');
         $root->setExtra($extra ?? []);
@@ -59,9 +82,9 @@ final class PluginInstallerTest extends TestCase
         return new PluginInstaller(new NullIO(), $composer);
     }
 
-    private static function samplePackage(): Package
+    private static function samplePackage(string $name = 'sugarcraft/sample-plugin'): Package
     {
-        $package = new Package('sugarcraft/sample-plugin', '1.0.0.0', '1.0.0');
+        $package = new Package($name, '1.0.0.0', '1.0.0');
         $package->setType('sugar-plugin');
 
         return $package;
@@ -90,6 +113,61 @@ final class PluginInstallerTest extends TestCase
         $path = $this->installerFor($extra)->getInstallPath(self::samplePackage());
 
         $this->assertSame($this->project . '/.candy-code/bundles/sample-plugin', $path);
+    }
+
+    public function testProjectScopeNeedsNoHomeDirectory(): void
+    {
+        // A CI container or service account may have no HOME. Project scope never
+        // reads it, so the install must not fail on it.
+        putenv('HOME');
+        putenv('USERPROFILE');
+        $extra = ['sugar-plugin-installer' => ['scope' => 'project']];
+
+        $path = $this->installerFor($extra)->getInstallPath(self::samplePackage());
+
+        $this->assertSame($this->project . '/.candy-code/bundles/sample-plugin', $path);
+    }
+
+    public function testUserScopeWithoutHomeIsRefused(): void
+    {
+        putenv('HOME');
+        putenv('USERPROFILE');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot resolve the user home directory');
+
+        $this->installerFor(null)->getInstallPath(self::samplePackage());
+    }
+
+    public function testComposerFileDecidesTheProjectDirectory(): void
+    {
+        // Composer reads COMPOSER's file without chdir-ing, so getcwd() is the
+        // wrong root here: the tree belongs next to the composer.json Composer loaded.
+        $elsewhere = Scratch::dir('elsewhere');
+        try {
+            Scratch::write($elsewhere . '/composer.json', '{}');
+            putenv('COMPOSER=' . $elsewhere . '/composer.json');
+            $extra = ['sugar-plugin-installer' => ['scope' => 'project']];
+
+            $path = $this->installerFor($extra)->getInstallPath(self::samplePackage());
+
+            $this->assertSame(realpath($elsewhere) . '/.candy-code/bundles/sample-plugin', $path);
+        } finally {
+            Scratch::remove($elsewhere);
+        }
+    }
+
+    public function testInstallRefusesAVendorSiblingThatStagesToTheSameDirectory(): void
+    {
+        // acme/candy-x and sugarcraft/candy-x both stage to bundles/candy-x. The
+        // second install would overwrite the first, and remove would delete both.
+        $installed = [self::samplePackage('sugarcraft/candy-x')];
+        $installer = $this->installerFor(null, $installed);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('both stage to');
+
+        $installer->install(new InstalledArrayRepository(), self::samplePackage('acme/candy-x'));
     }
 
     public function testRootOverrideMovesTheProjectBundleTree(): void

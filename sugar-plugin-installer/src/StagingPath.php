@@ -27,9 +27,27 @@ final class StagingPath
     public static function bundleRoot(InstallerConfig $config, string $projectDir, string $userHome): string
     {
         if ($config->scope === Scope::User) {
-            return self::join($userHome, self::BUNDLES_RELATIVE);
+            return self::userBundleRoot($userHome);
         }
 
+        return self::projectBundleRoot($config, $projectDir);
+    }
+
+    /**
+     * Split from bundleRoot so the installer resolves the home directory only
+     * under user scope: project scope must not fail on a missing HOME.
+     */
+    public static function userBundleRoot(string $userHome): string
+    {
+        return self::join($userHome, self::BUNDLES_RELATIVE);
+    }
+
+    /**
+     * The project-scope tree. `$config->root` is honoured here whatever its
+     * scope, so callers pass the config only when it is project scope.
+     */
+    public static function projectBundleRoot(InstallerConfig $config, string $projectDir): string
+    {
         $base = $config->root === null ? $projectDir : self::resolve($config->root, $projectDir);
 
         return self::join($base, self::BUNDLES_RELATIVE);
