@@ -544,8 +544,20 @@ final class AsyncOpsTest extends TestCase
             $map['/virtual/src/' . $i] = '/virtual/dst/' . $i;
         }
         $seen = [];
-        $ops = new AsyncOps(static function (string $src, string $dst) use (&$seen): bool {
+        $started = 0;
+        $startedAtProbe = null;
+        $ops = new AsyncOps(static function (string $src, string $dst) use (&$seen, &$started, &$startedAtProbe): bool {
+            $started++;
             $seen[$src] = ($seen[$src] ?? 0) + 1;
+            if ($started === 1) {
+                // A tick queued from the first leg runs after the ticks already
+                // queued for the legs the window admitted. Under a window of 3
+                // only 3 engine calls can have started by then; an unbounded
+                // fan-out has queued all 300 and the probe sees 300.
+                Loop::futureTick(static function () use (&$started, &$startedAtProbe): void {
+                    $startedAtProbe = $started;
+                });
+            }
             return true;
         });
         $resolved = null;
@@ -558,5 +570,11 @@ final class AsyncOpsTest extends TestCase
         self::assertCount(300, $seen, 'every leg ran');
         self::assertSame(array_fill(0, 300, 1), array_values($seen), 'each leg ran exactly once');
         self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
+        self::assertNotNull($startedAtProbe, 'the in-flight probe ran while legs were still settling');
+        self::assertLessThanOrEqual(
+            3,
+            $startedAtProbe,
+            'the semaphore window of 3 bounds the legs started before the probe runs',
+        );
     }
 }
