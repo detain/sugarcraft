@@ -209,7 +209,7 @@
     <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-core</code></pre>
     <p>Requires PHP 8.3 or newer, with <code>ext-intl</code> and <code>ext-mbstring</code>, both declared in <code>composer.json</code>. <code>ext-intl</code> is not optional in practice: <code>Util\Width</code> measures grapheme clusters through ICU, and without it an emoji or combining sequence is counted per code point, so the cell-budget checks in the renderers stop holding.</p>
-    <p><code>ext-pcntl</code> is suggested. Without it, SIGWINCH resize, Ctrl-Z suspend and resume, and the SIGINT, SIGTERM and SIGHUP stop path degrade silently. On Windows, <code>ext-ffi</code> is required for raw console input, and PHP 8.4 or newer is recommended there for the <code>SetConsoleCtrlHandler</code> path.</p>
+    <p><code>ext-pcntl</code> is suggested. Without it, SIGWINCH resize, Ctrl-Z suspend and resume, and the SIGINT, SIGTERM and SIGHUP stop path degrade silently. On Windows, <code>ext-ffi</code> is required for raw console input.</p>
     <p>Sibling SugarCraft packages track <code>dev-master</code>. A root manifest that accepts only stable releases must also set <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code>, or Composer cannot resolve the dependencies.</p>
 
     <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
