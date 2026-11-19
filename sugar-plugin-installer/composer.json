@@ -20,8 +20,7 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-plugin-installer/issues",
-        "source": "https://github.com/sugarcraft/sugar-plugin-installer",
-        "docs": "https://sugarcraft.github.io/lib/sugar-plugin-installer.html"
+        "source": "https://github.com/sugarcraft/sugar-plugin-installer"
     },
     "require": {
         "php": "^8.3",

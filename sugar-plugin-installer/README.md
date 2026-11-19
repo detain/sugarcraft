@@ -64,6 +64,10 @@ every other Composer command.
 
 - It stages files only. Composer's downloader fills the directory. `composer remove`
   deletes it, and `composer update` writes the new version to the same place.
+- One exception outside the staged tree: a package's declared `bin` entries are
+  linked into the project's `vendor/bin` on install and update, and the links are
+  removed on remove, as Composer does for any package. The links point into the
+  staged directory; no other file is written outside it.
 - It never runs plugin code.
 - It never edits `trustedBundleChannels`, and it never writes the channel ledger.
   Trust stays a user-tier decision in candy-code.
@@ -91,6 +95,7 @@ follows.
 | `docs/MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md` table | Done. Original-work rows; no icon yet, so the README row has an empty image cell. |
 | `codecov.yml` | Done. |
 | `docs/index.html` tile, `docs/_data/<slug>.json` and body, `php tools/gen-docs.php` | Skipped. The site catalogues libraries and apps, and this package is install tooling with no page of its own yet. |
+| `support.docs` in `composer.json` | Dropped. It would point at a `docs/lib/sugar-plugin-installer.html` page that is not generated, so the entry is left out until that page exists. |
 | `media/icons/sugar-plugin-installer.png` | Skipped. No icon asset has been designed for this package. |
 | `.github/workflows/vhs.yml` | Skipped. Non-visual, so exempt. |
 | `php tools/check-one-type-per-file.php`, `php tools/check-lib-licenses.php`, `php tools/check-child-lifetimes.php` | Applied. The package holds one type per file and carries the root `LICENSE`. It starts no child processes, so the lifetime check expects no change. The integration test runs `composer` through `exec`, which is a test-only child and is not exposed by the library. |

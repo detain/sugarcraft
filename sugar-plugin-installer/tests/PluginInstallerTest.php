@@ -122,6 +122,20 @@ final class PluginInstallerTest extends TestCase
         }
     }
 
+    public function testRemoveBasePathStaysTheStagingDirectoryWhenTargetDirMatchesTheName(): void
+    {
+        // LibraryInstaller strips a trailing `/<target-dir>`; with the name as
+        // target-dir that lands on the bundles root, which remove must never delete.
+        $package = self::samplePackage();
+        $package->setTargetDir('sample-plugin');
+        $installer = $this->installerFor(null);
+
+        $method = new \ReflectionMethod($installer, 'getPackageBasePath');
+        $base = $method->invoke($installer, $package);
+
+        $this->assertSame($this->home . '/.candy-code/bundles/sample-plugin', $base);
+    }
+
     public function testBadScopeIsRefusedWhenAPluginIsInstalled(): void
     {
         $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'global']]);

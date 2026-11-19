@@ -171,6 +171,66 @@ final class ComposerIntegrationTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/sample-plugin');
     }
 
+    /**
+     * @param array<string, mixed> $fields merged over the sample package's manifest
+     */
+    private function amendSample(array $fields): void
+    {
+        $path = $this->base . '/sample/composer.json';
+        $manifest = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        Scratch::write($path, json_encode(array_merge($manifest, $fields), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    public function testRemoveWithATargetDirMatchingTheNameDeletesOnlyThatPackage(): void
+    {
+        // Composer refuses target-dir with PSR-4 autoloading, so the sample uses a classmap.
+        $this->amendSample(['target-dir' => 'sample-plugin', 'autoload' => ['classmap' => ['src/']]]);
+        $this->writeProject(null);
+        $sibling = $this->home . '/.candy-code/bundles/other-plugin';
+        Scratch::write($sibling . '/composer.json', '{}');
+
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        $stage = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($stage . '/composer.json');
+
+        [$status, $out] = $this->composer('remove ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "remove failed:\n$out");
+
+        clearstatcache();
+        $this->assertDirectoryDoesNotExist($stage, 'remove left the staged tree behind');
+        $this->assertFileExists($sibling . '/composer.json', 'remove deleted another staged plugin');
+    }
+
+    public function testDeclaredBinEntriesAreLinkedIntoVendorBinAndRemoved(): void
+    {
+        Scratch::write($this->base . '/sample/bin/sample-tool', "#!/bin/sh\necho sample\n");
+        chmod($this->base . '/sample/bin/sample-tool', 0755);
+        $this->amendSample(['bin' => ['bin/sample-tool']]);
+        $this->writeProject(null);
+
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        // Composer links declared bin entries into the project bin dir, outside the
+        // staged tree. The README documents this exception; this pins it.
+        $link = $this->project . '/vendor/bin/sample-tool';
+        $this->assertTrue(is_link($link) || is_file($link), 'declared bin entry was not linked into vendor/bin');
+
+        [$status, $out] = $this->composer('remove ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "remove failed:\n$out");
+
+        // The earlier checks cached this path's stat; Composer changed it in another process.
+        clearstatcache();
+        $this->assertFalse(is_link($link) || is_file($link), 'remove left the bin link behind');
+        $this->assertDirectoryDoesNotExist($this->home . '/.candy-code/bundles/sample-plugin');
+    }
+
     public function testBadScopeFailsTheInstallWithAClearMessage(): void
     {
         $this->writeProject(['sugar-plugin-installer' => ['scope' => 'global']]);
