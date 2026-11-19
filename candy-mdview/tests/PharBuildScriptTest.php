@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\MdView\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Markdown\Theme;
 use SugarCraft\MdView\Application;
 
 /**
@@ -13,9 +14,9 @@ use SugarCraft\MdView\Application;
  * LIGHT by design — the suite never mints an archive (build + smoke live in
  * the lane report). Pinned here:
  *
- *  - tools/build-phar.php exists, packages themes/ (the three bundled JSON
- *    themes RenderCommand::pickTheme loads through __DIR__-relative paths),
- *    and keeps the candy-code guard inventory;
+ *  - tools/build-phar.php exists, packages themes/ (a copy no runtime path
+ *    reads), refuses a vendor sugar-markdown without the three bundled
+ *    themes (Guard 3b), and keeps the candy-code guard inventory;
  *  - bin/candy-mdview carries the phar:// autoload guard and the historical
  *    CANDIDATE ORDER survives untouched (the 'mdview-order' shape is itself
  *    the pinned thing — the archive arm runs before it, never inside it);
@@ -39,6 +40,26 @@ final class PharBuildScriptTest extends TestCase
         foreach (['bin', 'src', 'lang', 'vendor'] as $root) {
             self::assertStringContainsString("'" . $root . "'", $script);
         }
+    }
+
+    public function testTheBundledThemesShipWithTheVendoredSugarMarkdown(): void
+    {
+        // The phar carries vendor/ verbatim, and the bundled names load from
+        // the sugar-markdown package that Theme itself was autoloaded from.
+        // A package without its themes/ must fail here, not in the shipped phar.
+        $themesDir = dirname((string) (new \ReflectionClass(Theme::class))->getFileName()) . '/../themes';
+
+        foreach (['solarized', 'monokai', 'github'] as $slug) {
+            self::assertFileExists($themesDir . '/' . $slug . '.json', "sugar-markdown must ship the bundled '{$slug}' theme.");
+        }
+    }
+
+    public function testTheBuildScriptGuardsTheVendoredBundledThemes(): void
+    {
+        $script = self::source(self::PACKAGE . '/tools/build-phar.php');
+
+        self::assertStringContainsString('vendor/sugarcraft/sugar-markdown/themes/', $script, 'Guard 3b names the vendored themes.');
+        self::assertStringContainsString("['solarized', 'monokai', 'github']", $script);
     }
 
     public function testTheBuildScriptKeepsEveryCandyCodeGuard(): void

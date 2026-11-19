@@ -8,6 +8,9 @@ declare(strict_types=1);
  * Run: cat message.md | php examples/pipeline.php [to] [subject]
  * Or:  echo "Hello world" | php examples/pipeline.php you@example.com "Hi there"
  * Prints an offline MIME preview unless RESEND_API_KEY is set.
+ *
+ * Input: needs a piped body on stdin. With stdin empty or closed it prints a
+ * usage line and exits 1, so run it with a body piped in, not from /dev/null.
  */
 
 require __DIR__ . '/../vendor/autoload.php';

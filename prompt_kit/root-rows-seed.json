@@ -171,7 +171,7 @@
         "candy-mail": {
             "readme": {
                 "needles": [
-                    "Email library + CLI — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface."
+                    "Email library + CLI — SMTP, Resend API and Mailgun API transports, attachments, HTML + plain-text multipart, fluent interface."
                 ],
                 "dead": []
             },
