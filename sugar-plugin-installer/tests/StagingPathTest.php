@@ -74,6 +74,15 @@ final class StagingPathTest extends TestCase
         $this->assertSame('/srv/shared/.candy-code/bundles', $root);
     }
 
+    public function testProjectScopeUncRootIsUsedAsGivenNotJoinedOntoProject(): void
+    {
+        $config = self::config(['sugar-plugin-installer' => ['scope' => 'project', 'root' => '\\\\nas\\sugar']]);
+
+        $root = StagingPath::bundleRoot($config, 'C:\\proj', 'C:\\Users\\ann');
+
+        $this->assertSame('\\\\nas\\sugar/.candy-code/bundles', $root);
+    }
+
     public function testUserScopeIgnoresRoot(): void
     {
         $config = self::config(['sugar-plugin-installer' => ['root' => '/srv/shared']]);

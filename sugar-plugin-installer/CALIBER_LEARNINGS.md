@@ -3,7 +3,7 @@
 ## Accumulated Learnings
 
 ### 2026-11-19 — The installer stages, it never runs or trusts
-Pattern: `PluginInstaller` extends `Composer\Installer\LibraryInstaller` and overrides only `supports()` and `getInstallPath()`. Composer's download, update and remove all go through `getInstallPath()`, so one override redirects install, update and remove together. The scope is read there on every call, not at activation.
+Pattern: `PluginInstaller` extends `Composer\Installer\LibraryInstaller` and overrides `supports()`, `getInstallPath()`, `install()` and `getPackageBasePath()`. Composer's download, update and remove all go through `getInstallPath()`, so one override redirects install, update and remove together. The scope is read there on every call, not at activation. `install()` adds the vendor-collision refusal before the download. `getPackageBasePath()` must stay overridden: LibraryInstaller's default strips a trailing `/<target-dir>` from the install path, and a target-dir that matches the package name would make remove delete the whole bundles root.
 Anti-pattern: do not add a write to `trustedBundleChannels`, the channel ledger, or any candy-code store from the installer. Trust is a user-tier decision and stays in candy-code. Do not run anything from the package either.
 Source: plan_plugin.md §5.3, §5.5, phase 4 (PL-4a)
 

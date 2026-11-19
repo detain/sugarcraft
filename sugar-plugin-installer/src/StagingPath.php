@@ -104,8 +104,12 @@ final class StagingPath
         return rtrim($base, '/\\') . '/' . $relative;
     }
 
+    /**
+     * A leading double separator is a UNC share on Windows (`\\nas\sugar`), so
+     * it is absolute even though it has no drive letter.
+     */
     private static function isAbsolute(string $path): bool
     {
-        return str_starts_with($path, '/') || preg_match('~\A[A-Za-z]:[\\\\/]~', $path) === 1;
+        return str_starts_with($path, '/') || preg_match('~\A(?:[\\\\/]{2}|[A-Za-z]:[\\\\/])~', $path) === 1;
     }
 }
