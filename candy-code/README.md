@@ -1733,7 +1733,7 @@ command inside bubblewrap, writable only in the project.
 
 - **Read-only shell lines** run unasked under `default` and `accept-edits`, alone or chained or piped, as long as every command is on the read-only list. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#read-only-shell-commands-run-unasked) has the list and what breaks a line out of it.
 - **`ApplyPatch`** is judged per file, and the model's own questions (`AskUser`, and `PlanExit` as plan mode's way out) come up in the same permission modal. See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
-- **`autoReview`** (your own settings only) sends each call that `auto` flags to a reviewer model, and it is **on by default** whenever a reviewable model exists; `"autoReview": false` in your own settings is the opt-out. With the reviewer on, `autoReviewScope` decides which passed calls it also reviews: `shell` by default, so every non-read-only shell command gets a paid review, and `writes` or `all` widen that. Each review is a paid model call. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#what-auto-classifies) covers the classifier and the reviewer.
+- **`autoReview`** (your own settings only) sends each non-security call that `auto` flags to a reviewer model, and it is **on by default** whenever a reviewable model exists; `"autoReview": false` in your own settings is the opt-out. With the reviewer on, `autoReviewScope` decides which passed calls it also reviews: `shell` by default, so every non-read-only shell command gets a paid review, and `writes` or `all` widen that. Each review is a paid model call. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#what-auto-classifies) covers the classifier and the reviewer.
 
 ### Hooks and automation
 
