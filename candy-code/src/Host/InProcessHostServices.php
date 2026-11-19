@@ -42,7 +42,7 @@ use function React\Promise\resolve;
  * it gets the answer in the same tick. Refusals are the wire's own {@see RpcError}s: the
  * same code, kind and data.
  *
- * Five deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * Four deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Each answer's value is encoded under the wire's flags and decoded back, with no
  *   envelope. That keeps the wire's UTF-8 substitution, so a bundle gets the same
  *   values on both doors, and the `too_large` refusal is computed as the frame the
@@ -53,11 +53,6 @@ use function React\Promise\resolve;
  *   refused `too_deep` here: the bundle's wire client (sugar-mcp-client's
  *   `JsonRpc::MAX_DEPTH`, 64 with the envelope) drops that frame undecoded, and the
  *   call times out there instead.
- * - Session calls are served by the primary host's dispatcher only. This door never
- *   sends `root`, and the wire's workspace routing (`root` and sessionId-only requests
- *   through {@see \SugarCraft\Code\Server\Workspace\Gateway::routeOf()}) is not
- *   applied, so a session the gateway bound to a non-primary root is not found here.
- *   Reaching it in-process is open (PL-5c, see plan_plugin.md).
  * - Rate meters are not spent. {@see Dispatcher::invoke()} skips the per-client
  *   `rate_limited` budgets the wire applies to each frame, because the caller is the
  *   host itself, so a bundle's own loop is never refused `rate_limited`.
@@ -73,6 +68,16 @@ use function React\Promise\resolve;
  *   for is refused here by its published schema instead: a `text` past
  *   `ServerConfig::MAX_CLIENT_MESSAGE_BYTES` is `invalid_params`. Invalid UTF-8 is
  *   `parse_error` on both doors.
+ *
+ * Routing limit (PL-5c-B, owner decision 2026-11-19: the in-process door serves the primary
+ * root only). Session calls go to the primary host's dispatcher alone. This door never sends
+ * `root`, and the wire's workspace routing (`root`, and sessionId-only requests through
+ * {@see \SugarCraft\Code\Server\Workspace\Gateway::routeOf()}) is not applied. A session the
+ * gateway bound to a non-primary root is therefore refused `session_not_found` here, the same
+ * refusal the primary dispatcher gives any id it does not hold, and a bundle that follows such
+ * a session gets that refusal from {@see subscribeSession()}. No socket, loopback WebSocket or
+ * JSON-RPC frame carries these calls. The later step (A) of Phase 5 lifts this limit by routing
+ * through the gateway and the child-process socket hop, and it waits for the event sink design.
  */
 final class InProcessHostServices implements HostServices
 {

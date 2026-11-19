@@ -464,6 +464,45 @@ final class InProcessHostServicesTest extends TestCase
         self::assertFalse($this->call($this->host->isConnected()));
     }
 
+    /**
+     * The routing limit (PL-5c-B): the in-process door serves the primary root only. A session
+     * that lives on another root is refused session_not_found here, the refusal the primary wire
+     * gives an id it does not hold. Step (A) of Phase 5 lifts this limit; this pins it until then.
+     */
+    public function testANonPrimarySessionIsRefusedSessionNotFoundOnTheInProcessDoor(): void
+    {
+        $this->connect();
+        $other = ProtocolFixture::new();
+        try {
+            $otherId = $other->session($other->client('other-root'));
+
+            $inSend = $this->refusalOf(fn () => $this->call($this->host->sendTurn($otherId, 'hi', 'queue', null, [], [])));
+            self::assertSame('session_not_found', $inSend->kind);
+            $this->assertSameRefusal(
+                $inSend,
+                $this->wire->request('session.send', ['sessionId' => $otherId, 'text' => 'hi', 'delivery' => 'queue']),
+            );
+
+            $inSubscribe = $this->refusalOf(fn () => $this->call($this->host->subscribeSession($otherId, null, null)));
+            self::assertSame('session_not_found', $inSubscribe->kind);
+            $this->assertSameRefusal(
+                $inSubscribe,
+                $this->wire->request('session.subscribe', ['sessionId' => $otherId]),
+            );
+
+            $inSnapshot = $this->refusalOf(fn () => $this->call($this->host->sessionSnapshot($otherId, 10)));
+            self::assertSame('session_not_found', $inSnapshot->kind);
+            $this->assertSameRefusal(
+                $inSnapshot,
+                $this->wire->request('session.get', ['sessionId' => $otherId, 'limit' => 10]),
+            );
+
+            self::assertSame([], $this->call($this->host->followedSessions()));
+        } finally {
+            $other->tearDown();
+        }
+    }
+
     public function testUnsubscribeAnswersTheWireShapeAndAnUnknownSessionIsNoRefusal(): void
     {
         $this->connect();
