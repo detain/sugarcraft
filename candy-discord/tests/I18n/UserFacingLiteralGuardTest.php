@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\I18n;
 
+use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Discord\Commands;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Plugins\Bridge\ConversationRouterCore;
 
 /**
  * Every string a Discord user or the operator reads at startup rides
@@ -65,6 +67,25 @@ final class UserFacingLiteralGuardTest extends TestCase
                 \array_push($keys, ...$m[1]);
             }
         }
+
+        // The shared core asks for core-relative keys ($this->t('turn.eror')) and the
+        // router maps each one to its catalog key. Resolve every core key through the
+        // router's own catalogKey(), so a typo or an unmapped key reaches the catalog check.
+        $core = (string) \file_get_contents((string) (new \ReflectionClass(ConversationRouterCore::class))->getFileName());
+        $coreKeys = [];
+        \preg_match_all('/\$this->t\(\s*\'([a-z][a-z0-9_.]*)\'/', $core, $coreKeys);
+        self::assertNotEmpty($coreKeys[1], 'the core must name its catalog keys as literals');
+        $catalogKey = new \ReflectionMethod(ConversationRouter::class, 'catalogKey');
+        foreach (\array_unique($coreKeys[1]) as $coreKey) {
+            $keys[] = (string) $catalogKey->invoke(null, $coreKey);
+        }
+
+        // Every arm the router's map names must resolve too, including arms no core call uses yet.
+        $router = (string) \file_get_contents(self::SRC . '/Bridge/ConversationRouter.php');
+        \preg_match_all('/\'([a-z][a-z0-9_.]*)\'\s*=>\s*\'(channels\.discord\.[A-Za-z0-9_.]+)\'/', $router, $arms);
+        self::assertNotEmpty($arms[2], 'the router must map core keys onto the channels.discord catalog');
+        \array_push($keys, ...$arms[2]);
+
         $keys = \array_values(\array_unique($keys));
         self::assertNotEmpty($keys);
         $missing = [];

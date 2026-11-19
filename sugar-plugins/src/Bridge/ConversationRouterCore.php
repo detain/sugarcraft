@@ -947,7 +947,7 @@ class ConversationRouterCore
      *
      * @return list<PlatformFace>
      */
-    private function channelFaces(): array
+    protected function channelFaces(): array
     {
         $seen = [];
         foreach ($this->channels as $face) {
@@ -1031,7 +1031,7 @@ class ConversationRouterCore
      *
      * @param array<string,mixed> $result
      */
-    private function commandResultText(array $result): string
+    protected function commandResultText(array $result): string
     {
         $parts = [];
         foreach ((array) ($result['rows'] ?? []) as $row) {

@@ -447,6 +447,109 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertSame(['custom:fake:acc:group-1'], $this->serve->createdNames);
     }
 
+    public function testChannelLooksUpByExactNameAndTheFirstFaceServesThePlatformAlias(): void
+    {
+        $this->build();
+        $second = new FakeFace('fake');
+        $this->router->addChannel($second, 'acc2');
+
+        $this->assertSame($this->face, $this->router->channel('fake:acc'));
+        $this->assertSame($second, $this->router->channel('fake:acc2'));
+        // The bare platform name is the alias kept for the first face registered.
+        $this->assertSame($this->face, $this->router->channel('fake'));
+        $this->assertNull($this->router->channel('fake:gone'));
+        $this->assertNull($this->router->channel('other'));
+    }
+
+    public function testAllChannelsListsEveryRegisteredFace(): void
+    {
+        $this->build();
+        $this->assertSame([$this->face], $this->distinctFaces($this->router->allChannels()));
+
+        $second = new FakeFace('fake');
+        $this->router->addChannel($second, 'acc2');
+        $faces = $this->distinctFaces($this->router->allChannels());
+
+        $this->assertSame([$this->face, $second], $faces);
+    }
+
+    /**
+     * Identity dedupe: two FakeFace instances can compare equal by value, so
+     * array_unique(SORT_REGULAR) would merge distinct faces.
+     *
+     * @param list<\SugarCraft\Plugins\Bridge\PlatformFace> $faces
+     * @return list<\SugarCraft\Plugins\Bridge\PlatformFace>
+     */
+    private function distinctFaces(array $faces): array
+    {
+        $seen = [];
+        foreach ($faces as $face) {
+            $seen[\spl_object_id($face)] = $face;
+        }
+
+        return \array_values($seen);
+    }
+
+    public function testClaimInboundAcceptsTheFirstDeliveryOnly(): void
+    {
+        $this->build();
+
+        $this->assertTrue($this->router->claimInbound('fake', 'm1'));
+        $this->assertFalse($this->router->claimInbound('fake', 'm1'));
+        $this->assertTrue($this->router->claimInbound('fake', 'm2'));
+    }
+
+    public function testConfirmInboundForwardsToTheStore(): void
+    {
+        $this->build();
+        $this->store->ops = [];
+
+        $this->router->confirmInbound('fake', 'm1');
+
+        $this->assertSame(['confirm'], $this->store->ops);
+    }
+
+    public function testReleaseBindingForgetsTheConversationBinding(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->assertSame('s1', $this->store->bindings[self::KEY]);
+
+        $this->router->releaseBinding(self::KEY);
+
+        $this->assertArrayNotHasKey(self::KEY, $this->store->bindings);
+    }
+
+    public function testAdoptBindingsResubscribesEveryBoundConversationFromItsCursor(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->store->bind('fake:acc:other', 's2');
+        $this->store->noteSeqForSession('s2', 5);
+        $this->serve->calls = [];
+
+        $this->router->adoptBindings();
+
+        $follows = \array_values(\array_filter($this->serve->calls, static fn (array $c): bool => $c['method'] === 'follow'));
+        $this->assertSame(
+            [
+                ['sessionId' => 's1', 'afterSeq' => null],
+                ['sessionId' => 's2', 'afterSeq' => 5],
+            ],
+            \array_column($follows, 'params'),
+        );
+    }
+
+    public function testAdoptBindingsWithNoBindingsSubscribesNothing(): void
+    {
+        $this->build();
+        $this->serve->calls = [];
+
+        $this->router->adoptBindings();
+
+        $this->assertSame([], $this->serve->calls);
+    }
+
     public function testTheCoreHasNoImportOfAnyBundleNamespace(): void
     {
         $dir = \dirname(__DIR__, 2) . '/src/Bridge';
