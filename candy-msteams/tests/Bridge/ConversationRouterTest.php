@@ -176,6 +176,29 @@ final class ConversationRouterTest extends TestCase
         self::assertSame('retry', $this->serve->seenText);
     }
 
+    /**
+     * A host that throws from session.create instead of rejecting must not strand the
+     * single-flight memo: the next inbound has to mint a fresh attempt, not ride a promise
+     * that nothing will ever settle.
+     */
+    public function testASynchronouslyThrownSessionCreateLeavesNoMemoBehind(): void
+    {
+        $this->boot();
+        $this->serve->createThrows = true;
+        $this->inboundDm('thrown', false, 'm-1');
+
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertSame(0, $this->serve->sendSeen, 'a create that threw materialized nothing to prompt');
+        self::assertNotEmpty($this->face->delivered, 'the thrown create still answers in the chat (failWith arm)');
+
+        $this->serve->createThrows = false;
+        $this->inboundDm('retry', false, 'm-2');
+
+        self::assertSame(2, $this->serve->createSeen, 'the next inbound mints a fresh attempt after a synchronous throw');
+        self::assertSame(1, $this->serve->sendSeen);
+        self::assertSame('retry', $this->serve->seenText);
+    }
+
     public function testAMentionWhileTheSessionIsBusySteers(): void
     {
         $this->boot();

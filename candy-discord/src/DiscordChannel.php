@@ -186,7 +186,7 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
         // the router redact the same live roster. withSecrets() replaces —
         // build once with the tokens, then only add.
         $this->safety = (new TextSafety())->withSecrets($secrets);
-        // The serve token joins the roster on every dial (below).
+        // Every bot token is in the roster before the first Gateway dial below.
         $pairing = new PairingCodes($store, $this->safety);
         // (040) codes minted before this restart must rejoin the fresh
         // redactor the moment pairing exists, or the restart window leaks them.
@@ -345,8 +345,8 @@ final class DiscordChannel implements ChannelInterface, WritesCredentials
         $this->host = null;
         $this->serve = null;
         $this->router = null;
-        // Faces hold a reference to the (possibly placeholder) router; the
-        // placeholder refuses everything once disposed.
+        // Faces keep the router they were built with. Stopping them above is
+        // what ends their work; nulling $this->router only drops this channel's own handle.
         $this->faces = [];
     }
 

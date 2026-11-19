@@ -55,14 +55,10 @@ final class MsTeamsBundleWeldTest extends TestCase
         // channelsMsteamsSettings, the CredentialStore default path —
         // resolves into the temp tree.
         $this->useHomeSandbox($this->tempDir . '/home');
-        // The serve-discovery door stays dark for this window: there is no
-        // live serve here, and the poll must prove it touches nothing.
-        putenv('CANDY_CODE_SERVER_DIR=' . $this->tempDir . '/no-serve');
     }
 
     protected function tearDown(): void
     {
-        putenv('CANDY_CODE_SERVER_DIR');
         $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
     }

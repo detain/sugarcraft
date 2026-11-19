@@ -151,27 +151,34 @@ final class ConversationRouter extends ConversationRouterCore
         // a settle that ran first would unset a memo not yet set (PL-5d).
         $deferred = new \React\Promise\Deferred();
         $this->creating[$key] = $deferred->promise();
-        $this->serve->createSession($this->sessionName($key))->then(
-            function (array $created) use ($key, $ref, $deferred): void {
-                unset($this->creating[$key]);
-                try {
-                    $sessionId = (string) ($created['id'] ?? '');
-                    if ($sessionId === '') {
-                        throw new \RuntimeException('session.create returned no id');
+        try {
+            $this->serve->createSession($this->sessionName($key))->then(
+                function (array $created) use ($key, $ref, $deferred): void {
+                    unset($this->creating[$key]);
+                    try {
+                        $sessionId = (string) ($created['id'] ?? '');
+                        if ($sessionId === '') {
+                            throw new \RuntimeException('session.create returned no id');
+                        }
+                        $this->map->bind($key, $sessionId);
+                        $this->map->rememberConversation($sessionId, $key, $ref);
+                        $this->followNow($sessionId, $key);
+                        $deferred->resolve($sessionId);
+                    } catch (\Throwable $e) {
+                        $deferred->reject($e);
                     }
-                    $this->map->bind($key, $sessionId);
-                    $this->map->rememberConversation($sessionId, $key, $ref);
-                    $this->followNow($sessionId, $key);
-                    $deferred->resolve($sessionId);
-                } catch (\Throwable $e) {
+                },
+                function (\Throwable $e) use ($key, $deferred): void {
+                    unset($this->creating[$key]);
                     $deferred->reject($e);
-                }
-            },
-            function (\Throwable $e) use ($key, $deferred): void {
-                unset($this->creating[$key]);
-                $deferred->reject($e);
-            },
-        );
+                },
+            );
+        } catch (\Throwable $e) {
+            // A ServeClient that throws instead of returning a rejected promise must not strand
+            // the memo: every later first-contact would ride a promise nothing will settle.
+            unset($this->creating[$key]);
+            $deferred->reject($e);
+        }
 
         return $deferred->promise();
     }

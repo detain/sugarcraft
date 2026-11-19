@@ -155,12 +155,13 @@ entrypoint. Installing it exercises every rule above:
    mode 0600, with `DISCORD_BOT_TOKEN` honored for the default account only.
     Guild traffic is gated by `guilds.groupPolicy` — default `allowlist`:
     nothing is served in a guild until a row names that guild. Endpoint env
-    overrides (`DISCORD_API_URL`, `DISCORD_GATEWAY_URL`, `CANDY_CODE_SERVER_DIR`)
-    are documented in the bundle README.
-3. It dials the local serve process over the ordinary WebSocket protocol —
-   no new server surface, and `gen-protocol-schema --check` stays clean by
-   construction. Chunking, redaction, and prompt-fencing happen in the
-   bundle, never in a model loop.
+    overrides (`DISCORD_API_URL`, `DISCORD_GATEWAY_URL`) are documented in the
+    bundle README.
+3. It calls the serve it runs inside through the host services the host
+   injects, in process. No socket is dialled to the serve and no discovery
+   record is read, so there is no new server surface, and
+   `gen-protocol-schema --check` stays clean by construction. Chunking,
+   redaction, and prompt-fencing happen in the bundle, never in a model loop.
 4. Unpaired DM senders receive an expiring pairing code (8 glyphs, one
    hour, at most three pending); an approver answers `/pair grant <code>`
    (or the text spelling; `/pair approve` is a deprecated alias), which writes the allowlist into the same 0600

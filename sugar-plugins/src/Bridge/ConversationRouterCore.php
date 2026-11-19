@@ -687,20 +687,27 @@ abstract class ConversationRouterCore
         // settles at once, and a settle that ran first would unset a memo not yet set.
         $deferred = new Deferred();
         $this->creating[$key] = $deferred->promise();
-        $this->serve->createSession($this->sessionName($key))->then(
-            function (array $created) use ($key, $ref, $deferred): void {
-                unset($this->creating[$key]);
-                try {
-                    $deferred->resolve($this->adoptCreated($key, $ref, $created));
-                } catch (\Throwable $error) {
+        try {
+            $this->serve->createSession($this->sessionName($key))->then(
+                function (array $created) use ($key, $ref, $deferred): void {
+                    unset($this->creating[$key]);
+                    try {
+                        $deferred->resolve($this->adoptCreated($key, $ref, $created));
+                    } catch (\Throwable $error) {
+                        $deferred->reject($error);
+                    }
+                },
+                function (\Throwable $error) use ($key, $deferred): void {
+                    unset($this->creating[$key]);
                     $deferred->reject($error);
-                }
-            },
-            function (\Throwable $error) use ($key, $deferred): void {
-                unset($this->creating[$key]);
-                $deferred->reject($error);
-            },
-        );
+                },
+            );
+        } catch (\Throwable $error) {
+            // A ServeClient that throws instead of returning a rejected promise must not strand
+            // the memo: every later first-contact would ride a promise nothing will settle.
+            unset($this->creating[$key]);
+            $deferred->reject($error);
+        }
 
         return $deferred->promise();
     }

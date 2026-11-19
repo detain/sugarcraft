@@ -45,6 +45,9 @@ final class FakeServe implements HostServices
 
     public bool $createRefuses = false;
 
+    /** Throw from session.create itself, before any promise exists (the router's sync-throw arm). */
+    public bool $createThrows = false;
+
     /** Refuse the hello, so connect() rejects. */
     public bool $refuseHello = false;
 
@@ -154,6 +157,9 @@ final class FakeServe implements HostServices
         $this->createName = $name;
         if (!$this->connected) {
             return reject(new FakeRefusal('not_connected', 'not connected'));
+        }
+        if ($this->createThrows) {
+            throw new \TypeError('fixture throws from session.create');
         }
         if ($this->createRefuses) {
             return reject(new FakeRefusal('fixture_refused', 'fixture refuses create'));
