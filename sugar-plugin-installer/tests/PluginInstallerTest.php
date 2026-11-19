@@ -279,6 +279,41 @@ final class PluginInstallerTest extends TestCase
         $this->assertFileExists($survivor);
     }
 
+    public function testInstallPathFollowsTheTreeAfterAScopeChange(): void
+    {
+        // Installed under project scope, then the root moved to user scope. Composer's
+        // dump-autoload asks for the install path, and the autoload map must name the
+        // tree that exists, not the empty user-tier directory.
+        $staged = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($staged, 'sugarcraft/sample-plugin');
+
+        $path = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'user']])
+            ->getInstallPath(self::samplePackage());
+
+        $this->assertSame($staged, $path);
+    }
+
+    public function testInstallRefusesAForeignTreeAtTheConfiguredPath(): void
+    {
+        // The directory names sugarcraft/sample-plugin, so a fresh install of
+        // acme/sample-plugin would overwrite another package's tree. The install
+        // refuses before the download replaces anything.
+        $foreign = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($foreign, 'sugarcraft/sample-plugin');
+        $installer = $this->installerFor(null);
+
+        $refusal = null;
+        try {
+            $installer->install(new InstalledArrayRepository(), self::samplePackage('acme/sample-plugin'));
+        } catch (\RuntimeException $caught) {
+            $refusal = $caught;
+        }
+
+        $this->assertNotNull($refusal, 'an install must not overwrite a foreign tree');
+        $this->assertStringContainsString('refuses to overwrite', $refusal->getMessage());
+        $this->assertFileExists($foreign . '/composer.json');
+    }
+
     public function testComposerFileDecidesTheProjectDirectory(): void
     {
         // Composer reads COMPOSER's file without chdir-ing, so getcwd() is the

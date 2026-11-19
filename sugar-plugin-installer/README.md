@@ -111,7 +111,7 @@ follows.
 | Root `composer.lock` | Not refreshed in this change. A root `composer update` is needed to record the new require. |
 | `docs/MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md` table | Done. Original-work rows; the root README row carries the package icon. |
 | `codecov.yml` | Done. |
-| `docs/index.html` tile, `docs/_data/<slug>.json` and body, `php tools/gen-docs.php` | Skipped. The site catalogues libraries and apps, and this package is install tooling with no page of its own yet. The site's library count moves with it: the count is derived from `docs/MATCHUPS.md`, so the "forty-four libraries" copy on the site counts this package, which has no tile in the library catalog. |
+| `docs/index.html` tile, `docs/_data/<slug>.json` and body, `php tools/gen-docs.php` | Skipped. The site catalogues libraries and apps, and this package is install tooling with no page of its own yet. The site's library count does not move: the count is derived from `docs/MATCHUPS.md`, and this package sits under `## Composer tooling (outside the catalog counts)`, so the site stays at "forty-three" and `php tools/gen-docs.php --check` passes at 43. |
 | `support.docs` in `composer.json` | Dropped. It would point at a `docs/lib/sugar-plugin-installer.html` page that is not generated, so the entry is left out until that page exists. |
 | `media/icons/sugar-plugin-installer.png` | Done. The icon is in the root `media/icons/`, and the root README row references it. |
 | `.github/workflows/vhs.yml` | Skipped. Non-visual, so exempt. |

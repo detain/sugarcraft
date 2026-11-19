@@ -24,6 +24,13 @@ final class PluginInstaller extends LibraryInstaller
 {
     public const PACKAGE_TYPE = 'sugar-plugin';
 
+    /**
+     * True while a staging call (download, install, update) runs. Composer reads
+     * getInstallPath() there as the directory to write, so it must be the
+     * configured tier; everywhere else it is where the tree sits.
+     */
+    private bool $staging = false;
+
     public function supports(string $packageType): bool
     {
         return $packageType === self::PACKAGE_TYPE;
@@ -46,10 +53,12 @@ final class PluginInstaller extends LibraryInstaller
 
     /**
      * Composer calls this for every installed sugar-plugin package, on
-     * dump-autoload, show, validate and remove, not only on install. So a
-     * malformed section, or a home directory that is missing under user scope,
-     * must not throw here: the tree already on disk answers instead. The section
-     * is enforced where a tree is written (download, install, update), so a bad
+     * dump-autoload, show, validate and remove, not only on install. Outside a
+     * staging call it answers with the tree where it sits, so an autoload map
+     * after a scope change points at a directory that exists. A malformed
+     * section, or a home directory that is missing under user scope, must not
+     * throw here: the tree already on disk answers instead. The section is
+     * enforced where a tree is written (download, install, update), so a bad
      * scope or a missing home still refuses before anything is staged.
      *
      * @throws \RuntimeException when no bundle root can be resolved at all
@@ -57,9 +66,30 @@ final class PluginInstaller extends LibraryInstaller
     public function getInstallPath(PackageInterface $package)
     {
         try {
-            return $this->configuredPath($package);
+            $configured = $this->configuredPath($package);
         } catch (\InvalidArgumentException | \RuntimeException $unresolved) {
             return $this->fallbackPath($package, $unresolved);
+        }
+
+        if ($this->staging) {
+            return $configured;
+        }
+
+        return $this->existingPath($package) ?? $configured;
+    }
+
+    /**
+     * Runs a Composer write with getInstallPath() pinned to the configured tier.
+     * Synchronous: Composer reads the path before it returns its promise.
+     */
+    private function stage(callable $write): mixed
+    {
+        $outer = $this->staging;
+        $this->staging = true;
+        try {
+            return $write();
+        } finally {
+            $this->staging = $outer;
         }
     }
 
@@ -141,8 +171,14 @@ final class PluginInstaller extends LibraryInstaller
      */
     private function existingPath(PackageInterface $package): ?string
     {
+        $paths = [];
         try {
-            $paths = [$this->getInstallPath($package)];
+            $paths[] = $this->configuredPath($package);
+        } catch (\InvalidArgumentException | \RuntimeException) {
+            // A malformed section leaves the tiers below to answer.
+        }
+
+        try {
             foreach ($this->bundleRoots() as $root) {
                 $paths[] = StagingPath::forPackage($root, $package->getPrettyName());
             }
@@ -218,7 +254,28 @@ final class PluginInstaller extends LibraryInstaller
     {
         $this->configuredPath($package);
 
-        return parent::download($package, $prevPackage);
+        return $this->stage(fn () => parent::download($package, $prevPackage));
+    }
+
+    /**
+     * Composer also prepares an uninstall, which must read the tree where it sits
+     * and must not depend on a valid section, so only the write types are staged.
+     */
+    public function prepare($type, PackageInterface $package, ?PackageInterface $prevPackage = null)
+    {
+        return $type === 'uninstall'
+            ? parent::prepare($type, $package, $prevPackage)
+            : $this->stage(fn () => parent::prepare($type, $package, $prevPackage));
+    }
+
+    /**
+     * Mirrors prepare(): the uninstall cleanup reads the tree where it sits.
+     */
+    public function cleanup($type, PackageInterface $package, ?PackageInterface $prevPackage = null)
+    {
+        return $type === 'uninstall'
+            ? parent::cleanup($type, $package, $prevPackage)
+            : $this->stage(fn () => parent::cleanup($type, $package, $prevPackage));
     }
 
     /**
@@ -228,7 +285,7 @@ final class PluginInstaller extends LibraryInstaller
     {
         $this->configuredPath($target);
 
-        return parent::update($repo, $initial, $target);
+        return $this->stage(fn () => parent::update($repo, $initial, $target));
     }
 
     /**
@@ -264,7 +321,17 @@ final class PluginInstaller extends LibraryInstaller
             ));
         }
 
-        return parent::install($repo, $package);
+        // The download replaces whatever sits at $path, so a directory that does
+        // not name this package is refused before anything is written, as update does.
+        if (is_dir($path) && !$this->holdsPackage($path, $package)) {
+            throw new \RuntimeException(sprintf(
+                'sugar-plugin-installer: %s is already at %s and does not name this package, so the install refuses to overwrite it.',
+                $package->getPrettyName(),
+                $path,
+            ));
+        }
+
+        return $this->stage(fn () => parent::install($repo, $package));
     }
 
     /**
@@ -311,7 +378,7 @@ final class PluginInstaller extends LibraryInstaller
     protected function updateCode(PackageInterface $initial, PackageInterface $target)
     {
         $stale = $this->existingPath($initial);
-        $targetPath = $this->getInstallPath($target);
+        $targetPath = $this->configuredPath($target);
         if ($stale !== $targetPath && is_dir($targetPath)) {
             throw new \RuntimeException(sprintf(
                 'sugar-plugin-installer: %s is already at %s and does not name this package, so the update refuses to overwrite it.',
