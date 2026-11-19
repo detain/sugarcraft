@@ -117,7 +117,6 @@ use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
  */
 final class ForeignAgentPresetRegistry
 {
-
     /**
      * opencode names its built-in tools in lowercase; candy-code's own tools
      * report StudlyCase names ({@see \SugarCraft\Code\Tools\BuiltIn\Bash::name()}).

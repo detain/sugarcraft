@@ -39,7 +39,6 @@ use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
  */
 final class CommandSpec
 {
-
     /**
      * A command name is typed after "/" and used as an array key, so it is
      * restricted to path-safe characters. "/" itself is allowed as the

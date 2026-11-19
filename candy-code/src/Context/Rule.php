@@ -100,7 +100,6 @@ use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
  */
 final class Rule
 {
-
     /**
      * The three tiers, in load order (user -> project -> root). Kept as a
      * private const list so {@see new()} can parse-don't-validate the tier
