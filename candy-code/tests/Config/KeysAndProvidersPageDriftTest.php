@@ -122,13 +122,26 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         self::assertContains('AWS_REGION', $names, 'the bedrock region variable is no longer in the factory env oracle');
     }
 
+    public function testTheTableRowMatcherRefusesANameOnlyInProse(): void
+    {
+        // A variable named in a sentence is not documented in the env table.
+        // The check must take the table row, not the sentence, as the entry.
+        $page = "Set `AZURE_OPENAI_API_KEY` for azure.\n| `OPENAI_API_KEY` | `openai` | The key. | empty |\n";
+
+        $rows = self::tableRowNames($page);
+        self::assertContains('OPENAI_API_KEY', $rows);
+        self::assertNotContains('AZURE_OPENAI_API_KEY', $rows);
+    }
+
     public function testEveryEnvironmentVariableProviderFactoryReadsIsOnTheProvidersPage(): void
     {
-        $page = self::page('PROVIDERS.md');
+        // Demanded as the first cell of a table row, so deleting the env-table
+        // row fails even when the name is still mentioned in prose.
+        $rows = self::tableRowNames(self::page('PROVIDERS.md'));
 
         $missing = [];
         foreach (self::factoryEnvNames() as $name) {
-            if (!str_contains($page, '`' . $name . '`')) {
+            if (!in_array($name, $rows, true)) {
                 $missing[] = $name;
             }
         }
@@ -136,18 +149,20 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         self::assertSame(
             [],
             $missing,
-            'ProviderFactory reads these environment variables, and docs/PROVIDERS.md does not name them '
-            . '(as `NAME` in backticks): ' . implode(', ', $missing),
+            'ProviderFactory reads these environment variables, and docs/PROVIDERS.md has no table row for them '
+            . '(a row whose first cell is `NAME`): ' . implode(', ', $missing),
         );
     }
 
     public function testEveryProviderTypeTheFactoryOffersIsOnTheProvidersPage(): void
     {
-        $page = self::page('PROVIDERS.md');
+        // Demanded as the first cell of a table row, for the same reason as the
+        // environment check: a type named only in prose is not in the type table.
+        $rows = self::tableRowNames(self::page('PROVIDERS.md'));
 
         $missing = [];
         foreach ((new ProviderFactory())->availableTypes() as $type) {
-            if (!str_contains($page, '`' . $type . '`')) {
+            if (!in_array($type, $rows, true)) {
                 $missing[] = $type;
             }
         }
@@ -155,9 +170,23 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         self::assertSame(
             [],
             $missing,
-            'ProviderFactory::availableTypes() offers these types, and docs/PROVIDERS.md does not name them '
-            . '(as `type` in backticks): ' . implode(', ', $missing),
+            'ProviderFactory::availableTypes() offers these types, and docs/PROVIDERS.md has no table row for them '
+            . '(a row whose first cell is `type`): ' . implode(', ', $missing),
         );
+    }
+
+    /**
+     * The first-cell names of a page's table rows, as `| `NAME` |`. Only a
+     * row at the start of a line counts, so a name mentioned inside a sentence
+     * or a later cell does not satisfy the check.
+     *
+     * @return list<string>
+     */
+    private static function tableRowNames(string $page): array
+    {
+        preg_match_all('/^\| `([^`]+)` \|/m', $page, $matches);
+
+        return array_values(array_unique($matches[1]));
     }
 
     public function testTheDocsIndexLinksEveryPageThisTestCovers(): void
