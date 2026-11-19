@@ -21,10 +21,12 @@ declare(strict_types=1);
  * host namespace is allowed by construction. String literals are judged, so a
  * `'SugarCraft\\Code\\Foo'` passed to `class_exists()` cannot hide the reference.
  *
- * THE ROSTER. The bundles (`candy-discord`, `candy-msteams`) still require
- * candy-code today; they join the roster when phase 1c-i switches them to the
- * plugin contract. Until then the guard covering them would be red on master,
- * so they are deliberately absent, and the roster is the one place to add them.
+ * THE BUNDLES. `candy-discord` and `candy-msteams` joined the roster when
+ * phase 1c-i moved them onto the plugin contract (plan 3.3). Until phase 1c-ii
+ * moves their catalogs, each keeps `sugarcraft/candy-code` for `Lang` alone, so
+ * the allowance is exact: a bundle may require candy-code, and its PHP may name
+ * `SugarCraft\Code\Lang` and nothing else of the host. The libraries get no
+ * allowance at all.
  *
  * Usage: php tools/check-plugin-deps.php [--root=<monorepo root>]
  * Exit 0 clean, 1 on any violation, 2 when a roster lib or its manifest is
@@ -33,9 +35,15 @@ declare(strict_types=1);
 final class CheckPluginDeps
 {
     /** Libs that must stay independent of candy-code. */
-    public const ROSTER = ['sugar-plugins', 'sugar-serve-protocol'];
+    public const ROSTER = ['sugar-plugins', 'sugar-serve-protocol', 'candy-discord', 'candy-msteams'];
+
+    /** The bundles, the only roster libs allowed the host's `Lang` (until phase 1c-ii). */
+    public const BUNDLES = ['candy-discord', 'candy-msteams'];
 
     private const HOST_PACKAGE = 'sugarcraft/candy-code';
+
+    /** The one host name a bundle may reference, lowercased and without a leading backslash. */
+    private const LANG_ALLOWANCE = 'sugarcraft\\code\\lang';
 
     /**
      * @param list<string> $roster
@@ -56,9 +64,11 @@ final class CheckPluginDeps
                 exit(2);
             }
 
+            $bundle = in_array($lib, self::BUNDLES, true);
             foreach (['require', 'require-dev'] as $section) {
                 foreach (array_keys(is_array($manifest[$section] ?? null) ? $manifest[$section] : []) as $package) {
-                    if (strtolower((string) $package) === self::HOST_PACKAGE) {
+                    // A bundle keeps candy-code for Lang alone until phase 1c-ii, so its manifest may name it.
+                    if (!$bundle && strtolower((string) $package) === self::HOST_PACKAGE) {
                         $problems[] = "$lib/composer.json lists " . self::HOST_PACKAGE . " in $section — a plugin lib must not depend on the host";
                     }
                 }
@@ -72,6 +82,9 @@ final class CheckPluginDeps
                     exit(2);
                 }
                 foreach (self::hostReferences($raw) as [$line, $name]) {
+                    if ($bundle && self::isLangAllowance($name)) {
+                        continue;
+                    }
                     $problems[] = sprintf(
                         '%s:%d references %s — a plugin lib must not reach into candy-code',
                         substr($file, strlen($root) + 1),
@@ -116,6 +129,18 @@ final class CheckPluginDeps
         }
 
         return $hits;
+    }
+
+    /**
+     * True when a reference the scan found is the bundles' allowed `Lang`, written
+     * as a name (`SugarCraft\Code\Lang`) or as a string literal.
+     */
+    public static function isLangAllowance(string $written): bool
+    {
+        $name = strtolower(ltrim(trim($written, "'\""), '\\'));
+        $name = stripslashes($name);
+
+        return $name === self::LANG_ALLOWANCE;
     }
 
     /**
