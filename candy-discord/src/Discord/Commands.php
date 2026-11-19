@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\Discord\Lang;
 
 /**
  * The command vocabulary (docs/SPEC.md §7.6): NATIVE slash commands deployed with a

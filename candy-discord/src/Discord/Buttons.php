@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\Discord\Lang;
 
 /**
  * Approval UI (docs/SPEC.md §7.5). A `permission.requested` becomes a message whose

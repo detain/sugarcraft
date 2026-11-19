@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\Discord\Lang;
 use SugarCraft\ServeProtocol\Protocol;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;

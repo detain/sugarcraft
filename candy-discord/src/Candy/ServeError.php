@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Candy;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\Discord\Lang;
 
 /**
  * A serve-side failure with its kind in front: the JSON-RPC error `data.kind`

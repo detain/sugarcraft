@@ -17,7 +17,7 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out

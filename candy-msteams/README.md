@@ -328,13 +328,12 @@ address. The webhook limiter is per remote address (see troubleshooting).
 
 ## Language
 
-Delivered chat copy rides the host's catalogs: the bundle has no `lang/`
-directory of its own — it is a trusted bundle living inside the candy-code
-process, so the host's catalogs are its catalogs. Every string a human sees
-in a conversation routes through `Lang::t()` over the `channels.msteams.*`
-key family in `candy-code/lang/`, mirrored across all host locales. Boot and
-log lines are deliberately content-free English: event names and account
-labels, never message bodies or secrets. Unlike `candy-discord`, this bundle
+The bundle owns its catalog. Every string a human sees in a conversation
+routes through `Lang::t()` over the `channels.msteams.*` key family in
+`lang/`, a plugin-owned catalog loaded through `SugarCraft\Plugins\Lang`,
+mirrored across all twelve locales and checked by `tests/I18n/LangParityTest`.
+Boot and log lines are deliberately content-free English: event names and
+account labels, never message bodies or secrets. Unlike `candy-discord`, this bundle
 does not yet ship a `UserFacingLiteralGuardTest` — new delivered strings are
 caught by review, and a guard is open as a fan-out cost arm.
 

@@ -9,6 +9,8 @@ use SugarCraft\Plugins\Lang;
 
 /**
  * Keeps Lang::RESERVED in step with every monorepo library's Lang::NAMESPACE.
+ * Plugin bundles are skipped: they are not libraries, and a reserved namespace
+ * would refuse their own catalog.
  *
  * T is first-registration-wins, so a plugin that claimed a library's namespace
  * before the library registered would silently shadow that catalog. Reading
@@ -25,6 +27,11 @@ final class ReservedNamespaceDriftTest extends TestCase
 
         $namespaces = [];
         foreach (glob($root . '/{sugar,candy}-*/src/Lang.php', GLOB_BRACE) ?: [] as $file) {
+            // A plugin bundle (plugin.json beside its src/) claims its own catalog
+            // through Lang::claim and is not a library, so it is not reserved.
+            if (is_file(dirname($file, 2) . '/plugin.json')) {
+                continue;
+            }
             $source = (string) file_get_contents($file);
             if (preg_match("/const\s+NAMESPACE\s*=\s*'([^']+)'/", $source, $match) === 1) {
                 $namespaces[$match[1]] = basename(dirname($file, 2));

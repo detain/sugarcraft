@@ -329,7 +329,7 @@ final class ApprovalGateTest extends TestCase
     private function assertContainsRefusal(): void
     {
         foreach ($this->face->delivered as $chunk) {
-            if (\str_contains($chunk, \SugarCraft\Code\Lang::t('channels.msteams.approval.refused'))) {
+            if (\str_contains($chunk, \CandyCode\Bundles\MsTeams\Lang::t('channels.msteams.approval.refused'))) {
                 return;
             }
         }
