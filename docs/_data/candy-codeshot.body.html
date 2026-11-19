@@ -9,7 +9,7 @@ curl -LO https://github.com/detain/sugarcraft/releases/download/candy-codeshot/l
 sha256sum -c candy-codeshot.phar.sha256
 grep -m1 . candy-codeshot.phar.commit      # which build you hold
 php candy-codeshot.phar --version</code></pre>
-    <p>The <code>.sig</code> and <code>.minisig</code> sidecars carry a fleet-wide minisign signature over the <code>.sha256</code> body. Until an anchored public key ships for this app, treat the digest and the commit as a statement of what you hold, not a cryptographic attestation of who built it.</p>
+    <p>A signed build also carries two signatures. <code>candy-codeshot.phar.sha256.sig</code> is a base64 libsodium detached signature over the <code>.sha256</code> file's body. <code>candy-codeshot.phar.minisig</code> is the legacy raw-byte signature over the archive itself, with a <code>.minisig.sha256</code> digest beside it. Neither is a minisign signature over the <code>.sha256</code> body, so <code>minisign -V</code> against that file will not verify. An unsigned build has none of these files. The public half of the signing key is pinned in candy-code and candy-top, not in this app. Until an anchored public key ships for this app, treat the digest and the commit as a statement of what you hold, not a cryptographic attestation of who built it.</p>
 
     <h2 style="margin-top: 40px;">Quickstart</h2>
     <p>Pipe any text in, or name a file. The bare form writes SVG to stdout, and <code>-o</code> writes it to a file.</p>
@@ -134,7 +134,7 @@ $svg = $writer->result();</code></pre>
     <table>
     <tr><th>Option</th><th>Default</th><th>Effect</th></tr>
     <tr><td><code>--theme &lt;name|file&gt;</code></td><td><code>dark</code></td><td><code>dark</code>, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code> or <code>nord</code>. Names match case-insensitively, and <code>_</code> reads as <code>-</code>. A path is also accepted.</td></tr>
-    <tr><td><code>--padding &lt;n&gt;</code></td><td>24</td><td>Padding inside the frame, in pixels.</td></tr>
+    <tr><td><code>--padding &lt;n&gt;</code></td><td>24</td><td>Padding inside the frame, in pixels. The CLI refuses values above 512 with exit 2. The 4096 clamp in the API table is the library's own limit, and the CLI does not reach it.</td></tr>
     <tr><td><code>--no-window</code></td><td>off</td><td>Drops the window chrome entirely.</td></tr>
     <tr><td><code>--window-style &lt;style&gt;</code></td><td><code>macos</code></td><td>The chrome style. <code>none</code> removes the title-bar band, so no empty strip is left.</td></tr>
     <tr><td><code>--no-shadow</code>, <code>--no-border</code></td><td>off</td><td>Drop the drop shadow or the frame outline.</td></tr>
