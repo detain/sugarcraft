@@ -142,7 +142,7 @@ echo $shell->renderBreadcrumb();</code></pre>
     <p style="margin-top: 12px;">Filtering and payload walking refuse payloads nested deeper than 64 levels. Guards throw <code>\InvalidArgumentException</code> rather than truncating silently.</p>
 
     <h2 style="margin-top: 40px;">Keys and keybindings</h2>
-    <p>sugar-navstack handles no keys. A host maps its own keys to <code>pop()</code>, <code>popTo()</code> and <code>popToRoot()</code>. A keyboard user reaches the same jumps as a mouse user: select a visible index from <code>visibleIndices()</code> and call <code>popTo()</code> on it. The guard in <code>popTo()</code> makes an out-of-range selection a no-op.</p>
+    <p>sugar-navstack handles no keys. A host maps its own keys to <code>pop()</code>, <code>popTo()</code> and <code>popToRoot()</code>. A keyboard user reaches the same jumps as a mouse user: select a visible index from <code>visibleIndices()</code> and call <code>popTo()</code> on it. An index past the top of the stack is a no-op in <code>popTo()</code>, but a negative index throws <code>\InvalidArgumentException</code>.</p>
 
     <h2 style="margin-top: 40px;">Theme and styling</h2>
     <p>The library emits no ANSI and no motion. The default output is plain text, so styling belongs to the host. Wrap the item renderer's return value with your own <code>Style</code> to color the current crumb, and keep the separator and truncator plain so they stay legible in monochrome terminals.</p>
@@ -209,7 +209,7 @@ vendor/bin/phpunit</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the basic and navigation examples. The mouse example, the click-zone reference, has a tape but no recording yet. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/navigation.gif" alt="Terminal recording: a scripted back-navigation walk — Home, Settings, and Display pushed, then popped one by one while the trail shrinks.">

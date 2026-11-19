@@ -85,8 +85,8 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <table class="api-table">
 <tr><th>Variable</th><th>Type</th><th>Default</th><th>Effect</th></tr>
 <tr><td><code>COLUMNS</code></td><td>int (exported)</td><td>80</td><td>Width used by <code>AutoWidth::Auto</code>. Must be exported to be seen by PHP. Values outside 1 to 10000 are discarded</td></tr>
-<tr><td><code>NO_COLOR</code></td><td>any value</td><td>unset</td><td>Drops color and keeps bold and faint. Resolves to the Ascii profile</td></tr>
-<tr><td><code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code></td><td>any value</td><td>unset</td><td>Forces color on, even through a pipe or with <code>TERM=dumb</code></td></tr>
+<tr><td><code>NO_COLOR</code></td><td>any non-empty value</td><td>unset</td><td>Drops color and keeps bold and faint. Resolves to the Ascii profile. An empty value counts as unset</td></tr>
+<tr><td><code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code></td><td><code>CLICOLOR_FORCE</code>: any non-empty value except <code>0</code>, so <code>false</code> forces. <code>FORCE_COLOR</code>: <code>true</code>, <code>yes</code> or <code>on</code>, or a level of 1 or more. <code>0</code>, an empty value and other words do not force</td><td>unset</td><td>Forces color on, even through a pipe or with <code>TERM=dumb</code></td></tr>
 <tr><td><code>CLICOLOR</code></td><td><code>0</code> or other</td><td>unset</td><td>BSD convention. <code>0</code> drops color unless forced</td></tr>
 <tr><td><code>TERM</code></td><td>string</td><td>unset</td><td><code>dumb</code> emits no escape bytes unless color is forced</td></tr>
 </table>
