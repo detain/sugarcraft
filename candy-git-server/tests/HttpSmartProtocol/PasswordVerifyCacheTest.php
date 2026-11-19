@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\LruMap;
 use SugarCraft\GitServer\HttpSmartProtocol\PasswordVerifyCache;
 
 /**
@@ -89,12 +90,22 @@ final class PasswordVerifyCacheTest extends TestCase
     {
         // Structural: keys are (username, sha256(password)) — read the
         // entry map via reflection and prove no raw secret is recoverable.
+        $password = 'top-secret-pw';
         $cache = $this->cache();
-        $cache->verify('top-secret-pw', \password_hash('x', \PASSWORD_BCRYPT, ['cost' => 4]), 'dave');
+        $cache->verify($password, \password_hash('x', \PASSWORD_BCRYPT, ['cost' => 4]), 'dave');
         $prop = new \ReflectionProperty(PasswordVerifyCache::class, 'entries');
         $prop->setAccessible(true);
-        foreach ((array) $prop->getValue($cache) as $key => $_) {
-            self::assertStringNotContainsString('top-secret-pw', (string) $key);
+        /** @var LruMap<bool> $map */
+        $map = $prop->getValue($cache);
+        $keys = $map->keys();
+
+        // Guard against a vacuous pass: the loop must actually see the one key.
+        self::assertCount(1, $keys);
+        foreach ($keys as $key) {
+            self::assertStringNotContainsString($password, $key);
+            // Pin the exact shape (username + sha256 digest): a key carrying the
+            // password in any other form fails here, not only the literal text.
+            self::assertSame('dave' . "\n" . \hash('sha256', $password), $key);
         }
     }
 }

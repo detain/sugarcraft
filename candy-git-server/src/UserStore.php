@@ -203,7 +203,14 @@ final class UserStore
         $this->publish();
     }
 
-    /** Encode + atomic rename publish of the current snapshot. */
+    /**
+     * Encode + atomic rename publish of the current snapshot.
+     *
+     * Hand-rolled rather than routed through Support\AtomicWriter, on purpose:
+     * the fsync failure here is fatal (AtomicTextFile silences it), and the
+     * pinned control-plane test depends on that. Stay inline if AtomicWriter
+     * is ever retired; this chain does not depend on it.
+     */
     private function publish(): void
     {
         $dir = \dirname($this->filePath);
