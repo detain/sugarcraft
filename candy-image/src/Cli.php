@@ -135,9 +135,9 @@ final class Cli
      *
      * Hand-copied, not derived: fromModeString() is a match with no
      * enumerable vocabulary. Accepted exception: a word added to
-     * fromModeString() is rejected here with 'bad --format' until it is also
-     * added to this list. Its reason: fromModeString() exposes no list of its
-     * words to derive this from.
+     * fromModeString() is rejected here with the cli.bad_format message
+     * ("unknown render format") until it is also added to this list. Its
+     * reason: fromModeString() exposes no list of its words to derive this from.
      */
     private const FORMATS = [
         'auto', 'sixel', 'kitty', 'iterm2',
