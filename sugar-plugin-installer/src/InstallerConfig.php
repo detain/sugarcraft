@@ -60,6 +60,14 @@ final class InstallerConfig
                     'sugar-plugin-installer: extra.sugar-plugin-installer.root must be a non-empty path string.',
                 );
             }
+            // A leading tilde is the shell's home shorthand, which PHP does not expand.
+            // Read as a relative path it would stage under the project at a literal "~" directory.
+            if ($scope === Scope::Project && str_starts_with($value, '~')) {
+                throw new \InvalidArgumentException(
+                    'sugar-plugin-installer: extra.sugar-plugin-installer.root must not start with "~" under scope "project"; '
+                    . 'the home shorthand is not expanded, so use an absolute path (for example "/home/you/work").',
+                );
+            }
             $root = $value;
         }
 

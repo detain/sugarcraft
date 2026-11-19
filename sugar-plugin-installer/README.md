@@ -54,6 +54,10 @@ Refused with an exception, before anything is written:
 - a section that is not an object, or a non-empty list
 - an unknown key in the section (so a typo such as `"scoep"` cannot fall back to user scope)
 - a `root` that is not a non-empty string
+- a `root` that starts with `~` under `project` scope. PHP does not expand the home
+  shorthand, so `~/work` would stage under the project at a literal `~` directory and
+  candy-code would never find it. Write the absolute path (for example `/home/you/work`).
+  Under `user` scope the `root` is unused, so a `~` value there is accepted.
 - a package name that cannot be a directory name
 - a package whose staging directory another installed `sugar-plugin` already uses.
   Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share

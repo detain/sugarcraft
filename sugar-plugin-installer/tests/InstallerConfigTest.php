@@ -101,6 +101,34 @@ final class InstallerConfigTest extends TestCase
         InstallerConfig::fromExtra(['sugar-plugin-installer' => ['scope' => 'project', 'root' => $root]]);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function tildeRoots(): iterable
+    {
+        yield 'home shorthand' => ['~/work'];
+        yield 'bare tilde' => ['~'];
+        yield 'named home' => ['~alice/work'];
+    }
+
+    #[DataProvider('tildeRoots')]
+    public function testTildeRootIsRefusedUnderProjectScope(string $root): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('root must not start with "~" under scope "project"');
+        $this->expectExceptionMessage('use an absolute path');
+
+        InstallerConfig::fromExtra(['sugar-plugin-installer' => ['scope' => 'project', 'root' => $root]]);
+    }
+
+    public function testTildeRootIsNotRefusedUnderUserScopeWhereItIsUnused(): void
+    {
+        $config = InstallerConfig::fromExtra(['sugar-plugin-installer' => ['root' => '~/work']]);
+
+        $this->assertSame(Scope::User, $config->scope);
+        $this->assertSame('~/work', $config->root);
+    }
+
     public function testUnknownKeyIsRefusedSoATypoCannotFallBackToUser(): void
     {
         $this->expectException(\InvalidArgumentException::class);
