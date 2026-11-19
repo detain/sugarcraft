@@ -216,6 +216,69 @@ final class PluginInstallerTest extends TestCase
         $this->assertSame([$own], $downloader->removed);
     }
 
+    public function testRemoveLeavesAnUnnamedTreeAtTheConfiguredPath(): void
+    {
+        // A directory with no composer.json names no package, so it is not this
+        // package's tree. The package has nothing on disk, and remove must not
+        // hand the unnamed directory to the downloader.
+        $unnamed = $this->home . '/.candy-code/bundles/sample-plugin';
+        Scratch::write($unnamed . '/bundle.php', '<?php');
+        $downloader = new RecordingDownloader();
+        $installer = $this->installerFor(null, [], $downloader);
+        $package = self::removablePackage('acme/sample-plugin');
+
+        $installer->uninstall(new InstalledArrayRepository([$package]), $package);
+
+        $this->assertSame([], $downloader->removed);
+        $this->assertFileExists($unnamed . '/bundle.php');
+    }
+
+    public function testUpdateRefusesAnUnnamedDirectoryAtTheConfiguredPath(): void
+    {
+        $unnamed = $this->home . '/.candy-code/bundles/sample-plugin';
+        Scratch::write($unnamed . '/bundle.php', '<?php');
+
+        $this->assertUpdateRefusesOver($unnamed . '/bundle.php');
+    }
+
+    public function testUpdateRefusesAForeignTreeAtTheConfiguredPath(): void
+    {
+        // The directory names sugarcraft/sample-plugin, which is not the package
+        // being updated. The download would write over it, so the update refuses.
+        $foreign = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($foreign, 'sugarcraft/sample-plugin');
+
+        $this->assertUpdateRefusesOver($foreign . '/composer.json');
+    }
+
+    /**
+     * Runs an update of acme/sample-plugin over the directory that holds $survivor,
+     * a file that does not name the package, and asserts the update refuses before
+     * removing anything.
+     */
+    private function assertUpdateRefusesOver(string $survivor): void
+    {
+        $downloader = new RecordingDownloader();
+        $installer = $this->installerFor(null, [], $downloader);
+        $initial = self::removablePackage('acme/sample-plugin');
+        $target = new Package('acme/sample-plugin', '2.0.0.0', '2.0.0');
+        $target->setType('sugar-plugin');
+        $target->setInstallationSource('dist');
+        $target->setDistType('file');
+
+        $refusal = null;
+        try {
+            $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+        } catch (\RuntimeException $caught) {
+            $refusal = $caught;
+        }
+
+        $this->assertNotNull($refusal, 'an update must not overwrite a directory that does not name the package');
+        $this->assertStringContainsString('refuses to overwrite', $refusal->getMessage());
+        $this->assertSame([], $downloader->removed);
+        $this->assertFileExists($survivor);
+    }
+
     public function testComposerFileDecidesTheProjectDirectory(): void
     {
         // Composer reads COMPOSER's file without chdir-ing, so getcwd() is the

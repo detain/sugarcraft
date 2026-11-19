@@ -173,18 +173,6 @@ final class PluginInstaller extends LibraryInstaller
     }
 
     /**
-     * A tree that names some other package is never deleted by this package's
-     * remove, even when this package has no tree of its own. Such a tree sits at
-     * the configured path after another project staged the same directory name.
-     */
-    private function holdsAnotherPackage(string $path, PackageInterface $package): bool
-    {
-        $name = $this->manifestName($path);
-
-        return $name !== null && strtolower($name) !== strtolower($package->getName());
-    }
-
-    /**
      * The `name` in the composer.json at $path, or null when the directory has
      * no readable manifest that names a package.
      */
@@ -294,15 +282,14 @@ final class PluginInstaller extends LibraryInstaller
     }
 
     /**
-     * The downloader deletes whatever sits at the path it is handed. When no tree
-     * names this package, getPackageBasePath falls back to the configured path,
-     * and that path can hold another package's tree after a scope or root change
-     * or a malformed section. Such a tree is left alone: nothing of this package
-     * is on disk, so there is nothing to remove.
+     * The downloader deletes whatever sits at the path it is handed. Remove only
+     * when a tree names this package. With none, getPackageBasePath falls back to
+     * the configured path, which can hold another package's tree, an unnamed one,
+     * or nothing. Whatever sits there is left alone, since none of it is ours.
      */
     protected function removeCode(PackageInterface $package)
     {
-        if ($this->holdsAnotherPackage($this->getPackageBasePath($package), $package)) {
+        if ($this->existingPath($package) === null) {
             return null;
         }
 
@@ -314,11 +301,26 @@ final class PluginInstaller extends LibraryInstaller
      * configured tier. After a scope or root change they match, so the parent
      * would keep the old tree and stage a second copy. Remove the old tree where
      * it is, then stage the new one.
+     *
+     * The target directory is written over by the download, so a directory there
+     * that does not name this package is refused before anything is removed. With
+     * no tree of this package on disk, the update is a plain install.
+     *
+     * @throws \RuntimeException when the target directory holds a tree that does not name this package
      */
     protected function updateCode(PackageInterface $initial, PackageInterface $target)
     {
         $stale = $this->existingPath($initial);
-        if ($stale === null || $stale === $this->getInstallPath($target)) {
+        $targetPath = $this->getInstallPath($target);
+        if ($stale !== $targetPath && is_dir($targetPath)) {
+            throw new \RuntimeException(sprintf(
+                'sugar-plugin-installer: %s is already at %s and does not name this package, so the update refuses to overwrite it.',
+                $target->getPrettyName(),
+                $targetPath,
+            ));
+        }
+
+        if ($stale === null || $stale === $targetPath) {
             return parent::updateCode($initial, $target);
         }
 
