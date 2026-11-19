@@ -415,6 +415,8 @@ trait ServeStartup
                             return null;
                         }
                     })(),
+                    // PL-5d: each channel calls this serve in process, one client per bundle, with no loopback dial.
+                    static fn (string $bundle): \SugarCraft\Plugins\Host\HostServices => \SugarCraft\Code\Host\InProcessHostServices::new($protocol, $loop),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Channels;
 
 use React\EventLoop\LoopInterface;
+use SugarCraft\Plugins\Host\HostServices;
 use SugarCraft\Plugins\PluginContext;
 
 /**
@@ -24,6 +25,7 @@ final class ChannelContext
     /**
      * @param \Closure(string): void|null $log null discards every line
      * @param array<string, mixed>       $config the channel's settings section, frozen at launch
+     * @param HostServices|null          $host the in-process host calls this channel runs against (PL-5d)
      */
     public static function for(
         string $bundle,
@@ -34,7 +36,8 @@ final class ChannelContext
         ?ChannelInboundLog $inbound = null,
         array $config = [],
         ?string $stateDir = null,
+        ?HostServices $host = null,
     ): PluginContext {
-        return PluginContext::for($bundle, $channel, $root, $loop, $log, $config, $stateDir);
+        return PluginContext::for($bundle, $channel, $root, $loop, $log, $config, $stateDir, $host);
     }
 }

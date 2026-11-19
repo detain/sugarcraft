@@ -26,7 +26,7 @@ use function React\Promise\resolve;
  *
  * One instance is one in-process client of its host. {@see connect()} opens it
  * (the hello the wire makes first), {@see disconnect()} closes it, and events the
- * client follows reach {@see subscribeEvents()} listeners as {@see EventEnvelope}s,
+ * client follows reach {@see subscribeEvents()} listeners as their envelope arrays,
  * in the order the host emitted them. The feed bounds a catch-up buffer the same way
  * it does for a wire client: past the feed's catch-up cap (`SessionFeed::MAX_PRELIVE_BUFFER`
  * envelopes, or its byte cap) the events still buffered are dropped, and the listener
@@ -97,7 +97,7 @@ final class InProcessHostServices implements HostServices
 
     private ?Client $client = null;
 
-    /** @var list<\Closure(EventEnvelope): void> */
+    /** @var list<\Closure(array<string, mixed>): void> */
     private array $listeners = [];
 
     /** @var \SplQueue<EventEnvelope> */
@@ -333,9 +333,9 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Row 11: each event the followed sessions emit reaches the listener as its
-     * {@see EventEnvelope}; {@see EventEnvelope::notification()} is the wire shape
-     * for a listener that wants it.
+     * Row 11: each event the followed sessions emit reaches the listener as its envelope
+     * array, {@see EventEnvelope::toArray()}: the params of the wire's `event` notification
+     * (PL-5d, decision c).
      */
     public function subscribeEvents(\Closure $listener): PromiseInterface
     {
@@ -444,9 +444,15 @@ final class InProcessHostServices implements HostServices
         try {
             while (!$this->pending->isEmpty()) {
                 $envelope = $this->pending->dequeue();
+                // The wire encodes empty data as an object; in process it is an empty array, which the
+                // router reads the same way (PL-5d, decision c).
+                $wire = $envelope->toArray();
+                if ($wire['data'] instanceof \stdClass) {
+                    $wire['data'] = [];
+                }
                 foreach ($this->listeners as $listener) {
                     try {
-                        $listener($envelope);
+                        $listener($wire);
                     } catch (\Throwable $e) {
                         $this->dispatcher->context()->logError($e, 'in-process event listener failed');
                     }
