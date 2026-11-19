@@ -135,10 +135,26 @@ final class PasswordVerifyCacheTest extends TestCase
 
         $ttl = new \ReflectionProperty(LruMap::class, 'ttl');
         $ttl->setAccessible(true);
-        $clock = new \ReflectionProperty(LruMap::class, 'clock');
-        $clock->setAccessible(true);
 
         self::assertSame(PasswordVerifyCache::TTL_SECONDS, $ttl->getValue($map));
-        self::assertNull($clock->getValue($map));
+    }
+
+    public function testExpiredEntriesAreReapedBeforeLiveOnesAreEvicted(): void
+    {
+        $cache = $this->cache();
+        $hash = \password_hash('f', \PASSWORD_BCRYPT, ['cost' => 4]);
+
+        // One entry goes stale while the rest of the cache fills with live entries.
+        self::assertTrue($cache->verify('f', $hash, 'stale'));
+        $this->now += PasswordVerifyCache::TTL_SECONDS + 1;
+        for ($i = 1; $i < PasswordVerifyCache::MAX_ENTRIES; $i++) {
+            self::assertTrue($cache->verify('f', $hash, 'u' . $i));
+        }
+
+        // Inserting past capacity must drop the expired entry, not a live one.
+        self::assertFalse($cache->verify('pw-new', $hash, 'overflow'));
+        self::assertTrue($cache->verify('f', 'not-a-digest', 'u1'));
+        // The expired entry was dropped, so the poisoned digest decides again.
+        self::assertFalse($cache->verify('f', 'not-a-digest', 'stale'));
     }
 }
