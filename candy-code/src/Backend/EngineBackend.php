@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\RateGate;
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Agents\PathJailConfig;
 use SugarCraft\Code\App\App;
@@ -3470,17 +3471,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             return null;
         }
         $pid = getmypid();
-        $lastBeat = 0.0;
+        $gate = RateGate::new(1.0, static fn (): float => microtime(true));
 
-        return static function () use ($pid, $onHeartbeat, $onReasoning, &$lastBeat): void {
+        return static function () use ($pid, $onHeartbeat, $onReasoning, $gate): void {
             if (getmypid() !== $pid) {
                 return;
             }
-            $now = microtime(true);
-            if ($now - $lastBeat < 1.0) {
+            if (!$gate->allow()) {
                 return;
             }
-            $lastBeat = $now;
             $onHeartbeat !== null ? $onHeartbeat() : $onReasoning('');
         };
     }
