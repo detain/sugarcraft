@@ -48,7 +48,7 @@ echo $stack->viewHtml(
     label: 'Breadcrumb',
     allowSchemes: ['/', 'https'],
 );</code></pre>
-    <p><code>viewHtml()</code> emits <code>nav[aria-label]</code> around an <code>ol</code>, with <code>aria-current="page"</code> on the last crumb. Each ancestor becomes an anchor when the callback returns a string, and stays plain text when it returns <code>null</code>. <code>$allowSchemes</code> gates the URLs the callback returns, and rejected ones render as plain text. The <code>'/'</code> entry admits scheme-less paths such as <code>Url::deriveTo()</code> output, so leave it out and every relative link renders as plain text. The output for the example is <code>&lt;li&gt;&lt;a href="/Home"&gt;Home&lt;/a&gt;&lt;/li&gt;</code> for the first crumb.</p>
+    <p><code>viewHtml()</code> emits <code>nav[aria-label]</code> around an <code>ol</code>, with <code>aria-current="page"</code> on the last crumb. Each ancestor becomes an anchor when the callback returns a string, and stays plain text when it returns <code>null</code>. <code>$allowSchemes</code> gates the URLs the callback returns, and rejected ones render as plain text. The <code>'/'</code> entry admits scheme-less paths such as <code>Url::deriveTo()</code> output, so leave it out and every relative link renders as plain text. The first crumb of the example therefore becomes an anchor to <code>/Home</code>.</p>
 
     <h3 style="margin-top: 24px;">Make crumbs clickable with mouse zones</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Mouse\{Scan, Scanner};
