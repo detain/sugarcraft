@@ -1269,8 +1269,9 @@ final class RenderCommandTest extends TestCase
     public function testProbeIsConsultedAfterEnvVerdictOrder(): void
     {
         // Structural anti-regression: the environment verdict must be read
-        // BEFORE TerminalProbe::run() inside terminalSupportsColor(), and the
-        // probe must remain reachable (a verdict of null falls through).
+        // BEFORE the awaited color report (awaitTerminalReport(), which wraps
+        // AsyncProbe::report()) inside terminalSupportsColor(), and the probe
+        // must remain reachable (a verdict of null falls through).
         // 092 adds a middle leg: the cheap color-capability env facts answer
         // between the verdict and the fork (CALIBER rule-10 order).
         $src = implode('', array_slice(
@@ -1281,7 +1282,7 @@ final class RenderCommandTest extends TestCase
         ));
         $verdict    = strpos($src, 'colorDecisionFromEnvironment()');
         $capability = strpos($src, 'colorCapableFromEnvironment()');
-        $probe      = strpos($src, 'TerminalProbe::run()');
+        $probe      = strpos($src, 'awaitTerminalReport()');
         $this->assertNotFalse($verdict);
         $this->assertNotFalse($capability);
         $this->assertNotFalse($probe);
