@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ « always » nécessite un approbateur configuré (channels.msteams approvals.approvers). Répondez une fois ou refusez, ou demandez à un approbateur.',
+    'channels.msteams.approval.not_yours' => '⛔ Cette approbation ne vous appartient pas.',
     'channels.msteams.approval.refused' => '⛔ Réponse d\'approbation refusée : elle ne correspond pas à la carte affichée ici (envoi falsifié ou périmé). La question reste ouverte — répondez avec les boutons de la carte ou avec `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Toujours autorisé{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'Aucune réponse n\'a été produite.',
     'channels.msteams.progress.working' => 'en cours…',
     'channels.msteams.progress.working_elapsed' => 'en cours… {seconds}s',
+    'channels.msteams.prompt.failed' => '⚠ Votre message n\'a pas pu être transmis : {error}',
     'channels.msteams.queue.usage' => 'Utilisation : `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ Le journal du serveur n\'a pas pu rejouer les séquences {from}–{to} pendant l\'absence de ce pont ; {count} ligne(s) d\'instantané ont été écartées, certaines réponses peuvent manquer ici.',
     'channels.msteams.router.dropped_queued' => '{count} invite(s) en file d\'attente ont été écartées au-delà de la limite.',

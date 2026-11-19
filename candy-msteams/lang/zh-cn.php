@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" 需要已配置的审批人（channels.msteams approvals.approvers）。请单次允许或拒绝，或请审批人处理。',
+    'channels.msteams.approval.not_yours' => '⛔ 此审批轮不到您答复。',
     'channels.msteams.approval.refused' => '⛔ 审批回答已拒绝：与此处显示的卡片不匹配（伪造或过期的提交）。问题仍未解决——请使用卡片按钮或 `/approve <askId> once|always|deny` 回答。',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ 已始终允许{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => '未生成回复。',
     'channels.msteams.progress.working' => '处理中…',
     'channels.msteams.progress.working_elapsed' => '处理中… {seconds}秒',
+    'channels.msteams.prompt.failed' => '⚠ 您的提示无法送达：{error}',
     'channels.msteams.queue.usage' => '用法：`/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ 桥接离线期间，serve 日志无法回放序号 {from}–{to}；已丢弃 {count} 条快照记录，此处可能缺少部分回复。',
     'channels.msteams.router.dropped_queued' => '已丢弃超出上限的 {count} 条排队提示。',

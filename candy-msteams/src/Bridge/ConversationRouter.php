@@ -473,8 +473,10 @@ final class ConversationRouter extends ConversationRouterCore
             'approve.hint' => 'channels.msteams.approve.hint',
             'approval.always_needs_approver' => 'channels.msteams.approval.always_needs_approver',
             'approval.refused' => 'channels.msteams.approval.refused',
+            'approval.not_yours' => 'channels.msteams.approval.not_yours',
             'replay.gap' => 'channels.msteams.replay.gap',
             'media.refused' => 'channels.msteams.media.refused',
+            'prompt.failed' => 'channels.msteams.prompt.failed',
             default => 'channels.msteams.' . $key,
         };
     }

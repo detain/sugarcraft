@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" には承認者の設定が必要です（channels.msteams approvals.approvers）。一度だけ許可するか拒否するか、承認者に確認してください。',
+    'channels.msteams.approval.not_yours' => '⛔ この承認に回答する権限がありません。',
     'channels.msteams.approval.refused' => '⛔ 承認の回答を拒否しました。ここに表示されたカードと一致しません（偽造または古い送信）。質問はまだ未回答です。カードのボタン、または `/approve <askId> once|always|deny` で回答してください。',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ 常に許可{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => '返信は生成されませんでした。',
     'channels.msteams.progress.working' => '処理中…',
     'channels.msteams.progress.working_elapsed' => '処理中… {seconds}秒',
+    'channels.msteams.prompt.failed' => '⚠ プロンプトを配信できませんでした: {error}',
     'channels.msteams.queue.usage' => '使い方: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ このブリッジの不在中に serve ログ seq {from}–{to} を再生できませんでした。スナップショット行 {count} 件を破棄したため、一部の返信がここに無い可能性があります。',
     'channels.msteams.router.dropped_queued' => '上限を超えた待機中のプロンプト {count} 件を破棄しました。',

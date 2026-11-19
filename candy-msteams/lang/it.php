@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" richiede un approvatore configurato (channels.msteams approvals.approvers). Rispondi una volta o nega, oppure chiedi a un approvatore.',
+    'channels.msteams.approval.not_yours' => '⛔ Non sei tu a dover rispondere a questa approvazione.',
     'channels.msteams.approval.refused' => '⛔ Risposta di approvazione rifiutata: non corrisponde alla scheda mostrata qui (un invio falsificato o obsoleto). La domanda è ancora aperta — rispondi con i pulsanti della scheda o con `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Sempre consentito{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'Nessuna risposta è stata prodotta.',
     'channels.msteams.progress.working' => 'al lavoro…',
     'channels.msteams.progress.working_elapsed' => 'al lavoro… {seconds}s',
+    'channels.msteams.prompt.failed' => '⚠ Il tuo messaggio non è stato recapitato: {error}',
     'channels.msteams.queue.usage' => 'Uso: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ Il log del server non ha potuto riprodurre le sequenze {from}–{to} mentre questo bridge era assente; {count} righe di snapshot sono state scartate, alcune risposte potrebbero mancare qui.',
     'channels.msteams.router.dropped_queued' => 'Scartati {count} prompt in coda oltre il limite.',
