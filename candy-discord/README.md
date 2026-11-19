@@ -8,6 +8,10 @@ are all handled inside the bundle.
 
 Package: `sugarcraft/candy-discord` (bundle namespace `CandyCode\Bundles\Discord\`).
 
+Original work: this bundle has no upstream port, so it carries no `Mirrors charmbracelet/...`
+citation. It is a channel plugin for `candy-code serve` and sits outside the 42 + 22 package matrix
+in `docs/MATCHUPS.md`.
+
 ## Contents
 
 1. [Requirements](#requirements)

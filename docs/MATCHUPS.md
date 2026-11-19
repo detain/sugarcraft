@@ -120,9 +120,9 @@ Two further directories ship channel plugins for `candy-code serve` rather
 than packages in the 42 + 22 matrix above: [`candy-discord/`](../candy-discord/)
 (Discord bot conversations become served sessions) and
 [`candy-msteams/`](../candy-msteams/) (Teams chats and channels do the same).
-Each publishes as its own `sugarcraft/*` composer library; neither is a
-require of the root aggregate, a row in the status tables above, or a tile
-in the site catalog — their READMEs are the authority for how they work.
+Each publishes as its own `sugarcraft/*` composer library, and the root
+`composer.json` requires both. Neither is a row in the status tables above
+or a tile in the site catalog — their READMEs are the authority for how they work.
 ---
 
 ## Naming conventions (cheat sheet)

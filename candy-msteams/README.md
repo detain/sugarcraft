@@ -11,6 +11,10 @@ This guide is written from the code. Anything the code cannot confirm (Azure
 portal labels, tenant policy, Teams client behaviour) is marked
 **verify in your tenant**.
 
+Original work: this bundle has no upstream port, so it carries no `Mirrors charmbracelet/...`
+citation. It is a channel plugin for `candy-code serve` and sits outside the 42 + 22 package matrix
+in `docs/MATCHUPS.md`.
+
 ## Contents
 
 1. [Requirements](#requirements)
