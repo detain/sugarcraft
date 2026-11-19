@@ -1,18 +1,24 @@
-<p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the "cursed" cell-diff renderer (the Bubble Tea v2 name for it) — meaningful SSH bandwidth savings for slow-changing UIs.</p>
+<p class="lede" style="margin-top: 28px;">sugar-core is the Model–Update–View runtime that every SugarCraft TUI is built on. An app is a <code>Model</code> with four methods: <code>init()</code> starts it, <code>update(Msg)</code> folds an event into a new Model and an optional <code>Cmd</code>, <code>view()</code> renders the frame, and <code>subscriptions()</code> declares the timers it needs. <code>Program</code> owns the terminal, the ReactPHP event loop, input parsing and the renderer. The design mirrors <a href="https://github.com/charmbracelet/bubbletea">charmbracelet/bubbletea</a>; the <code>Mirrors charmbracelet/bubbletea</code> docblocks in <code>src/</code> state where the PHP port diverges.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-core</code></pre>
+    <p>Requires PHP 8.3 or newer, with <code>ext-intl</code> and <code>ext-mbstring</code>, both declared in <code>composer.json</code>. <code>ext-intl</code> is not optional in practice: <code>Util\Width</code> measures grapheme clusters through ICU, and without it an emoji or combining sequence is counted per code point, so the cell-budget checks in the renderers stop holding.</p>
+    <p><code>ext-pcntl</code> is suggested. Without it, SIGWINCH resize, Ctrl-Z suspend and resume, and the SIGINT, SIGTERM and SIGHUP stop path degrade silently. On Windows, <code>ext-ffi</code> is required for raw console input.</p>
+    <p>Sibling SugarCraft packages track <code>dev-master</code>. A root manifest that accepts only stable releases must also set <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code>, or Composer cannot resolve the dependencies.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <p>A complete program. The counter moves on <kbd>↑</kbd> and <kbd>↓</kbd> and quits on <kbd>q</kbd>. Run it in a terminal, or see <code>examples/counter.php</code> in the source tree.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 
-final class Counter implements Model {
+final class Counter implements Model
+{
     public function __construct(public readonly int $count = 0) {}
     public function init(): ?\Closure { return null; }
     public function subscriptions(): ?Subscriptions { return null; }
 
-    public function update(Msg $msg): array {
+    public function update(Msg $msg): array
+    {
         if ($msg instanceof KeyMsg) {
             return match (true) {
                 $msg-&gt;type === KeyType::Char &amp;&amp; $msg-&gt;rune === 'q' =&gt; [$this, Cmd::quit()],
@@ -24,36 +30,477 @@ final class Counter implements Model {
         return [$this, null];
     }
 
-    public function view(): string {
+    public function view(): string
+    {
         return "count: $this-&gt;count\n(↑/↓ to change, q to quit)";
     }
 }
 
 (new Program(new Counter()))-&gt;run();</code></pre>
+    <p>The first frame, before any key is pressed:</p>
+    <pre class="code"><code class="language-text">count: 0
+(↑/↓ to change, q to quit)</code></pre>
+    <p>Press <kbd>↑</kbd> once and the first line reads <code>count: 1</code>. A recording of this counter is in the <a href="#demos">Demos</a> section at the end of this page.</p>
+    <p><code>view()</code> is called again after every change, and the renderer repaints only what changed. <code>run()</code> blocks until a <code>Cmd::quit()</code> ends the loop, then returns the final Model. When stdin reaches end-of-file, the program also quits cleanly with exit code 0, so <code>echo | php counter.php</code> runs to completion instead of idling.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Model interface</strong><span>Four methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>, <code>subscriptions()</code> — the <code>SubscriptionCapable</code> trait supplies a default for the last one.</span></div>
-      <div class="feature"><strong>Cmd helpers</strong><span><code>Cmd::quit()</code>, <code>Cmd::batch()</code>, <code>Cmd::send()</code> — async work scheduled, never inlined.</span></div>
-      <div class="feature"><strong>InputReader</strong><span>Stateful escape-sequence parser. Bracketed paste, mouse, function keys, OSC, DEC private modes. Paste is bounded: an end marker split across reads still closes the envelope, a paste larger than <code>MAX_PASTE_BYTES</code> (1 MiB) surfaces in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1 s) of silence so the keyboard comes back. Pasted content is sanitized by default: escapes are stripped and the <code>U+E000</code>–<code>U+F8FF</code> marker arena is swept before the payload reaches <code>update()</code>; opt out with <code>ProgramOptions::$sanitizePaste</code> only when you supply your own containment. Process launches from user data use <code>proc_open()</code>'s argv form — never shell interpolation.</span></div>
-      <div class="feature"><strong>"Cursed" renderer</strong><span>Bubble Tea v2's term for the cell-diff default — here, cell-diff rendering with ≥15% bandwidth savings on a 50-tick test.</span></div>
-      <div class="feature"><strong>ReactPHP loop</strong><span>Event-loop concurrency for input, signals, render tick, command execution.</span></div>
-      <div class="feature"><strong>Signal handling</strong><span>SIGWINCH (resize), SIGTSTP and SIGCONT surface as Msgs in your <code>update()</code>; SIGINT, SIGTERM and SIGHUP instead unwind the loop cleanly and record the 128+N exit convention for the entry point to propagate. While raw mode is active Ctrl+C is an ordinary keystroke, not a signal. On exit the runtime cancels its pending one-shot timers and restores the previous signal handlers and async-signal mode.</span></div>
-      <div class="feature"><strong>ColorProfile::detect()</strong><span>Detection order: unless <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code> is set, a non-tty output is <code>NoTty</code> first (so <code>NO_COLOR</code> on a pipe emits no escapes at all), then <code>TERM=dumb</code> → <code>NoTty</code>; next <code>NO_COLOR</code> → <code>Ascii</code> (color off, bold/faint kept — it outranks the force variables), then <code>CLICOLOR=0</code> → <code>Ascii</code> (the BSD opt-out, unless a force variable already won), then force → <code>TrueColor</code> (so a forced pipe still gets color), then <code>COLORTERM</code>, <code>TERM_PROGRAM</code>, <code>WT_SESSION</code> and <code>TERM</code> patterns; a truthy <code>CI</code> variable → <code>Ansi</code>, and the fallback → <code>Ascii</code>.</span></div>
-      <div class="feature"><strong>Screen / ScreenStack</strong><span>Immutable stack for modal / drill-down flows. <code>RootModelWithScreenStack</code> + <code>ScreenStackCapable</code> delegate <code>init/update/view</code> to the active screen automatically.</span></div>
-      <div class="feature"><strong>Component / Composite</strong><span>Parent-child lifecycle model. <code>Component</code> interface adds <code>onMount()</code>/<code>onUnmount()</code>; <code>Composite</code> owns children and drains lifecycle Cmds during reconcile.</span></div>
-      <div class="feature"><strong>WorkerPool</strong><span>Bounded-concurrency pool (default 4 workers) for CPU-bound tasks. <code>WorkerCmd::run($pool, $task)</code> dispatches a global function name or serializable callable and yields a <code>WorkerResultMsg</code> on completion. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <h3 style="margin-top: 24px;">The loop</h3>
+    <p><code>Model</code> is immutable. <code>update()</code> never mutates the receiver; it returns a new Model, so old values stay valid for snapshots, undo and replay. A <code>Cmd</code> is a closure that returns a <code>Msg</code> or <code>null</code>. The runtime runs it asynchronously, and its result re-enters <code>update()</code> as an ordinary message. <code>view()</code> is pure: the same Model must produce the same frame. Side effects belong in a Cmd.</p>
+    <p>Keystrokes, timers, signals and Cmd results all reach the model as Msgs. The runtime decides when to render: a frame is armed when the view becomes dirty and is capped by <code>ProgramOptions::$framerate</code> (60 frames per second by default), so an idle program does no render work.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 24px;">The renderer owns stdout</h3>
+    <p>Anything printed directly from <code>update()</code> or <code>view()</code> is overwritten by the next frame. To write above the program region, return <code>Cmd::println()</code>, or <code>Cmd::raw()</code> for bytes written verbatim. The default renderer is line-diff: it repaints only the rows that changed, inside a DEC 2026 synchronized-output update (<code>ProgramOptions::$synchronizedOutput</code>, on by default). Pass <code>cellDiffRenderer: true</code> to opt into the per-cell diff, the "cursed" renderer, which also skips unchanged cells inside a changed row and so saves bandwidth on slow links.</p>
+
+    <h3 style="margin-top: 24px;">Alt-screen and inline mode</h3>
+    <p>The default paints over the current screen. <code>useAltScreen: true</code> takes over the alternate screen, and the previous content returns when the program exits. <code>inlineMode: true</code> keeps output in the shell's scrollback: the first frame saves the cursor, and each later frame restores it and clears to the end of the screen before drawing.</p>
+
+    <h3 style="margin-top: 24px;">Terminal ownership and signals</h3>
+    <p><code>Program::run()</code> switches the terminal to raw mode and restores it in a <code>finally</code> block. A <code>die()</code> or <code>exit()</code> that skips those blocks is caught by a shutdown backstop armed in <code>setupTerminal()</code>. Pass <code>catchPanics: false</code> only when your own code restores the terminal on bailout paths. While raw mode is active, Ctrl+C is an ordinary key, so <code>update()</code> decides what it means.</p>
+    <p>SIGWINCH, SIGTSTP and SIGCONT arrive as <code>Msg\WindowSizeMsg</code>, <code>Msg\SuspendMsg</code> and <code>Msg\ResumeMsg</code>. SIGINT, SIGTERM and SIGHUP unwind the loop cleanly and record the signal number N, which <code>Program::stopSignal()</code> returns. <code>run()</code> then returns normally, and the script sets the shell's 128+N exit code itself: <code>exit($program-&gt;stopSignal() === null ? 0 : 128 + $program-&gt;stopSignal())</code>. After SIGINT that is 130. A script that returns from <code>run()</code> without that line exits 0.</p>
+
+    <h3 style="margin-top: 24px;">Untrusted input</h3>
+    <p>Bracketed paste is sanitized by default. Escape sequences, C1 controls and the two zone sentinels (U+E000 and U+E001) are stripped before the payload reaches <code>update()</code> as a <code>Msg\PasteMsg</code>, so paste is not guaranteed to be byte-identical to what was copied. Set <code>sanitizePaste: false</code> only when your app contains the payload itself. Processes launched from user data use the argv form of <code>proc_open()</code>, never a shell string.</p>
+
+    <h3 style="margin-top: 24px;">Clean untrusted text and fit it to a column</h3>
+    <p><code>Util\Sanitize::untrustedForDisplay()</code> removes escape sequences, renders bidi and zero-width characters as visible <code>&lt;U+XXXX&gt;</code> markers, and normalizes carriage-return line ends. <code>Util\Width</code> measures and fits text in terminal cells, never bytes. <code>Width::string()</code> counts cells, <code>truncateEllipsis()</code> cuts to a cell budget, and <code>padRight()</code>, <code>wrap()</code> and <code>wrapAnsi()</code> keep text aligned.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\{Color, ColorProfile, Sanitize, Width};
+
+// Strip escapes and control characters from text that came from outside the app.
+$safe = Sanitize::untrustedForDisplay("hi\x1b[31m there\x07 \u{1F600}");
+
+// Measure and fit by terminal cells, not bytes.
+$row = Width::padRight(Width::truncateEllipsis($safe, 12), 12);
+echo '[' . $row . "] cells=", Width::string($row), "\n";
+
+$accent = Color::hex('#ff6b6b');
+echo $accent-&gt;toHex(), ' ', var_export($accent-&gt;isDark(), true), "\n";
+echo ColorProfile::detect(null, STDOUT)-&gt;name, "\n";</code></pre>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Run a full-screen program</h3>
+    <p>Pass options to the constructor. Named arguments are the shortest form:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, Model, Msg, MouseMode, Program, ProgramOptions, Subscriptions};
+use SugarCraft\Core\Msg\KeyMsg;
+
+final class Counter implements Model
+{
+    public function __construct(public readonly int $count = 0) {}
+    public function init(): ?\Closure { return null; }
+    public function subscriptions(): ?Subscriptions { return null; }
+
+    public function update(Msg $msg): array
+    {
+        return $msg instanceof KeyMsg &amp;&amp; $msg-&gt;rune === 'q' ? [$this, Cmd::quit()] : [$this, null];
+    }
+
+    public function view(): string
+    {
+        return "count: {$this-&gt;count} (q to quit)";
+    }
+}
+
+$program = new Program(
+    new Counter(),
+    new ProgramOptions(useAltScreen: true, framerate: 30.0, mouseMode: MouseMode::CellMotion),
+);
+$final = $program-&gt;run(); // blocks until the loop stops, then returns the last Model</code></pre>
+    <p>The fluent builder carries the same options and checks their types, and it rejects a <code>framerate</code> of zero or less and an <code>escapeDelay</code> that is negative or not finite: <code>ProgramOptions::builder()-&gt;withUseAltScreen(true)-&gt;build()</code>.</p>
+
+    <h3 style="margin-top: 24px;">Schedule recurring work with subscriptions</h3>
+    <p>Return a <code>Subscriptions</code> set from <code>subscriptions()</code>. After each <code>update()</code> the runtime compares it with the live set: new ids start, dropped ids are canceled, and an id whose params or producer change is re-armed. <code>withTick()</code> fires every N seconds, <code>withKey()</code> polls at an interval (0.1 seconds by default), <code>withSignal()</code> handles a POSIX signal, and <code>withCustom(string $id, array $params, Closure $produce)</code> registers a <code>Kind::Custom</code> subscription keyed by its id. The clock below keeps a one-second timer running while the model is alive:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
+use SugarCraft\Core\Msg\KeyMsg;
+
+final class Second implements Msg {}
+
+final class Clock implements Model
+{
+    // One stable producer: a new closure on every subscriptions() call would
+    // look like a new subscription and restart the timer on every update.
+    private static ?\Closure $second = null;
+
+    public function __construct(public readonly int $seconds = 0) {}
+
+    public function init(): ?\Closure { return null; }
+
+    // Reconciled after every update(): the 'clock' timer runs while this
+    // returns it and is canceled when a later call omits it.
+    public function subscriptions(): ?Subscriptions
+    {
+        self::$second ??= static fn (): Msg =&gt; new Second();
+        return (new Subscriptions())-&gt;withTick('clock', 1.0, self::$second);
+    }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof Second) {
+            return [new self($this-&gt;seconds + 1), null];
+        }
+        if ($msg instanceof KeyMsg &amp;&amp; $msg-&gt;type === KeyType::Char &amp;&amp; $msg-&gt;rune === 'q') {
+            return [$this, Cmd::quit()];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return "elapsed: {$this-&gt;seconds}s (q to quit)";
+    }
+}
+
+(new Program(new Clock()))-&gt;run();</code></pre>
+    <p>For a single delayed Msg, return <code>Cmd::tick(float $seconds, \Closure $produce)</code>. <code>Cmd::cancellableTick()</code> returns a <code>TickHandle</code> whose <code>cancel()</code> stops the timer before it fires.</p>
+
+    <h3 style="margin-top: 24px;">Run CPU-bound work off the loop</h3>
+    <p><code>WorkerPool</code> runs tasks in child processes, four at a time by default. A task must be a serializable callable, such as the static method array <code>[Thumbnailer::class, 'render']</code> or an invokable object. A string, which names a global function, is refused with an <code>InvalidArgumentException</code> when dispatched. A <code>Closure</code> cannot cross the process boundary, so dispatching one rejects its promise with a serialization error: at once when a worker is free, or later, when the queued job leaves the queue because every worker is busy. <code>Cmd\WorkerCmd::run()</code> turns each outcome into exactly one message: a <code>SugarCraft\Core\Msg\WorkerResultMsg</code> on success or a <code>SugarCraft\Core\Msg\ExceptionMsg</code> on failure.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Cmd\WorkerCmd;
+use SugarCraft\Core\WorkerPool;
+
+// $pool is a WorkerPool built on the loop the Program runs on: new WorkerPool($loop).
+return [$this, WorkerCmd::run($pool, [Thumbnailer::class, 'render'])];</code></pre>
+
+    <h3 style="margin-top: 24px;">Navigate with a screen stack</h3>
+    <p>Implement <code>ScreenStackCapable</code> on your root model, or use <code>RootModelWithScreenStack</code>, a final class that routes the screen messages and delegates <code>init()</code>, <code>update()</code> and <code>view()</code> to the active screen. A screen is a <code>Screen</code> value holding a Model, an optional title and optional enter and exit hooks. Navigate with the invokable Cmds <code>PushScreenCmd</code> and <code>PopScreenCmd</code>, both in <code>SugarCraft\Core\Cmd</code>. <code>Program</code> runs only <code>Closure</code> commands, so wrap each object with <code>\Closure::fromCallable()</code> before returning it from <code>update()</code>; returning the bare object throws a <code>TypeError</code>:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Screen;
+use SugarCraft\Core\Cmd\{PopScreenCmd, PushScreenCmd};
+
+// Inside a root model that implements ScreenStackCapable or uses RootModelWithScreenStack:
+return [$this, \Closure::fromCallable(new PushScreenCmd(new Screen($detail, title: 'Item 1')))];
+
+// From the detail screen, to go back one level:
+return [$this, \Closure::fromCallable(new PopScreenCmd())];</code></pre>
+
+    <h3 style="margin-top: 24px;">Map keys to actions</h3>
+    <p><code>Keys\KeyBindings</code> maps action names to key tokens, so one registry answers "did this press trigger this action", and user overrides hang off the registry rather than off each call site. Tokens are lowercase: a letter is its rune, a space is <code>space</code>, and other keys use their <code>KeyType</code> value, such as <code>up</code>. Matching looks at press events only and ignores case. Modifier chords are not part of the vocabulary, so a bare <code>q</code> binding also matches Ctrl+Q.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Subscriptions};
+use SugarCraft\Core\Keys\KeyBindings;
+use SugarCraft\Core\Msg\KeyMsg;
+
+final class Counter implements Model
+{
+    private static ?KeyBindings $keys = null;
+
+    public function __construct(public readonly int $count = 0) {}
+
+    public function init(): ?\Closure { return null; }
+
+    public function subscriptions(): ?Subscriptions { return null; }
+
+    private static function keys(): KeyBindings
+    {
+        return self::$keys ??= KeyBindings::fromMap([
+            'quit' =&gt; ['q'],
+            'up'   =&gt; ['up', 'k'],
+            'down' =&gt; ['down', 'j'],
+        ]);
+    }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg) {
+            $keys = self::keys();
+            if ($keys-&gt;matches($msg, 'quit')) {
+                return [$this, Cmd::quit()];
+            }
+            if ($keys-&gt;matches($msg, 'up')) {
+                return [new self($this-&gt;count + 1), null];
+            }
+            if ($keys-&gt;matches($msg, 'down')) {
+                return [new self($this-&gt;count - 1), null];
+            }
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return "count: {$this-&gt;count}";
+    }
+}
+
+// Tests drive update() directly, with no terminal and no event loop.
+$model = new Counter();
+[$model, $cmd] = $model-&gt;update(new KeyMsg(KeyType::Up));
+echo $model-&gt;count, ' ', var_export($cmd === null, true), "\n";
+[$model, $cmd] = $model-&gt;update(new KeyMsg(KeyType::Char, 'k'));
+echo $model-&gt;count, "\n";
+[$model, $cmd] = $model-&gt;update(new KeyMsg(KeyType::Char, 'Q'));
+echo var_export($cmd !== null, true), "\n";</code></pre>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The source tree holds 162 PHP files under <code>src/</code>. The runtime types live in the root namespace <code>SugarCraft\Core\</code>, terminal and event messages in <code>SugarCraft\Core\Msg\</code>, and helpers in <code>SugarCraft\Core\Util\</code>. The tables below group the public surface by area. Each row names the class and its role, followed by its key members; signatures are abbreviated. The class docblocks hold the full contracts.</p>
+
+    <h3 style="margin-top: 24px;">Model, Msg and Cmd</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>Model</code></td><td>Application contract (interface)</td><td><code>init(): ?\Closure</code> · <code>update(Msg): array</code> · <code>view(): string|View</code> · <code>subscriptions(): ?Subscriptions</code></td></tr>
+        <tr><td><code>SubscriptionCapable</code></td><td>Trait supplying <code>subscriptions(): null</code></td><td>Use it when the model needs no timers</td></tr>
+        <tr><td><code>Msg</code></td><td>Marker interface for every message</td><td>Concrete classes sit in <code>Msg\</code>, or in the root namespace for orchestration messages such as <code>BatchMsg</code> and <code>SequenceMsg</code></td></tr>
+        <tr><td><code>Msg\KeyMsg</code></td><td>A parsed key press</td><td><code>__construct(KeyType $type, string $rune = '', bool $alt = false, bool $ctrl = false, bool $shift = false)</code></td></tr>
+        <tr><td><code>Msg\MouseMsg</code> and subclasses</td><td>Mouse press, release, motion and wheel</td><td><code>x</code>, <code>y</code>, <code>button</code>, <code>action</code>, modifiers</td></tr>
+        <tr><td><code>Cmd</code></td><td>Factory of Cmds, each a closure returning <code>?Msg</code></td><td><code>quit()</code> · <code>batch(...$cmds)</code> · <code>sequence(...$cmds)</code> · <code>tick(float, \Closure)</code> · <code>cancellableTick(float, \Closure): TickHandle</code> · <code>every(float, \Closure)</code> · <code>send(Msg)</code> · <code>promise(\Closure, ?float)</code> · <code>exec(string|array, bool, ?\Closure)</code></td></tr>
+        <tr><td><code>TickHandle</code></td><td>A cancellable one-shot timer</td><td><code>cmd(): \Closure</code> · <code>cancel(): void</code> · <code>isCancelled(): bool</code></td></tr>
+        <tr><td><code>Cmd\PushScreenCmd</code>, <code>Cmd\PopScreenCmd</code></td><td>Screen-stack navigation as invokable Cmds</td><td><code>\Closure::fromCallable(new PushScreenCmd(Screen))</code> · <code>\Closure::fromCallable(new PopScreenCmd())</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Program and the loop</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>Program</code></td><td>Runtime orchestrator: terminal, loop, input, render</td><td><code>__construct(Model, ProgramOptions = new ProgramOptions())</code> · <code>run(): Model</code> · <code>send(Msg): void</code> · <code>quit()</code> · <code>kill()</code> · <code>wait(): bool</code> · <code>model(): Model</code> · <code>println(string ...)</code> · <code>printf(string, ...)</code> · <code>forceRepaint()</code> · <code>lastFrameDuration(): float</code></td></tr>
+        <tr><td><code>Program</code> hooks</td><td>Fluent hooks that return the Program</td><td><code>withLogger(object)</code> · <code>withExceptionHandler(\Closure)</code> · <code>withFrameDiffHook(\Closure)</code> · <code>withRecorder(?Recorder)</code></td></tr>
+        <tr><td><code>ProgramOptions</code></td><td>Readonly options for a Program</td><td>27 constructor parameters, listed under Configuration · <code>builder(): ProgramOptionsBuilder</code></td></tr>
+        <tr><td><code>ProgramOptions\ProgramOptionsBuilder</code></td><td>Fluent mirror of the options</td><td><code>withUseAltScreen()</code>, <code>withFramerate()</code>, <code>withMouseMode()</code>, <code>withEscapeDelay()</code>, and the rest · <code>build()</code></td></tr>
+        <tr><td><code>Subscriptions</code>, <code>Subscription</code>, <code>Kind</code></td><td>Declarative timers, polled keys and signals</td><td><code>withTick()</code> · <code>withKey()</code> · <code>withSignal()</code> · <code>withCustom()</code> · <code>all()</code> · <code>has()</code>. <code>Kind</code> cases: <code>Tick</code>, <code>Key</code>, <code>Signal</code>, <code>Custom</code></td></tr>
+        <tr><td><code>Screen</code>, <code>ScreenStack</code></td><td>Immutable screen stack for drill-down flows</td><td><code>ScreenStack::push()</code> · <code>pop()</code> · <code>current()</code> · <code>breadcrumb()</code> · <code>replaceCurrentModel()</code> · <code>count()</code></td></tr>
+        <tr><td><code>ScreenStackCapable</code>, <code>RootModelWithScreenStack</code></td><td>Routes the stack to the active screen</td><td><code>screens(): ScreenStack</code></td></tr>
+        <tr><td><code>Component</code>, <code>Composite</code></td><td>Parent-child lifecycle</td><td><code>onMount()</code> · <code>onUnmount()</code> · <code>Composite::withChildren()</code> · <code>children()</code> · <code>drainPendingCmds()</code></td></tr>
+        <tr><td><code>Panes</code>, <code>Pane</code>, <code>Rect</code></td><td>Split-region bookkeeping for several viewports</td><td><code>Pane::view()</code> clips content to the rectangle's rows and columns</td></tr>
+        <tr><td><code>View</code></td><td>A frame with declarative extras</td><td><code>body</code>, <code>cursor</code>, <code>windowTitle</code>, <code>progressBar</code>, and a foreground color override</td></tr>
+        <tr><td><code>RevisionCapable</code></td><td>Optional view-memoization hook</td><td><code>revision(): int|string|null</code>, used to skip an unchanged view</td></tr>
+        <tr><td><code>WorkerPool</code>, <code>Cmd\WorkerCmd</code>, <code>Msg\WorkerResultMsg</code></td><td>Bounded pool of child processes for CPU-bound tasks</td><td><code>WorkerPool(LoopInterface, int $concurrency = 4, int $maxOutstandingJobs = 1024)</code> · <code>dispatch(callable|string): PromiseInterface</code> (a string throws <code>InvalidArgumentException</code>; a <code>Closure</code> rejects the promise) · <code>WorkerCmd::run(WorkerPool, callable|string): \Closure</code></td></tr>
+        <tr><td><code>Recorder</code></td><td>Interface that captures a session</td><td><code>recordResize()</code> · <code>recordInputBytes()</code> · <code>recordOutput()</code> · <code>recordQuit()</code> · <code>close()</code></td></tr>
+        <tr><td><code>Progress</code>, <code>ProgressBarState</code></td><td>Taskbar or window progress (OSC 9;4)</td><td><code>ProgressBarState</code> cases: <code>Remove</code>, <code>Normal</code>, <code>Error</code>, <code>Indeterminate</code>, <code>Warning</code></td></tr>
+        <tr><td><code>Cursor</code>, <code>CursorShape</code></td><td>Cursor position and shape for a View</td><td><code>CursorShape</code> cases: <code>Block</code>, <code>Underline</code>, <code>Bar</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Renderer and terminal</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>Renderer</code></td><td>Turns each frame into the minimal output that repaints it</td><td><code>__construct($out, bool $inline, bool $cellDiff, bool $synchronized, ?Writer $writer)</code> · <code>render(string): void</code> · <code>reset(): void</code></td></tr>
+        <tr><td><code>Writer</code></td><td>Ordered byte sink shared by the Program and its Renderer. Each worker process stdin has its own Writer, so <code>pendingBytes()</code> and <code>isSaturated()</code> do not count worker traffic</td><td><code>attach(LoopInterface)</code> · <code>write(string, float $deadline)</code> · <code>flush()</code> · <code>pendingBytes()</code> · <code>isSaturated()</code>. Attached to a loop, it does not block; the pending cap defaults to 8 MiB</td></tr>
+        <tr><td><code>Util\Tty</code></td><td>Portable facade over a raw-mode backend</td><td><code>isTty()</code> · <code>size()</code> · <code>enableRawMode()</code> · <code>restore()</code> · <code>Tty::onResize()</code> · <code>Tty::drainSignals()</code> · <code>Tty::restoreLast()</code></td></tr>
+        <tr><td><code>Util\Tty\Backend</code></td><td>The raw-mode contract that each platform implements</td><td><code>isTty()</code>, <code>openTty()</code>, <code>size()</code>, <code>enableRawMode()</code>, <code>restore()</code>, <code>onResize()</code>, <code>drainSignals()</code></td></tr>
+        <tr><td><code>Util\Tty\PosixBackend</code></td><td>POSIX termios backend, with the window-size query and <code>/dev/tty</code> handling</td><td><code>queryWinsize(int $fd)</code> · <code>openTty()</code> · <code>enableRawMode()</code> · <code>restore()</code></td></tr>
+        <tr><td><code>Util\Tty\WindowsBackend</code></td><td>Windows console backend, using the Win32 console API through FFI</td><td><code>enableRawMode()</code> · <code>size()</code> · <code>onResize()</code> · <code>takePendingKeyBytes()</code></td></tr>
+        <tr><td><code>Util\RawMode</code></td><td>Portable <code>stty</code>-based raw-mode toggle</td><td><code>RawMode::enable($stream)</code> · <code>RawMode::disable($stream)</code></td></tr>
+        <tr><td><code>Util\TtyDetect</code></td><td>Stream terminal check</td><td><code>TtyDetect::isAtty($stream)</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Input and keys</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>InputReader</code></td><td>Stateful escape-sequence parser; keeps partial sequences across reads</td><td><code>parse(string): array</code> · <code>flushPending(): ?Msg</code> · <code>hasPendingEscape()</code> · <code>isPasting()</code> · <code>flushStalePaste()</code>. Constants: <code>MAX_PASTE_BYTES</code> (1 MiB) and <code>PASTE_IDLE_TIMEOUT</code> (1.0 seconds)</td></tr>
+        <tr><td><code>KeyType</code></td><td>Key identity (string-backed enum)</td><td>Printable <code>Char</code>; navigation <code>Up</code>, <code>Down</code>, <code>Left</code>, <code>Right</code>, <code>Home</code>, <code>End</code>, <code>PageUp</code>, <code>PageDown</code>; editing <code>Enter</code>, <code>Escape</code>, <code>Tab</code>, <code>Backspace</code>, <code>Space</code>, <code>Delete</code>, <code>Insert</code>; function keys <code>F1</code> and up</td></tr>
+        <tr><td><code>MouseMode</code></td><td>Which mouse events the terminal reports</td><td><code>Off</code>, <code>CellMotion</code> (motion while a button is held), <code>AllMotion</code> (every motion)</td></tr>
+        <tr><td><code>MouseButton</code>, <code>MouseAction</code></td><td>Button and action of a mouse event</td><td>Buttons <code>Left</code>, <code>Middle</code>, <code>Right</code>, <code>WheelUp</code>, <code>WheelDown</code>, <code>Backward</code>, <code>Forward</code>. Actions <code>Press</code>, <code>Release</code>, <code>Motion</code></td></tr>
+        <tr><td><code>Modifiers</code></td><td>Shift, alt and ctrl as a value object</td><td><code>of(bool $shift, bool $alt, bool $ctrl)</code> · <code>fromXtermMod(int)</code> · <code>toBitfield()</code> · <code>has(int)</code></td></tr>
+        <tr><td><code>Keys\KeyBindings</code></td><td>Immutable action-to-token registry</td><td><code>fromMap(array)</code> · <code>defaults()</code> · <code>withOverride(string $id, string ...$tokens)</code> · <code>matches(KeyMsg, string $id)</code> · <code>tokenOf(KeyMsg)</code> · <code>label(string $id)</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Styling and color</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>Util\Ansi</code></td><td>Builders for SGR, cursor, hyperlink, graphics and mode sequences</td><td><code>sgr(int ...$codes)</code> · <code>fg256(int)</code> · <code>fgRgb(int, int, int)</code> · <code>cursorTo(int, int)</code> · <code>hyperlink(string, string, string)</code> · <code>syncBegin()</code> · <code>strip(string)</code></td></tr>
+        <tr><td><code>Util\Color</code></td><td>Immutable color value with conversions and blending</td><td>Constructors <code>rgb()</code>, <code>hex()</code>, <code>ansi()</code>, <code>ansi256()</code>, <code>parse()</code>, <code>hsl()</code>, <code>hsv()</code> · <code>toHex()</code> · <code>lighten()</code>, <code>darken()</code>, <code>alpha()</code>, <code>blend()</code> · <code>luminance()</code>, <code>isDark()</code> · <code>toFg(ColorProfile)</code>, <code>toBg(ColorProfile)</code></td></tr>
+        <tr><td><code>Util\ColorProfile</code></td><td>Terminal color tier (enum)</td><td>Cases <code>NoTty</code>, <code>Ascii</code>, <code>Ansi</code>, <code>Ansi256</code>, <code>TrueColor</code> · <code>detect()</code> · <code>detectTerminal()</code> · <code>supportsAnsi()</code>, <code>supports256()</code>, <code>supportsTrueColor()</code></td></tr>
+        <tr><td><code>Util\Palettes</code></td><td>Named color schemes</td><td>Constants <code>DRACULA</code>, <code>ONE_DARK</code>, <code>GITHUB_DARK</code> · <code>hex(string $scheme, string $name)</code></td></tr>
+        <tr><td><code>Util\Width</code></td><td>Cell measurement and fitting, ANSI-aware</td><td><code>string()</code> · <code>truncate()</code> · <code>truncateEllipsis()</code> · <code>truncateMiddle()</code> · <code>padRight()</code>, <code>padLeft()</code>, <code>padCenter()</code> · <code>wrap()</code>, <code>wrapWords()</code>, <code>wrapAnsi()</code> · <code>truncateAnsi()</code>, <code>takeAnsi()</code>, <code>dropAnsi()</code></td></tr>
+        <tr><td><code>Util\Clamp</code>, <code>Util\Format</code></td><td>Bounded numbers; human-readable sizes and durations</td><td><code>Clamp::int()</code>, <code>float()</code>, <code>nonNeg()</code>, <code>byte()</code> · <code>Format::siBytes()</code>, <code>iecBytes()</code>, <code>duration()</code>, <code>scaleValue()</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Safety, processes and storage</h3>
+    <table class="api-table">
+      <thead><tr><th>Type</th><th>Role</th><th>Key members</th></tr></thead>
+      <tbody>
+        <tr><td><code>Util\Sanitize</code></td><td>The vocabulary for untrusted strings</td><td><code>controlChars()</code> · <code>cellValue()</code> · <code>untrusted()</code> · <code>untrustedForDisplay()</code> · <code>untrustedForMarkedFrames()</code> · <code>visibleControls()</code> · <code>stripInvisibleFormatting()</code></td></tr>
+        <tr><td><code>Util\Proc\BoundedShutdown</code></td><td>Child teardown ladder: SIGTERM, bounded wait, SIGKILL, bounded wait, reap</td><td><code>terminateBounded()</code> · <code>escalate()</code> · <code>terminateBoundedAsync()</code> · <code>terminatePid()</code> · <code>groupEmpty()</code></td></tr>
+        <tr><td><code>Util\Semaphore</code></td><td>Bounded-concurrency permits over promises</td><td><code>Semaphore::new(int)</code> · <code>acquire()</code> · <code>run(callable)</code> · <code>release()</code> · <code>close()</code></td></tr>
+        <tr><td><code>Util\LockFile</code></td><td>Cross-process advisory lock with a bounded wait</td><td><code>LockFile::on(string)</code> · <code>tryAcquire()</code> · <code>tryAcquireAsync($loop)</code> · <code>acquire(float)</code></td></tr>
+        <tr><td><code>Util\LruMap</code></td><td>Fixed-capacity least-recently-used map</td><td><code>new(int $capacity, ?int $maxCapacity)</code> · <code>get()</code> promotes · <code>peek()</code> reads without promoting · <code>put()</code> · <code>evictions()</code> · <code>withTtl()</code></td></tr>
+        <tr><td><code>Undo\UndoStack</code></td><td>Bounded undo and redo history</td><td><code>UndoStack::new(int $limit = 100)</code> · <code>push()</code> · <code>undo()</code> · <code>redo()</code> · <code>canUndo()</code>, <code>canRedo()</code></td></tr>
+        <tr><td><code>Util\AtomicJsonFile</code></td><td>Crash-safe JSON files, written as a whole</td><td><code>AtomicJsonFile::new(string $path)</code> · <code>read()</code> · <code>write(array)</code> · <code>mutate(\Closure)</code></td></tr>
+        <tr><td><code>Util\PathJail</code></td><td>Confines a relative path to a root directory</td><td><code>resolve()</code> · <code>resolveForCreate()</code> · <code>resolveDir()</code> · <code>confine()</code> · <code>within()</code> · <code>below()</code></td></tr>
+        <tr><td><code>Util\SecretStore</code></td><td>Reads a secret from the operating system keychain</td><td><code>supported()</code> · <code>lookup(string, string)</code> · <code>forget(string, string)</code></td></tr>
+        <tr><td><code>Util\Open</code>, <code>Util\Editor</code>, <code>Util\Clipboard\Clipboard</code></td><td>Hand-off to the desktop, the user's editor and the system clipboard</td><td><code>Open::url()</code>, <code>Open::file()</code> · <code>Editor::edit()</code>, <code>Editor::command()</code> · <code>Clipboard::copy()</code>, <code>Clipboard::osc52()</code></td></tr>
+        <tr><td><code>Util\Executable\Locator</code></td><td>Finds an executable on the search path</td><td><code>locate()</code> · <code>exists()</code> · <code>search()</code></td></tr>
+        <tr><td><code>Util\Json</code>, <code>Util\TokenEstimate</code></td><td>Strict JSON decoding; rough token counts for prompts</td><td><code>Json::decodeArray()</code> · <code>TokenEstimate::ofText()</code>, <code>ofMessages()</code>, <code>ofToolSchemas()</code></td></tr>
+        <tr><td><code>Config\Interpolate</code>, <code>Syntax\RegexHighlighter</code></td><td>Variable expansion in config values; a regex tokenizer for code</td><td><code>Interpolate::expand()</code> · <code>RegexHighlighter::languageForPath()</code>, <code>tokenize()</code></td></tr>
+        <tr><td><code>I18n\T</code>, <code>Lang</code></td><td>Message lookup with locale fallback</td><td><code>T::t(key, params)</code> · <code>T::setLocale()</code> · <code>T::register()</code> · <code>Lang::t()</code></td></tr>
+        <tr><td><code>Util\LegacyEnv</code>, <code>Util\LegacyPaths</code></td><td>Rename shims for old environment variables and data directories</td><td><code>LegacyEnv::import()</code> · <code>LegacyPaths::migrate()</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>Every option is a constructor parameter of <code>ProgramOptions</code>, and every option is readonly. The defaults are the values in the table.</p>
+    <table class="api-table">
+      <thead><tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>useAltScreen</code></td><td>bool</td><td><code>false</code></td><td>Take over the alternate screen; the previous content returns on exit.</td></tr>
+        <tr><td><code>inlineMode</code></td><td>bool</td><td><code>false</code></td><td>Render only the program's own rows and keep the shell scrollback. Pair with <code>useAltScreen: false</code>.</td></tr>
+        <tr><td><code>framerate</code></td><td>float</td><td><code>60.0</code></td><td>Ceiling on frames per second. Frames are armed only when the view changes.</td></tr>
+        <tr><td><code>mouseMode</code></td><td><code>MouseMode</code></td><td><code>MouseMode::Off</code></td><td>Mouse reporting: <code>Off</code>, <code>CellMotion</code> or <code>AllMotion</code>.</td></tr>
+        <tr><td><code>reportFocus</code></td><td>bool</td><td><code>false</code></td><td>Report focus gained and lost as <code>FocusGainedMsg</code> and <code>BlurMsg</code>.</td></tr>
+        <tr><td><code>bracketedPaste</code></td><td>bool</td><td><code>false</code></td><td>Enable bracketed-paste reporting.</td></tr>
+        <tr><td><code>hideCursor</code></td><td>bool</td><td><code>true</code></td><td>Hide the cursor while the program runs.</td></tr>
+        <tr><td><code>catchInterrupts</code></td><td>bool</td><td><code>true</code></td><td>Install the runtime's signal handlers. Pass <code>false</code> to leave signal handling off, as <code>withoutSignalHandler</code> does.</td></tr>
+        <tr><td><code>unicodeMode</code></td><td>bool</td><td><code>true</code></td><td>Enable DEC mode 2027 (grapheme cluster mode).</td></tr>
+        <tr><td><code>cellDiffRenderer</code></td><td>bool</td><td><code>false</code></td><td>Use the per-cell diff renderer instead of the line-diff renderer.</td></tr>
+        <tr><td><code>synchronizedOutput</code></td><td>bool</td><td><code>true</code></td><td>Wrap each frame in DEC 2026 synchronized-update markers. Set it to <code>false</code> for a terminal that does not advertise the mode.</td></tr>
+        <tr><td><code>withoutRenderer</code></td><td>bool</td><td><code>false</code></td><td>Skip rendering entirely, for tests that drive <code>update()</code> only.</td></tr>
+        <tr><td><code>withoutSignalHandler</code></td><td>bool</td><td><code>false</code></td><td>Install no signal handlers. Mirrors <code>WithoutSignalHandler</code>.</td></tr>
+        <tr><td><code>catchPanics</code></td><td>bool</td><td><code>true</code></td><td>Arm the terminal-release backstop for fatal errors and uncaught exceptions.</td></tr>
+        <tr><td><code>openTty</code></td><td>bool</td><td><code>false</code></td><td>Open <code>/dev/tty</code> for input and output when neither <code>input</code> nor <code>output</code> is given.</td></tr>
+        <tr><td><code>input</code>, <code>output</code></td><td>mixed</td><td><code>null</code></td><td>Streams to read keys from and write frames to. <code>null</code> means STDIN and STDOUT.</td></tr>
+        <tr><td><code>loop</code></td><td>?LoopInterface</td><td><code>null</code></td><td>The ReactPHP loop. <code>null</code> means <code>Loop::get()</code>.</td></tr>
+        <tr><td><code>environment</code></td><td>?array</td><td><code>null</code></td><td>Environment snapshot for the startup <code>EnvMsg</code>. <code>null</code> reads the live environment.</td></tr>
+        <tr><td><code>windowSize</code></td><td>?array</td><td><code>null</code></td><td>Forced initial size, <code>['cols' =&gt; N, 'rows' =&gt; N]</code>. Mostly for tests.</td></tr>
+        <tr><td><code>colorProfile</code></td><td>?ColorProfile</td><td><code>null</code></td><td>Forces a color tier instead of detection.</td></tr>
+        <tr><td><code>filter</code></td><td>?\Closure</td><td><code>null</code></td><td>Receives the model and each Msg, and returns the Msg to dispatch or <code>null</code> to drop it.</td></tr>
+        <tr><td><code>termios</code></td><td>?<code>SugarCraft\Pty\Contract\Termios</code></td><td><code>null</code></td><td>Overrides the raw-mode implementation. The interface lives in sugar-pty, not sugar-core. Tests inject a stub here.</td></tr>
+        <tr><td><code>subscriptions</code></td><td>?\Closure</td><td><code>null</code></td><td>Callable that returns the subscriptions, reconciled after each update.</td></tr>
+        <tr><td><code>sanitizePaste</code></td><td>bool</td><td><code>true</code></td><td>Sanitize bracketed-paste payloads before they reach the model.</td></tr>
+        <tr><td><code>exitOnStdinEof</code></td><td>bool</td><td><code>true</code></td><td>Quit cleanly when input reaches end-of-file. Pass <code>false</code> for programs driven by timers, sockets or subscriptions.</td></tr>
+        <tr><td><code>escapeDelay</code></td><td>float</td><td><code>0.05</code></td><td>Seconds to wait after a lone ESC byte before reporting Escape. Zero disables the window.</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">Environment variables</h3>
+    <p>These are the environment variables sugar-core reads. Apps may read their own variables as well.</p>
+    <table class="api-table">
+      <thead><tr><th>Variable</th><th>Read by</th><th>Effect when set</th></tr></thead>
+      <tbody>
+        <tr><td><code>TERM</code></td><td><code>ColorProfile</code>, <code>detectTerminal()</code></td><td><code>detectTerminal()</code> answers <code>NoTty</code> for an unforced <code>TERM=dumb</code> terminal.</td></tr>
+        <tr><td><code>COLORTERM</code>, <code>TERM_PROGRAM</code>, <code>WT_SESSION</code></td><td>Color detection, when sugar-colorprofile is installed</td><td>Hints about truecolor and known terminal programs.</td></tr>
+        <tr><td><code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code>, <code>FORCE_COLOR</code></td><td>Color detection, when sugar-colorprofile is installed</td><td>Disable or force color. <code>CLICOLOR=0</code> opts out; a force variable keeps color on a pipe.</td></tr>
+        <tr><td><code>CI</code>, <code>GITHUB_ACTIONS</code>, <code>GITLAB_CI</code>, <code>BUILDKITE</code></td><td>Color detection, when sugar-colorprofile is installed</td><td>Read by sugar-colorprofile's detection chain as continuous-integration hints.</td></tr>
+        <tr><td><code>COLUMNS</code>, <code>LINES</code></td><td><code>PosixBackend</code></td><td>Size fallback when stdout is not a terminal.</td></tr>
+        <tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td><code>I18n\T::detect()</code></td><td>Choose the message locale. <code>C</code> and <code>POSIX</code> are not usable and fall through to the next variable.</td></tr>
+        <tr><td><code>VISUAL</code>, <code>EDITOR</code></td><td><code>Util\Editor</code></td><td>The editor that <code>Editor::edit()</code> launches. <code>VISUAL</code> wins.</td></tr>
+        <tr><td><code>PATH</code>, <code>PATHEXT</code></td><td><code>Util\Executable\Locator</code></td><td>The search path for executables; <code>PATHEXT</code> lists the Windows extensions.</td></tr>
+        <tr><td><code>TMUX</code>, <code>DISPLAY</code>, <code>WAYLAND_DISPLAY</code></td><td><code>Util\Clipboard</code></td><td>Select the clipboard backends to try.</td></tr>
+        <tr><td><code>WSL_DISTRO_NAME</code>, <code>WSL_INTEROP</code>, <code>MSYSTEM</code>, <code>OSTYPE</code></td><td><code>Util\Tty\EnvDetect</code></td><td>Identify WSL, MSYS2 and Cygwin hosts.</td></tr>
+        <tr><td><code>STY</code>, <code>GOOGLE_CLOUD_SHELL</code></td><td><code>Util\ColorProfile</code></td><td>Terminal hints in the color-profile detection chain: a GNU screen session and Google Cloud Shell.</td></tr>
+        <tr><td><code>MINTTY_SHORTCUT</code></td><td><code>Util\Tty\EnvDetect</code></td><td>Identifies a mintty terminal started from its launcher shortcut.</td></tr>
+        <tr><td><code>HOME</code></td><td><code>WorkerPool</code></td><td>Worker processes run with <code>HOME=/tmp</code> when <code>HOME</code> is empty.</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">How color is detected</h3>
+    <p><code>Util\ColorProfile::detect()</code> reads the process environment and the stream it is given. A non-terminal stream answers <code>NoTty</code>, which emits no escape bytes at all, unless a force variable is set. With no stream argument, <code>detect()</code> assumes a terminal, so a program whose output may be piped passes the stream: <code>detect(null, STDOUT)</code>. A terminal is then classified by sugar-colorprofile's <code>DetectionChain</code> when that package is installed, and answers <code>Ascii</code> (color off, decoration kept) when it is not. The <code>colorProfile</code> option and the <code>override</code> argument of <code>fromEnvironment()</code> outrank the environment. <code>detectTerminal()</code> additionally maps an unforced <code>TERM=dumb</code> terminal to <code>NoTty</code>, so full-screen features stay off on terminals that cannot address the cursor.</p>
+
+    <h2 style="margin-top: 40px;">Keys and input</h2>
+    <p>Keystrokes reach <code>update()</code> as <code>Msg\KeyMsg</code>, each with a <code>KeyType</code>, a <code>rune</code> for printable keys, and the <code>alt</code>, <code>ctrl</code> and <code>shift</code> flags. Mouse events arrive as <code>Msg\MouseMsg</code> subclasses when <code>mouseMode</code> is set. Bracketed paste arrives as <code>Msg\PasteMsg</code>. Under the Kitty keyboard protocol, keys arrive as the <code>KeyMsg</code> subclasses <code>KeyPressMsg</code>, <code>KeyRepeatMsg</code> and <code>KeyReleaseMsg</code>, which carry the event kind. Legacy keys arrive as plain <code>KeyMsg</code>, so match on <code>KeyMsg</code> and check the subclass only when you need the event kind.</p>
+    <p>A lone ESC byte is held for <code>escapeDelay</code> seconds, in case it starts a longer sequence. Raise the value for slow SSH or multiplexer links that split escape sequences, and lower it for a snappier Escape key. A negative or non-finite value is refused with <code>\InvalidArgumentException</code>.</p>
+    <p>Paste is bounded. A payload over <code>InputReader::MAX_PASTE_BYTES</code> (1 MiB) is delivered in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1.0 seconds) of silence, so the keyboard comes back.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p>Nineteen demos ship in <code>examples/</code>, and each runs from the source tree with <code>php examples/&lt;name&gt;.php</code>. <code>examples/guard.php</code> is the shared preamble that every demo loads, not a demo. The demos are interactive. Run them in a terminal, or pipe keystrokes in: a FIFO on stdin counts as live input, so each demo exits 0 when it reaches its quit key.</p>
+    <pre class="code"><code class="language-shell">printf 'q' | php examples/counter.php; echo "exit=$?"</code></pre>
+    <p>With neither a terminal nor piped keystrokes, a demo prints what it needs and exits 1. With <code>TERM=dumb</code>, it prints one line and exits 0.</p>
+    <table class="api-table">
+      <thead><tr><th>Demo</th><th>What it shows</th></tr></thead>
+      <tbody>
+        <tr><td><code>simple</code></td><td>The smallest program: a fixed view that quits on any key.</td></tr>
+        <tr><td><code>counter</code></td><td>The classic counter, with the up and down keys and <code>q</code> to quit.</td></tr>
+        <tr><td><code>timer</code></td><td>A wall-clock timer driven by <code>Cmd::tick</code>.</td></tr>
+        <tr><td><code>realtime</code></td><td>A periodic refresh where the model reschedules its own tick.</td></tr>
+        <tr><td><code>splash</code></td><td>An animated welcome for a fixed duration, then the main view.</td></tr>
+        <tr><td><code>views</code></td><td>Several view bodies behind one Model, switched by state.</td></tr>
+        <tr><td><code>tabs</code></td><td>A tab bar with one cursor index, rendering only the active tab.</td></tr>
+        <tr><td><code>panes</code></td><td>Two side-by-side viewports built with <code>Panes</code>; Tab switches between them.</td></tr>
+        <tr><td><code>screen-stack</code></td><td>A three-deep drill-down with push and pop navigation.</td></tr>
+        <tr><td><code>altscreen-toggle</code></td><td>Flipping the alternate screen at runtime with the space bar.</td></tr>
+        <tr><td><code>prevent-quit</code></td><td>Eating Ctrl+C until the user confirms the quit.</td></tr>
+        <tr><td><code>mouse</code></td><td>Logging clicks, wheel events and motion with real coordinates.</td></tr>
+        <tr><td><code>focus-blur</code></td><td>Focus gained and lost, reported as <code>FocusGainedMsg</code> and <code>BlurMsg</code>.</td></tr>
+        <tr><td><code>print-key</code></td><td>Printing every key the runtime parses, useful for checking modifiers.</td></tr>
+        <tr><td><code>window-size</code></td><td>The current dimensions, updated on resize.</td></tr>
+        <tr><td><code>set-window-title</code></td><td><code>Cmd::setWindowTitle()</code>, which sets the title with OSC 0 and 2.</td></tr>
+        <tr><td><code>suspend</code></td><td><code>Cmd::suspend()</code>, and the <code>ResumeMsg</code> that follows SIGCONT.</td></tr>
+        <tr><td><code>send-msg</code></td><td>A custom Msg dispatched with <code>Cmd::send()</code>.</td></tr>
+        <tr><td><code>sequence</code></td><td><code>Cmd::sequence()</code> runs commands in order; <code>Cmd::batch()</code> fires them together.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-core &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p><code>tests/bootstrap.php</code> pins the event-loop clock with <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> when sugar-testing is loadable, then installs <code>HangWatchdog</code>, which bounds each test's wall-clock time so an unbounded wait fails by name. Model tests call <code>update()</code> directly, as the key-binding example shows. The PTY-backed tests, such as <code>tests/Util/Tty/ExamplesPtyTest.php</code>, drive the demos through a real pseudo-terminal.</p>
+
+    <h3 style="margin-top: 24px;">Test a model without a terminal</h3>
+    <p>Drive <code>update()</code> directly with scripted messages and assert on the returned Model and Cmd. The runtime is not involved, so state-machine tests stay fast and deterministic. The end of the key-binding example above shows the pattern.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+    <h3 style="margin-top: 24px;">The program exits as soon as it starts under cron or CI</h3>
+    <p>Its stdin is at end-of-file, and <code>exitOnStdinEof</code> defaults to <code>true</code>, so the program quits cleanly with exit code 0. A program driven by timers, sockets or subscriptions must pass <code>exitOnStdinEof: false</code>.</p>
+
+    <h3 style="margin-top: 24px;">Pasted text does not match what was copied</h3>
+    <p>Paste is sanitized by default. Escape sequences, C1 controls and the zone sentinels U+E000 and U+E001 are removed. Other private-use characters, such as image markers and icon-font glyphs, zero-width characters and bidi characters survive. This is deliberate, because the paste source is attacker-influenced. Keep <code>sanitizePaste</code> on unless your app contains the payload itself.</p>
+
+    <h3 style="margin-top: 24px;">The Escape key takes a moment to register over SSH</h3>
+    <p>The runtime waits <code>escapeDelay</code> (0.05 seconds by default) after a lone ESC byte, in case the byte starts a longer sequence. Lower the value for a snappier Escape key, or raise it only if a slow link splits escape sequences.</p>
+
+    <h3 style="margin-top: 24px;">Wide characters or emoji break column alignment</h3>
+    <p>Check that <code>ext-intl</code> is loaded. Without it, <code>Util\Width</code> counts code points, not grapheme clusters, so a skin-toned emoji measures four cells instead of two.</p>
+
+    <h3 style="margin-top: 24px;">Output printed from update() disappears</h3>
+    <p>The renderer owns stdout, and the next frame overwrites direct writes. Return <code>Cmd::println()</code> to print above the program region, or log to a file while the program runs.</p>
+
+    <h3 style="margin-top: 24px;">A crash shows a raw PHP stack trace on the recovered screen</h3>
+    <p>An uncaught exception from <code>update()</code> or <code>view()</code> reaches the exception handler, which rethrows by default. Install one with <code>Program::withExceptionHandler()</code> to log the error and show a friendlier frame.</p>
+
+    <h3 style="margin-top: 24px;">view() fails with a TypeError, or the frame repaints every row</h3>
+    <p><code>view()</code> must return <code>string|View</code>, so return <code>''</code> rather than <code>null</code> for an empty frame. The diff renderers skip unchanged rows only when the frame is byte-stable. Time-dependent or randomized output defeats the diff and repaints every frame.</p>
+
+    <h3 style="margin-top: 24px;">The demo prints "needs a terminal" and exits 1</h3>
+    <p>The demo's guard found neither a terminal nor piped keystrokes on stdin. Run it from a terminal, or pipe keys in: <code>printf 'q' | php examples/counter.php</code>.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <p>The port follows the bubbletea vocabulary where the PHP idiom fits. Each row names the upstream symbol and the SugarCraft type that carries it. Where the upstream citation is present in the source, it is named in the Notes column. The full upstream-to-port map is in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>.</p>
+    <table class="api-table">
+      <thead><tr><th>bubbletea</th><th>sugar-core</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>tea.Model</code></td><td><code>Model</code></td><td>Adds <code>subscriptions()</code> to the three upstream methods.</td></tr>
+        <tr><td><code>tea.Msg</code>, <code>tea.Cmd</code></td><td><code>Msg</code>, <code>Cmd</code></td><td>A Cmd is a <code>\Closure</code> that returns <code>?Msg</code>.</td></tr>
+        <tr><td><code>tea.Program</code></td><td><code>Program</code></td><td><code>run()</code> returns the final Model. Mirrors <code>Program.Wait</code> as <code>Program::wait()</code>.</td></tr>
+        <tr><td><code>tea.View</code></td><td><code>View</code></td><td>Mirrors bubbletea.View.</td></tr>
+        <tr><td><code>tea.Batch</code></td><td><code>Cmd::batch()</code></td><td>Runs its commands together.</td></tr>
+        <tr><td><code>tea.Sequence</code></td><td><code>Cmd::sequence()</code></td><td>Mirrors bubbletea.Sequence.</td></tr>
+        <tr><td><code>tea.Every</code></td><td><code>Cmd::every()</code></td><td>Mirrors bubbletea.Every.</td></tr>
+        <tr><td><code>tea.Tick</code></td><td><code>Cmd::tick()</code>, <code>Cmd::cancellableTick()</code></td><td>The cancellable form returns a <code>TickHandle</code>.</td></tr>
+        <tr><td><code>tea.Quit</code></td><td><code>Cmd::quit()</code></td><td>Ends the loop and restores the terminal.</td></tr>
+        <tr><td><code>tea.Suspend</code>, <code>tea.Interrupt</code></td><td><code>Cmd::suspend()</code>, <code>Cmd::interrupt()</code></td><td>Mirrors bubbletea.Suspend. <code>SuspendMsg</code>, <code>ResumeMsg</code> and <code>InterruptMsg</code> carry the events.</td></tr>
+        <tr><td><code>tea.Println</code>, <code>tea.Printf</code></td><td><code>Cmd::println()</code>, <code>Cmd::printf()</code></td><td>Print above the program region.</td></tr>
+        <tr><td><code>tea.Raw</code></td><td><code>Cmd::raw()</code></td><td>Mirrors bubbletea.Raw.</td></tr>
+        <tr><td><code>tea.WithoutSignalHandler</code></td><td><code>ProgramOptions::$withoutSignalHandler</code></td><td>Mirrors bubbletea.WithoutSignalHandler.</td></tr>
+        <tr><td><code>tea.WithoutCatchPanics</code></td><td><code>ProgramOptions::$catchPanics</code></td><td>Set to <code>false</code>.</td></tr>
+        <tr><td><code>tea.WithFilter</code></td><td><code>ProgramOptions::$filter</code></td><td>Receives the model and each Msg.</td></tr>
+        <tr><td><code>tea.WithoutRenderer</code></td><td><code>ProgramOptions::$withoutRenderer</code></td><td>For headless tests.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Not ported:</strong> bubbletea's <code>WithReporter</code> metrics hook and its <code>WithSignalHandler</code> handler-replacement option have no sugar-core counterpart. Signal installation is built in, and it is controlled by <code>withoutSignalHandler</code>.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The runtime is a small set of cooperating parts. <code>Program</code> owns the terminal and the loop. <code>InputReader</code> turns bytes into Msgs, and <code>Program</code> dispatches them to <code>update()</code>. <code>Renderer</code> turns each frame into output through a <code>Writer</code>, which queues bytes and never blocks once it is attached to the loop. <code>WorkerPool</code> runs child processes whose results come back as Msgs. Subscriptions are reconciled after every update, so timers and signal handlers start and stop with the model that declares them.</p>
+    <p>Timing has one caveat. On a libuv-backed loop (<code>ExtUvLoop</code>, chosen automatically when <code>ext-uv</code> is installed), a timer's deadline is computed against a clock that refreshes once per loop iteration. A timer armed after long blocking work fires early by that much, so keep callbacks short.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>No release notes are kept in this directory. The root <a href="https://github.com/detain/sugarcraft/blob/master/README.md"><code>README.md</code></a> and the <a href="https://github.com/detain/sugarcraft/commits/master/sugar-core">commit history</a> record changes. The package was renamed inside the monorepo in 2026-10, and the rename shims <code>LegacyEnv::import()</code> and <code>LegacyPaths::migrate()</code> keep users' old environment variables and data directories working. The sibling packages track <code>dev-master</code>, as described under Install.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
     <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-core">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-core/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-core/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="sugar-style.html">SugarStyle</a>: declarative styling and layout.</li>
+      <li><a href="sugar-widgets.html">SugarWidgets</a>: prebuilt terminal components.</li>
+      <li><a href="sugar-forms.html">SugarForms</a>: multi-page forms.</li>
+      <li><a href="sugar-charts.html">SugarCharts</a>: sparklines, bars, lines, heatmaps and OHLC charts.</li>
+      <li><a href="candy-scriptui.html">CandyScriptui</a>: a composer-installable, <code>gum</code>-style CLI.</li>
+      <li><a href="sugar-markdown.html">SugarMarkdown</a>: a Markdown to ANSI renderer.</li>
+      <li><a href="sugar-mouse.html">SugarMouse</a>: a mouse-zone tracker.</li>
+      <li><a href="sugar-cli.html">SugarCli</a>: opinionated CLI presentation helpers.</li>
+      <li><a href="sugar-ssh-server.html">SugarSshServer</a>: SSH server middleware.</li>
+      <li><a href="candy-codeshot.html">CandyCodeshot</a>: code to SVG screenshots.</li>
+      <li><a href="candy-ansi-inspect.html">CandyAnsiInspect</a>: an ANSI escape-sequence inspector.</li>
     </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <p style="margin-top: 48px;"><a href="https://github.com/sugarcraft/sugar-core/tree/master/examples" class="btn btn-primary">Browse the examples →</a></p>
   </div>
 </section>
 

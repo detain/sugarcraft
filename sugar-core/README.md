@@ -202,7 +202,7 @@ $opts = (new ProgramOptionsBuilder())
 
 ## Requirements
 
-- PHP 8.3+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
+- PHP 8.3+ (`ext-ffi` is required on Windows for raw console input)
 - `mbstring` — **required, and declared as `ext-mbstring` in `composer.json`.**
   Escape decoding and clipboard paths call `mb_*` functions on hot paths.
 - `intl` — **required, and declared as `ext-intl` in `composer.json`.** `Width`'s grapheme
