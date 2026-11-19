@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView;
 
+use React\EventLoop\Loop;
+use SugarCraft\Async\Await;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\MdView\Lang;
@@ -11,8 +13,9 @@ use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\ColorProfile\AsyncProbe;
 use SugarCraft\ColorProfile\Probe\Capability;
-use SugarCraft\ColorProfile\Probe\TerminalProbe;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\StyleGuide;
 use SugarCraft\Markdown\Theme;
@@ -52,6 +55,13 @@ final class RenderCommand extends Command
 
     /** glow's own default document width — the ceiling of the auto ladder. */
     public const AUTO_WIDTH_MAX = 80;
+
+    /**
+     * Seconds the color report may take before the await gives up. Sits above
+     * AsyncProbe's 5 s TERM + 1 s KILL ladder, so a stalled infocmp replays as
+     * "no dump" inside the budget rather than tripping it.
+     */
+    private const COLOR_PROBE_BUDGET_SECONDS = 10.0;
 
     /** @var callable|null */
     private static $colorProbeCallback = null;
@@ -761,14 +771,17 @@ final class RenderCommand extends Command
             // and not empty"), but sugar-colorprofile's probe disables on ANY
             // value including empty. Hide the empty value from the probe so
             // the spec-correct "no opinion" answer reaches it, then restore.
+            // The putenv hide spans the whole await: the child inherits the
+            // environment when it is spawned, and the replay pass reads it
+            // again when the report settles, both inside this window.
             $noColor = getenv('NO_COLOR');
             if ($noColor === false || $noColor !== '') {
-                $report = TerminalProbe::run();
+                $report = self::awaitTerminalReport();
                 return !$report->has(Capability::NoColor);
             }
             putenv('NO_COLOR');
             try {
-                $report = TerminalProbe::run();
+                $report = self::awaitTerminalReport();
                 return !$report->has(Capability::NoColor);
             } finally {
                 putenv('NO_COLOR=');
@@ -776,6 +789,22 @@ final class RenderCommand extends Command
         } catch (\Throwable) {
             return true; // Fall back to assuming color is available.
         }
+    }
+
+    /**
+     * Await the terminal color report on the shared loop. The terminfo leg
+     * runs as an infocmp child there, bounded by the probe's own 5 s TERM
+     * and 1 s KILL ladder, so the budget only has to outlast that ladder.
+     *
+     * Await refuses to nest inside a running loop, so this stays on the
+     * command's synchronous path; a stalled report surfaces as a
+     * TimeoutException and falls back to color-capable in the caller.
+     */
+    private static function awaitTerminalReport(): ProbeReport
+    {
+        $loop = Loop::get();
+
+        return Await::until(AsyncProbe::report($loop), self::COLOR_PROBE_BUDGET_SECONDS, $loop);
     }
 
     /**
