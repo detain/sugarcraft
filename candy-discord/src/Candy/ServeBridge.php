@@ -219,7 +219,7 @@ final class ServeBridge implements \SugarCraft\Plugins\Bridge\ServeClient
      * subscriber at throughSeq, going live strictly above it. The snapshot
      * array is the ONLY carrier of that window and its message rows carry no
      * seq, so they are never re-fed as durable frames. The router's
-     * ConversationRouter::consumeFollowResult is where the contract lands: it
+     * ConversationRouterCore::consumeFollowResult is where the contract lands: it
      * accounts the un-replayed gap loudly (log + one disclosure) and only
      * THEN absorbs throughSeq into the session cursor. Field law: never
      * cursor-skip on RESET — the skip must be accounted before it is taken.
