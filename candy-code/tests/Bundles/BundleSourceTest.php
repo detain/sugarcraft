@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Bundles\BundleSource;
 use SugarCraft\Code\Bundles\MarketplaceEntry;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Plugins\Provenance\SourceRecord;
 
 /**
  * C-EXT-4.a: the install provenance record. The pins here are deliberately
@@ -46,7 +47,7 @@ final class BundleSourceTest extends TestCase
         $entry = MarketplaceEntry::github('beta', 'acme/beta')->withPinnedSha(str_repeat('c', 40));
         $source = BundleSource::fromEntry($entry, 'acme-hub');
 
-        self::assertNull($source->write($this->bundleDir));
+        self::assertNull(BundleSource::write($source, $this->bundleDir));
         self::assertFileExists($this->bundleDir . '/' . BundleSource::RECORD_RELATIVE_PATH);
 
         $read = BundleSource::read($this->bundleDir, $this->boundary);
@@ -119,8 +120,8 @@ final class BundleSourceTest extends TestCase
 
     public function testTrustedAndReadPathsBuildTheSameView(): void
     {
-        $trusted = BundleSource::fromTrustedRecord('h', 'beta', 'url', '', 'https://x.invalid/beta', str_repeat('e', 40), 11);
-        self::assertNull($trusted->write($this->bundleDir));
+        $trusted = SourceRecord::fromTrustedRecord('h', 'beta', 'url', '', 'https://x.invalid/beta', str_repeat('e', 40), 11);
+        self::assertNull(BundleSource::write($trusted, $this->bundleDir));
         $read = BundleSource::read($this->bundleDir, $this->boundary);
         self::assertNotNull($read);
         self::assertSame($trusted->marketplace, $read->marketplace);
@@ -131,24 +132,24 @@ final class BundleSourceTest extends TestCase
 
     public function testWritingIntoAMissingDirectoryRefusesLoudly(): void
     {
-        $source = BundleSource::fromTrustedRecord('h', 'gone', 'github', 'a/gone', '', '', 1);
+        $source = SourceRecord::fromTrustedRecord('h', 'gone', 'github', 'a/gone', '', '', 1);
 
-        self::assertStringContainsString('does not exist', (string) $source->write($this->tempDir . '/nowhere'));
+        self::assertStringContainsString('does not exist', (string) BundleSource::write($source, $this->tempDir . '/nowhere'));
     }
 
     public function testDescribeNamesOriginAndShortCommit(): void
     {
         self::assertSame(
             'hub/beta (github:acme/beta @ abcdefa)',
-            BundleSource::fromTrustedRecord('hub', 'beta', 'github', 'acme/beta', '', 'abcdefabc', 1)->describe(),
+            BundleSource::describe(SourceRecord::fromTrustedRecord('hub', 'beta', 'github', 'acme/beta', '', 'abcdefabc', 1)),
         );
         self::assertSame(
             'hub/plain (path)',
-            BundleSource::fromTrustedRecord('hub', 'plain', 'path', '', '', '', 1)->describe(),
+            BundleSource::describe(SourceRecord::fromTrustedRecord('hub', 'plain', 'path', '', '', '', 1)),
         );
         self::assertStringContainsString(
             'url:https://x.invalid/y',
-            BundleSource::fromTrustedRecord('hub', 'y', 'url', '', 'https://x.invalid/y', '', 1)->describe(),
+            BundleSource::describe(SourceRecord::fromTrustedRecord('hub', 'y', 'url', '', 'https://x.invalid/y', '', 1)),
         );
     }
 }

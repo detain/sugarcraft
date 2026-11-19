@@ -5115,7 +5115,7 @@ final class Subcommands
             self::removeTree($staged);
         }
 
-        $recordRefusal = BundleSource::fromEntry($entry, $marketplaceName)->write($dest);
+        $recordRefusal = BundleSource::write(BundleSource::fromEntry($entry, $marketplaceName), $dest);
 
         if ($recordRefusal !== null) {
             self::bundlesLine($recordRefusal);
@@ -5398,7 +5398,7 @@ final class Subcommands
                 continue;
             }
 
-            $write = BundleSource::fromEntry($fresh, $record->marketplace)->write($dir);
+            $write = BundleSource::write(BundleSource::fromEntry($fresh, $record->marketplace), $dir);
 
             if ($write !== null) {
                 self::bundlesLine($write);

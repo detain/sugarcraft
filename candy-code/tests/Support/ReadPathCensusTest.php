@@ -314,11 +314,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'which manifest signals exist; no content is read, nothing is installed, and '
                 . 'a later content read of any of these names would carry its own gate',
         ],
-        'Bundles/BundleSource.php|file_get_contents' => [
-            'CONTAINED — the provenance record inside a bundle directory, gated by a '
-                . '\SugarCraft\Core\Util\PathJail::below() compare in this file against the boundary the caller '
-                . 'names; a planted link out of the tree fails the compare before any bytes are read',
-        ],
         'Bundles/Marketplace.php|file_get_contents' => [
             'CONTAINED — a checkout\'s catalog file, gated by a \SugarCraft\Core\Util\PathJail::below() compare '
                 . 'in this file against that checkout; a .claude-plugin symlinked elsewhere '
