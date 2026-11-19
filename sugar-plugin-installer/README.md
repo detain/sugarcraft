@@ -87,7 +87,11 @@ plugin staged under a section that has since been broken.
   entries still run when the project's Composer autoloader loads. Treat a
   plugin package with the same trust you give any Composer dependency.
 - Changing `scope` or `root` after an install does not move the staged tree.
-  Remove the package before changing the scope, or the old tree is orphaned.
+  `remove` and `update` find the tree where it sits, in either tier, and delete
+  it. A tree counts only when its `composer.json` names the package, so another
+  package's tree is never touched. A plain `composer install` leaves the tree
+  where it is. To move it, `composer remove` and `composer require` the package
+  again, or `composer update` it to a new version.
 - The home directory is taken from `HOME`, or from `USERPROFILE` when `HOME` is
   empty. candy-code's own home resolution has extra hardening that this
   package does not copy, because a plugin library must not depend on candy-code.
@@ -104,11 +108,11 @@ follows.
 | No per-lib `composer.lock` | Done. `/*/composer.lock` is gitignored. |
 | Root `composer.json` | `require`, `repositories[]` (a path entry, as the root does for every sibling) and `allow-plugins` entries. The checked-in rule in AGENTS.md and plan section 7 asks for both. |
 | Root `composer.lock` | Not refreshed in this change. A root `composer update` is needed to record the new require. |
-| `docs/MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md` table | Done. Original-work rows; no icon yet, so the README row has an empty image cell. |
+| `docs/MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md` table | Done. Original-work rows; the root README row carries the package icon. |
 | `codecov.yml` | Done. |
 | `docs/index.html` tile, `docs/_data/<slug>.json` and body, `php tools/gen-docs.php` | Skipped. The site catalogues libraries and apps, and this package is install tooling with no page of its own yet. |
 | `support.docs` in `composer.json` | Dropped. It would point at a `docs/lib/sugar-plugin-installer.html` page that is not generated, so the entry is left out until that page exists. |
-| `media/icons/sugar-plugin-installer.png` | Skipped. No icon asset has been designed for this package. |
+| `media/icons/sugar-plugin-installer.png` | Done. The icon is in the root `media/icons/`, and the root README row references it. |
 | `.github/workflows/vhs.yml` | Skipped. Non-visual, so exempt. |
 | `php tools/check-one-type-per-file.php`, `php tools/check-lib-licenses.php`, `php tools/check-child-lifetimes.php` | Applied. The package holds one type per file and carries the root `LICENSE`. It starts no child processes, so the lifetime check expects no change. The integration test runs `composer` through `exec`, which is a test-only child and is not exposed by the library. |
 

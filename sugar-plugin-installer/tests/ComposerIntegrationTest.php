@@ -292,4 +292,58 @@ final class ComposerIntegrationTest extends TestCase
         clearstatcache();
         $this->assertDirectoryDoesNotExist($stage, 'remove orphaned the staged tree after the section broke');
     }
+
+    /**
+     * A valid scope change after install must not orphan the tree: remove reads it
+     * from the tier it was staged into, not only from the tier the section now selects.
+     */
+    public function testRemoveAfterAScopeChangeDeletesTheTreeStagedUnderTheOldScope(): void
+    {
+        $this->writeProject(['sugar-plugin-installer' => ['scope' => 'user']]);
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        $stage = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($stage . '/composer.json');
+
+        $this->setProjectExtra(['sugar-plugin-installer' => ['scope' => 'project']]);
+
+        [$status, $out] = $this->composer('remove ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "remove failed after a scope change:\n$out");
+
+        clearstatcache();
+        $this->assertDirectoryDoesNotExist($stage, 'remove orphaned the tree staged under the old scope');
+        $this->assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/sample-plugin', 'remove staged a tree into the new scope');
+    }
+
+    /**
+     * An update after a scope change must move the tree, not leave the old copy
+     * behind and stage a second one beside it.
+     */
+    public function testUpdateAfterAScopeChangeMovesTheTreeInsteadOfDuplicatingIt(): void
+    {
+        $this->writeProject(['sugar-plugin-installer' => ['scope' => 'user']]);
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sugar-plugin-installer:*'));
+        $this->assertSame(0, $status, "installer require failed:\n$out");
+        [$status, $out] = $this->composer('require ' . escapeshellarg('sugarcraft/sample-plugin:*'));
+        $this->assertSame(0, $status, "sample require failed:\n$out");
+
+        $old = $this->home . '/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($old . '/composer.json');
+
+        // A new version gives update a real target to move to.
+        $this->amendSample(['version' => '1.1.0']);
+        $this->setProjectExtra(['sugar-plugin-installer' => ['scope' => 'project']]);
+
+        [$status, $out] = $this->composer('update ' . escapeshellarg('sugarcraft/sample-plugin'));
+        $this->assertSame(0, $status, "update failed after a scope change:\n$out");
+
+        clearstatcache();
+        $new = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->assertFileExists($new . '/composer.json', 'update did not stage the tree into the new scope');
+        $this->assertStringContainsString('"version": "1.1.0"', (string) file_get_contents($new . '/composer.json'));
+        $this->assertDirectoryDoesNotExist($old, 'update left the old tree behind');
+    }
 }

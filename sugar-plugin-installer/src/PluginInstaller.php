@@ -8,6 +8,7 @@ use Composer\Factory;
 use Composer\Installer\LibraryInstaller;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
+use React\Promise\PromiseInterface;
 
 /**
  * Stages `sugar-plugin` packages to the scope the root project selects.
@@ -26,6 +27,21 @@ final class PluginInstaller extends LibraryInstaller
     public function supports(string $packageType): bool
     {
         return $packageType === self::PACKAGE_TYPE;
+    }
+
+    /**
+     * Composer drops every installed package that fails this check before a
+     * command runs, and then skips its uninstall or update. A tree staged before a
+     * scope change sits in another tier, so the configured path alone would make
+     * the package look uninstalled and orphan the tree.
+     */
+    public function isInstalled(InstalledRepositoryInterface $repo, PackageInterface $package)
+    {
+        if (parent::isInstalled($repo, $package)) {
+            return true;
+        }
+
+        return $repo->hasPackage($package) && $this->existingPath($package) !== null;
     }
 
     /**
@@ -72,6 +88,30 @@ final class PluginInstaller extends LibraryInstaller
     private function fallbackPath(PackageInterface $package, \InvalidArgumentException $malformed): string
     {
         $name = $package->getPrettyName();
+        $roots = $this->bundleRoots();
+
+        if ($roots === []) {
+            throw $malformed;
+        }
+
+        $paths = array_map(static fn (string $root): string => StagingPath::forPackage($root, $name), $roots);
+        foreach ($paths as $path) {
+            if (is_dir($path)) {
+                return $path;
+            }
+        }
+
+        return $paths[0];
+    }
+
+    /**
+     * Every bundle root a tree can sit in, the project tier first. A root that
+     * cannot be resolved is skipped; nothing is written from here.
+     *
+     * @return list<string>
+     */
+    private function bundleRoots(): array
+    {
         $roots = [];
 
         try {
@@ -89,18 +129,57 @@ final class PluginInstaller extends LibraryInstaller
         } catch (\RuntimeException) {
         }
 
-        if ($roots === []) {
-            throw $malformed;
+        return $roots;
+    }
+
+    /**
+     * The directory that already holds this package's tree, in whichever tier
+     * it was staged. The configured path is checked first, so a tree in the
+     * selected tier wins. The other tiers matter only after a scope or root
+     * change, which leaves the tree where the old section put it.
+     */
+    private function existingPath(PackageInterface $package): ?string
+    {
+        try {
+            $paths = [$this->getInstallPath($package)];
+            foreach ($this->bundleRoots() as $root) {
+                $paths[] = StagingPath::forPackage($root, $package->getPrettyName());
+            }
+        } catch (\InvalidArgumentException) {
+            return null;
         }
 
-        $paths = array_map(static fn (string $root): string => StagingPath::forPackage($root, $name), $roots);
-        foreach ($paths as $path) {
-            if (is_dir($path)) {
+        foreach (array_unique($paths) as $path) {
+            if (is_dir($path) && $this->holdsPackage($path, $package)) {
                 return $path;
             }
         }
 
-        return $paths[0];
+        return null;
+    }
+
+    /**
+     * A tree belongs to the package only when its composer.json names it. Another
+     * package whose name ends in the same segment can stage to the same directory
+     * name in a tier this project no longer selects, and removing that tree would
+     * delete a plugin the package never installed.
+     */
+    private function holdsPackage(string $path, PackageInterface $package): bool
+    {
+        $manifest = $path . '/composer.json';
+        if (!is_file($manifest)) {
+            return false;
+        }
+
+        try {
+            $decoded = json_decode((string) file_get_contents($manifest), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return false;
+        }
+
+        return is_array($decoded)
+            && is_string($decoded['name'] ?? null)
+            && strtolower($decoded['name']) === strtolower($package->getName());
     }
 
     /**
@@ -183,10 +262,41 @@ final class PluginInstaller extends LibraryInstaller
      * the install path. Our install path is already the package's own staging
      * directory, so a target-dir that matches the package name would strip it
      * back to the bundles root, and remove would delete every staged plugin.
+     *
+     * Removal reads the tree where it sits, not where the current scope would
+     * stage it, so a scope change after install does not orphan the tree.
      */
     protected function getPackageBasePath(PackageInterface $package)
     {
-        return $this->getInstallPath($package);
+        return $this->existingPath($package) ?? $this->getInstallPath($package);
+    }
+
+    /**
+     * LibraryInstaller compares the initial and target paths, both taken from the
+     * configured tier. After a scope or root change they match, so the parent
+     * would keep the old tree and stage a second copy. Remove the old tree where
+     * it is, then stage the new one.
+     */
+    protected function updateCode(PackageInterface $initial, PackageInterface $target)
+    {
+        $stale = $this->existingPath($initial);
+        if ($stale === null || $stale === $this->getInstallPath($target)) {
+            return parent::updateCode($initial, $target);
+        }
+
+        $promise = $this->removeCode($initial);
+        if (!$promise instanceof PromiseInterface) {
+            $promise = \React\Promise\resolve(null);
+        }
+
+        return $promise->then(function () use ($target): PromiseInterface {
+            $promise = $this->installCode($target);
+            if ($promise instanceof PromiseInterface) {
+                return $promise;
+            }
+
+            return \React\Promise\resolve(null);
+        });
     }
 
     /**
