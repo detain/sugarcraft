@@ -176,7 +176,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid, cursor and mode state out, without ever spawning a real terminal. <code>SugarVterm</code> is the in-memory virtual terminal of the SugarCraft ecosystem. It is built on a Paul Williams VT500 state machine shared with <a href="sugar-ansi-parser.html">sugar-ansi-parser</a>, and it mirrors the design of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a>.</p>
+<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid, cursor and mode state out, without ever spawning a real terminal. sugar-vterm is the in-memory virtual terminal of the SugarCraft ecosystem. It is built on a Paul Williams VT500 state machine shared with <a href="sugar-ansi-parser.html">sugar-ansi-parser</a>, and it mirrors the design of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-vterm</code></pre>
@@ -327,7 +327,7 @@ $vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());</code></pre
 <tr><td><code>lines()</code> output renders control sequences on a real terminal</td><td>The grid holds whatever the stream wrote. Treat the output as hostile and sanitize it before echoing, as the example does.</td></tr>
 <tr><td><code>enableAltScreen()</code> throws <code>LogicException</code></td><td>The root <code>Terminal</code> does not model the alternate screen. Use <code>SugarCraft\Vterm\Terminal\Terminal</code>, which does.</td></tr>
 <tr><td>The scrollback is empty after a long stream</td><td><code>CSI 3 J</code> erases it, and the ring holds only the last <code>scrollbackSize</code> rows. Raise the capacity with <code>withScrollbackSize()</code> if you need more history.</td></tr>
-<tr><td>A snapshot looks stale after you edit the grid directly</td><td><code>revision()</code> counts only <code>feed()</code> and <code>flush()</code> calls, so a direct <code>grid()</code> mutation is invisible to it. Go through <code>feed()</code>, or compare snapshots by value.</td></tr>
+<tr><td>A snapshot looks stale after you edit the grid directly</td><td>This applies to the lightweight root <code>SugarCraft\Vterm\Terminal</code>, which has <code>revision()</code>, <code>grid()</code> and <code>snapshot()</code>; the default emulator on this page does not. On the root class, <code>revision()</code> counts only <code>feed()</code> and <code>flush()</code> calls, so a direct <code>grid()</code> mutation is invisible to it. Go through <code>feed()</code>, or compare snapshots by value.</td></tr>
 <tr><td>Long OSC payloads are cut short</td><td>Payloads cap at 64 KiB. Anything past the cap is dropped, and the tail of an overlong title or clipboard write is lost.</td></tr>
 <tr><td>Static analysis flags a call to <code>Terminal::create()</code></td><td>The factory is marked deprecated and takes no <code>scrollbackSize</code>. Use <code>Terminal::new()</code>.</td></tr>
 </table>

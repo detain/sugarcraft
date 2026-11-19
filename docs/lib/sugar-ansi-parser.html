@@ -174,7 +174,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured events (SGR attributes, cursor movement, erase operations, DEC private modes, OSC and DCS strings) without coupling the parser to any cell grid. <code>SugarAnsiParser</code> is the VT500 byte-stream state machine behind <a href="sugar-vterm.html">sugar-vterm</a>, extracted so other consumers can share it. It follows the Paul Williams DEC parser diagram and mirrors the parser side of <a href="https://github.com/charmbracelet/x/tree/main/ansi">charmbracelet/x/ansi</a>.</p>
+<p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured events (SGR attributes, cursor movement, erase operations, DEC private modes, OSC and DCS strings) without coupling the parser to any cell grid. sugar-ansi-parser is the VT500 byte-stream state machine behind <a href="sugar-vterm.html">sugar-vterm</a>, extracted so other consumers can share it. It follows the Paul Williams DEC parser diagram and mirrors the parser side of <a href="https://github.com/charmbracelet/x/tree/main/ansi">charmbracelet/x/ansi</a>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ansi-parser</code></pre>
@@ -212,17 +212,24 @@ foreach ($chunks as $chunk) {
 }
 $parser-&gt;flush();</code></pre>
 
-    <p><strong>Read colon-separated subparameters.</strong> <code>CSI 4:3 m</code> is curly underline, one slot with a subparameter, and it is not the same as <code>CSI 4;3 m</code>. <code>subparams()</code> reports which slots carry a colon, and <code>groupSubparameters()</code> regroups them:</p>
-    <pre class="code"><code class="language-php">$grouped = Parser::groupSubparameters($params, $parser-&gt;subparams());
-// $grouped is a list of lists, one inner list per slot</code></pre>
+    <p><strong>Read colon-separated subparameters.</strong> <code>CSI 4:3 m</code> is curly underline, one slot with a subparameter, and it is not the same as <code>CSI 4;3 m</code>. <code>subparams()</code> reports which slots carry a colon, and <code>groupSubparameters()</code> regroups them. Read the flags inside <code>csiDispatch()</code>, where they describe the sequence being dispatched: the parser clears them when that dispatch returns, so a read after <code>parseComplete()</code> sees none.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\Parser;
+
+// Call this from csiDispatch(), with its $params argument.
+function groupedParams(Parser $parser, array $params): array
+{
+    return Parser::groupSubparameters($params, $parser-&gt;subparams());
+}
+// CSI 4:3 m gives [[4, 3]]; CSI 4;3 m gives [[4], [3]].</code></pre>
 
     <p><strong>Decode an OSC 8 hyperlink.</strong> A hyperlink open carries a URI, and a close is an empty URI. <code>HandlerAdapter</code> reports both through <code>OscHandler::hyperlink()</code>, and it accepts the backtick-terminated form as well:</p>
     <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{HandlerAdapter, Parser, RecordingOscHandler};
 
 $osc = new RecordingOscHandler();
 $parser = new Parser(new HandlerAdapter($csi, $osc));
-$parser-&gt;parseComplete("\x1b]8;;https://example.org\x1b\\link\x1b]8;;\x1b\\");
-$osc-&gt;hyperlinkUri(); // the URI of the currently open link</code></pre>
+$parser-&gt;parseComplete("\x1b]8;;https://example.org\x1b\\link");
+$osc-&gt;hyperlinkUri(); // https://example.org, read while the link is open
+// A close (an empty URI) resets this to '', so read the URI before the close arrives.</code></pre>
 
     <p><strong>Bound a long-lived log.</strong> <code>DebugHandler</code> keeps an unbounded <code>$log</code> by default, which suits test fixtures. For a long-lived mirror, pass <code>maxLogRows</code> and the log becomes a keep-newest ring that counts evictions in <code>$dropped</code>:</p>
     <pre class="code"><code class="language-php">$debug = new DebugHandler(maxLogRows: 500);
