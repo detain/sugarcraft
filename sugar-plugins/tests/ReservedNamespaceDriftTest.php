@@ -9,8 +9,10 @@ use SugarCraft\Plugins\Lang;
 
 /**
  * Keeps Lang::RESERVED in step with every monorepo library's Lang::NAMESPACE.
- * Plugin bundles are skipped: they are not libraries, and a reserved namespace
- * would refuse their own catalog.
+ * The two plugin bundles are skipped by name as well as by their plugin.json
+ * marker: they are not libraries, and a reserved namespace would refuse their
+ * own catalog. Any other directory is checked even if it carries a plugin.json,
+ * so a future library cannot escape the check by adding one.
  *
  * T is first-registration-wins, so a plugin that claimed a library's namespace
  * before the library registered would silently shadow that catalog. Reading
@@ -18,6 +20,9 @@ use SugarCraft\Plugins\Lang;
  */
 final class ReservedNamespaceDriftTest extends TestCase
 {
+    /** Plugin bundles whose catalogs are claimed through Lang::claim, not reserved. */
+    private const PLUGIN_BUNDLES = ['candy-discord', 'candy-msteams'];
+
     public function testEveryLibraryNamespaceIsReserved(): void
     {
         $root = dirname(__DIR__, 2);
@@ -27,14 +32,13 @@ final class ReservedNamespaceDriftTest extends TestCase
 
         $namespaces = [];
         foreach (glob($root . '/{sugar,candy}-*/src/Lang.php', GLOB_BRACE) ?: [] as $file) {
-            // A plugin bundle (plugin.json beside its src/) claims its own catalog
-            // through Lang::claim and is not a library, so it is not reserved.
-            if (is_file(dirname($file, 2) . '/plugin.json')) {
+            $lib = basename(dirname($file, 2));
+            if (in_array($lib, self::PLUGIN_BUNDLES, true) && is_file(dirname($file, 2) . '/plugin.json')) {
                 continue;
             }
             $source = (string) file_get_contents($file);
             if (preg_match("/const\s+NAMESPACE\s*=\s*'([^']+)'/", $source, $match) === 1) {
-                $namespaces[$match[1]] = basename(dirname($file, 2));
+                $namespaces[$match[1]] = $lib;
             }
         }
 

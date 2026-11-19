@@ -63,6 +63,15 @@ abstract class Lang extends BaseLang
     private static array $claimed = [];
 
     /**
+     * Identical copies already accepted, per namespace, keyed by directory.
+     * A copy is hashed once; later lookups for it skip the hash and only
+     * re-check that the claimed copy is still on disk.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $accepted = [];
+
+    /**
      * Translate a key in this plugin's namespace, after checking the
      * NAMESPACE and DIR contract.
      *
@@ -106,6 +115,10 @@ abstract class Lang extends BaseLang
         if (!is_file($dir . DIRECTORY_SEPARATOR . 'en.php')) {
             throw new \InvalidArgumentException("$class DIR '$dir' has no en.php catalog.");
         }
+        if ($held !== null && isset(self::$accepted[$namespace][$dir])) {
+            self::takeOverIfClaimedCopyIsGone($namespace, $held, $dir, $held['fingerprint']);
+            return;
+        }
         $fingerprint = self::fingerprint($dir);
         if ($held !== null) {
             if ($held['fingerprint'] !== $fingerprint) {
@@ -113,14 +126,26 @@ abstract class Lang extends BaseLang
                     "$class NAMESPACE '$namespace' is already claimed by another plugin directory."
                 );
             }
-            // T keeps reading the claimed directory, so once that copy is gone the accepted copy takes over.
-            if (!is_file($held['dir'] . DIRECTORY_SEPARATOR . 'en.php')) {
-                self::$claimed[$namespace] = ['dir' => $dir, 'fingerprint' => $fingerprint];
-                T::overrideNamespace($namespace, $dir);
-            }
+            self::$accepted[$namespace][$dir] = true;
+            self::takeOverIfClaimedCopyIsGone($namespace, $held, $dir, $fingerprint);
             return;
         }
         self::$claimed[$namespace] = ['dir' => $dir, 'fingerprint' => $fingerprint];
+    }
+
+    /**
+     * T keeps reading the claimed directory, so once that copy is gone the
+     * accepted copy takes over.
+     *
+     * @param array{dir: string, fingerprint: string} $held
+     */
+    private static function takeOverIfClaimedCopyIsGone(string $namespace, array $held, string $dir, string $fingerprint): void
+    {
+        if (is_file($held['dir'] . DIRECTORY_SEPARATOR . 'en.php')) {
+            return;
+        }
+        self::$claimed[$namespace] = ['dir' => $dir, 'fingerprint' => $fingerprint];
+        T::overrideNamespace($namespace, $dir);
     }
 
     /**

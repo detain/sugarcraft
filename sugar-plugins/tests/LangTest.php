@@ -236,6 +236,35 @@ final class LangTest extends TestCase
         $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
     }
 
+    public function testAcceptedCopyIsRememberedAndStillRefusesADifferentCatalog(): void
+    {
+        $first = new class () extends Lang {
+            protected const NAMESPACE = 'claim-cache';
+            protected const DIR = __DIR__ . '/fixtures/lang';
+        };
+        $copy = new class () extends Lang {
+            protected const NAMESPACE = 'claim-cache';
+            protected const DIR = __DIR__ . '/fixtures/lang-copy';
+        };
+        $other = new class () extends Lang {
+            protected const NAMESPACE = 'claim-cache';
+            protected const DIR = __DIR__ . '/fixtures/lang-other';
+        };
+
+        $this->assertSame('Hello Ada', $first::t('greeting', ['name' => 'Ada']));
+        $this->assertSame('Hello Ada', $copy::t('greeting', ['name' => 'Ada']));
+        // The second lookup for the same copy takes the remembered path, not a re-hash.
+        $this->assertSame('Hello Ada', $copy::t('greeting', ['name' => 'Ada']));
+
+        $accepted = (new \ReflectionProperty(Lang::class, 'accepted'))->getValue();
+        $this->assertArrayHasKey(__DIR__ . '/fixtures/lang-copy', $accepted['claim-cache']);
+        $this->assertArrayNotHasKey(__DIR__ . '/fixtures/lang-other', $accepted['claim-cache']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('already claimed by another plugin directory');
+        $other::t('greeting');
+    }
+
     public function testSameNamespaceFromTheSameDirectoryIsAccepted(): void
     {
         $again = new class () extends Lang {
