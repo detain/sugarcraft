@@ -157,12 +157,27 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#requirements">Requirements</a></li>
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks-and-how-to">Tasks and how-to</a></li>
+            <li class="toc-h3"><a href="#pick-a-difficulty">Pick a difficulty</a></li>
+            <li class="toc-h3"><a href="#play-a-custom-board">Play a custom board</a></li>
+            <li class="toc-h3"><a href="#save-and-resume-a-game">Save and resume a game</a></li>
+            <li class="toc-h3"><a href="#keep-statistics-across-sessions">Keep statistics across sessions</a></li>
+            <li class="toc-h3"><a href="#start-a-game-from-code">Start a game from code</a></li>
+            <li class="toc-h3"><a href="#read-the-board-without-a-terminal">Read the board without a terminal</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#keys">Keys</a></li>
+            <li class="toc-h3"><a href="#theming-and-colour">Theming and colour</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#versioning-and-changelog">Versioning and changelog</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#play">Play</a></li>
             <li class="toc-h3"><a href="#flagging">Flagging</a></li>
@@ -170,92 +185,263 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Customizable board (width / height / mine count), iterative zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
-
-    <h3 id="requirements" style="margin-top: 32px;">Requirements</h3>
-    <p>PHP 8.3+ with <code>ext-mbstring</code> (the cell-width math behind every glyph) and <code>ext-intl</code> (the locale machinery behind the 16-locale interface). The composer path enforces both transitively through sugar-core's manifest; the standalone phar installs nothing through composer, so the binary preflights them itself and refuses with a named exit-1 message (<code>candy-minesweeper requires ext-mbstring</code>) before the first frame, never a half-rendered board dying on an undefined function.</p>
+<p class="lede" style="margin-top: 28px;">CandyMinesweeper is Minesweeper for the terminal, built on the SugarCraft stack. It has a customisable board, an iterative flood-fill, win and loss detection, vim-style movement, mouse support, a mid-game save and resume, opt-in statistics and a 16-locale interface. It is a PHP 8.3+ port of the design of <a href="https://github.com/maxpaulus43/go-sweep">maxpaulus43/go-sweep</a>, a Go game in the Charm ecosystem. The game logic lives in a pure <code>Board</code> class, so every reveal can be tested and driven without a terminal.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-minesweeper
-./vendor/bin/candy-minesweeper       # play straight from the dependency
+    <pre class="code"><code class="language-shell">composer global require sugarcraft/candy-minesweeper
+candy-minesweeper                                # default 10x10 board, 12 mines</code></pre>
+    <p>Requires PHP 8.3 or newer with <code>ext-mbstring</code> and <code>ext-intl</code>. The Composer path enforces both through sugar-core. The standalone phar installs nothing through Composer, so the binary checks the two extensions at boot and exits with status 1 and a named message if either is missing. On Debian or Ubuntu the packages are <code>php8.3-mbstring</code> and <code>php8.3-intl</code>.</p>
+    <p>A project-local install works through <code>vendor/bin/candy-minesweeper</code>. From a clone of the monorepo, run <code>composer install</code> inside <code>candy-minesweeper/</code> and then <code>./bin/candy-minesweeper</code>.</p>
+    <pre class="code"><code class="language-shell">wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/latest/candy-minesweeper.phar
+sha256sum -c candy-minesweeper.phar.sha256    # verify the digest
+php candy-minesweeper.phar --version</code></pre>
+    <p>The phar channels are frozen at present. The published <code>latest</code> artifact predates the current sibling pins, and new publish builds are blocked fleet-wide. Until that clears, the Composer paths are the only fresh channel.</p>
 
-# or run the shipped binary from a clone:
-composer install
-./bin/candy-minesweeper
+    <h3 id="quickstart" style="margin-top: 40px;">Quickstart</h3>
+    <p>Start a game on a chosen board, or use the picker to pick a preset from inside the game.</p>
+    <pre class="code"><code class="language-shell">candy-minesweeper --medium                # 16x16 with 40 mines
+candy-minesweeper 16 10                   # 16 columns by 10 rows, 20 mines by default
+candy-minesweeper 9 9 10                  # 9 wide, 9 tall, 10 mines
+candy-minesweeper --pick                  # open the board picker first</code></pre>
+    <p>The game draws the board in a rounded frame, with a status line and a help footer below it. Move the cursor with the arrow keys or <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd>, reveal with <kbd>Space</kbd>, and flag with <kbd>f</kbd>.</p>
+    <p>The game logic also runs without a terminal. <code>examples/headless.php</code> reveals one cell on a fixed-seed 8x5 board, prints the grid as text and then reveals every safe cell. Its output on every run is:</p>
+    <pre class="code"><code class="language-text">after revealing (0,0):
+.1######
+.2######
+.2######
+12######
+########
+won: no
 
-# or grab the rolling latest phar (rebuilt on every push to master):
-wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/latest/candy-minesweeper.phar
-php candy-minesweeper.phar</code></pre>
+after revealing every safe cell:
+.111.1#1
+.2#2.111
+.2#3211.
+123#2#1.
+1#21211.
+won: yes</code></pre>
+    <p>In the text grid, <code>#</code> is a hidden cell, <code>F</code> is a flag, <code>.</code> is a revealed empty cell, a digit is the count of neighbouring mines, and <code>*</code> is a revealed mine. The six <code>#</code> left at the end are the six mines.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">./bin/candy-minesweeper                    # 10×10, 12 mines (defaults)
-./bin/candy-minesweeper 16 16 40           # positional args: width height mines</code></pre>
-    <pre class="code"><code class="language-php">// Programmatic:
-use SugarCraft\Core\MouseMode;
-use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
+    <h3 id="concepts" style="margin-top: 40px;">Concepts</h3>
+    <p>The board is a grid of immutable <code>Cell</code> values. Each cell records whether it holds a mine, whether it is revealed, whether it carries a flag or a question mark, and how many of its eight neighbours hide mines. <code>Board</code> is the only place that changes that state. Every transition returns a new board: <code>reveal()</code>, <code>cycleMarker()</code> and <code>chord()</code>.</p>
+    <p><strong>Numbers are the clue.</strong> A revealed cell shows how many of its eight neighbours hide mines. The in-game help footer teaches that rule on its first line.</p>
+    <p><strong>The first reveal is always safe.</strong> Mines are placed after the first click, so the clicked cell and its 3x3 neighbourhood start mine-free. At edges and corners the zone is smaller, with 6 or 4 guaranteed-safe cells. A board too dense for the full zone falls back to keeping only the clicked cell clear. The custom-board limits prevent that from happening in a normal game.</p>
+    <p><strong>Flood-fill.</strong> Revealing a zero cell reveals its neighbours, and so on across the connected empty region. The fill is iterative and stack-based, so a large open board cannot overflow the call stack.</p>
+    <p><strong>Winning.</strong> You win by revealing every cell that is not a mine. Flags are notes. The win check counts revealed safe cells only, so a board can be won with no flags at all. <code>Board::isWon()</code> compares a counter with <code>width x height - mines</code>, so the check is constant-time on any board size.</p>
+    <p><strong>Markers.</strong> <kbd>f</kbd> cycles a cell through flag, question mark and clear. A question mark is a free memo that never counts toward the mine total and never takes part in a chord. Flagging is refused once the flags equal the mine count, and un-flagging stays free.</p>
+    <p><strong>Chords.</strong> When a revealed number has exactly that many flagged neighbours, <kbd>c</kbd>, a middle-click or a double left-click reveals the remaining neighbours. The flags must match exactly. If any flag is wrong, the chord detonates on it. A revealed zero is never chordable.</p>
+    <p><strong>The clock.</strong> The timer starts at the first successful reveal or chord. It is wall-clock time and has no pause, so an idle spell inflates a game in progress. Saves restore the elapsed time but never record a best time.</p>
+
+    <h3 id="tasks-and-how-to" style="margin-top: 24px;">Tasks and how-to</h3>
+    <h3 id="pick-a-difficulty" style="margin-top: 16px;">Pick a difficulty</h3>
+    <p>Four presets exist. Pass one as a flag, or pick it from the in-game picker with <kbd>n</kbd> and the keys <kbd>1</kbd> to <kbd>4</kbd>.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Preset</th><th scope="col">Flag</th><th scope="col">Board</th><th scope="col">Mines</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Difficulty::Easy</code></td><td><code>--easy</code></td><td>9 x 9</td><td>10</td></tr>
+<tr><td><code>Difficulty::Standard</code></td><td><code>--standard</code> (the default)</td><td>10 x 10</td><td>12</td></tr>
+<tr><td><code>Difficulty::Medium</code></td><td><code>--medium</code></td><td>16 x 16</td><td>40</td></tr>
+<tr><td><code>Difficulty::Expert</code></td><td><code>--expert</code></td><td>30 x 16</td><td>99</td></tr>
+</tbody>
+</table>
+    <h3 id="play-a-custom-board" style="margin-top: 16px;">Play a custom board</h3>
+    <p>Pass a width, a height and a mine count. Width is columns and height is rows. Each side must be 2 to 50, and the mine count must leave a safe 3x3 area for the first click, so <code>1 &lt;= mines &lt;= width x height - 9</code>. Boards of fewer than 10 cells are refused. If you give only the width and height, the mine count defaults to one eighth of the cells, rounded down, with a minimum of 1.</p>
+    <pre class="code"><code class="language-shell">candy-minesweeper 30 16 99                # the Expert shape, by hand
+candy-minesweeper 20 20                   # 20x20 with 50 mines by default</code></pre>
+    <h3 id="save-and-resume-a-game" style="margin-top: 16px;">Save and resume a game</h3>
+    <p>Press <kbd>S</kbd> to write the live game to a single save slot, and <kbd>L</kbd> to load it. Loading works after a win or a loss too, so you can replay the exact board. Saving is refused once the board is finished, which leaves the slot unchanged.</p>
+    <p>The slot is <code>$XDG_CONFIG_HOME/candy-minesweeper/savegame.json</code> when <code>XDG_CONFIG_HOME</code> is set, and <code>~/.config/candy-minesweeper/savegame.json</code> otherwise. It is written with mode <code>0600</code> through an atomic write. The slot records the full mine layout as well as your progress. Treat the file as private if you sync dotfiles.</p>
+    <h3 id="keep-statistics-across-sessions" style="margin-top: 16px;">Keep statistics across sessions</h3>
+    <p>Statistics are opt-in. Set <code>CANDY_MINESWEEPER_STATS</code> to a file path and each finished game is tallied there per preset: games, wins and best time. Only boards whose shape matches a preset are tallied, and a save restored with <kbd>L</kbd> never records a best time.</p>
+    <pre class="code"><code class="language-shell">export CANDY_MINESWEEPER_STATS="$HOME/.local/state/candy-minesweeper/stats.json"
+candy-minesweeper --standard</code></pre>
+    <h3 id="start-a-game-from-code" style="margin-top: 16px;">Start a game from code</h3>
+    <p>Build a <code>Game</code> with <code>Game::start()</code>, <code>Game::withDifficulty()</code> or <code>Game::withCustom()</code>, and pass a seeded generator to make the layout repeatable. <code>examples/play.php</code> shows the full runtime wiring.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
+use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
 
-(new Program(Game::start(width: 16, height: 16, mines: 40),
-             new ProgramOptions(useAltScreen: true,
-                                mouseMode: MouseMode::CellMotion)))-&gt;run();</code></pre>
+// one of the three constructors, passed to the runtime
+$game = Game::withDifficulty(Difficulty::Medium);      // a preset
+$game = Game::withCustom(12, 10, 14);                  // a custom shape
+$game = Game::start(width: 12, height: 10, mines: 14); // the blank board the binary uses
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>First-click safety</strong><span>Mines aren't placed until the first reveal, with the clicked cell's 3×3 neighbourhood excluded (6 or 4 cells at edges) — every game gets a non-trivial flood-fill on click 1. On densely customized boards that cannot spare a full 3×3 the exclusion falls back to the clicked cell alone, so the first click is still never a mine and every requested mine is placed.</span></div>
-      <div class="feature"><strong>Iterative flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like classic Minesweeper.</span></div>
-      <div class="feature"><strong>Vim-style movement</strong><span><code>hjkl</code> alongside arrows; cursor clamps at board edges.</span></div>
-      <div class="feature"><strong>Flag toggle</strong><span><code>f</code> flags / unflags the cursor cell; flagged cells can't be revealed by accident.</span></div>
-      <div class="feature"><strong>Chord click</strong><span><code>c</code> or middle-click on a satisfied number reveals all unflagged neighbours — mirrors classic left+right chord behavior.</span></div>
-      <div class="feature"><strong>Sub-second timer</strong><span>The clock reads <code>microtime(true)</code> internally, but every observable path — the status line and the persisted best times — is whole seconds; frozen on win/lose.</span></div>
-      <div class="feature"><strong>Best-time persistence</strong><span>Opt-in via <code>CANDY_MINESWEEPER_STATS=/path/stats.json</code> (off by default): <code>DifficultyStats</code> then persists games/wins/best time per difficulty to JSON atomically via sugar-core <code>AtomicJsonFile</code> (flock sidecar, temp + rename) so crashes never corrupt the record. Records ride live clocks only: a savegame restore re-anchors the timer from the file, so restored games still count games and wins but can never set a best time (the brand is monotonic per session). The live clock is wall-clock with no pause — AFK time and laptop sleeps inflate a running game, and one dishonestly slow first entry shadows a preset's minimum until a faster run beats it.</span></div>
-      <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked. O(1) via <code>revealedCount</code> — no grid scan on each move.</span></div>
-      <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
-      <div class="feature"><strong>Save / resume mid-game</strong><span>Press <code>S</code> to write the live board to the single save slot — <code>$XDG_CONFIG_HOME/candy-minesweeper/savegame.json</code> when set, <code>~/.config/candy-minesweeper/savegame.json</code> otherwise (mode 0600) — and <code>L</code> to restore it. The slot carries the full live mine layout: it is the answer key to the game in progress, so keep the file private if you sync dotfiles. Backed by <code>Board::serialize()</code> versioned JSON; <code>unserialize()</code> re-validates every shape and recomputes the counts, so tampered payloads are refused rather than half-parsed.</span></div>
-      <div class="feature"><strong>New-game picker</strong><span>Press <code>n</code> — live or on the post-game banner — to choose another board without a shell round-trip: <code>1-4</code> start the presets, <code>c</code> opens a digit form (width, height, mines) validated by the same rules as the CLI arguments, refusals included. Plain launch still plays the classic 10×10 board straight away (ruling G5-b), and the whole picker speaks the terminal's locale.</span></div>
-      <div class="feature"><strong>Localized interface</strong><span>Status line, win/lose banners and the help footer route through <code>Lang::t</code>; <code>LC_ALL</code>/<code>LC_MESSAGES</code>/<code>LANG</code> pick the locale from 16 shipped files.</span></div>
-      <div class="feature"><strong>Custom difficulty</strong><span><code>Ui\CustomDifficulty</code> validates rows (2–50), cols (2–50), mines (1 to rows×cols−9) with i18n-aware error messages.</span></div>
-      <div class="feature"><strong>Terminal graceful downgrade</strong><span>Setting <code>NO_COLOR</code>, <code>CLICOLOR=0</code>, or <code>TERM=dumb</code> strips the foreground/background colors through the fleet color authority; the game stays fully playable without them.</span></div>
-    </div>
+(new Program($game))->run();</code></pre>
+    <h3 id="read-the-board-without-a-terminal" style="margin-top: 16px;">Read the board without a terminal</h3>
+    <p>Use <code>Board</code> directly. The cells come back as rows, and <code>reveal()</code> takes a generator closure for the first click. The <code>examples/headless.php</code> script is a complete worked version of this.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Minesweeper\Board;
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+$board = Board::blank(8, 5, 6);
+$board = $board->reveal(0, 0, $rand);          // $rand: Closure(int): int
+if ($board->isWon()) {
+    // every safe cell is revealed
+}
+$cell = $board->cell(0, 0);                    // Cell|null, read-only</code></pre>
+
+    <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>The public classes group by role. The table lists the methods a caller most often needs.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
+<tr><td>Game</td><td>start(width, height, mines, rand, stats, statsPath, notice)</td><td>Builds a game on a blank board. Mines are placed on the first reveal.</td></tr>
+<tr><td>Game</td><td>withDifficulty(Difficulty, ...)</td><td>Builds a game on a preset shape.</td></tr>
+<tr><td>Game</td><td>withCustom(width, height, mines, ...)</td><td>Builds a game on a custom shape.</td></tr>
+<tr><td>Game</td><td>withPicker() / presetKeys()</td><td>Opens the board picker. <code>presetKeys()</code> lists the keys that start a preset.</td></tr>
+<tr><td>Game</td><td>update(Msg) / view() / subscriptions()</td><td>The TEA surface: handle a key, mouse or tick message, render the frame, and subscribe to the 1 Hz clock.</td></tr>
+<tr><td>Game</td><td>elapsed() / difficulty() / stats() / savePath() (static)</td><td>The elapsed seconds, the preset in play (or null), the current statistics, and the save slot path.</td></tr>
+<tr><td>Board</td><td>blank(width, height, mines) / fromRows(...)</td><td>Builds an empty board, or one from explicit rows.</td></tr>
+<tr><td>Board</td><td>reveal(x, y, rand)</td><td>Reveals a cell and flood-fills zeros. Places mines on the first reveal.</td></tr>
+<tr><td>Board</td><td>cycleMarker(x, y) / chord(x, y)</td><td>Cycles a flag and question mark, or chords a satisfied number.</td></tr>
+<tr><td>Board</td><td>cell(x, y) / rows() / isWon() / flagCount()</td><td>Reads one cell, all rows, the win state and the flag count.</td></tr>
+<tr><td>Board</td><td>serialize() / unserialize(data)</td><td>Writes and reads the versioned save payload. The reader re-checks every field.</td></tr>
+<tr><td>Cell</td><td>withMine() / withAdjacent() / reveal() / cycleMarker()</td><td>Immutable transitions on one cell.</td></tr>
+<tr><td>Difficulty</td><td>width() / height() / mines() / fromDimensions(w, h, m)</td><td>The four presets, and the preset that matches a shape.</td></tr>
+<tr><td>CustomDifficulty</td><td>new() / fromInput(rows, cols, mines) / label() / labelShape()</td><td>Validated custom-board input with named errors.</td></tr>
+<tr><td>Stats</td><td>gamesPlayed(d) / wins(d) / winRate(d) / bestTime(d) / withGame(d, won, time)</td><td>Immutable per-preset tallies.</td></tr>
+<tr><td>DifficultyStats</td><td>load(path) / save(path) / fromStats(stats) / withGame(...)</td><td>Atomic JSON persistence for the stats file.</td></tr>
+<tr><td>Renderer</td><td>render(Game) / renderWithScanner(Game) / resolveClick(Game, col, row)</td><td>The pure view function, and the mapping from a mouse click to a cell.</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Looks up a UI string through sugar-core's translator.</td></tr>
+<tr><td>TickMsg</td><td>()</td><td>The 1 Hz clock tick that repaints the status line.</td></tr>
+<tr><td>Support\Version</td><td>line() / current()</td><td>The version line printed by <code>--version</code>.</td></tr>
+</tbody>
+</table>
+
+    <h3 id="configuration" style="margin-top: 40px;">Configuration</h3>
+    <p>The binary takes its board from the command line and its environment from the shell. The options accepted by the binary are below. Every block of the README accepts the same options.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Option</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--easy</code>, <code>--standard</code>, <code>--medium</code>, <code>--expert</code></td><td>Start a preset. Only one preset flag is allowed.</td></tr>
+<tr><td><code>[width] [height] [mines]</code></td><td>A custom board. Cannot be combined with a preset flag.</td></tr>
+<tr><td><code>-p</code>, <code>--pick</code></td><td>Open the board picker as the first frame. Cannot be combined with a preset or with dimensions.</td></tr>
+<tr><td><code>-v</code>, <code>--version</code></td><td>Print the version and exit.</td></tr>
+<tr><td><code>-h</code>, <code>--help</code></td><td>Print the usage text and exit.</td></tr>
+</tbody>
+</table>
+    <p>Any other option exits with status 1 and prints the usage text to stderr. Nothing is silently ignored.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Environment variable</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>CANDY_MINESWEEPER_STATS</code></td><td>Path of the statistics file. Unset means the game stays in memory.</td></tr>
+<tr><td><code>CANDY_MINES_STATS</code></td><td>The pre-rename variable. Still read, with a deprecation warning.</td></tr>
+<tr><td><code>XDG_CONFIG_HOME</code></td><td>Changes the directory of the save slot.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>CLICOLOR=0</code>, <code>TERM=dumb</code></td><td>Drop to plain text. The board switches to its narrow glyph set.</td></tr>
+<tr><td><code>FORCE_COLOR</code>, <code>CLICOLOR_FORCE</code></td><td>Assert colour to a host that misdetects as dumb.</td></tr>
+<tr><td><code>COLORFGBG</code></td><td>A background report ending in <code>;7</code> selects the darkened light-console palette.</td></tr>
+<tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>Choose the interface locale. The game falls back to English.</td></tr>
+</tbody>
+</table>
+
+    <h3 id="keys" style="margin-top: 40px;">Keys</h3>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Key</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd></td><td>Move the cursor.</td></tr>
+<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>Jump to the start or end of the row.</td></tr>
+<tr><td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td><td>Jump half a board height up or down.</td></tr>
+<tr><td><kbd>Space</kbd> / <kbd>Enter</kbd></td><td>Reveal the cell.</td></tr>
+<tr><td><kbd>f</kbd></td><td>Cycle the marker: flag, then question mark, then clear.</td></tr>
+<tr><td><kbd>c</kbd>, middle-click or double left-click</td><td>Chord a revealed number.</td></tr>
+<tr><td><kbd>S</kbd> / <kbd>L</kbd></td><td>Save the live game, or load the saved game.</td></tr>
+<tr><td><kbd>r</kbd></td><td>Restart with new mines.</td></tr>
+<tr><td><kbd>n</kbd></td><td>New game. Pick a preset with <kbd>1</kbd> to <kbd>4</kbd>, or open the custom form with <kbd>c</kbd>.</td></tr>
+<tr><td><kbd>q</kbd> / <kbd>Esc</kbd></td><td>Quit. On a live board with an unsaved position, the first press asks for confirmation.</td></tr>
+<tr><td><kbd>Ctrl+C</kbd></td><td>Quit at once.</td></tr>
+<tr><td>Left click / right click</td><td>Reveal / flag. Terminals that do not honour cell motion tracking simply never send mouse rows, and the keyboard still works.</td></tr>
+</tbody>
+</table>
+    <p>Ctrl and Alt letters are inert, so an editor habit cannot restart or save the game by accident. Some control combinations arrive as plain bytes and act as Enter or Escape. Ctrl+J and Ctrl+M reveal like <kbd>Space</kbd>, and Ctrl+[ quits like <kbd>Esc</kbd>.</p>
+
+    <h3 id="theming-and-colour" style="margin-top: 40px;">Theming and colour</h3>
+    <p>The board uses a number palette in which each adjacent count has its own hue. The count is also drawn as the digit itself, so the board reads correctly without colour. Flags are a bold gold <code>F</code>, hidden cells are a width-safe colon, and the cursor is reverse video.</p>
+    <p>Colour follows the terminal. Setting <code>NO_COLOR</code>, <code>CLICOLOR=0</code> or <code>TERM=dumb</code> drops the output to plain text. The renderer then uses an ASCII glyph set: an <code>x</code> for a wrong flag and a <code>+</code> border. On a light console, a background report ending in <code>;7</code> in <code>COLORFGBG</code> selects darkened versions of every ink, each of which clears 4.5:1 contrast against white. Terminals that declare neither keep the dark palette.</p>
+    <p>The always-on help legend uses a dim lavender that sits below WCAG AA for body text against the dark background. <code>NO_COLOR</code> paints every line in the terminal's own ink, which is the highest-contrast option.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-minesweeper">Source on GitHub (canonical: the <code>candy-minesweeper/</code> directory of the monorepo)</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-minesweeper/blob/master/candy-minesweeper/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-minesweeper/tree/master/candy-minesweeper/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/maxpaulus43/go-sweep">go-sweep</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/play.php</code>: the interactive game wired by hand, with the same locale, colour and mouse setup as the binary. Run it in a terminal with <code>php examples/play.php</code>. With stdin at <code>/dev/null</code> it draws one frame and exits with status 0.</li>
+      <li><code>examples/headless.php</code>: the pure <code>Board</code> API with no terminal and no event loop. It takes no input, uses a fixed seed and prints the output shown in the Quickstart. Run it with <code>php examples/headless.php</code>.</li>
+    </ul>
+    <p>The gameplay recordings at the foot of this page are the <code>.vhs/play.tape</code> and <code>.vhs/flagging.tape</code> tapes, each of which drives <code>./bin/candy-minesweeper</code>.</p>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite covers the board rules, the game flow, the saves, the statistics and the views. Snapshot tests in <code>tests/GoldenRenderTest.php</code> pin the first-click safe area, the cascade reveal and the win overlay against golden files under <code>tests/fixtures/</code>, using <code>sugar-testing</code>. <code>LocaleParityTest</code> fails when any of the 16 locale files drifts from the English key set. <code>FooterWidthGuardTest</code> keeps the help footer within 80 columns in every locale.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The binary exits with <code>candy-minesweeper requires ext-mbstring</code>.</strong> The phar cannot install extensions through Composer, so it checks them at boot. Install <code>php8.3-mbstring</code> and <code>php8.3-intl</code>, then check with <code>php -m</code>.</li>
+      <li><strong>The footer wraps on a wide-glyph terminal.</strong> Terminals set to double-width ambiguous characters, such as <code>--ambigwidth=2</code>, widen the footer separator, the arrow hints and the rounded border. Set the terminal's ambiguous-width option to narrow.</li>
+      <li><strong>The board is cut off in a small terminal.</strong> The board renders in full with no scrolling viewport, and there is no resize re-fit. <code>Expert</code> needs a terminal at least 80 by 24, and boards near 50 by 50 need a larger terminal.</li>
+      <li><strong>The save refuses to load.</strong> The message <code>save refused (unreadable or tampered)</code> means the file failed validation. The reader re-checks every field and refuses foreign versions, so a hand-edited slot leaves the game untouched.</li>
+      <li><strong>Best times look wrong.</strong> The clock is wall-clock time with no pause, so an idle spell inflates a game in progress. A best time is a minimum, so one dishonestly slow first entry stands until a faster run beats it.</li>
+      <li><strong>Two instances lose statistics.</strong> Writes are atomic, but two processes sharing one stats file resolve as last-writer-wins. Give each parallel session its own <code>CANDY_MINESWEEPER_STATS</code> path.</li>
+      <li><strong>Screen readers cannot read the board.</strong> The board is conveyed only through the visual frame, and there is no text-dump mode. Keyboard play works, and the digits, <code>F</code> and cursor reverse video carry the meaning without colour.</li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>The pure state lives in <code>Board</code>, <code>Cell</code> and <code>Difficulty</code>. The runtime is one Model, <code>Game</code>, which owns the cursor, the key routing, the flow and the timer. <code>Renderer</code> is a pure function from a <code>Game</code> to a string, built on sugar-cellbuffer and sugar-mouse. Persistence sits in <code>Stats</code> and <code>DifficultyStats</code>, which use sugar-core's atomic JSON file.</p>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Game</td><td>start(width, height, mines)</td><td>Start a new game (optional <code>$rand</code>, <code>$stats</code>, <code>$statsPath</code>, <code>$notice</code>)</td></tr>
-<tr><td>Game</td><td>withDifficulty(d)</td><td>Start with a preset difficulty</td></tr>
-<tr><td>Game</td><td>withCustom(width, height, mines)</td><td>Start a custom-sized game; it tallies stats when its dimensions match a preset (via <code>difficulty()</code>) and plays without preset tallies otherwise</td></tr>
-<tr><td>Game</td><td>difficulty()</td><td>The <code>Difficulty</code> whose dimensions the board matches, or null for a custom shape</td></tr>
-<tr><td>Game</td><td>savePath()</td><td>Absolute save-slot path resolved at call time (<code>$XDG_CONFIG_HOME</code> wins, then <code>$HOME/.config</code>); null when neither is usable, degrading save/load to announced no-ops</td></tr>
-<tr><td>Game</td><td>elapsed()</td><td>Elapsed time as float seconds (the status line and stats carry whole seconds)</td></tr>
-<tr><td>Game</td><td>recordResult(elapsed)</td><td>Record win/loss and update stats</td></tr>
-<tr><td>Board</td><td>blank(width, height, mineCount)</td><td>Empty board; mines placed on the first reveal</td></tr>
-<tr><td>Board</td><td>cell(x, y)</td><td>Get cell at position</td></tr>
-<tr><td>Board</td><td>reveal(x, y, rand)</td><td>Reveal the cursor cell — places mines on the first call, then floods; no-ops on revealed or flagged cells</td></tr>
-<tr><td>Board</td><td>toggleFlag(x, y)</td><td>Flag / unflag a cell; no-ops once the cell is revealed</td></tr>
-<tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveals the unflagged neighbours of a satisfied number; a mis-flagged mine detonates through the flood</td></tr>
-<tr><td>Board</td><td>isWon()</td><td>True when every non-mine cell is revealed (O(1))</td></tr>
-<tr><td>Board</td><td>flagCount()</td><td>Live flag total (tracked incrementally)</td></tr>
-<tr><td>Board</td><td>serialize()</td><td>Emit versioned JSON string ({v:1, w, h, m, p, e, r, c}) — the save slot's board payload</td></tr>
-<tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload, re-validating shapes and recomputing counts</td></tr>
-<tr><td>Difficulty</td><td>enum (Easy/Standard/Medium/Expert)</td><td>The four shipped presets; <code>fromDimensions(w, h, m)</code> maps a board shape back to its preset (or null)</td></tr>
-<tr><td>Stats</td><td>pure value object</td><td>In-memory games/wins/best time per difficulty — <code>withGame(d, won, time)</code>, <code>gamesPlayed(d)</code>, <code>wins(d)</code>, <code>winRate(d)</code>, <code>bestTime(d)</code></td></tr>
-<tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws the translated string via <code>Lang::t</code> on violation</td></tr>
-<tr><td>Ui\CustomDifficulty</td><td>defaults()</td><td>Factory — 9×9, 10 mines</td></tr>
-<tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent; RuntimeException on an invalid or unsupported-version file)</td></tr>
-<tr><td>DifficultyStats</td><td>save(path)</td><td>Persist stats atomically via AtomicJsonFile (flock + temp + rename)</td></tr>
-<tr><td>DifficultyStats</td><td>withGame(d, won, time)</td><td>Return new DifficultyStats with the game recorded</td></tr>
-<tr><td>DifficultyStats</td><td>stats()</td><td>Read side as the pure <code>Stats</code> value object</td></tr>
+<thead>
+<tr><th scope="col">File</th><th scope="col">Role</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Cell</code></td><td>A value object: mine, revealed, flagged, question mark and the adjacent count.</td></tr>
+<tr><td><code>Board</code></td><td>The grid and every transition. Win detection is O(1) through a revealed counter. Serialises to versioned JSON.</td></tr>
+<tr><td><code>Game</code></td><td>The TEA model: cursor, key routing, game flow and the timer.</td></tr>
+<tr><td><code>Difficulty</code></td><td>The four presets, with dimension and mine counts.</td></tr>
+<tr><td><code>Stats</code> and <code>DifficultyStats</code></td><td>Immutable tallies per preset, and their atomic JSON persistence.</td></tr>
+<tr><td><code>Renderer</code></td><td>The pure view function and the click-to-cell mapping.</td></tr>
+<tr><td><code>Ui\CustomDifficulty</code></td><td>Validated custom dimensions, with an error that names the violated bound.</td></tr>
+<tr><td><code>Lang</code> and <code>TickMsg</code></td><td>The translation facade and the 1 Hz clock message.</td></tr>
+</tbody>
 </table>
+    <p>The board uses an immutable list of lists of <code>Cell</code>. Mines are placed after the first click, and the save format is the same versioned JSON that the in-game slot uses.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The design antecedent is the Go game <a href="https://github.com/maxpaulus43/go-sweep">maxpaulus43/go-sweep</a>. It was transcribed rather than cloned, and the parity record lives in the monorepo's <code>docs/old/repo_map/</code>. The table shows the rows that still hold.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Aspect</th><th scope="col">go-sweep</th><th scope="col">candy-minesweeper</th></tr>
+</thead>
+<tbody>
+<tr><td>Language</td><td>Go</td><td>PHP 8.3+</td></tr>
+<tr><td>Framework</td><td>Bubble Tea</td><td>sugar-core (ReactPHP)</td></tr>
+<tr><td>First-click safety</td><td>TODO comment, not implemented</td><td>Implemented, with a 3x3 safe zone and a dense-board fallback</td></tr>
+<tr><td>Win detection</td><td>O(n) grid scan</td><td>O(1) through a revealed counter</td></tr>
+<tr><td>Mine placement</td><td>Shuffle all cells up front</td><td>Deferred until the first click</td></tr>
+<tr><td>Recursion</td><td>Recursive sweep</td><td>Iterative, stack-based flood-fill</td></tr>
+<tr><td>Chord rule</td><td>Fires at <code>adjFlags &gt;= adjMines</code>, chords revealed zeros</td><td>Exact match only, zeros are not chordable, chord on <kbd>c</kbd> or the middle click</td></tr>
+<tr><td>RNG</td><td>Seeded from the clock</td><td>An injectable <code>Closure(int): int</code></td></tr>
+<tr><td>Serialization</td><td>None</td><td>Versioned JSON, shared with the save slot</td></tr>
+<tr><td>Internationalisation</td><td>None</td><td>16 locales</td></tr>
+<tr><td>Timers</td><td>Whole seconds</td><td>Sub-second, shown by a 1 Hz tick</td></tr>
+</tbody>
+</table>
+    <p>The shape of the 10 x 10 default board, the picker, the custom form, the save payload and the colour degradation have no upstream counterpart.</p>
+
+    <h3 id="versioning-and-changelog" style="margin-top: 40px;">Versioning and changelog</h3>
+    <p>The version is reported by <code>--version</code>, and a phar build reads it from the archive metadata. The package was published as <code>sugarcraft/candy-mines</code> until the 2026-10 rename. The namespace moved from <code>SugarCraft\Mines\</code> to <code>SugarCraft\Minesweeper\</code>. The old <code>CANDY_MINES_STATS</code> variable is still read, with a deprecation warning, and nothing under the old name receives updates.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a>: the Model and Program runtime, the translator and the atomic JSON file.</li>
+      <li><a href="sugar-style.html">sugar-style</a>: the styled frame and the colour profile.</li>
+      <li><a href="sugar-testing.html">sugar-testing</a>: the golden-file helpers behind the render tests.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
     </div>
   </div>
 </section>
