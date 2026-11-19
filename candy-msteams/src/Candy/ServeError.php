@@ -7,10 +7,10 @@ namespace CandyCode\Bundles\MsTeams\Candy;
 use SugarCraft\Plugins\Host\RefusedCall;
 
 /**
- * A serve-side failure with its kind in front: the JSON-RPC error `data.kind`
- * (or the bridge's own — `not_connected`, `timeout`, `dropped`, `unreachable`,
- * `handshake_failed`, `bad_url`) is what callers branch on; the message is
- * what the log shows.
+ * A serve-side failure with its kind in front: callers branch on the kind, which for a refused
+ * call is the wire's kind (the JSON-RPC error `data.kind`, carried through by the in-process host)
+ * and for any other failure is `internal`. The in-process door produces no other kinds; the
+ * message is what the log shows.
  */
 class ServeError extends \RuntimeException
 {
