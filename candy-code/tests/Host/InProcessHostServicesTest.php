@@ -7,10 +7,16 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Host\InProcessHostServices;
+use SugarCraft\Code\Host\InProcessPeer;
+use SugarCraft\Code\Protocol\Client;
+use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
+use SugarCraft\Code\Protocol\Methods\ServerMethods;
+use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\RpcError;
+use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 
@@ -28,6 +34,9 @@ final class InProcessHostServicesTest extends TestCase
 
     private InProcessHostServices $host;
 
+    /** The probe dispatcher a test built, stopped in tearDown() so its ticks leave the shared loop. */
+    private ?Dispatcher $probe = null;
+
     /** @var list<string> the server log lines, in order */
     private array $logs = [];
 
@@ -43,6 +52,7 @@ final class InProcessHostServicesTest extends TestCase
     protected function tearDown(): void
     {
         $this->host->disconnect();
+        $this->probe?->stop('test over');
         $this->fixture->tearDown();
     }
 
@@ -119,6 +129,42 @@ final class InProcessHostServicesTest extends TestCase
 
         self::assertSame(ErrorCode::ParseError, $inProcess->errorCode);
         self::assertSame('parse_error', $inProcess->kind);
+    }
+
+    /**
+     * The wire substitutes invalid UTF-8 in an answer (JsonRpc::encode), so a bundle
+     * that json-encodes a result must get the same text on both doors, not the raw bytes.
+     */
+    public function testAnInvalidUtf8ResultIsSubstitutedOnBothDoors(): void
+    {
+        $dispatcher = $this->probeDispatcher(static fn (): array => ['text' => "ok\xFF", 'lines' => ["\xC3\x28"]]);
+        $wire = WireClient::open($dispatcher, 'probe-wire');
+        $wire->hello();
+
+        $wireResult = $wire->call('probe.raw');
+        $inResult = $this->probeInProcess($dispatcher);
+
+        self::assertSame($wireResult, $inResult);
+        self::assertSame(['text' => "ok\u{FFFD}", 'lines' => ["\u{FFFD}("]], $inResult);
+        self::assertNotFalse(\json_encode($inResult, \JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * The wire answers a result past the frame ceiling with `too_large` (Dispatcher::answer);
+     * the in-process door refuses it the same way, rather than handing back the full array.
+     */
+    public function testAResultPastTheFrameCeilingIsTheWireTooLargeRefusalOnBothDoors(): void
+    {
+        $dispatcher = $this->probeDispatcher(static fn (): array => ['blob' => \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES)]);
+        $wire = WireClient::open($dispatcher, 'probe-big');
+        $wire->hello();
+
+        $wireResponse = $wire->request('probe.raw');
+        $inProcess = $this->refusalOf(fn () => $this->probeInProcess($dispatcher));
+
+        $this->assertSameRefusal($inProcess, $wireResponse);
+        self::assertSame(ErrorCode::Internal, $inProcess->errorCode);
+        self::assertSame('too_large', $inProcess->kind);
     }
 
     public function testCreateAndSubscribeAnswerTheWireShape(): void
@@ -490,6 +536,31 @@ final class InProcessHostServicesTest extends TestCase
     {
         $this->fixture->await($this->host->connect());
         self::assertTrue($this->host->isConnected());
+    }
+
+    /** A dispatcher over the fixture's context whose roster adds one read method, `probe.raw`, answering $handler. */
+    private function probeDispatcher(\Closure $handler): Dispatcher
+    {
+        $methods = Dispatcher::methods();
+        $methods->add(MethodSpec::new('probe.raw', Scope::Read, 'Test probe.', $handler));
+
+        return $this->probe = Dispatcher::new($this->fixture->context, $methods);
+    }
+
+    /** Calls `probe.raw` through the in-process door of $dispatcher, after the hello the door needs. */
+    private function probeInProcess(Dispatcher $dispatcher): mixed
+    {
+        $client = new Client(InProcessPeer::new(), null, Scope::owner(), $this->fixture->context->clock(), static function (): void {
+        });
+        $this->fixture->context->addClient($client);
+        $dispatcher->invoke($client, ServerMethods::HELLO, [
+            'minProtocol' => Dispatcher::PROTOCOL,
+            'maxProtocol' => Dispatcher::PROTOCOL,
+            'client' => ['name' => 'candy-code.in-process', 'version' => $this->fixture->context->version()],
+            'caps' => [],
+        ]);
+
+        return $dispatcher->invoke($client, 'probe.raw', []);
     }
 
     /** @param \Closure(): mixed $call */

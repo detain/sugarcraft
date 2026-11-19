@@ -437,8 +437,12 @@ final class Dispatcher implements MessageHandler
      * The in-process door (PL-5c): runs $method with $params through every gate the wire
      * runs for a request (the hello gate, the method and its scope, the published params
      * schema, the viewer session pin, the idempotency cache) and returns the handler's
-     * result. Nothing is framed: no JSON-RPC envelope is built or decoded, and the rate
-     * meters are not spent, because the caller is the host itself.
+     * answer as the wire carries it. The rate meters are not spent, because the caller is
+     * the host itself.
+     *
+     * The answer is encoded and decoded again by {@see wireAnswer()}: invalid UTF-8 is
+     * substituted and a result past {@see MAX_SERVER_FRAME_BYTES} is refused `too_large`,
+     * so a caller holds the values a wire client decodes. No request envelope is built.
      *
      * A refusal throws the RpcError the wire would answer with, carrying the same code,
      * kind and data. Any other failure is logged the way the wire logs it and surfaces as
@@ -461,7 +465,7 @@ final class Dispatcher implements MessageHandler
                 throw RpcError::of(ErrorCode::NotInitialized, 'send server.hello first');
             }
 
-            return $this->run($client, $request);
+            return self::wireAnswer($this->run($client, $request));
         } catch (RpcError $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -594,12 +598,36 @@ final class Dispatcher implements MessageHandler
         }
         $text = JsonRpc::result($request->id, $result);
         if (\strlen($text) > self::MAX_SERVER_FRAME_BYTES) {
-            $text = JsonRpc::error($request->id, RpcError::of(
-                ErrorCode::Internal,
-                \sprintf('the answer is larger than %d bytes; ask for less', self::MAX_SERVER_FRAME_BYTES),
-                'too_large',
-            ));
+            $text = JsonRpc::error($request->id, self::tooLarge());
         }
         $client->send($text);
+    }
+
+    /**
+     * A result the wire would send, as the in-process door hands it on: encoded the way
+     * {@see answer()} encodes it (so invalid UTF-8 is substituted, as JsonRpc::encode does),
+     * refused `too_large` past the frame ceiling, then decoded back so a caller holds the
+     * values a wire client decodes.
+     *
+     * @throws RpcError
+     */
+    private static function wireAnswer(mixed $result): mixed
+    {
+        $text = JsonRpc::result(null, $result);
+        if (\strlen($text) > self::MAX_SERVER_FRAME_BYTES) {
+            throw self::tooLarge();
+        }
+
+        return \json_decode($text, true, 512, \JSON_THROW_ON_ERROR)['result'];
+    }
+
+    /** The refusal an answer past the frame ceiling gets, on the wire and in-process alike. */
+    private static function tooLarge(): RpcError
+    {
+        return RpcError::of(
+            ErrorCode::Internal,
+            \sprintf('the answer is larger than %d bytes; ask for less', self::MAX_SERVER_FRAME_BYTES),
+            'too_large',
+        );
     }
 }
