@@ -250,7 +250,7 @@ timeout 5 candy-gifview loop.gif &lt; /dev/null      # or let timeout(1) end it;
     <p>The <code>--lang</code> flag is resolved before the first message prints, so it works on hosts where no <code>LC_*</code> variable exists, such as native Windows cmd. An unknown code is refused in plain English, and the refusal names the locales that are available.</p>
 
     <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
-    <p>The public classes live in <code>SugarCraft\GifView\</code>. Most of the work happens in the sugar-animation classes that this app wires together, so the list below covers the app's own surface.</p>
+    <p>The public classes live in <code>SugarCraft\GifView\</code>, except <code>Version</code>, which lives in <code>SugarCraft\GifView\Support\</code>. Most of the work happens in the sugar-animation classes that this app wires together, so the list below covers the app's own surface.</p>
 
     <h3 id="cli" style="margin-top: 24px;">Cli</h3>
     <table class="api-table">
@@ -297,7 +297,7 @@ timeout 5 candy-gifview loop.gif &lt; /dev/null      # or let timeout(1) end it;
     <h3 id="environment" style="margin-top: 24px;">Environment</h3>
     <table class="api-table">
     <tr><th>Variable</th><th>Effect</th></tr>
-    <tr><td><code>COLUMNS</code>, <code>LINES</code></td><td>A positive-integer pair that sets the viewport size. It wins over the terminal probe.</td></tr>
+    <tr><td><code>COLUMNS</code>, <code>LINES</code></td><td>A positive-integer pair that sets the viewport size. It wins over the terminal probe. The viewer reserves two rows of chrome, so whenever both axes resolve, the grid is <code>LINES</code> minus 2 rows, whether the values come from the environment or the probe. <code>COLUMNS</code> is used as given. Each axis is taken from the environment first and from the probe second.</td></tr>
     <tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>Message locale, read in that order, with the first usable value winning. <code>--lang</code> overrides all three.</td></tr>
     </table>
 

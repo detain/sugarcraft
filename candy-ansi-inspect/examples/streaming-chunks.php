@@ -14,9 +14,9 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\AnsiInspect\StreamingInspector;
 
-// The second chunk ends inside the SGR sequence ESC[31m, and the third
-// finishes it, so the first two feed() calls return fewer segments than the
-// third one does.
+// The first chunk ends inside the SGR sequence ESC[31m and the second chunk
+// completes it, so feed() #1 returns no segments while feed() #2 and #3 each
+// return some.
 $chunks = [
     "ok \e[3",
     "1mred",
