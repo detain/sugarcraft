@@ -229,6 +229,11 @@ final class PathJail
      * It takes no filesystem input, so Windows fixtures run on any platform.
      * The FS-backed methods call the same normaliser on Windows, and their link
      * checks are the part this does not cover.
+     *
+     * $root must be canonical, as realpath() answers it: its names are trusted
+     * for the 8.3 short-name rule only. Every other name rule still refuses a
+     * bad root, so `C:\CON` or `C:\data\a:b` answers null, while `C:\PROGRA~1`
+     * is accepted. Only the 8.3 check is skipped for the root; $path gets it all.
      */
     public static function windowsLexical(string $root, string $path): ?string
     {
@@ -412,28 +417,32 @@ final class PathJail
             return str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
         }
 
-        $absolute = WindowsPath::absolutise($rootReal, $path);
-        if ($absolute === null || self::windowsDotDotCrossesLink($absolute)) {
+        $parts = WindowsPath::resolve($rootReal, $path);
+        if ($parts === null || self::windowsDotDotCrossesLink($parts)) {
             return null;
         }
 
-        return WindowsPath::collapse($absolute);
+        $normal = WindowsPath::normalise($parts);
+
+        return $normal === null ? null : WindowsPath::render($normal[0], $normal[1]);
     }
 
     /**
-     * Whether a `..` in the Windows path $absolute would be applied by the
+     * Whether a `..` in the Windows path $parts would be applied by the
      * filesystem to a different directory from the lexical collapse.
      *
-     * The same test as {@see parentWalkCrossesLink()}, written over WindowsPath's
+     * The shape of {@see parentWalkCrossesLink()}, written over WindowsPath's
      * anchor and segments, so the drive and UNC prefixes render correctly. Any
-     * prefix that is a link, or that realpath() would move, is a refusal.
+     * prefix that is a link, or that realpath() would move, is a refusal. Unlike
+     * parentWalkCrossesLink(), the move test is case-insensitive (see
+     * {@see windowsRealpathMoves()}), so the two checks are not interchangeable:
+     * routing this through parentWalkCrossesLink() would refuse a `..` after a
+     * directory typed in other than its on-disk case.
+     *
+     * @param array{0: string, 1: list<string>} $parts
      */
-    private static function windowsDotDotCrossesLink(string $absolute): bool
+    private static function windowsDotDotCrossesLink(array $parts): bool
     {
-        $parts = WindowsPath::parts($absolute);
-        if ($parts === null) {
-            return true;
-        }
         [$anchor, $segments] = $parts;
 
         $stack = [];
@@ -445,7 +454,7 @@ final class PathJail
             if ($stack !== []) {
                 $current = WindowsPath::render($anchor, $stack);
                 $real = realpath($current);
-                if (is_link($current) || ($real !== false && $real !== $current)) {
+                if (is_link($current) || ($real !== false && self::windowsRealpathMoves($current, $real))) {
                     return true;
                 }
             }
@@ -453,6 +462,19 @@ final class PathJail
         }
 
         return false;
+    }
+
+    /**
+     * Whether realpath() answered with a different path for the same prefix.
+     *
+     * NTFS ignores case by default, and realpath() answers with the on-disk
+     * spelling, so a case-only difference names the same entry and is not a
+     * redirect. Comparing case-sensitively refused a `..` after any directory
+     * typed in other than its on-disk case, which is a false refusal.
+     */
+    private static function windowsRealpathMoves(string $typed, string $real): bool
+    {
+        return !WindowsPath::sameSpelling($typed, $real);
     }
 
     /**

@@ -638,6 +638,33 @@ final class PathJailTest extends TestCase
         yield 'alternate data stream refused' => ["C:\\ws", "C:\\ws\\a.txt:hidden", null];
         yield 'reserved device name refused' => ["C:\\ws", "C:\\ws\\NUL", null];
         yield 'rooted path refused' => ["C:\\ws", "\\secret.txt", null];
+        yield 'relative path under a tilde-digit root' => ["C:\\work\\proj~2", "a.txt", "C:\\work\\proj~2\\a.txt"];
+        yield 'absolute path under a tilde-digit root' => ["C:\\work\\proj~2", "C:\\work\\proj~2\\a.txt", "C:\\work\\proj~2\\a.txt"];
+        yield 'short name typed under a tilde-digit root refused' => ["C:\\work\\proj~2", "PROGRA~1\\a.txt", null];
+    }
+
+    /**
+     * @return iterable<string, array{string, string, bool}>
+     */
+    public static function realpathSpellingRows(): iterable
+    {
+        // [typed prefix, realpath() answer, whether the answer moves the prefix]
+        yield 'same spelling' => ["C:\\ws\\src", "C:\\ws\\src", false];
+        yield 'on-disk case differs' => ["C:\\ws\\Src", "C:\\ws\\src", false];
+        yield 'drive letter case differs' => ["c:\\ws\\src", "C:\\ws\\src", false];
+        // Regression: NTFS folds non-ASCII letters, so a case-only difference there is not a redirect.
+        yield 'non-ASCII on-disk case differs' => ["C:\\Projets\\été", "C:\\Projets\\Été", false];
+        yield 'non-ASCII realpath lands elsewhere' => ["C:\\Projets\\été", "C:\\Projets\\autre", true];
+        yield 'realpath lands elsewhere' => ["C:\\ws\\link", "D:\\data\\target", true];
+        yield 'realpath lands in a sibling' => ["C:\\ws\\link", "C:\\ws\\target", true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('realpathSpellingRows')]
+    public function testWindowsRealpathMovesIgnoresCaseOnly(string $typed, string $real, bool $moves): void
+    {
+        $method = new \ReflectionMethod(PathJail::class, 'windowsRealpathMoves');
+
+        $this->assertSame($moves, $method->invoke(null, $typed, $real));
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('windowsLexicalRows')]
