@@ -6,7 +6,6 @@ namespace CandyCode\Bundles\MsTeams\Tests\Bridge;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
@@ -93,7 +92,7 @@ final class ConversationRouterTest extends TestCase
 
     private FakeServe $serve;
 
-    private ServeBridge $bridge;
+    private \SugarCraft\Plugins\Bridge\ServeClient $bridge;
 
     private SessionMap $map;
 
@@ -110,9 +109,8 @@ final class ConversationRouterTest extends TestCase
     protected function setUp(): void
     {
         $this->loop = new StreamSelectLoop();
-        $this->serve = new FakeServe($this->loop, 'tok-123456');
-        $port = $this->serve->listen();
-        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-123456', 'subprotocol', Log::silent(), $this->loop);
+        $this->serve = new FakeServe($this->loop);
+        $this->bridge = $this->serve->client();
 
         $this->tempDir = sys_get_temp_dir() . '/p3-router-' . getmypid() . '-' . uniqid('', true);
         $this->map = new SessionMap($this->tempDir . '/map/map.sqlite');
@@ -121,8 +119,7 @@ final class ConversationRouterTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->bridge->stop();
-        $this->serve->stop();
+        $this->serve->disconnect();
         if ($this->tempDir !== '') {
             $this->removeTree($this->tempDir);
         }
@@ -536,7 +533,7 @@ final class ConversationRouterTest extends TestCase
     public function testARefusedPromptAnswersInTheChatNotOnlyTheLog(): void
     {
         $this->boot();
-        $this->bridge->stop();
+        $this->serve->disconnect();
         self::runFor($this->loop, 50);
 
         $sendPrompt = new \ReflectionMethod(ConversationRouter::class, 'sendPrompt');
@@ -636,7 +633,7 @@ final class ConversationRouterTest extends TestCase
         $this->router->addChannel($face ?? $this->face, 'default');
 
         $started = false;
-        $this->bridge->start()->then(static function () use (&$started): void {
+        $this->serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         // msteams-27: handshake admission awaited at 5 ms granularity instead

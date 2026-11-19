@@ -7,7 +7,6 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use SugarCraft\ServeProtocol\Protocol;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
 use CandyCode\Bundles\MsTeams\MsTeams\Rest;
@@ -49,7 +48,7 @@ final class MsTeamsAccountTest extends TestCase
 
     private ?FakeServe $served = null;
 
-    private ?ServeBridge $bridge = null;
+    private ?\SugarCraft\Plugins\Bridge\ServeClient $bridge = null;
 
     private const PNG = "\x89PNG\r\n\x1a\nFAKEPNG";
 
@@ -70,8 +69,7 @@ final class MsTeamsAccountTest extends TestCase
     protected function tearDown(): void
     {
         $this->face?->cancelAllTimers();
-        $this->bridge?->stop();
-        $this->served?->stop();
+        $this->served?->disconnect();
         $this->api->stop();
         @\unlink($this->tempDir . '/sessions.db');
         @\rmdir($this->tempDir);
@@ -537,11 +535,10 @@ final class MsTeamsAccountTest extends TestCase
 
     public function testTheFullRoundTripPromptInAndAssistantOutOverRealFixtures(): void
     {
-        $serve = new FakeServe($this->loop, 'tok-serve');
-        $port = $serve->listen();
-        $bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $serve = new FakeServe($this->loop);
+        $bridge = $serve->client();
         $started = false;
-        $bridge->start()->then(static function () use (&$started): void {
+        $serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {
@@ -584,9 +581,7 @@ final class MsTeamsAccountTest extends TestCase
         self::assertIsArray($out, 'the assistant answer never reached the platform');
         $body = (array) \json_decode((string) $out['body'], true);
         self::assertSame('ANSWER — secret [redacted] inside', $body['text'], 'the outbound filter redacts as the answer rides out');
-
-        $bridge->stop();
-        $serve->stop();
+        $serve->disconnect();
     }
 
     // ── harness ──
@@ -599,7 +594,7 @@ final class MsTeamsAccountTest extends TestCase
             'http://127.0.0.1:' . $this->api->port,
         ), Log::silent(), true);
         $router = new ConversationRouter(
-            new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            (new FakeServe($this->loop, refuseCreates: true))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             $this->safety,
@@ -613,11 +608,10 @@ final class MsTeamsAccountTest extends TestCase
     /** A face wired to a real FakeServe bridge, with u1 paired. */
     private function serveFace(array $cfg = ['dmPolicy' => 'pairing']): void
     {
-        $this->served = new FakeServe($this->loop, 'tok-serve');
-        $port = $this->served->listen();
-        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $this->served = new FakeServe($this->loop);
+        $this->bridge = $this->served->client();
         $started = false;
-        $this->bridge->start()->then(static function () use (&$started): void {
+        $this->served->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {
