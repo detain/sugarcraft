@@ -795,7 +795,6 @@ final class InProcessHostServicesTest extends TestCase
         return $value;
     }
 
-    /** @param \Closure(): mixed $call */
     /**
      * The settled answer of an in-process call: its value, or the refusal it rejected with, thrown
      * the way the synchronous call threw it.
