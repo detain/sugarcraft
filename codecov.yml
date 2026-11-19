@@ -207,6 +207,9 @@ flag_management:
     - name: sugar-serve-protocol
       paths: ["sugar-serve-protocol/src/**"]
       carryforward: true
+    - name: sugar-plugin-installer
+      paths: ["sugar-plugin-installer/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
       carryforward: true
@@ -588,6 +591,12 @@ component_management:
         - "sugar-serve-protocol/src/**"
       flag_regexes:
         - "^sugar-serve-protocol$"
+    - component_id: sugar-plugin-installer
+      name: sugar-plugin-installer
+      paths:
+        - "sugar-plugin-installer/src/**"
+      flag_regexes:
+        - "^sugar-plugin-installer$"
     - component_id: sugar-toast
       name: sugar-toast
       paths:

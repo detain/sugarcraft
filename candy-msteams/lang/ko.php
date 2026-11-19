@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always"에는 설정된 승인자가 필요합니다 (channels.msteams approvals.approvers). 한 번만 답하거나 거부하거나 승인자에게 문의하세요.',
+    'channels.msteams.approval.not_yours' => '⛔ 이 승인에 답변할 수 없습니다.',
     'channels.msteams.approval.refused' => '⛔ 승인 응답이 거부되었습니다. 여기 표시된 카드와 일치하지 않습니다(위조되었거나 오래된 제출). 질문은 아직 열려 있습니다. 카드 버튼이나 `/approve <askId> once|always|deny` 로 답하세요.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ 항상 허용됨{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => '응답이 생성되지 않았습니다.',
     'channels.msteams.progress.working' => '작업 중…',
     'channels.msteams.progress.working_elapsed' => '작업 중… {seconds}초',
+    'channels.msteams.prompt.failed' => '⚠ 프롬프트를 전달할 수 없습니다: {error}',
     'channels.msteams.queue.usage' => '사용법: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ 이 브리지가 없는 동안 serve 로그 seq {from}–{to}를 재생할 수 없었습니다. 스냅샷 행 {count}개를 버려서 일부 응답이 여기에 없을 수 있습니다.',
     'channels.msteams.router.dropped_queued' => '한도를 넘은 대기 중 프롬프트 {count}개를 버렸습니다.',

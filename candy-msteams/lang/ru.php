@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ «always» требует настроенного утверждающего (channels.msteams approvals.approvers). Ответьте один раз или отклоните, либо обратитесь к утверждающему.',
+    'channels.msteams.approval.not_yours' => '⛔ Отвечать на это одобрение — не вам.',
     'channels.msteams.approval.refused' => '⛔ Ответ на запрос отклонён: он не соответствует карточке, показанной здесь (подделка или устаревшая отправка). Вопрос всё ещё открыт — ответьте кнопками карточки или командой `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Всегда разрешено{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'Ответ не был сформирован.',
     'channels.msteams.progress.working' => 'работает…',
     'channels.msteams.progress.working_elapsed' => 'работает… {seconds} с',
+    'channels.msteams.prompt.failed' => '⚠ Не удалось доставить ваш запрос: {error}',
     'channels.msteams.queue.usage' => 'Использование: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ Журнал serve не смог воспроизвести seq {from}–{to}, пока мост был недоступен; отброшено строк снимка: {count}, часть ответов здесь может отсутствовать.',
     'channels.msteams.router.dropped_queued' => 'Отброшено подсказок в очереди сверх лимита: {count}.',

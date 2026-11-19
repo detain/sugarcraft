@@ -185,6 +185,10 @@ final class SettingsHelpKeyDriftTest extends TestCase
                 $files[] = $f->getPathname();
             }
         }
+        // The router's policy reads run in the sugar-plugins core this bundle hands its
+        // policy to, so the census includes that file: the guard still sees every read
+        // the bundle's policy feeds, and the assertions above are unchanged.
+        $files[] = (string) (new \ReflectionClass(\SugarCraft\Plugins\Bridge\ConversationRouterCore::class))->getFileName();
         self::assertNotEmpty($files, 'src census found nothing to scan');
 
         return $files;

@@ -919,6 +919,20 @@
                 ],
                 "dead": []
             }
+        },
+        "sugar-plugin-installer": {
+            "readme": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages: stages each plugin to the user or project bundle tree that the root project's `extra.sugar-plugin-installer` selects. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages"
+                ],
+                "dead": []
+            }
         }
     }
 }

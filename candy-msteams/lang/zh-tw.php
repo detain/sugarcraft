@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" 需要已設定的核准者（channels.msteams approvals.approvers）。請單次允許或拒絕，或請核准者處理。',
+    'channels.msteams.approval.not_yours' => '⛔ 此審批輪不到您答覆。',
     'channels.msteams.approval.refused' => '⛔ 審批回答已拒絕：與此處顯示的卡片不符（偽造或過期的提交）。問題仍未解決——請使用卡片按鈕或 `/approve <askId> once|always|deny` 回答。',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ 已永久允許{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => '未產生回覆。',
     'channels.msteams.progress.working' => '處理中…',
     'channels.msteams.progress.working_elapsed' => '處理中… {seconds} 秒',
+    'channels.msteams.prompt.failed' => '⚠ 您的提示無法送達：{error}',
     'channels.msteams.queue.usage' => '用法：`/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ 橋接離線期間，serve 日誌無法重播序號 {from}–{to}；已捨棄 {count} 筆快照紀錄，此處可能缺少部分回覆。',
     'channels.msteams.router.dropped_queued' => '已捨棄超出上限的 {count} 則排隊提示。',

@@ -262,6 +262,31 @@ final class SkillFileReaderTest extends TestCase
         $this->assertSame('x', $manifest['description']);
     }
 
+    /**
+     * The key audit reads the same bounded text as the manifest parse, so a
+     * closer straddling the window edge keeps its keys in the audit too: the
+     * skill loads, and `allowed-tools` must still be reported as ignored.
+     */
+    public function testTheKeyAuditReadsAClosingFenceStraddlingTheWindowEdge(): void
+    {
+        $dir = $this->tempDir . '/straddle-audit';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: from frontmatter\nallowed-tools: Bash\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($dir . '/SKILL.md', 'SKILL.md', $after);
+        $keys = array_keys(\SugarCraft\Code\Support\FrontmatterKeyAudit::metaOf(SkillFileReader::frontmatterText($head, $truncated, $after)));
+
+        $this->assertSame(['description', 'allowed-tools'], $keys);
+    }
+
+    public function testFrontmatterTextIsTheWholeHeadWhenTheFileFitsTheWindow(): void
+    {
+        $this->assertSame("---\ndescription: x\n---\nBody.", SkillFileReader::frontmatterText("---\ndescription: x\n---\nBody.", false, ''));
+    }
+
     public function testHeadHandsBackTheRestOfTheLineTheWindowCut(): void
     {
         $path = $this->tempDir . '/after-line.md';
@@ -273,6 +298,27 @@ final class SkillFileReaderTest extends TestCase
         $this->assertTrue($truncated);
         $this->assertSame("---", substr($head, -3));
         $this->assertSame("  \r\n", $after);
+    }
+
+    /**
+     * The closer's `---` starts at byte 65,534, so only `--` lies inside the
+     * window and the last dash and line break are the tail. The closer guard
+     * judges the tail, so the parse must read it too: name and description
+     * must survive rather than the frontmatter silently dropping.
+     */
+    public function testAClosingFenceStraddlingTheWindowEdgeKeepsItsFrontmatter(): void
+    {
+        $dir = $this->tempDir . '/straddle';
+        mkdir($dir, 0777, true);
+        $pre = "---\nname: probe-skill\ndescription: from frontmatter\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+        $this->assertSame('-', substr(file_get_contents($dir . '/SKILL.md'), SkillFileReader::MAX_FRONTMATTER_BYTES, 1));
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('straddle', $manifest['name']);
+        $this->assertSame('from frontmatter', $manifest['description']);
     }
 
     public function testHeadHandsBackTheByteJustPastTheWindow(): void

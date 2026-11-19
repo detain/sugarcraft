@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" precisa de um aprovador configurado (channels.msteams approvals.approvers). Responda uma vez ou negue, ou peça a um aprovador.',
+    'channels.msteams.approval.not_yours' => '⛔ Esta aprovação não é sua para responder.',
     'channels.msteams.approval.refused' => '⛔ Resposta de aprovação recusada: ela não corresponde ao cartão apresentado aqui (um envio forjado ou desatualizado). A pergunta continua aberta — responda com os botões do cartão ou com `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Sempre permitido{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'Nenhuma resposta foi produzida.',
     'channels.msteams.progress.working' => 'trabalhando…',
     'channels.msteams.progress.working_elapsed' => 'trabalhando… {seconds}s',
+    'channels.msteams.prompt.failed' => '⚠ Sua mensagem não pôde ser entregue: {error}',
     'channels.msteams.queue.usage' => 'Uso: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ O log do serve não conseguiu reproduzir as sequências {from}–{to} enquanto esta ponte esteve ausente; {count} linha(s) de snapshot foram descartadas e algumas respostas podem faltar aqui.',
     'channels.msteams.router.dropped_queued' => '{count} prompt(s) na fila foram descartados por exceder o limite.',

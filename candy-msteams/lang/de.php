@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" braucht einen konfigurierten Freigebenden (channels.msteams approvals.approvers). Antworte einmal oder lehne ab, oder frage einen Freigebenden.',
+    'channels.msteams.approval.not_yours' => '⛔ Du darfst diese Freigabe nicht beantworten.',
     'channels.msteams.approval.refused' => '⛔ Freigabe-Antwort abgelehnt: Sie passt nicht zur hier angezeigten Karte (gefälschte oder veraltete Übermittlung). Die Frage ist weiterhin offen — antworte mit den Kartenschaltflächen oder mit `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Immer erlaubt{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'Es wurde keine Antwort erzeugt.',
     'channels.msteams.progress.working' => 'arbeitet…',
     'channels.msteams.progress.working_elapsed' => 'arbeitet… {seconds}s',
+    'channels.msteams.prompt.failed' => '⚠ Deine Eingabe konnte nicht übermittelt werden: {error}',
     'channels.msteams.queue.usage' => 'Verwendung: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ Das Serve-Protokoll konnte Seq {from}–{to} während der Abwesenheit dieser Brücke nicht wiedergeben — {count} Snapshot-Zeile(n) wurden verworfen; hier können einige Antworten fehlen.',
     'channels.msteams.router.dropped_queued' => '{count} wartende Eingabe(n) über dem Limit verworfen.',

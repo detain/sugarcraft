@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'channels.msteams.approval.always_needs_approver' => '⛔ "always" needs a configured approver (channels.msteams approvals.approvers). Answer once or deny, or ask an approver.',
+    'channels.msteams.approval.not_yours' => '⛔ This approval is not yours to answer.',
     'channels.msteams.approval.refused' => '⛔ Approval answer refused: it did not match the card presented here (a forged or stale submit). The question is still open — answer with the card buttons or `/approve <askId> once|always|deny`.',
     'channels.msteams.approve.hint' => '/approve {askId} once|always|deny',
     'channels.msteams.approve.resolved_always' => '✅ Always allowed{who}',
@@ -48,6 +49,7 @@ return [
     'channels.msteams.progress.no_reply' => 'No reply was produced.',
     'channels.msteams.progress.working' => 'working…',
     'channels.msteams.progress.working_elapsed' => 'working… {seconds}s',
+    'channels.msteams.prompt.failed' => '⚠ Your prompt could not be delivered: {error}',
     'channels.msteams.queue.usage' => 'Usage: `/queue <text>`',
     'channels.msteams.replay.gap' => '⚠ The serve log could not replay seq {from}–{to} while this bridge was away — {count} snapshot row(s) were discarded; some replies may be missing here.',
     'channels.msteams.router.dropped_queued' => 'Dropped {count} queued prompt(s) over the cap.',

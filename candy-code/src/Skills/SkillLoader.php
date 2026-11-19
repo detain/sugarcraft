@@ -742,10 +742,14 @@ final class SkillLoader
         // whole skill or, past the parse, fail every request's JSON encode
         // (audit 15d-08). Too small a field for a note; the body read carries
         // one ({@see loadSkillBody()}).
-        $content = Utf8Scrub::clean($content);
+        // The parse reads the same bounded text the closer guard judged: a
+        // closer whose `---` straddles the window edge is in the tail, not in
+        // $content, so splitting $content alone dropped the whole frontmatter
+        // while the guard passed.
+        $parsable = Utf8Scrub::clean(SkillFileReader::frontmatterText($content, $truncated, $next));
 
         // Parse frontmatter only (stage 1 - don't load body)
-        $split = MarkdownFrontmatter::split($content);
+        $split = MarkdownFrontmatter::split($parsable);
         $parsed = $split !== null ? Frontmatter::parse($split->meta) : null;
 
         $name = basename($skillDir);

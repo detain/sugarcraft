@@ -126,6 +126,25 @@ final class SkillFileReader
         return [$head, false];
     }
 
+    /**
+     * The text a {@see head()} read is judged and parsed by: the head through
+     * its last line break when the file continues past the window, so a closing
+     * fence whose `---` straddles the edge is part of it; the head itself
+     * otherwise. Parsing the head alone drops such a frontmatter while the
+     * closer guard, which judges this text, passes it.
+     */
+    public static function frontmatterText(string $head, bool $truncated, string $after): string
+    {
+        if (!$truncated) {
+            return $head;
+        }
+
+        $probe = $head . $after;
+        $lastBreak = strrpos($probe, "\n");
+
+        return $lastBreak === false ? $head : substr($probe, 0, $lastBreak + 1);
+    }
+
     private static function overCeiling(string $what, int $bytes, string $path): string
     {
         return sprintf(

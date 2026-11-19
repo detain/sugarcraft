@@ -343,6 +343,7 @@ table above is generated from `tools/renames.json` and is never hand-edited.
 | Package | Prefix | Role | Decision |
 |---|---|---|---|
 | `sugar-serve-protocol` (`SugarCraft\ServeProtocol\`) | `sugar-` | library: the `candy-code.v1` serve wire contract (subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation) | Original work. The suffix names the contract, and the namespace follows the suffix rule. The slug is 20 characters, past the ~16-character guideline; kept because the plugin plan fixes the package name and the bundles import it by that name. |
+| `sugar-plugin-installer` (`SugarCraft\PluginInstaller\`) | `sugar-` | composer-plugin (`type: composer-plugin`): stages each `sugar-plugin` package to the user or project bundle tree the root project's `extra` selects | Original work. A composer-plugin cannot also be a library, so the installer ships as its own package (plan_plugin.md O6). The namespace follows the suffix rule. |
 
 ## Naming conventions (cheat sheet — two prefixes, since 2026-10)
 
