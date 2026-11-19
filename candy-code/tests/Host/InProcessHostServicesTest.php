@@ -80,6 +80,47 @@ final class InProcessHostServicesTest extends TestCase
         self::assertSame(ErrorCode::NotInitialized, $inSend->errorCode);
     }
 
+    /**
+     * The wire refuses a frame whose text is not UTF-8 as parse_error, before any gate runs,
+     * so a turn with a lone invalid byte is refused there. The in-process door refuses the
+     * same text the same way instead of substituting the bytes and running the turn.
+     */
+    public function testNonUtf8TextIsTheWireParseErrorOnBothDoors(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+        $this->wire->clear();
+
+        $this->wire->raw('{"jsonrpc":"2.0","id":"bad","method":"session.send","params":{"sessionId":"' . $wireId . '","text":"' . "\xFF" . '","delivery":"queue"}}');
+        $wireResponse = null;
+        foreach ($this->wire->received() as $message) {
+            if (\array_key_exists('error', $message)) {
+                $wireResponse = $message;
+            }
+        }
+        self::assertNotNull($wireResponse, 'the wire answered the frame with an error');
+
+        $inProcess = $this->refusalOf(fn () => $this->host->sendTurn($inId, "\xFF", 'queue', null, [], []));
+
+        $this->assertSameRefusal($inProcess, $wireResponse);
+        self::assertSame(ErrorCode::ParseError, $inProcess->errorCode);
+        self::assertSame(-32700, $wireResponse['error']['code']);
+    }
+
+    /** The UTF-8 gate walks every string the params carry, keys included, not only the prompt. */
+    public function testNonUtf8InsideAnAttachmentIsRefusedInProcessToo(): void
+    {
+        $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $badDocument = ['name' => "\xC3\x28.pdf", 'mime' => 'application/pdf', 'data' => 'AAAA'];
+
+        $inProcess = $this->refusalOf(fn () => $this->host->sendTurn($inId, '/help', 'queue', null, [], [$badDocument]));
+
+        self::assertSame(ErrorCode::ParseError, $inProcess->errorCode);
+        self::assertSame('parse_error', $inProcess->kind);
+    }
+
     public function testCreateAndSubscribeAnswerTheWireShape(): void
     {
         $this->connect();

@@ -444,11 +444,17 @@ final class Dispatcher implements MessageHandler
      * kind and data. Any other failure is logged the way the wire logs it and surfaces as
      * `internal` without its message.
      *
+     * Text that is not UTF-8 is refused as `parse_error` before any gate runs, the same
+     * answer the wire gives: JsonRpc::decode refuses the whole frame, so the wire never
+     * hands the handler bytes the in-process door would have to substitute.
+     *
      * @param array<string, mixed> $params
      * @throws RpcError
      */
     public function invoke(Client $client, string $method, array $params): mixed
     {
+        self::assertUtf8($params);
+
         $request = new Request(null, false, $method, $params);
         try {
             if (!$client->isInitialized() && $method !== ServerMethods::HELLO) {
@@ -462,6 +468,32 @@ final class Dispatcher implements MessageHandler
             $this->logFailure($client, $request, $e);
 
             throw RpcError::of(ErrorCode::Internal, 'internal error');
+        }
+    }
+
+    /**
+     * Every string the params carry, keys included, must be UTF-8. The wire's decode
+     * refuses a non-UTF-8 frame as a whole, so this walks the same values.
+     *
+     * @throws RpcError
+     */
+    private static function assertUtf8(mixed $value): void
+    {
+        if (\is_string($value)) {
+            if (\preg_match('//u', $value) !== 1) {
+                throw RpcError::of(ErrorCode::ParseError, 'parse error');
+            }
+
+            return;
+        }
+
+        if (\is_array($value)) {
+            foreach ($value as $key => $child) {
+                if (\is_string($key)) {
+                    self::assertUtf8($key);
+                }
+                self::assertUtf8($child);
+            }
         }
     }
 
