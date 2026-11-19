@@ -43,7 +43,14 @@ final class PasswordVerifyCache
     /** @var LruMap<bool> outcome per (username, password-digest) key, TTL-bound */
     private readonly LruMap $entries;
 
-    /** @param (callable(): float)|null $clock test seam for TTL math */
+    /**
+     * Without an injected clock, TTL math runs on LruMap's monotonic hrtime
+     * clock. The pre-P1-11 cache read the wall clock (microtime), which a
+     * backwards NTP step could stretch past TTL_SECONDS; a monotonic clock
+     * keeps the freshness bound in the class docblock true.
+     *
+     * @param (callable(): float)|null $clock test seam for TTL math
+     */
     public function __construct(?callable $clock = null)
     {
         $this->entries = LruMap::new(self::MAX_ENTRIES)->withTtl(

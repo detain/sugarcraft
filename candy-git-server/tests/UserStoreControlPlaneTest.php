@@ -136,6 +136,32 @@ final class UserStoreControlPlaneTest extends TestCase
         $this->assertLessThan((int) $rename, (int) $close, 'nothing is still in flight when the name flips');
     }
 
+    public function testSettleFailureIsFatalAndUnsuppressed(): void
+    {
+        // The fsync result must abort the publish. Pinned structurally for the
+        // same reason as the ordering test: a functional save cannot make fsync
+        // fail. A silent variant (no throw, or an @-suppressed call as in
+        // AtomicTextFile) must turn this red.
+        $reflection = new \ReflectionMethod(UserStore::class, 'publish');
+        $lines = \file((string) $reflection->getFileName());
+        $body = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine() - 1,
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1
+        ));
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/@\s*\\\\?fsync\s*\(/',
+            $body,
+            'the settle call must not be error-suppressed'
+        );
+        $this->assertMatchesRegularExpression(
+            '/\\\\?fsync\(\$handle\)\s*===\s*false\s*\)\s*\{\s*throw\s+new\s+\\\\?RuntimeException\(/',
+            $body,
+            'a failed fsync must throw, not fall through to the rename'
+        );
+    }
+
     public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
     {
         $path = $this->tmpDir . '/users.json';
