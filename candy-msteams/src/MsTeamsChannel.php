@@ -513,7 +513,9 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests, Wri
         $this->host = null;
         $this->serve = null;
         $this->router = null;
-        // Faces hold a reference to the router, which refuses everything once disposed.
+        // Faces are stopped above. Host disconnect drains the events still owed to the
+        // in-process client through the live router first, so a late reply is delivered
+        // via its face's deliver path before the router and serve are released.
         $this->faces = [];
         $this->validators = [];
     }
