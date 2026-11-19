@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\MCP;
 
-use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\TimedFileLock;
+use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * What the user consented to when they trusted a project's `.mcp.json`: one
@@ -194,7 +194,7 @@ final class McpTrustPins
                 ['version' => self::VERSION, 'roots' => $roots],
                 \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
             );
-            AtomicFileWriter::write($this->path, $json . "\n", 0600);
+            AtomicTextFile::at($this->path)->withPermissions(0600)->write($json . "\n");
         } finally {
             $guard->release();
         }
