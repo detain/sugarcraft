@@ -50,6 +50,6 @@ echo "\n";
 echo 'digest: ' . ReleaseSelector::parseSidecar($sidecar) . "\n";
 echo 'name:   ' . ReleaseSelector::sidecarName($sidecar) . "\n";
 
-// Uppercase hex, a short digest or a bare name is refused, never normalised.
+// Uppercase hex, a short digest or a bare name is refused, never normalized.
 echo 'uppercase refused: ' . var_export(ReleaseSelector::parseSidecar(strtoupper($sidecar)), true) . "\n";
 echo 'short refused:     ' . var_export(ReleaseSelector::parseSidecar("abc123  widget.phar\n"), true) . "\n";
