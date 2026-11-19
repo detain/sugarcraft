@@ -90,8 +90,11 @@ Flags:
   place of `-` (`DRACULA` and `Tokyo_Night` work). Pass `auto` to run the
   implicit ladder explicitly. Each built-in name maps one-to-one onto the
   same-named SugarMarkdown preset (`Theme::ansi()`, `Theme::notty()`,
-  `Theme::dracula()`, …); `solarized`, `monokai`, and `github` load JSON theme
-  files from `themes/`. The three tiers: **ansi** is the terminal-native
+  `Theme::dracula()`, …). Names resolve through SugarMarkdown's
+  `Theme::catalogByName()`; `solarized`, `monokai`, and `github` are the three
+  bundled JSON themes it loads. candy-mdview keeps byte-identical copies in
+  `themes/` because `ThemeLoadTest` and `PharBuildScriptTest` pin them, and the
+  phar ships that directory. The three tiers: **ansi** is the terminal-native
   palette, **ascii** keeps structure — bold/italic survive, color does not —
   and **plain** is undecorated bytes. With `--theme` omitted, the numbered
   color walk below picks the tier: **ansi** when the stream is decorated and
@@ -116,7 +119,12 @@ Flags:
   library glamour styles through, so its map is keyed by token family — the
   shape of
   [charmbracelet/glamour's style files](https://github.com/charmbracelet/glamour/tree/master/styles))
-  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`; the legacy flat
+  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`. `GlamourTheme`
+  stays in candy-mdview as an accepted exception to the theme move (P1-12c-mdview,
+  narrowed scope): sugar-markdown's `StyleGuide` differs from it in four pinned
+  places: the whitespace-only affix refusal, flag parsing of the string `false`,
+  `headingCase` and `imageText` projection, and sanitizing versus refusing
+  affixes. The legacy flat
   color map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
   *path* and is used for the three bundled JSON themes.) In the flat shape the
   accepted top-level keys are exactly the `Theme` element slots —

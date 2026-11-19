@@ -600,24 +600,32 @@ final class RenderCommand extends Command
         throw new \InvalidArgumentException(Lang::t('render.directory_empty', ['path' => $arg]));
     }
 
+    /**
+     * Spellings this CLI has always answered, after `_` becomes `-` and the
+     * name is lowercased. The shared catalog's loose matching would also take
+     * `Tokyo Night`; pickTheme keeps refusing that, so the roster stays here.
+     */
+    private const THEME_NAMES = [
+        'ansi', 'ascii', 'plain', 'no', 'dark', 'light', 'notty', 'auto-no',
+        'dracula', 'tokyo-night', 'tokyonight', 'pink', 'solarized', 'monokai', 'github',
+    ];
+
+    /** CLI-only aliases, answered here rather than by sugar-markdown's catalog. */
+    private const THEME_ALIASES = ['no' => 'plain', 'auto-no' => 'notty'];
+
+    /**
+     * Resolve a theme name. The lookup moved to sugar-markdown's
+     * Theme::catalogByName() (P1-12c-mdview); the roster and the two aliases
+     * remain this CLI's contract.
+     */
     public static function pickTheme(string $name): Theme
     {
-        return match (strtolower(str_replace('_', '-', $name))) {
-            'ansi'            => Theme::ansi(),
-            'ascii'            => Theme::ascii(),
-            'plain', 'no'      => Theme::plain(),
-            'dark'             => Theme::dark(),
-            'light'            => Theme::light(),
-            'notty', 'auto-no' => Theme::notty(),
-            'dracula'          => Theme::dracula(),
-            'tokyo-night',
-            'tokyonight'       => Theme::tokyoNight(),
-            'pink'             => Theme::pink(),
-            'solarized'        => Theme::fromJson(__DIR__ . '/../themes/solarized.json'),
-            'monokai'          => Theme::fromJson(__DIR__ . '/../themes/monokai.json'),
-            'github'           => Theme::fromJson(__DIR__ . '/../themes/github.json'),
-            default            => throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name])),
-        };
+        $key = strtolower(str_replace('_', '-', $name));
+        $theme = in_array($key, self::THEME_NAMES, true)
+            ? Theme::catalogByName(self::THEME_ALIASES[$key] ?? $key)
+            : null;
+
+        return $theme ?? throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
     }
 
     /**
