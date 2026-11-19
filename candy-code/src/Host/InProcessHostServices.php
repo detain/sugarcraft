@@ -51,9 +51,10 @@ use function React\Promise\resolve;
  * - Rate meters are not spent. {@see Dispatcher::invoke()} skips the per-client
  *   `rate_limited` budgets the wire applies to each frame, because the caller is the
  *   host itself, so a bundle's own loop is never refused `rate_limited`.
- * - Follow results: {@see subscribeFollowResults()} listeners receive the
- *   `session.subscribe` answer on every successful {@see subscribeSession()}, the
- *   first subscribe included. This host never reconnects, so each call is a follow.
+ * - Follow results: {@see subscribeFollowResults()} listeners are never fired here.
+ *   The wire fires them only from the reconnect re-follow, and this door never
+ *   reconnects. The first follow's answer is the return value of
+ *   {@see subscribeSession()}, which is the only delivery a bundle needs.
  */
 final class InProcessHostServices implements HostServices
 {
@@ -64,9 +65,6 @@ final class InProcessHostServices implements HostServices
 
     /** @var list<\Closure(EventEnvelope): void> */
     private array $listeners = [];
-
-    /** @var list<\Closure(array<string, mixed>): void> */
-    private array $followListeners = [];
 
     /** @var \SplQueue<EventEnvelope> */
     private \SplQueue $pending;
@@ -168,21 +166,19 @@ final class InProcessHostServices implements HostServices
             $params['snapshotLimit'] = self::SNAPSHOT_LIMIT;
         }
 
-        $answer = $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
-        foreach ($this->followListeners as $listener) {
-            try {
-                $listener($answer);
-            } catch (\Throwable $e) {
-                $this->dispatcher->context()->logError($e, 'in-process follow-result listener failed');
-            }
-        }
-
-        return $answer;
+        return $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
     }
 
-    /** Mirrors session.unsubscribe (row 3). */
+    /**
+     * Mirrors session.unsubscribe (row 3). Best-effort like the wire wrapper: once the
+     * client has disconnected there is nothing left to unfollow, so this returns quietly
+     * rather than throwing not-initialized.
+     */
     public function unsubscribeSession(string $sessionId): void
     {
+        if (!$this->isConnected()) {
+            return;
+        }
         $this->dispatcher->invoke($this->connected(), 'session.unsubscribe', ['sessionId' => $sessionId]);
     }
 
@@ -275,14 +271,13 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Row 12: the follow result is the `session.subscribe` answer, so it reaches the
-     * listener right after each successful {@see subscribeSession()}. A throwing
-     * listener is logged and the others still hear it. Registering never refuses:
-     * a bundle that registers at construction must start.
+     * Row 12: accepted so a bundle registers at construction, and never fired. The wire
+     * fires follow results only on a reconnect re-follow, which this door has no path to
+     * (see the class docblock). The first follow's answer is {@see subscribeSession()}'s
+     * return value.
      */
     public function subscribeFollowResults(\Closure $listener): void
     {
-        $this->followListeners[] = $listener;
     }
 
     /**

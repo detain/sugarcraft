@@ -345,37 +345,44 @@ final class InProcessHostServicesTest extends TestCase
         );
     }
 
-    public function testFollowResultsReachTheListenerWithEachSubscribeAnswer(): void
+    /**
+     * The wire fires follow results only from the reconnect re-follow (ServeBridge::follow never
+     * fires them), and this door never reconnects. So neither the first subscribe nor a manual
+     * re-subscribe reaches a follow listener: the first answer is subscribeSession()'s return value.
+     * Registering a listener, even a throwing one, never refuses and never runs.
+     */
+    public function testFollowResultListenersNeverFireInProcess(): void
     {
         $this->connect();
         $inId = $this->host->createSession(null, null)['id'];
-        $results = [];
-        $this->host->subscribeFollowResults(function (array $result) use (&$results): void {
-            $results[] = $result;
-        });
-
-        $answer = $this->host->subscribeSession($inId, null, null);
-
-        self::assertSame([$answer], $results, 'the follow result is the subscribe answer, delivered to the listener');
-    }
-
-    public function testAThrowingFollowResultListenerIsLoggedAndTheOthersStillHear(): void
-    {
-        $this->connect();
-        $inId = $this->host->createSession(null, null)['id'];
-        $this->host->subscribeFollowResults(static function (): void {
-            throw new \RuntimeException('follow listener broke');
-        });
         $heard = 0;
+        $this->host->subscribeFollowResults(static function (): void {
+            throw new \RuntimeException('follow listener must not run');
+        });
         $this->host->subscribeFollowResults(function () use (&$heard): void {
             $heard++;
         });
 
-        $answer = $this->host->subscribeSession($inId, null, null);
+        $first = $this->host->subscribeSession($inId, null, null);
+        $again = $this->host->subscribeSession($inId, $first['throughSeq'] ?? null, null);
 
-        self::assertSame(1, $heard);
-        self::assertIsArray($answer);
-        self::assertStringContainsString('in-process follow-result listener failed', \implode("\n", $this->logs));
+        self::assertIsArray($first);
+        self::assertIsArray($again);
+        self::assertSame(0, $heard, 'no follow listener fires, on the first subscribe or a re-subscribe');
+        self::assertStringNotContainsString('follow-result listener', \implode("\n", $this->logs));
+    }
+
+    public function testUnsubscribeAfterDisconnectIsQuietLikeTheWireWrapper(): void
+    {
+        $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $this->host->subscribeSession($inId, null, null);
+        $this->host->disconnect();
+
+        $this->host->unsubscribeSession($inId);
+
+        self::assertFalse($this->host->isConnected());
+        self::assertSame([], $this->host->followedSessions());
     }
 
     public function testADisconnectFromAListenerDoesNotReorderWhatIsStillOwed(): void
@@ -700,12 +707,17 @@ final class InProcessHostServicesTest extends TestCase
         self::fail('the in-process call answered where a refusal was expected');
     }
 
-    /** The wire's error object must carry the refusal's code and kind. */
+    /**
+     * The wire's error object must carry the refusal's code and kind, and the same data: the
+     * in-process RpcError's toArray() is the wire's `data`, so `errors` (invalid_params) and
+     * the retryable flag are compared too, not only the kind.
+     */
     private function assertSameRefusal(RpcError $inProcess, array $wireResponse): void
     {
         self::assertArrayHasKey('error', $wireResponse, 'the wire answered where in-process refused: ' . $inProcess->getMessage());
         self::assertSame($inProcess->errorCode->value, $wireResponse['error']['code']);
         self::assertSame($inProcess->kind, $wireResponse['error']['data']['kind'] ?? null);
+        self::assertSame($inProcess->toArray()['data'], $wireResponse['error']['data'], 'the refusal data matches the wire');
     }
 
     /** Results are compared by the keys and value types they carry, never by value. */
