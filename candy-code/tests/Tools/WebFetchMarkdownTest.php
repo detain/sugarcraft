@@ -261,6 +261,40 @@ final class WebFetchMarkdownTest extends TestCase
         );
     }
 
+    public function testBracketsAndBackslashesInPageProseReachTheModelEscaped(): void
+    {
+        // The converter escapes page text so a bracket cannot forge a link;
+        // WebFetch passes that Markdown source on unchanged, so the escapes
+        // are part of what the model reads and copies.
+        $body = '<p>Use arr[0] and see [citation needed]</p><p>C:\temp\new</p>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/escapes"])->content();
+
+        $this->assertSame("Use arr\\[0\\] and see \\[citation needed\\]\n\nC:\\\\temp\\\\new\n", $content);
+    }
+
+    public function testHiddenAndTemplateLikeTextIsDroppedFromTheWebFetchMarkdown(): void
+    {
+        // Text the page hides from its own view, or markup a browser never
+        // shows, is not the page's content and does not reach the model.
+        $body = '<p>Visible</p>'
+            . '<div hidden>secret</div>'
+            . '<p style="display:none">gone</p>'
+            . '<template>tpl text</template>'
+            . '<noembed>embed text</noembed>'
+            . '<noframes>frame text</noframes>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/hidden"])->content();
+
+        $this->assertSame("Visible\n", $content);
+    }
+
     /**
      * A WebFetch wired to the loopback fixture: md.test resolves only to the
      * fixture address and nothing else can be dialed at all.

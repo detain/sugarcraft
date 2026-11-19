@@ -1618,7 +1618,6 @@ candy-code/tests/Sessions/ScheduleTest.php	0.008	30
 candy-code/tests/Support/FrontmatterTest.php	0.008	23
 candy-code/tests/Support/FrontmatterFenceGrammarTest.php	0.010	6
 candy-code/tests/Support/PublicUrlGuardTest.php	0.008	16
-candy-code/tests/Tools/Web/HtmlToMarkdownTest.php	0.008	29
 candy-code/tests/Tools/WorkflowToolDescriptionDriftTest.php	0.008	13
 candy-code/tests/Workflows/WorkflowLinterEngineTokensTest.php	0.008	6
 candy-code/tests/Agents/AgentPresetShadowNoticeTest.php	0.007	5
