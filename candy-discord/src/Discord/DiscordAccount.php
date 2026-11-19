@@ -976,16 +976,6 @@ final class DiscordAccount implements PlatformFace
         }
     }
 
-    /**
-     * The serve-dial state machine rebuilds the router whenever the local
-     * serve endpoint (re)appears; the faces outlive the dial, so they take
-     * the new router here instead of being re-constructed.
-     */
-    public function rebindRouter(ConversationRouter $router): void
-    {
-        $this->router = $router;
-    }
-
     public function accountName(): string
     {
         return $this->account;

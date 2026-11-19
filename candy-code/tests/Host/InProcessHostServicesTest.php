@@ -411,8 +411,8 @@ final class InProcessHostServicesTest extends TestCase
     }
 
     /**
-     * The wire fires follow results only from the reconnect re-follow (ServeBridge::follow never
-     * fires them), and this door has no re-follow. So neither the first subscribe nor a manual
+     * The wire fires follow results only from the reconnect re-follow (the channel-bridge copy at
+     * scripts/channel-bridge/src/Candy/ServeBridge.php, follow(), never fires them), and this door has no re-follow. So neither the first subscribe nor a manual
      * re-subscribe reaches a follow listener: the first answer is subscribeSession()'s return value.
      * Registering a listener, even a throwing one, never refuses and never runs.
      */

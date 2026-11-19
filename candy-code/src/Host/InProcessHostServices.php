@@ -209,7 +209,8 @@ final class InProcessHostServices implements HostServices
 
     /**
      * Mirrors session.subscribe (row 2). A $cursor is read on every call and its value
-     * is the resume point, as the wire's reconnect re-follow reads it (ServeBridge::follow):
+     * is the resume point, as the wire's reconnect re-follow reads it (ServeBridge::follow in
+     * scripts/channel-bridge/src/Candy/ServeBridge.php, the only surviving copy):
      * a re-follow after a `server.overflow` notice resumes from the seq the bundle has
      * applied, not from the $afterSeq it first followed with. $afterSeq is the resume
      * point only when no cursor is given. A cursor of null or 0 opens from a snapshot.
