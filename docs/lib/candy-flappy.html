@@ -156,81 +156,234 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#physics-constants">Physics constants</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#run-the-game-headless-and-read-the-frame">Run the game headless and read the frame</a></li>
+            <li class="toc-h3"><a href="#pin-the-pipe-layout-with-an-injected-prng">Pin the pipe layout with an injected PRNG</a></li>
+            <li class="toc-h3"><a href="#read-and-merge-the-leaderboard">Read and merge the leaderboard</a></li>
+            <li class="toc-h3"><a href="#reset-the-leaderboard">Reset the leaderboard</a></li>
+            <li class="toc-h3"><a href="#run-the-bundled-example-from-a-checkout">Run the bundled example from a checkout</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#compiled-in-limits">Compiled-in limits</a></li>
+            <li class="toc-h2"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h2"><a href="#color-and-styling">Color and styling</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#needs-an-interactive-terminal-on-stdout-and-exit-1">&quot;needs an interactive terminal on stdout&quot; and exit 1</a></li>
+            <li class="toc-h3"><a href="#a-notice-screen-instead-of-the-board">A notice screen instead of the board</a></li>
+            <li class="toc-h3"><a href="#the-game-refuses-to-launch">The game refuses to launch</a></li>
+            <li class="toc-h3"><a href="#the-leaderboard-is-empty-or-a-file-named-scores-json-corrupt-timestamp-appears">The leaderboard is empty, or a file named scores.json.corrupt-&lt;timestamp&gt; appears</a></li>
+            <li class="toc-h3"><a href="#a-score-was-not-saved">A score was not saved</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#pure-state-one-frame-per-update">Pure state, one frame per update</a></li>
+            <li class="toc-h3"><a href="#subscriptions-drive-the-clock">Subscriptions drive the clock</a></li>
+            <li class="toc-h3"><a href="#persistence-runs-as-a-command">Persistence runs as a command</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#play">Play</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Physics-driven flap game — the bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell. Pure-state Game class; the renderer is a one-pass canvas fill.</p>
+<p class="lede" style="margin-top: 28px;">candy-flappy is a terminal flap game. The bird's vertical motion is a SugarSpring <code>Projectile</code> (gravity plus an upward velocity kick on each flap), pipes slide left one cell per tick, and collision is tested per cell. The game state is a pure value: <code>Game</code> is a SugarCraft Model, so every key, tick and resize returns a new <code>Game</code>, and <code>Renderer</code> paints one frame from it. The design is a native PHP take on <a href="https://github.com/kbrgl/flapioca">flapioca</a>; the Go original ticks at 5 Hz, and this port runs the same one-column-per-tick rule at 30 ticks per second.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <p>Pre-1.0 the package publishes a dev branch only, so pull it in explicitly as <code>:@dev</code>:</p>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flappy</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <p>Requires PHP 8.3 or newer. The package is pre-1.0 and publishes a dev branch only, so Composer needs the explicit <code>@dev</code> constraint:</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flappy:@dev   # the game binary lands in vendor/bin/candy-flappy</code></pre>
+    <p>A standalone <code>.phar</code> is published with the GitHub releases and runs with <code>php candy-flappy.phar</code>. A monorepo checkout needs only <code>composer install</code> inside <code>candy-flappy/</code>.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># Monorepo clone &mdash; per-lib install, then the checked-in bin:
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-shell"># From a checkout: install the lib's own dependencies, then run the checked-in bin
 cd candy-flappy &amp;&amp; composer install &amp;&amp; ./bin/candy-flappy
 
-# Composer install &mdash; the vendored console bin:
+# From a Composer install: the vendored console bin
 vendor/bin/candy-flappy
 
-# Or download the standalone .phar release from GitHub and run it with php.</code></pre>
-    <pre class="code"><code class="language-php">// Programmatic:
-use SugarCraft\Core\Program;
+candy-flappy --version   # prints the version line and exits 0
+candy-flappy --help      # prints the usage and exits 0</code></pre>
+    <p>The game needs a terminal at least 62 columns by 21 rows, with stdout attached to a real TTY. A smaller window shows a notice screen instead of the board, and a piped stdout is refused with exit 1 before the game starts.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Flappy\Game;
 
-(new Program(Game::start(),
-             new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+$final = (new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();   // the final model: the Game, settled</code></pre>
+    <p><code>Program::run()</code> returns the final model. The <code>Game</code> it returns is already settled, so a qualifying score from a mid-flight quit is on the board before the call comes back. Read the best score from it with <code>$final-&gt;highScore()</code> when you hold a <code>Game</code> value.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Real physics</strong><span>Bird movement is a <code>Projectile</code> with gravity vector. <code>flap()</code> rebuilds the projectile with an upward velocity kick — same trick the original flapioca uses, just expressed as projectile state.</span></div>
-      <div class="feature"><strong>Pipe spawning</strong><span>A new pipe pair every <code>PIPE_EVERY</code> ticks; the gap row is sampled from the injected PRNG so tests pin layouts deterministically.</span></div>
-      <div class="feature"><strong>Tick-driven</strong><span><code>Game::subscriptions()</code> arms <code>Subscriptions::withTick('game-tick', Game::TICK_SECONDS)</code> — <code>TICK_SECONDS</code> is <code>1/Bird::TICKS_PER_SEC</code>, exactly 1/30 s. Each tick advances physics, scrolls pipes and checks collision; the subscription goes empty on crash, on a too-small viewport, and under the NoTty refusal posture.</span></div>
-      <div class="feature"><strong>Per-cell collision</strong><span>Bird's row is rounded to a cell index; collision = bird column matches a pipe column AND the row is outside the open gap.</span></div>
-      <div class="feature"><strong>Ready card</strong><span>The board opens frozen; the first flap starts the run. <code>r</code> reseeds (mid-flight too); <code>q</code> / <code>Esc</code> / <code>Ctrl+C</code> quit &mdash; a qualifying mid-flight score is settled before the process exits.</span></div>
-      <div class="feature"><strong>Score on pass</strong><span>Every tick that moves a pipe past the bird's column bumps the score.</span></div>
-      <div class="feature"><strong>Variable difficulty</strong><span>Pipe gap shrinks from 6 cells down to 3 as score increases — every 5 points the gap narrows by 1 cell, making the game progressively harder.</span></div>
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The board opens on a <strong>ready card</strong>. The bird hovers and the world stays frozen until the first flap, so a launch never drops the player into the floor. The first flap starts the run and the 30 Hz tick subscription from <code>Game::subscriptions()</code> begins to deliver <code>TickMsg</code> values.</p>
+    <p>Each tick advances the bird, scrolls every pipe one column, spawns a pipe every <code>Game::PIPE_EVERY</code> ticks, and checks for a crash. A crash happens on the floor (the bird's row reaches <code>Game::HEIGHT</code>), on the ceiling (the row goes above 0), or in a pipe (the bird's cell lies outside the open gap). All three end the run the same way. Score rises by one for every pipe that has just slid past the bird's column, so surviving is scored, not flapping.</p>
+    <p>The pipe gap is the only progressive difficulty. <code>PipeGenerator::gapHeightForScore()</code> starts at 6 cells, shrinks by 1 every 5 points, and floors at 3. The gap's center row comes from the injected PRNG, so a gap never touches the floor or ceiling rows.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="physics-constants" style="margin-top: 24px;">Physics constants</h3>
+    <p>The bird's motion uses three constants on <code>Bird</code>, tuned for an 18-row playfield at 30 ticks per second:</p>
+    <table class="api-table">
+    <tr><th>Constant</th><th>Value</th><th>Role</th></tr>
+    <tr><td><code>Bird::FLAP_KICK</code></td><td><code>-10.0</code></td><td>Upward velocity in cells per second, applied by <code>flap()</code></td></tr>
+    <tr><td><code>Bird::GRAVITY</code></td><td><code>18.0</code></td><td>Constant downward acceleration in cells per second squared</td></tr>
+    <tr><td><code>Bird::TICKS_PER_SEC</code></td><td><code>30</code></td><td>Simulation rate, baked into the projectile's time step</td></tr>
+    </table>
+    <p>Fall speed is clamped to <code>Projectile::TERMINAL_GRAVITY</code> on every tick. The clamp never engages in ordinary play, because the fastest reachable fall across the 18-row world peaks at about 27.4 cells per second, under one row per tick, so the bird cannot tunnel through a gap unchecked.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="run-the-game-headless-and-read-the-frame" style="margin-top: 24px;">Run the game headless and read the frame</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Flappy\Game;
+use SugarCraft\Flappy\Renderer;
+
+$game  = Game::start();
+$after = $game->tickN(30);         // advance 30 ticks, one second of physics, with no terminal
+echo Renderer::render($after);     // the full ANSI frame, as a string</code></pre>
+    <p><code>Game::tickN($n)</code> applies <code>$n</code> physics ticks in sequence. It is the deterministic helper the suite uses, and it needs no terminal.</p>
+
+    <h3 id="pin-the-pipe-layout-with-an-injected-prng" style="margin-top: 24px;">Pin the pipe layout with an injected PRNG</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Flappy\Game;
+
+// The closure receives the inclusive upper bound and returns an int in 0..$max.
+$pinned = Game::start(rand: static fn (int $max): int => intdiv($max, 2));</code></pre>
+    <p>Every pipe gap is drawn through the closure, so the same seed gives the same board. <code>Game::start()</code> takes the closure as its first argument and a config directory as its second.</p>
+
+    <h3 id="read-and-merge-the-leaderboard" style="margin-top: 24px;">Read and merge the leaderboard</h3>
+    <pre class="code"><code class="language-php">$game = Game::start();
+$game->highScores();              // the kept top-ten list, best first
+$game->highScore();               // the current best, 0 when the board is empty
+$merged = $game->withHighScore(42);   // a new Game with 42 merged in; nothing is written to disk</code></pre>
+    <p><code>withHighScore()</code> only changes the in-memory board. The write happens through the <code>Cmd</code> the game returns on a finish, so a test or a script can check a score without touching the score file.</p>
+
+    <h3 id="reset-the-leaderboard" style="margin-top: 24px;">Reset the leaderboard</h3>
+    <pre class="code"><code class="language-shell">rm ~/.config/.candy-flappy/scores.json      # or $XDG_CONFIG_HOME/.candy-flappy/scores.json</code></pre>
+    <p>The next launch starts with an empty board. The lock sidecar next to the file stays in place on purpose; the lock is the anchor for concurrent writers, and removing it while another instance waits would race that instance.</p>
+
+    <h3 id="run-the-bundled-example-from-a-checkout" style="margin-top: 24px;">Run the bundled example from a checkout</h3>
+    <pre class="code"><code class="language-shell">php examples/play.php --version
+FORCE_COLOR=1 php examples/play.php   # draws into a pipe on purpose; use a real terminal for play</code></pre>
+    <p>The example mirrors the binary: it answers <code>--version</code> and <code>--help</code>, refuses unknown arguments with exit 2, and refuses a non-TTY stdout with exit 1 unless <code>FORCE_COLOR</code> or <code>CLICOLOR_FORCE</code> is set.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\Flappy\</code>. <code>Game</code> is the only Model. <code>Bird</code>, <code>Pipe</code>, <code>PipeGenerator</code> and <code>Renderer</code> are value-level helpers that the Model calls, and the tests drive each of them directly.</p>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Game</td><td><code>start(?Closure $rand = null, ?string $configDir = null)</code></td><td>Build the ready board, world frozen until the first flap. Loads the leaderboard from the config directory.</td></tr>
+    <tr><td>Game</td><td><code>init()</code>, <code>update(Msg)</code>, <code>view()</code></td><td>The TEA contract. <code>update()</code> returns <code>[Game, ?Cmd]</code>; <code>view()</code> delegates to <code>Renderer::render()</code>.</td></tr>
+    <tr><td>Game</td><td><code>subscriptions()</code></td><td>The single source of the game cadence: a stable 30 Hz tick subscription. Returns <code>null</code> when crashed, when the viewport is too small, or when the terminal cannot play.</td></tr>
+    <tr><td>Game</td><td><code>tickN(int $n)</code></td><td>Apply <code>$n</code> ticks in sequence. The deterministic test helper.</td></tr>
+    <tr><td>Game</td><td><code>highScore()</code>, <code>highScores()</code>, <code>withHighScore(int $score)</code></td><td>The best score, the kept top-ten list, and an in-memory merge that returns a new <code>Game</code>.</td></tr>
+    <tr><td>Game</td><td><code>tooSmall()</code>, <code>rand()</code></td><td>Whether the live viewport is under 62 by 21, and the PRNG closure in use.</td></tr>
+    <tr><td>Game</td><td><code>settleOnExit()</code></td><td>Idempotent save of a qualifying score at the process boundary, the safety net for signal deaths.</td></tr>
+    <tr><td>Bird</td><td><code>spawn(int $x, float $y)</code>, <code>tick()</code>, <code>flap()</code>, <code>row()</code></td><td>Create the bird, advance one physics step, apply the flap kick, and read the playfield row index.</td></tr>
+    <tr><td>Pipe</td><td><code>tick()</code>, <code>collides(int $col, int $row)</code>, <code>isOffScreen()</code></td><td>Slide the pair one column left, test a cell against the open gap, and check whether it has left the field.</td></tr>
+    <tr><td>PipeGenerator</td><td><code>pipe(int $score, Closure $rand)</code>, <code>gapHeightForScore(int $score)</code></td><td>Spawn a pipe pair at the right edge with a score-scaled gap.</td></tr>
+    <tr><td>Renderer</td><td><code>render(Game $g)</code></td><td>Compose one full frame for any <code>Game</code> state. Static, no side effects.</td></tr>
+    <tr><td>TickMsg</td><td>(a <code>Msg</code> value)</td><td>The message a tick subscription delivers to <code>update()</code>.</td></tr>
+    <tr><td>Version</td><td><code>line()</code>, <code>current()</code>, <code>fromPharMetadata(string $path)</code></td><td>The version line printed by <code>--version</code>, and the phar stamp when one is present.</td></tr>
+    <tr><td>Lang</td><td><code>t($key, $params)</code></td><td>The i18n wrapper over <code>SugarCraft\Core\I18n\T</code>, with catalogs in <code>lang/</code>.</td></tr>
+    </table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>Almost nothing is configurable, on purpose. The physics, tick rate, gap bands and key bindings are compiled in, because the leaderboard and the difficulty curve form one game, and knobs would let a session claim scores the defaults could not produce. What the environment controls is where the leaderboard lives and how color is drawn.</p>
+    <table class="api-table">
+    <tr><th>Setting</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>XDG_CONFIG_HOME</code></td><td>absolute path</td><td>unset</td><td>Config base for the score file. Falls back to <code>HOME/.config</code>. With neither set the game refuses to launch rather than guess.</td></tr>
+    <tr><td><code>HOME</code></td><td>absolute path</td><td>system value</td><td>Used only when <code>XDG_CONFIG_HOME</code> is unset.</td></tr>
+    <tr><td><code>NO_COLOR</code></td><td>any value</td><td>unset</td><td>Forces the ASCII posture.</td></tr>
+    <tr><td><code>CLICOLOR_FORCE</code>, <code>FORCE_COLOR</code></td><td>any non-empty value except <code>0</code> or <code>false</code></td><td>unset</td><td>Forces color on where detection would withhold it, and lets the bin draw into a pipe on purpose.</td></tr>
+    <tr><td><code>TERM</code></td><td>terminal name</td><td>system value</td><td><code>dumb</code> gets the plain refusal screen.</td></tr>
+    </table>
+    <p>The leaderboard lives at <code>&lt;config base&gt;/.candy-flappy/scores.json</code>. The directory is mode 0700 and the file is mode 0600. A write goes through sugar-core's <code>AtomicJsonFile</code> (flock plus temp-and-rename), never a bare truncating write.</p>
+
+    <h3 id="compiled-in-limits" style="margin-top: 24px;">Compiled-in limits</h3>
+    <table class="api-table">
+    <tr><th>Constant</th><th>Value</th><th>Meaning</th></tr>
+    <tr><td><code>Game::WIDTH</code>, <code>Game::HEIGHT</code></td><td>60, 18</td><td>Playfield size in cells</td></tr>
+    <tr><td><code>Game::MIN_COLS</code>, <code>Game::MIN_ROWS</code></td><td>62, 21</td><td>Smallest viewport that gets the board rather than the notice screen</td></tr>
+    <tr><td><code>Game::PIPE_EVERY</code></td><td>18</td><td>Ticks between successive pipes</td></tr>
+    <tr><td><code>PipeGenerator::GAP_DEFAULT</code>, <code>GAP_MIN</code></td><td>6, 3</td><td>Gap height at score 0, and the floor it shrinks to</td></tr>
+    <tr><td><code>PipeGenerator::GAP_SHRINK_INTERVAL</code>, <code>GAP_SHRINK_STEP</code></td><td>5, 1</td><td>The gap loses one cell every five points</td></tr>
+    <tr><td><code>Game::MAX_HIGH_SCORES</code></td><td>10</td><td>Entries kept on the board</td></tr>
+    <tr><td><code>Game::MAX_SCORE_FILE_BYTES</code></td><td>65536</td><td>Larger score files are quarantined, not read</td></tr>
+    <tr><td><code>Game::SCORE_CEILING</code></td><td>100000</td><td>Highest whole score the board accepts on read and write</td></tr>
+    </table>
+
+    <h2 id="keys-and-input" style="margin-top: 40px;">Keys and input</h2>
+    <table class="api-table">
+    <tr><th>Input</th><th>Action</th></tr>
+    <tr><td><kbd>Space</kbd>, <kbd>Enter</kbd>, <kbd>↑</kbd>, <kbd>w</kbd> (either case)</td><td>Flap. The first flap also starts the run.</td></tr>
+    <tr><td>Mouse click or touch tap</td><td>Flap. The first click also starts the run.</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Restart after a crash or mid-flight. A qualifying mid-flight score is settled first, and the run lands on the ready card.</td></tr>
+    <tr><td><kbd>q</kbd>, <kbd>Esc</kbd>, <kbd>Ctrl+C</kbd></td><td>Quit. A qualifying mid-flight score is saved before the process exits.</td></tr>
+    </table>
+    <p>Other Ctrl chords do nothing. On terminals without kitty-protocol reporting, <kbd>Ctrl+M</kbd> and <kbd>Ctrl+J</kbd> arrive as Enter and flap, and <kbd>Ctrl+[</kbd> is byte-identical to Esc and quits.</p>
+
+    <h2 id="color-and-styling" style="margin-top: 40px;">Color and styling</h2>
+    <p>Color follows sugar-core's <code>ColorProfile::detect()</code>. The game reads the profile the terminal reports through <code>ColorProfileMsg</code>. A NoTty profile gets the refusal screen and quits, and <code>NO_COLOR</code> selects the ASCII tier, which draws the same layout with plain glyphs. The game has no theme file, and the glyphs and colors are fixed by <code>Renderer</code>.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds one runnable program:</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-flappy">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-flappy/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-flappy/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/kbrgl/flapioca">flapioca</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/play.php</code> runs the game straight from a checkout without the <code>bin/</code> wrapper. It accepts <code>--version</code> and <code>--help</code>, refuses unknown arguments, and refuses a non-TTY stdout unless <code>FORCE_COLOR</code> or <code>CLICOLOR_FORCE</code> is set. It always exits 0 once the loop returns, settling the score on every path the bin does.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/play.php           # play, in a real terminal
+php examples/play.php --help    # usage, exit 0</code></pre>
+    <p>The demo GIF below is recorded by the <code>.vhs/play.tape</code> script, which drives <code>./bin/candy-flappy</code> itself and not the example.</p>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite lives in <code>tests/</code> and runs under PHPUnit 10. Run it from the package root with stdin redirected, so a stray read cannot hang the run:</p>
+    <pre class="code"><code class="language-shell">cd candy-flappy &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests drive the physics with <code>tickN()</code> and an injected PRNG, check the rendered frame with golden snapshots (<code>GoldenRenderTest</code>), and cover the binary's flags and preflight (<code>BinFlagsTest</code>, <code>BinNoTtyPreflightTest</code>). <code>LocaleParityTest</code> keeps every <code>lang/</code> catalog in step with the default.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="needs-an-interactive-terminal-on-stdout-and-exit-1" style="margin-top: 24px;">"needs an interactive terminal on stdout" and exit 1</h3>
+    <p>Stdout is a pipe or a file. Run the game in a terminal window. To draw into a pipe on purpose, set <code>FORCE_COLOR=1</code>, which is the same escape hatch the bin honors.</p>
+
+    <h3 id="a-notice-screen-instead-of-the-board" style="margin-top: 24px;">A notice screen instead of the board</h3>
+    <p>The viewport is smaller than 62 columns by 21 rows. Resize the window. The world stands still while the notice shows, and <code>Game::subscriptions()</code> returns null, so no ticks are spent.</p>
+
+    <h3 id="the-game-refuses-to-launch" style="margin-top: 24px;">The game refuses to launch</h3>
+    <p>Neither <code>XDG_CONFIG_HOME</code> nor <code>HOME</code> is set, so there is no config base to write the leaderboard into. Export one, for example <code>export XDG_CONFIG_HOME=$HOME/.config</code>. The game refuses rather than guess a location.</p>
+
+    <h3 id="the-leaderboard-is-empty-or-a-file-named-scores-json-corrupt-timestamp-appears" style="margin-top: 24px;">The leaderboard is empty, or a file named <code>scores.json.corrupt-&lt;timestamp&gt;</code> appears</h3>
+    <p>A corrupt, unreadable or oversized save was set aside, and play started with an empty board so a bad file cannot block launch. Inspect the quarantined file if you need the old scores. Entries that are not whole positive scores below <code>SCORE_CEILING</code> are dropped on read.</p>
+
+    <h3 id="a-score-was-not-saved" style="margin-top: 24px;">A score was not saved</h3>
+    <p>A save that fails mid-run gives up silently. A failed end-of-run save prints one warning line to stderr. A score is written only when it earns a slot on the board, so a run that does not beat the lowest entry on a full board leaves the file alone.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream (Go or library)</th><th>candy-flappy (PHP)</th></tr>
+    <tr><td><code>kbrgl/flapioca</code>, the game loop and the bird and pipe rules</td><td><code>Game</code>, <code>Bird</code>, <code>Pipe</code>, <code>PipeGenerator</code></td></tr>
+    <tr><td>flapioca's draw pass</td><td><code>Renderer::render()</code>, a one-pass canvas fill</td></tr>
+    <tr><td>Projectile motion (not in flapioca)</td><td><code>SugarSpring</code> <code>Projectile</code>, used by <code>Bird</code></td></tr>
+    </table>
+    <p>The tick rate differs from upstream on purpose. Flapioca slides at 5 cells per second; candy-flappy runs the same rule at 30 ticks per second, and the difficulty curve is tuned against that faster clock.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+
+    <h3 id="pure-state-one-frame-per-update" style="margin-top: 24px;">Pure state, one frame per update</h3>
+    <p><code>Game</code> never mutates. Every transition builds a new instance through <code>mutate()</code>, so the field list lives in one place and a restart cannot drop the live viewport. <code>view()</code> is a pure function of the state, so a test can compare two frames without a terminal.</p>
+
+    <h3 id="subscriptions-drive-the-clock" style="margin-top: 24px;">Subscriptions drive the clock</h3>
+    <p>The tick cadence is a subscription with a stable id, not a loop inside the Model. Program reconciles the subscription each cycle, which keeps exactly one tick chain alive across restarts and cancels it when the game stands down, so a dead bird or a frozen ready card burns no timer.</p>
+
+    <h3 id="persistence-runs-as-a-command" style="margin-top: 24px;">Persistence runs as a command</h3>
+    <p>The leaderboard write is a <code>Cmd</code> that <code>update()</code> returns, so the synchronous reducer never touches the disk. The bin and the example also call <code>settleOnExit()</code> at the process boundary as a safety net for signal deaths.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>Tagged releases use the <code>candy-flappy/</code> tag prefix, and the standalone phar is the release artifact. From a checkout, <code>--version</code> reports <code>dev-master</code>, and a phar reports the build stamp it was cut with.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-spring.html">SugarSpring</a>: the <code>Projectile</code> and <code>Vector</code> types the bird's motion is built on.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the Model, Msg, Cmd and Program runtime, plus <code>AtomicJsonFile</code> and <code>ColorProfile</code>.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Game</td><td>init()</td><td>TEA init hook — returns null; the tick cadence rides subscriptions()</td></tr>
-<tr><td>Game</td><td>start($rand, $configDir)</td><td>Build the ready board (world frozen until the first flap)</td></tr>
-<tr><td>Game</td><td>update($msg)</td><td>TEA reducer: keys/ticks/resize/profile &rarr; [new Game, optional Cmd]</td></tr>
-<tr><td>Game</td><td>view()</td><td>Full ANSI frame (delegates to Renderer::render)</td></tr>
-<tr><td>Game</td><td>subscriptions()</td><td>1/30 s tick subscription; empty when crashed or the terminal cannot play</td></tr>
-<tr><td>Game</td><td>withHighScore($score)</td><td>New Game with $score merged into the records if it beats the best (no disk write)</td></tr>
-<tr><td>Game</td><td>highScore() / highScores()</td><td>Current best / the kept top-ten record list</td></tr>
-<tr><td>Game</td><td>settleOnExit()</td><td>Idempotent process-boundary high-score save (signal-death safety net)</td></tr>
-<tr><td>Game</td><td>tickN($n)</td><td>Apply n physics ticks in sequence (deterministic test helper)</td></tr>
-<tr><td>Bird</td><td>flap() / tick()</td><td>Projectile velocity kick + one physics step (on Bird, not Game)</td></tr>
-<tr><td>Bird</td><td>row()</td><td>Bird y rounded to its playfield row index</td></tr>
-<tr><td>Pipe</td><td>collides($col, $row)</td><td>Per-cell test against the open gap band of the pair</td></tr>
-<tr><td>Pipe</td><td>tick() / isOffScreen()</td><td>Slide the pair one cell / whether it has left the field</td></tr>
-<tr><td>PipeGenerator</td><td>gapHeightForScore($score)</td><td>Gap height for a score: starts at 6 cells, shrinks one every 5 points, floors at 3</td></tr>
-<tr><td>PipeGenerator</td><td>makePipe($score, $rand)</td><td>Spawn a pair; the gap shrinks 6&rarr;3 as score climbs</td></tr>
-<tr><td>Renderer</td><td>render($game)</td><td>Compose a frame for any Game state (static)</td></tr>
-<tr><td>Program</td><td>new($game, $options) / run()</td><td>sugar-core event loop; run() returns the final model</td></tr>
-</table>
     </div>
   </div>
 </section>
@@ -238,7 +391,7 @@ use SugarCraft\Flappy\Game;
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2 id="demos">Demos.</h2>
-        <p class="lede">The demo below is VHS-recorded by CI: the <code>.vhs/play.tape</code> script drives <code>./bin/candy-flappy</code> itself — not the <code>examples/</code> scripts — and the workflow re-renders the GIF on pushes that touch it.</p>
+        <p class="lede">VHS-recorded by CI: the <code>.vhs/play.tape</code> script drives <code>./bin/candy-flappy</code> itself, not the <code>examples/</code> scripts, and the workflow re-renders the GIF on pushes that touch it.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-flappy/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
