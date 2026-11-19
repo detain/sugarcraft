@@ -768,4 +768,275 @@ final class SemaphoreTest extends TestCase
             });
         }
     }
+
+    /**
+     * Migrated from candy-git-server PromisePoolTest: the ordered batch mapper
+     * now lives on the pool. Results keep input order even when the tasks
+     * settle in the reverse order on the loop.
+     */
+    public function testMapResolvesInInputOrderWhenTasksSettleOutOfOrder(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $result = null;
+        Semaphore::new(3)->map(['a', 'b', 'c'], function (string $x, int $i) use ($loop): PromiseInterface {
+            $gate = new Deferred();
+            $loop->addTimer(0.01 * (3 - $i), static fn () => $gate->resolve($x));
+
+            return $gate->promise();
+        }, $loop)->then(static function (array $r) use (&$result): void {
+            $result = $r;
+        });
+        $loop->run();
+
+        $this->assertSame(['a', 'b', 'c'], $result);
+    }
+
+    public function testMapOfNothingResolvesEmpty(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $result = null;
+        Semaphore::new(2)->map([], static fn ($x) => $x, $loop)
+            ->then(static function (array $r) use (&$result): void {
+                $result = $r;
+            });
+
+        $this->assertSame([], $result);
+    }
+
+    public function testMapStartsNothingInsideTheCall(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $started = [];
+        Semaphore::new(2)->map([1, 2, 3], static function (int $x) use (&$started): int {
+            $started[] = $x;
+
+            return $x;
+        }, $loop);
+
+        $this->assertSame([], $started, 'items must start on a loop tick, not inside map()');
+
+        $loop->run();
+        $this->assertSame([1, 2, 3], $started);
+    }
+
+    public function testMapExecutionOrderFollowsInputOrderWithLimitOne(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $order = [];
+        Semaphore::new(1)->map(['a', 'b', 'c'], static function (string $x) use (&$order): string {
+            $order[] = $x;
+
+            return $x;
+        }, $loop)->then(static fn () => null);
+        $loop->run();
+
+        $this->assertSame(['a', 'b', 'c'], $order);
+    }
+
+    /**
+     * The bound bites for pending promises: a slot is held from start until the
+     * promise settles. Seven items through a pool of three must overlap exactly
+     * three at a time, and the pool must actually fill all three slots.
+     */
+    public function testMapBoundsInFlightWorkToTheLimit(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $inFlight = 0;
+        $maxInFlight = 0;
+        $started = 0;
+
+        $fn = static function (int $item) use (&$inFlight, &$maxInFlight, &$started, $loop): PromiseInterface {
+            $started++;
+            $inFlight++;
+            $maxInFlight = \max($maxInFlight, $inFlight);
+
+            $deferred = new Deferred();
+            $loop->addTimer(0.01 * $started, static function () use ($deferred, &$inFlight, $item): void {
+                $inFlight--;
+                $deferred->resolve($item);
+            });
+
+            return $deferred->promise();
+        };
+
+        $result = null;
+        Semaphore::new(3)->map(\range(1, 7), $fn, $loop)
+            ->then(static function (array $r) use (&$result): void {
+                $result = $r;
+            });
+        $loop->run();
+
+        $this->assertSame(\range(1, 7), $result);
+        $this->assertSame(7, $started);
+        $this->assertSame(3, $maxInFlight, 'the pool must fill exactly its limit, never more');
+    }
+
+    public function testMapRejectsOnSynchronousThrowAndStartsNoMoreItems(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $started = [];
+        $error = null;
+        Semaphore::new(1)->map([1, 2, 3], static function (int $x) use (&$started): int {
+            $started[] = $x;
+            if ($x === 2) {
+                throw new \RuntimeException('task 2 failed');
+            }
+
+            return $x;
+        }, $loop)->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $loop->run();
+
+        $this->assertInstanceOf(\RuntimeException::class, $error);
+        $this->assertSame('task 2 failed', $error->getMessage());
+        $this->assertSame([1, 2], $started, 'item 3 must not start after item 2 rejected');
+    }
+
+    public function testMapRejectsWhenATaskPromiseRejects(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $error = null;
+        Semaphore::new(2)->map([1, 2], static function (int $x) {
+            return $x === 1
+                ? \React\Promise\reject(new \LogicException('boom'))
+                : $x;
+        }, $loop)->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $loop->run();
+
+        $this->assertInstanceOf(\LogicException::class, $error);
+        $this->assertSame('boom', $error->getMessage());
+    }
+
+    /**
+     * Cancelling the aggregate must stop the batch: item 1 is held pending, the
+     * batch is cancelled, then item 1 resolves. Nothing may start after the
+     * cancel, and the aggregate rejects with the supplied cancel reason.
+     */
+    public function testCancellingTheMapStopsLaunchingAndRejectsWithTheCancelReason(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $started = [];
+        $pending = [];
+        $promise = Semaphore::new(1)->map([1, 2, 3, 4, 5], static function (int $x) use (&$started, &$pending) {
+            $started[] = $x;
+            $pending[$x] = new Deferred();
+
+            return $pending[$x]->promise();
+        }, $loop, static fn (): \Throwable => new \DomainException('batch abandoned'));
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.01, static function () use ($promise, &$pending): void {
+            $promise->cancel();
+            $pending[1]->resolve(1);
+        });
+        $loop->run();
+
+        $this->assertSame([1], $started, 'a cancelled batch must not start any further item');
+        $this->assertInstanceOf(\DomainException::class, $error);
+        $this->assertSame('batch abandoned', $error->getMessage());
+    }
+
+    public function testCancellingTheMapWithoutAReasonRejectsWithARuntimeException(): void
+    {
+        $loop = new StreamSelectLoop();
+
+        $pending = new Deferred();
+        $promise = Semaphore::new(1)->map([1, 2], static fn (int $x) => $pending->promise(), $loop);
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.01, static function () use ($promise): void {
+            $promise->cancel();
+        });
+        $loop->run();
+
+        $this->assertInstanceOf(\RuntimeException::class, $error);
+        $this->assertSame('batch cancelled before every item finished', $error->getMessage());
+    }
+
+    /**
+     * Retiring the pool while item 1 is still running leaves no permit for items
+     * 2 and 3. The aggregate must reject with SemaphoreClosedException; before the
+     * fix the LogicException from the next start was swallowed in the then-chain
+     * and the batch stayed pending forever.
+     */
+    public function testClosingThePoolMidBatchRejectsTheMapInsteadOfHanging(): void
+    {
+        $loop = new StreamSelectLoop();
+        $sem = Semaphore::new(1);
+
+        $started = [];
+        $pending = [];
+        $promise = $sem->map([1, 2, 3], static function (int $x) use (&$started, &$pending) {
+            $started[] = $x;
+            $pending[$x] = new Deferred();
+
+            return $pending[$x]->promise();
+        }, $loop);
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.01, static function () use ($sem, &$pending): void {
+            $sem->close();
+            $pending[1]->resolve(1);
+        });
+        $loop->run();
+
+        $this->assertSame([1], $started, 'a retired pool must not start any further item');
+        $this->assertInstanceOf(SemaphoreClosedException::class, $error);
+    }
+
+    public function testMapOnAClosedPoolThrowsSynchronouslyAndStartsNothing(): void
+    {
+        $sem = Semaphore::new(2);
+        $sem->close();
+
+        $started = false;
+        $this->expectException(\LogicException::class);
+
+        try {
+            $sem->map([1, 2], static function () use (&$started): int {
+                $started = true;
+
+                return 0;
+            });
+        } finally {
+            $this->assertFalse($started, 'no item may start on a retired pool');
+        }
+    }
+
+    public function testMapOfNothingOnAClosedPoolStillResolvesEmpty(): void
+    {
+        $sem = Semaphore::new(2);
+        $sem->close();
+
+        $result = null;
+        $sem->map([], static fn ($x) => $x, new StreamSelectLoop())
+            ->then(static function (array $r) use (&$result): void {
+                $result = $r;
+            });
+
+        $this->assertSame([], $result);
+    }
 }

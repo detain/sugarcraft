@@ -481,13 +481,14 @@ and the path through `StyleGuide`.
 candy-mdview declares its direct dependencies: **sugar-markdown** (renderer +
 themes), **sugar-forms** (Viewport), **sugar-core** (TEA runtime, width,
 sanitize), **sugar-colorprofile** (terminal capability probing),
-**sugar-style**, and **symfony/console** (`^6.4 || ^7.0`) — the app is a
+**sugar-style**, **sugar-async** (the bounded await on the color probe), and
+**symfony/console** (`^6.4 || ^7.0`) — the app is a
 Symfony Console program (`Application` extends
 `Symfony\Component\Console\Application`; the whole flag and exit-code surface
 depends on it). The command's private static `terminalSupportsColor()` consults
-the environment verdict first, then
-`\SugarCraft\ColorProfile\Probe\TerminalProbe::run()`, and falls back to
-`true` (assume color) if the probe throws — ensuring graceful degradation
+the environment verdict first, then awaits
+`\SugarCraft\ColorProfile\AsyncProbe::report()` on the shared loop, and falls
+back to `true` (assume color) if the probe throws or the await times out — ensuring graceful degradation
 on Windows, over SSH, and in old terminals.
 
 ## Snapshot tests

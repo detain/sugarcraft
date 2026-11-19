@@ -42,6 +42,7 @@ return [
     'semaphore.shutdown'          => 'semaphore closed before a permit could be granted',
     'semaphore.closed'            => 'semaphore is closed and cannot grant another permit',
     'semaphore.derive_closed'     => 'cannot derive a new pool from a closed semaphore',
+    'semaphore.map_cancelled' => 'batch cancelled before every item finished',
 
     // Util/LruMap.php
     'lru_map.capacity_invalid'    => 'LRU capacity must be at least 1, got {capacity}',

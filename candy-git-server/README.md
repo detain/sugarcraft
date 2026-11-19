@@ -89,8 +89,7 @@ at startup. Every served request spawns bounded, reaped `git` children.
 - `Jobs\Schedule`, `Jobs\MirrorPuller` — `@every`/alias schedules and
   mirror-pull job logic
 - `Stats`, `StatsServer` — counters + JSON stats endpoint class
-- `Support\PromisePool`, `Support\Version` — bounded-concurrency helper,
-  phar build-stamp resolver
+- `Support\Version` — phar build-stamp resolver
 - `bin/candy-git-server` — CLI: `serve` (refuses), `serve --http
   --repo-root DIR` (starts the smart-HTTP listener), `init [data-path]`
   (writes a config skeleton; `--admin NAME` also mints the first admin),
@@ -147,7 +146,6 @@ candy-git-server/
 │   │   └── LFSStorageBackendInterface.php
 │   └── Support/
 │       ├── BoundedCommand.php      argv-only subprocess runner: caps, deadline, reaping
-│       │   ├── PromisePool.php         Bounded-concurrency helper
 │       └── Version.php             Phar build-stamp resolver
 ├── examples/                       config.php, repo.php (library usage)
 ├── tools/build-phar.php            phar build script
@@ -494,7 +492,7 @@ kicks the NEWCOMER, never an established transfer.
 LFS batches have the same split: `LFSHandler::handleBatch()` is the
 synchronous path, `handleBatchAsync()` resolves the identical response
 via the loop with at most `concurrentTransfers` objects in flight
-(bounded by `SugarCraft\GitServer\Support\PromisePool`). Note that per-object
+(bounded by a sugar-core `SugarCraft\Core\Util\Semaphore`, ordered by `Semaphore::map()`). Note that per-object
 storage inspection is still synchronous file I/O inside its loop tick —
 the async path bounds *scheduling*, it does not make `file_get_contents`
 asynchronous.

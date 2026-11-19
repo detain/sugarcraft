@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'семафор закрыт до выдачи разрешения',
     'semaphore.closed' => 'семафор закрыт и не может выдать новое разрешение',
     'semaphore.derive_closed' => 'невозможно создать новый пул из закрытого семафора',
+    'semaphore.map_cancelled' => 'пакет отменён до завершения всех элементов',
     'lru_map.capacity_invalid' => 'ёмкость LRU должна быть не меньше 1, получено {capacity}',
     'lru_map.capacity_too_large' => 'ёмкость LRU {capacity} превышает ограничитель роста {max}',
     'lru_map.evict_from_empty' => 'невозможно вытеснить из пустой карты LRU',

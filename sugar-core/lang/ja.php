@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => '許可が与えられる前にセマフォが閉じられました',
     'semaphore.closed' => 'セマフォは閉じられており、これ以上許可を与えられません',
     'semaphore.derive_closed' => '閉じられたセマフォから新しいプールを派生できません',
+    'semaphore.map_cancelled' => 'すべての項目が終わる前にバッチが取り消されました',
     'lru_map.capacity_invalid' => 'LRU 容量は 1 以上である必要があります。取得値: {capacity}',
     'lru_map.capacity_too_large' => 'LRU 容量 {capacity} が成長ガード {max} を超えています',
     'lru_map.evict_from_empty' => '空の LRU マップから退避できません',

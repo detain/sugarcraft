@@ -20,14 +20,13 @@ final class HeadlessReportExampleTest extends TestCase
 
     public function testReportIgnoresBeatsAtTheLegacySharedPath(): void
     {
-        // The child process reads its temp directory from TMPDIR, so the planted
-        // legacy directory lives under a root this test creates and owns. The real
-        // shared temp directory is never touched, and the test never skips.
-        $root = \sys_get_temp_dir() . '/candy-codetime-test-' . \bin2hex(\random_bytes(8));
-        Store::ensurePrivateDir($root, 'test temp root');
+        $legacy = \sys_get_temp_dir() . '/' . self::LEGACY_DIR_NAME;
+        if (\file_exists($legacy)) {
+            $this->markTestSkipped('The legacy shared path already exists; planting a beat there would touch data this test does not own.');
+        }
+
+        Store::ensurePrivateDir($legacy, 'test planted directory');
         try {
-            $legacy = $root . '/' . self::LEGACY_DIR_NAME;
-            Store::ensurePrivateDir($legacy, 'test planted directory');
             $planted = (new DateTimeImmutable('today'))->setTime(8, 0);
             (new Store($legacy))->append(new Heartbeat(
                 time: $planted->getTimestamp(),
@@ -38,19 +37,14 @@ final class HeadlessReportExampleTest extends TestCase
             ));
 
             $script = \dirname(__DIR__) . '/examples/headless-report.php';
-            \exec(
-                'TMPDIR=' . \escapeshellarg($root) . ' '
-                . \PHP_BINARY . ' ' . \escapeshellarg($script) . ' < /dev/null 2>&1',
-                $lines,
-                $rc,
-            );
+            \exec(\PHP_BINARY . ' ' . \escapeshellarg($script) . ' < /dev/null 2>&1', $lines, $rc);
             $out = \implode("\n", $lines);
 
             $this->assertSame(0, $rc, $out);
             $this->assertStringNotContainsString('intruder', $out, 'the report must cover only the beats this run seeded');
             $this->assertStringContainsString('total: 1h 15m', $out);
         } finally {
-            \exec('rm -rf ' . \escapeshellarg($root));
+            \exec('rm -rf ' . \escapeshellarg($legacy));
         }
     }
 }

@@ -7,8 +7,9 @@ namespace SugarCraft\GitServer\LFS;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Core\Concerns\Mutable;
-use SugarCraft\GitServer\Support\PromisePool;
+use SugarCraft\Core\Util\Semaphore;
 use SugarCraft\GitServer\{AccessControl, Repo, Stats, User};
 
 use function React\Promise\resolve;
@@ -297,7 +298,7 @@ final class LFSHandler
      * Gates and per-entry validation run synchronously through the SAME
      * predicates first, so the two paths can never disagree; at most
      * `$concurrentTransfers` validated objects are in flight at once (via
-     * {@see PromisePool}), and the resolved payload is byte-identical to
+     * a sugar-core {@see Semaphore}), and the resolved payload is byte-identical to
      * what the sequential path returns, including per-object error
      * entries (400 malformed, 404 missing). A storage-backend exception
      * on one object never sinks the batch: it is captured as a GENERIC
@@ -351,11 +352,11 @@ final class LFSHandler
         $loop ??= Loop::get();
         $indexes = \array_keys($pending);
 
-        return PromisePool::map(
-            $loop,
+        return Semaphore::new(\max(1, $this->concurrentTransfers))->map(
             \array_values($pending),
             fn (array $pair): array => $this->safeObject($operation, $pair[0], $pair[1]),
-            \max(1, $this->concurrentTransfers),
+            $loop,
+            static fn (): \Throwable => new OperationCancelledException('LFS batch cancelled'),
         )->then(static function (array $handled) use ($indexes, $results): array {
             foreach ($indexes as $slot => $index) {
                 $results[$index] = $handled[$slot];

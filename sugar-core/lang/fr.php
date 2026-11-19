@@ -36,6 +36,7 @@ return [
     'semaphore.shutdown' => 'sémaphore fermé avant qu\'un permis puisse être accordé',
     'semaphore.closed' => 'le sémaphore est fermé et ne peut plus accorder de permis',
     'semaphore.derive_closed' => 'impossible de dériver un nouveau pool d\'un sémaphore fermé',
+    'semaphore.map_cancelled' => 'lot annulé avant la fin de tous les éléments',
     'lru_map.capacity_invalid' => 'la capacité LRU doit être au moins 1, reçue {capacity}',
     'lru_map.capacity_too_large' => 'la capacité LRU {capacity} dépasse la garde de croissance {max}',
     'lru_map.evict_from_empty' => 'impossible d\'évincer depuis une carte LRU vide',
