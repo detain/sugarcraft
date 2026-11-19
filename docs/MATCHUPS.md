@@ -81,6 +81,7 @@ ships as `App\` — called out in the table below.
 | **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 | **SugarIgnore** (`sugar-ignore/`) | 🟢 ready | gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code's `IgnoreRules` (owner decision G-10=A); candy-git, candy-files and candy-git-server are the intended second consumers. |
 | **SugarServeProtocol** (`sugar-serve-protocol/`) | 🟢 ready | Wire contract for the `candy-code.v1` serve protocol — subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation. Original work: no upstream port. |
+| **SugarPluginInstaller** (`sugar-plugin-installer/`) | 🟢 ready | Composer installer for `sugar-plugin` packages (composer-plugin, `LibraryInstaller` subclass). Original work: no upstream port. |
 
 ## Apps
 

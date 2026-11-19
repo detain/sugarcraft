@@ -77,6 +77,7 @@
         "sugarcraft/sugar-ssh-server": "dev-master",
         "sugarcraft/sugar-serve-protocol": "dev-master",
         "sugarcraft/sugar-plugins": "dev-master",
+        "sugarcraft/sugar-plugin-installer": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-widgets": "dev-master",
@@ -595,7 +596,8 @@
     "prefer-stable": true,
     "config": {
         "allow-plugins": {
-            "php-http/discovery": true
+            "php-http/discovery": true,
+        "sugarcraft/sugar-plugin-installer": true
         }
     }
 }
