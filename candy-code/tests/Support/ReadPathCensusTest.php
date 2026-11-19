@@ -323,14 +323,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'the memo keys on the resolved root, so caching never widens containment',
         ],
         'Bundles/Bundle.php|file_get_contents' => [
-            // CONTAINED_EXTERNAL holds for fromDir() only because its sole caller is
-            // BundleDiscovery, which hands every directory to PluginDiscovery::guard() first.
-            // manifestPath() refuses a manifest whose real path leaves the bundle directory,
-            // so the file read is never a link out of that directory. An in-bundle link loads.
-            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — fromDir() reads the manifest of a '
-                . 'bundle directory discovery chose; PluginDiscovery::guard() admits that directory through '
-                . 'PathJail::below() against its boundary, and manifestPath() refuses a manifest whose real path '
-                . 'leaves the bundle directory before the read',
+            // The gate is this file's own escapesBundle() compare, not PluginDiscovery::guard():
+            // guard() bounds only tier roots, and an operator-named root is recorded with no compare
+            // at all. manifestPath() refuses a manifest whose real path leaves the bundle directory,
+            // so the file read is never a link out of that directory for any root. An in-bundle link loads.
+            'CONTAINED — fromDir() reads the manifest manifestPath() resolved for a bundle directory; '
+                . 'escapesBundle() in this file gates that path with a \SugarCraft\Core\Util\PathJail::below() '
+                . 'compare against the bundle directory, and a real path that leaves it is refused before the read',
             // NOT CONTAINED_EXTERNAL: readManifest() is reached from the installer's staged trees
             // (Cli\Subcommands), which PluginDiscovery::guard() never sees. The escape refusal in
             // manifestPath() covers the file, but no sugar-plugins compare bounds the staged directory.
@@ -1843,8 +1842,8 @@ final class ReadPathCensusTest extends TestCase
     public function testEveryVerdictIsFromTheVocabularyAndEveryWordIsUsed(): void
     {
         // The vocabulary is shared by both ledgers, so a word is "used" if either one holds a
-        // row for it: CONTAINED_EXTERNAL lives only in the sibling ledger since the Bundle rows
-        // stopped claiming it.
+        // row for it: CONTAINED_EXTERNAL is claimed by sibling-ledger rows only, since the
+        // Bundle fromDir() row is CONTAINED, measured against its own compare in that file.
         $used = [];
         foreach ([...self::READ_PATHS, ...self::SIBLING_READ_PATHS] as $key => $verdicts) {
             foreach ($verdicts as $entry) {
