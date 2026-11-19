@@ -176,6 +176,117 @@ missing key (and the environment variable to set, where there is one).
 - Use `custom` for any server that speaks the OpenAI chat wire and is not one of
   the named types above.
 
+## Native clients and subscription routes
+
+The `anthropic` type key is the native Messages API client. `ProviderFactory::createAnthropic()` builds a dedicated `AnthropicProvider`: `x-api-key`/`anthropic-version` headers, a native `/v1/messages` body shared with Claude-on-Vertex through `AnthropicMessagesWire`, tools as native `tool_use` blocks, prompt caching marked by default, and a per-model Claude context table. `claude-code` remains the route for subscription login (`bare: false`, which drives the `claude` binary), and `CANDY_CODE_BACKEND_CMD` for shell relays. On that route the block's `isolate` key (default **true**) keeps the `bare: false` child from inheriting the user's `~/.claude` state: the binary is launched with `--setting-sources project,local`, `--strict-mcp-config` and `--disable-slash-commands`, and the host's Shift+Tab permission mode rides down as `--permission-mode` — narrowed only, never widened past what the host granted (unless the launch falls back, `fallbackModels`: the `claude-code` child then sits behind the wrapper and the mirror stands down). What the trio cannot cover: `claude`'s CLAUDE.md auto-discovery and auto-memory load under no switch except `--bare` itself (probed: `claude --help`, 2.1.312), so a `bare: false` launch says so once in a launch notice, and `isolate: false` restores the full user state — the documented escape if the CLI's own settings are part of the workflow you are subscribing to. The `codex` route takes the same key the same way: under `isolate` (default true) the `codex exec` child runs with `--ignore-user-config` — a foreign `config.toml`'s hooks, profiles and MCP servers drop out while authentication keeps using `CODEX_HOME` (probed: `codex exec --help`, 0.154.0) — and the spawn never defers its sandbox: `-s` always rides, the block's `sandbox` key when set else `workspace-write`, forced to `read-only` while the host holds plan or dont-ask, never widened by a host mode, `danger-full-access` reaching the wire only from your own configured spelling. A schema-bearing request also spills its JSON Schema to a `0600` temp file riding `--output-schema`, removed on every exit path; the route still answers `supportsJsonSchema()` false — a flag listed in `--help` is not yet a record of constrained decoding through a live login, so the flip is owed to a probe, not to a code change.
+
+## Model metadata and fallback models
+
+Context windows and prices for models a provider has no built-in figure for come from a **model database**: LiteLLM's `model_prices_and_context_window.json`, cached at `~/.candy-code/cache/` for 24 hours and refreshed in a detached background process, so it never holds the terminal (`ModelMetadata`). The `openai` and `custom` types consult it, in this order: your own `contextWindow` / `modelPrices` (the provider block's keys, else the user-tier settings), then the database, then the provider's built-in table. That is what sizes a hosted model behind a `custom` gateway. A `custom` model the database does not list — a self-hosted id — keeps 128,000 tokens and a real $0; give it a `contextWindow` to size it. Matching is exact (case-insensitive, or LiteLLM's own `provider/id` form), never fuzzy, so a self-hosted model is not billed at a hosted model's price because their names overlap. Offline, a failed refresh keeps the old file and waits a day; `CANDY_CODE_DISABLE_MODEL_METADATA=1` turns the database off entirely — see [`ENVIRONMENT.md`](ENVIRONMENT.md). This read is one of two launch-time egresses, and neither is an LLM call: the other is the once-a-day release-list check phar builds make to see whether a newer `candy-code` exists, behind its own switch, `CANDY_CODE_NO_UPDATE_CHECK=1`.
+
+**Fallback models.** A provider block may name `fallbackModels`: other model ids on the same provider, tried in order (`"fallbackModels": ["gpt-4o-mini"]`, or a single string). `ProviderFactory` then wraps the provider in a `FallbackProvider`, which re-sends a request to the next model when it fails in one of the two ways another model can fix: a transient failure still failing after the provider's own retries (overloaded, rate-limited, a 5xx, a dropped connection), or a context-window overflow — and an overflow only moves to a model the model database knows to have a larger window, or whose size it does not know. Every other failure is raised exactly as before. On the streaming path the switch happens only before the first chunk arrives; after that the reply is that model's, and a failure mid-reply is the turn's to recover. Each switch puts one notice in the transcript naming both models and why, and a transient switch keeps the fallback first for 60 seconds — the status bar names it while it answers — before the original model is tried again (an overflow does not, since the next request may fit). Each fallback is the same block with only `model` replaced, so it is sized and priced as itself. No timeout is added to any call.
+
+## SGLang: parsers, reasoning effort and server reads
+
+The `sglang` type accepts an optional `toolCallParser` key, with three values:
+
+- `'openai'` — read the server's parsed `tool_calls[]` array, and nothing else.
+- `'minimax-xml-fallback'` — the same, but when that array is absent, recover
+  MiniMax's raw `<minimax:tool_call>` XML out of the message content.
+- `'dsml'` — the same, but recover DeepSeek-V4's native DSML markup
+  (`<｜DSML｜tool_calls>`) instead.
+
+All three read `tool_calls[]` first, so the two fallbacks cost one `isset` on a
+correctly configured server. They matter only if your SGLang deployment was
+launched *without* `--tool-call-parser`, which leaves the model's native
+tool-call syntax unparsed in the content — and the DeepSeek-V4 model card's own
+documented launch command omits that flag, which is why `dsml` exists.
+
+**Omit the key** and the parser is derived from the model: `dsml` for the
+DeepSeek-V4 family, `openai` for everything else. That is why
+`defaultConfig('sglang')` reports `toolCallParser: null` rather than a name — a
+stamped literal would keep applying after you edited `model` to another family.
+This differs from `reasoningEffort` in no way; both are model-derived for the
+same reason.
+
+The setting applies to **both** the batch `complete()` path and the streaming
+path. On the streaming path the fallback runs over the reassembled content once
+the response ends, and only when the structured `delta.tool_calls[]` route
+produced nothing, so it cannot duplicate a call. A recovered envelope is cut
+out of the assistant's text on both paths, so the markup is neither shown nor
+sent back to the model next to the structured call. To make that possible on
+the streaming path, `minimax-xml-fallback` and `dsml` hold text back from the
+screen from the first bytes that could open an envelope: a chunk ending in a
+partial marker or a line break waits for the next one, and anything after a
+complete marker waits for the end of the response. Text that turns out not to
+be a recovered call is then shown unchanged. `openai` holds nothing back.
+
+It also accepts an optional `reasoningEffort` key — SGLang's top-level
+`reasoning_effort` request field. One of `none`, `minimal`, `low`, `medium`,
+`high`, `xhigh`, `max`, or a float. Omit it and the value is derived from the
+model: `max` for the DeepSeek-V4 family, and nothing at all for any other
+model.
+
+A misspelled **level name** is refused when the provider is built, so a typo in
+a config file fails immediately. A **number** is not: the float range is the
+server's (`0.0`–`0.99` inclusive when measured, `le: 0.99`) and is deliberately
+not re-checked locally, since a later SGLang may widen it. The catch is that
+JSON has no float/int distinction to lean on here — a whole number is read as a
+float, so `"reasoningEffort": 1` becomes `1.0`, the one value just outside that
+bound, and every request then fails with an HTTP 400 from the server rather than
+at startup. Write `0.99`, not `1`.
+
+Configure the **real model id**, not a `--served-model-name` alias. The
+DeepSeek-V4 defaults above are selected by matching `deepseek-v4` in the `model`
+string, so a server launched as `--served-model-name default` reports `default`
+from `/v1/models`, and copying that into `model` silently gets you the legacy
+`temperature = 0.7`, no `top_p`, no `reasoning_effort` and a 196,608-token
+context window while you are in fact talking to DeepSeek-V4. There is no way to
+detect that from the id alone — but the server can say, see below.
+
+The provider also asks the server about itself: once per session it reads
+`GET /model_info` and `GET /server_info` from the server root (`baseUrl` minus
+`/v1`), with a 3-second bound, and fails soft. From them it takes the context
+window (`min(context_length, max_req_input_len − 4096)`, so the compaction
+tiers follow the deployment rather than a transcription of it) and the default
+`max_tokens` (`min(262144, the room the prompt leaves)`; `maxOutputTokens`
+still wins). When the reads fail, per-family figures stand in: 262144 output
+tokens for DeepSeek-V4 and Qwen3.8, 4096 for anything else. The same read
+names the served model and its `--tool-call-parser`: a served model of another
+family than `model`, or a server with no tool-call parser while no textual
+fallback is armed, raises a one-time transcript notice. The chat's status bar
+ends with the served model's id (the configured `model` until the server has
+named one) whenever the row has room left over — it is the bar's
+lowest-priority piece, shortened to the part after the last `/` and then
+ellipsised before it is dropped. Set
+`"discoverServerInfo": false` in the provider block to skip the reads.
+
+That default exists because an *absent* `reasoning_effort` is not neutral. On
+DeepSeek-V4-Flash, a request without it comes back with `reasoning_content:
+null` and the model's thinking written straight into `content` — so the
+reasoning ends up in the reply the user reads instead of the collapsible
+thinking pane. Sending a level moves it back to `reasoning_content`, which is
+where `CompleteResponse::$reasoning` reads from.
+
+The default `sglang` model is **whatever the server serves**. With no model
+named (the generic `sglang` config, no `--model`, no `$CANDY_CODE_MODEL`), the
+provider reads `served_model_name` from `/model_info` and addresses every
+request to it, picking that model's sampling, reasoning-effort and tool-call
+parser defaults; the served-model notice above does not fire, since there is no
+configured model to contradict. Only when the server cannot be asked does it
+fall back to `Qwen/Qwen3.8-Flash-Next-FP8` — a placeholder pinned to whatever
+the maintainer's test endpoint happened to serve when it was written, nothing
+more. A model you do name is sent as named. Once the served name is
+known — read by the TUI process itself, or reported back by the first turn —
+the Settings pane's `Model` row shows it instead of the fallback id.
+
+The DeepSeek-V4 family also gets `temperature = 1.0` plus `top_p = 0.95` when
+the request offers tools / `1.0` when it does not — the model card's own figures
+for agentic and non-agentic use. MiniMax-M2.x is unaffected by all of the above: name it as the
+`model` and the provider keeps its previous `temperature = 0.7`, sends no
+`top_p`, and sends no `reasoning_effort` unless you set one explicitly. A
+per-request override lives on `CompleteRequest::$reasoningEffort`.
+
 ## Keys every block may carry
 
 - `model`: the model id sent on each request.
