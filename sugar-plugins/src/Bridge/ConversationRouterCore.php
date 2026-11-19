@@ -306,11 +306,15 @@ abstract class ConversationRouterCore
 
                     return;
                 }
-                $this->serve->call('command.exec', [
-                    'sessionId' => $sessionId,
-                    'name' => 'model',
-                    'args' => \implode(' ', $args),
-                ])->then(
+                // An argument-less command carries no args key at all: the candy-code
+                // wire refuses an empty args string with invalid_params. Same shape as
+                // candy-code's Chat.php command.exec (the trimmed-empty check there).
+                $argText = \trim(\implode(' ', $args));
+                $params = ['sessionId' => $sessionId, 'name' => 'model'];
+                if ($argText !== '') {
+                    $params['args'] = $argText;
+                }
+                $this->serve->call('command.exec', $params)->then(
                     fn (array $result) => $this->deliver($channel, $ref, $this->commandResultText($result)),
                     fn (\Throwable $e) => $this->failWith($channel, $ref, $this->t('model.failed', ['error' => $this->failureReason($e)])),
                 );
