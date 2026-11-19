@@ -1,71 +1,257 @@
-<p class="lede" style="margin-top: 28px;"><code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code> — start from the template and you've got a working app. Demo Counter Model, PHPUnit wired up, <code>bin/start</code> entry point.</p>
+<p class="lede" style="margin-top: 28px;">CandyStarter is the template you start from when you want a new SugarCraft terminal app. <code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code> gives you a working app with a demo <code>Counter</code> Model, PHPUnit wired up, and a <code>bin/start</code> entry point. It mirrors the shape of <a href="https://github.com/charmbracelet/bubbletea-app-template">charmbracelet/bubbletea-app-template</a> (Go), so a Bubble Tea developer will recognise the Model, the update loop and the view. It is a project skeleton, not a library: you copy it, replace the Model, and keep the runtime from <a href="sugar-core.html">sugar-core</a>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev</code></pre>
-    <p>Packagist carries <code>dev-master</code> (plus read-only <code>dev-legacy/*</code> branches frozen at the pre-rename candy-mold era) today, so the quickstart passes <code>--stability=dev</code> — <code>create-project</code> refuses a dev-only package unless told to accept it. The equivalent command shape is <code>composer create-project sugarcraft/candy-starter:dev-master my-app</code>. Until the first release tag is cut and synced, <code>dev-master</code> plus the committed <code>composer.lock</code> are the only reproducibility lever.</p>
-    <p>This package is <code>type: project</code> — <code>composer create-project</code> is the only install verb that works the way you mean it to. Composer does not refuse a <code>composer require</code> of a project-type package — it is simply the wrong tool: the skeleton would land in <code>vendor/</code> and merge its <code>App\</code> autoload map into your host app.</p>
+    <p>Packagist carries <code>dev-master</code> today, so the command passes <code>--stability=dev</code>. Without it, <code>create-project</code> refuses a dev-only package. The equivalent shape is <code>composer create-project sugarcraft/candy-starter:dev-master my-app</code>. No <code>candy-starter/v*</code> release tag exists yet, so the flag stays required until the first tag is cut and synced.</p>
+    <p>The package is <code>type: project</code>. Use <code>create-project</code> and nothing else. The <code>require</code> verb is the wrong tool here: Composer does not refuse a require of a project-type package, but the skeleton would land in <code>vendor/</code> and merge its <code>App\</code> autoload map into your host application.</p>
+    <p>PHP 8.3 or newer is required, with <code>ext-intl</code> and <code>ext-mbstring</code> (both hard-required by sugar-core) and <code>ext-ffi</code> (required by sugar-pty, which arrives through sugar-core). The skeleton declares no extensions of its own, so Composer fails with a platform error if one is missing.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev
 cd my-app
-./bin/start
+./bin/start</code></pre>
+    <p>The app opens in your terminal and shows the counter. Press <kbd>↑</kbd> to raise it, <kbd>↓</kbd> to lower it, and <kbd>q</kbd>, <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> to quit. The frame it draws for a count of 3 is this, captured from <code>(new Counter(3))-&gt;view()</code>:</p>
+    <pre class="code"><code class="language-text">╭─────────────────────────────────────────╮
+│                                         │
+│  count: 3                               │
+│  ↑ ↓ to change · q / Esc / Ctrl+C quit  │
+│                                         │
+╰─────────────────────────────────────────╯</code></pre>
+    <p>Every line of that frame comes from the Model. The rounded border and padding come from one shared <code>Style</code>, and the two text lines come from <code>lang/en.php</code>. The Program harness draws the frame, owns the terminal and runs the loop.</p>
 
-# Replace src/Counter.php with your own Model — and its matrix in tests/CounterTest.php too.</code></pre>
+    <h3 style="margin-top: 32px;">What ships in the skeleton</h3>
     <pre class="code"><code class="language-text">my-app/
-├── composer.json         # type: project — requires sugar-core + sugar-style
-├── phpunit.xml           # failOnWarning gate
+├── composer.json         # type: project, requires sugar-core and sugar-style
+├── phpunit.xml           # failOnWarning gate; tests scan tests/, coverage spans src/
 ├── LICENSE               # MIT
 ├── README.md             # the walkthrough this page mirrors
-├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync
+├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync (fine to delete)
 ├── .gitignore            # vendor/, composer.lock, phpunit caches, *.gif except !.vhs/start.gif
 ├── .assets/icon.png      # icon for the docs site
-├── bin/start             # entry point — constructs Program with the Counter model, stopSignal() exit tail (128+N)
+├── bin/start             # entry point: Program(new Counter()), run(), stopSignal() exit tail
+├── lang/en.php           # the two UI strings; the other locales mirror these keys
 ├── src/
-│   └── Counter.php       # demo Model: up/down/quit, styled border
+│   ├── Counter.php       # demo Model: up, down, quit, styled border
+│   └── Lang.php          # the copyable Lang facade over sugar-core's translator
 ├── tests/
 │   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
-│   ├── CounterTest.php                    # pinned behaviour matrix — the test-shape reference
-│   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
-│   ├── ReadmeSnippetsTest.php             # lint+execute every README php fence
-│   └── SiteBodyTruthTest.php              # docs site body matches the README's claims
+│   ├── CounterTest.php                    # pinned behaviour matrix, the test-shape reference
+│   ├── ModelContractDocumentationTest.php # README fence against the interface
+│   ├── ReadmeSnippetsTest.php             # lint and execute every README php fence
+│   └── SiteBodyTruthTest.php              # this docs page keeps the README's claims
 └── .vhs/
-    ├── start.tape        # CI gif recording of the running app
-    └── start.gif         # the rendered demo (un-ignored by !.vhs/start.gif; CI regenerates)</code></pre>
+    ├── start.tape        # CI recording of the running app
+    └── start.gif         # the rendered demo; CI regenerates it</code></pre>
+    <p><code>bin/start</code> is a handful of meaningful lines. It loads the autoloader, selects the UI locale, builds the Model, wraps it in <code>Program</code> and calls <code>run()</code>. The exit tail then checks <code>stopSignal()</code>. A signal-stopped run exits <code>128+N</code>, so 130 after SIGINT and 143 after a plain <code>kill</code>. A cooperative quit keeps exit code 0.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>composer create-project</strong><span>Three commands and you're running. <code>composer create-project sugarcraft/candy-starter my-app --stability=dev && cd my-app && ./bin/start</code>.</span></div>
-      <div class="feature"><strong>Demo Counter</strong><span><code>src/Counter.php</code> — a minimal Model with up/down/quit and a styled border.</span></div>
-      <div class="feature"><strong>Tests in place</strong><span>PHPUnit 10 wired to <code>tests/</code>. Replace, don't reconfigure.</span></div>
-      <div class="feature"><strong>Entry point + exit tail</strong><span><code>bin/start</code> is autoload + <code>new Program(new Counter())</code> + <code>run()</code> + the <code>stopSignal()</code> tail that exits <code>128+N</code> on signals.</span></div>
-      <div class="feature"><strong>Pure-Model anatomy</strong><span>Demonstrates all four required Model methods — init / update / view / subscriptions — plus readonly props.</span></div>
-      <div class="feature"><strong>Common-next-steps table</strong><span>README points at <code>sugarcraft/sugar-core</code> (its <code>Lang::t()</code>), <code>sugar-forms</code>, <code>sugar-markdown</code>, <code>sugar-charts</code>, <code>sugar-style</code> and <code>sugar-ssh-server</code> — six packages you're likely to reach for next — and flags which of them are not plain renderers.</span></div>
-    </div>
+    <h3 style="margin-top: 40px;">Concepts</h3>
+    <p>A SugarCraft app is a <strong>Model</strong>. A Model is an immutable value object with four required methods, <code>init / update / view / subscriptions</code>, and the <code>Program</code> harness calls them in a loop. The shape is the Elm-style Model, Update and View architecture. State lives on the value object, transitions are pure functions, and side effects such as timers, HTTP calls and file I/O are scheduled as <code>Cmd</code> values rather than run inline.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Subscriptions;
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+final class Greeter implements Model
+{
+    public function init(): ?\Closure { return null; }                 // optional startup Cmd
+    public function update(Msg $msg): array { return [$this, null]; }  // [next Model, optional Cmd]
+    public function view(): string { return 'hello'; }                 // the current frame
+    public function subscriptions(): ?Subscriptions { return null; }   // live Msg sources
+}</code></pre>
+    <p>Omit any one of the four methods and PHP refuses to instantiate the class with a <code>contains 1 abstract method</code> fatal. Only the <em>return</em> of <code>init()</code> is optional. The method itself is required, and <code>null</code> means "no startup Cmd". The same holds for <code>subscriptions()</code>, which returns <code>null</code> when the Model needs no live sources.</p>
+    <p><code>update()</code> returns a fresh Model whenever state changes and the current instance when it does not. It never mutates <code>$this</code>. That is why <code>Counter</code> declares <code>public readonly int $n</code>, and why its "no change" arm can return <code>$this</code> honestly.</p>
+    <p>The contract allows <code>view()</code> to return a plain string or a <code>View</code> value object. The starter narrows the return type to <code>string</code>, which is enough for the demo. A <code>View</code> carries a cursor position and shape, a window title, taskbar progress, terminal colours, a mouse-tracking mode, focus reporting, bracketed paste and a pixel image layer. If you need any of those, widen the return type back to <code>string|View</code>.</p>
+
+    <h3 style="margin-top: 24px;">Getting messages in</h3>
+    <p><code>update()</code> sees only what the harness dispatches. There are four doors in. The terminal is the first: keystrokes, mouse events, resizes and pastes arrive as <code>Msg</code> objects with no work from you. The other three are yours to wire.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-starter">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-starter/blob/master/README.md">Full README</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbletea-app-template">bubbletea-app-template</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><strong><code>subscriptions()</code></strong> is the live-source seam. Return a <code>Subscriptions</code> collection, for example <code>(new Subscriptions())-&gt;withTick('clock', 1.0, $produce)</code>, and the harness starts each entry. It re-diffs the set after every update cycle, starting new entries and cancelling dropped ones.</li>
+      <li><strong><code>Cmd::promise()</code></strong> runs work off the loop. A promise that resolves with a <code>Msg</code> dispatches that Msg into <code>update()</code>. A rejection arrives as an <code>ExceptionMsg</code>.</li>
+      <li><strong><code>Program::send()</code></strong> pushes a Msg onto the running loop from outside. A call made before <code>run()</code> is buffered and drained when the loop starts.</li>
     </ul>
+    <p>The demo takes none of these doors. Before any of them opens, the harness dispatches boot messages (<code>EnvMsg</code>, <code>ColorProfileMsg</code> and an initial <code>WindowSizeMsg</code>). Every Model must tolerate them, and the demo's <code>update()</code> treats every non-key Msg as a no-op.</p>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
+    <h3 style="margin-top: 24px;">Files you replace</h3>
+    <p>The skeleton has three things a real app replaces: the Model in <code>src/</code>, the import in <code>bin/start</code>, and the tests that pin the Model's behaviour. The Forking checklist below lists the exact edits.</p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 40px;">Tasks and how-to</h3>
+    <h3 style="margin-top: 16px;">Replace the demo Model</h3>
+    <p>Write your own Model with the four methods, then point <code>bin/start</code> at it. The starter keeps one import in <code>bin/start</code>, so the change is a single line:</p>
+    <pre class="code"><code class="language-php">// bin/start
+use App\Counter;             // before
+use App\Dashboard;           // after: your own final class implementing Model
+
+$program = new Program(new Dashboard());
+$program-&gt;run();</code></pre>
+    <h3 style="margin-top: 16px;">Add a translated string</h3>
+    <p>Frame text goes through <code>Lang::t()</code>. Add a key to <code>lang/en.php</code> and mirror it in every other locale file. The <code>LocaleParityTest</code> fails when the key sets drift apart. Call <code>T::setLocale(T::detect())</code> at boot, as <code>bin/start</code> already does, so the locale follows <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>.</p>
+    <pre class="code"><code class="language-php">// lang/en.php
+return [
+    'frame.count' => 'count: {n}',
+    'frame.hint'  => '↑ ↓ to change · q / Esc / Ctrl+C quit',
+    // add a key such as 'frame.title' => 'counter' here, then mirror it
+    // in lang/de.php, lang/fr.php and every other locale file
+];</code></pre>
+    <h3 style="margin-top: 16px;">Turn on the panic handler</h3>
+    <p>The starter ships an opt-in panic handler that catches uncaught exceptions and draws a styled backtrace. Require <code>sugarcraft/sugar-log</code>, then uncomment the two lines at the top of <code>bin/start</code>:</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-log</code></pre>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Log;
+Log::installPanicHandler();</code></pre>
+    <p>The backtrace prints absolute paths and the arguments of every frame. That is what you want while debugging. On a shared or recorded terminal it can leak data, so ship with the uncaught errors routed to a log file or syslog, and keep on-screen backtraces for debug builds.</p>
+    <h3 style="margin-top: 16px;">Pipe the program or run it under cron</h3>
+    <p>Raw mode needs an interactive input stream. Run the app with piped stdin, as in <code>php bin/start &lt; /dev/null</code> from cron or CI, and it does not enter raw mode. It quits cleanly at end of input with exit code 0. Build the options explicitly when you need a different behaviour, for example to read the terminal through <code>/dev/tty</code>:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\ProgramOptions;
+
+$options = ProgramOptions::builder()
+    ->withExitOnStdinEof(false)   // keep running when stdin reaches end of input
+    ->build();
+$program = new Program(new Counter(), $options);</code></pre>
+    <p><code>openTty: true</code> grabs <code>/dev/tty</code> for input on piped streams. It also moves the output to the terminal, so frames stop reaching your pipe.</p>
+
+    <h3 style="margin-top: 40px;">API reference</h3>
 <table class="api-table">
 <thead>
 <tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
 </thead>
 <tbody>
-<tr><td>Counter</td><td>__construct(n = 0)</td><td>Creates the demo Model — its single state is the readonly count <code>$n</code></td></tr>
-<tr><td>Counter</td><td>init()</td><td>Optional startup Cmd (null = none) — required method</td></tr>
-<tr><td>Counter</td><td>update(msg)</td><td>Handle input message — returns [next Model, optional Cmd]</td></tr>
-<tr><td>Counter</td><td>view()</td><td>Render the current frame</td></tr>
-<tr><td>Counter</td><td>subscriptions()</td><td>Live Msg sources (null = none) — required method</td></tr>
-<tr><td>Program <em>(sugar-core)</em></td><td>run()</td><td>Start the app — provided by the sugar-core dependency, not shipped by the starter</td></tr>
-<tr><td>Program <em>(sugar-core)</em></td><td>send(msg)</td><td>Inject a Msg into a running loop — out-of-band ingress, besides the <code>Cmd::promise()</code> resolution and <code>subscriptions()</code> paths that reach <code>update()</code> (see the README's "Getting Msgs in")</td></tr>
+<tr><td>Counter</td><td>__construct(n = 0)</td><td>Creates the demo Model. Its single state is the readonly count <code>$n</code>.</td></tr>
+<tr><td>Counter</td><td>init()</td><td>Optional startup Cmd (null means none). Required method.</td></tr>
+<tr><td>Counter</td><td>update(msg)</td><td>Handles one message and returns <code>[next Model, optional Cmd]</code>.</td></tr>
+<tr><td>Counter</td><td>view()</td><td>Renders the current frame as a styled string.</td></tr>
+<tr><td>Counter</td><td>subscriptions()</td><td>Live Msg sources (null means none). Required method.</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Looks up a UI string in <code>lang/&lt;code&gt;.php</code>, falling back to English. Built on the sugar-core <code>T</code> translator.</td></tr>
+<tr><td>Program <em>(sugar-core)</em></td><td>run()</td><td>Starts the app. Provided by the sugar-core dependency, not shipped by the starter.</td></tr>
+<tr><td>Program <em>(sugar-core)</em></td><td>send(msg)</td><td>Injects a Msg into a running loop. This is out-of-band ingress, besides the <code>Cmd::promise()</code> and <code>subscriptions()</code> paths that reach <code>update()</code>.</td></tr>
+<tr><td>Program <em>(sugar-core)</em></td><td>stopSignal()</td><td>Returns the OS signal number that stopped the run, or null for a cooperative quit. <code>bin/start</code> turns it into the 128+N exit code.</td></tr>
 </tbody>
 </table>
+
+    <h3 style="margin-top: 40px;">Configuration</h3>
+    <p>The starter reads no environment variables of its own, and its files carry no configuration file. Configuration lives in code, as <code>ProgramOptions</code> arguments passed to <code>Program</code>. The demo runs on the defaults, which are listed below. The rest of the options exist in sugar-core and are set the same way.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>useAltScreen</code></td><td>bool</td><td><code>false</code></td><td>Takes over the alternate screen. Off, so the frame draws on the main screen.</td></tr>
+<tr><td><code>hideCursor</code></td><td>bool</td><td><code>true</code></td><td>Hides the terminal cursor while the app runs.</td></tr>
+<tr><td><code>framerate</code></td><td>float</td><td><code>60.0</code></td><td>Maximum render rate in frames per second.</td></tr>
+<tr><td><code>mouseMode</code></td><td><code>MouseMode</code></td><td><code>MouseMode::Off</code></td><td>Enables mouse tracking only when you pass it.</td></tr>
+<tr><td><code>bracketedPaste</code></td><td>bool</td><td><code>false</code></td><td>Asks the terminal to bracket pasted text.</td></tr>
+<tr><td><code>inlineMode</code></td><td>bool</td><td><code>false</code></td><td>Renders only the program's own rows instead of taking over the viewport. Pairs with <code>useAltScreen: false</code>.</td></tr>
+<tr><td><code>openTty</code></td><td>bool</td><td><code>false</code></td><td>Reads input from <code>/dev/tty</code> and moves output there.</td></tr>
+<tr><td><code>exitOnStdinEof</code></td><td>bool</td><td><code>true</code></td><td>Quits at end of piped stdin. Set through <code>ProgramOptions::builder()</code>.</td></tr>
+</tbody>
+</table>
+
+    <h3 style="margin-top: 40px;">Keys</h3>
+    <p>The demo binds five keys. Every other key is ignored.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Key</th><th scope="col">Action</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>↑</kbd> (<code>KeyType::Up</code>)</td><td>Increments the count.</td></tr>
+<tr><td><kbd>↓</kbd> (<code>KeyType::Down</code>)</td><td>Decrements the count.</td></tr>
+<tr><td><kbd>q</kbd></td><td>Quits. Matches the rune <code>q</code> with no Ctrl modifier, so <kbd>Alt+q</kbd> also quits.</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Quits under any modifier.</td></tr>
+<tr><td><kbd>Ctrl+C</kbd></td><td>Quits. A raw-mode tty delivers it as a <code>KeyMsg</code>, so the quit is cooperative and exits 0.</td></tr>
+</tbody>
+</table>
+    <p>The quit matrix is pinned cell by cell in <code>tests/CounterTest.php</code>. Its comments explain each rule, including why <kbd>Ctrl+Q</kbd> does not quit while <kbd>Alt+q</kbd> does.</p>
+
+    <h3 style="margin-top: 40px;">Theming and styling</h3>
+    <p>The frame is one <code>Style</code> from sugar-style. It draws a rounded border and one unit of padding on each side. The style is built once and reused, because a <code>Style</code> is an immutable value and constructing it per frame only creates throwaways at render rate.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+
+private static ?Style $frameStyle = null;
+
+private static function frameStyle(): Style
+{
+    return self::$frameStyle ??= Style::new()
+        ->border(Border::rounded())
+        ->padding(1, 2);
+}</code></pre>
+    <p>The demo emits no palette, so it renders cleanly in monochrome. Add colour with the same <code>Style</code> builder, or build a palette from <code>Theme</code> in sugar-style, and keep the constant decoration memoized as shown above. Per-frame content styling can stay inline.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <p>The starter deliberately ships no separate examples directory, so there is nothing to run beyond the app itself. The copyable references are the three files that show the pattern end to end:</p>
+    <ul>
+      <li><code>bin/start</code>: the entry point, the locale selection and the exit-code tail.</li>
+      <li><code>src/Counter.php</code>: a complete Model with the four methods, a readonly state, a quit matrix and a memoized style.</li>
+      <li><code>tests/CounterTest.php</code>: the behaviour matrix. It drives <code>update()</code> with constructed messages and asserts the returned tuple.</li>
+    </ul>
+    <p>The demo recording at the foot of this page is the <code>.vhs/start.tape</code> rendered by CI. It is the only recording the starter ships.</p>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <p>Inside a <code>create-project</code> app the dependencies are already installed. Run the suite with:</p>
+    <pre class="code"><code class="language-shell">vendor/bin/phpunit
+# or, from a plain clone
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The starter's tests need no event loop, no terminal and no mocking. They construct <code>Msg</code> objects, call <code>update()</code> and assert the result. The test suite also carries three documentation guards: <code>ReadmeSnippetsTest</code> lints and runs every PHP fence in the README, <code>ModelContractDocumentationTest</code> keeps the README's Model fence in step with the interface, and <code>SiteBodyTruthTest</code> keeps this page in step with the README. When you fork the template, adapt or delete those three guards, because they pin this tutorial and go red as soon as your app diverges from it.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong><code>create-project</code> stops with a stability error.</strong> The package is dev-only. Add <code>--stability=dev</code>, or use <code>sugarcraft/candy-starter:dev-master</code> as the package name.</li>
+      <li><strong>PHP refuses the Model with <code>contains 1 abstract method</code>.</strong> A Model must implement all four methods, including <code>subscriptions()</code>. Return <code>null</code> from <code>init()</code> or <code>subscriptions()</code> when you have nothing to start or subscribe to.</li>
+      <li><strong><code>bin/start: cannot find composer autoload.php</code>.</strong> Run <code>composer install</code> in the package directory. The entry point resolves the autoloader relative to its own file, so it runs from any working directory once <code>vendor/</code> exists.</li>
+      <li><strong>The app exits at once when run from cron or CI.</strong> Piped stdin reaches end of input, and the program quits with exit code 0. Build the options with <code>ProgramOptions::builder()-&gt;withExitOnStdinEof(false)-&gt;build()</code> to keep it running.</li>
+      <li><strong>The exit code is 128+N after a stop.</strong> The stop was delivered by the OS, for example <code>kill -INT</code> (130) or <code>kill</code> (143). A cooperative quit through <kbd>q</kbd>, <kbd>Esc</kbd> or <kbd>Ctrl+C</kbd> keeps exit code 0.</li>
+      <li><strong>The output shows raw control sequences under <code>TERM=dumb</code>.</strong> The harness emits DEC private-mode escapes unconditionally and does not probe terminal capabilities. Run the demo in a real terminal.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p>The architecture has three layers. The <code>Program</code> harness in sugar-core owns the event loop, the render tick, signal installation, raw-mode setup and the alternate-screen lifecycle. The Model owns the state and decides what each message does. The Lang facade and the style builder are plain helpers the Model calls from <code>view()</code>.</p>
+    <h3 style="margin-top: 16px;">Trust boundary</h3>
+    <p><code>Program</code> writes whatever <code>view()</code> returns to the terminal unmediated. Render only text you control. Text from files, network responses or other users goes through a sugar-core sanitizer first. Use <code>Sanitize::untrusted()</code> to strip terminal-control payload, <code>Sanitize::untrustedForDisplay()</code> for multi-line text where carriage-return overwrite and bidi spoofing matter, and <code>Sanitize::untrustedForMarkedFrames()</code> when a frame carries mouse-zone or image markers. Raw SGR and OSC-8 payload is an injection surface under all three.</p>
+    <h3 style="margin-top: 16px;">Common next steps</h3>
+    <p>The starter stops at one static frame. These sugar packages cover the next steps. Add the dependency, import the classes and return them from <code>view()</code>.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">You want to</th><th scope="col">Reach for</th></tr>
+</thead>
+<tbody>
+<tr><td>Add a text input or a multi-page wizard</td><td><a href="sugar-forms.html">sugar-forms</a> (<code>TextInput</code>, <code>Group</code>)</td></tr>
+<tr><td>Render Markdown help text</td><td><a href="sugar-markdown.html">sugar-markdown</a></td></tr>
+<tr><td>Plot a sparkline or a chart</td><td><a href="sugar-charts.html">sugar-charts</a></td></tr>
+<tr><td>Style the frame with colour and emphasis</td><td><a href="sugar-style.html">sugar-style</a> (<code>Style</code>, <code>Theme</code>)</td></tr>
+<tr><td>Serve the app over SSH</td><td><a href="sugar-ssh-server.html">sugar-ssh-server</a></td></tr>
+</tbody>
+</table>
+    <p>Check each package's README for setup and side effects. <code>sugar-ssh-server</code> runs an authenticated server around your Program, and the Lang facade registers its locale directory on first use.</p>
+
+    <h3 style="margin-top: 40px;">Forking checklist</h3>
+    <p>These six edits are what you do after <code>create-project</code>:</p>
+    <ol>
+      <li><strong><code>composer.json</code></strong>: rename <code>name</code> and <code>description</code> to your app.</li>
+      <li><strong><code>bin/start</code></strong>: swap the <code>use App\Counter;</code> import for your own Model.</li>
+      <li><strong><code>src/</code> and <code>tests/</code></strong>: replace the demo Model and its matrix. Keep the <code>App\</code> and <code>App\Tests\</code> namespaces, or update the PSR-4 prefixes to match. Adapt or delete the three documentation guards.</li>
+      <li><strong><code>composer.lock</code></strong>: the shipped <code>.gitignore</code> ignores the lock, which suits this template but not the app you fork it into. Delete the ignore line and commit the lock for reproducible builds.</li>
+      <li><strong>Sibling dependencies</strong>: <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-style</code> ride <code>dev-master</code>. Switch to released constraints once tags exist.</li>
+      <li><strong>Tests</strong>: run <code>vendor/bin/phpunit</code> (or <code>composer test</code>) after each change.</li>
+    </ol>
+
+    <h3 style="margin-top: 40px;">Versioning and changelog</h3>
+    <p>There is no release yet. Packagist serves <code>dev-master</code> and the committed <code>composer.lock</code> is the only reproducibility lever. Release tags follow the <code>candy-starter/v*</code> pattern once the first one is cut. The sibling SugarCraft packages are dev-only until their own first tags, so the starter tracks them on <code>dev-master</code> on purpose.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The starter mirrors the template structure of <a href="https://github.com/charmbracelet/bubbletea-app-template">charmbracelet/bubbletea-app-template</a>. The PHP names differ where the idiom differs.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Upstream (Go, bubbletea-app-template)</th><th scope="col">SugarCraft (PHP)</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Model.init</code></td><td><code>Counter::init()</code>, returns an optional <code>\Closure</code> Cmd</td></tr>
+<tr><td><code>Program.update</code></td><td><code>Counter::update(Msg)</code>, returns <code>[Model, ?Cmd]</code></td></tr>
+<tr><td><code>Model.view</code></td><td><code>Counter::view()</code>, returns a styled string</td></tr>
+<tr><td>(no direct counterpart)</td><td><code>Counter::subscriptions()</code>, the live-source seam</td></tr>
+<tr><td>Bubble Tea program runner</td><td><code>SugarCraft\Core\Program</code>, from sugar-core</td></tr>
+</tbody>
+</table>
+    <p>Related reading: <a href="sugar-core.html">sugar-core</a> for the runtime and the Model contract, and <a href="sugar-style.html">sugar-style</a> for the frame styling.</p>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
   </div>
 </section>
 
