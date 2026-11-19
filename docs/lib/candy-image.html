@@ -362,7 +362,7 @@ vendor/bin/phpunit</code></pre>
     <p>macOS has never joined the CI pool for this app, so treat it as supported but untested. Windows renders should work, and the interactive paths need <code>ext-ffi</code>. Without a terminal, or without FFI to read one, the size falls back to <code>COLUMNS</code> and <code>LINES</code>, then to 60×24.</p>
 
     <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
-    <p>There is no tagged release yet. A Composer checkout reports <code>dev-master</code>, as the Concepts sample above shows. The phar build instead stamps <code>dev-&lt;shortsha&gt;</code>, and <code>candy-image --version</code> prints the stamp of the commit the phar was built from. The rolling phar lives at <code>candy-image/latest</code> on the GitHub releases page, with its <code>.sha256</code>, <code>.commit</code> and <code>.pins.json</code> sidecars. Signing keys are not pinned, so check the digest and the commit, and treat the signatures as informational.</p>
+    <p>There is no tagged release yet. A Composer checkout reports <code>dev-master</code>, as the terminal detection dump in Quickstart above shows. The phar build instead stamps <code>dev-&lt;shortsha&gt;</code>, and <code>candy-image --version</code> prints the stamp of the commit the phar was built from. The rolling phar lives at <code>candy-image/latest</code> on the GitHub releases page, with its <code>.sha256</code>, <code>.commit</code> and <code>.pins.json</code> sidecars. Signing keys are not pinned, so check the digest and the commit, and treat the signatures as informational.</p>
 
     <h2 id="related" style="margin-top: 40px;">Related</h2>
     <ul>
