@@ -43,7 +43,7 @@ candy-mdview --width 0 table-heavy.md  # no wrap: long lines are cut, and the pa
 
     <h3 style="margin-top: 24px;">Load a custom theme file</h3>
     <pre class="code"><code class="language-shell">candy-mdview --theme-config ./my-theme.json README.md</code></pre>
-    <p>A theme file is read as a regular file of at most 1 MB. Two shapes are detected automatically: a Glamour-style document with a top-level <code>"document"</code> block, which <code>GlamourTheme</code> maps onto a SugarMarkdown theme, and the flat shape, one style object per element slot, which <code>Theme::fromJsonString()</code> reads. <code>themes/solarized.json</code> in the repository is a worked flat starting point. A payload that matches neither shape refuses with exit 2 instead of quietly rendering the stock theme.</p>
+    <p>A theme file is read as a regular file of at most 1 MB. Two shapes are detected automatically: a Glamour-style document with a top-level <code>"document"</code> block, which <code>GlamourDecorationGate</code> admits and sugar-markdown's <code>StyleGuide</code> maps onto a SugarMarkdown theme, and the flat shape, one style object per element slot, which <code>Theme::fromJsonString()</code> reads. <code>themes/solarized.json</code> in the repository is a worked flat starting point. A payload that matches neither shape refuses with exit 2 instead of quietly rendering the stock theme.</p>
 
     <h3 style="margin-top: 24px;">Persist preferences and remap pager keys</h3>
     <pre class="code"><code class="language-text">{
@@ -83,10 +83,7 @@ candy-mdview -p https://example.com/README.md   # pager on a fetched URL: no aut
     <tr><td>FileWatcher</td><td><code>__construct(string $path)</code>, <code>hasChangedSince(int $mtime)</code></td><td>Instance check against a remembered mtime for one path.</td></tr>
     <tr><td>FileWatcher</td><td><code>snapshot(string $path)</code>, <code>pollTuple(string $path, int $lastMtime, int $lastSize)</code></td><td>Static (mtime, size) fingerprint, and the one non-blocking sweep that returns a new fingerprint only when it differs from the baseline.</td></tr>
     <tr><td>Config</td><td><code>load(?string $path = null)</code>, <code>defaultPath()</code>, <code>empty()</code></td><td>Read the preferences file (at most 64 KiB, known keys only), find its default location, or get the empty config.</td></tr>
-    <tr><td>GlamourTheme</td><td><code>fromFile(string $path)</code>, <code>fromJsonString(string $json)</code>, <code>fromDecoded(array $decoded)</code></td><td>Load a Glamour-style theme. The file form is capped at 1 MB.</td></tr>
-    <tr><td>GlamourTheme</td><td><code>isGlamourSchema(array $decoded)</code></td><td>Detect a Glamour-style document from decoded JSON.</td></tr>
-    <tr><td>GlamourTheme</td><td><code>element(string $name)</code>, <code>chroma(string $token)</code>, <code>indentToken(string $element = 'document')</code></td><td>Read unmapped style fields verbatim, so a Glamour field the SugarMarkdown theme does not model is not lost silently.</td></tr>
-    <tr><td>GlamourTheme</td><td><code>toMarkdownTheme()</code></td><td>Convert to a SugarMarkdown <code>Theme</code>.</td></tr>
+    <tr><td>GlamourDecorationGate</td><td><code>admit(array $decoded)</code></td><td>The one refusal in front of the Glamour loader. A document or paragraph <code>block_prefix</code> / <code>block_suffix</code> that is not inert whitespace throws <code>glamour.decoration_unsafe</code>, and a non-string affix reads as empty. The admitted document then goes to sugar-markdown's <code>StyleGuide::fromDecoded()</code>, and <code>theme()</code> returns the SugarMarkdown <code>Theme</code>.</td></tr>
     <tr><td>RenderCommand</td><td><code>pickTheme(string $name)</code></td><td>Resolve a built-in theme name (<code>dracula</code>, <code>tokyo-night</code>, …) to a SugarMarkdown <code>Theme</code>.</td></tr>
     <tr><td>ReloadTickMsg</td><td><code>__construct(string $id = self::ID)</code></td><td>The tick message the pager's reload timer delivers. <code>ID</code> is <code>mdview.reload</code>.</td></tr>
     <tr><td>Application</td><td><code>versionString()</code>, <code>hostArchive()</code></td><td>The version string shown by <code>--version</code>, and the path of the running phar (an empty string outside a phar).</td></tr>
@@ -159,7 +156,7 @@ php examples/theme-json.php</code></pre>
     <h2 style="margin-top: 40px;">Testing</h2>
     <p>The suite lives in <code>tests/</code> and runs under PHPUnit 10. Run it once from the package root, with stdin redirected so a stray read cannot hang the run:</p>
     <pre class="code"><code class="language-shell">cd candy-mdview &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
-    <p>The tests cover the pieces named above. <code>MdViewModelTest</code> and <code>MdViewModelReloadTest</code> drive the pager Model through <code>update()</code>. <code>FileWatcherTest</code> covers the (mtime, size) tuple law. <code>GoldenRenderTest</code> pins rendered output, <code>GlamourThemeTest</code> and <code>ThemeLoadTest</code> cover theme loading, <code>HttpFetchTest</code> covers the URL door, and <code>LocaleParityTest</code> checks that all sixteen <code>lang/</code> catalogs carry the English key set.</p>
+    <p>The tests cover the pieces named above. <code>MdViewModelTest</code> and <code>MdViewModelReloadTest</code> drive the pager Model through <code>update()</code>. <code>FileWatcherTest</code> covers the (mtime, size) tuple law. <code>GoldenRenderTest</code> pins rendered output, <code>GlamourDecorationGateTest</code> and <code>ThemeLoadTest</code> cover theme loading, <code>HttpFetchTest</code> covers the URL door, and <code>LocaleParityTest</code> checks that all sixteen <code>lang/</code> catalogs carry the English key set.</p>
 
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
@@ -185,7 +182,7 @@ php examples/theme-json.php</code></pre>
     <table class="api-table">
     <tr><th>Upstream (Go)</th><th>candy-mdview (PHP)</th></tr>
     <tr><td><code>charmbracelet/glow</code>, the Markdown viewer and pager</td><td><code>bin/candy-mdview</code>, <code>RenderCommand</code>, <code>MdViewModel</code></td></tr>
-    <tr><td><code>charmbracelet/glamour</code>, style files for rendering</td><td><code>GlamourTheme</code>, which maps the <code>document</code> and chroma shapes onto a SugarMarkdown <code>Theme</code></td></tr>
+    <tr><td><code>charmbracelet/glamour</code>, style files for rendering</td><td><code>GlamourDecorationGate</code>, which admits the <code>document</code> and chroma shapes, and sugar-markdown's <code>StyleGuide</code>, which maps them onto a SugarMarkdown <code>Theme</code></td></tr>
         </table>
     <p>Deliberately absent from the port: glow's directory browser, search, config UI, presentation modes, and glow 3.0's <code>-a/--all</code>, <code>-l/--line-numbers</code>, <code>-n/--preserve-new-lines</code>, <code>-t/--tui</code> and <code>--config</code>.</p>
 
