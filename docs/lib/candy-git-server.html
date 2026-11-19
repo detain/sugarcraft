@@ -235,7 +235,7 @@ Repository 'myrepo' created at /var/lib/candy-git-server/repositories/myrepo
 Note: start a listener to serve it: candy-git-server serve --http --repo-root /var/lib/candy-git-server/repositories (private until --public; anonymous-read needs git.allow_anonymous_read).
 Repo 'myrepo': collaborator 'bob' added (plane now: bob)
 
-candy-git-server: smart-HTTP listener on 127.0.0.1:23232 (2 repos, 1 published; 2 accounts; anonymous-read=off; push is served too — hook declines ride in-band)
+candy-git-server: smart-HTTP listener on 127.0.0.1:23232 (1 repos, 0 published; 2 accounts; anonymous-read=off; push is served too — hook declines ride in-band)
 access 127.0.0.1 GET /myrepo.git/info/refs 401 23 1.6ms
 access 127.0.0.1 GET /myrepo.git/info/refs 200 288 69.0ms
 access 127.0.0.1 POST /myrepo.git/git-receive-pack 200 50 72.4ms</code></pre>
@@ -356,12 +356,19 @@ $puller-&gt;runOnce();                  // from cron: pull every due mirror now
     <tr><th>Key</th><th>Default</th><th>Effect</th></tr>
     <tr><td><code>git.allow_anonymous_read</code></td><td><code>false</code></td><td>Turns on anonymous reads of public repos, over HTTP and through the daemon.</td></tr>
     <tr><td><code>git.max_timeout</code></td><td><code>0</code></td><td>Deadline for a stateless git child on the smart-HTTP path.</td></tr>
-    <tr><td><code>git.listen_addr</code>, <code>git.idle_timeout</code>, <code>git.max_connections</code></td><td><code>:9418</code></td><td>The daemon's bind address, its idle timer, and its connection cap. Newcomers are refused past the cap, and an established transfer is never evicted.</td></tr>
+    <tr><td><code>git.listen_addr</code></td><td><code>:9418</code></td><td>The daemon's bind address.</td></tr>
+    <tr><td><code>git.idle_timeout</code></td><td><code>3</code></td><td>The daemon's idle timer.</td></tr>
+    <tr><td><code>git.max_connections</code></td><td><code>32</code></td><td>The daemon's connection cap. Newcomers are refused past the cap, and an established transfer is never evicted.</td></tr>
+    <tr><td><code>git.mirror_allow_git_protocol</code></td><td><code>false</code></td><td>Lets mirror pulls reach their upstream over the unauthenticated <code>git://</code> protocol. Each such pull is logged.</td></tr>
     <tr><td><code>http.max_pack_bytes</code></td><td>268435456</td><td>The one request-body cap, shared by pack POSTs and LFS object PUTs. Larger bodies answer 413.</td></tr>
     <tr><td><code>http.public_url</code></td><td><code>http://localhost:23232</code></td><td>The origin used in LFS batch hrefs. Set it to the <code>https://</code> origin behind a proxy.</td></tr>
     <tr><td><code>http.user_trust_mode</code></td><td><code>off</code></td><td>Selects one of <code>off</code>, <code>proxy</code> or <code>token</code> for the identity headers.</td></tr>
     <tr><td><code>http.trusted_proxies</code></td><td>empty</td><td>For <code>proxy</code> mode. Exact IPv4 or IPv6 addresses, or CIDR ranges, as a YAML list or a comma-separated string.</td></tr>
     <tr><td><code>http.auth_secret</code></td><td>empty</td><td>The HMAC key for <code>token</code> mode. Generate it with <code>php -r "echo bin2hex(random_bytes(32));"</code>.</td></tr>
+    <tr><td><code>http.token_max_ttl</code></td><td>2592000</td><td>The ceiling on the lifetime of a minted proxy token, in seconds. Values above one year are refused at load.</td></tr>
+    <tr><td><code>http.worker_per_request</code></td><td><code>true</code></td><td>Forks one worker per connection when <code>ext-pcntl</code> is present. Set it to <code>false</code> to serve connections one at a time.</td></tr>
+    <tr><td><code>http.auth_max_attempts</code></td><td>10</td><td>The failed Basic-auth budget per peer and per username. An exhausted budget refuses the attempt before any bcrypt work.</td></tr>
+    <tr><td><code>http.auth_refill_seconds</code></td><td>60</td><td>The window over which the failed-attempt budget refills.</td></tr>
     <tr><td><code>lfs.enabled</code></td><td><code>true</code></td><td>Gates the LFS routes.</td></tr>
     <tr><td><code>jobs.mirror_pull</code></td><td><code>@every 10m</code></td><td>The mirror-pull schedule. Cron expressions are refused.</td></tr>
     <tr><td><code>stats.listen_addr</code></td><td><code>:23233</code></td><td>The stats endpoint bind. A hostless value resolves to loopback.</td></tr>

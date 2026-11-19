@@ -17,7 +17,10 @@ use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Stats;
 use SugarCraft\CodeTime\Store;
 
-$dir = sys_get_temp_dir() . '/candy-codetime-headless-report';
+// A random suffix keeps the report on data this run seeded: a fixed path in the
+// shared temp directory could hold another user's beats, which would be reported
+// as this example's output.
+$dir = sys_get_temp_dir() . '/candy-codetime-headless-report-' . bin2hex(random_bytes(8));
 // Owner-private from the first byte, the same rule the CLI applies to its data dir.
 Store::ensurePrivateDir($dir, 'demo data directory');
 $store = new Store($dir);
@@ -28,16 +31,14 @@ $beats = [
     [0, 'sugarcraft', 'markdown', 'README.md', 300],
     [1, 'candy-tetris', 'php', 'src/Board.php', 2400],
 ];
-if ($store->loadRange($today->modify('-1 day'), $today) === []) {
-    foreach ($beats as [$daysAgo, $project, $language, $file, $duration]) {
-        $store->append(new Heartbeat(
-            time: $today->modify("-{$daysAgo} days")->getTimestamp(),
-            project: $project,
-            language: $language,
-            file: $file,
-            duration: $duration,
-        ));
-    }
+foreach ($beats as [$daysAgo, $project, $language, $file, $duration]) {
+    $store->append(new Heartbeat(
+        time: $today->modify("-{$daysAgo} days")->getTimestamp(),
+        project: $project,
+        language: $language,
+        file: $file,
+        duration: $duration,
+    ));
 }
 
 $from = $today->modify('-1 day');
@@ -52,3 +53,5 @@ echo "by language:\n";
 foreach ($stats->perLanguage() as $language => $seconds) {
     printf("  %-14s %s\n", $language, Stats::formatHours($seconds));
 }
+
+exec('rm -rf ' . escapeshellarg($dir));
