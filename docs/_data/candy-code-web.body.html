@@ -99,7 +99,8 @@ Assets::diagnose($packageRoot);  // {dist, manifest, version, error}, never an e
     <tr><td><code>drafts</code></td><td>Unsent composer text, per session.</td><td>50 sessions of 16 Ki characters</td><td>Sign-out, a session leaving the index, or first-in first-out eviction.</td></tr>
     <tr><td><code>theme</code>, <code>notify</code>, <code>diffStyle</code></td><td>UI preferences.</td><td>enum values</td><td>Kept across sign-out.</td></tr>
     </table>
-    <p>The sign-in secret stays in storage while you are signed in, so anything that can run script on this origin can read it. Keep the host page clean, and treat browser storage as holding a credential. The table is checked by a spec that derives every key from the sources, so a key that ships without a row fails the test run.</p>
+    <p>This table covers the keys that matter most. The full inventory is the <strong>Browser storage</strong> table in the package README, which is the one the test suite checks: a spec derives every persisted key from the sources and fails when a key ships without a row there, or a row outlives its key.</p>
+    <p>The sign-in secret stays in storage while you are signed in, so anything that can run script on this origin can read it. Keep the host page clean, and treat browser storage as holding a credential.</p>
 
     <h2 style="margin-top: 40px;">Keys and shortcuts</h2>
     <p>The UI is keyboard first. Press <code>?</code> for the help overlay, which lists the live chords. It opens only when the composer is empty or focus sits outside an editable field. Three actions can be rebound and are kept per browser: the command palette, the help overlay and the tab chord. The defaults in this table are the shipped ones.</p>
@@ -203,7 +204,7 @@ npm run e2e                                  # Playwright (Chromium) against a r
 
     <h2 style="margin-top: 40px;">Architecture</h2>
     <p>The package has three layers that meet at two files. The PHP layer is <code>src/Assets.php</code>. It resolves the path of <code>dist/</code>, checks that <code>index.html</code> is there, and reads the manifest and the build stamp. The UI layer is <code>src-web/</code>, a Vue 3 application with Pinia stores and a single WebSocket client. The build layer is <code>vite.config.ts</code>, which writes the manifest, stamps the build with its version, and produces the content-hashed files in <code>dist/</code>.</p>
-    <p>The Composer archive is the built bundle and the PHP shim, nothing else. The archive excludes <code>src-web/</code>, <code>tests/</code>, <code>phpunit.xml</code>, <code>node_modules/</code>, the Node configuration and the Playwright files. A Composer install therefore carries the bundle and the one-class locator, and no build tooling.</p>
+    <p>The Composer archive excludes <code>src-web/</code>, <code>tests/</code>, <code>phpunit.xml</code>, <code>node_modules/</code>, the Node configuration, the build scripts and the Playwright files. What remains is the built bundle, the PHP shim, the <code>examples/</code> directory, and the top-level README, LICENSE and CALIBER_LEARNINGS.md. A Composer install therefore carries the bundle, the one-class locator and the examples, and no build tooling.</p>
 
     <h3 style="margin-top: 24px;">Path safety</h3>
     <p><code>Assets</code> resolves <code>dist/</code> through <code>realpath()</code>. A server that confines requests to that directory can then compare the request path against the same canonical prefix the kernel reports, even when <code>vendor/</code> is a symlink farm, as path repositories make it.</p>

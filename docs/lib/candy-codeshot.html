@@ -387,7 +387,7 @@ git show HEAD:README.md | candy-codeshot -t markdown -o readme.svg</code></pre>
     <tr><td><code>examples/codeshot_to_png.php</code></td><td>Writes one PNG per theme, then an ANSI demo with a window and a border radius, then one PNG per window style, named <code>window_style_&lt;style&gt;.png</code>. Needs <code>ext-gd</code>.</td><td><code>php examples/codeshot_to_png.php</code></td></tr>
     </table>
     <pre class="code"><code class="language-shell">composer install
-php examples/screenshot.php        # one "wrote examples/out/<theme>.svg" line per theme
+php examples/screenshot.php        # one "wrote <absolute path>/examples/out/<theme>.svg" line per theme
 php examples/codeshot_to_png.php   # needs ext-gd; writes PNG files into the same out/ directory</code></pre>
     <p>Both examples load <code>vendor/autoload.php</code>, so run <code>composer install</code> in the checkout first.</p>
 
