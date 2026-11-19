@@ -169,7 +169,7 @@
             <li class="toc-h2"><a href="#testing">Testing</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#set-waits-for-input">set waits for input</a></li>
-            <li class="toc-h3"><a href="#got-a-list-sequence-on-import">&quot;got a list/sequence&quot; on import</a></li>
+            <li class="toc-h3"><a href="#an-import-refuses-a-top-level-json-array-or-yaml-sequence">An import refuses a top-level JSON array or YAML sequence</a></li>
             <li class="toc-h3"><a href="#an-import-refuses-a-null-boolean-array-or-object-value">An import refuses a null, boolean, array or object value</a></li>
             <li class="toc-h3"><a href="#a-write-to-key-settings-throws-invalidargumentexception">A write to key@settings throws InvalidArgumentException</a></li>
             <li class="toc-h3"><a href="#a-relative-xdg-config-home-or-home-is-refused">A relative XDG_CONFIG_HOME or HOME is refused</a></li>
@@ -335,8 +335,8 @@ php examples/multidb.php</code></pre>
     <h3 id="set-waits-for-input" style="margin-top: 24px;"><code>set</code> waits for input</h3>
     <p><code>candy-kv set key</code> with no value reads standard input, silently, with no prompt. Pass the value on the command line, or pipe it in: <code>printf 'value' | candy-kv set key</code>.</p>
 
-    <h3 id="got-a-list-sequence-on-import" style="margin-top: 24px;">"got a list/sequence" on import</h3>
-    <p>The document's top level is a JSON array or a YAML sequence. candy-kv refuses it rather than importing the indices as keys. Wrap the entries in an object that maps each key to its value.</p>
+    <h3 id="an-import-refuses-a-top-level-json-array-or-yaml-sequence" style="margin-top: 24px;">An import refuses a top-level JSON array or YAML sequence</h3>
+    <p>The document's top level is a JSON array or a YAML sequence. candy-kv refuses it with <code>Expected a JSON object mapping keys to values, got a list.</code> (JSON) or <code>Expected a YAML mapping of keys to values, got a sequence.</code> (YAML), rather than importing the indices as keys. Wrap the entries in an object that maps each key to its value.</p>
 
     <h3 id="an-import-refuses-a-null-boolean-array-or-object-value" style="margin-top: 24px;">An import refuses a null, boolean, array or object value</h3>
     <p>Those values cannot round-trip as stored text, so the whole import is refused before anything is written. Convert the value to a string in the source document.</p>
