@@ -19,8 +19,8 @@ candy-flappy --help      # prints the usage and exits 0</code></pre>
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Flappy\Game;
 
-$final = (new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();   // the final model: the Game, settled</code></pre>
-    <p><code>Program::run()</code> returns the final model. The <code>Game</code> it returns is already settled, so a qualifying score from a mid-flight quit is on the board before the call comes back. Read the best score from it with <code>$final-&gt;highScore()</code> when you hold a <code>Game</code> value.</p>
+$final = (new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();   // the final model: the Game</code></pre>
+    <p><code>Program::run()</code> returns the final model, typed as <code>Model</code>. A <code>q</code> or Esc quit settles a qualifying score inside <code>update()</code>, so that score is on the board before the call comes back. A signal death (Ctrl+C, SIGTERM, SIGHUP) skips <code>update()</code>, so a score from a run that ends that way is banked only if you also call <code>settleOnExit()</code> on the returned <code>Game</code>. When the program can receive a signal, check that the result is a <code>Game</code> and call <code>settleOnExit()</code> on it after <code>run()</code> returns, as <code>bin/candy-flappy</code> does. The call is idempotent. Read the best score from the <code>Game</code> with <code>$final-&gt;highScore()</code>.</p>
 
     <h2 style="margin-top: 40px;">Concepts</h2>
     <p>The board opens on a <strong>ready card</strong>. The bird hovers and the world stays frozen until the first flap, so a launch never drops the player into the floor. The first flap starts the run and the 30 Hz tick subscription from <code>Game::subscriptions()</code> begins to deliver <code>TickMsg</code> values.</p>
@@ -97,7 +97,7 @@ FORCE_COLOR=1 php examples/play.php   # draws into a pipe on purpose; use a real
     <tr><th>Setting</th><th>Type</th><th>Default</th><th>Effect</th></tr>
     <tr><td><code>XDG_CONFIG_HOME</code></td><td>absolute path</td><td>unset</td><td>Config base for the score file. Falls back to <code>HOME/.config</code>. With neither set the game refuses to launch rather than guess.</td></tr>
     <tr><td><code>HOME</code></td><td>absolute path</td><td>system value</td><td>Used only when <code>XDG_CONFIG_HOME</code> is unset.</td></tr>
-    <tr><td><code>NO_COLOR</code></td><td>any value</td><td>unset</td><td>Forces the ASCII posture.</td></tr>
+    <tr><td><code>NO_COLOR</code></td><td>any non-empty value</td><td>unset</td><td>Forces the ASCII posture.</td></tr>
     <tr><td><code>CLICOLOR_FORCE</code>, <code>FORCE_COLOR</code></td><td>any non-empty value except <code>0</code> or <code>false</code></td><td>unset</td><td>Forces color on where detection would withhold it, and lets the bin draw into a pipe on purpose.</td></tr>
     <tr><td><code>TERM</code></td><td>terminal name</td><td>system value</td><td><code>dumb</code> gets the plain refusal screen.</td></tr>
     </table>
