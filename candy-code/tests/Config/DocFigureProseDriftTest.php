@@ -4973,7 +4973,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the fence-tag roster sentence left its pinned shape',
         );
         preg_match_all('/`([\w-]+)`/', $rosterCite[1], $documentedTags);
-        $tags = (array) (new \ReflectionClass(PromptFence::class))->getReflectionConstant('TAGS')->getValue();
+        $tags = (array) (new \ReflectionClass(\SugarCraft\Plugins\Support\PromptFence::class))->getReflectionConstant('TAGS')->getValue();
         self::assertSame($tags, $documentedTags[1], 'the documented roster no longer matches PromptFence::TAGS in word or order — the page names PromptFence as the single authority');
 
         self::assertSame(
