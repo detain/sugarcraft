@@ -208,6 +208,7 @@ Decoding untrusted images is budgeted — the caps are constants on
 |---|---|---|
 | `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file, URL and `fromString()` reads — oversized payloads are refused before GD ever sees them (the in-memory route measures its buffer up front, so every byte-intake path shares one ceiling; the format-signature and pixel budgets below still guard what fits) |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
+| `DecodedImageCache::BYTE_BUDGET` | 32 MiB of decoded pixels (eight slots at most) | the process-wide decode LRU's retained memory: a handle larger than the budget is never kept, so one large sheet cannot pin memory across later decodes under `memory_limit` |
 | `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: a frame whose `width × height` cell footprint exceeds it is refused with a mosaic-owned message before sugar-animation's decoder sees it (mirrors the sibling's own `Decoder::MAX_CELLS`) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
@@ -643,7 +644,8 @@ argument is a placeholder for interface uniformity.
 
 `Detect::fromEnv(?array $env = null)` classifies the terminal from environment
 variables alone: no tty, no query bytes, no timeout, no tmux process. Pass an
-explicit `name => value` map, or `null` to read the process environment.
+explicit `name => value` map, or `null` to read the process environment. An
+environment-only Kitty claim is reported unconfirmed, never true (see below).
 `Mosaic::fromEnv()` builds the renderer from that answer, and
 `Mosaic::fromModeString('auto', false)` routes the `auto` mode through it.
 The answer is the env stage of `Detect::probe()`; a DA1 sixel promotion, a
@@ -676,6 +678,57 @@ not grow. iTerm2 pops the previous frame before it draws, because its delete
 removes only the topmost image. Sixel and the text tiers have nothing to delete.
 `Renderer::supportsIdDelete()` reports which case applies.
 
+**Kitty is confirmed, not assumed.** An environment claim of Kitty
+(`KITTY_WINDOW_ID`, `TERM=xterm-kitty`, a known `TERM_PROGRAM`) is a hypothesis.
+`Detect::probe()` sends an APC `a=q` query for one 1x1 pixel under image id 31,
+followed by DA1, and `Capability::kitty()` is true only when the terminal
+answers `ESC _ G i=31;OK`. The reply window is 300 ms. A DA1 answer without that
+reply, no answer in the window, or no tty to ask on drops the claim, and the
+ladder decides as it does for any other terminal.
+
+**Kitty over a slow link.** The window covers a round trip of about 300 ms, so
+a remote Kitty terminal (ssh, a Kitty pane across a satellite link) answers in
+time. A reply that arrives after the window is dropped: the claim falls to
+symbols or sixel, and the late bytes are consumed by the input parser, not
+shown. A local terminal returns as soon as the DA1 answer lands, so the window
+costs nothing there; only a silent window waits the full 300 ms.
+
+**No tty, no Kitty.** This is a behavior change for callers that pre-render
+frames. Before it, a Kitty environment claim selected Kitty with no tty at all,
+so `candy-image --format auto photo.png > frame.txt` inside Kitty wrote Kitty
+APC bytes. Now the query needs a tty on stdin and stdout, so that run writes
+symbols text, and a later `cat` of the file in Kitty shows text, not the
+image. To get the Kitty bytes into a file, force the protocol with
+`--format=kitty`, which skips the confirmation. `Mosaic::auto()` keeps that answer: its palette fallback
+grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
+needs the reply. `Detect::fromEnv()` and `Mosaic::fromEnv()` never ask, so they
+hold no reply and report the environment claim unconfirmed: `Capability::kitty()`
+is false there, and `Mosaic::fromEnv(['TERM' => 'xterm-kitty'])` builds the
+symbols rung. `Mosaic::fromModeString('auto', false)` inherits that answer.
+
+## Sprite sheets, timelines and the decode cache
+
+`SpriteSheet::fromSource($sheet, $cols, $rows)` splits a storyboard or trickplay
+sheet into an equal grid. `->tile($i)` returns tile `$i` in row-major order as an
+`ImageSource`. `Timeline::new($tiles, $durationSeconds)->tileAt($sec)` maps a
+playback position to the tile that covers it, clamping before the start and
+past the end.
+
+Each tile is a crop of the sheet, and `ImageSource::crop()` reads its decode
+through `DecodedImageCache`: a process-wide LRU of eight decoded handles, keyed
+on the content of the bytes. A sheet of any number of tiles costs one decode,
+and two `ImageSource` values built from the same bytes share one. The cache
+owns its handles, so callers read them and never destroy them. The cache is
+bounded by eight slots and by `DecodedImageCache::BYTE_BUDGET` (32 MiB) of
+decoded pixels, whichever is hit first; a sheet larger than the budget is decoded
+on each call and not kept.
+`DecodedImageCache::misses()` counts the decodes, and `reset()` clears the cache.
+
+`ChafaRenderer::renderAsync($image, $width, $height, $loop)` runs the chafa child
+on the event loop through `ChildRun`. The loop keeps running while chafa
+encodes. The repaint memo is kept, so an unchanged frame resolves without a
+spawn. `render()` is unchanged and still blocks.
+
 ## Inside tmux
 
 tmux panes **swallow** DCS, APC and OSC strings unless the window's
@@ -705,6 +758,25 @@ instead: `ScreenPacketizer` and `ScreenPassthrough`, which live under
 `Passthrough/` behind the shared `PassthroughDecorator` interface. The
 tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
 — sits in the root namespace, not in `Passthrough/`.
+
+**Kitty inside tmux needs the APC reply.** This is a behavior change for tmux
+users. Before it, a Kitty environment claim inside tmux (`TMUX` set with
+`KITTY_WINDOW_ID`, `TERM=xterm-kitty` or a known `TERM_PROGRAM`) selected
+Kitty on its own. Now `Capability::kitty()` is true only when the APC `a=q`
+reply arrives, and that reply has to cross tmux to reach the program. With
+`allow-passthrough` off, tmux is expected to swallow the reply, so the claim is
+dropped and the ladder falls to symbols or sixel. The probe runs before
+`TmuxPassthrough::ensure()` flips the option (that happens when the renderer
+is built), so the automatic flip cannot rescue the first probe. Setting
+`allow-passthrough` to `on` (`set -g allow-passthrough on`) governs passthrough
+in general, but it may not change this outcome: the query is written raw, not
+wrapped, and this library has not measured whether tmux forwards a raw,
+unwrapped APC query to the outer terminal or relays its reply. No tested path
+currently confirms Kitty inside tmux. Treat it as unconfirmed: if no reply
+arrives, the claim is dropped as described above, and symbols or sixel is the
+expected result whatever the option is set to. The query is written raw: there is
+no tmux exception to the reply rule and no DCS passthrough wrap around the
+query.
 
 ## Animation
 

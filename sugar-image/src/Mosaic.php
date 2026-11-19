@@ -116,7 +116,9 @@ final class Mosaic implements IncrementalRenderer
      * timeouts, no palette probe, and no tmux `allow-passthrough` toggle (that
      * toggle is a tmux process, which this pure entry point must not spawn).
      * Inside tmux the passthrough envelope is still applied, so the bytes
-     * match what the probed path would emit for the same terminal.
+     * match what the probed path would emit for the same terminal. A Kitty
+     * env claim is not enough here: {@see Detect::fromEnv()} reports it
+     * unconfirmed, so this never picks the Kitty renderer from TERM alone.
      *
      * @param array<string,string>|null $env  null reads the process environment
      */
@@ -217,9 +219,12 @@ final class Mosaic implements IncrementalRenderer
      * Explicit fallback detection via sugar-colorprofile's TerminalProbe.
      *
      * Only consulted when {@see Detect::probe()} identified no graphics
-     * protocol. The palette report can still see Kitty/iTerm2 environment
-     * advertisements Detect's env table misses; anything else keeps the
-     * Detect snapshot (whose bestBackend lands on the Symbols rung).
+     * protocol. The palette report can still see iTerm2 environment
+     * advertisements Detect's env table misses. It is never a Kitty source:
+     * its Kitty keyboard flag comes from TERM alone, and a Kitty graphics
+     * claim needs the APC `a=q` reply that Detect already asked for (P1-13b).
+     * Anything else keeps the Detect snapshot (whose bestBackend lands on the
+     * Symbols rung).
      * Consumer wire: the rebuilt capabilities inherit the snapshot's
      * probed OSC 10/11 default colours — dropping them used to hand the
      * terminal a colour-blind text fallback two rungs down the ladder.
@@ -231,15 +236,6 @@ final class Mosaic implements IncrementalRenderer
         } catch (\Throwable) {
             // TerminalProbe itself threw — keep the Detect snapshot.
             return self::fromCapability($fallbackCap);
-        }
-
-        // Kitty keyboard support implies the Kitty graphics protocol.
-        if ($report->has(PaletteCapability::KittyKeyboard)) {
-            return self::fromCapability(
-                Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux)
-                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg)
-                    ->withTerminalFacts($fallbackCap->quirks, $fallbackCap->passthroughMode),
-            );
         }
 
         // iTerm2 inline image support.
@@ -1240,10 +1236,11 @@ final class Mosaic implements IncrementalRenderer
      * fulfillment chain, so a rejected fetch stores nothing. Error semantics
      * are inherited from the source call: an unsupported URL scheme throws
      * synchronously, SSRF/host rejections come back as a rejected promise.
-     * The render itself is synchronous on the event loop (decode + resample
-     * + encode) — for large posters route the source through
-     * {@see Mosaic::adaptive()} + {@see AdaptiveImage::withAsync()} or
-     * offload the whole call so the loop keeps serving other sockets.
+     *
+     * The encode runs through a {@see PacedAsyncRenderer} over this mosaic's
+     * row-lazy seam (AUD §3.9): each slice is budgeted and the loop is
+     * yielded between slices, so a large poster no longer occupies the loop for
+     * one whole encode. The bytes are the ones {@see poster()} returns.
      *
      * @return PromiseInterface<string>
      */
@@ -1262,14 +1259,16 @@ final class Mosaic implements IncrementalRenderer
             }
         }
 
-        $poster = $this->scaledForPoster();
+        $paced = new PacedAsyncRenderer($this->scaledForPoster());
 
         return ImageSource::fromUrlAsync($url, allowedHosts: $allowedHosts)
-            ->then(static function (ImageSource $source) use ($poster, $cellW, $cellH, $cache, $key): string {
-                $rendered = $poster->render($source, $cellW, $cellH);
-                $cache?->put($key, $rendered);
+            ->then(static function (ImageSource $source) use ($paced, $cellW, $cellH, $cache, $key): PromiseInterface {
+                return $paced->renderAsync($source, $cellW, $cellH)
+                    ->then(static function (string $rendered) use ($cache, $key): string {
+                        $cache?->put($key, $rendered);
 
-                return $rendered;
+                        return $rendered;
+                    });
             });
     }
 
