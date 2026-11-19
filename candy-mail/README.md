@@ -45,9 +45,9 @@ store, or manage an inbox.
   bytes with `Attachment::fromContent()` via the constructor's `attachments:` parameter
 - **Inline attachments (CID)** — `withInlineAttachment()` embeds images addressed as
   `cid:…`; honoured by the SMTP transport's MIME builder and by the Mailgun multipart
-  POST (the `inline` part carries the Content-ID as its filename). The Resend API payload
-  does not carry `cid`, so inline references break there — use SMTP or Mailgun for CID
-  embedding.
+  POST (the `inline` part carries the Content-ID as its filename). The Resend transport
+  refuses an inline attachment with an `InvalidArgumentException` keyed `resend.cid_unsupported`
+  before any HTTP call, so nothing is sent — use SMTP or Mailgun for CID embedding.
   The CLI has no inline door: `--attach` produces ordinary attachments only —
   `cid:` embedding is library-only.
 - **CC/BCC support** — full carbon-copy / blind carbon-copy routing (envelope RCPT for all,
