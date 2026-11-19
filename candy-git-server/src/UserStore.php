@@ -243,7 +243,10 @@ final class UserStore
         }
         try {
             \chmod($tmp, 0600);
-            if (\fwrite($handle, $payload) === false) {
+            // A short write returns a byte count, not false: comparing only
+            // against false would let a truncated payload reach the rename.
+            $written = \fwrite($handle, $payload);
+            if ($written === false || $written !== \strlen($payload)) {
                 throw new \RuntimeException('cannot write user store payload');
             }
             \fflush($handle);

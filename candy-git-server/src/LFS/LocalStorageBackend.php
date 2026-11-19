@@ -146,6 +146,20 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
      * per upload for a default backend that only ever wants the bytes.
      * Same atomic 0600 publish as write(), sliced at the lib's 64 KiB
      * law so no oversized temporary ever rides the copy.
+     *
+     * Staying off sugar-core AtomicTextFile (P1-11 exception) is not only
+     * the streamed-sink point, which no longer applies here: the whole
+     * bytes are already in hand, and the door still stays on publish() for
+     * three reasons AtomicTextFile would change:
+     *  - the fsync is fatal (041): a failed settle throws "Cannot fsync LFS
+     *    object", while AtomicTextFile silences it (@fsync), so a power loss
+     *    after rename could publish a content-addressed oid whose bytes never
+     *    reached the media;
+     *  - shard directories are created 0750 by ensureDir() (038), not the
+     *    0700 AtomicTextFile mkdirs with;
+     *  - the failure texts ("Cannot open LFS object for writing", "Cannot
+     *    fsync LFS object", "Cannot publish LFS object") are fixed English
+     *    strings, while AtomicTextFile's messages are localized.
      */
     public function writeBytes(string $oid, string $bytes): void
     {

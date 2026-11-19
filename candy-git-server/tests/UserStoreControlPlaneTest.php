@@ -162,6 +162,33 @@ final class UserStoreControlPlaneTest extends TestCase
         );
     }
 
+    public function testShortPayloadWriteIsFatalBeforeTheFsyncAndRename(): void
+    {
+        // fwrite() on a plain file returns the byte count it landed, so a
+        // disk-full partial write is not false. Only a count-vs-strlen
+        // comparison stops a truncated users.json from being fsynced and
+        // renamed over the last good store. Pinned structurally: a short
+        // write cannot be forced through a plain-path fopen in a test.
+        $reflection = new \ReflectionMethod(UserStore::class, 'publish');
+        $lines = \file((string) $reflection->getFileName());
+        $body = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine() - 1,
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1
+        ));
+
+        $this->assertMatchesRegularExpression(
+            '/\$written\s*===\s*false\s*\|\|\s*\$written\s*!==\s*\\\\?strlen\(\$payload\)/',
+            $body,
+            'a short fwrite must throw before the flush, fsync and rename'
+        );
+        $this->assertLessThan(
+            (int) \strpos($body, 'fsync('),
+            (int) \strpos($body, '$written !=='),
+            'the short-write check must precede the settle'
+        );
+    }
+
     public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
     {
         $path = $this->tmpDir . '/users.json';
