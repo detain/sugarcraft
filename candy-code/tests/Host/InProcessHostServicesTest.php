@@ -523,7 +523,7 @@ final class InProcessHostServicesTest extends TestCase
      * finds no hosted session and no relayed question to answer. Step (A) of Phase 5 lifts this
      * limit; this pins it until then.
      */
-    public function testANonPrimarySessionIsRefusedSessionNotFoundOnTheInProcessDoor(): void
+    public function testANonPrimarySessionIsRefusedAsTheWireRefusesAnUnheldIdOnTheInProcessDoor(): void
     {
         $this->connect();
         $other = ProtocolFixture::new();
