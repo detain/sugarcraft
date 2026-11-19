@@ -36,7 +36,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
 <p>The screen is two <em>panes</em>, each with its own working directory, cursor, selection, sort order and hidden-file flag. Tabs hold a pair of panes, so one tab can keep two directory pairs open. <code>Tab</code> moves the focus between the panes of the current tab; every file operation acts on the focused pane's selection, or on the cursor entry when nothing is selected, and targets the other pane for copy and move.</p>
 <p>Mutations do not run straight away. <code>c</code>, <code>m</code>, <code>d</code> and <code>p</code> arm a <em>confirm gate</em>: the next key answers it, and only <code>y</code> (or the affirmative word your locale's prompt teaches) commits. Any other key cancels. Copy runs on the event loop as a tick-sliced job, so a large tree does not freeze the frame; move and rename are synchronous renames on the same filesystem.</p>
 <p>Delete is recoverable only while the process lives. <code>d</code> moves files into a per-process trash directory under the system temporary directory, created with mode <code>0700</code> and removed on exit. A delete that would cross a device is announced as <code>PERMANENT</code> before you confirm, because a cross-device move cannot be undone by renaming back.</p>
-<p>The undo stack keeps the last 50 delete, move and rename operations. <code>u</code> undoes, <code>Ctrl+y</code> redoes. Copy is not undoable; the status line says so.</p>
+<p>The undo stack keeps the last 50 operations, and delete, move, rename and copy records share that one stack. <code>u</code> undoes the newest record and <code>Ctrl+y</code> redoes it. A copy is not reversed: <code>u</code> on a copy record reports <code>copy left in place (nothing to undo)</code>, leaves the files alone and moves the record to redo, so an older delete or move is reached by pressing <code>u</code> again.</p>
 
 <h3 style="margin-top: 32px;">Modes</h3>
 <p>Exactly one mode owns the keyboard at a time: browse (the default), the confirm gate, text entry (<code>R</code> rename, <code>N</code> make directory, <code>Ctrl+O</code> typed path, <code>*</code> pattern select), search (<code>/</code>), and the help overlay (<code>?</code>). In text entry every printable key is a letter, so <code>y</code> is typed rather than answered; in search every printable key extends the query, and <code>↑</code>/<code>↓</code> move the result cursor.</p>
@@ -193,7 +193,7 @@ $manager = Manager::builder()
 <tr><td><code>1</code>–<code>9</code></td><td>Switch to tab 1–9</td></tr>
 <tr><td><code>Ctrl+Tab</code> / <code>Ctrl+Shift+Tab</code></td><td>Next or previous tab; needs a terminal that reports modified Tab</td></tr>
 <tr><td><code>Ctrl+PgUp</code> / <code>Ctrl+PgDn</code></td><td>Next or previous tab; tmux and browser terminals may intercept these</td></tr>
-<tr><td><code>u</code> / <code>Ctrl+z</code>, <code>Ctrl+y</code></td><td>Undo the last delete, move or rename; redo it</td></tr>
+<tr><td><code>u</code> / <code>Ctrl+z</code>, <code>Ctrl+y</code></td><td>Undo the newest record: a delete, move or rename is reversed, and a copy is a no-op that says so; redo it</td></tr>
 <tr><td><code>q</code></td><td>Quit. While copy batches are in flight, press it twice</td></tr>
 <tr><td><code>?</code></td><td>Help overlay: every binding, one per row</td></tr>
 </table>
@@ -260,7 +260,7 @@ $manager = Manager::builder()
 <tr><td><code>FsLister</code></td><td>The default lister, built on <code>scandir</code> and <code>lstat</code>. <code>memo()</code> adds the directory-mtime cache.</td></tr>
 <tr><td><code>Renderer</code></td><td>A pure view function: tab bar, two pane boxes side by side, the search overlay, and the status line.</td></tr>
 <tr><td><code>AsyncOps</code></td><td>The deferred copy engine. It is the only home of recursive copy, depth-capped at 256, and runs on the event loop.</td></tr>
-<tr><td><code>UndoAction</code></td><td>An immutable undo record: delete records for restores, or old-to-new path maps for rename, move and copy.</td></tr>
+<tr><td><code>UndoAction</code></td><td>An immutable undo record: delete records for restores, or old-to-new path maps for rename, move and copy. Copy records share the 50-entry stack and undo as a no-op.</td></tr>
 <tr><td><code>Lang</code></td><td>The i18n wrapper over the catalogs under <code>lang/</code>.</td></tr>
 <tr><td><code>Support\Archive</code>, <code>Support\ArchiveExtractor</code>, <code>Support\TarReader</code></td><td>Archive detection and the read-only index, loop-sliced extraction with a bomb meter, and a forward-only tar reader.</td></tr>
 <tr><td><code>Support\Bookmarks</code>, <code>Support\Home</code>, <code>Support\GlyphSet</code>, <code>Support\Version</code></td><td>The bookmark store, the home-directory cascade, the glyph tier, and the <code>--version</code> stamp.</td></tr>
