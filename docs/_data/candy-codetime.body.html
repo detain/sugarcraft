@@ -26,7 +26,7 @@ by project:
   sugarcraft  0h 01m
 by language:
   php  0h 03m</code></pre>
-    <p>Three replies are worth knowing. <code>gaps: no tracked data for that period</code> means nothing has been recorded yet. <code>No gaps found.</code> means the window is covered. Running <code>candy-codetime dashboard &lt; /dev/null</code> prints <code>the dashboard needs an interactive terminal</code> and exits 1, with the headless commands named as the alternative, so a script cannot hang on a missing terminal.</p>
+    <p>Three replies are worth knowing. <code>gaps: no tracked data for that period</code> means no tracked data matches that period and any <code>--project</code> or <code>--tag</code> filter, either because nothing is recorded there yet or because a filter excludes all of it. <code>No gaps found.</code> means the window is covered. Running <code>candy-codetime dashboard &lt; /dev/null</code> prints <code>the dashboard needs an interactive terminal</code> and exits 1, with the headless commands named as the alternative, so a script cannot hang on a missing terminal.</p>
     <p>Open the dashboard in a real terminal with <code>candy-codetime</code>, or <code>candy-codetime dashboard 30</code> for a 30-day window. Use <code>export csv 30</code> for a plain-text dump of the same data.</p>
 
     <h2 style="margin-top: 40px;">Concepts</h2>
@@ -76,7 +76,7 @@ candy-codetime export ics 7 --tag=review > review.ics</code></pre>
 candy-codetime milestone add "v1.0 shipped" "first stable tag"
 candy-codetime milestone list
 CANDY_CODETIME_BACKEND=sqlite candy-codetime dashboard 30</code></pre>
-    <p>The SQLite backend tunes the database on open with WAL journaling, a five-second busy timeout and <code>synchronous=NORMAL</code>. A milestone always writes to SQLite, even when <code>--backend</code> is not given, and the SQLite dashboard marks milestone days with <code>*</code> under the weekday row. The file backend never shows milestones.</p>
+    <p>The SQLite backend tunes the database on open with WAL journaling, and a five-second busy timeout. Once WAL is confirmed, it also sets <code>synchronous=NORMAL</code>; on a filesystem that refuses WAL, synchronous stays at the FULL default. A milestone always writes to SQLite, even when <code>--backend</code> is not given, and the SQLite dashboard marks milestone days with <code>*</code> under the weekday row. The file backend never shows milestones.</p>
 
     <h3 style="margin-top: 24px;">Remove a project, safely</h3>
     <pre class="code"><code class="language-shell">candy-codetime backup                                   # archive day files older than 30 days first

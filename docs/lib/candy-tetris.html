@@ -272,7 +272,7 @@ $game = $game->addGarbageRows(2);     // push two garbage rows from the bottom</
     <h3 id="play-the-computer-in-vs-mode" style="margin-top: 24px;">Play the computer in VS mode</h3>
     <pre class="code"><code class="language-shell">./bin/candy-tetris --vs
 ./bin/candy-tetris -v</code></pre>
-    <p>Each line you clear pushes one row at the opponent, and each line the opponent clears pushes one row back. Every garbage row has exactly one hole. The opponent runs on its own clock, so its difficulty comes from its board's pace, not from your level. The VS board needs a terminal of 54 by 33 exactly.</p>
+    <p>Each line you clear pushes one row at the opponent, and each line the opponent clears pushes one row back. Every garbage row has exactly one hole. The opponent runs on its own clock, so its difficulty comes from its board's pace, not from your level. The VS board needs a terminal of at least 54 by 33.</p>
 
     <h2 id="controls-and-keybindings" style="margin-top: 40px;">Controls and keybindings</h2>
     <p>The shipped default keys are below. The help card, the versus strip, the intro card, the one-row sidebar pointer, the confirm prompts and the <code>--help</code> screen all draw from this table, so a remap is visible wherever the game teaches its keys.</p>
@@ -309,7 +309,7 @@ $game = $game->addGarbageRows(2);     // push two garbage rows from the bottom</
     <h3 id="terminal-contracts" style="margin-top: 24px;">Terminal contracts</h3>
     <ul>
       <li><strong>The frame.</strong> The full single-player frame is 40 columns by 33 rows, and the floor is 40 by 24. Between the two the sidebar reflows by budget, not by scrolling. The help card goes first, and a one-row key pointer replaces it, so a floor terminal never loses every key at once. Below the floor a resize notice paints, and play freezes until the terminal is tall enough. Widening the columns does not restore a short frame.</li>
-      <li><strong>The duel.</strong> The VS board has one size, 54 by 33. There is no compact versus frame, so a smaller terminal shows the resize notice.</li>
+      <li><strong>The duel.</strong> The VS board has a floor of 54 by 33. There is no compact versus frame, so a smaller terminal shows the resize notice.</li>
       <li><strong>No terminal, no game.</strong> A launch with stdin or stdout redirected, or with <code>TERM=dumb</code>, is refused before anything paints. It writes one line to stderr, no escape bytes, and it exits 1.</li>
       <li><strong>No colour, still playable.</strong> <code>NO_COLOR</code> and <code>CLICOLOR=0</code> redraw the frame with no SGR codes. Shape carries every fact that colour carried, and empty cells draw as <code>·</code>.</li>
     </ul>
