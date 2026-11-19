@@ -323,15 +323,20 @@ final class ReadPathCensusTest extends TestCase
                 . 'the memo keys on the resolved root, so caching never widens containment',
         ],
         'Bundles/Bundle.php|file_get_contents' => [
-            // NOT CONTAINED_EXTERNAL: PluginDiscovery::guard() bounds the bundle DIRECTORY, but
-            // Bundle::manifestPath() takes manifest.json with is_file() and no realpath compare
-            // of the file itself, so a symlinked manifest.json is read. Same gap as the
-            // sugar-plugins PluginManifest.php rows; the census records it rather than certifying it.
-            'CALLER_SUPPLIED — fromDir() reads the manifest of a bundle directory discovery chose; discovery admits '
-                . 'that directory through guard() in sugar-plugins, but the manifest file itself is taken with '
-                . 'is_file() and no realpath compare of its own, so a symlinked manifest.json is read here',
-            'CALLER_SUPPLIED — readManifest() reads the same manifest for the same caller-chosen directory, with '
-                . 'the same missing compare on the file',
+            // CONTAINED_EXTERNAL holds for fromDir() only because its sole caller is
+            // BundleDiscovery, which hands every directory to PluginDiscovery::guard() first.
+            // manifestPath() refuses a symlink on the way to the manifest, so the file read
+            // is never a link out of that directory.
+            'CONTAINED_EXTERNAL:sugar-plugins/src/Discovery/PluginDiscovery.php — fromDir() reads the manifest of a '
+                . 'bundle directory discovery chose; PluginDiscovery::guard() admits that directory through '
+                . 'PathJail::below() against its boundary, and manifestPath() refuses any symlink on the way to the '
+                . 'manifest before the read',
+            // NOT CONTAINED_EXTERNAL: readManifest() is reached from the installer's staged trees
+            // (Cli\Subcommands), which PluginDiscovery::guard() never sees. The symlink refusal in
+            // manifestPath() covers the file, but no sugar-plugins compare bounds the staged directory.
+            'CALLER_SUPPLIED — readManifest() reads the manifest of a staged installer tree the installer built '
+                . 'for the caller-chosen source; no PluginDiscovery::guard() admits that directory, and '
+                . 'manifestPath() refuses a symlink on the way to the manifest',
         ],
         'Bundles/BundleRecommender.php|scandir' => [
             'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
