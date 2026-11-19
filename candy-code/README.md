@@ -386,6 +386,8 @@ all one component tree — not two parallel UIs.
 > **Reference — safe to skim.** A summary of the chat-pane keyboard; the in-app `?` overlay below is
 > generated live and is always the authority.
 
+The full key map, grouped by the part of the screen that owns each key, is in [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md).
+
 | Key | Does |
 |-----|------|
 | `?` (blank input) | Show the in-app keyboard reference; the draft must be **blank**, and that word carries weight — see the fine print below. |
@@ -1918,6 +1920,8 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | OpenRouter      | `openrouter`  | `custom` preset on `https://openrouter.ai/api/v1` with `HTTP-Referer`/`X-Title` attribution (`OPENROUTER_API_KEY`) |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
+
+Each type's required keys, environment variables and defaults are in [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 The `anthropic` type key is the native Messages API client. `ProviderFactory::createAnthropic()` builds a dedicated `AnthropicProvider`: `x-api-key`/`anthropic-version` headers, a native `/v1/messages` body shared with Claude-on-Vertex through `AnthropicMessagesWire`, tools as native `tool_use` blocks, prompt caching marked by default, and a per-model Claude context table. `claude-code` remains the route for subscription login (`bare: false`, which drives the `claude` binary), and `CANDY_CODE_BACKEND_CMD` for shell relays. On that route the block's `isolate` key (default **true**) keeps the `bare: false` child from inheriting the user's `~/.claude` state: the binary is launched with `--setting-sources project,local`, `--strict-mcp-config` and `--disable-slash-commands`, and the host's Shift+Tab permission mode rides down as `--permission-mode` — narrowed only, never widened past what the host granted (unless the launch falls back, `fallbackModels`: the `claude-code` child then sits behind the wrapper and the mirror stands down). What the trio cannot cover: `claude`'s CLAUDE.md auto-discovery and auto-memory load under no switch except `--bare` itself (probed: `claude --help`, 2.1.312), so a `bare: false` launch says so once in a launch notice, and `isolate: false` restores the full user state — the documented escape if the CLI's own settings are part of the workflow you are subscribing to. The `codex` route takes the same key the same way: under `isolate` (default true) the `codex exec` child runs with `--ignore-user-config` — a foreign `config.toml`'s hooks, profiles and MCP servers drop out while authentication keeps using `CODEX_HOME` (probed: `codex exec --help`, 0.154.0) — and the spawn never defers its sandbox: `-s` always rides, the block's `sandbox` key when set else `workspace-write`, forced to `read-only` while the host holds plan or dont-ask, never widened by a host mode, `danger-full-access` reaching the wire only from your own configured spelling. A schema-bearing request also spills its JSON Schema to a `0600` temp file riding `--output-schema`, removed on every exit path; the route still answers `supportsJsonSchema()` false — a flag listed in `--help` is not yet a record of constrained decoding through a live login, so the flip is owed to a probe, not to a code change.
 
