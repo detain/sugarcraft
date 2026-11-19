@@ -208,7 +208,7 @@ final class InProcessHostServicesTest extends TestCase
         );
         $this->assertSameRefusal(
             $this->refusalOf(fn () => $this->host->execCommand($wireId, 'no-such-command', '')),
-            $this->wire->request('command.exec', ['sessionId' => $wireId, 'name' => 'no-such-command', 'args' => '']),
+            $this->wire->request('command.exec', ['sessionId' => $wireId, 'name' => 'no-such-command']),
         );
     }
 
@@ -232,15 +232,126 @@ final class InProcessHostServicesTest extends TestCase
         );
     }
 
-    public function testFollowResultsHaveNoServeMethodAndSaySo(): void
+    public function testFollowResultsReachTheListenerWithEachSubscribeAnswer(): void
     {
         $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $results = [];
+        $this->host->subscribeFollowResults(function (array $result) use (&$results): void {
+            $results[] = $result;
+        });
 
-        $refusal = $this->refusalOf(fn () => $this->host->subscribeFollowResults(static function (): void {
-        }));
+        $answer = $this->host->subscribeSession($inId, null, null);
 
-        self::assertSame(ErrorCode::MethodNotFound, $refusal->errorCode);
-        self::assertSame('no_serve_method', $refusal->kind);
+        self::assertSame([$answer], $results, 'the follow result is the subscribe answer, delivered to the listener');
+    }
+
+    public function testAThrowingFollowResultListenerIsLoggedAndTheOthersStillHear(): void
+    {
+        $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $this->host->subscribeFollowResults(static function (): void {
+            throw new \RuntimeException('follow listener broke');
+        });
+        $heard = 0;
+        $this->host->subscribeFollowResults(function () use (&$heard): void {
+            $heard++;
+        });
+
+        $answer = $this->host->subscribeSession($inId, null, null);
+
+        self::assertSame(1, $heard);
+        self::assertIsArray($answer);
+        self::assertStringContainsString('in-process follow-result listener failed', \implode("\n", $this->logs));
+    }
+
+    public function testADisconnectFromAListenerDoesNotReorderWhatIsStillOwed(): void
+    {
+        $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $client = (new \ReflectionProperty(InProcessHostServices::class, 'client'))->getValue($this->host);
+        // session.created is queued by createSession(); flush it before the listeners attach.
+        $this->fixture->run();
+        $first = [];
+        $second = [];
+        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$first): void {
+            $first[] = $envelope->type;
+            if ($envelope->type === 'first') {
+                $this->host->disconnect();
+            }
+        });
+        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$second): void {
+            $second[] = $envelope->type;
+        });
+
+        // Two events emitted in one synchronous run: the first listener's disconnect must not
+        // let the second event reach the listeners ahead of the first.
+        $client->emit(EventEnvelope::ephemeral($inId, 'first', []));
+        $client->emit(EventEnvelope::ephemeral($inId, 'second', []));
+        $this->fixture->run(0.08);
+
+        self::assertSame(['first', 'second'], $first);
+        self::assertSame(['first', 'second'], $second, 'every listener hears the owed events in emit order');
+        self::assertFalse($this->host->isConnected());
+    }
+
+    public function testUnsubscribeAnswersTheWireShapeAndAnUnknownSessionIsNoRefusal(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+        $this->wire->call('session.subscribe', ['sessionId' => $wireId]);
+        $this->host->subscribeSession($inId, null, null);
+
+        $wireAnswer = $this->wire->call('session.unsubscribe', ['sessionId' => $wireId]);
+        $this->host->unsubscribeSession($inId);
+
+        self::assertSame(['unsubscribed' => true], $wireAnswer);
+        self::assertSame([], $this->host->followedSessions());
+
+        // The wire answers an unknown session with unsubscribed=false, not a refusal; so does the host.
+        self::assertSame(['unsubscribed' => false], $this->wire->call('session.unsubscribe', ['sessionId' => 'no-such-session']));
+        $this->host->unsubscribeSession('no-such-session');
+    }
+
+    public function testExecCommandAnswersTheWireShapeAndTheUiOnlyRefusal(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $inId = $this->host->createSession(null, null)['id'];
+
+        $wireClear = $this->wire->call('command.exec', ['sessionId' => $wireId, 'name' => 'clear']);
+        $inClear = $this->host->execCommand($inId, 'clear', '');
+        self::assertSame(self::shape($wireClear), self::shape($inClear));
+        self::assertSame($wireClear['effects'], $inClear['effects']);
+        self::assertSame(['clear-transcript'], $inClear['effects']);
+
+        $this->assertSameRefusal(
+            $this->refusalOf(fn () => $this->host->execCommand($inId, 'theme', '')),
+            $this->wire->request('command.exec', ['sessionId' => $wireId, 'name' => 'theme']),
+        );
+    }
+
+    public function testRespondPermissionAnswersTheWireShape(): void
+    {
+        $this->connect();
+        $wireId = $this->wire->call('session.create', [])['id'];
+        $this->wire->call('session.subscribe', ['sessionId' => $wireId]);
+        $this->fixture->run();
+        $this->wire->call('session.send', ['sessionId' => $wireId, 'text' => 'check the log']);
+        $this->fixture->run(0.08);
+
+        // Two asks on the one running turn: the wire answers the first, the in-process host the second.
+        $wireAsk = $this->fixture->backend->ask('wire-call', 'Bash', ['command' => 'ls']);
+        $inAsk = $this->fixture->backend->ask('in-call', 'Bash', ['command' => 'ls']);
+        $this->fixture->run(0.08);
+
+        $wireAnswer = $this->wire->call('permission.respond', ['sessionId' => $wireId, 'askId' => $wireAsk->askId, 'reply' => 'once']);
+        $inAnswer = $this->host->respondPermission($wireId, $inAsk->askId, 'once', null);
+
+        self::assertTrue($wireAnswer['applied']);
+        self::assertTrue($inAnswer['applied']);
+        self::assertSame(self::shape($wireAnswer), self::shape($inAnswer));
     }
 
     private function connect(): void

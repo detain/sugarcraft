@@ -28,9 +28,18 @@ use function React\Promise\resolve;
  * client follows reach {@see subscribeEvents()} listeners as {@see EventEnvelope}s,
  * in the order the host emitted them, with none dropped: delivery is queued and
  * drained on the loop, so a listener that calls back into the host cannot reorder
- * or re-enter the feed that is emitting.
+ * or re-enter the feed that is emitting: a drain already in progress is not entered
+ * again, and the outer loop delivers whatever a listener's call queued.
  *
  * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
+ *
+ * Two deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * - Session calls go to the primary host's dispatcher. The wire's workspace routing
+ *   (`root`, {@see \SugarCraft\Code\Server\Workspace\Gateway}) is not applied, so a
+ *   session bound to a non-primary root is not found here. No bundle sends `root`.
+ * - Follow results: {@see subscribeFollowResults()} listeners receive the
+ *   `session.subscribe` answer on every successful {@see subscribeSession()}, the
+ *   first subscribe included. This host never reconnects, so each call is a follow.
  */
 final class InProcessHostServices implements HostServices
 {
@@ -42,10 +51,17 @@ final class InProcessHostServices implements HostServices
     /** @var list<\Closure(EventEnvelope): void> */
     private array $listeners = [];
 
+    /** @var list<\Closure(array<string, mixed>): void> */
+    private array $followListeners = [];
+
     /** @var \SplQueue<EventEnvelope> */
     private \SplQueue $pending;
 
+    /** Whether a drain is scheduled or running: enqueue() schedules at most one. */
     private bool $draining = false;
+
+    /** Whether a drain is running right now: a drain entered from inside a listener returns at once. */
+    private bool $delivering = false;
 
     private function __construct(
         private readonly Dispatcher $dispatcher,
@@ -80,7 +96,9 @@ final class InProcessHostServices implements HostServices
 
     /**
      * Close the in-process client. Events it was already owed are delivered first,
-     * then the client leaves the host, which drops its feed subscriptions.
+     * then the client leaves the host, which drops its feed subscriptions. Called
+     * from a listener, the owed events are delivered by the drain already running
+     * (in order, to every listener) and the client still closes here.
      */
     public function disconnect(): void
     {
@@ -129,7 +147,16 @@ final class InProcessHostServices implements HostServices
             $params['snapshotLimit'] = self::SNAPSHOT_LIMIT;
         }
 
-        return $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
+        $answer = $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
+        foreach ($this->followListeners as $listener) {
+            try {
+                $listener($answer);
+            } catch (\Throwable $e) {
+                $this->dispatcher->context()->logError($e, 'in-process follow-result listener failed');
+            }
+        }
+
+        return $answer;
     }
 
     /** Mirrors session.unsubscribe (row 3). */
@@ -201,7 +228,13 @@ final class InProcessHostServices implements HostServices
     /** Mirrors command.exec (row 9). */
     public function execCommand(string $sessionId, string $name, string $args): array
     {
-        return $this->dispatcher->invoke($this->connected(), 'command.exec', ['sessionId' => $sessionId, 'name' => $name, 'args' => $args]);
+        // The wire refuses `args: ""` as invalid params; an empty argument list is an absent key.
+        $params = ['sessionId' => $sessionId, 'name' => $name];
+        if ($args !== '') {
+            $params['args'] = $args;
+        }
+
+        return $this->dispatcher->invoke($this->connected(), 'command.exec', $params);
     }
 
     /** Mirrors permission.pending (row 10). */
@@ -221,19 +254,14 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Row 12 has no serve method. The wire carries a follow result only as the
-     * `session.subscribe` answer itself, so there is nothing for a listener to
-     * receive here: the caller gets it from {@see subscribeSession()}.
-     *
-     * @throws RpcError always, with the wire's method-not-found code
+     * Row 12: the follow result is the `session.subscribe` answer, so it reaches the
+     * listener right after each successful {@see subscribeSession()}. A throwing
+     * listener is logged and the others still hear it. Registering never refuses:
+     * a bundle that registers at construction must start.
      */
     public function subscribeFollowResults(\Closure $listener): void
     {
-        throw RpcError::of(
-            ErrorCode::MethodNotFound,
-            'no serve method delivers follow results; the session.subscribe answer carries them',
-            'no_serve_method',
-        );
+        $this->followListeners[] = $listener;
     }
 
     /**
@@ -286,9 +314,19 @@ final class InProcessHostServices implements HostServices
         $this->loop->futureTick(fn () => $this->drain());
     }
 
-    /** Hand every queued event to every listener, in emit order; a throwing listener is logged and the rest still hear it. */
+    /**
+     * Hand every queued event to every listener, in emit order; a throwing listener is logged and the rest still hear it.
+     *
+     * Not re-entrant: a listener that disconnects reaches here while the outer loop is
+     * still delivering, and returning at once keeps the queue in one order for every
+     * listener. The outer loop picks up what the listener's call queued.
+     */
     private function drain(): void
     {
+        if ($this->delivering) {
+            return;
+        }
+        $this->delivering = true;
         try {
             while (!$this->pending->isEmpty()) {
                 $envelope = $this->pending->dequeue();
@@ -301,6 +339,7 @@ final class InProcessHostServices implements HostServices
                 }
             }
         } finally {
+            $this->delivering = false;
             $this->draining = false;
         }
     }
