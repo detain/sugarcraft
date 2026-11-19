@@ -27,7 +27,7 @@ $rules-&gt;ignores('build', true);           // directory-only rules need $isDir
     <h2 style="margin-top: 40px;">Tasks</h2>
     <h3 style="margin-top: 24px;">Use it for</h3>
     <ul>
-      <li><strong>Agent file tools</strong>: candy-code's Glob, Grep and Ls skip the same paths a git checkout would, through candy-code's <code>Tools\IgnoreRules</code> wrapper.</li>
+      <li><strong>Agent file tools</strong>: candy-code's Glob, Grep and Ls match paths with sugar-ignore's rules, through candy-code's <code>Tools\IgnoreRules</code> wrapper. That wrapper adds two layers of its own: a default exclude list (<code>.git</code>, <code>vendor</code>, <code>node_modules</code>, <code>.phpunit.cache</code>) that applies with or without any ignore file, and a hard stop at symlinked directories. A checkout's git would not skip <code>vendor/</code> or <code>node_modules/</code> unless a <code>.gitignore</code> names them.</li>
     </ul>
 
     <h3 style="margin-top: 24px;">Add one ignore file after construction</h3>
