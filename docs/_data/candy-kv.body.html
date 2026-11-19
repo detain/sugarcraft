@@ -1,71 +1,199 @@
-<p class="lede" style="margin-top: 28px;">Personal key/value store — one SQLite database per store, <code>@dbname</code> namespaces, glob listing, TTL, binary values, JSON/YAML import/export, and a bare CLI.</p>
+<p class="lede" style="margin-top: 28px;">candy-kv is a personal key/value store. Each named database is one SQLite file, a <code>key@db</code> suffix routes a key to a database, keys can carry a TTL, values can be binary, and whole databases import and export as JSON or YAML. It ships as a library (<code>Store</code>) and as a bare CLI (<code>candy-kv</code>). The design follows <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a>, a Go key/value tool. candy-kv is a native PHP project, not a line-by-line port, and it stores data in SQLite where skate uses BadgerDB.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv</code></pre>
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv   # the candy-kv binary lands in vendor/bin/</code></pre>
+    <p>Requires PHP 8.3 or newer with the <code>sqlite3</code> and <code>mbstring</code> extensions. A standalone phar is published with the releases. A monorepo checkout runs straight from the tree with <code>php bin/candy-kv</code> after <code>composer install</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
 
-$store = new Store();                       // SQLite files under $XDG_CONFIG_HOME/skate (else ~/.config/skate)
+$store = new Store();   // SQLite files under $XDG_CONFIG_HOME/skate, else ~/.config/skate
 
 $store-&gt;set('user:1', 'Alice');
 $store-&gt;set('user:2', 'Bob');
-echo $store-&gt;get('user:1');                 // 'Alice'
-echo $store-&gt;get('missing', 'n/a');         // fallback: 'n/a'
+echo $store-&gt;get('user:1');             // 'Alice'
+echo $store-&gt;get('missing', 'n/a');     // the fallback: 'n/a'
 
-// A key@db suffix routes to a named database ("\@" spells a literal at-sign)
+// A key@db suffix routes to a named database. "\@" spells a literal at-sign.
 $store-&gt;set('token@passwords', 'ghp_xxxx');
-$store-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
+$store-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 seconds
 
-foreach ($store-&gt;list('user:*') as $entry) {  // case-sensitive character-wise glob patterns; yields Entry
+foreach ($store-&gt;list('user:*') as $entry) {  // character-wise glob, case-sensitive; yields Entry
     echo "{$entry-&gt;key} =&gt; {$entry-&gt;rawValue()}\n";
 }
-$store-&gt;listDatabases();                    // ['default', 'passwords']
-$store-&gt;pruneExpired();                     // reclaims expired rows in the default database</code></pre>
+$store-&gt;listDatabases();                 // ['default', 'passwords']
+$store-&gt;pruneExpired();                  // reclaims expired rows in the default database</code></pre>
+    <p>Constructing a <code>Store</code> touches nothing on disk. Neither the data directory nor any database file is created until the first write, and a read never creates a file.</p>
 
-    <h3 style="margin-top: 32px;">CLI</h3>
-    <pre class="code"><code class="language-shell">candy-kv set color blue              # values with NUL/invalid UTF-8 auto-arm binary mode
-candy-kv get color                   # prints exact stored bytes, no added newline
-candy-kv list 'user-*'               # key&ltTAB&gtvalue rows; binary values show a &lt;binary N bytes&gt; placeholder
-candy-kv delete 'tmp-*' --dry-run    # preview the match count without writing
-candy-kv prune                       # remove expired residue
+    <h3 style="margin-top: 24px;">The CLI in one screen</h3>
+    <pre class="code"><code class="language-shell">candy-kv set color blue              # a value with a NUL byte or invalid UTF-8 is stored as binary
+candy-kv get color                   # prints the exact stored bytes, with no added newline
+candy-kv list 'user-*'               # key&lt;TAB&gt;value rows; a binary value shows a &lt;binary N bytes&gt; placeholder
+candy-kv delete 'tmp-*' --dry-run    # reports how many entries would go, writes nothing
+candy-kv prune                       # removes expired residue from the default database
 candy-kv export json &gt; backup.json
-candy-kv import json backup.json     # atomic within a database; a file spanning databases needs --no-atomic</code></pre>
-    <p style="margin-top: 12px;">Exit codes: <code>0</code> success, <code>1</code> miss / no match / runtime failure, <code>2</code> usage errors (unknown flags and commands are refused before anything is written). Run <code>candy-kv --help</code> for the full flag list.</p>
+candy-kv import json backup.json     # atomic within one database; a file spanning databases needs --no-atomic</code></pre>
+    <p>Exit codes: <code>0</code> on success, <code>1</code> for a miss, no match or a runtime failure, and <code>2</code> for usage errors. Unknown flags and commands are refused before anything is written. <code>candy-kv --help</code> prints the full flag list.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>$XDG_CONFIG_HOME/skate</code>, else <code>~/.config/skate</code>; files at <code>0600</code>); <code>key@db</code> picks the database and reads never create files.</span></div>
-      <div class="feature"><strong>Glob and fuzzy listing</strong><span>Case-sensitive <code>*</code> / <code>?</code> glob patterns (<code>\*</code> spells a literal star), reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
-      <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired rows are invisible to readers immediately and stay on disk until <code>pruneExpired()</code> reclaims them.</span></div>
-      <div class="feature"><strong>Binary values and transactions</strong><span>Store raw bytes as binary entries (<code>rawValue()</code> decodes them) and group writes in a transaction.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>A <strong>store</strong> is a directory of SQLite files, one per database, named <code>&lt;dir&gt;/&lt;dbname&gt;.db</code>. Unsuffixed keys land in <code>default.db</code>. <code>Store</code> is the facade: it routes each key to a <code>Database</code> through <code>Store::splitKey()</code>, which reads the <code>key@db</code> suffix, and the <code>Database</code> does the row work. Database files are created with mode 0600, and the data directory is 0700.</p>
+    <p>An <strong>Entry</strong> is one stored row: the key, its value, the binary flag, the created and modified times, and an optional expiry. An expired row is invisible to readers at once and stays on disk until <code>pruneExpired()</code> or <code>prune</code> reclaims it. <code>Database::raw()</code> is the one reader that still sees an expired row.</p>
+    <p>A <strong>binary</strong> value is stored base64-encoded with the binary flag. <code>Entry::rawValue()</code> returns the decoded bytes. The CLI picks binary mode for you when a value contains a NUL byte or invalid UTF-8, and <code>--text</code> refuses such a value outright.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 24px;">Listing and fuzzy search</h3>
+    <p><code>Store::list()</code> takes a glob pattern, a database name, a reverse flag and a mode of <code>all</code>, <code>keys</code> or <code>values</code>. Any other mode throws, so a typo cannot quietly yield the wrong shape. <code>Store::fuzzyFilter()</code> ranks the keys of a database against a query with a Smith-Waterman local-alignment matcher, which finds <code>usr1</code> inside <code>user:1</code>.</p>
+
+    <h2 style="margin-top: 40px;">Tasks</h2>
+
+    <h3 style="margin-top: 24px;">Keep a backup of one database and restore it</h3>
+    <pre class="code"><code class="language-shell">candy-kv export json passwords &gt; passwords.json
+candy-kv import json passwords.json --if-exists=skip   # keep what is already there</code></pre>
+    <p>Export writes the database as a JSON or YAML document, and <code>import</code> reads it back into a database of the same name. <code>--if-exists</code> picks the clobber policy: <code>replace</code> (the default), <code>skip</code> to keep a live row, or <code>fail</code> to refuse and name the key. Import runs in one transaction by default, and an overwriting import reports how much it replaced.</p>
+
+    <h3 style="margin-top: 24px;">Store a file as a binary value</h3>
+    <pre class="code"><code class="language-php">$store->setFile('logo', '/srv/assets/logo.png');   // binary, read from disk
+$store->saveTo('logo', '/tmp/logo-copy.png');     // written back out, mode 0600</code></pre>
+    <p>Both calls work on binary entries. <code>setFile()</code> returns the stored <code>Entry</code>, and <code>saveTo()</code> returns a <code>bool</code>.</p>
+
+    <h3 style="margin-top: 24px;">Expire a key and sweep it later</h3>
+    <pre class="code"><code class="language-shell">candy-kv set session abc --ttl 300   # expires after five minutes
+candy-kv prune --all                # sweep expired rows from every listed database</code></pre>
+    <p><code>--ttl</code> must be a positive whole number of seconds, from 1 to 999999999. <code>--ttl 0</code> is a usage error, not "expire now" and not "forever". Leave <code>--ttl</code> off for an entry that never expires.</p>
+
+    <h3 style="margin-top: 24px;">Run several transactions on one database</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Kv\{Database, Store};
+
+$store = new Store();
+$store->transaction('work', function (Database $db): void {
+    // every write in this closure commits together, or none of them does
+});</code></pre>
+    <p><code>Store::transaction()</code> creates the target database on demand, because a transaction may write. A transaction aimed at <code>settings</code> throws <code>InvalidArgumentException</code>, and so does a single write to a key routed there.</p>
+
+    <h3 style="margin-top: 24px;">Import a YAML document across several databases</h3>
+    <pre class="code"><code class="language-shell">candy-kv import yaml secrets.yml --no-atomic --max-bytes=0</code></pre>
+    <p>A file that spans databases cannot run as one transaction, so <code>--no-atomic</code> is needed. <code>--max-bytes=0</code> lifts the default 256 MiB ceiling on the document, and an oversized document is otherwise refused before its bytes are read.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\Kv\</code>. <code>Store</code> is the entry point for code, <code>Database</code> is one SQLite file, and <code>Entry</code> is the value a read returns. The CLI commands and the import and export classes sit on top of <code>Store</code>.</p>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Store</td><td><code>__construct(?string $dataDir = null, string $defaultDb = 'default')</code></td><td>A store over the data directory. Touches nothing on disk until a write.</td></tr>
+    <tr><td>Store</td><td><code>set(key, value, bool $binary = false, ?int $ttlSeconds = null)</code>, <code>setWithTtl(key, value, int $ttlSeconds)</code></td><td>Write a key. <code>key@db</code> routes to a named database.</td></tr>
+    <tr><td>Store</td><td><code>get(key, fallback = '')</code>, <code>entry(key)</code>, <code>suggestionFor(key)</code></td><td>A value with a fallback, the full <code>Entry</code>, or the closest existing key for a typo.</td></tr>
+    <tr><td>Store</td><td><code>list(?pattern, ?dbName, bool $reverse, string $mode = 'all', string $delimiter)</code></td><td>A generator of entries, keys or values, in glob order or reverse</td></tr>
+    <tr><td>Store</td><td><code>fuzzyFilter(query, ?dbName)</code></td><td>Keys ranked by Smith-Waterman local alignment against a query</td></tr>
+    <tr><td>Store</td><td><code>delete(key)</code>, <code>setFile(key, path)</code>, <code>saveTo(key, path)</code></td><td>Delete keys by name or glob, store a file as binary, and write a binary value to disk</td></tr>
+    <tr><td>Store</td><td><code>pruneExpired()</code>, <code>pruneDatabase(name)</code></td><td>Reclaim expired rows from the default database or a named one</td></tr>
+    <tr><td>Store</td><td><code>listDatabases()</code>, <code>deleteDatabase(name)</code>, <code>isReservedDatabase(name)</code></td><td>Database management. <code>settings</code> is reserved.</td></tr>
+    <tr><td>Store</td><td><code>transaction(dbName, callable $fn)</code></td><td>Run a closure against a database inside one transaction</td></tr>
+    <tr><td>Store</td><td><code>dataDir()</code>, <code>defaultDatabase()</code>, <code>splitKey(key, defaultDb)</code>, <code>resolveDataDir()</code>, <code>sanitizeForTty(value)</code></td><td>Where the data lives, the <code>key@db</code> split, the data-directory resolution, and a value stripped for terminal output</td></tr>
+    <tr><td>Database</td><td><code>__construct(path, name, bool $create = true)</code>, <code>get</code>, <code>raw</code>, <code>set</code>, <code>delete</code>, <code>list</code>, <code>count</code></td><td>One SQLite database. <code>raw()</code> also sees expired rows.</td></tr>
+    <tr><td>Database</td><td><code>deleteMany(pattern)</code>, <code>pruneExpired()</code>, <code>allKeys()</code>, <code>transaction(callable $fn, bool $write)</code>, <code>close()</code></td><td>Bulk delete, expiry sweep, the key list, a transaction, and close</td></tr>
+    <tr><td>Entry</td><td><code>key</code>, <code>value</code>, <code>binary</code>, <code>createdAt</code>, <code>modifiedAt</code>, <code>expiresAt</code>; <code>isExpired()</code>, <code>rawValue()</code>; <code>binary(key, bytes)</code></td><td>A stored row. <code>rawValue()</code> decodes binary entries.</td></tr>
+    <tr><td>ImportCommand</td><td><code>run(format, path, atomic, ifExists, maxBytes)</code></td><td>The <code>import</code> command as a method, returning an exit code</td></tr>
+    <tr><td>ExportCommand</td><td><code>run(format, ?dbName, ?pattern)</code>, <code>exportToString(format, ?dbName, ?pattern)</code></td><td>The <code>export</code> command, to stdout or to a string</td></tr>
+    <tr><td>JsonImporter, YamlImporter</td><td><code>importFromFile(path, atomic, ifExists, maxBytes)</code>, <code>importFromString(text, ...)</code></td><td>Import one document format, returning an <code>ImportReport</code></td></tr>
+    <tr><td>FlatDocumentNormaliser</td><td><code>validatedOptions()</code>, <code>ttlMap()</code>, <code>binaryKeyList()</code>, <code>commit(store, rows, atomic, ifExists)</code></td><td>Turns a flat document into validated rows and writes them under one import policy</td></tr>
+    <tr><td>YamlDialect</td><td><code>build(array $flat)</code>, <code>parse(string $yaml)</code>, <code>reservedKeyReason(key)</code></td><td>The YAML document shape: TTL and binary markers, and the keys the dialect reserves</td></tr>
+    <tr><td>ArgParser</td><td><code>set()</code>, <code>get()</code>, <code>list()</code>, <code>delete()</code>, <code>import()</code>, <code>export()</code>, <code>prune()</code></td><td>The CLI's argument parsing. Unknown options and surplus positionals are refused, not ignored.</td></tr>
+    <tr><td>ImportReport</td><td><code>imported</code>, <code>overwritten</code>, <code>skipped</code></td><td>The counts an import returns</td></tr>
+    <tr><td>Ttl</td><td><code>inRange(int $seconds)</code></td><td>The valid TTL range, 1 to 999999999 seconds</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Configuration and data directory</h2>
+    <p>candy-kv reads two environment variables, and neither one is required. The data directory is <code>$XDG_CONFIG_HOME/skate</code> when that is set, otherwise <code>~/.config/skate</code>. The directory keeps the pre-rename <em>skate</em> name on disk, so installs from before the rename keep working.</p>
+    <table class="api-table">
+    <tr><th>Setting</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>XDG_CONFIG_HOME</code></td><td>absolute path</td><td>unset</td><td>Base directory. The store lives in <code>&lt;base&gt;/skate</code>. A relative value is refused.</td></tr>
+    <tr><td><code>HOME</code></td><td>absolute path</td><td>system value</td><td>Used when <code>XDG_CONFIG_HOME</code> is unset. The store lives in <code>&lt;home&gt;/.config/skate</code>. A relative value is refused.</td></tr>
+    </table>
+    <p>If neither variable is set, candy-kv falls back to the home directory in the passwd database. If even that is unavailable, it throws rather than writing into the install tree. Database names are limited to letters, digits, <code>_</code> and <code>-</code>. The name <code>settings</code> is reserved: <code>listDatabases()</code> never shows it, and every write aimed at it is refused.</p>
+    <p>Upstream skate keeps its own data in a BadgerDB layout that this store cannot read. Move data across with <code>export</code> there and <code>import</code> here. JSON and YAML are the only bridge, and the two stores never share a directory.</p>
+
+    <h3 style="margin-top: 24px;">Output discipline</h3>
+    <p><code>get</code> prints the exact stored bytes, with no newline added and nothing scrubbed, so <code>$(candy-kv get k)</code> round-trips honestly. <code>get --sanitize</code> collapses a value to one line, strips the C0 control bytes (ESC included) and DEL, and removes the C1 range, for terminal printing. Values reach the terminal through <code>Store::sanitizeForTty()</code>.</p>
+
+    <h2 style="margin-top: 40px;">Key naming, @db and escapes</h2>
+    <p>A key is any string, with one syntax on top. A trailing <code>@name</code> routes the key to the database <code>name</code>, and a key without a suffix goes to the default database. <code>\@</code> spells a literal at-sign in a key, and <code>\*</code> spells a literal star in a glob. Glob patterns support <code>*</code> and <code>?</code>, and they are case-sensitive.</p>
+    <pre class="code"><code class="language-shell">candy-kv set 'mail@work' hunter2          # stored in the work database, key "mail"
+candy-kv set 'a\@b' 1                    # the key is the literal "a@b" in the default database
+candy-kv list 'user-?'                   # one character after "user-"</code></pre>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds five runnable programs. Each one uses a temporary data directory, so none of them touches the real store:</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-kv">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-kv/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-kv/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go); candy-kv is a native PHP project, not a line-by-line port. The interactive TUI of upstream skate is out of scope — library and CLI only.</li>
+      <li><code>examples/basic.php</code> covers <code>set()</code>, <code>get()</code>, <code>delete()</code> and <code>list()</code>, the fallback value, and <code>entry()</code> for metadata.</li>
+      <li><code>examples/binary.php</code> stores raw bytes with <code>set(binary: true)</code> and reads them back through <code>rawValue()</code>.</li>
+      <li><code>examples/glob.php</code> lists keys with <code>*</code> and <code>?</code> glob patterns.</li>
+      <li><code>examples/multidb.php</code> uses the <code>key@dbname</code> suffix to keep two databases side by side.</li>
+      <li><code>examples/reverse-order.php</code> lists the same keys forward and in reverse order.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/multidb.php</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <p>The suite lives in <code>tests/</code> and runs under PHPUnit 10. Run it from the package root, with stdin redirected so a stray read cannot hang the run:</p>
+    <pre class="code"><code class="language-shell">vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests cover the store contract (<code>StorageContractTest</code>, <code>StoreTest</code>), the database and its TTL migration (<code>DatabaseTest</code>, <code>DatabaseTtlMigrationTest</code>), the import and export commands (<code>ImportCommandTest</code>, <code>ImportExportTest</code>), the YAML dialect (<code>YamlDialectTest</code>), and the CLI's argument contract (<code>CliArgParserTest</code>, <code>CliContractTest</code>).</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;"><code>set</code> waits for input</h3>
+    <p><code>candy-kv set key</code> with no value reads standard input, silently, with no prompt. Pass the value on the command line, or pipe it in: <code>printf 'value' | candy-kv set key</code>.</p>
+
+    <h3 style="margin-top: 24px;">"got a list/sequence" on import</h3>
+    <p>The document's top level is a JSON array or a YAML sequence. candy-kv refuses it rather than importing the indices as keys. Wrap the entries in an object that maps each key to its value.</p>
+
+    <h3 style="margin-top: 24px;">An import refuses a null, boolean, array or object value</h3>
+    <p>Those values cannot round-trip as stored text, so the whole import is refused before anything is written. Convert the value to a string in the source document.</p>
+
+    <h3 style="margin-top: 24px;">A write to <code>key@settings</code> throws <code>InvalidArgumentException</code></h3>
+    <p><code>settings</code> is reserved, so a listing-driven backup never misses a half-written values database. Write to a different database name. Reads of a planted <code>key@settings</code> still work.</p>
+
+    <h3 style="margin-top: 24px;">A relative XDG_CONFIG_HOME or HOME is refused</h3>
+    <p>A relative path would move the store with the working directory, so candy-kv refuses it. Set the variable to an absolute path.</p>
+
+    <h3 style="margin-top: 24px;">A value with a NUL byte refuses under <code>--text</code></h3>
+    <p>Every reader truncates at the first NUL, so <code>--text</code> refuses the value with exit 2. Store it with <code>--binary</code>, or drop the <code>--text</code> flag and let the CLI choose binary mode.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream (Go, charmbracelet/skate)</th><th>candy-kv (PHP)</th></tr>
+    <tr><td>The <code>skate</code> command and its key/value verbs</td><td><code>bin/candy-kv</code>, <code>ArgParser</code>, and the commands behind them</td></tr>
+    <tr><td>Named databases through a <code>key@db</code> suffix</td><td><code>Store::splitKey()</code>, one SQLite file per database</td></tr>
+    <tr><td>BadgerDB storage</td><td>SQLite through <code>Database</code>. Data does not move between the two without an export.</td></tr>
+    <tr><td>The interactive skate TUI</td><td>Not ported. candy-kv is library and CLI only.</td></tr>
+    </table>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+
+    <h3 style="margin-top: 24px;">Store routes, Database stores</h3>
+    <p><code>Store</code> owns the data directory and the routing. It resolves a key to its database and rejects reserved names. The rows and the SQL all sit in <code>Database</code>, so a transaction or a prune runs against one file at a time.</p>
+
+    <h3 style="margin-top: 24px;">Import is a pipeline with one commit point</h3>
+    <p>An importer parses its format (<code>JsonImporter</code>, <code>YamlImporter</code>), and <code>FlatDocumentNormaliser</code> validates every row before anything is written. <code>ImportCommit</code> then applies the <code>replace</code>, <code>skip</code> or <code>fail</code> policy. A value that cannot round-trip as stored text refuses the whole import before a single row is written.</p>
+
+    <h3 style="margin-top: 24px;">Output is sanitized at the edge</h3>
+    <p>A value bound for a terminal goes through <code>Store::sanitizeForTty()</code>, so a stored value that holds escape sequences cannot move the cursor or restyle the screen.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p><code>candy-kv --version</code> reports the version stamped into a phar build. A source checkout reports <code>dev-master</code> rather than an invented semver, so an unreleased tree never claims a release number.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a>: the Model, Program and sanitizer behind the CLI's output.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files; construction touches nothing on disk</td></tr>
-<tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
-<tr><td>Store</td><td>get(key, fallback = '') / entry(key) / suggestionFor(key)</td><td>Read a value, or the full Entry, or a close-existing key for a typo</td></tr>
-<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode) / fuzzyFilter(query) / pruneExpired()</td><td>Glob listing; fuzzy key ranking by local-alignment score against a query; reclaim expired rows</td></tr>
-<tr><td>Store</td><td>delete(key) / setFile(key, path) / saveTo(key, path)</td><td>Delete; binary values from and to files (<code>0600</code>)</td></tr>
-<tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
-<tr><td>Database</td><td>get / raw / set / delete / deleteMany / list / allKeys / count / pruneExpired / transaction / close</td><td>One SQLite database; <code>raw()</code> also sees expired rows</td></tr>
-<tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired() / rawValue()</td><td>A stored value; <code>rawValue()</code> returns decoded bytes for binary entries</td></tr>
-</table>
+    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-kv">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-kv/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-kv/tree/master/examples">Runnable examples</a></li>
+    </ul>
   </div>
 </section>
-
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
@@ -75,12 +203,12 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/basic.gif" alt="Get / set / list">
                 <h3>Get / set / list</h3>
-                <span class="demo-caption">File-backed store — set, get, list, delete.</span>
+                <span class="demo-caption">File-backed store: set, get, list, delete.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/glob.gif" alt="Glob listing">
                 <h3>Glob listing</h3>
-                <span class="demo-caption">List keys matching `user-*`, `user-?` and `config-*`.</span>
+                <span class="demo-caption">List keys matching <code>user-*</code>, <code>user-?</code> and <code>config-*</code>.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/reverse-order.gif" alt="Reverse-order list">
@@ -90,14 +218,13 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/binary.gif" alt="Binary values">
                 <h3>Binary values</h3>
-                <span class="demo-caption">Round-trip raw bytes in / out of the store.</span>
+                <span class="demo-caption">Round-trip raw bytes in and out of the store.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/multidb.gif" alt="Multiple DBs">
                 <h3>Multiple DBs</h3>
-                <span class="demo-caption">Two named stores side-by-side, no collisions.</span>
+                <span class="demo-caption">Two named stores side by side, no collisions.</span>
             </div>
         </div>
-        <p style="margin-top: 20px;">Five GIFs: <code>glob.gif</code> is recorded from live <code>./bin/candy-kv</code> calls; the other four drive the library surface through <code>php examples/*.php</code>. For a text walkthrough of the CLI itself, see the <code>Output&nbsp;format</code> transcript in the <a href="https://github.com/sugarcraft/candy-kv#demos">README</a>.</p>
     </div>
 </section>
