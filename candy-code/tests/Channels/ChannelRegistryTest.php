@@ -122,6 +122,40 @@ final class ChannelRegistryTest extends TestCase
         $registry->boot([], [], $this->freshLedger(), null, Loop::get(), $this->collector());
     }
 
+    public function testBootHandsEachChannelItsBundlesInProcessHost(): void
+    {
+        // PL-5d regression: the host factory must reach the context a started channel receives.
+        // Dropping the host: argument in boot(), or the factory in ServeStartup, goes red here.
+        [$bundleA, , $trusted] = $this->twoBundleStage();
+        $journal = $this->journal();
+        $this->bakeHostProbe($bundleA, 'probe-chan', $journal);
+        $bundleA = $this->refresh($bundleA);
+        $host = $this->createMock(\SugarCraft\Plugins\Host\HostServices::class);
+        $asked = [];
+        $registry = ChannelRegistry::new();
+        $registry->boot(
+            [$bundleA],
+            $trusted,
+            $this->seenLedger($bundleA),
+            $this->scratch,
+            Loop::get(),
+            $this->collector(),
+            null,
+            null,
+            null,
+            static function (string $bundle) use ($host, &$asked): \SugarCraft\Plugins\Host\HostServices {
+                $asked[] = $bundle;
+
+                return $host;
+            },
+        );
+
+        self::assertSame(['probe-chan'], $registry->startedNames());
+        self::assertSame([$bundleA->name], $asked, 'the factory is asked for the bundle that owns the channel');
+        $lines = array_values(array_filter(array_map('trim', file($journal) ?: [])));
+        self::assertSame(['host:wired'], $lines, 'the started channel sees the in-process host on its context');
+    }
+
     public function testAChannelWhoseConstructorThrowsIsRefusedAndLogged(): void
     {
         [$bundleA] = $this->twoBundleStage();
@@ -418,6 +452,14 @@ final class ChannelRegistryTest extends TestCase
     public function handleRequest(\\Psr\\Http\\Message\\ServerRequestInterface $request): \\Psr\\Http\\Message\\ResponseInterface { return new \\React\\Http\\Message\\Response(200, [], "channel-answered"); }
 ';
         $this->plantClass($bundle, $this->classText($bundle, 'web-chan', 'AcceptsHttpRequests', '', $members));
+    }
+
+    private function bakeHostProbe(Bundle $bundle, string $routeName, string $journal): void
+    {
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void { file_put_contents($this->journal, "host:" . ($context->host instanceof \\SugarCraft\\Plugins\\Host\\HostServices ? "wired" : "none") . PHP_EOL, FILE_APPEND); }
+    public function dispose(): void {}
+';
+        $this->plantClass($bundle, $this->classText($bundle, $routeName, 'ChannelInterface', $journal, $members));
     }
 
     private function bakeCtorThrower(Bundle $bundle): void

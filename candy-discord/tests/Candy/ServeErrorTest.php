@@ -16,11 +16,7 @@ final class ServeErrorTest extends TestCase
 {
     public function testAKnownKindRendersItsOwnSentenceNotTheWireText(): void
     {
-        $error = ServeError::fromRpc('session.create', [
-            'code' => -32000,
-            'message' => 'connect timed out',
-            'data' => ['kind' => 'timeout'],
-        ]);
+        $error = new ServeError('timeout', 'channel-bridge: session.create: connect timed out', ['kind' => 'timeout']);
 
         self::assertStringContainsString('channel-bridge: session.create', $error->getMessage(), 'the log line keeps its attribution');
         self::assertSame('candy-code took too long to answer', $error->userReason());

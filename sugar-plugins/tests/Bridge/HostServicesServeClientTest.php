@@ -212,6 +212,62 @@ final class HostServicesServeClientTest extends TestCase
         $this->assertSame(3, $first[0]['seq']);
     }
 
+    public function testAThrowingListenerNeverStarvesItsSibling(): void
+    {
+        $host = new FakeHostServices();
+        $client = new HostServicesServeClient($host);
+        $second = [];
+        $client->onEvent(static function (array $e): void {
+            throw new \RuntimeException('listener A blew up');
+        });
+        $client->onEvent(static function (array $e) use (&$second): void {
+            $second[] = $e;
+        });
+
+        $subscriptions = array_values(array_filter($host->calls, static fn (array $c): bool => $c['method'] === 'subscribeEvents'));
+        $listener = $subscriptions[0]['args'][0];
+
+        try {
+            $listener(['sessionId' => 's1', 'seq' => 7, 'type' => 'turn.done', 'data' => []]);
+            $this->fail('the failing listener must still reach the host, so its drain can log it');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('listener A blew up', $e->getMessage());
+        }
+
+        $this->assertCount(1, $second, 'the sibling still receives the envelope');
+        $this->assertSame(7, $second[0]['seq']);
+    }
+
+    public function testSeveralFailingListenersRethrowAsOneAggregateWithTheFirstAsPrevious(): void
+    {
+        $host = new FakeHostServices();
+        $client = new HostServicesServeClient($host);
+        $survivor = [];
+        $client->onEvent(static function (array $e): void {
+            throw new \RuntimeException('first blew up');
+        });
+        $client->onEvent(static function (array $e): void {
+            throw new \LogicException('second blew up');
+        });
+        $client->onEvent(static function (array $e) use (&$survivor): void {
+            $survivor[] = $e;
+        });
+
+        $subscriptions = array_values(array_filter($host->calls, static fn (array $c): bool => $c['method'] === 'subscribeEvents'));
+        $listener = $subscriptions[0]['args'][0];
+
+        try {
+            $listener(['sessionId' => 's1', 'seq' => 8, 'type' => 'turn.done', 'data' => []]);
+            $this->fail('every listener failure must reach the host');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('2 event listeners failed: first blew up; second blew up', $e->getMessage());
+            $this->assertInstanceOf(\RuntimeException::class, $e->getPrevious());
+            $this->assertSame('first blew up', $e->getPrevious()->getMessage());
+        }
+
+        $this->assertCount(1, $survivor, 'the healthy listener after two failures still receives the envelope');
+    }
+
     public function testOnFollowResultNeverSubscribesToTheHost(): void
     {
         $host = new FakeHostServices();

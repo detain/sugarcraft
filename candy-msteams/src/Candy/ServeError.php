@@ -40,13 +40,4 @@ class ServeError extends \RuntimeException
 
         return new self('internal', "channel-bridge: {$method}: " . $e->getMessage(), [], $e);
     }
-
-    /** @param array<string, mixed> $error the JSON-RPC error object */
-    public static function fromRpc(string $method, array $error): self
-    {
-        $data = \is_array($error['data'] ?? null) ? $error['data'] : [];
-        $kind = \is_string($data['kind'] ?? null) ? $data['kind'] : 'rpc_' . (int) ($error['code'] ?? 0);
-
-        return new self($kind, "channel-bridge: {$method}: " . (string) ($error['message'] ?? 'error'), $data);
-    }
 }

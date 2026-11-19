@@ -48,10 +48,42 @@ final class HostServicesServeClient implements ServeClient
         // doubles the delivery.
         $this->subscribed = true;
         $this->host->subscribeEvents(function (array $envelope): void {
-            foreach ($this->listeners as $listener) {
-                $listener($envelope);
-            }
+            $this->deliver($envelope);
         });
+    }
+
+    /**
+     * Runs every listener even when one throws, so a failing listener never starves its
+     * siblings of the envelope. The failures are rethrown once the fan-out is done, so the
+     * host's drain still logs them: one failure rethrows as itself, several as one aggregate
+     * that carries the first as its previous.
+     *
+     * @param array<string,mixed> $envelope
+     */
+    private function deliver(array $envelope): void
+    {
+        $failures = [];
+        foreach ($this->listeners as $listener) {
+            try {
+                $listener($envelope);
+            } catch (\Throwable $e) {
+                $failures[] = $e;
+            }
+        }
+
+        if ($failures === []) {
+            return;
+        }
+        if (\count($failures) === 1) {
+            throw $failures[0];
+        }
+
+        $messages = \array_map(static fn (\Throwable $e): string => $e->getMessage(), $failures);
+        throw new \RuntimeException(
+            \count($failures) . ' event listeners failed: ' . \implode('; ', $messages),
+            0,
+            $failures[0],
+        );
     }
 
     public function onFollowResult(\Closure $listener): void

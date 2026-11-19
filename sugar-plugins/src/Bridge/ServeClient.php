@@ -8,8 +8,8 @@ use React\Promise\PromiseInterface;
 
 /**
  * The serve connection as the router uses it: session lifecycle, prompt
- * admission, permission answers, and the two event feeds. A bundle's
- * ServeBridge implements this; the router never names the concrete client.
+ * admission, permission answers, and the two event feeds. {@see HostServicesServeClient}
+ * is the in-process implementation the bundles use; the router never names the concrete client.
  */
 interface ServeClient
 {
