@@ -412,7 +412,7 @@ final class InProcessHostServicesTest extends TestCase
 
     /**
      * The wire fires follow results only from the reconnect re-follow (ServeBridge::follow never
-     * fires them), and this door never reconnects. So neither the first subscribe nor a manual
+     * fires them), and this door has no re-follow. So neither the first subscribe nor a manual
      * re-subscribe reaches a follow listener: the first answer is subscribeSession()'s return value.
      * Registering a listener, even a throwing one, never refuses and never runs.
      */
@@ -435,6 +435,42 @@ final class InProcessHostServicesTest extends TestCase
         self::assertIsArray($again);
         self::assertSame(0, $heard, 'no follow listener fires, on the first subscribe or a re-subscribe');
         self::assertStringNotContainsString('follow-result listener', \implode("\n", $this->logs));
+    }
+
+    /**
+     * A disconnect()/connect() pair is a new client with no follows: the session's events stop
+     * reaching the listener until the bundle follows it again, and no follow result tells the
+     * bundle so. The listener itself survives the reconnect.
+     */
+    public function testAReconnectStartsWithNoFollowsUntilEachSessionIsFollowedAgain(): void
+    {
+        $this->connect();
+        $inId = $this->call($this->host->createSession(null, null))['id'];
+        $heard = [];
+        $this->call($this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard, $inId): void {
+            if ($envelope->sessionId === $inId) {
+                $heard[] = $envelope->type;
+            }
+        }));
+        $this->call($this->host->subscribeSession($inId, null, null));
+        $this->call($this->host->disconnect());
+
+        $this->fixture->await($this->host->connect());
+        self::assertSame([], $this->call($this->host->followedSessions()), 'a reconnect follows nothing');
+
+        $this->call($this->host->sendTurn($inId, 'while unfollowed', 'queue', 'k-unfollowed', [], []));
+        $this->fixture->run(0.08);
+        $this->fixture->backend->settle(Message::assistant('done'));
+        $this->fixture->run(0.08);
+        self::assertSame([], $heard, 'events of an unfollowed session do not reach the listener');
+
+        $this->call($this->host->subscribeSession($inId, null, null));
+        self::assertSame([$inId], $this->call($this->host->followedSessions()));
+        $this->call($this->host->sendTurn($inId, 'after refollow', 'queue', 'k-refollowed', [], []));
+        $this->fixture->run(0.08);
+        $this->fixture->backend->settle(Message::assistant('done'));
+        $this->fixture->run(0.08);
+        self::assertNotSame([], $heard, 'the re-follow restores delivery to the surviving listener');
     }
 
     public function testUnsubscribeAfterDisconnectIsQuietLikeTheWireWrapper(): void

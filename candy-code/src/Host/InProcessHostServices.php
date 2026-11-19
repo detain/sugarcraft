@@ -42,7 +42,7 @@ use function React\Promise\resolve;
  * it gets the answer in the same tick. Refusals are the wire's own {@see RpcError}s: the
  * same code, kind and data.
  *
- * Four deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * Five deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Each answer's value is encoded under the wire's flags and decoded back, with no
  *   envelope. That keeps the wire's UTF-8 substitution, so a bundle gets the same
  *   values on both doors, and the `too_large` refusal is computed as the frame the
@@ -59,9 +59,15 @@ use function React\Promise\resolve;
  *   `rate_limited` budgets the wire applies to each frame, because the caller is the
  *   host itself, so a bundle's own loop is never refused `rate_limited`.
  * - Follow results: {@see subscribeFollowResults()} listeners are never fired here.
- *   The wire fires them only from the reconnect re-follow, and this door never
- *   reconnects. The first follow's answer is the return value of
+ *   The wire fires them only from the reconnect re-follow, and this door has no
+ *   re-follow. The first follow's answer is the return value of
  *   {@see subscribeSession()}, which is the only delivery a bundle needs.
+ * - A reconnect follows nothing. {@see disconnect()} then {@see connect()} opens a new
+ *   client with no feeds: {@see followedSessions()} is empty, and no event of a session is
+ *   delivered until the bundle calls {@see subscribeSession()} for it again. This door tells
+ *   no listener that its follows were lost, unlike the wire's reconnect re-follow, so a
+ *   bundle that reconnects must re-follow each session it still wants. The
+ *   {@see subscribeEvents()} listeners survive the reconnect.
  * - Request-side refusals are the schema's, not the transport's. There is no frame, so
  *   the wire's pre-hello ceiling ({@see Dispatcher::MAX_PRE_HELLO_BYTES}) and frame
  *   ceiling ({@see \SugarCraft\Code\Server\ServerConfig::MAX_CLIENT_FRAME_BYTES}), which
@@ -138,7 +144,8 @@ final class InProcessHostServices implements HostServices
      * Close the in-process client. Events it was already owed are delivered first,
      * then the client leaves the host, which drops its feed subscriptions. Called
      * from a listener, the owed events are delivered by the drain already running
-     * (in order, to every listener) and the client still closes here.
+     * (in order, to every listener) and the client still closes here. A later
+     * connect() starts with no follows (see the class docblock).
      */
     public function disconnect(): PromiseInterface
     {
