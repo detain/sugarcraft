@@ -1,135 +1,289 @@
-<p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
+<p class="lede" style="margin-top: 28px;">candy-files is a dual-pane terminal file manager in the Midnight Commander lineage: two directory panes side by side, Tab to swap focus, multi-select, copy, move, rename, delete with a confirm gate, undo, tabs, and fuzzy search by name. It runs on the SugarCraft stack and is inspired by <a href="https://github.com/yorukot/superfile">superfile</a>; it is native PHP, not a port of superfile. Its filesystem layer is injected, so every transition is unit-testable without a temporary directory.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-files</code></pre>
-    <p>While the release channel is dev-only the inline <code>:@dev</code> is required — Packagist carries just <code>dev-master</code>, and a fresh project's default stable minimum-refuses the bare command.</p>
+<h2 style="margin-top: 40px;">Install</h2>
+<pre class="code"><code class="language-shell">composer require sugarcraft/candy-files:@dev</code></pre>
+<p>Requires PHP 8.3 or newer with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are required transitively by <code>sugar-core</code>, whose cell-width math runs through ICU, so <code>composer install</code> is the step that refuses on a bare php-cli machine.</p>
+<p>While the release channel is dev-only the inline <code>:@dev</code> is required. Packagist carries only <code>dev-master</code>, and a fresh project's default <code>minimum-stability: stable</code> refuses the bare command. Archive browsing is optional: <code>ext-zip</code>, <code>ext-zlib</code> and <code>ext-bz2</code> are <code>suggest</code>ed and only needed for <code>.zip</code>, <code>.tar.gz</code> and <code>.tar.bz2</code> archives.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># 1. Composer consumer — the package bin (composer.json "bin"):
+<h2 style="margin-top: 40px;">Quickstart</h2>
+<p>Run it from a Composer install, from a source checkout, or from the rolling phar. The positional arguments are the left and right start directories; both default to the current directory and <code>$HOME</code>.</p>
+<pre class="code"><code class="language-shell"># Composer consumer: the package bin from composer.json "bin"
 vendor/bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 
-# 2. Source checkout of this repo:
+# Source checkout of this repository
 composer install
 ./bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 
-# 3. Rolling phar — published on GitHub Releases under the
-#    candy-files/latest tag (with .sha256/.sig verification sidecars and
-#    the .phar.commit build stamp + .phar.pins.json pin-map — quote
-#    the latter pair in bug reports):
-php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
+# Rolling phar from the candy-files/latest GitHub release
+php candy-files.phar [LEFT_DIR] [RIGHT_DIR]</code></pre>
+<p>A missing or unreadable start directory refuses before the interface opens, with <code>left/right directory does not exist: &lt;dir&gt;</code> and exit status 1. The interface needs a terminal. Frame, status line and prompts are windowed to the live terminal size, so they stay on screen at any size.</p>
 
-# Flags (answered before the positional directory scan):
-#   --version  build stamp — phar-aware via Support\Version
-#   --help/-h  usage
-#   --print-cd cd-on-quit handshake: the interface rides /dev/tty
-#              and stdout carries ONLY the final active-pane
-#              directory at exit — capture it in a shell function
-#              (candy-files-cd, see the README handshake section)
-# A missing/unreadable start directory refuses up front with exit 1
-# ("left/right directory does not exist: <dir>").
-# Default: left = cwd, right = $HOME.
-# Size honesty: each pane box measures (cols - 2) / 2 cells outer — the
-# name column, header clip and separator all derive from the content
-# width inside it, so the composed frame lands exactly on the live
-# terminal width at any size. Rows are windowed: the listing scrolls a
-# window that follows the cursor (↑/↓ fold hints mark hidden head/tail),
-# and the status line and confirm prompts are always on screen.
+<h3 style="margin-top: 32px;">What the screen looks like</h3>
+<p>The example below is the real renderer output for two in-memory panes, captured with <code>php examples/browse.php</code> and clipped to 84 columns for the page, so the status line ends in an ellipsis where the live example prints it in full. Each pane has its own working directory, cursor and sort; the status line on the last row names the focused pane and the keys it accepts.</p>
+<pre class="code"><code class="language-text">┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌──────────────────────────────────────┐
+┃ /work/left  [Name ↑]                 ┃  │ /work/right  [Name ↑]                │
+┃ ──────────────────────────────────── ┃  │ ──────────────────────────────────── │
+┃ ▸  ../                       DIR     ┃  │ ▸  ../                       DIR     │
+┃    docs/                     DIR     ┃  │    photos/                   DIR     │
+┃    notes.md                  12.0KB  ┃  │    todo.txt                  512B    │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  └──────────────────────────────────────┘
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up …</code></pre>
 
-# Keys
-# Tab        Swap focus
-# ↑ / k      Move up
-# ↓ / j      Move down
-# Home / g   Top
-# End / G    Bottom
-# Enter / →  Open: directory navigates, archive (.zip/.tar/.tgz/.tbz2) browses read-only, file launches $EDITOR
-# l          Page a file through $PAGER, or the built-in viewer when none is installed; on a dir it opens (vim-diamond right)
-# o          Open with the platform default (xdg-open / open / cmd start) — argv list, never a shell string
-# x          Run the entry under cursor when it carries the exec bit; inside an archive view, extract to the other pane
-# ← / h      Up one directory
-# Space      Toggle selection + advance
-# Ctrl+a     Select every listed entry (the .. sentinel is never marked)
-# v          Invert the selection — pressing it twice restores the set
-# *          Pattern-select: type a glob-lite pattern (fnmatch, never regex)
-# s          Cycle sort order (8 modes)
-# e          Direct-select extension sort
-# .          Toggle hidden files
-# c          Copy selection or cursor → inactive pane (confirm: y or the locale's affirmative)
-# m          Move selection or cursor → inactive pane (confirm: y or the locale's affirmative)
-# R          Rename cursor entry — type new name, Enter commits, Backspace edits, Esc cancels
-# N          Create directory in the active pane — same text-entry; u removes it while empty
-# d          Delete (selection or cursor) — confirm gate arms first
-# y / Y      Yank (copy / move) the selection or cursor entry into the yank register
-# p          Paste the register into the active pane's directory (existing confirm gate)
-# w / W      Copy the full path / bare name to the clipboard over OSC 52
-# a          Pin the active directory as a bookmark · B opens the bookmarks overlay (Enter jumps, d unpins)
-# I          Info overlay: path, type, size, permissions, owner, times, link target, free space
-# r          Refresh active pane
-# q          Quit (two presses while copy batches are in flight)
-# ?          Help overlay — every binding one per row, Esc or ? closes
-# /          Search mode — fuzzy filter by name of the active pane; arrows move the result cursor, Enter opens dirs / lands on files, Backspace-to-empty exits; Ctrl+R inside search toggles the bounded recursive walk (hits show their path relative to the pane)
-# Escape     Exit search mode · cancel armed gates and text-entry · clear selection (outside modes)
-# t          Duplicate current tab
-# Ctrl+w     Close current tab
-# Ctrl+O     Open a typed path in the active pane (~ expands, relative joins the pane cwd)
-# 1-9        Switch to tab 1-9 (bare digit or Alt+n)
-# Ctrl+Tab   Cycle to next tab — terminals that report modified Tab
-# Ctrl+Shift+Tab  Previous tab
-# Ctrl+PgUp  Next tab · Ctrl+PgDn  Previous tab — tmux/browser terminals may intercept modified Page keys
-# u / Ctrl+z Undo last operation
-# Ctrl+y     Redo last undo
-# Mouse      Wheel scrolls the pane under the pointer · click activates + parks the cursor · Ctrl+click toggles the mark · double-click opens · tab-bar click switches tab</code></pre>
+<h3 style="margin-top: 32px;">Command-line flags</h3>
+<p>Flags are answered before the positional directory scan. <code>--version</code> and <code>--help</code> never open the terminal interface, and a directory literally named <code>--version</code> prints the version too, because flags are matched anywhere in argv.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Dual panes</strong><span>Left + right; Tab swaps focus. Each pane has its own cwd, cursor, selection, sort, hidden-flag.</span></div>
-      <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. <code>Ctrl+a</code> marks every listed entry, <code>v</code> inverts, <code>*</code> pattern-selects with a glob-lite prompt. Selection survives <code>r</code> relist and sort; leaving a directory stashes its marks and re-entering re-adopts them for names that still exist (CF-31) — the stash is keyed by directory, so a mark can never act on a same-named entry elsewhere. Escape clears.</span></div>
-      <div class="feature"><strong>Eight sort modes</strong><span>name / mtime / size / extension, asc / desc — <code>s</code> cycles, <code>e</code> jumps straight to extension (CF-46).</span></div>
-      <div class="feature"><strong>Hidden-file toggle</strong><span><code>.</code> hides / shows dotfiles.</span></div>
-      <div class="feature"><strong>Copy / Move / Rename</strong><span><code>c</code>/<code>m</code> stage to the inactive pane, <code>y</code> commits. <code>R</code> opens a text-entry rename submode — type the new name, Enter commits, Esc cancels. Undo covers delete, move and rename (copy undo is informational).</span></div>
-      <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> arms the gate, <code>y</code> (or the prompt's taught localized affirmative) commits — protects against fat-finger deletes. Files move to a per-session ephemeral trash (mode <code>0700</code>, wiped on exit; a cross-device delete is announced <code>PERMANENT</code> before you confirm).</span></div>
-      <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
-      <div class="feature"><strong>Requirements</strong><span>PHP <code>^8.3</code> with <code>ext-intl</code> and <code>ext-mbstring</code> — both hard-required transitively by <code>sugar-core</code>, whose cell-width math segments through ICU, so <code>composer install</code> is the step that refuses on a bare php-cli machine.</span></div>
-      <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's listing <strong>by name</strong> (dotfiles obey the <code>.</code> visibility law). Matching compares NFC-normalized names, so a composed query finds macOS's decomposed bytes and vice versa (CF-48). <code>↑</code>/<code>↓</code> move the result cursor, so <code>k</code>, <code>j</code> and every other printable type into the query (<code>/</code> itself cannot). <code>Enter</code> opens a directory result; on a file result it exits search with the pane cursor landed on the hit. A <code>Backspace</code> that empties the query exits. <code>Ctrl+R</code> inside search arms a bounded recursive walk of the whole tree (CF-17) — depth, name-count, and hit budgets, with the status announcing "search partial" when any cap fires.</span></div>
-      <div class="feature"><strong>Mouse</strong><span>The launcher requests SGR cell-motion reporting: the wheel scrolls the hovered pane, a click activates it and parks the cursor, <code>Ctrl</code>+click toggles the mark, a double-click opens, and a tab label click switches tabs. Modal frames (confirm gate, help, info, bookmarks, search) swallow the pointer so a click can never answer a prompt (CF-55).</span></div>
-      <div class="feature"><strong>Metadata</strong><span>Terminals of 100 columns or more add a modification-time column to every pane row; <code>I</code> opens a stat overlay read fresh with <code>lstat</code> (type, bytes, <code>drwxr-xr-x</code> + octal, owner:group, times, link target, free space) (CF-52).</span></div>
-      <div class="feature"><strong>Yank / paste &amp; clipboard</strong><span><code>y</code>/<code>Y</code> stage a copy or move, <code>p</code> arms the ordinary confirm gate at the active pane's directory; <code>w</code>/<code>W</code> put the path or name on the clipboard over OSC 52, refusing a <code>dumb</code>/<code>linux</code> TERM and admitting the terminal may ignore the sequence (CF-32, CF-50).</span></div>
-      <div class="feature"><strong>Bookmarks</strong><span><code>a</code> pins the directory, <code>B</code> lists the pins, Enter jumps through the typed-path door, <code>d</code> unpins; stored as atomic <code>0600</code> JSON under <code>$XDG_DATA_HOME/candy-files/</code> (CF-30).</span></div>
-      <div class="feature"><strong>Archives</strong><span>Enter on a <code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code> or <code>.tar.bz2</code> browses it as a read-only directory; <code>x</code> extracts to the other pane through the copy gate on the event loop. Zip-slip names, links and devices are dropped, and 256&nbsp;MiB scan / 512&nbsp;MiB extract ceilings stop decompression bombs (CF-33).</span></div>
-      <div class="feature"><strong>Built-in viewer &amp; open-with-default</strong><span><code>l</code> falls back to a read-only in-app viewer (head 256&nbsp;KiB, sanitized lines) when no pager exists; <code>o</code> opens the entry with <code>xdg-open</code>/<code>open</code> as an argv list (CF-03).</span></div>
-      <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
-      <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
-      <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogs, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
-    </div>
+<h2 style="margin-top: 40px;">Concepts</h2>
+<p>The screen is two <em>panes</em>, each with its own working directory, cursor, selection, sort order and hidden-file flag. Tabs hold a pair of panes, so one tab can keep two directory pairs open. <code>Tab</code> moves the focus between the panes of the current tab; every file operation acts on the focused pane's selection, or on the cursor entry when nothing is selected, and targets the other pane for copy and move.</p>
+<p>Mutations do not run straight away. <code>c</code>, <code>m</code>, <code>d</code> and <code>p</code> arm a <em>confirm gate</em>: the next key answers it, and only <code>y</code> (or the affirmative word your locale's prompt teaches) commits. Any other key cancels. Copy runs on the event loop as a tick-sliced job, so a large tree does not freeze the frame; move and rename are synchronous renames on the same filesystem.</p>
+<p>Delete is recoverable only while the process lives. <code>d</code> moves files into a per-process trash directory under the system temporary directory, created with mode <code>0700</code> and removed on exit. A delete that would cross a device is announced as <code>PERMANENT</code> before you confirm, because a cross-device move cannot be undone by renaming back.</p>
+<p>The undo stack keeps the last 50 operations, and delete, move, rename and copy records share that one stack. <code>u</code> undoes the newest record and <code>Ctrl+y</code> redoes it. A copy is not reversed: <code>u</code> on a copy record reports <code>copy left in place (nothing to undo)</code>, leaves the files alone and moves the record to redo, so an older delete or move is reached by pressing <code>u</code> again.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-       <li><a href="https://github.com/sugarcraft/candy-files">Source on GitHub</a></li>
-       <li><a href="https://github.com/sugarcraft/candy-files/blob/master/README.md">Full README</a></li>
-      <li>Originally inspired by <a href="https://github.com/yorukot/superfile">superfile</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+<h3 style="margin-top: 32px;">Modes</h3>
+<p>Exactly one mode owns the keyboard at a time: browse (the default), the confirm gate, text entry (<code>R</code> rename, <code>N</code> make directory, <code>Ctrl+O</code> typed path, <code>*</code> pattern select), search (<code>/</code>), and the help overlay (<code>?</code>). In text entry every printable key is a letter, so <code>y</code> is typed rather than answered; in search every printable key extends the query, and <code>↑</code>/<code>↓</code> move the result cursor.</p>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+<h2 style="margin-top: 40px;">Tasks</h2>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+<h3 style="margin-top: 32px;">Copy a selection to the other pane</h3>
+<ol>
+  <li>Move to the first file and press <code>Space</code>, which selects it and advances. Repeat for the rest, or press <code>Ctrl+a</code> to select every listed entry, <code>v</code> to invert the selection, or <code>*</code> and type a glob such as <code>*.log</code>.</li>
+  <li>Press <code>c</code> to arm the copy gate. The prompt names the count and the destination pane.</li>
+  <li>Press <code>y</code> to commit. Existing files are replaced and directories merge; the status line announces the replacement.</li>
+</ol>
+
+<h3 style="margin-top: 32px;">Delete with undo</h3>
+<p>Press <code>d</code>, then <code>y</code>, to move the selection to the session trash. Press <code>u</code> while the process is still running to bring it back. Quitting with <code>q</code> empties the trash, so a delete made in one session cannot be undone in the next.</p>
+
+<h3 style="margin-top: 32px;">Search the active pane by name</h3>
+<p>Press <code>/</code> and type. Matching is a fuzzy filter over the names in the active pane, NFC-normalized so a composed query finds a decomposed macOS name. <code>Enter</code> opens a directory result or lands the cursor on a file result. <code>Ctrl+R</code> inside search starts a bounded recursive walk of the whole tree; its hits show their path relative to the pane, and the status reads <code>search partial</code> when a cap fires.</p>
+
+<h3 style="margin-top: 32px;">Change the shell's directory when you quit</h3>
+<p><code>--print-cd</code> prints the directory of the active pane on exit to stdout and draws the interface on <code>/dev/tty</code>, so a shell function can change directory afterwards. Add this to <code>~/.bashrc</code> or <code>~/.zshrc</code>:</p>
+<pre class="code"><code class="language-shell">candy-files-cd() {
+    local dir
+    dir=$(candy-files --print-cd "$@") || return $?
+    if [[ -n "$dir" && -d "$dir" ]]; then
+        builtin cd "$dir"
+    fi
+}</code></pre>
+<p>With tabs open the handshake reports the active pane of the tab that was on screen at exit. A <code>^C</code> abort exits non-zero, and the wrapper returns that status, so the shell stays where it was.</p>
+
+<h3 style="margin-top: 32px;">Browse and extract an archive</h3>
+<p>Press <code>Enter</code> on a <code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code>, <code>.tgz</code>, <code>.tar.bz2</code> or <code>.tbz2</code> file to browse it as a read-only directory. Press <code>x</code> inside the archive to extract the entry under the cursor, or the whole view, to the other pane through the copy gate. Zip-slip names, links and devices are dropped, and scans stop at 256&nbsp;MiB and extraction at 512&nbsp;MiB, so a decompression bomb cannot fill the disk.</p>
+
+<h3 style="margin-top: 32px;">Open an entry in an editor or a pager</h3>
+<p><code>Enter</code> on a regular file launches the editor from <code>VISUAL</code>, then <code>EDITOR</code>, then <code>vi</code> (<code>notepad</code> on Windows), then <code>nano</code>. <code>l</code> pages a file through <code>$PAGER</code>, then <code>less</code>, then <code>more</code>, and falls back to the built-in read-only viewer when none is on <code>PATH</code>. <code>o</code> hands the entry to the platform opener (<code>xdg-open</code>, <code>open</code> or <code>cmd start</code>) as an argument list, never as a shell string.</p>
+
+<h2 style="margin-top: 40px;">API reference</h2>
+<p>The public surface is four classes plus the value objects they exchange. <code>Manager</code> is the SugarCraft <code>Model</code>: <code>update()</code> returns the next model and an optional command, and <code>view()</code> renders the frame. Everything else is a pure helper the model calls.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initializes two panes + first tab</td></tr>
-<tr><td>Manager</td><td>update(Msg): [Model, ?Cmd]</td><td>Main event loop — key dispatch, confirm gate</td></tr>
-<tr><td>Manager</td><td>view(): string</td><td>Renders two panes + tab bar + status line</td></tr>
-<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>Direct single-entry helpers — rename/move run synchronously; the deferred engine is copy-only, and the committed copy path goes through the async command, not these</td></tr>
-<tr><td>Manager</td><td>search(query), exitSearch(), openSearchResult()</td><td>Live search mode</td></tr>
-<tr><td>Manager</td><td>undo(), redo(), canUndo(), canRedo()</td><td>Delete / move / rename undo/redo stack (copy undo is informational); <code>u</code>/<code>Ctrl+z</code> undo, <code>Ctrl+y</code> redo</td></tr>
-<tr><td>Manager</td><td>duplicateTab(), closeTab(), switchTab()</td><td>Tab management</td></tr>
-<tr><td>Manager</td><td>openNewTab(path)</td><td>API tab push — <code>path</code> defaults to <code>/</code>; since CF-29 a key binding carries a path too: <code>Ctrl+O</code> opens the typed-path prompt in the active pane (<code>t</code> duplicates)</td></tr>
-<tr><td>Manager</td><td>moveSearchCursor(delta)</td><td>Result-cursor motion in search mode (clamped to the result list)</td></tr>
-<tr><td>Manager</td><td>builder(): ManagerBuilder</td><td>Fluent immutable construction of the eighteen founding fields — see README "Constructing Manager"</td></tr>
-<tr><td>Pane</td><td>open(cwd, lister, sort, showHidden): self</td><td>Factory — reads and sorts directory</td></tr>
-<tr><td>Pane</td><td>navigate(lister): self</td><td>Enter directory under cursor (no-op on files)</td></tr>
-<tr><td>Pane</td><td>toggleSelection(): self</td><td>Add/remove cursor entry from selection set</td></tr>
-<tr><td>Sort</td><td>apply(entries): list&lt;Entry&gt;</td><td>Sort entries (parent sentinel stays at index 0)</td></tr>
-<tr><td>Sort</td><td>cycle(): self</td><td>Cycles: name → mtime → size → extension, each asc then desc, wrapping to name-asc (CF-46)</td></tr>
-<tr><td>Entry</td><td>displaySize(): string</td><td>Returns "DIR" / "LINK" / compacted bytes</td></tr>
+<tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister): self</td><td>Factory. Opens both panes and one initial tab. The lister defaults to <code>FsLister::lister()</code>, memoized by directory mtime.</td></tr>
+<tr><td>Manager</td><td>update(Msg): array</td><td>Returns <code>[Manager, ?Cmd]</code>. Dispatches keys, the confirm gate, text entry and the async copy completion message.</td></tr>
+<tr><td>Manager</td><td>view(): string</td><td>Renders the tab bar, the two panes, the search overlay if any, and the status line.</td></tr>
+<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName): bool</td><td>Direct single-entry helpers. Move and rename run synchronously; the deferred engine copies only, and the committed copy goes through the async command, not these helpers.</td></tr>
+<tr><td>Manager</td><td>search(query), exitSearch(), moveSearchCursor(delta), openSearchResult()</td><td>Live search mode and its result cursor.</td></tr>
+<tr><td>Manager</td><td>undo(), redo(), canUndo(), canRedo()</td><td>Delete, move and rename undo and redo. Copy is informational only.</td></tr>
+<tr><td>Manager</td><td>openNewTab(path), duplicateTab(), closeTab(?index), switchTab(index)</td><td>Tab management. <code>openNewTab()</code> defaults to <code>/</code>. <code>closeTab()</code> refuses to close the last tab.</td></tr>
+<tr><td>Manager</td><td>builder(): ManagerBuilder</td><td>Fluent immutable construction of the eighteen founding fields. See <a href="#constructing-manager">Constructing Manager</a>.</td></tr>
+<tr><td>Pane</td><td>open(cwd, lister, sort = Sort::NameAsc, showHidden = false): self</td><td>Factory. Reads and sorts one directory.</td></tr>
+<tr><td>Pane</td><td>navigate(lister), relist(lister, ?showHidden), toggleSelection(), clearSelection(), moveCursor(delta)</td><td>Directory navigation and cursor and selection motion. Each returns a new pane.</td></tr>
+<tr><td>Sort</td><td>apply(entries): array; cycle(): self; label(): string</td><td>Sorts entries with the parent sentinel kept at index 0. <code>cycle()</code> walks name, mtime, size, extension, each ascending then descending, and wraps.</td></tr>
+<tr><td>Entry</td><td>displaySize(): string</td><td>Returns <code>DIR</code>, <code>LINK</code>, or a compact byte count.</td></tr>
+<tr><td>FsLister</td><td>lister(maxEntries), memo(lister, ?mtime)</td><td><code>lister()</code> scans with <code>scandir</code> and <code>lstat</code>. <code>memo()</code> adds the directory-mtime cache and returns the lister with its invalidator.</td></tr>
+<tr><td>ManagerBuilder</td><td>with*(...), build(): Manager</td><td>Each setter returns a new builder; <code>build()</code> returns the manager.</td></tr>
 </table>
+
+<h3 id="constructing-manager" style="margin-top: 32px;">Constructing Manager</h3>
+<p>Prefer the builder to the 32-parameter constructor, which is kept only for backward compatibility. The state the machine itself produces, namely the per-result directories (<code>searchResultDirs</code>) and the recursive-search flag (<code>searchRecursive</code>), takes safe defaults and has no builder setter.</p>
+<pre class="code"><code class="language-php">use SugarCraft\Files\ConfirmState;
+use SugarCraft\Files\FsLister;
+use SugarCraft\Files\Manager;
+
+$manager = Manager::builder()
+    -&gt;withLeft($leftPane)
+    -&gt;withRight($rightPane)
+    -&gt;withActiveIdx(0)
+    -&gt;withStatus('')
+    -&gt;withConfirm(ConfirmState::None)
+    -&gt;withLister(FsLister::lister())
+    -&gt;withSearchQuery(null)
+    -&gt;withSearchResults([])
+    -&gt;withSearchCursor(0)
+    -&gt;withTabs([])
+    -&gt;withTabIndex(0)
+    -&gt;withUndoStack([])
+    -&gt;withRedoStack([])
+    -&gt;withPendingOpDest(null)
+    -&gt;withPendingOpType(null)
+    -&gt;withInputBuffer(null)
+    -&gt;withTermCols(0)
+    -&gt;withTermRows(0)
+    -&gt;build();</code></pre>
+
+<h2 style="margin-top: 40px;">Configuration</h2>
+<p>candy-files has no configuration file. Its behavior comes from the command line, the environment, and the start directories. Bookmarks are state, not configuration, and live in the data directory.</p>
+
+<h3 style="margin-top: 32px;">Command-line options</h3>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>[LEFT_DIR] [RIGHT_DIR]</code></td><td>path, positional</td><td>cwd, then <code>$HOME</code></td><td>Start directories for the two panes. Both must exist and be readable at start.</td></tr>
+<tr><td><code>--version</code></td><td>flag</td><td>off</td><td>Prints the build stamp and exits. A stamped phar reports its own stamp; a source checkout reports <code>dev-master</code>.</td></tr>
+<tr><td><code>--help</code>, <code>-h</code></td><td>flag</td><td>off</td><td>Prints usage and exits.</td></tr>
+<tr><td><code>--print-cd</code></td><td>flag</td><td>off</td><td>Draws on <code>/dev/tty</code> and writes only the final active-pane directory to stdout. Refuses to run without a controlling terminal.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Environment</h3>
+<table class="api-table">
+<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>VISUAL</code>, <code>EDITOR</code></td><td>unset</td><td>Editor for <code>Enter</code> on a file. The chain falls back to <code>vi</code> (<code>notepad</code> on Windows), then <code>nano</code>.</td></tr>
+<tr><td><code>PAGER</code></td><td>unset</td><td>Pager for <code>l</code>. The chain falls back to <code>less</code> and <code>more</code>, then the built-in viewer.</td></tr>
+<tr><td><code>LC_ALL</code>, <code>LANG</code></td><td>English</td><td>Selects one of the 16 catalogs under <code>lang/</code>. Confirm gates accept the affirmative that the locale's prompt teaches, and <code>y</code> always works.</td></tr>
+<tr><td><code>TERM</code></td><td>unset</td><td><code>dumb</code> and <code>linux</code> refuse the OSC 52 clipboard. The Linux console and CJK locales use the ASCII glyph tier.</td></tr>
+<tr><td><code>CANDY_FILES_GLYPHS</code></td><td>auto</td><td><code>ascii</code> or <code>unicode</code> forces the chrome glyph tier.</td></tr>
+<tr><td><code>XDG_DATA_HOME</code></td><td><code>~/.local/share</code></td><td>Bookmarks are written atomically, mode <code>0600</code>, to <code>$XDG_DATA_HOME/candy-files/bookmarks.json</code>. When <code>XDG_DATA_HOME</code> is unset, Windows uses <code>APPDATA</code> when it is set.</td></tr>
+<tr><td><code>HOME</code>, <code>USERPROFILE</code>, <code>HOMEDRIVE</code> + <code>HOMEPATH</code></td><td>first set</td><td>The home directory cascade for the default right pane and bookmarks. <code>/</code> is the last resort.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Built-in limits</h3>
+<p>These caps are fixed in the source. Hitting one shows a status message; it never truncates silently.</p>
+<table class="api-table">
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Recursive copy depth</td><td>256 levels</td></tr>
+<tr><td>Recursive search walk</td><td>depth 8, 20 000 names examined, four screens of hits; breadth-first</td></tr>
+<tr><td>Undo stack</td><td>50 operations</td></tr>
+<tr><td>Remembered selections (per directory)</td><td>128 directories, oldest dropped first</td></tr>
+<tr><td>Cached directory listings</td><td>256 paths, oldest dropped first; invalidated by mtime</td></tr>
+<tr><td>Pager</td><td>refuses binary files and files over 32&nbsp;MiB</td></tr>
+<tr><td>Built-in viewer</td><td>first 256&nbsp;KiB, sanitized lines</td></tr>
+<tr><td>Archive scan and extraction</td><td>256&nbsp;MiB scan, 512&nbsp;MiB extraction</td></tr>
+</table>
+
+<h2 style="margin-top: 40px;">Keys</h2>
+<p>Keys are the same in every mode unless a mode owns the keyboard. The help overlay (<code>?</code>) lists the full roster for your build.</p>
+<table class="api-table">
+<tr><th>Key</th><th>Action</th></tr>
+<tr><td><code>Tab</code></td><td>Swap focus between the panes</td></tr>
+<tr><td><code>↑</code> / <code>k</code>, <code>↓</code> / <code>j</code></td><td>Move the cursor up and down</td></tr>
+<tr><td><code>Home</code> / <code>g</code>, <code>End</code> / <code>G</code></td><td>Jump to the top or bottom</td></tr>
+<tr><td><code>Enter</code> / <code>→</code></td><td>Open a directory; browse an archive; edit a file</td></tr>
+<tr><td><code>←</code> / <code>h</code></td><td>Up one directory</td></tr>
+<tr><td><code>l</code></td><td>View a file through <code>$PAGER</code> or the built-in viewer; on a directory, open it</td></tr>
+<tr><td><code>o</code></td><td>Open with the platform default application</td></tr>
+<tr><td><code>x</code></td><td>Run the entry under the cursor when it has the exec bit; inside an archive, extract to the other pane</td></tr>
+<tr><td><code>Space</code></td><td>Toggle the selection and advance the cursor</td></tr>
+<tr><td><code>Ctrl+a</code></td><td>Select every listed entry (the <code>..</code> entry is never marked)</td></tr>
+<tr><td><code>v</code></td><td>Invert the selection; pressing it twice restores the set</td></tr>
+<tr><td><code>*</code></td><td>Pattern select with a glob-lite pattern (fnmatch, never a regex)</td></tr>
+<tr><td><code>Escape</code></td><td>Leave search, cancel an armed gate or text entry, or clear the selection</td></tr>
+<tr><td><code>s</code> / <code>e</code></td><td>Cycle the sort order (eight modes) / sort straight to extension</td></tr>
+<tr><td><code>.</code></td><td>Toggle hidden files</td></tr>
+<tr><td><code>c</code> / <code>m</code></td><td>Stage a copy or move of the selection or cursor to the other pane; <code>y</code> commits</td></tr>
+<tr><td><code>y</code> / <code>Y</code></td><td>Stage a copy or move in the yank register; <code>p</code> pastes it into the active pane through the confirm gate</td></tr>
+<tr><td><code>R</code></td><td>Rename the cursor entry</td></tr>
+<tr><td><code>N</code></td><td>Create a directory in the active pane; <code>u</code> removes it while it is empty</td></tr>
+<tr><td><code>d</code></td><td>Delete the selection or cursor entry; the confirm gate arms first</td></tr>
+<tr><td><code>w</code> / <code>W</code></td><td>Copy the full path or the bare name to the clipboard over OSC 52</td></tr>
+<tr><td><code>a</code> / <code>B</code></td><td>Pin the active directory as a bookmark / open the bookmarks overlay (Enter jumps, <code>d</code> unpins)</td></tr>
+<tr><td><code>I</code></td><td>Info overlay: path, type, size, permissions, owner, times, link target, free space</td></tr>
+<tr><td><code>r</code></td><td>Refresh the active pane</td></tr>
+<tr><td><code>/</code></td><td>Search mode: fuzzy filter by name; <code>Ctrl+R</code> toggles the recursive walk</td></tr>
+<tr><td><code>t</code></td><td>Duplicate the current tab</td></tr>
+<tr><td><code>Ctrl+w</code></td><td>Close the current tab</td></tr>
+<tr><td><code>Ctrl+O</code></td><td>Open a typed path in the active pane (<code>~</code> expands; relative paths join the pane's directory)</td></tr>
+<tr><td><code>1</code>–<code>9</code></td><td>Switch to tab 1–9</td></tr>
+<tr><td><code>Ctrl+Tab</code> / <code>Ctrl+Shift+Tab</code></td><td>Next or previous tab; needs a terminal that reports modified Tab</td></tr>
+<tr><td><code>Ctrl+PgUp</code> / <code>Ctrl+PgDn</code></td><td>Next or previous tab; tmux and browser terminals may intercept these</td></tr>
+<tr><td><code>u</code> / <code>Ctrl+z</code>, <code>Ctrl+y</code></td><td>Undo the newest record: a delete, move or rename is reversed, and a copy is a no-op that says so; redo it</td></tr>
+<tr><td><code>q</code></td><td>Quit. While copy batches are in flight, press it twice</td></tr>
+<tr><td><code>?</code></td><td>Help overlay: every binding, one per row</td></tr>
+</table>
+<p>Mouse input uses SGR cell-motion reporting. The wheel scrolls the pane under the pointer, a click activates the pane and parks the cursor, <code>Ctrl</code>+click toggles a mark, a double-click opens, and a click on a tab label switches tabs. Modal frames swallow the pointer, so a click cannot answer a prompt.</p>
+
+<h2 style="margin-top: 40px;">Theme, styling and glyph tiers</h2>
+<p>The interface is monochrome by construction. The renderer emits no color or font styling, so emphasis rides on text and shape: the <code>▸</code> cursor, the <code>✓</code> selection mark, the thick border, the localized focus label, and the <code>↑ N more</code> and <code>↓ N more</code> fold hints. A <code>NO_COLOR</code>, high-contrast or inverted terminal palette shows the full interface.</p>
+<p>The chrome glyphs (<code>▸ ✓ ─ ↑ ↓ ·</code>) are East Asian Width "Ambiguous": some terminals draw them one cell wide and some two. candy-files draws them one cell wide unless it detects a surface that doubles them: a <code>zh</code>, <code>ja</code> or <code>ko</code> locale, a legacy CJK codepage (<code>CP932</code>, <code>GBK</code>, <code>EUC-JP</code>, <code>BIG5</code>), or the Linux console. Those surfaces get the ASCII tier (<code>&gt; v - ^ v |</code> and plain <code>+--+</code> borders). Set <code>CANDY_FILES_GLYPHS=ascii</code> or <code>unicode</code> to choose the tier yourself. File names are data and are never rewritten by the tier.</p>
+<p>The layout follows the live terminal size. Each pane box is <code>(cols - 2) / 2</code> cells wide, and every status and search line is clipped to the width, so nothing wraps.</p>
+
+<h2 style="margin-top: 40px;">Examples</h2>
+<p>Both examples run without a terminal and without touching the real filesystem: they build the panes from an in-memory tree and print the frame.</p>
+<ul>
+  <li><code>examples/browse.php</code> starts a manager over two in-memory directories and prints the frame it renders. Run it with <code>php examples/browse.php</code>.</li>
+  <li><code>examples/select-and-copy.php</code> feeds the key sequence <code>j</code>, <code>Space</code>, <code>Space</code>, <code>c</code> to <code>update()</code>, selecting two entries and arming the copy gate. Nothing is copied. Run it with <code>php examples/select-and-copy.php</code>.</li>
+</ul>
+<p>The interactive program is <code>bin/candy-files</code>. It needs a real terminal and is not run from an example.</p>
+
+<h2 style="margin-top: 40px;">Testing</h2>
+<p>Run the suite from the package root after <code>composer install</code>:</p>
+<pre class="code"><code class="language-shell">vendor/bin/phpunit</code></pre>
+<p>The suite pins <code>CANDY_FILES_GLYPHS</code> to <code>unicode</code> in <code>tests/bootstrap.php</code>, so the goldens describe the unicode chrome tier. An export of <code>CANDY_FILES_GLYPHS</code> in your shell wins over that pin. Most tests drive <code>Manager::update()</code> with scripted <code>KeyMsg</code> values over an in-memory lister, so they need no temporary directories. Tests that drive the real program through a pseudo-terminal use <code>sugarcraft/sugar-pty</code>, a dev dependency, via <code>tests/Support/PtyRun.php</code>.</p>
+
+<h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+<h3 style="margin-top: 32px;">It refuses to start with "directory does not exist"</h3>
+<p>A start directory is missing or unreadable. Pass existing directories, or omit the positional arguments to start in the current directory and <code>$HOME</code>. The check runs before the interface opens, so the exit status is 1 and no frame is drawn.</p>
+
+<h3 style="margin-top: 32px;">Ctrl+Tab does nothing</h3>
+<p>Most terminals do not report a modified Tab key. Use <code>1</code> to <code>9</code> to pick a tab, or <code>Ctrl+PgUp</code> and <code>Ctrl+PgDn</code>. tmux and browser terminals may intercept the Page keys, in which case use the digit keys.</p>
+
+<h3 style="margin-top: 32px;">The box borders or arrows are misaligned</h3>
+<p>Your terminal draws the ambiguous-width glyphs at two cells. Run with <code>CANDY_FILES_GLYPHS=ascii</code> to switch to the ASCII tier, or set your terminal's ambiguous-width option to one cell.</p>
+
+<h3 style="margin-top: 32px;">w and W copy nothing to the clipboard</h3>
+<p>The clipboard uses the OSC 52 escape sequence, which some terminals ignore. candy-files refuses it under <code>TERM=dumb</code> and <code>TERM=linux</code> and says so in the status line. Use a terminal with OSC 52 support, or copy the path shown in the <code>I</code> info overlay.</p>
+
+<h3 style="margin-top: 32px;">An archive will not open</h3>
+<p>The status names the missing PHP extension. A <code>.zip</code> needs <code>ext-zip</code>; a <code>.tar.gz</code> or <code>.tgz</code> needs <code>ext-zlib</code>; a <code>.tar.bz2</code> or <code>.tbz2</code> needs <code>ext-bz2</code>. Install the extension and restart candy-files.</p>
+
+<h3 style="margin-top: 32px;">A deleted file is gone after I quit</h3>
+<p>Deleted files go to a per-process trash that is removed on exit, so a delete survives only while the process lives. Press <code>u</code> before you quit. A delete across devices is permanent, and the confirm prompt says <code>PERMANENT</code> before you commit.</p>
+
+<h3 style="margin-top: 32px;">l opens the built-in viewer, not less</h3>
+<p>No pager was found. Set <code>PAGER</code>, or install <code>less</code> on <code>PATH</code>. The built-in viewer shows only the first 256&nbsp;KiB of a file, and <code>l</code> refuses a binary file or one over 32&nbsp;MiB with a status message.</p>
+
+<h3 style="margin-top: 32px;">Enter opens the wrong editor</h3>
+<p>The editor chain checks <code>VISUAL</code> first, then <code>EDITOR</code>, then <code>vi</code> (<code>notepad</code> on Windows), then <code>nano</code>. Set <code>VISUAL</code> or <code>EDITOR</code> to the editor you want.</p>
+
+<h3 style="margin-top: 32px;">Search says "search partial"</h3>
+<p>The recursive walk hit one of its caps: depth 8, 20 000 names, or four screens of hits. Narrow the query, or search a deeper directory directly.</p>
+
+<h2 style="margin-top: 40px;">Upstream and inspiration</h2>
+<p>candy-files has no Charmbracelet counterpart, so it has no upstream mapping table. It is original SugarCraft work, inspired by <a href="https://github.com/yorukot/superfile">superfile</a> (Go) and by the dual-pane layout of Midnight Commander. Its terminal layer runs on <code>sugar-core</code> and <code>sugar-style</code>, and its name search runs on <code>sugar-fuzzy</code>.</p>
+
+<h2 style="margin-top: 40px;">Architecture</h2>
+<p>The transition layer is pure. Filesystem reads enter through an injected lister, a <code>Closure(string $path): list&lt;Entry&gt;</code>, so every transition runs in memory. Production uses <code>FsLister</code>, and copy runs as a tick-sliced job through <code>AsyncOps</code>. Each model is immutable, and <code>with*()</code> methods return new instances.</p>
+<table class="api-table">
+<tr><th>Class</th><th>Role</th></tr>
+<tr><td><code>Manager</code></td><td>The SugarCraft <code>Model</code>. Orchestrates two panes, handles every key, and runs the confirm gate.</td></tr>
+<tr><td><code>Pane</code></td><td>One pane: working directory, entries, cursor, selection set, sort, and the hidden-file flag.</td></tr>
+<tr><td><code>Entry</code>, <code>Sort</code></td><td>The value object for one directory entry, and the sort modes with their comparators.</td></tr>
+<tr><td><code>ConfirmState</code></td><td>The mode that owns the keyboard for a pending prompt: delete, copy, move, rename, mkdir, path or pattern.</td></tr>
+<tr><td><code>FsLister</code></td><td>The default lister, built on <code>scandir</code> and <code>lstat</code>. <code>memo()</code> adds the directory-mtime cache.</td></tr>
+<tr><td><code>Renderer</code></td><td>A pure view function: tab bar, two pane boxes side by side, the search overlay, and the status line.</td></tr>
+<tr><td><code>AsyncOps</code></td><td>The deferred copy engine. It is the only home of recursive copy, depth-capped at 256, and runs on the event loop.</td></tr>
+<tr><td><code>UndoAction</code></td><td>An immutable undo record: delete records for restores, or old-to-new path maps for rename, move and copy. Copy records share the 50-entry stack and undo as a no-op.</td></tr>
+<tr><td><code>Lang</code></td><td>The i18n wrapper over the catalogs under <code>lang/</code>.</td></tr>
+<tr><td><code>Support\Archive</code>, <code>Support\ArchiveExtractor</code>, <code>Support\TarReader</code></td><td>Archive detection and the read-only index, loop-sliced extraction with a bomb meter, and a forward-only tar reader.</td></tr>
+<tr><td><code>Support\Bookmarks</code>, <code>Support\Home</code>, <code>Support\GlyphSet</code>, <code>Support\Version</code></td><td>The bookmark store, the home-directory cascade, the glyph tier, and the <code>--version</code> stamp.</td></tr>
+</table>
+
+<h2 style="margin-top: 40px;">Changelog and versioning</h2>
+<p>candy-files ships no separate changelog file, and the GitHub releases are the release history. The rolling phar is published under the <code>candy-files/latest</code> release tag, with a <code>.sha256</code> sidecar, a <code>.phar.commit</code> build stamp, and, when the build is signed, a <code>.sig</code> sidecar (<code>.phar.sha256.sig</code>). A keyless build ships without the <code>.sig</code>. Stable cuts ride the <code>candy-files/v*</code> tags. <code>--version</code> prints the stamp that the running phar carries.</p>
+
+<h2 style="margin-top: 40px;">Related</h2>
+<ul>
+  <li><a href="sugar-core.html">sugar-core</a> provides the event loop, the key and mouse messages, and the cell-width math.</li>
+  <li><a href="sugar-style.html">sugar-style</a> supplies the styling primitives the renderer uses.</li>
+  <li><a href="sugar-fuzzy.html">sugar-fuzzy</a> powers the name search.</li>
+  <li><a href="candy-kv.html">candy-kv</a> and <a href="candy-mdview.html">candy-mdview</a> are other SugarCraft apps built on the same stack.</li>
+</ul>
+
+<h2 style="margin-top: 40px;">Source &amp; demos</h2>
+<ul>
+   <li><a href="https://github.com/sugarcraft/candy-files">Source on GitHub</a></li>
+   <li><a href="https://github.com/sugarcraft/candy-files/blob/master/README.md">Full README</a></li>
+   <li><a href="https://github.com/sugarcraft/candy-files/tree/master/examples">Examples</a></li>
+</ul>
+<p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
 
@@ -150,7 +304,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/multi-select.gif" alt="Multi-select">
-                <h3>Multi-select</h3>
+                <h3>Multi-select and delete</h3>
                 <span class="demo-caption">Space toggles selection, d+y deletes all selected.</span>
             </div>
             <div class="demo-card">

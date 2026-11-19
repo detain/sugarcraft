@@ -1,15 +1,20 @@
-<p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship on dev-master (rolling prerelease tag <code>candy-sql/latest</code>).</p>
+<p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship on dev-master (rolling prerelease tag <code>candy-sql/latest</code>). The interaction model follows <a href="https://github.com/jorgerojas26/lazysql">lazysql</a>, a Go SQL terminal client; candy-sql is a native PHP project.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-sql</code></pre>
+<h2 style="margin-top: 40px;">Install</h2>
+<pre class="code"><code class="language-shell">composer require sugarcraft/candy-sql:@dev</code></pre>
+<p>Requires PHP 8.3 or newer, with <code>ext-pdo_sqlite</code> and <code>ext-sqlite3</code>, which the manifest requires. A MySQL target needs <code>ext-pdo_mysql</code>, and a PostgreSQL target needs <code>ext-pdo_pgsql</code>. Both are suggested rather than required, because a plain install may not need them. <code>ext-pcntl</code> is suggested as well: it arms the query timeout, and without it the timeout falls back to the driver's network timeout.</p>
+<p>The <code>:@dev</code> suffix is needed while the release channel is dev-only. The sugar-* siblings track <code>dev-master</code>, and <code>react/mysql</code> is pinned to <code>0.7.x-dev</code>, so a stable-only project cannot resolve the bare command.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># SQLite via bare path (inferred as Flavor::Sqlite)
+<h2 style="margin-top: 40px;">Quickstart</h2>
+<pre class="code"><code class="language-shell"># SQLite via bare path (inferred as Flavor::Sqlite)
 vendor/bin/candy-sql app.sqlite
 
 # Any DSN — SQLite, MySQL, PostgreSQL (flags are equals-form only)
-vendor/bin/candy-sql --dsn=mysql://user:pass@localhost:3306/dbname</code></pre>
-    <pre class="code"><code class="language-php">// Or wire it up programmatically:
+vendor/bin/candy-sql --dsn=mysql://user:pass@localhost:3306/dbname
+
+# No database at hand: seed an in-memory SQLite and browse it
+php examples/play.php</code></pre>
+<pre class="code"><code class="language-php">// Or wire it up programmatically:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Sql\App;
@@ -19,8 +24,14 @@ use SugarCraft\Sql\Db\Flavor;
 // fromDsn() only parses the DSN into a ConnectionConfig; fromConfig() connects.
 $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname'));
 (new Program(App::start($db, Flavor::MySQL), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+<p>A SQLite path must name an existing file. The launcher refuses a missing file rather than creating an empty database that would lose every write at exit. The <code>:memory:</code> form is the exception, and it gives a throwaway database.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+<h2 style="margin-top: 40px;">Concepts</h2>
+<p>The app is a single model with four panes: Tables, Rows, Query and Admin. <code>Tab</code> cycles through them. The Tables pane lists tables and views. The Rows pane shows the first 100 rows of the selected table, and a table preview there is editable. The Query pane is an SQL editor. The Admin pane holds the server dashboards, and it is available only on MySQL and PostgreSQL. On SQLite the Admin pane answers through an empty-context fallback.</p>
+<p>Every driver speaks one interface, <code>DatabaseInterface</code>, and the rest of the app works against that interface. The flavor, an enum of <code>Flavor</code> values, selects the schema queries, the explain output and the admin providers. Driver-specific behavior sits behind strategy objects such as <code>SchemaBrowser</code>, <code>ExplainView</code> and <code>AdminProviderInterface</code>.</p>
+<p>Errors stay on the screen. A failed query writes its error to the status line and does not end the session. A connection lost mid-session is detected by its error code (2002, 2003 or 2013), and the session can reconnect. Strings from the server pass through <code>CellValue::sanitize</code> before they reach the terminal.</p>
+
+<h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Tables pane</strong><span>Lists every <code>type IN (table, view)</code> in <code>sqlite_master</code> excluding <code>sqlite_*</code> internals.</span></div>
       <div class="feature"><strong>Rows pane</strong><span>First 100 rows of the selected table, with header row + reverse-video cursor.</span></div>
@@ -33,7 +44,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
       <div class="feature"><strong>ConnectionConfig</strong><span>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Password never echoed.</span></div>
       <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code> parses a DSN into a <code>ConnectionConfig</code> without connecting; <code>fromConfig()</code> and <code>fromArgv()</code> connect and return a PDO-backed <code>DatabaseInterface</code> (<code>SqliteDatabase</code>, <code>MysqlDatabase</code> or <code>PostgresDatabase</code>); <code>fromPath()</code> opens a bare SQLite file path.</span></div>
       <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor. <code>Flavor::detectFromDriver()</code> detects flavor from a PDO driver name + optional version string; <code>Flavor::detectFromVersionString()</code> refines MySQL to MariaDB/Percona using the version comment.</span></div>
-      <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast($major, $minor = 0, $release = 0)</code> compares versions safely.</span></div>
+      <div class="feature"><strong>ServerVersion</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast($major, $minor = 0, $release = 0)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI colored tree; <code>toArray()</code> returns JSON-serializable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
       <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), detail tab cycling (<code>Tab</code>/<code>1</code>/<code>2</code>/<code>3</code> — page-level handlers; in-app <code>Tab</code> cycles focus panes and digits pick admin pages, so these fire only in standalone use), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render.</span></div>
@@ -64,21 +75,41 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
        <div class="feature"><strong>CommitPlanner</strong><span>Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code> tuples with all values bound as <code>?</code> placeholders, none interpolated. Instruments use anchored RLIKE (<code>^name$</code>, regex-escaped via <code>preg_quote()</code>) bucketed by (enabled, timed); Consumers use <code>UPDATE ... IN(?..)</code> with bound names; Actors and Objects use keyed INSERT/UPDATE/DELETE with all values bound. <code>isDirty()</code> scans all tracked models. SetupTimers/SetupThreads commit wiring deferred to a planned follow-up.</span></div>
         <div class="feature"><strong>InstrumentTree</strong><span>Hierarchical view of PS instruments organized by name path (e.g. <code>wait/io/file/sql/binlog</code> → 5-level tree). Tracks aggregate enabled/timed state of each subtree via tri-state values: <code>1</code>=all-enabled, <code>0</code>=mixed, <code>-1</code>=all-disabled. Provides <code>setChildrenEnabled(bool)</code> / <code>setChildrenTimed(bool)</code> cascade methods that recursively mark all instruments in a subtree with the same state and return the modified list. <code>pathDepth()</code> returns the number of path segments (root=0, <code>wait</code>=1, <code>wait/io</code>=2) for indent calculation. <code>flattenTree()</code> (in PerfSchemaPage) emits <code>[nodeOrInstrument, depth, isGroup]</code> triples for renderer consumption. Mirrors <code>mysql-workbench wb_admin_performance_schema instrument_tree</code>.</span></div>
       <div class="feature"><strong>Restart detection + Sampler</strong><span>Restart detection lives solely in <code>ServerContext::detectReset()</code>, which compares the current <code>Uptime</code> status variable against the last observed value after each successful status fetch; <code>Sampler</code> consumes the verdict through <code>provider-&gt;wasReset()</code> on each <code>sample()</code> call, clearing cached rate state via <code>resetAll()</code>. <code>Sampler</code> also computes per-second rate deltas (Bytes_received, Bytes_sent, etc.) from two status snapshots, used by <code>SidebarGaugeSet</code> for baseline-corrected Traffic gauge ratios; the gauge set advances via <code>poll()</code> on each refresh cycle.</span></div>
-      <div class="feature"><strong>Alerting</strong><span>Stateless <code>AlertManager</code> evaluates metrics against <code>AlertThresholds</code> presets (<code>::default()</code>, <code>::strict()</code>). <code>Alert</code> value objects carry severity, metric, value, and threshold. <code>AlertNotifier</code> dispatches toasts via <code>sugar-toast</code> with mute-safe degradation when no factory is available. Maps <code>Severity::Critical → ToastType::Error</code>, <code>Warning → Warning</code>, <code>Info → Info</code>.</span></div>
-      <div class="feature"><strong>Status-Snapshot History (default-on, <code>--no-history</code> opt-out)</strong><span>SQLite persistence via <code>SqliteHistoryStore</code> — an implementation of the five-method <code>HistoryStoreInterface</code> port (<code>save()</code> / <code>query()</code> / <code>count()</code> / <code>prune()</code> / <code>close()</code>), with WAL mode, 0600 file / 0700 dir private modes; pruning is explicit — <code>prune()</code> / <code>HistoryRecorder::pruneOlderThan()</code>, no automatic size cap). Stores timestamped admin status-variable snapshots, not SQL text. <code>HistoryRecorder</code> implements <code>StatusSnapshotProviderInterface</code> and records via <code>record()</code> / <code>recordFromProvider()</code>; history faults never crash a session and degrade through two channels — at launch a corrupt or unwritable store warns loudly on stderr (<code>history recording DISABLED</code>) and the session runs history-less, while a mid-session persist failure drops to the in-app query log so the live dashboard and in-memory snapshots stay authoritative. <code>HistoryQuery::query()/querySince()/rate()</code> retrieve snapshots and compute per-variable rates over time ranges.</span></div>
+      <div class="feature"><strong>Alerting</strong><span>Stateless <code>AlertManager</code> evaluates metrics against <code>AlertThresholds</code> presets (<code>::standard()</code>, <code>::strict()</code>). <code>Alert</code> value objects carry severity, metric, value, and threshold. <code>AlertNotifier</code> dispatches toasts via <code>sugar-toast</code> with mute-safe degradation when no factory is available. Maps <code>Severity::Critical → ToastType::Error</code>, <code>Warning → Warning</code>, <code>Info → Info</code>.</span></div>
+      <div class="feature"><strong>Status-Snapshot History (default-on, <code>--no-history</code> opt-out)</strong><span>SQLite persistence via <code>SqliteHistoryStore</code> — an implementation of the five-method <code>HistoryStoreInterface</code> port (<code>save()</code> / <code>query()</code> / <code>count()</code> / <code>prune()</code> / <code>close()</code>), with WAL mode, 0600 file / 0700 dir private modes; retention is bounded automatically to the newest 10&nbsp;000 rows and the last 72 hours, swept at open and after every insert; <code>prune()</code> / <code>HistoryRecorder::pruneOlderThan()</code> remain for an explicit cut). Stores timestamped admin status-variable snapshots, not SQL text. <code>HistoryRecorder</code> implements <code>StatusSnapshotProviderInterface</code> and records via <code>record()</code> / <code>recordFromProvider()</code>; history faults never crash a session and degrade through two channels — at launch a corrupt or unwritable store warns loudly on stderr (<code>history recording DISABLED</code>) and the session runs history-less, while a mid-session persist failure drops to the in-app query log so the live dashboard and in-memory snapshots stay authoritative. <code>HistoryQuery::query()/querySince()/rate()</code> retrieve snapshots and compute per-variable rates over time ranges.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/candy-sql">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-sql/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-sql/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/jorgerojas26/lazysql">lazysql</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+<h2 style="margin-top: 40px;">Tasks</h2>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+<h3 style="margin-top: 32px;">Connect to a MySQL server with a password from the environment</h3>
+<p>Pass the password through <code>CANDY_SQL_PASS</code> rather than argv, so it stays out of <code>/proc/&lt;pid&gt;/cmdline</code>:</p>
+<pre class="code"><code class="language-shell">CANDY_SQL_PASS=secret vendor/bin/candy-sql --driver=mysql --user=root --db=mydb</code></pre>
 
-    <h3 style="margin-top: 32px;">API</h3>
+<h3 style="margin-top: 32px;">Save a connection and dial it by name</h3>
+<p>Named connections live in <code>$XDG_CONFIG_HOME/candy-sql/connections.json</code>, or <code>$HOME/.config/candy-sql/connections.json</code> when <code>XDG_CONFIG_HOME</code> is unset. An entry names an environment variable with <code>pass-env</code>, and the password is read when the connection is dialed. Dial the entry with <code>--connect=prod</code>, or run with no arguments in a terminal to choose one from a picker. See <a href="#configuration">Configuration</a> for the fields.</p>
+
+<h3 style="margin-top: 32px;">Edit a cell in a table preview</h3>
+<ol>
+  <li>In the Tables pane, select a table and press <code>Enter</code> to load it into the Rows pane.</li>
+  <li>Move the cell cursor with <code>←</code>/<code>→</code> or <code>h</code>/<code>l</code>, and press <code>e</code>. Type the new value. <code>Ctrl+N</code> stores NULL.</li>
+  <li>Press <code>Enter</code> to show the <code>UPDATE</code> statement, and press <code>Enter</code> again to commit it. Nothing is written before the second <code>Enter</code>.</li>
+</ol>
+<p>Row insert with <code>o</code> and row delete with <code>D</code> follow the same confirm-then-write flow. The Troubleshooting section lists the refusals.</p>
+
+<h3 style="margin-top: 32px;">Run a query and keep it as a favorite</h3>
+<p>Type SQL in the Query pane. <code>Enter</code> inserts a newline, and <code>Ctrl+R</code>, <code>Ctrl+E</code> or <code>Ctrl+Enter</code> runs the statement. <code>Ctrl+F</code> saves the text to the favorites list for the session. A statement with <code>?</code> or <code>:name</code> placeholders opens a prompt for each parameter before it runs. An empty value binds NULL.</p>
+
+<h3 style="margin-top: 32px;">Export a table to CSV, or import a file</h3>
+<p>With rows on screen, press <code>x</code> in the Tables or Rows pane to open the export line, or press <code>Ctrl+S</code> from any pane to open the same line. Press <code>i</code> in the Tables or Rows pane to open the import line. In either line <code>Enter</code> submits and <code>Esc</code> closes it.</p>
+
+<h3 style="margin-top: 32px;">Read the recorded status history</h3>
+<p>Press <code>H</code> in the Tables, Rows or Admin pane to read the recorded status history. Its counter trend is folded into the Rows pane. Recording is on by default in the launcher. Pass <code>--no-history</code> to turn it off, or <code>--history=PATH</code> to choose the file. See <a href="#status-snapshot-history">Status-snapshot history</a>.</p>
+
+<h3 style="margin-top: 32px;">Drive it from a script</h3>
+<p>The launcher is an interactive program. With stdout not a terminal it dials the connection and then refuses with exit status 2. To drive it from a script, run it under a pseudo-terminal, for example <code>script -qec 'candy-sql app.sqlite' /dev/null</code>. To render results from library code, use <code>ResultTable::renderPlain()</code>, which produces an escape-free grid.</p>
+
+<h2 style="margin-top: 40px;">API reference</h2>
+<p>The classes below are the public surface. <code>App</code> is the model. <code>ConnectionFactory</code> parses a DSN into a <code>ConnectionConfig</code> and opens a connection. The rest are strategy objects and value types the model calls.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Database ⚠️</td><td>—</td><td><strong>Deprecated</strong> thin alias to <code>SqliteDatabase</code>. Use <code>DatabaseInterface</code> instead.</td></tr>
@@ -179,7 +210,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Connect using a ConnectionConfig and return the driver's <code>DatabaseInterface</code> (<code>sqlite</code>, <code>mysql</code> or <code>pgsql</code>; any other driver throws <code>InvalidArgumentException</code>)</td></tr>
 <tr><td>ConnectionFactory</td><td>fromArgv(argv)</td><td>Build a connection from CLI flags: <code>--dsn=</code> alone, or <code>--driver= --db=</code> with optional <code>--host= --port= --user= --pass= --ssl-mode=</code>. Equals-form only; unknown or valueless flags are refused with an <code>InvalidArgumentException</code>.</td></tr>
 <tr><td>Flavor</td><td>detectFromDriver(driver, version?, versionComment?)</td><td>Detect flavor from PDO driver name ('mysql', 'pgsql', 'sqlite') + optional version string. Uses <code>detectFromVersionString()</code> for MySQL refinement. Ensures mysql/pgsql never falls back to SQLite for an unparseable version.</td></tr>
-<tr><td>Version</td><td>isAtLeast($major, $minor = 0, $release = 0)</td><td>Compare version integers (handles MariaDB 5.5.5- prefix)</td></tr>
+<tr><td>ServerVersion</td><td>isAtLeast($major, $minor = 0, $release = 0)</td><td>Compare version integers (handles MariaDB 5.5.5- prefix). Lives on <code>SugarCraft\Sql\Db\ServerVersion</code>, not on the build-stamp <code>SugarCraft\Sql\Version</code>.</td></tr>
 <tr><td>ResultTable</td><td>fromRows(rows)</td><td>Factory from a list of associative row arrays</td></tr>
 <tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>
 <tr><td>ResultTable</td><td>withVisibleWidth(n) / withJsonPretty(bool) / withNullToken(s)</td><td>Fluent configuration builders</td></tr>
@@ -200,7 +231,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>Alert</td><td>warning() / critical() / info()</td><td>Factory helpers for alert creation</td></tr>
 <tr><td>Alert</td><td>isCritical() / isWarning() / isInfo()</td><td>Severity predicates</td></tr>
 <tr><td>Alert</td><td>toToastMessage()</td><td>Format as "metric: message (X% > Y%)"</td></tr>
-<tr><td>AlertThresholds</td><td>new() / default() / strict()</td><td>Factory presets: bare, 60%/80%, 50%/70%</td></tr>
+<tr><td>AlertThresholds</td><td>new() / standard() / strict()</td><td>Factory presets: bare, 60%/80% (standard), 50%/70%</td></tr>
 <tr><td>AlertThresholds</td><td>connectionWarningThreshold() / connectionCriticalThreshold()</td><td>Connection usage ratio thresholds</td></tr>
 <tr><td>AlertThresholds</td><td>withConnectionWarningThreshold() / withConnectionCriticalThreshold()</td><td>Fluent threshold setters (0.0–1.0)</td></tr>
 <tr><td>AlertThresholds</td><td>abortedRateThreshold() / withAbortedRateThreshold()</td><td>Aborted connection rate threshold</td></tr>
@@ -226,7 +257,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>HistoryStoreInterface</td><td>count()</td><td>Return total number of stored entries</td></tr>
 <tr><td>HistoryStoreInterface</td><td>close()</td><td>Release held resources (e.g. close the SQLite database)</td></tr>
 <tr><td>SqliteHistoryStore</td><td>__construct(dbPath)</td><td>Open or create the SQLite store: WAL, 5s busy timeout, private 0600 file / 0700 dir (a pre-existing loose file is tightened). An unusable store raises here: the launcher catches that at boot and runs history-less with a loud <code>history recording DISABLED</code> stderr warning; a store that dies only mid-session instead degrades per-write to the in-app query log via <code>HistoryRecorder::record()</code>.</td></tr>
-<tr><td>SqliteHistoryStore</td><td>—</td><td>HistoryStoreInterface via SQLite. Schema: id, ts, recorded_at, variables (JSON). No automatic prune — call <code>prune(before)</code> or <code>HistoryRecorder::pruneOlderThan(cutoff)</code>.</td></tr>
+<tr><td>SqliteHistoryStore</td><td>—</td><td>HistoryStoreInterface via SQLite. Schema: id, ts, recorded_at, variables (JSON). Bounded retention: the newest 10 000 rows and the last 72 hours, whichever discards more, swept at open and after every insert. Explicit pruning is still available through <code>prune(before)</code> and <code>HistoryRecorder::pruneOlderThan(cutoff)</code>.</td></tr>
 <tr><td>HistoryRecorder</td><td>record(snapshot) / recordFromProvider()</td><td>Persist snapshots directly or pulled from a wrapped <code>StatusSnapshotProviderInterface</code>; implements the same interface (<code>currentSnapshot()</code> / <code>statusVariablesTs()</code> / <code>wasReset()</code>) for downstream readers.</td></tr>
 <tr><td>HistoryQuery</td><td>query(sinceTs, untilTs)</td><td>Raw snapshot rows in an epoch-seconds range</td></tr>
 <tr><td>HistoryQuery</td><td>querySince(sinceTs)</td><td>Snapshots at or after a point in time</td></tr>
@@ -255,6 +286,157 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>CommitPlanner</td><td>commitObjects()</td><td>Emit parameterized INSERT/UPDATE/DELETE for objects based on <code>changeType()</code>. All string values (OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, ENABLED, TIMED) bound as <code>?</code>. Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code>.</td></tr>
 <tr><td>CommitPlanner</td><td>isDirty()</td><td>True if any tracked model is dirty.</td></tr>
 </table>
+
+<h2 style="margin-top: 40px;">Configuration</h2>
+<p>Connection details come from a DSN, from individual flags, or from a saved connection. Each one is a route into the same <code>ConnectionFactory</code>.</p>
+<h3 style="margin-top: 32px;">Command-line flags</h3>
+<table class="api-table">
+<tr><th>Flag</th><th>Effect</th></tr>
+<tr><td><code>--dsn=URL</code></td><td>A DSN for <code>sqlite://</code>, <code>mysql://</code> or <code>pgsql://</code>. The same string also works as the positional argument. <code>sqlite://:memory:</code> gives a throwaway database.</td></tr>
+<tr><td><code>--driver=NAME</code></td><td><code>sqlite</code>, <code>mysql</code> or <code>pgsql</code>. Used with <code>--db</code> when no DSN is given.</td></tr>
+<tr><td><code>--host=HOST</code>, <code>--port=PORT</code></td><td>Server address and port.</td></tr>
+<tr><td><code>--user=USER</code></td><td>Database user.</td></tr>
+<tr><td><code>--pass=PASS</code></td><td>Password on the command line. Prefer <code>CANDY_SQL_PASS</code>, which keeps it out of the process list.</td></tr>
+<tr><td><code>--db=NAME</code></td><td>Database name, or the SQLite file path.</td></tr>
+<tr><td><code>--ssl-mode=MODE</code></td><td>TLS mode for the server connection. See the DSN and MySQL SSL notes in the README.</td></tr>
+<tr><td><code>--connect=NAME</code></td><td>Dial a saved connection. It cannot be combined with explicit connection arguments.</td></tr>
+<tr><td><code>--read-only</code></td><td>Turns the in-grid edit chords off for the session.</td></tr>
+<tr><td><code>--history=PATH</code></td><td>Store the status-snapshot history at <code>PATH</code> instead of the default.</td></tr>
+<tr><td><code>--no-history</code></td><td>Turn off status-snapshot recording.</td></tr>
+<tr><td><code>--help</code>, <code>--version</code></td><td>Print the usage or the build stamp, then exit 0.</td></tr>
+</table>
+<p>Flags use the equals form only. The positional argument takes a DSN or a SQLite path.</p>
+
+<h3 style="margin-top: 32px;">Environment and files</h3>
+<table class="api-table">
+<tr><th>Name</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>CANDY_SQL_PASS</code></td><td>unset</td><td>Password fallback for an individual flag connection, or for a saved connection with no <code>pass-env</code>.</td></tr>
+<tr><td><code>pass-env</code> (in a saved connection)</td><td>none</td><td>Names the environment variable that holds the password. It is read at dial time. A <code>pass</code> field in the file is refused.</td></tr>
+<tr><td><code>XDG_CONFIG_HOME</code>, <code>HOME</code></td><td>first set</td><td>The saved connections live in <code>candy-sql/connections.json</code> under the config directory. The directory is created with mode 0700 and the file with 0600.</td></tr>
+<tr><td><code>HOME</code></td><td>required for history</td><td>The default history is <code>$HOME/.candy-sql/history.db</code>. If <code>HOME</code> is unset, recording stays disabled.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read through sugar-core's color detection. <code>NO_COLOR</code> and <code>TERM=dumb</code> remove the color.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Saved connections file</h3>
+<pre class="code"><code class="language-text">{
+  "connections": {
+    "prod":    {"driver": "mysql", "host": "db.example.com", "port": "3306",
+                "user": "app", "db": "shop", "ssl-mode": "verify_identity",
+                "pass-env": "PROD_DB_PASS"},
+    "local":   {"driver": "pgsql", "host": "127.0.0.1", "port": "5432",
+                "user": "pg", "db": "dev"},
+    "scratch": {"driver": "sqlite", "db": "/tmp/scratch.sqlite"}
+  }
+}</code></pre>
+<p>Allowed fields are <code>driver</code>, <code>host</code>, <code>port</code>, <code>user</code>, <code>db</code>, <code>ssl-mode</code> and <code>pass-env</code>. An unknown field, an unsupported driver, a non-numeric port or a malformed name is refused by name, with one line and exit status 2. Passwords are never stored on disk.</p>
+
+<h3 style="margin-top: 32px;">Status-snapshot history</h3>
+<p>The launcher records the admin poll snapshots to SQLite by default. The file is <code>$HOME/.candy-sql/history.db</code>, or the path given to <code>--history</code>. It is created with mode 0600 inside a 0700 directory. A snapshot is a timestamped map of server status variables, and SQL statement text is never persisted.</p>
+<p>Recording applies to MySQL and PostgreSQL only. A SQLite session has no status feed, so the history file stays empty for it. Retention is bounded by two caps, the newest 10 000 rows and the last 72 hours, and whichever discards more wins. The sweep runs at open and after every insert.</p>
+
+<h2 style="margin-top: 40px;">Keys</h2>
+<p>The <code>?</code> overlay shows the bindings of the pane you are in, generated from the same routing table as the status-line legends. Any key closes it.</p>
+<table class="api-table">
+<tr><th>Key</th><th>Action</th></tr>
+<tr><td><code>Tab</code></td><td>Cycle the pane: Tables, Rows, Query, Admin</td></tr>
+<tr><td><code>↑</code>/<code>↓</code>, <code>j</code>/<code>k</code></td><td>Move the cursor in the active list. In the Query pane the arrows move between lines.</td></tr>
+<tr><td><code>←</code>/<code>→</code>, <code>h</code>/<code>l</code></td><td>Move the cell cursor between columns in the Rows pane, scrolling the grid to keep it in view</td></tr>
+<tr><td><code>Enter</code>, <code>Space</code> (Tables)</td><td>Load the highlighted table into the Rows pane</td></tr>
+<tr><td><code>e</code> (Rows)</td><td>Edit the cell under the cursor. Shows the <code>UPDATE</code> and writes on <code>Enter</code></td></tr>
+<tr><td><code>o</code> (Rows)</td><td>Insert a row. Prompts for each column, then shows the <code>INSERT</code></td></tr>
+<tr><td><code>D</code> (Rows)</td><td>Delete the row under the cursor. Shows the <code>DELETE</code> and writes on <code>Enter</code></td></tr>
+<tr><td><code>y</code> (Rows)</td><td>Yank the cell to the terminal clipboard over OSC 52. Dumb and Linux-console terminals never receive the sequence</td></tr>
+<tr><td><code>Ctrl+R</code>, <code>Ctrl+E</code>, <code>Ctrl+Enter</code></td><td>Run the SQL in the Query pane</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Save the Query pane's text to the favorites list. <code>Ctrl+Shift+F</code> removes it</td></tr>
+<tr><td><code>x</code>, <code>i</code></td><td>Open the export or import line (Tables or Rows)</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Open the export line from any pane while rows are on screen</td></tr>
+<tr><td><code>H</code></td><td>Read the recorded status history</td></tr>
+<tr><td><code>:tx</code>, <code>:tx begin</code>, <code>:tx commit</code>, <code>:tx rollback</code></td><td>Transaction control on the sync session, typed in the Query pane. <code>:tx</code> and <code>:tx begin</code> open, <code>commit</code> closes, and <code>rollback</code> closes and discards the work</td></tr>
+<tr><td><code>[p]</code> (Admin)</td><td>Pause or resume the admin auto-refresh</td></tr>
+<tr><td><code>?</code></td><td>Toggle the key-help overlay</td></tr>
+<tr><td><code>q</code>, <code>Esc</code></td><td>Cancel a running query first when one is in flight. Otherwise <code>q</code> and <code>Esc</code> quit from the Tables and Rows panes. Inside Admin, <code>q</code> returns to Tables and <code>Esc</code> closes an open dialog</td></tr>
+<tr><td><code>Ctrl+C</code></td><td>Cancel the running query when one is in flight. Quits when idle</td></tr>
+</table>
+<p>While a text line owns the keyboard, <code>q</code>, <code>Tab</code> and <code>x</code> are ordinary letters.</p>
+
+<h2 style="margin-top: 40px;">Theming and styling</h2>
+<p>candy-sql ships no theme file. Its colors come from the terminal profile that sugar-core detects, so <code>NO_COLOR</code>, <code>TERM=dumb</code> and <code>COLORTERM</code> decide what you see. The focus marker is a bold <code>▶</code> on the pane's frame title. That glyph survives <code>NO_COLOR</code>, where a hue change would vanish, and the status-line legends and the <code>error:</code> word stay readable without color.</p>
+<p>The result grid uses a reverse-video cursor on styling terminals. JSON cells pretty-print with a two-space indent, and long rows scroll horizontally. The renderer does not offer a high-contrast mode or a reduced-motion toggle. The <code>[p]</code> key freezes the dashboard gauges at their last values until it is pressed again. The 1-second admin fetch keeps running while paused, so the cached server status still refreshes.</p>
+
+<h2 style="margin-top: 40px;">Examples</h2>
+<p><code>examples/play.php</code> seeds an in-memory SQLite database with two tables, <code>users</code> and <code>posts</code>, and opens the dashboard over it. It takes no arguments. Run it in a terminal with <code>php examples/play.php</code>, and quit with <code>q</code> or <code>Ctrl+C</code>. Non-interactively, <code>printf 'q' | php examples/play.php</code> starts the app, reads the quit key and exits 0. With stdin at <code>/dev/null</code> it exits 0 at once, because end of file on stdin ends the run. It keeps running only while stdin is an open stream, so write a key to an open pipe to drive it.</p>
+<p>The Admin pane needs a MySQL or PostgreSQL server, so on the example's SQLite database it shows the fallback. For the headless path, see <code>ResultTable::renderPlain()</code> under Tasks, in Drive it from a script.</p>
+
+<h2 style="margin-top: 40px;">Testing</h2>
+<p>Run the suite from the package root after <code>composer install</code>:</p>
+<pre class="code"><code class="language-shell">vendor/bin/phpunit</code></pre>
+<p>Most tests use an in-memory SQLite database, so they need no server. The live MySQL leg in <code>tests/Db/MysqlConnectedPathTest.php</code> runs only when <code>CANDY_SQL_MYSQL_DSN</code> names a reachable server, and it is skipped otherwise. <code>tests/SiteBodyTruthTest.php</code> checks that the API rows on this page name real classes and that the equals-form flags it lists still exist.</p>
+
+<h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+<h3 style="margin-top: 32px;">The launcher says "no such SQLite file"</h3>
+<p>The path names a file that does not exist. candy-sql does not create SQLite files, so an empty file cannot appear and lose writes at exit. Point it at an existing file, or create the file first, for example with <code>sqlite3 fresh.sqlite &lt; dump.sql</code>. <code>:memory:</code> is exempt.</p>
+
+<h3 style="margin-top: 32px;">A MySQL or PostgreSQL connection fails because its PDO driver is missing</h3>
+<p>The matching PDO driver is not installed. Install <code>ext-pdo_mysql</code> for <code>mysql://</code> DSNs and <code>--driver=mysql</code>, or <code>ext-pdo_pgsql</code> for <code>pgsql://</code> DSNs and <code>--driver=pgsql</code>. Without <code>pdo_mysql</code>, a MySQL DSN stops with <code>candy-sql: Undefined constant PDO::MYSQL_ATTR_SSL_CA</code> and exit status 2. Without <code>pdo_pgsql</code>, a PostgreSQL DSN stops with PDO's <code>could not find driver</code> and exit status 2.</p>
+
+<h3 style="margin-top: 32px;">The launcher prints USAGE, or refuses a piped stdout, and exits 2</h3>
+<p>With no DSN, no flags and no saved connection, the launcher prints USAGE. Give a DSN, use <code>--connect=NAME</code>, or run the command in a terminal. A piped or redirected stdout is refused with <code>this launcher drives an interactive terminal and refuses to stream ANSI onto a pipe (exit 2)</code>, even when a path is given, for example <code>candy-sql app.sqlite | cat</code>. Use a pseudo-terminal when scripting.</p>
+
+<h3 style="margin-top: 32px;">A warning says "history recording DISABLED"</h3>
+<p>The history file is corrupt or cannot be written. The session runs without history and says so on stderr. Relocate the file with <code>--history=PATH</code>, or turn recording off with <code>--no-history</code>.</p>
+
+<h3 style="margin-top: 32px;">A query timeout does not fire</h3>
+<p>The SIGALRM timeout needs <code>ext-pcntl</code>, which Windows and slim Docker php-cli images often lack. Without it the timeout falls back to the driver's network timeout. Install the extension, or run on a host that has it.</p>
+
+<h3 style="margin-top: 32px;">A saved connection is refused because of a pass field</h3>
+<p>A <code>pass</code> field in <code>connections.json</code> is a hard refusal, because passwords are never stored on disk. Move the password to an environment variable, and name that variable with <code>pass-env</code>.</p>
+
+<h3 style="margin-top: 32px;">Editing a cell is refused</h3>
+<p>Edits address rows by their full primary key. A table with no primary key, a NULL or binary key value, a binary or large cell, a query-result view, or a <code>--read-only</code> session all refuse with a named reason. A write that touches a different row count than promised is rolled back.</p>
+
+<h3 style="margin-top: 32px;">y copies nothing to the clipboard</h3>
+<p>The clipboard uses OSC 52. A terminal that reports <code>TERM=dumb</code>, <code>TERM=linux</code> or nothing never receives the sequence. Use a terminal that supports OSC 52.</p>
+
+<h2 style="margin-top: 40px;">Upstream mapping</h2>
+<p>lazysql is the design antecedent. Its Tables, Rows and Query layout, and its change-cell, new-row and delete-row flow, are the model for the editable Rows pane. The admin dashboard is modeled on MySQL Workbench. candy-sql is native PHP, and it is not a line-by-line port, so there is no class-for-class table. The README's Editing table data section names the lazysql flow it follows.</p>
+
+<h2 style="margin-top: 40px;">Architecture</h2>
+<p>The layers run from the terminal down to the server:</p>
+<ul>
+  <li><strong>Model.</strong> <code>App</code> holds the panes, the query state and the admin pages. It returns a new model for each message.</li>
+  <li><strong>Database.</strong> <code>DatabaseInterface</code> and its PDO adapters, <code>SqliteDatabase</code>, <code>MysqlDatabase</code> and <code>PostgresDatabase</code>. <code>ConnectionFactory</code> parses a DSN, and <code>Flavor</code> names the server type.</li>
+  <li><strong>Strategies.</strong> <code>SchemaBrowser</code> and <code>ExplainView</code> pick the driver-specific SQL for schema introspection and plan output.</li>
+  <li><strong>Edits.</strong> <code>DmlBuilder</code> builds statements from the full primary key, and <code>DmlRunner</code> wraps each write in a transaction that rolls back unless the promised row count changed.</li>
+  <li><strong>Admin.</strong> <code>AdminProviderInterface</code> gives one port for admin data, with a MySQL and a PostgreSQL adapter. The pages sit on top of it.</li>
+  <li><strong>History.</strong> <code>HistoryRecorder</code> writes snapshots through <code>SqliteHistoryStore</code>.</li>
+</ul>
+
+<h3 style="margin-top: 32px;">Known limitations</h3>
+<p>The gaps are pre-1.0, and most sit on the asynchronous ReactPHP query path.</p>
+<ul>
+  <li><strong>No connection pooling.</strong> One async connection per flavor, DSN and user is cached and reused. Concurrent admin queries are serialized onto that connection.</li>
+  <li><strong>No transactions on async connections.</strong> <code>ReactMysqlConnection</code> and <code>ReactPostgresConnection</code> run single statements. A <code>BEGIN</code> and <code>COMMIT</code> that spans several queries is not coordinated on that path.</li>
+</ul>
+
+<h2 style="margin-top: 40px;">Changelog and versioning</h2>
+<p>candy-sql is pre-1.0. The rolling prerelease is tagged <code>candy-sql/latest</code>, and it carries the MySQL, PostgreSQL and admin pages. The README's Deprecated: Database class section covers the move: <code>Database</code> is now a deprecated alias for <code>SqliteDatabase</code>, and <code>DatabaseInterface</code> is the name to use.</p>
+
+<h2 style="margin-top: 40px;">Related</h2>
+<ul>
+  <li><a href="sugar-core.html">sugar-core</a> provides the program loop, the color detection and the translation registry.</li>
+  <li><a href="candy-git.html">candy-git</a> and <a href="candy-files.html">candy-files</a> are other SugarCraft apps on the same stack.</li>
+</ul>
+
+<h2 style="margin-top: 40px;">Source &amp; demos</h2>
+<ul>
+  <li><a href="https://github.com/sugarcraft/candy-sql">Source on GitHub</a></li>
+  <li><a href="https://github.com/sugarcraft/candy-sql/blob/master/README.md">Full README</a></li>
+  <li><a href="https://github.com/sugarcraft/candy-sql/tree/master/examples">Runnable examples</a></li>
+  <li>Originally inspired by <a href="https://github.com/jorgerojas26/lazysql">lazysql</a> (Go); SugarCraft is developed as a native PHP project.</li>
+</ul>
+
+<p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
 
@@ -266,7 +448,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sql/.vhs/play.gif" alt="Play">
                 <h3>Play</h3>
-                <span class="demo-caption">A seeded SQLite database opened in the dashboard — cycle tables, Tab to the query pane, run a SELECT, Ctrl+R to refresh.</span>
+                <span class="demo-caption">A seeded SQLite database opened in the dashboard — cycle tables, Tab to the query pane, run a SELECT, Ctrl+R to run.</span>
             </div>
         </div>
     </div>
