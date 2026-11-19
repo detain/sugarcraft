@@ -962,6 +962,20 @@
                 "dead": []
             }
         },
+        "sugar-clipboard": {
+            "readme": {
+                "needles": [
+                    "Clipboard access for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Clipboard access — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
         "sugar-ws-rpc": {
             "readme": {
                 "needles": [

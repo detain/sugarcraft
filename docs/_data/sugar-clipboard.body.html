@@ -1,0 +1,8 @@
+<p class="lede" style="margin-top: 28px;">Clipboard access for SugarCraft terminal programs. The planned backend is OSC 52, the terminal escape sequence that asks the emulator to set its clipboard, so a copy also works over SSH and inside multiplexers when the terminal allows it. The OSC 52 writer in candy-git-server has no consumers today and moves here as this backend. It is a skeleton: its namespace and packaging exist, and the API arrives in a later change.</p>
+
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-clipboard</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The package has no runtime dependencies beyond PHP.</p>
+
+    <h2 style="margin-top: 40px;">Status</h2>
+    <p>The package currently ships only its PSR-4 wiring under <code>SugarCraft\Clipboard\</code>. No public API exists yet, so there is no quickstart to show.</p>
