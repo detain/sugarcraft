@@ -21,7 +21,8 @@ use function React\Promise\resolve;
  * The {@see HostServices} a channel plugin runs against, served by the candy-code
  * host it runs inside (PL-5c). Each call goes through {@see Dispatcher::invoke()},
  * the same gates and the same handler functions the WebSocket path runs, but with
- * no socket, no loopback dial and no JSON-RPC framing.
+ * no socket and no loopback dial. The one framing step is the answer encoding
+ * listed among the deliberate differences below.
  *
  * One instance is one in-process client of its host. {@see connect()} opens it
  * (the hello the wire makes first), {@see disconnect()} closes it, and events the
@@ -36,7 +37,14 @@ use function React\Promise\resolve;
  *
  * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
  *
- * Three deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * Four deliberate differences from the wire, recorded for the Phase 5d bundles:
+ * - Each answer is encoded as the wire's JSON-RPC result frame, then decoded back.
+ *   That is the one place this door frames anything. It keeps the wire's UTF-8
+ *   substitution and its `too_large` refusal, so a bundle gets the same values on
+ *   both doors. The ceiling is measured on that frame with a null id, not the
+ *   request's id, so a wire answer to a long request id can cross the ceiling where
+ *   this door does not. A bundle that needs byte-exact parity with the wire should
+ *   keep its answers well under {@see Dispatcher::MAX_SERVER_FRAME_BYTES}.
  * - Session calls go to the primary host's dispatcher. The wire's workspace routing
  *   (`root`, {@see \SugarCraft\Code\Server\Workspace\Gateway}) is not applied, so a
  *   session bound to a non-primary root is not found here. No bundle sends `root`.
@@ -294,8 +302,14 @@ final class InProcessHostServices implements HostServices
         ));
     }
 
+    /**
+     * Opens the in-process client. Arms the dispatcher's timers too (idempotent): the
+     * pump, the server tick and the background poll belong to the host, so this door
+     * must not depend on a socket client or ServeStartup having started it.
+     */
     private function open(): Client
     {
+        $this->dispatcher->start();
         $context = $this->dispatcher->context();
         $client = new Client(
             InProcessPeer::new(),

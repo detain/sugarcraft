@@ -8,15 +8,18 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Host\InProcessHostServices;
 use SugarCraft\Code\Host\InProcessPeer;
+use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Protocol\Client;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
+use SugarCraft\Code\Protocol\EventType;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
+use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 
@@ -559,6 +562,77 @@ final class InProcessHostServicesTest extends TestCase
         self::assertSame($wireNamed['effects'], $inNamed['effects']);
         self::assertContains('rename-session', $inNamed['effects']);
         self::assertStringContainsString('Refactor notes', \json_encode($inNamed, \JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Opening the in-process client starts the host's timers (the pump and the server tick),
+     * with no socket client and no ServeStartup, and does so once: the start is idempotent.
+     */
+    public function testOpeningTheClientArmsTheHostTimersWithoutASocketOrStartup(): void
+    {
+        $probe = $this->probe = Dispatcher::new($this->fixture->context, Dispatcher::methods());
+        $host = InProcessHostServices::new($probe, Loop::get());
+        $timer = static fn (string $name): mixed => (new \ReflectionProperty(Dispatcher::class, $name))->getValue($probe);
+
+        self::assertNull($timer('pumpTimer'), 'fixture: a dispatcher nobody started has armed no timers');
+        self::assertNull($timer('tickTimer'), 'fixture: a dispatcher nobody started has armed no timers');
+
+        $this->fixture->await($host->connect());
+        $pump = $timer('pumpTimer');
+        self::assertNotNull($pump, 'the pump timer is armed by opening the in-process client');
+        self::assertNotNull($timer('tickTimer'), 'the server tick is armed by opening the in-process client');
+
+        $probe->start();
+        self::assertSame($pump, $timer('pumpTimer'), 'a second start keeps the timer it already armed');
+        $host->disconnect();
+    }
+
+    /**
+     * A subscriber still catching up hoards what it hears. Past the cap, the in-process listener
+     * must hear the same `server.overflow` notice the wire sends, in order, not lose events silently.
+     */
+    public function testAnOverflowNoticeReachesAnInProcessListener(): void
+    {
+        $this->connect();
+        $inId = $this->host->createSession(null, null)['id'];
+        $heard = [];
+        $this->host->subscribeEvents(function (EventEnvelope $envelope) use (&$heard): void {
+            $heard[] = $envelope;
+        });
+        $this->host->subscribeSession($inId, null, null);
+
+        // Catch-up gets no loop tick, so everything heard meanwhile piles into the pre-live buffer.
+        $session = $this->fixture->hub->get($inId);
+        self::assertNotNull($session, 'fixture: the in-process session has a live host');
+        $cap = (new \ReflectionClass(SessionFeed::class))->getConstant('MAX_PRELIVE_BUFFER');
+        for ($i = 0; $i < $cap + 5; ++$i) {
+            $session->announce(SessionEvent::new(SessionEvent::TOOL_PROGRESS, ['name' => 'Read', 'callId' => 'c' . $i], $inId, null, 1_700_000_000_000 + $i));
+        }
+        $this->fixture->run();
+
+        $overflow = \array_values(\array_filter($heard, static fn (EventEnvelope $e): bool => $e->type === EventType::SERVER_OVERFLOW));
+        self::assertCount(1, $overflow, 'the stale notice reaches the in-process listener exactly once');
+        self::assertSame(['sessionId' => $inId, 'dropped' => $cap + 1, 'action' => 'resubscribe'], $overflow[0]->data);
+        $progress = \array_filter($heard, static fn (EventEnvelope $e): bool => $e->type === 'tool.progress');
+        self::assertSame([], $progress, 'the hoard is discarded, not delivered late');
+    }
+
+    /** An in-process client has no socket outbox: its events go through emit(), so asking for one is a programming error. */
+    public function testAnInProcessClientHasNoOutbox(): void
+    {
+        $client = new Client(InProcessPeer::new(), null, Scope::owner(), static fn (): float => 0.0, static function (): void {});
+
+        self::assertTrue($client->isInProcess());
+        $this->expectException(\LogicException::class);
+        $client->outbox();
+    }
+
+    /** A client is a socket (an outbox) or in-process (a deliver closure), never neither. */
+    public function testAClientWithNeitherAnOutboxNorADeliverClosureIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Client(InProcessPeer::new(), null, Scope::owner(), static fn (): float => 0.0, null);
     }
 
     private function connect(): void
