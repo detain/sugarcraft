@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Plugins;
 
 use React\EventLoop\LoopInterface;
+use SugarCraft\Plugins\Host\HostServices;
 
 /**
  * What a plugin is allowed to know about the launch it runs in.
@@ -21,6 +22,7 @@ final readonly class PluginContext
     /**
      * @param \Closure(string): void $log one line per event; never a secret
      * @param array<string, mixed> $config the plugin's settings section, frozen at launch
+     * @param HostServices|null $host the in-process host calls; null until a host is wired in
      */
     private function __construct(
         public string $plugin,
@@ -30,6 +32,7 @@ final readonly class PluginContext
         public \Closure $log,
         public array $config,
         public ?string $stateDir,
+        public ?HostServices $host = null,
     ) {
     }
 
@@ -45,6 +48,7 @@ final readonly class PluginContext
         ?\Closure $log = null,
         array $config = [],
         ?string $stateDir = null,
+        ?HostServices $host = null,
     ): self {
         return new self(
             $plugin,
@@ -55,6 +59,7 @@ final readonly class PluginContext
             },
             $config,
             $stateDir,
+            $host,
         );
     }
 }

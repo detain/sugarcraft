@@ -14,6 +14,7 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\StyleGuide;
 use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -47,7 +48,7 @@ final class RenderCommand extends Command
      * or runaway file (or an attacker-controlled path) from being slurped
      * whole into memory. Mirrors sugar-markdown's MAX_HIGHLIGHT_BYTES.
      */
-    private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
+    private const MAX_THEME_CONFIG_BYTES = StyleGuide::MAX_CONFIG_BYTES;
 
     /** glow's own default document width — the ceiling of the auto ladder. */
     public const AUTO_WIDTH_MAX = 80;
@@ -600,24 +601,40 @@ final class RenderCommand extends Command
         throw new \InvalidArgumentException(Lang::t('render.directory_empty', ['path' => $arg]));
     }
 
+    /**
+     * Spellings this CLI has always answered, after `_` becomes `-` and the
+     * name is lowercased. The shared catalog's loose matching would also take
+     * `Tokyo Night`; pickTheme keeps refusing that, so the roster stays here.
+     */
+    private const THEME_NAMES = [
+        'ansi', 'ascii', 'plain', 'no', 'dark', 'light', 'notty', 'auto-no',
+        'dracula', 'tokyo-night', 'tokyonight', 'pink', 'solarized', 'monokai', 'github',
+    ];
+
+    /** CLI-only aliases, answered here rather than by sugar-markdown's catalog. */
+    private const THEME_ALIASES = ['no' => 'plain', 'auto-no' => 'notty'];
+
+    /**
+     * Resolve a theme name. The lookup lives in sugar-markdown's Theme
+     * (P1-12c-mdview): stock names through Theme::byName(), the bundled JSON
+     * slugs through Theme::catalogByName(). The roster and the two aliases
+     * remain this CLI's contract.
+     */
     public static function pickTheme(string $name): Theme
     {
-        return match (strtolower(str_replace('_', '-', $name))) {
-            'ansi'            => Theme::ansi(),
-            'ascii'            => Theme::ascii(),
-            'plain', 'no'      => Theme::plain(),
-            'dark'             => Theme::dark(),
-            'light'            => Theme::light(),
-            'notty', 'auto-no' => Theme::notty(),
-            'dracula'          => Theme::dracula(),
-            'tokyo-night',
-            'tokyonight'       => Theme::tokyoNight(),
-            'pink'             => Theme::pink(),
-            'solarized'        => Theme::fromJson(__DIR__ . '/../themes/solarized.json'),
-            'monokai'          => Theme::fromJson(__DIR__ . '/../themes/monokai.json'),
-            'github'           => Theme::fromJson(__DIR__ . '/../themes/github.json'),
-            default            => throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name])),
-        };
+        $key = strtolower(str_replace('_', '-', $name));
+        if (!in_array($key, self::THEME_NAMES, true)) {
+            throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
+        }
+
+        // The stock names answer from their factories. Only the three bundled
+        // slugs reach catalog(), which reads their JSON files: a built-in name
+        // must not depend on sugar-markdown's themes/ directory being present.
+        $slug = self::THEME_ALIASES[$key] ?? $key;
+
+        return Theme::byName($slug)
+            ?? Theme::catalogByName($slug)
+            ?? throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
     }
 
     /**
@@ -770,7 +787,7 @@ final class RenderCommand extends Command
      *
      * Two JSON schemas are accepted: a top-level `document` OBJECT marks a
      * glamour style file and routes through
-     * {@see GlamourTheme::toMarkdownTheme()} via the sniff below; anything
+     * {@see StyleGuide::theme()} behind the {@see GlamourDecorationGate} via the sniff below; anything
      * else keeps the historic flat per-element shape. The signatures cannot
      * collide — the flat schema has no `document` key.
      */
@@ -798,8 +815,8 @@ final class RenderCommand extends Command
         }
 
         $decoded = json_decode($raw, associative: true);
-        if (is_array($decoded) && GlamourTheme::isGlamourSchema($decoded)) {
-            return GlamourTheme::fromDecoded($decoded)->toMarkdownTheme();
+        if (is_array($decoded) && StyleGuide::isGlamourSchema($decoded)) {
+            return StyleGuide::fromDecoded(GlamourDecorationGate::admit($decoded))->theme();
         }
 
         // Explicit means explicit (finding 020): an object that feeds

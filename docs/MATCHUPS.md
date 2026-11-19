@@ -81,6 +81,8 @@ ships as `App\` — called out in the table below.
 | **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 | **SugarIgnore** (`sugar-ignore/`) | 🟢 ready | gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code's `IgnoreRules` (owner decision G-10=A); candy-git, candy-files and candy-git-server are the intended second consumers. |
 | **SugarServeProtocol** (`sugar-serve-protocol/`) | 🟢 ready | Wire contract for the `candy-code.v1` serve protocol — subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation. Original work: no upstream port. |
+| **SugarWsRpc** (`sugar-ws-rpc/`) | 🔴 planning | WebSocket RPC transport — skeleton (namespace and wiring only); the ServeBridge socket layer from the channel bundles moves here in P4-10d. Original work: no upstream port. |
+| **SugarJwt** (`sugar-jwt/`) | 🔴 planning | JWT and JWK verification — skeleton (namespace and wiring only); the Teams token and JWK code from the channel bundles moves here in P4-10d. Original work: no upstream port. |
 
 ## Apps
 
@@ -93,7 +95,7 @@ ships as `App\` — called out in the table below.
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON endpoints). |
 | **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite file per database, glob + fuzzy listing, TTL, binary-safe values, JSON/YAML import/export. |
-| **CandyMail** (`candy-mail/`) | 🟢 ready | Email library + CLI — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
+| **CandyMail** (`candy-mail/`) | 🟢 ready | Email library + CLI — SMTP, Resend API and Mailgun API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟡 in progress | Self-hostable Git server — smart-HTTP clone/fetch/push via `serve --http`; SSH delegates real git under host-sshd `ForceCommand`; git:// daemon advertisement-only. Users, repos, access control, optional LFS. |
 | **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — eleven provider type keys over nine engines, 38 built-in tools per launch, skills, hooks, agents, MCP, SQLite sessions. |
 | **CandyCodeWeb** (`candy-code-web/`) | 🟡 in progress | Browser UI for candy-code's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. Multi-session live: twelve tabs + a tiled grid of up to nine sessions, twelve dockable panels, approvals drawer, settings form, command palette. |
@@ -238,6 +240,8 @@ maps each package to its upstream.
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReleases (sugar-releases/) | none — first-party |
 | SugarServeProtocol (sugar-serve-protocol/) | none — first-party (original work; no upstream port) |
+| SugarJwt (sugar-jwt/) | none — first-party (original work; no upstream port) |
+| SugarWsRpc (sugar-ws-rpc/) | none — first-party (original work; no upstream port) |
 | SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
 | SugarStyle (sugar-style/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |

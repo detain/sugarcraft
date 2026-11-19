@@ -46,7 +46,7 @@ $counter = new class implements \SugarCraft\Core\Model {
 };
 
 $result = ProgramSimulator::for($counter)
-    -&gt;send(...ScriptedInput::new()-&gt;key('a')-&gt;key('q')-&gt;build())
+    -&gt;addMsgs(...ScriptedInput::new()-&gt;key('a')-&gt;key('q')-&gt;build())
     -&gt;run();
 
 // Real suites COMMIT the golden file; a missing golden then fails loudly (see

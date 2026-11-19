@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyMail — SugarCraft</title>
-<meta name="description" content="CandyMail: Email sending — SMTP + Resend HTTP API transports, attachments">
+<meta name="description" content="CandyMail: Email sending — SMTP, Resend and Mailgun HTTP API transports, attachments">
 <meta property="og:title" content="CandyMail — SugarCraft">
-<meta property="og:description" content="Email sending — SMTP + Resend HTTP API transports, attachments">
+<meta property="og:description" content="Email sending — SMTP, Resend and Mailgun HTTP API transports, attachments">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mail.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-mail.html">
 <meta property="og:type" content="website">
@@ -78,6 +78,8 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -139,7 +141,7 @@
       <img class="detail-icon" src="../img/icons/candy-mail.png" alt="" aria-hidden="true">
       <div>
         <h2><span aria-hidden="true">📨</span> CandyMail</h2>
-        <p class="detail-sub">Email sending — SMTP + Resend HTTP API transports, attachments</p>
+        <p class="detail-sub">Email sending — SMTP, Resend and Mailgun HTTP API transports, attachments</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/pop" style="color: inherit; text-decoration: underline;">charmbracelet/pop</a></span>
           <span class="tag-chip">email</span><span class="tag-chip">mail</span><span class="tag-chip">smtp</span><span class="tag-chip">attachment</span><span class="tag-chip">resend</span><span class="tag-chip">mailer</span><span class="tag-chip">send</span>
@@ -150,34 +152,58 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#send-over-smtp-with-tls-and-an-explicit-ca-bundle">Send over SMTP with TLS and an explicit CA bundle</a></li>
+            <li class="toc-h3"><a href="#send-through-the-resend-or-mailgun-api">Send through the Resend or Mailgun API</a></li>
+            <li class="toc-h3"><a href="#embed-an-inline-image-and-reference-it-by-content-id">Embed an inline image and reference it by content ID</a></li>
+            <li class="toc-h3"><a href="#attach-bytes-that-never-touch-the-disk">Attach bytes that never touch the disk</a></li>
+            <li class="toc-h3"><a href="#send-from-the-command-line">Send from the command line</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h2"><a href="#keys-in-the-compose-tui">Keys in the compose TUI</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#building-an-attachment-throws-a-runtimeexception">Building an attachment throws a RuntimeException</a></li>
+            <li class="toc-h3"><a href="#mailer-throws-invalidargumentexception-before-sending">Mailer throws InvalidArgumentException before sending</a></li>
+            <li class="toc-h3"><a href="#an-api-key-is-refused-at-construction">An API key is refused at construction</a></li>
+            <li class="toc-h3"><a href="#resend-refuses-a-message-with-only-cc-or-bcc-recipients">Resend refuses a message with only cc or bcc recipients</a></li>
+            <li class="toc-h3"><a href="#the-cli-sent-through-a-different-provider-than-expected">The CLI sent through a different provider than expected</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#values-in-transports-out">Values in, transports out</a></li>
+            <li class="toc-h3"><a href="#validate-before-dialing">Validate before dialing</a></li>
+            <li class="toc-h3"><a href="#the-compose-screen-is-a-model">The compose screen is a Model</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#showcase">Showcase</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
+<p class="lede" style="margin-top: 28px;">CandyMail builds and sends email. An immutable <code>Email</code> value carries the addresses, subject, plain and HTML bodies, attachments and headers. A <code>Transport</code> delivers it over SMTP, the Resend HTTP API or the Mailgun HTTP API, and <code>Mailer</code> checks the envelope before the transport dials. The package also ships a command-line sender and a compose TUI. It mirrors the send path of <a href="https://github.com/charmbracelet/pop">charmbracelet/pop</a>, which sends through go-mail; the message model follows go-mail's <code>NewEmail()</code> shape, and the rest is native PHP.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mail</code></pre>
+    <p>Requires PHP 8.3 or newer. The Resend and Mailgun API transports need the <code>curl</code> extension, and STARTTLS or implicit-TLS SMTP needs <code>openssl</code>. Plain SMTP works without either. The composer install puts the <code>candy-mail</code> binary in <code>vendor/bin/</code>. A standalone phar is also published; the README's Install section covers both.</p>
+    <p>Sibling <code>sugarcraft/*</code> requirements track <code>dev-master</code>, so the plain command above only resolves when dev stability is allowed. Pin the package with <code>composer require sugarcraft/candy-mail:@dev</code>, or set <code>minimum-stability</code> to <code>dev</code> with <code>prefer-stable</code> set to <code>true</code> in your consuming manifest. The pin covers the whole sibling closure, so allowing dev for candy-mail alone is not enough. The global install takes the same form: <code>composer global require sugarcraft/candy-mail:@dev</code>.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
 
-// Immutable: every with*() returns a new Email
-// The fields double as named arguments — new Email(from: ..., to: ..., subject: ..., body: ...) —
-// a partial build stays readable without counting positional slots
+// Immutable: every with*() returns a new Email. The constructor takes named
+// arguments too, so a partial build stays readable.
 $email = Email::new('noreply@example.com', 'user@example.com', 'Deployment complete', 'Your app was deployed successfully.')
     -&gt;withHtmlBody('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
     -&gt;withCc('ops@example.com')
     -&gt;withAttachment('build.zip', '/tmp/build.zip');   // display name, then the file on disk
 
-// Credentials come from the environment — never from committed source.
+// Credentials come from the environment, never from committed source.
 $transport = new SmtpTransport(
     host:     'smtp.example.com',
     port:     587,
@@ -186,54 +212,196 @@ $transport = new SmtpTransport(
 );
 $transport-&gt;send($email);
 
-// Or over the Resend HTTP API (key from the argument or RESEND_API_KEY)
+// Or over the Resend HTTP API, with the key taken from RESEND_API_KEY
 (new ResendTransport())-&gt;send($email);</code></pre>
+    <p>The SMTP transport requires TLS by default, so credentials never travel over a plaintext channel. The <code>candy-mail</code> CLI reads the same <code>CANDY_MAIL_SMTP_*</code> names listed under <a href="#configuration">Configuration</a>.</p>
+    <p>To see the message without sending anything, build the MIME text offline. No transport or network is involved:</p>
+    <pre class="code"><code class="language-php">$mime = (new SmtpTransport('smtp.example.com'))->buildMimeMessage($email);
+echo $mime;   // headers, the multipart/alternative body and the base64 attachment part</code></pre>
 
-    <p>TLS is required by default on the SMTP transport — credentials never travel over a plaintext
-    channel. Keep real passwords and API keys in the environment (the <code>candy-mail</code> CLI reads
-    the same <code>CANDY_MAIL_SMTP_*</code> names); see the TLS &amp; security section of the
-    <a href="https://github.com/sugarcraft/candy-mail/blob/master/candy-mail/README.md">README</a>.</p>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>An <code>Email</code> is a value. It holds the sender and recipient lists, the subject, the plain and HTML bodies, the attachments and any extra headers. Each <code>with*()</code> returns a new instance, and <code>Email::new()</code> is the one-pair shortcut. The constructor refuses, rather than cleans, any header value that holds a carriage return, line feed or other control byte, so a header cannot forge a second header.</p>
+    <p>A <code>Transport</code> is the delivery contract. It has a <code>send(Email, ?CancellationToken)</code> method and a <code>name()</code> for logging. Three implementations ship: <code>SmtpTransport</code>, <code>ResendTransport</code> and <code>MailgunTransport</code>. Writing your own means implementing the interface.</p>
+    <p><code>Mailer</code> wraps one transport. Before it dials, it refuses an email with no recipient in <code>to</code>, <code>cc</code> or <code>bcc</code>, and an email with no sender. The <code>candy-mail</code> CLI reports a missing transport configuration as <code>MissingTransportConfig</code>, a <code>RuntimeException</code>, and its offline <code>--render</code> fallback catches exactly that type, so a broken configuration stays a loud error. The library does not raise that type: a <code>ResendTransport</code> built with a blank key throws <code>InvalidArgumentException</code> when it sends.</p>
+    <p>Attachments are read when they are built, not when the message is sent. <code>Attachment::fromPath()</code> reads the file eagerly, so an unreadable path throws at <code>withAttachment()</code> time. A single attachment is capped at <code>Attachment::MAX_BYTES</code> (25 MiB), and the whole message at <code>Email::MAX_TOTAL_BYTES</code> (64 MiB).</p>
 
-    <p>Attachment paths are read eagerly at build time — the file on disk must exist when <code>withAttachment()</code> is called, or the builder throws a <code>RuntimeException</code>.</p>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>SMTP transport</strong><span>TCP connection with TLS, auth (LOGIN via TLS, fail-closed).</span></div>
-            <div class="feature"><strong>Resend transport</strong><span>API-based sending via Resend.com — no SMTP needed.</span></div>
-            <div class="feature"><strong>Attachments</strong><span>Local files, memory content, custom MIME types.</span></div>
-            <div class="feature"><strong>HTML + Text</strong><span>Multipart/alternative email bodies.</span></div>
-            <div class="feature"><strong>Command-line sender</strong><span>Body from stdin, repeatable address and attachment flags, offline --render preview.</span></div>
-            
-    </div>
+    <h3 id="send-over-smtp-with-tls-and-an-explicit-ca-bundle" style="margin-top: 24px;">Send over SMTP with TLS and an explicit CA bundle</h3>
+    <pre class="code"><code class="language-php">$smtp = (new SmtpTransport(
+    host: 'smtp.example.com',
+    port: 587,
+    username: (string) getenv('CANDY_MAIL_SMTP_USERNAME'),
+    password: (string) getenv('CANDY_MAIL_SMTP_PASSWORD'),
+))->withCaFile('/etc/ssl/certs/corp-ca.pem');
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+$smtp->send($email);</code></pre>
+    <p>STARTTLS is the default on port 587, and implicit TLS is selected automatically on port 465. <code>withRequireTls(false)</code> allows a plaintext fallback. Use it only when you accept that the credentials may cross the network unencrypted.</p>
+
+    <h3 id="send-through-the-resend-or-mailgun-api" style="margin-top: 24px;">Send through the Resend or Mailgun API</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Mail\{MailgunTransport, Mailer, ResendTransport};
+
+$resend  = new ResendTransport();                              // reads RESEND_API_KEY when the argument is empty
+$mailgun = new MailgunTransport(domain: 'mg.example.com', region: MailgunTransport::REGION_EU);
+
+(new Mailer($resend))->send($email);</code></pre>
+    <p>A transport constructed with an empty key falls back to the environment. A key that contains whitespace or a control character is refused at construction, before any request is made. One gap remains: a single trailing line feed passes that check, so trim a key read from a file before you pass it. The API transports never send without a key.</p>
+
+    <h3 id="embed-an-inline-image-and-reference-it-by-content-id" style="margin-top: 24px;">Embed an inline image and reference it by content ID</h3>
+    <pre class="code"><code class="language-php">$html = $email
+    ->withInlineAttachment('/srv/assets/logo.png', 'logo')   // the cid is the handle
+    ->withHtmlBody('&lt;img src=&quot;cid:logo&quot; alt=&quot;logo&quot;&gt; &lt;p&gt;Deployed.&lt;/p&gt;');
+$smtp->send($html);   // $smtp from the first recipe; ResendTransport refuses inline parts</code></pre>
+    <p>The inline part is sent with its content ID, and the HTML body refers to it as <code>cid:logo</code>. <code>Attachment::inline()</code> builds the same value object if you need it outside an <code>Email</code>.</p>
+    <p>Inline CID needs the SMTP or the Mailgun transport. <code>ResendTransport</code> refuses an inline attachment with an error keyed <code>resend.cid_unsupported</code>, because the Resend API payload has no Content-ID field, so a Resend key never sends this recipe. Send the message with <code>SmtpTransport</code> or <code>MailgunTransport</code>.</p>
+
+    <h3 id="attach-bytes-that-never-touch-the-disk" style="margin-top: 24px;">Attach bytes that never touch the disk</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Mail\{Attachment, Email};
+
+$report = Attachment::fromContent($csv, 'report.csv', 'text/csv');
+$email  = new Email(
+    from:        ['ops@example.com'],
+    to:          ['you@example.com'],
+    subject:     'Weekly report',
+    attachments: [$report],
+);</code></pre>
+    <p><code>withAttachment()</code> is for files on disk and refuses a missing path. <code>Attachment::fromContent()</code> takes the bytes and a MIME type, and defaults to <code>application/octet-stream</code> when none is given. The constructor's <code>attachments</code> argument accepts the value objects directly.</p>
+
+    <h3 id="send-from-the-command-line" style="margin-top: 24px;">Send from the command line</h3>
+    <pre class="code"><code class="language-shell">printf 'Build 42 is live.\n' | candy-mail --from ops@example.com --to you@example.com --subject "Deploy"
+candy-mail --from ops@example.com --to you@example.com --attach build.zip --render < message.txt   # offline preview, nothing sent</code></pre>
+    <p>The body is read from stdin. <code>--to</code>, <code>--cc</code>, <code>--bcc</code> and <code>--attach</code> repeat. <code>--render</code> prints the composed MIME message and sends nothing, so it needs no transport configured.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\Mail\</code>. The message and transports are plain value and service objects. The compose screen lives in <code>SugarCraft\Mail\Tui\</code>.</p>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Email</td><td><code>new(from, to, ?subject, ?body)</code></td><td>Create an email with one sender and one recipient</td></tr>
+    <tr><td>Email</td><td><code>withFrom()</code>, <code>withTo(...$to)</code>, <code>withCc(...$cc)</code>, <code>withBcc(...$bcc)</code>, <code>withReplyTo()</code>, <code>withSubject()</code></td><td>Immutable header builders</td></tr>
+    <tr><td>Email</td><td><code>withBody()</code>, <code>withHtmlBody()</code>, <code>withSignature()</code>, <code>withHeader(name, value)</code></td><td>Plain and HTML bodies, the signature, and extra headers</td></tr>
+    <tr><td>Email</td><td><code>withAttachment(filename, path)</code>, <code>withInlineAttachment(path, cid, ?filename)</code></td><td>Attach a file, or embed one for a <code>cid:</code> reference</td></tr>
+    <tr><td>Email</td><td><code>bodyWithSignature()</code>, <code>allRecipients()</code></td><td>The body with the signature applied, and the combined to, cc and bcc list</td></tr>
+    <tr><td>Attachment</td><td><code>fromPath(path, ?filename)</code>, <code>inline(path, cid, ?filename)</code></td><td>Build an attachment from a file on disk, plain or inline</td></tr>
+    <tr><td>Attachment</td><td><code>fromContent(content, filename, mimeType)</code>, <code>content()</code>, <code>withCid(cid)</code></td><td>Build one from memory, read the bytes, or set the content ID</td></tr>
+    <tr><td>Transport</td><td><code>send(Email, ?CancellationToken)</code>, <code>name()</code></td><td>The delivery interface. Implement it to add a transport.</td></tr>
+    <tr><td>Mailer</td><td><code>__construct(Transport)</code>, <code>send(Email, ?CancellationToken)</code>, <code>transportName()</code></td><td>Transport-agnostic sender that validates the envelope before dialing</td></tr>
+    <tr><td>SmtpTransport</td><td><code>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '', ?assumeOpenssl)</code></td><td>SMTP delivery. The constructor refuses an unsafe host, port, timeout or EHLO name.</td></tr>
+    <tr><td>SmtpTransport</td><td><code>withRequireTls(bool)</code>, <code>withImplicitTls(bool)</code>, <code>withCaFile(path)</code></td><td>TLS policy and a custom CA trust anchor</td></tr>
+    <tr><td>SmtpTransport</td><td><code>buildMimeMessage(Email, allow8Bit = true)</code></td><td>Render the full MIME message without sending</td></tr>
+    <tr><td>ResendTransport</td><td><code>__construct(apiKey = '', apiUrl = '')</code>, <code>send()</code>, <code>name()</code></td><td>Resend API delivery. Falls back to <code>RESEND_API_KEY</code>; <code>API_URL</code> is the default endpoint.</td></tr>
+    <tr><td>MailgunTransport</td><td><code>__construct(apiKey = '', domain = '', region = REGION_US, baseUrl = '')</code>, <code>endpoint()</code>, <code>send()</code></td><td>Mailgun API delivery, with <code>REGION_US</code> and <code>REGION_EU</code></td></tr>
+    <tr><td>MissingTransportConfig</td><td>extends <code>RuntimeException</code></td><td>The typed refusal for a missing transport configuration. Catch it by type, never by message text.</td></tr>
+    <tr><td>ComposeModel</td><td><code>new(Closure $send, Closure $render, array $prefill = [])</code>, <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>, <code>email()</code>, <code>focused()</code></td><td>The compose screen as a TEA Model. <code>email()</code> builds the Email from the fields.</td></tr>
+    <tr><td>TextBuffer</td><td><code>new(value = '', multiline = false)</code>, <code>insert()</code>, <code>backspace()</code>, <code>left()</code>, <code>right()</code>, <code>home()</code>, <code>end()</code>, <code>layout()</code></td><td>The editable text field used by each compose field, with immutable edits</td></tr>
+    <tr><td>SendResultMsg</td><td><code>__construct(?string $error, string $transport = '')</code></td><td>The message that reports a finished send back to the compose screen, with the error text when the send failed</td></tr>
+    </table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>The library reads no configuration files. Transports take their settings as constructor arguments, and the CLI maps environment variables onto them. Flags beat the environment, and the environment beats the defaults.</p>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>RESEND_API_KEY</code></td><td>string</td><td>unset</td><td>Enables the Resend transport. It wins outright when set.</td></tr>
+    <tr><td><code>CANDY_MAIL_MAILGUN_API_KEY</code></td><td>string</td><td>unset</td><td>Enables the Mailgun transport when no Resend key is set. The library reads <code>MAILGUN_API_KEY</code> when constructed without a key.</td></tr>
+    <tr><td><code>CANDY_MAIL_MAILGUN_DOMAIN</code></td><td>string</td><td>unset</td><td>Sending domain. Required with the Mailgun key.</td></tr>
+    <tr><td><code>CANDY_MAIL_MAILGUN_REGION</code></td><td><code>us</code> or <code>eu</code></td><td><code>us</code></td><td>Mailgun API region</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_HOST</code></td><td>host name</td><td>unset</td><td>SMTP server. Used when no API key is set.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_PORT</code></td><td>int</td><td><code>587</code></td><td>SMTP port. Port 465 selects implicit TLS.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_USERNAME</code>, <code>CANDY_MAIL_SMTP_PASSWORD</code></td><td>string</td><td>empty</td><td>SMTP credentials. Use an app password for Gmail-style accounts.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_REQUIRE_TLS</code></td><td>boolean word</td><td><code>1</code></td><td>Requires TLS. <code>1</code>, <code>true</code>, <code>yes</code>, <code>on</code> and their off counterparts are accepted. Any other value is refused, never guessed.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_IMPLICIT_TLS</code></td><td>boolean word</td><td>auto</td><td>Unset auto-detects from the port. Set <code>1</code> or <code>0</code> to force it.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_HELO</code></td><td>hostname</td><td>empty</td><td>EHLO identity. Letters, digits, dots and hyphens only.</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_CA_FILE</code></td><td>path</td><td>system store</td><td>Custom CA bundle for TLS verification</td></tr>
+    <tr><td><code>CANDY_MAIL_SMTP_TIMEOUT</code></td><td>int, 1 to 3600</td><td><code>30</code></td><td>Connect and per-response timeout in seconds</td></tr>
+    <tr><td><code>CANDY_MAIL_FROM</code></td><td>address</td><td>unset</td><td>Default sender. The CLI requires it unless <code>--from</code> is given, and never invents one.</td></tr>
+    <tr><td><code>CANDY_MAIL_SIGNATURE</code></td><td>string</td><td>unset</td><td>Appended to the plain-text body. HTML-only mail drops it.</td></tr>
+    </table>
+    <p>The transport is chosen by a ladder, not a merge. A non-blank Resend key wins outright, then the Mailgun key, then SMTP. When more than one transport is configured, <code>--transport=smtp</code>, <code>--transport=resend</code> or <code>--transport=mailgun</code> forces the choice, because the sending domain sets SPF and DKIM alignment.</p>
+
+    <h2 id="keys-in-the-compose-tui" style="margin-top: 40px;">Keys in the compose TUI</h2>
+    <p><code>candy-mail tui</code> opens the compose screen, a <code>ComposeModel</code> that runs on the sugar-core Model loop. A bare invocation on a terminal opens it too. Fields are <code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>replyto</code>, <code>subject</code>, <code>body</code>, <code>html</code> and <code>attach</code>.</p>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>Tab</kbd>, <kbd>Shift+Tab</kbd></td><td>Move to the next or previous field</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>In the body or the HTML field, insert a newline. Elsewhere, move to the next field.</td></tr>
+    <tr><td><kbd>Up</kbd>, <kbd>Down</kbd></td><td>In the body or the HTML field, move between lines. Elsewhere, and on the first or last line of those fields, move to the previous or next field.</td></tr>
+    <tr><td><kbd>Left</kbd>, <kbd>Right</kbd>, <kbd>Home</kbd>, <kbd>End</kbd></td><td>Move the cursor within the field</td></tr>
+    <tr><td><kbd>Backspace</kbd>, <kbd>Delete</kbd>, <kbd>Ctrl+U</kbd></td><td>Delete before the cursor, after it, or clear the field</td></tr>
+    <tr><td><kbd>Ctrl+P</kbd></td><td>Toggle the preview. <kbd>Esc</kbd> in the preview returns to editing.</td></tr>
+    <tr><td><kbd>Ctrl+S</kbd></td><td>Send the composed email through the configured transport</td></tr>
+    <tr><td><kbd>Esc</kbd> on the edit screen, <kbd>Ctrl+C</kbd>, <kbd>Ctrl+Q</kbd></td><td>Quit. With unsaved edits the first press asks for confirmation.</td></tr>
+    </table>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds six runnable programs. Five of them print an offline MIME preview unless they find the credentials they need, so none of them sends mail by accident. <code>showcase.php</code> prints a field summary instead of a MIME message.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-mail">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-mail/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-mail/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/pop">charmbracelet/pop</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/showcase.php</code> builds <code>Email</code> values and prints their fields. It needs no SMTP or Resend access.</li>
+      <li><code>examples/basic.php</code> sends through the Resend API when <code>RESEND_API_KEY</code> is set. Without a key it prints the composed MIME message.</li>
+      <li><code>examples/html-email.php</code> adds CC and BCC recipients, an HTML body and an inline CID image, then prints an offline MIME preview. With <code>RESEND_API_KEY</code> set it tries the Resend API instead, which refuses the inline image with the error keyed <code>resend.cid_unsupported</code>, so the run exits 1. Inline CID needs SMTP or Mailgun.</li>
+      <li><code>examples/attachments.php</code> attaches two files from disk with <code>withAttachment()</code> and prints the offline MIME preview.</li>
+      <li><code>examples/smtp.php</code> sends over SMTP when <code>CANDY_MAIL_SMTP_HOST</code> is set. Without it, the example prints the offline preview.</li>
+      <li><code>examples/pipeline.php</code> reads the message body from stdin, takes an optional recipient and subject from the command line, and sends through Resend when <code>RESEND_API_KEY</code> is set. Otherwise it prints the preview. It needs a piped body: with stdin empty or closed it prints a usage line and exits 1.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/showcase.php
+php examples/html-email.php           # offline MIME preview; RESEND_API_KEY routes it to Resend, which refuses the inline image</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite lives in <code>tests/</code> and runs under PHPUnit 10. Run it from the package root, with stdin redirected so a stray read cannot hang the run:</p>
+    <pre class="code"><code class="language-shell">vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The SMTP tests cover the MIME structure, and <code>TlsChannelTest</code> forks a minimal TLS-terminating fake SMTP server to exercise the TLS channel. The Resend and Mailgun tests check the request payload. The compose TUI has its own tests under <code>tests/Tui/</code>.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="building-an-attachment-throws-a-runtimeexception" style="margin-top: 24px;">Building an attachment throws a RuntimeException</h3>
+    <p>The path does not exist or is not readable, and <code>withAttachment()</code> reads the file when it is called. Check the path before building the email, or pass the bytes with <code>Attachment::fromContent()</code> instead.</p>
+
+    <h3 id="mailer-throws-invalidargumentexception-before-sending" style="margin-top: 24px;">Mailer throws InvalidArgumentException before sending</h3>
+    <p>The email has no recipient in <code>to</code>, <code>cc</code> or <code>bcc</code>, or it has no sender. Add a recipient with <code>withTo()</code> and a sender with <code>withFrom()</code>. The transports never see an envelope that <code>Mailer</code> refuses.</p>
+
+    <h3 id="an-api-key-is-refused-at-construction" style="margin-top: 24px;">An API key is refused at construction</h3>
+    <p>The key contains a carriage return, whitespace inside the value, or another control character. A trailing carriage return, as left by a Windows-style line ending in <code>RESEND_API_KEY</code>, is a common cause. The check exists because the key is written verbatim into an Authorization header, so a carriage return would forge a second header. A single trailing line feed is the one exception: it passes the check, so trim the value in the environment or after reading it from a file.</p>
+
+    <h3 id="resend-refuses-a-message-with-only-cc-or-bcc-recipients" style="margin-top: 24px;">Resend refuses a message with only cc or bcc recipients</h3>
+    <p>The Resend API needs at least one <code>to</code> recipient. SMTP accepts a cc or bcc-only send, so the same email can succeed over SMTP and fail over Resend.</p>
+
+    <h3 id="the-cli-sent-through-a-different-provider-than-expected" style="margin-top: 24px;">The CLI sent through a different provider than expected</h3>
+    <p>A configured Resend key wins over SMTP, and a Mailgun key wins over SMTP when no Resend key is set. Pass <code>--transport=smtp</code> to force SMTP, or <code>--transport=resend</code> and <code>--transport=mailgun</code> to refuse without their credentials.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>candy-mail (PHP)</th></tr>
+    <tr><td><code>charmbracelet/pop</code>, the email client whose send path this package follows</td><td><code>bin/candy-mail</code>, <code>ComposeModel</code>, <code>Mailer</code></td></tr>
+    <tr><td><code>go-mail</code> <code>NewEmail()</code>, the message library pop sends through</td><td><code>Email::new()</code> and the <code>Email</code> value object</td></tr>
+    <tr><td>The SMTP client and its MIME encoding</td><td><code>SmtpTransport</code>, with its own MIME builder. Not a line-by-line port.</td></tr>
+    <tr><td>Resend and Mailgun HTTP APIs</td><td><code>ResendTransport</code>, <code>MailgunTransport</code>. Native additions, not in pop.</td></tr>
+    </table>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+
+    <h3 id="values-in-transports-out" style="margin-top: 24px;">Values in, transports out</h3>
+    <p>The message is built as values, validated, and then handed to a transport. Sending is the only network step. A message can be built, inspected and rendered without one, and <code>buildMimeMessage()</code> exposes the exact bytes a send would produce. Attachments are the one I/O at build time, because they read their files when attached.</p>
+
+    <h3 id="validate-before-dialing" style="margin-top: 24px;">Validate before dialing</h3>
+    <p><code>Mailer</code> refuses an envelope with no recipient or no sender, and a canceled token stops a send before it starts. The SMTP transport validates its own host, port, timeout and EHLO name in the constructor, so a bad value fails where the caller still owns it.</p>
+
+    <h3 id="the-compose-screen-is-a-model" style="margin-top: 24px;">The compose screen is a Model</h3>
+    <p><code>ComposeModel</code> keeps one <code>TextBuffer</code> per field. Each key returns a new model, and the send is a <code>Cmd</code> that reports back through <code>SendResultMsg</code>, so the view never performs I/O.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p><code>candy-mail --version</code> prints the package version. Releases follow the sugarcraft tags, and the README's Install section explains the standalone phar.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a>: the Model, Cmd and Program runtime behind the compose screen, plus the sanitizer used on untrusted output.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Email</td><td>static new(from, to, ?subject, ?body)</td><td>Create an email</td></tr>
-<tr><td>Email</td><td>withFrom() / withTo(...$to) / withCc(...) / withBcc(...) / withReplyTo() / withSubject()</td><td>Immutable header builders</td></tr>
-<tr><td>Email</td><td>withBody() / withHtmlBody() / withSignature()</td><td>Plain-text and HTML bodies</td></tr>
-<tr><td>Email</td><td>withAttachment(filename, path) / withInlineAttachment(path, cid, ?filename)</td><td>Attach a file, or embed one for a cid: reference</td></tr>
-<tr><td>Email</td><td>bodyWithSignature() / allRecipients()</td><td>Body with signature applied; combined to/cc/bcc list</td></tr>
-<tr><td>Transport</td><td>send(Email, ?token = null)</td><td>Delivery interface — implement to add a custom transport</td></tr>
-<tr><td>Mailer</td><td>__construct(Transport) / send(Email, ?token = null)</td><td>Transport-agnostic sender; validates the envelope before dialing</td></tr>
-<tr><td>MissingTransportConfig</td><td>extends RuntimeException — catch by type, never by message text</td><td>The typed "no transport is configured" refusal; the CLI --render fallback catches exactly this so a broken config stays a loud error</td></tr>
-<tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email, ?token = null)</td><td>SMTP delivery</td></tr>
-<tr><td>SmtpTransport</td><td>withRequireTls() / withImplicitTls() / withCaFile(caFile)</td><td>TLS policy and custom CA trust anchor</td></tr>
-<tr><td>SmtpTransport</td><td>buildMimeMessage(Email, allow8Bit = true)</td><td>Render the full MIME message without sending</td></tr>
-<tr><td>ResendTransport</td><td>__construct(apiKey = '') / send(Email, ?token = null)</td><td>Resend API delivery; falls back to RESEND_API_KEY</td></tr>
-<tr><td>Attachment</td><td>static fromPath(path, ?filename) / static inline(path, cid, ?filename)</td><td>Attachment value objects</td></tr>
-<tr><td>Attachment</td><td>static fromContent(content, filename, mimeType = 'application/octet-stream')</td><td>Build an attachment from in-memory bytes</td></tr>
-</table>
+    <h3 id="source-demos" style="margin-top: 32px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mail">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mail/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mail/tree/master/examples">Runnable examples</a></li>
+    </ul>
     </div>
   </div>
 </section>
@@ -246,7 +414,7 @@ $transport-&gt;send($email);
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mail/.vhs/showcase.gif" alt="Showcase" onerror="this.parentElement.style.display='none'">
                 <h3 id="showcase">Showcase</h3>
-                <span class="demo-caption">Building Email value objects — transports, recipients, multipart bodies, attachments — and printing their resolved fields, structure visible without any SMTP access.</span>
+                <span class="demo-caption">Building Email value objects (recipients, multipart bodies) and printing their resolved fields, with the transports described as text and no SMTP access.</span>
             </div>
         </div>
     </div>

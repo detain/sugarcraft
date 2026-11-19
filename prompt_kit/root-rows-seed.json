@@ -171,7 +171,7 @@
         "candy-mail": {
             "readme": {
                 "needles": [
-                    "Email library + CLI — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface."
+                    "Email library + CLI — SMTP, Resend API and Mailgun API transports, attachments, HTML + plain-text multipart, fluent interface."
                 ],
                 "dead": []
             },
@@ -930,6 +930,34 @@
             "matchups": {
                 "needles": [
                     "Composer installer for `sugar-plugin` packages"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-jwt": {
+            "readme": {
+                "needles": [
+                    "JWT and JWK verification — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "JWT and JWK verification — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-ws-rpc": {
+            "readme": {
+                "needles": [
+                    "WebSocket RPC transport for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "WebSocket RPC transport — skeleton (namespace and wiring only)"
                 ],
                 "dead": []
             }

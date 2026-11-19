@@ -1,0 +1,8 @@
+<p class="lede" style="margin-top: 28px;">The JSON Web Token and JSON Web Key handling that SugarCraft channel bundles need to verify signed tokens from a remote identity provider. Today the candy-msteams bundle carries its own copy of this code, and the non-bundle scripts/channel-bridge JwtValidator verifies tokens separately. This library is the planned single home for it. It is a skeleton: its namespace and packaging exist, and the verification classes arrive in a later change. There is no Charmbracelet upstream; this library is first-party.</p>
+
+    <h2 style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-jwt</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The package has no runtime dependencies beyond PHP.</p>
+
+    <h2 style="margin-top: 40px;">Status</h2>
+    <p>The package currently ships only its PSR-4 wiring under <code>SugarCraft\Jwt\</code>. No public API exists yet, so there is no quickstart to show. The candy-msteams bundle keeps its own token and key-set code, and scripts/channel-bridge keeps its JwtValidator, until the verifier lands here.</p>
