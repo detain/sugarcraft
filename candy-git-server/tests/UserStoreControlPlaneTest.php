@@ -128,7 +128,7 @@ final class UserStoreControlPlaneTest extends TestCase
         foreach (['fwrite', 'fflush', 'fsync', 'fclose', 'rename'] as $i => $step) {
             $this->assertIsInt(
                 [$write, $flush, $sync, $close, $rename][$i],
-                "save() must contain the {$step} step of the durable publish chain"
+                "publish() must contain the {$step} step of the durable publish chain"
             );
         }
         $this->assertLessThan((int) $flush, (int) $write, 'payload lands before the flush');
