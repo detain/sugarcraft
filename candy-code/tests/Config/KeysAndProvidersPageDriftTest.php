@@ -214,6 +214,14 @@ final class KeysAndProvidersPageDriftTest extends TestCase
         $source = self::read('src/Providers/ProviderFactory.php');
         $scanner = new EnvReadScanner(['src/Providers/ProviderFactory.php' => $source]);
 
+        // An env read the scanner cannot place is absent from reads() and
+        // ambientReads(), so the oracle would silently miss it. Refuse here.
+        self::assertSame(
+            [],
+            $scanner->unresolved(),
+            'ProviderFactory has an environment read the env scanner cannot place; the env oracle would miss it',
+        );
+
         $names = [
             ...array_keys($scanner->reads()),
             ...array_keys($scanner->ambientReads()),
