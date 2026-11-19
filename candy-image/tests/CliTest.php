@@ -19,6 +19,7 @@ use SugarCraft\CandyImage\Cli;
 use SugarCraft\Core\Util\Tty\Kernel32Interface;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\SymbolMapRenderer;
 
 final class CliTest extends TestCase
@@ -1037,6 +1038,28 @@ final class CliTest extends TestCase
 
         $this->assertSame(Cli::EXIT_OK, $exit);
         $this->assertStringContainsString('da1-reply: (none)', $out, 'an empty echo is not an answer');
+    }
+
+    /**
+     * Argv validation of --format=auto must not run the terminal probe: the
+     * probe's memo would be taken before --passthrough is applied, and a
+     * tmux pane could get allow-passthrough toggled against the user's
+     * --passthrough=none. The file is missing, so the run stops after
+     * validation and nothing renders.
+     */
+    public function testFormatValidationDoesNotRunTheTerminalProbe(): void
+    {
+        $memo = new \ReflectionProperty(Mosaic::class, 'autoMemo');
+        $memo->setAccessible(true);
+
+        Mosaic::resetAutoMemo();
+        try {
+            self::drive(['--format=auto', '--passthrough=none', '/nonexistent/candy-image-probe.png']);
+
+            $this->assertNull($memo->getValue(), 'argv validation must not memoise the auto() probe');
+        } finally {
+            Mosaic::resetAutoMemo();
+        }
     }
 
     private function armConsoleCodepage(Kernel32Interface $kernel32): ?callable

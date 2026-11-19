@@ -250,7 +250,10 @@ final class Cli
 
                             return self::EXIT_USAGE;
                         }
-                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw) === null) {
+                        // Validation only needs to know the spelling is known: probe:false
+                        // keeps the terminal probe (and its tmux passthrough toggle) out of
+                        // argv parsing, before the --passthrough choice is applied below.
+                        if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw, probe: false) === null) {
                             self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 
                             return self::EXIT_USAGE;
@@ -410,7 +413,9 @@ final class Cli
                 // one to steer the player and the pump spins CPU forever
                 // (candy-image-004). Refuse loudly, same lane as every other
                 // usage error. The $play seam is exempt: it replaces exactly
-                // that loop, so Program->run() is never reached.
+                // that loop, so Program->run() is never reached. This is a bare
+                // presence check, not protocol detection, so it stays on core
+                // stream_isatty() and is not migrated to the sugar-image presenter.
                 if ($play === null && !\stream_isatty(STDIN) && !\stream_isatty(STDOUT)) {
                     self::err($stderr, Lang::t('cli.animate_requires_terminal'));
 
