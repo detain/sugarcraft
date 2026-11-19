@@ -81,7 +81,7 @@ final class PluginLoader
      * @param array<string, class-string>      $kindInterfaces the interface each requested kind is mapped to; the
      *                                                         loader only requires that a mapping exists, and the
      *                                                         caller checks the type of what it is handed
-     * @param int                              $hostContract  the host's contract integer; a plugin declaring a higher one is refused
+     * @param int                              $hostContract  the host's contract integer; a declared contract must equal this integer exactly, so an unknown value is refused
      * @param ?int                             $processUid    the uid the bytes must belong to; null reads the process's own
      *
      * @throws \InvalidArgumentException when a requested kind has no interface mapped
@@ -147,7 +147,7 @@ final class PluginLoader
             }
 
             $contract = $manifest->contract();
-            $unsupported = $contract !== null && $contract > $hostContract;
+            $unsupported = $contract !== null && $contract !== $hostContract;
             $declared = $manifest->entrypoints();
 
             // Per candidate: one path, one row for this bundle, however many kinds

@@ -378,7 +378,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame(['channel', 'theme'], array_column($result->refusals, 'kind'));
     }
 
-    public function testAContractAtOrBelowTheHostIsAccepted(): void
+    public function testAContractEqualToTheHostIsAccepted(): void
     {
         $plugin = $this->declaring('Impl', contract: 3);
 
@@ -386,6 +386,15 @@ final class PluginLoaderTest extends TestCase
 
         $this->assertCount(1, $result->quarantined);
         $this->assertSame([], $result->refusals);
+    }
+
+    public function testAContractBelowTheHostIsRefusedBecauseTheCheckIsExact(): void
+    {
+        $plugin = $this->declaring('Impl', contract: 2);
+
+        $result = $this->load([Plugins::candidate('demo', $plugin['dir'])], new MemoryLedger(), host: 3);
+
+        $this->assertSame(['contract-unsupported'], array_column($result->refusals, 'reason'));
     }
 
     public function testAWorldWritableFileIsRefused(): void

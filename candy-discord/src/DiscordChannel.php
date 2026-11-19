@@ -19,12 +19,13 @@ use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Channels\ChannelInterface;
-use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Server\Auth\TokenStore;
-use SugarCraft\Code\Server\DiscoveryFile;
-use SugarCraft\Code\Server\StateDir;
+use SugarCraft\Plugins\PluginContext;
+use SugarCraft\Plugins\Channel\ChannelInterface;
+use SugarCraft\Plugins\Channel\CredentialWriter;
+use SugarCraft\Plugins\Channel\WritesCredentials;
+use SugarCraft\ServeProtocol\Auth\TokenFile;
+use SugarCraft\ServeProtocol\Discovery\LiveRecord;
+use SugarCraft\ServeProtocol\Discovery\StateDirReader;
 
 // Entrypoint self-bootstrap: the P1 loader require_once's THIS file and
 // nothing else, so the bundle's sibling classes need their autoloader
@@ -57,7 +58,7 @@ require_once __DIR__ . '/autoload.php';
  * The disabled posture is absolute: `enabled:false` (the default) starts
  * ZERO timers, opens ZERO sockets, writes ZERO files.
  */
-final class DiscordChannel implements ChannelInterface
+final class DiscordChannel implements ChannelInterface, WritesCredentials
 {
     private ?LoopInterface $loop = null;
 
@@ -88,21 +89,18 @@ final class DiscordChannel implements ChannelInterface
 
     private bool $disposed = false;
 
+    /** The settings section the host froze at launch (plan 4.14). */
+    private array $cfg = [];
+
     public function name(): string
     {
         return 'discord';
     }
 
-    public function start(ChannelContext $context): void
+    public function start(PluginContext $context, ?CredentialWriter $writer = null): void
     {
-        // Version-skew guard: a bundle newer than its host candy-code must
-        // no-op loudly, not fatal the launch.
-        if (!method_exists(Bootstrap::class, 'channelsDiscordSettings')) {
-            ($context->log)('channels.discord: candy-code too old for this bundle — refusing to start');
-
-            return;
-        }
-        $cfg = Bootstrap::channelsDiscordSettings();
+        $cfg = $context->config;
+        $this->cfg = $cfg;
         if (($cfg['enabled'] ?? false) !== true) {
             ($context->log)('channels.discord: disabled posture, nothing started');
 
@@ -123,7 +121,12 @@ final class DiscordChannel implements ChannelInterface
             return;
         }
 
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        if ($context->stateDir === null || $context->stateDir === '') {
+            ($context->log)('channels.discord: no state directory, nothing started');
+
+            return;
+        }
+        $store = new CredentialStore(CredentialStore::pathIn($context->stateDir), $writer);
         $accounts = $this->accountNames($cfg, $store);
         if ($accounts === []) {
             $this->log->warn('channels.discord.no_accounts', ['why' => 'no token in the channels store and no DISCORD_BOT_TOKEN']);
@@ -179,7 +182,7 @@ final class DiscordChannel implements ChannelInterface
         // redactor the moment pairing exists, or the restart window leaks them.
         $pairing->registerLiveSecrets(array_keys($tokens));
 
-        $dir = Bootstrap::trustedConfigDirPath() . '/discord';
+        $dir = $context->stateDir . '/discord';
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
@@ -285,7 +288,7 @@ final class DiscordChannel implements ChannelInterface
         $stateDirPath = (string) (getenv('CANDY_CODE_SERVER_DIR')
             ?: ( rtrim((string) (getenv('HOME') ?: ''), '/') . '/.candy-code/server'));
         try {
-            $dir = StateDir::existing($stateDirPath);
+            $dir = StateDirReader::existing($stateDirPath);
         } catch (\Throwable $e) {
             $this->log?->warn('channels.discord.state_dir_refused', ['error' => $e->getMessage()]);
             $this->nextDialAt = time() + 30;
@@ -295,17 +298,18 @@ final class DiscordChannel implements ChannelInterface
         if ($dir === null) {
             return; // no serve yet — the 5s poll keeps trying (this is the boot order, not an error)
         }
-        $record = DiscoveryFile::read($dir);
-        if ($record === null || !$record->isLive()) {
+        // A record that is absent, malformed or stale is no serve at all (plan 4.12).
+        $liveUrl = LiveRecord::url($dir);
+        if ($liveUrl === null) {
             return;
         }
-        $wsUrl = ServeBridge::wsUrlFrom((string) ($record->toArray()['url'] ?? ''));
+        $wsUrl = ServeBridge::wsUrlFrom($liveUrl);
         if ($wsUrl === null) {
             $this->log?->warn('channels.discord.discovery_url_untranslatable');
 
             return;
         }
-        $tokenFile = $dir->path . '/' . TokenStore::FILE;
+        $tokenFile = $dir . '/' . TokenFile::FILE;
         $stat = @lstat($tokenFile);
         $serveToken = $stat !== false && (($stat['mode'] & 0170000) === 0100000)
             ? trim((string) @file_get_contents($tokenFile))
@@ -323,7 +327,7 @@ final class DiscordChannel implements ChannelInterface
 
     private function rebuildRouter(string $wsUrl, string $serveToken): void
     {
-        $cfg = method_exists(Bootstrap::class, 'channelsDiscordSettings') ? Bootstrap::channelsDiscordSettings() : [];
+        $cfg = $this->cfg;
         $this->serve?->stop();
         $this->queueGate?->cancelAll();
 

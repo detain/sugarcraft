@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Channels;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Plugins\PluginContext;
 use React\EventLoop\Loop;
 use React\Http\Message\ServerRequest;
 use SugarCraft\Code\Bundles\Bundle;
-use SugarCraft\Code\Channels\AcceptsHttpRequests;
+use SugarCraft\Plugins\Channel\AcceptsHttpRequests;
 use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Channels\ChannelInterface;
+use SugarCraft\Plugins\Channel\ChannelInterface;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
-use SugarCraft\Code\Channels\SubscribesToSessionEvents;
+use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
@@ -391,7 +392,7 @@ final class ChannelRegistryTest extends TestCase
 
     private function bakeWorkingChannel(Bundle $bundle, string $routeName, string $journal): void
     {
-        $members = '    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext $context): void { file_put_contents($this->journal, "start:" . $this->name() . PHP_EOL, FILE_APPEND); }
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void { file_put_contents($this->journal, "start:" . $this->name() . PHP_EOL, FILE_APPEND); }
     public function dispose(): void { file_put_contents($this->journal, "dispose:" . $this->name() . PHP_EOL, FILE_APPEND); }
 ';
         $this->plantClass($bundle, $this->classText($bundle, $routeName, 'ChannelInterface', $journal, $members));
@@ -403,7 +404,7 @@ final class ChannelRegistryTest extends TestCase
         $onEvent = $willThrow
             ? '    public function onEvent(array $envelope): void { throw new \\RuntimeException("subscriber blown"); }'
             : '    public function onEvent(array $envelope): void { file_put_contents(' . $sink . ', json_encode($envelope) . PHP_EOL, FILE_APPEND); }';
-        $members = '    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext $context): void {}
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void {}
     public function dispose(): void {}
 ' . $onEvent . '
 ';
@@ -412,7 +413,7 @@ final class ChannelRegistryTest extends TestCase
 
     private function bakeWebhook(Bundle $bundle): void
     {
-        $members = '    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext $context): void {}
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void {}
     public function dispose(): void {}
     public function handleRequest(\\Psr\\Http\\Message\\ServerRequestInterface $request): \\Psr\\Http\\Message\\ResponseInterface { return new \\React\\Http\\Message\\Response(200, [], "channel-answered"); }
 ';
@@ -422,7 +423,7 @@ final class ChannelRegistryTest extends TestCase
     private function bakeCtorThrower(Bundle $bundle): void
     {
         $members = '    public function __construct() { throw new \\RuntimeException("ctor refused"); }
-    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext $context): void {}
+    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void {}
     public function dispose(): void {}
 ';
         $this->plantClass($bundle, $this->classText($bundle, 'boom-ctor', 'ChannelInterface', '', $members));
@@ -437,7 +438,7 @@ final class ChannelRegistryTest extends TestCase
 
     private function bakeStartThrower(Bundle $bundle): void
     {
-        $members = '    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext $context): void { throw new \\RuntimeException("start refused"); }
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void { throw new \\RuntimeException("start refused"); }
     public function dispose(): void {}
 ';
         $this->plantClass($bundle, $this->classText($bundle, 'failing-start', 'ChannelInterface', '', $members));
@@ -459,7 +460,7 @@ final class ChannelRegistryTest extends TestCase
     {
         $id = $this->nextId();
         $journalExport = var_export($journal, true);
-        return "class {$id} implements \\SugarCraft\\Code\\Channels\\{$shortContract}\n{\n    private string \$journal = {$journalExport};\n    public function name(): string { return '" . $routeName . "'; }\n" . $members . "}\n";
+        return "class {$id} implements \\SugarCraft\\Plugins\\Channel\\{$shortContract}\n{\n    private string \$journal = {$journalExport};\n    public function name(): string { return '" . $routeName . "'; }\n" . $members . "}\n";
     }
 
     /** @param string|null $forcedId when the source was built without classText() */
@@ -525,7 +526,7 @@ final class ChannelRegistryTest extends TestCase
                 return $this->label;
             }
 
-            public function start(ChannelContext $context): void
+            public function start(PluginContext $context): void
             {
             }
 

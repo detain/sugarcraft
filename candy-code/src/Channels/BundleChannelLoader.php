@@ -54,6 +54,9 @@ use SugarCraft\Code\Support\ContainedPath;
  */
 final class BundleChannelLoader
 {
+    /** The plugin contract integer this host supports; plugin.json's `contract` must equal it when declared. */
+    public const CONTRACT = 1;
+
     /**
      * Load every trusted bundle's entrypoints of $kinds into this process.
      *
@@ -105,6 +108,13 @@ final class BundleChannelLoader
                         continue;
                     }
 
+                    // The contract is exact when declared: an absent key is accepted as before,
+                    // and any other value (a string, a number other than 1) is refused.
+                    $declared = $bundle->manifest['contract'] ?? null;
+                    if ($declared !== null && $declared !== self::CONTRACT) {
+                        $refusals[] = $where + ['reason' => 'contract-unsupported'];
+                        continue;
+                    }
                     $private = self::refuseLooseBytes($entry['path']);
                     if ($private !== null) {
                         $refusals[] = $where + ['reason' => $private];

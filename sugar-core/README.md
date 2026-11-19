@@ -474,6 +474,7 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — pure enum: Tick (periodic timer, `seconds` required) / Key (polling timer, `interval` defaulting to 0.1 s — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
+- **`RevisionCapable`** — optional interface for view memoization (P1-16): `revision(): int|string|null`. It is a companion to `Model`, not a method on it, because PHP interfaces cannot carry a default and existing models must stay unchanged; a model that does not implement it behaves exactly as before. `Program` reads the revision on every frame. When it equals the revision the previous frame was rendered under, and the active model is the same class, `view()` is not called and the previous rendered value is painted again, so the bytes match a fresh `view()` with unchanged output. A `null` revision (or a model without the interface) calls `view()` every frame, and a throw from `view()` leaves no memo behind. Headless mode (`withoutRenderer`) honors the same memo, since no paint is needed to skip `view()`. A push or pop delivered as `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` clears the memo, so the newly active screen gets a fresh `view()`; a root that changes its stack through any other path (a `SuspendMsg` stash, a direct `withScreens()` route) gets no such clear, so it must bump its revision for the change to show. The model owns the invalidation: bump the revision whenever `view()` would produce different output, including when the view depends on terminal size. Distinct instances of one class in the same program must not report the same revision for different output.
 
 **Timing notes.** On a libuv-backed loop (`ExtUvLoop`, picked automatically when
 `ext-uv` is installed) a timer's deadline is computed against a clock refreshed
@@ -1069,6 +1070,21 @@ use SugarCraft\Core\Program;
 
 $program = (new Program(new Counter()))
     ->withExceptionHandler(fn (\Throwable $t) => error_log($t->getMessage()));
+```
+
+### withFrameDiffHook
+
+Register a per-frame diff hook: a read-only observer that runs after every frame the renderer paints. It receives the body the previous frame painted and the body this frame painted. The previous body is `null` before the first paint and after a reset such as `forceRepaint()`. Both bodies are the ones after image markers are resolved, which is what the text renderer diffed. Equal bodies mean the text grid did not change. The body does not include the cursor or the image layer, so a cursor move, or an image whose pixels change behind an unchanged marker, can alter the screen while the bodies stay equal. The hook is not called in headless mode (`withoutRenderer`). A throw goes to the exception handler. Do not write to the terminal from the hook.
+
+```php
+use SugarCraft\Core\Program;
+
+$program = (new Program(new Counter()))
+    ->withFrameDiffHook(function (?string $previous, string $current): void {
+        if ($previous !== $current) {
+            // the screen changed this frame
+        }
+    });
 ```
 
 ### lastFrameDuration

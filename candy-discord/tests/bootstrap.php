@@ -1,11 +1,10 @@
 <?php
 
 /**
- * Bundle-local test bootstrap — runs OUTSIDE the marketplace path, straight
- * from the repository, so it may reach for the host vendor directly (a
- * relative hop from here: candy-discord/tests → repo root → candy-code).
- * The runtime bundle never takes this hop; its autoload.php knows only its
- * own subtree.
+ * Bundle-local test bootstrap. The suite runs under the bundle's own vendor
+ * tree (PL-1c-i): the plugin libraries and the candy-code Lang catalog come
+ * from there, so no host vendor hop is taken. The runtime bundle's
+ * autoload.php knows only its own subtree.
  *
  * The Tests\ subtree lives beside this file, not under src/, so it gets its
  * own PSR-4 map here — the runtime autoload deliberately never sees it.
@@ -13,9 +12,9 @@
 
 declare(strict_types=1);
 
-$host = \dirname(__DIR__, 2) . '/candy-code/vendor/autoload.php';
+$host = \dirname(__DIR__) . '/vendor/autoload.php';
 if (!\is_file($host)) {
-    fwrite(STDERR, "bundle tests need the candy-code vendor tree present: {$host}\n");
+    fwrite(STDERR, "bundle tests need the bundle vendor tree present (composer install): {$host}\n");
     exit(1);
 }
 require_once $host;

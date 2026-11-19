@@ -1,6 +1,7 @@
 {
   "name": "candy-msteams",
   "version": "0.1.0",
+  "contract": 1,
   "description": "Microsoft Teams channel bundle for candy-code serve: chat with a served session from Teams personal chats, group chats and channel posts. Webhook inbound with in-bundle Bot Framework JWT validation, activity-referenced REST outbound, pairing gates, group allowlists, queue modes, chunked redacted replies, and adaptive-card approvals with a same-chat text fallback. Policy rides the user-tier channels.msteams settings; credentials live only in the 0600 channels store.",
   "entrypoints": {
     "channel": [

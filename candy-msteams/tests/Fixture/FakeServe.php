@@ -19,16 +19,14 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\Tests\Fixture;
 
 use Ratchet\RFC6455\Handshake\RequestVerifier;
+use SugarCraft\ServeProtocol\Protocol;
 use Ratchet\RFC6455\Handshake\ServerNegotiator;
 use Ratchet\RFC6455\Messaging\CloseFrameChecker;
 use Ratchet\RFC6455\Messaging\Frame;
 use Ratchet\RFC6455\Messaging\MessageBuffer;
 use React\EventLoop\LoopInterface;
-use SugarCraft\Code\Attachments\FileMentions;
 use React\Socket\ConnectionInterface;
 use React\Socket\SocketServer;
-use SugarCraft\Code\Protocol\Dispatcher;
-use SugarCraft\Code\Server\ServerConfig;
 
 final class FakeServe
 {
@@ -171,7 +169,7 @@ final class FakeServe
         $token = $this->token;
         $buffer = '';
         $negotiator = new ServerNegotiator(new RequestVerifier(), new \GuzzleHttp\Psr7\HttpFactory());
-        $negotiator->setSupportedSubProtocols([ServerConfig::SUBPROTOCOL]);
+        $negotiator->setSupportedSubProtocols([Protocol::SUBPROTOCOL]);
         $negotiator->setStrictSubProtocolCheck(true);
 
         $onData = function (string $chunk) use (&$buffer, $connection, $negotiator, $token, $id, &$onData): void {
@@ -188,15 +186,15 @@ final class FakeServe
             if ($offered !== ['']) {
                 $this->upgradeSeen++;
             }
-            $this->sawAuthSubprotocol = \in_array(ServerConfig::AUTH_SUBPROTOCOL_PREFIX . $token, $offered, true);
+            $this->sawAuthSubprotocol = \in_array(Protocol::AUTH_SUBPROTOCOL_PREFIX . $token, $offered, true);
             $this->sawBearerHeader = $request->getHeaderLine('Authorization') === 'Bearer ' . $token;
 
             // The two doors AuthMiddleware reads: bearer header and the
             // `candy-code.auth.<token>` subprotocol spelling.
             $authenticated = false;
             foreach ($offered as $offeredProtocol) {
-                if (\str_starts_with($offeredProtocol, ServerConfig::AUTH_SUBPROTOCOL_PREFIX)) {
-                    $authenticated = $authenticated || \substr($offeredProtocol, \strlen(ServerConfig::AUTH_SUBPROTOCOL_PREFIX)) === $token;
+                if (\str_starts_with($offeredProtocol, Protocol::AUTH_SUBPROTOCOL_PREFIX)) {
+                    $authenticated = $authenticated || \substr($offeredProtocol, \strlen(Protocol::AUTH_SUBPROTOCOL_PREFIX)) === $token;
                 }
             }
             if ($this->sawBearerHeader) {
@@ -237,8 +235,8 @@ final class FakeServe
                 },
                 true,
                 null,
-                Dispatcher::MAX_SERVER_FRAME_BYTES,
-                Dispatcher::MAX_SERVER_FRAME_BYTES,
+                Protocol::MAX_SERVER_FRAME_BYTES,
+                Protocol::MAX_SERVER_FRAME_BYTES,
                 function (string $bytes) use ($connection): void {
                     $connection->write($bytes);
                 },
@@ -289,7 +287,7 @@ final class FakeServe
                     'result' => (object) [
                         'protocol' => (object) ['major' => 1, 'minor' => 0],
                         'server' => (object) ['version' => 'fixture', 'root' => '/fixture', 'name' => 'fake-serve'],
-                        'limits' => (object) ['tickIntervalMs' => 15000, 'maxClientFrameBytes' => Dispatcher::MAX_SERVER_FRAME_BYTES],
+                        'limits' => (object) ['tickIntervalMs' => 15000, 'maxClientFrameBytes' => Protocol::MAX_SERVER_FRAME_BYTES],
                     ],
                 ]);
                 break;
@@ -442,13 +440,40 @@ final class FakeServe
                 continue;
             }
             $bytes = (string) \base64_decode((string) ($entry['data'] ?? ''), true);
-            $sniffed = $image ? FileMentions::sniffImage($bytes) : FileMentions::sniffDocument($bytes);
+            $sniffed = $image ? self::sniffImage($bytes) : self::sniffDocument($bytes);
             if ($sniffed !== (string) ($entry['mime'] ?? '')) {
                 return $image ? 'image_mime_mismatch' : 'document_mime_mismatch';
             }
         }
 
         return null;
+    }
+
+    /**
+     * Inline stand-in for the host's image sniff (plan default e): the same
+     * magic-number rules, so the fixture never imports a candy-code class.
+     */
+    private static function sniffImage(string $bytes): ?string
+    {
+        if (\strlen($bytes) >= 8 && \str_starts_with($bytes, "\x89PNG")) {
+            return 'image/png';
+        }
+        if (\str_starts_with($bytes, "\xFF\xD8\xFF")) {
+            return 'image/jpeg';
+        }
+        if (\str_starts_with($bytes, 'GIF87a') || \str_starts_with($bytes, 'GIF89a')) {
+            return 'image/gif';
+        }
+        if (\strlen($bytes) >= 12 && \str_starts_with($bytes, 'RIFF') && \substr($bytes, 8, 4) === 'WEBP') {
+            return 'image/webp';
+        }
+
+        return null;
+    }
+
+    private static function sniffDocument(string $bytes): ?string
+    {
+        return \str_starts_with($bytes, '%PDF-') ? 'application/pdf' : null;
     }
 
     private function emit(int $connectionId, array $message): void

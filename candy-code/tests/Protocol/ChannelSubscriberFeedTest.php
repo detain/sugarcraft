@@ -147,9 +147,9 @@ final class ChannelSubscriberFeedTest extends TestCase
         $entryPath = $dir . '/gen/sub-' . $class . '.php';
         mkdir($dir . '/gen', 0777, true);
         $throwLine = $blows ? "throw new \\RuntimeException('feed subscriber blown');\n        " : '';
-        $code = "<?php\nfinal class {$class} implements \\SugarCraft\\Code\\Channels\\SubscribesToSessionEvents\n{\n"
+        $code = "<?php\nfinal class {$class} implements \\SugarCraft\\Plugins\\Channel\\SubscribesToSessionEvents\n{\n"
             . "    public function name(): string\n    {\n        return 'feed-chan';\n    }\n\n"
-            . "    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext \$context): void\n    {\n    }\n\n"
+            . "    public function start(\\SugarCraft\\Plugins\\PluginContext \$context): void\n    {\n    }\n\n"
             . "    public function dispose(): void\n    {\n    }\n\n"
             . "    public function onEvent(array \$envelope): void\n    {\n        {$throwLine}"
             . "file_put_contents(" . var_export($sink, true) . ", json_encode(\$envelope) . PHP_EOL, FILE_APPEND | LOCK_EX);\n    }\n}\n";

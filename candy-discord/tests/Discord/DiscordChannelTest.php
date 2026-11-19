@@ -10,8 +10,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Plugins\PluginContext;
 
 /**
  * The dark-channel law: a disabled (or absent) channels.discord tree must
@@ -52,7 +51,7 @@ final class DiscordChannelTest extends TestCase
     {
         $lines = [];
         $channel = new DiscordChannel();
-        $channel->start(ChannelContext::for(
+        $channel->start($this->ctx(
             'candy-discord',
             'discord',
             $this->homeRoot,
@@ -64,7 +63,7 @@ final class DiscordChannelTest extends TestCase
 
         self::assertSame(['channels.discord: disabled posture, nothing started'], $lines);
         self::assertSame([], $channel->faceNames());
-        self::assertDirectoryDoesNotExist(Bootstrap::trustedConfigDirPath() . '/discord');
+        self::assertDirectoryDoesNotExist($this->configDir() . '/discord');
         self::assertSame([], $channel->faceNames());
 
         $channel->dispose();
@@ -85,7 +84,7 @@ final class DiscordChannelTest extends TestCase
 
         $channel = new DiscordChannel();
         try {
-            $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line): void {
+            $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line): void {
             }));
             self::fail('a plain-http remote endpoint must refuse the start');
         } catch (\RuntimeException $error) {
@@ -94,7 +93,7 @@ final class DiscordChannelTest extends TestCase
 
         // Dispose after a failed start is safe and still touches no state dir.
         $channel->dispose();
-        self::assertDirectoryDoesNotExist(Bootstrap::trustedConfigDirPath() . '/discord');
+        self::assertDirectoryDoesNotExist($this->configDir() . '/discord');
     }
 
     /**
@@ -115,7 +114,7 @@ final class DiscordChannelTest extends TestCase
 
         $lines = [];
         $channel = new DiscordChannel();
-        $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
+        $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
             $lines[] = $line;
         }));
 
@@ -137,7 +136,7 @@ final class DiscordChannelTest extends TestCase
 
         $lines = [];
         $channel = new DiscordChannel();
-        $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
+        $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
             $lines[] = $line;
         }));
 
@@ -276,13 +275,13 @@ final class DiscordChannelTest extends TestCase
         };
 
         $channel = new DiscordChannel();
-        $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $loop, static function (string $line): void {
+        $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $loop, static function (string $line): void {
         }));
 
         // Sanity: the tree genuinely booted (poll timer armed, state dir live)
         // — the dark path would arm nothing, so this leg passes before the fix.
         self::assertTrue($loop->armedPeriodic(5.0), 'a bottled tree must arm the serve poll');
-        $db = Bootstrap::trustedConfigDirPath() . '/discord/sessions.db';
+        $db = $this->configDir() . '/discord/sessions.db';
         self::assertFileExists($db);
 
         // Seed the ledger: one stale row (aged past any keep) and one fresh.
@@ -307,5 +306,38 @@ final class DiscordChannelTest extends TestCase
         // Dispose releases the sweep beside its siblings.
         $channel->dispose();
         self::assertContains(21600.0, $loop->cancelledIntervals(), 'dispose must cancel the prune timer');
+    }
+
+    /** The candy-code configuration directory the sandbox HOME carries. */
+    private function configDir(): string
+    {
+        return $this->homeRoot . '/.candy-code';
+    }
+
+    private function channelsPath(): string
+    {
+        return $this->configDir() . '/channels.json';
+    }
+
+    /**
+     * The settings section a host would freeze for this channel: the flat
+     * dotted key in the sandbox's config.json, read directly so the bundle
+     * test never loads candy-code's settings reader.
+     *
+     * @return array<string, mixed>
+     */
+    private function userSection(string $key): array
+    {
+        $path = $this->configDir() . '/config.json';
+        $tree = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+        $section = is_array($tree) ? ($tree[$key] ?? []) : [];
+
+        return is_array($section) ? $section : [];
+    }
+
+    /** @param \Closure(string):void $sink */
+    private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink): PluginContext
+    {
+        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir());
     }
 }
