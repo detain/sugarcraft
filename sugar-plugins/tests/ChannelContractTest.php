@@ -10,7 +10,9 @@ use Psr\Http\Message\ServerRequestInterface;
 use SugarCraft\Plugins\Channel\AcceptsHttpRequests;
 use SugarCraft\Plugins\Channel\ChannelInterface;
 use SugarCraft\Plugins\Channel\DispatchesInboundEvents;
+use SugarCraft\Plugins\Channel\CredentialWriter;
 use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
+use SugarCraft\Plugins\Channel\WritesCredentials;
 use SugarCraft\Plugins\Plugin;
 use SugarCraft\Plugins\PluginContext;
 
@@ -72,5 +74,19 @@ final class ChannelContractTest extends TestCase
 
         $this->assertSame('array', (string) $method->getParameters()[0]->getType());
         $this->assertSame('bool', (string) $method->getReturnType());
+    }
+
+    public function testWritesCredentialsExtendsPluginAndTakesAnOptionalWriter(): void
+    {
+        $this->assertTrue(is_a(WritesCredentials::class, Plugin::class, true));
+        $method = new \ReflectionMethod(WritesCredentials::class, 'start');
+        $this->assertSame(['context', 'writer'], array_map(static fn(\ReflectionParameter $p): string => $p->getName(), $method->getParameters()));
+        $this->assertTrue($method->getParameters()[1]->allowsNull());
+    }
+
+    public function testCredentialWriterHasOneMutateMethod(): void
+    {
+        $methods = array_map(static fn(\ReflectionMethod $m): string => $m->getName(), (new \ReflectionClass(CredentialWriter::class))->getMethods());
+        $this->assertSame(['mutate'], $methods);
     }
 }
