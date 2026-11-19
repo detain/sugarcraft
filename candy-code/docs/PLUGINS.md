@@ -39,12 +39,19 @@ Three roots are scanned, and each bundle carries the tier its root implies:
 | Root | Tier | Trust |
 |---|---|---|
 | `<project>/.candy-code/bundles/` | `project` | confined to the checkout, exactly like a cloned `.claude/skills` tree |
-| `~/.candy-code/bundles/` | `user` | the destination `candy-code bundles install` writes to; a symlink inside it may point anywhere in home and nowhere outside it |
+| `~/.candy-code/bundles/` | `user` | the destination `candy-code bundles install` writes to; a bundle directory may be a symlink into home, but its manifest must resolve inside that bundle (see below) |
 | every `pluginPaths` entry | `user` | the operator's explicit word: a listed path is trusted as given, and may be either one bundle or a container of bundles |
 
 A bundle whose path resolves outside the tree it was found in (a project
 symlink pointing at someone else's home, say) is refused, named, and reported
 through the same launch-refusal channel as every other project-tier escape.
+
+A bundle's manifest is held to the same rule wherever the bundle sits. A
+`.claude-plugin/plugin.json` (or bare `plugin.json`) that is a symbolic link
+resolving outside its bundle directory refuses that bundle: discovery skips it
+and reports a launch warning naming the link, and `candy-code bundles install`
+names the same link and installs nothing. A link inside a bundle that points
+back into the bundle is still fine.
 
 `pluginPaths` lives in your user config and is user-tier only — a checked-out
 repository cannot add to it. See [SETTINGS.md](SETTINGS.md).

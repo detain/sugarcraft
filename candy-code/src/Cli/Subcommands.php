@@ -4148,11 +4148,21 @@ final class Subcommands
      */
     private static function bundlesNotBundle(string $staged, string $source): void
     {
+        self::bundlesLine(self::bundlesNotBundleMessage($staged, $source));
+    }
+
+    /**
+     * The words {@see bundlesNotBundle()} prints. Split out so the choice
+     * between "absent" and "linked" is pinned without capturing STDERR, which
+     * an in-process `ob_start()` cannot see.
+     */
+    private static function bundlesNotBundleMessage(string $staged, string $source): string
+    {
         $link = Bundle::refusedManifest($staged);
 
-        self::bundlesLine($link === null
+        return $link === null
             ? Lang::t('cli.bundles.install.not_bundle', ['source' => $source])
-            : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $link]));
+            : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $link]);
     }
 
     /**
