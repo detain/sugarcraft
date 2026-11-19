@@ -37,6 +37,18 @@ final class TimelineTest extends TestCase
         $this->assertSame(0, Timeline::new(10, 20.0)->tileAt(-5.0));
     }
 
+    public function testABoundaryOnANonBinaryStepLandsInItsOwnTile(): void
+    {
+        // Step 0.1 is inexact in binary: the boundary at 0.3 belongs to tile 3
+        // (the division by the rounded step used to answer tile 2).
+        $timeline = Timeline::new(10, 1.0);
+
+        $this->assertSame(1, $timeline->tileAt(0.1));
+        $this->assertSame(2, $timeline->tileAt(0.2));
+        $this->assertSame(3, $timeline->tileAt(0.3));
+        $this->assertSame(6, $timeline->tileAt(0.6));
+    }
+
     public function testSingleTileTimelineAlwaysAnswersZero(): void
     {
         $timeline = Timeline::new(1, 3.0);

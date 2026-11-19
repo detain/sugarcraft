@@ -292,8 +292,18 @@ final class Detect
     public static function fromEnv(?array $env = null): Capability
     {
         $env ??= TermDb::snapshotEnv();
+        $inTmux = isset($env['TMUX']);
+        $cap = self::envLadder($env, $inTmux);
 
-        return self::envLadder($env, isset($env['TMUX']));
+        // A Kitty claim is a hypothesis until an APC `a=q` reply confirms it
+        // (P1-13b, no exception). This entry point never asks, so it reports the
+        // claim unconfirmed: a caller that writes Kitty bytes from it would
+        // otherwise paint APC sequences into a terminal that does not speak them.
+        if ($cap->kitty) {
+            return Capability::unknown(null, $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode);
+        }
+
+        return $cap;
     }
 
     /**

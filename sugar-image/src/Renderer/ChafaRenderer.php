@@ -278,12 +278,21 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return resolve($cached);
         }
 
-        $cmd = $this->commandFor($binary, $size, $image);
+        // The child reads its input path only after this call has returned, so
+        // the path must not be the shared scratch: a second frame in the same
+        // tick would overwrite it first and this child would encode that frame.
+        $input = self::launchInput($image->bytes);
+        try {
+            $launched = ChildRun::new($this->commandFor($binary, $size, $input))
+                ->withTimeout(self::ASYNC_DEADLINE_SECONDS)
+                ->withMaxBytes(self::ASYNC_MAX_BYTES)
+                ->launch($loop ?? Loop::get());
+        } catch (\Throwable $e) {
+            @unlink($input);
+            throw $e;
+        }
 
-        return ChildRun::new($cmd)
-            ->withTimeout(self::ASYNC_DEADLINE_SECONDS)
-            ->withMaxBytes(self::ASYNC_MAX_BYTES)
-            ->launch($loop ?? Loop::get())
+        return $launched
             ->then(function (ChildResult $result) use ($memoKey): string {
                 if ($result->timedOut()) {
                     throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'timed out']));
@@ -305,7 +314,33 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
                 self::rememberRender($memoKey, $result->stdout);
 
                 return $result->stdout;
+            })
+            ->finally(static function () use ($input): void {
+                @unlink($input);
             });
+    }
+
+    /**
+     * A fresh input file holding $bytes for one off-loop launch, removed when
+     * that launch settles (see {@see renderAsync()}). Never shared, unlike
+     * {@see scratchFile()}: a reused path would let the next frame's write land
+     * before this child reads it, and the memo would then keep that frame's art
+     * under this frame's key.
+     *
+     * @throws \RuntimeException  if the file cannot be created or written
+     */
+    private static function launchInput(string $bytes): string
+    {
+        $path = tempnam(self::sinkDir(), 'chafa');
+        if ($path === false) {
+            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        }
+        if (file_put_contents($path, $bytes) === false) {
+            @unlink($path);
+            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        }
+
+        return $path;
     }
 
     /** Wall budget for one off-loop chafa encode (see {@see renderAsync()}). */
@@ -316,18 +351,18 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 
     /**
      * The argv both paths spawn: the size, the format, the caller's options and
-     * the scratch copy of the source, in the order render() always used.
+     * the input image path, in the order render() always used.
      *
      * @return list<string>
      */
-    private function commandFor(string $binary, string $size, ImageSource $image): array
+    private function commandFor(string $binary, string $size, string $inputPath): array
     {
         $cmd = [$binary, '--size=' . $size];
         if ($this->format !== null) {
             $cmd[] = '--format=' . $this->format;
         }
         $cmd = array_merge($cmd, $this->options);
-        $cmd[] = self::scratchFile($image->bytes);
+        $cmd[] = $inputPath;
 
         return $cmd;
     }
@@ -366,7 +401,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return $cached;
         }
 
-        $cmd = $this->commandFor($binary, $size, $image);
+        $cmd = $this->commandFor($binary, $size, self::scratchFile($image->bytes));
 
         // The child's diagnostics go to a private file sink, never to
         // this process's stderr. An inherited fd 2 let chafa's own error

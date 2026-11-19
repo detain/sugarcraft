@@ -52,11 +52,21 @@ final class Timeline
 
         // Compare in float before the int cast: a huge overshoot would wrap
         // under (int) and land on a tile in the middle of the sheet.
-        $index = floor($sec / ($this->durationSeconds / $this->tiles));
-        if ($index >= $this->tiles) {
+        $guess = floor($sec * $this->tiles / $this->durationSeconds);
+        if ($guess >= $this->tiles) {
             return $this->tiles - 1;
         }
+        $index = (int) $guess;
 
-        return (int) $index;
+        // The boundary is judged on the product, not the rounded step: dividing
+        // by duration/tiles put 0.3 s over 10 one-second tiles into tile 2
+        // (0.3 / 0.1 is 2.9999999999999996). One nudge each way is enough.
+        if ($index + 1 < $this->tiles && $sec * $this->tiles >= ($index + 1) * $this->durationSeconds) {
+            $index++;
+        } elseif ($index > 0 && $sec * $this->tiles < $index * $this->durationSeconds) {
+            $index--;
+        }
+
+        return $index;
     }
 }

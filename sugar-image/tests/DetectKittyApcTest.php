@@ -165,12 +165,12 @@ final class DetectKittyApcTest extends TestCase
         $this->assertSame('', Detect::takeStrayInputBytes(), 'the Kitty reply is not a keystroke');
     }
 
-    public function testFromEnvStillClassifiesKittyWithoutAQuery(): void
+    public function testFromEnvNeverClaimsKittyAndNeverAsks(): void
     {
-        // fromEnv() is the pure env ladder: it names the claim and never asks.
+        // fromEnv() is the pure env ladder: it never asks, so the env claim stays unconfirmed.
         $cap = Detect::fromEnv(['KITTY_WINDOW_ID' => '1']);
 
-        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->kitty);
         $this->assertSame('', $this->queriesWritten());
     }
 }

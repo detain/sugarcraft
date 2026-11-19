@@ -47,9 +47,14 @@ final class MosaicFromEnvTest extends TestCase
         parent::tearDown();
     }
 
-    public function testKittyEnvBuildsAKittyMosaic(): void
+    public function testKittyEnvWithoutAReplyBuildsNoKittyMosaic(): void
     {
-        $this->assertSame('kitty', Mosaic::fromEnv(['TERM' => 'xterm-kitty'])->protocol());
+        // Regression (P1-13b): a pure env entry point must not emit Kitty APC bytes
+        // to a terminal that never answered `a=q`, so the env claim is not Kitty.
+        $protocol = Mosaic::fromEnv(['TERM' => 'xterm-kitty'])->protocol();
+
+        $this->assertNotSame('kitty', $protocol);
+        $this->assertSame('symbols', $protocol);
     }
 
     public function testITerm2EnvBuildsAnITerm2Mosaic(): void
@@ -64,27 +69,37 @@ final class MosaicFromEnvTest extends TestCase
 
     public function testFromEnvWrapsInsideTmuxButNeverProbes(): void
     {
-        $mosaic = Mosaic::fromEnv(['TERM' => 'xterm-kitty', 'TMUX' => '/tmp/tmux-1000/default,1,0']);
+        $mosaic = Mosaic::fromEnv(['TERM_PROGRAM' => 'iTerm.app', 'TMUX' => '/tmp/tmux-1000/default,1,0']);
 
         $this->assertInstanceOf(TmuxPassthroughDecorator::class, $mosaic->renderer());
-        $this->assertSame('tmux(kitty)', $mosaic->protocol(), 'the decorator names the wrapped backend');
+        $this->assertSame('tmux(iterm2)', $mosaic->protocol(), 'the decorator names the wrapped backend');
     }
 
     public function testFromEnvNullReadsTheProcessEnvironment(): void
     {
-        putenv('TERM=xterm-kitty');
+        putenv('TERM_PROGRAM=iTerm.app');
 
-        $this->assertSame('kitty', Mosaic::fromEnv(null)->protocol());
+        $this->assertSame('iterm2', Mosaic::fromEnv(null)->protocol());
     }
 
     public function testFromModeStringAutoWithoutProbeUsesTheEnvironment(): void
+    {
+        putenv('TERM_PROGRAM=iTerm.app');
+
+        $mosaic = Mosaic::fromModeString('auto', false);
+
+        $this->assertNotNull($mosaic);
+        $this->assertSame('iterm2', $mosaic->protocol());
+    }
+
+    public function testFromModeStringAutoWithoutProbeNeverBuildsKittyFromTerm(): void
     {
         putenv('TERM=xterm-kitty');
 
         $mosaic = Mosaic::fromModeString('auto', false);
 
         $this->assertNotNull($mosaic);
-        $this->assertSame('kitty', $mosaic->protocol());
+        $this->assertNotSame('kitty', $mosaic->protocol());
     }
 
     public function testFromModeStringAutoDefaultsToTheProbedPath(): void

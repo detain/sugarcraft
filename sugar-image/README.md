@@ -208,6 +208,7 @@ Decoding untrusted images is budgeted — the caps are constants on
 |---|---|---|
 | `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file, URL and `fromString()` reads — oversized payloads are refused before GD ever sees them (the in-memory route measures its buffer up front, so every byte-intake path shares one ceiling; the format-signature and pixel budgets below still guard what fits) |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
+| `DecodedImageCache::BYTE_BUDGET` | 32 MiB of decoded pixels (eight slots at most) | the process-wide decode LRU's retained memory: a handle larger than the budget is never kept, so one large sheet cannot pin memory across later decodes under `memory_limit` |
 | `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: a frame whose `width × height` cell footprint exceeds it is refused with a mosaic-owned message before sugar-animation's decoder sees it (mirrors the sibling's own `Decoder::MAX_CELLS`) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
@@ -643,7 +644,8 @@ argument is a placeholder for interface uniformity.
 
 `Detect::fromEnv(?array $env = null)` classifies the terminal from environment
 variables alone: no tty, no query bytes, no timeout, no tmux process. Pass an
-explicit `name => value` map, or `null` to read the process environment.
+explicit `name => value` map, or `null` to read the process environment. An
+environment-only Kitty claim is reported unconfirmed, never true (see below).
 `Mosaic::fromEnv()` builds the renderer from that answer, and
 `Mosaic::fromModeString('auto', false)` routes the `auto` mode through it.
 The answer is the env stage of `Detect::probe()`; a DA1 sixel promotion, a
@@ -684,8 +686,10 @@ answers `ESC _ G i=31;OK`. A DA1 answer without that reply, no answer in the
 window, or no tty to ask on drops the claim, and the ladder decides as it does
 for any other terminal. `Mosaic::auto()` keeps that answer: its palette fallback
 grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
-needs the reply. `Detect::fromEnv()` is unchanged: it still names the claim, and
-it never asks.
+needs the reply. `Detect::fromEnv()` and `Mosaic::fromEnv()` never ask, so they
+hold no reply and report the environment claim unconfirmed: `Capability::kitty()`
+is false there, and `Mosaic::fromEnv(['TERM' => 'xterm-kitty'])` builds the
+symbols rung. `Mosaic::fromModeString('auto', false)` inherits that answer.
 
 ## Sprite sheets, timelines and the decode cache
 
@@ -699,7 +703,10 @@ Each tile is a crop of the sheet, and `ImageSource::crop()` reads its decode
 through `DecodedImageCache`: a process-wide LRU of eight decoded handles, keyed
 on the content of the bytes. A sheet of any number of tiles costs one decode,
 and two `ImageSource` values built from the same bytes share one. The cache
-owns its handles, so callers read them and never destroy them.
+owns its handles, so callers read them and never destroy them. The cache is
+bounded by eight slots and by `DecodedImageCache::BYTE_BUDGET` (32 MiB) of
+decoded pixels, whichever is hit first; a sheet larger than the budget is decoded
+on each call and not kept.
 `DecodedImageCache::misses()` counts the decodes, and `reset()` clears the cache.
 
 `ChafaRenderer::renderAsync($image, $width, $height, $loop)` runs the chafa child

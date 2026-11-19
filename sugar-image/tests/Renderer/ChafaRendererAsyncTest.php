@@ -56,6 +56,11 @@ case "$FAKE_CHAFA_MODE" in
         echo 'boom' >&2
         exit 3
         ;;
+    echo-input)
+        for last; do :; done
+        cat "$last"
+        exit 0
+        ;;
     *)
         printf 'MOCK-ANSI-BYTES'
         exit 0
@@ -201,6 +206,72 @@ SH;
 
         $this->assertSame('MOCK-ANSI-BYTES', $resolved);
         $this->assertSame(1, $this->starts(), 'an unchanged repaint spawns nothing');
+    }
+
+    /** A 1x1 PNG of red $red, built with GD so two frames differ in their bytes. */
+    private function frameOf(int $red): ImageSource
+    {
+        $img = imagecreatetruecolor(1, 1);
+        imagefilledrectangle($img, 0, 0, 0, 0, imagecolorallocate($img, $red, 0, 0));
+        ob_start();
+        imagepng($img);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($img);
+
+        return ImageSource::fromString($bytes);
+    }
+
+    /**
+     * Two different frames in flight in the same tick: each child must encode
+     * its own frame, and a repeat of either must come back from the memo with
+     * its own bytes. A shared input path let the second launch overwrite the
+     * first before its child read it, so the first frame came back as the second.
+     */
+    public function testTwoDifferentFramesInFlightEachEncodeTheirOwnBytes(): void
+    {
+        putenv('FAKE_CHAFA_MODE=echo-input');
+        $loop     = new StreamSelectLoop();
+        $renderer = new ChafaRenderer();
+        $first    = $this->frameOf(200);
+        $second   = $this->frameOf(40);
+        $this->assertNotSame($first->bytes, $second->bytes);
+
+        $got  = [];
+        $fail = null;
+        $settle = static function (string $key) use (&$got, &$fail, $loop): array {
+            return [
+                static function (string $value) use (&$got, $key, $loop): void {
+                    $got[$key] = $value;
+                    if (count($got) === 2) {
+                        $loop->stop();
+                    }
+                },
+                static function (\Throwable $e) use (&$fail, $loop): void {
+                    $fail = $e;
+                    $loop->stop();
+                },
+            ];
+        };
+
+        [$onFirst, $onFirstFail]   = $settle('first');
+        [$onSecond, $onSecondFail] = $settle('second');
+        $renderer->renderAsync($first, 10, null, $loop)->then($onFirst, $onFirstFail);
+        $renderer->renderAsync($second, 10, null, $loop)->then($onSecond, $onSecondFail);
+
+        $guard = $loop->addTimer(20.0, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertNull($fail, $fail?->getMessage() ?? '');
+        $this->assertSame($first->bytes, $got['first'] ?? null, 'the first child encoded the second frame');
+        $this->assertSame($second->bytes, $got['second'] ?? null, 'the second child encoded the wrong frame');
+
+        $repeat = null;
+        $renderer->renderAsync($first, 10, null, $loop)
+            ->then(static function (string $value) use (&$repeat): void {
+                $repeat = $value;
+            });
+        $this->assertSame($first->bytes, $repeat, 'the memo holds the first frame under its own key');
     }
 
     public function testAnUnavailableBinaryRejectsWithoutSpawning(): void

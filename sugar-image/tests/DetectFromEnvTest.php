@@ -37,28 +37,28 @@ final class DetectFromEnvTest extends TestCase
         parent::tearDown();
     }
 
-    public function testXtermKittyTermIsKitty(): void
+    public function testXtermKittyTermIsNotKittyWithoutAReply(): void
     {
+        // The env claim is a hypothesis: fromEnv never asks, so Kitty stays unconfirmed (P1-13b).
         $cap = Detect::fromEnv(['TERM' => 'xterm-kitty']);
 
-        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->kitty);
         $this->assertFalse($cap->iterm2);
         $this->assertFalse($cap->sixel);
     }
 
-    public function testGhosttyTermIsKitty(): void
+    public function testGhosttyTermIsNotKittyWithoutAReply(): void
     {
-        // AUD §3.9 drift: TERM=xterm-ghostty must classify without a probe.
         $cap = Detect::fromEnv(['TERM' => 'xterm-ghostty']);
 
-        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->kitty);
     }
 
-    public function testKittyWindowIdAloneIsKitty(): void
+    public function testKittyWindowIdAloneIsNotKittyWithoutAReply(): void
     {
         $cap = Detect::fromEnv(['KITTY_WINDOW_ID' => '7']);
 
-        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->kitty);
     }
 
     public function testITerm2TermProgramIsITerm2(): void
@@ -85,7 +85,7 @@ final class DetectFromEnvTest extends TestCase
         $cap = Detect::fromEnv(['TERM' => 'xterm-kitty', 'TMUX' => '/tmp/tmux-1000/default,1,0']);
 
         $this->assertTrue($cap->inTmux);
-        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->kitty, 'a tmux pane with a Kitty env claim is not Kitty without the reply');
     }
 
     public function testEmptyTmuxKeyStillMarksInTmux(): void
@@ -107,12 +107,13 @@ final class DetectFromEnvTest extends TestCase
 
     public function testNullEnvReadsTheProcessEnvironment(): void
     {
-        putenv('TERM=xterm-kitty');
+        putenv('TERM=xterm-256color');
+        putenv('TERM_PROGRAM=iTerm.app');
         putenv('TMUX');
 
         $cap = Detect::fromEnv(null);
 
-        $this->assertTrue($cap->kitty);
+        $this->assertTrue($cap->iterm2, 'null reads the process environment');
         $this->assertFalse($cap->inTmux);
     }
 
