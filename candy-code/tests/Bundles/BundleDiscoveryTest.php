@@ -143,6 +143,8 @@ final class BundleDiscoveryTest extends TestCase
         self::assertSame(['healthy'], array_map(static fn (Bundle $b): string => $b->name, $bundles));
         self::assertCount(1, $discovery->warnings(), 'a refused link must not vanish from launch notices');
         self::assertStringContainsString('acme', $discovery->warnings()[0]);
+        self::assertStringContainsString('.claude-plugin/plugin.json', $discovery->warnings()[0], 'the warning names the refused link');
+        self::assertStringNotContainsString('could not be read or parsed', $discovery->warnings()[0], 'a refused link is not a parse failure');
     }
 
     public function testAnInBundleSymlinkedManifestStillLoads(): void
