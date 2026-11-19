@@ -50,7 +50,7 @@ use SugarCraft\McpClient\Protocol\JsonRpc;
 
 use function React\Promise\reject;
 
-final class ServeBridge
+final class ServeBridge implements \SugarCraft\Plugins\Bridge\ServeClient
 {
     /** First reconnect wait; doubles per attempt, capped (attach's ladder, widened for a daemon). */
     private const BACKOFF_BASE_SECONDS = 0.25;
