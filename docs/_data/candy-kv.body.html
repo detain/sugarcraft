@@ -127,7 +127,7 @@ candy-kv list 'user-?'                   # one character after "user-"</code></p
       <li><code>examples/basic.php</code> covers <code>set()</code>, <code>get()</code>, <code>delete()</code> and <code>list()</code>, the fallback value, and <code>entry()</code> for metadata.</li>
       <li><code>examples/binary.php</code> stores raw bytes with <code>set(binary: true)</code> and reads them back through <code>rawValue()</code>.</li>
       <li><code>examples/glob.php</code> lists keys with <code>*</code> and <code>?</code> glob patterns.</li>
-      <li><code>examples/multidb.php</code> uses the <code>key@dbname</code> suffix to keep two databases side by side.</li>
+      <li><code>examples/multidb.php</code> uses the <code>key@dbname</code> suffix to keep three named databases (passwords, bookmarks, notes) side by side, then deletes notes.</li>
       <li><code>examples/reverse-order.php</code> lists the same keys forward and in reverse order.</li>
     </ul>
     <pre class="code"><code class="language-shell">php examples/basic.php
@@ -200,7 +200,7 @@ php examples/multidb.php</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the shipped examples, plus one CLI session for the glob listing. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/basic.gif" alt="Get / set / list">
@@ -210,7 +210,7 @@ php examples/multidb.php</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/glob.gif" alt="Glob listing">
                 <h3>Glob listing</h3>
-                <span class="demo-caption">List keys matching <code>user-*</code> and <code>token-*</code>.</span>
+                <span class="demo-caption">List keys matching <code>user-*</code> and <code>token-*</code>. Recorded from the CLI (<code>./bin/candy-kv</code>), not from <code>examples/glob.php</code>.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/reverse-order.gif" alt="Reverse-order list">
@@ -225,7 +225,7 @@ php examples/multidb.php</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/multidb.gif" alt="Multiple DBs">
                 <h3>Multiple DBs</h3>
-                <span class="demo-caption">Two named stores side by side, no collisions.</span>
+                <span class="demo-caption">Three named stores side by side, no collisions.</span>
             </div>
         </div>
     </div>

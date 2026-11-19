@@ -87,7 +87,8 @@ candy-mail --from ops@example.com --to you@example.com --attach build.zip --rend
     <tr><th>Key</th><th>Action</th></tr>
     <tr><td><kbd>Tab</kbd>, <kbd>Shift+Tab</kbd></td><td>Move to the next or previous field</td></tr>
     <tr><td><kbd>Enter</kbd></td><td>In the body or the HTML field, insert a newline. Elsewhere, move to the next field.</td></tr>
-    <tr><td>Arrow keys, <kbd>Home</kbd>, <kbd>End</kbd></td><td>Move the cursor within the field</td></tr>
+    <tr><td><kbd>Up</kbd>, <kbd>Down</kbd></td><td>In the body or the HTML field, move between lines. Elsewhere, and on the first or last line of those fields, move to the previous or next field.</td></tr>
+    <tr><td><kbd>Left</kbd>, <kbd>Right</kbd>, <kbd>Home</kbd>, <kbd>End</kbd></td><td>Move the cursor within the field</td></tr>
     <tr><td><kbd>Backspace</kbd>, <kbd>Delete</kbd>, <kbd>Ctrl+U</kbd></td><td>Delete before the cursor, after it, or clear the field</td></tr>
     <tr><td><kbd>Ctrl+P</kbd></td><td>Toggle the preview. <kbd>Esc</kbd> in the preview returns to editing.</td></tr>
     <tr><td><kbd>Ctrl+S</kbd></td><td>Send the composed email through the configured transport</td></tr>
@@ -142,7 +143,7 @@ candy-mail --from ops@example.com --to you@example.com --attach build.zip --rend
     <h2 style="margin-top: 40px;">Examples</h2>
     <p>The <code>examples/</code> directory holds six runnable programs. Five of them print an offline MIME preview unless they find the credentials they need, so none of them sends mail by accident. <code>showcase.php</code> prints a field summary instead of a MIME message.</p>
     <ul>
-      <li><code>examples/showcase.php</code> builds <code>Email</code> and attachment values and prints their fields. It needs no SMTP or Resend access.</li>
+      <li><code>examples/showcase.php</code> builds <code>Email</code> values and prints their fields. It needs no SMTP or Resend access.</li>
       <li><code>examples/basic.php</code> sends through the Resend API when <code>RESEND_API_KEY</code> is set. Without a key it prints the composed MIME message.</li>
       <li><code>examples/html-email.php</code> adds CC and BCC recipients, an HTML body and an inline CID image, then prints the result unless a Resend key is set.</li>
       <li><code>examples/attachments.php</code> attaches two files from disk with <code>withAttachment()</code> and prints the offline MIME preview.</li>
@@ -221,7 +222,7 @@ php examples/html-email.php           # offline preview unless RESEND_API_KEY is
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mail/.vhs/showcase.gif" alt="Showcase">
                 <h3>Showcase</h3>
-                <span class="demo-caption">Building Email value objects (recipients, multipart bodies, attachments) and printing their resolved fields, with the transports described as text and no SMTP access.</span>
+                <span class="demo-caption">Building Email value objects (recipients, multipart bodies) and printing their resolved fields, with the transports described as text and no SMTP access.</span>
             </div>
         </div>
     </div>

@@ -12,6 +12,9 @@ declare(strict_types=1);
  * 128+signo when a signal ends the run — this example always exits 0 once
  * the loop returns, settling on every path like the bin does.
  *
+ * Input: needs an interactive terminal on stdout. With stdout piped it exits 1
+ * before launch; --version and --help answer and exit 0 without a terminal.
+ *
  * flappy-56 (finding -013): this file used to accept no flags at all, so
  * `php examples/play.php --version` launched the TUI instead of answering —
  * the minimal flag legs and the stdout preflight below mirror the bin.
