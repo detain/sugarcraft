@@ -231,7 +231,7 @@ detect: summary=Sixel</code></pre>
     <p>Graphics protocols (<code>sixel</code>, <code>kitty</code>, <code>iterm2</code>) hand the terminal an encoded payload. Text tiers (<code>half</code>, <code>quarter</code>, <code>ascii</code>, <code>ansi16</code>, <code>ansi256</code>, <code>truecolor</code>, <code>symbols</code>) draw characters that any terminal can show, at any colour depth. <code>--format=auto</code> prefers a graphics protocol when the terminal confirms one, and falls back to the text tiers otherwise.</p>
 
     <h3 id="cell-boxes-not-pixel-boxes" style="margin-top: 24px;">Cell boxes, not pixel boxes</h3>
-    <p>Every size is in terminal cells. <code>--size=WxH</code> is a cells box, and the image aspect never chooses the box height. A box leg is capped at 100,000 cells and the whole box must stay below 25,000,000 cells, so an oversized request is refused with exit 1 rather than left to run for minutes.</p>
+    <p>Every size is in terminal cells. <code>--size=WxH</code> is a cells box, and the image aspect never chooses the box height. A box leg is capped at 100,000 cells. When both legs are explicit, as with <code>--size=WxH</code> or <code>--width</code> together with <code>--height</code>, the whole box must stay below 25,000,000 cells, and a box at or over that is refused with exit 1 rather than left to run for minutes. A single leg is not multiplied out: <code>--width</code> alone takes the other axis from the terminal viewport, so the product ceiling never applies to it, and an oversized single leg exits 2 from the sugar-image pixel ceiling or runs for a long time.</p>
 
     <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
 

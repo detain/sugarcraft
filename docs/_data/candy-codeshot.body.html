@@ -58,7 +58,7 @@ $png = PngRenderer::dracula()
 $svg = SvgRenderer::dark()-&gt;render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");</code></pre>
 
     <h3 id="concepts-language" style="margin-top: 24px;">Language detection</h3>
-    <p>Syntax colour needs a language. The detector looks at the filename extension first, then the shebang, then content signatures. It reads at most the first 8 KB for signatures. Content over 1 MB is not inspected and is treated as plain text. A detected name with no grammar renders plain rather than failing. The lexer covers sixteen keyword grammars in pure PHP. Any other name still reaches the same code path and renders uncoloured.</p>
+    <p>Syntax colour needs a language. The detector looks at the filename extension first, then the shebang, then content signatures. It reads at most the first 8 KB for signatures. Content over 1 MB is not inspected and is treated as plain text. A detected name with no grammar renders plain rather than failing. The lexer covers fifteen keyword grammars in pure PHP. Any other name still reaches the same code path and renders uncoloured.</p>
     <p>The <code>-t</code> or <code>--type</code> flag forces a language and skips detection. The value is not validated, so an unknown name is harmless.</p>
 
     <h3 style="margin-top: 24px;">Themes and palettes</h3>
@@ -163,7 +163,7 @@ $svg = $writer->result();</code></pre>
 
     <h3 style="margin-top: 24px;">Messages and locale</h3>
     <p>The CLI speaks sixteen languages: the English baseline plus fifteen translations. The catalogues live under <code>lang/</code>. The locale is chosen once at startup by <code>T::detect()</code>, which checks <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>. The encoding suffix is dropped, so <code>de_DE.UTF-8</code> becomes <code>de</code>, and <code>en</code> is the fallback. The <code>LANGUAGE</code> variable is not consulted.</p>
-    <pre class="code"><code class="language-shell">LANG=de_DE.UTF-8 candy-codeshot --help             # usage in German
+    <pre class="code"><code class="language-shell">env -u LC_ALL -u LC_MESSAGES LANG=de_DE.UTF-8 candy-codeshot --help  # usage in German
 LC_ALL=fr candy-codeshot --padding abc script.php  # refusal in French</code></pre>
     <p>Only messages are translated. Flag names, theme and format identifiers, file paths and the content of lines always appear exactly as typed.</p>
 
