@@ -84,11 +84,16 @@ final class SkillFileReader
      * be read is refused at the manifest stage rather than listed to the model
      * as a skill it cannot load.
      *
+     * @param string $after receives the single byte just past the window when
+     *        the file continues past it, and stays '' otherwise: a caller that
+     *        must tell a line that ends at the window edge from one cut there
+     *        needs the byte the window did not keep
      * @return array{0: string, 1: bool} the bytes read, and whether the file
      *         continues past them
      */
-    public static function head(string $path, string $what): array
+    public static function head(string $path, string $what, string &$after = ''): array
     {
+        $after = '';
         $size = @filesize($path);
         if ($size !== false && $size > self::MAX_FILE_BYTES) {
             throw new \RuntimeException(self::overCeiling($what, $size, $path));
@@ -100,6 +105,8 @@ final class SkillFileReader
         }
 
         if (strlen($head) > self::MAX_FRONTMATTER_BYTES) {
+            $after = $head[self::MAX_FRONTMATTER_BYTES];
+
             return [substr($head, 0, self::MAX_FRONTMATTER_BYTES), true];
         }
 

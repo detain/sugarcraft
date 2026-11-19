@@ -208,6 +208,38 @@ final class SkillFileReaderTest extends TestCase
         (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
     }
 
+    /**
+     * The mirror of the fragment case: the closing `---` ends exactly at the
+     * window edge and its line break is the byte just past the window. That is
+     * a whole closer, so the manifest must load rather than refuse a file the
+     * frontmatter does close.
+     */
+    public function testAClosingFenceEndingExactlyAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-closer';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    public function testHeadHandsBackTheByteJustPastTheWindow(): void
+    {
+        $path = $this->tempDir . '/after.md';
+        file_put_contents($path, str_repeat('a', SkillFileReader::MAX_FRONTMATTER_BYTES) . "\nZ");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($path, 'SKILL.md', $after);
+
+        $this->assertTrue($truncated);
+        $this->assertSame("\n", $after);
+        $this->assertSame(SkillFileReader::MAX_FRONTMATTER_BYTES, strlen($head));
+    }
+
     public function testTheBodyStageRefusesAFileOverTheCeiling(): void
     {
         $file = $this->sparseSkill($this->tempDir . '/body', SkillFileReader::MAX_FILE_BYTES + 1) . '/SKILL.md';

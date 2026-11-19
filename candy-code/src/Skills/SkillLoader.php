@@ -717,14 +717,18 @@ final class SkillLoader
         // over the whole-file ceiling is refused here rather than listed: its
         // body could never be loaded, so offering it to the model as a skill
         // would only promise something the Skill tool must then refuse.
-        [$content, $truncated] = SkillFileReader::head($skillPath, 'SKILL.md');
+        $next = '';
+        [$content, $truncated] = SkillFileReader::head($skillPath, 'SKILL.md', $next);
         // The head is cut at a byte, so its last line may be a fragment of a
         // longer line: a `---` cut from `----` would read as a closing fence
         // with no line break after it. Only a closer ended by a line break
-        // inside the head counts as closed.
-        $lastBreak = strrpos($content, "\n");
+        // counts as closed. That break may be the byte just past the window,
+        // which the reader kept aside: a `---` that ends exactly at the window
+        // edge with its line break there is a whole closer.
+        $probe = $truncated && $next === "\n" ? $content . "\n" : $content;
+        $lastBreak = strrpos($probe, "\n");
         $closedInHead = $lastBreak !== false
-            && MarkdownFrontmatter::split(substr($content, 0, $lastBreak + 1)) !== null;
+            && MarkdownFrontmatter::split(substr($probe, 0, $lastBreak + 1)) !== null;
         if ($truncated && str_starts_with($content, '---') && !$closedInHead) {
             throw new \RuntimeException(sprintf(
                 'SKILL.md frontmatter does not close within its first %s bytes; not read further: %s',
