@@ -251,7 +251,7 @@ $baker-&gt;info('Batch complete');</code></pre>
     <p>Every level has a <code>sprintf</code>-style twin: <code>debugf()</code>, <code>infof()</code>, <code>warnf()</code>, <code>errorf()</code>, <code>fatalf()</code> and <code>printf()</code>. The second argument is mixed on purpose. An array there is context, and any other value is the first <code>sprintf</code> argument. The level-bound helpers check <code>enabled()</code> before they format, so a dropped record costs no formatting work.</p>
 
     <h3 id="output-goes-to-stdout-by-default" style="margin-top: 24px;">Output goes to STDOUT by default</h3>
-    <p>Every level is written to <code>STDOUT</code> by default. charmbracelet/log writes to stderr, and this port deliberately differs so that pipes and files get every level on one stream. Split the severe records out with an error stream, described in <a href="#configuration">Configuration</a>. Under a web SAPI, the standard streams resolve lazily to <code>php://stdout</code> and <code>php://stderr</code>, and a stream that cannot be opened goes silent instead of failing the request.</p>
+    <p>Every level is written to <code>STDOUT</code> by default. charmbracelet/log writes to stderr, and this port deliberately differs so that pipes and files get every level on one stream. Split the severe records out with an error stream, described in <a href="#configuration">Configuration</a>. Under a web SAPI, where the <code>STDOUT</code> and <code>STDERR</code> constants are not defined, the default streams open <code>php://stdout</code> and <code>php://stderr</code> when a logger is built. The STDERR notice path goes silent if its stream cannot be opened. A default output stream that cannot be opened does not go silent: <code>Logger::new()</code> throws <code>InvalidArgumentException</code>.</p>
 
     <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
 
@@ -420,7 +420,7 @@ Log::installPanicHandler(PanicFormatter::plain(true, ['/etc/secrets']));   // or
     <h3 id="environment-variables" style="margin-top: 24px;">Environment variables</h3>
     <table class="api-table">
     <tr><th>Variable</th><th>Read at</th><th>Effect</th></tr>
-    <tr><td><code>CLICOLOR_FORCE=1</code></td><td>construction and every write</td><td>Forces color on. The value must be exactly <code>1</code>. It outranks <code>NO_COLOR</code> at construction</td></tr>
+    <tr><td><code>CLICOLOR_FORCE</code></td><td>construction and every write</td><td>Forces color on. Any value other than empty or <code>0</code> counts, and <code>1</code> is the usual spelling. It outranks <code>NO_COLOR</code> at construction</td></tr>
     <tr><td><code>NO_COLOR</code></td><td>construction and panic-handler install</td><td>Turns color off for a logger built afterwards. It is not re-read per write</td></tr>
     <tr><td><code>FORCE_COLOR</code></td><td>construction</td><td>Honoured by the construction-time probe. The per-write gate ignores it</td></tr>
     </table>
@@ -487,7 +487,7 @@ Logger::new()-&gt;setStyles($styles);</code></pre>
     <p>The default minimum level is <code>Info</code>. Start the logger with <code>Logger::new(level: Level::Debug)</code>, or call <code>setMinLevel(Level::Debug)</code> on a shared logger. <code>print()</code> skips the filter entirely, so it is the way to force a line out.</p>
 
     <h3 id="colour-codes-appear-in-a-log-file" style="margin-top: 24px;">Colour codes appear in a log file</h3>
-    <p>The per-write gate keeps colour out of files and pipes, unless <code>CLICOLOR_FORCE=1</code> is set. A standalone <code>new TextFormatter(useColors: true)</code> emits SGR by contract, because the gate lives in the logger and not in the formatter. Write through a <code>Logger</code> when the destination might not be a terminal.</p>
+    <p>The per-write gate keeps colour out of files and pipes, unless <code>CLICOLOR_FORCE</code> is set to any value other than empty or <code>0</code> (<code>CLICOLOR_FORCE=1</code> is the usual spelling). A standalone <code>new TextFormatter(useColors: true)</code> emits SGR by contract, because the gate lives in the logger and not in the formatter. Write through a <code>Logger</code> when the destination might not be a terminal.</p>
 
     <h3 id="setting-no-color-after-the-logger-was-built-has-no-effect" style="margin-top: 24px;">Setting NO_COLOR after the logger was built has no effect</h3>
     <p>The construction-time probe reads the environment once. Set <code>NO_COLOR</code> before you construct the logger, or build a new logger after you set it.</p>
