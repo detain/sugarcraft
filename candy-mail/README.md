@@ -44,8 +44,10 @@ store, or manage an inbox.
 - **File attachments** — attach from disk paths (`withAttachment()`), or pass raw in-memory
   bytes with `Attachment::fromContent()` via the constructor's `attachments:` parameter
 - **Inline attachments (CID)** — `withInlineAttachment()` embeds images addressed as
-  `cid:…`; honoured by the SMTP transport's MIME builder. The Resend API payload does not
-  carry `cid`, so inline references break there — use SMTP for CID embedding.
+  `cid:…`; honoured by the SMTP transport's MIME builder and by the Mailgun transport
+  (its `inline` field, with the Content-ID as the part filename). The Resend API payload does
+  not carry `cid`, so Resend refuses an inline attachment outright — use SMTP or Mailgun for
+  CID embedding.
   The CLI has no inline door: `--attach` produces ordinary attachments only —
   `cid:` embedding is library-only.
 - **CC/BCC support** — full carbon-copy / blind carbon-copy routing (envelope RCPT for all,
