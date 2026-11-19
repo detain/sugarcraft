@@ -149,11 +149,12 @@ final class Cli
     /**
      * chicle-style --scale spellings mapped onto the Scale enum.
      *
-     * Kept in candy-image. The plan is not silent and conflicts with itself:
-     * reviews/UPSTREAM-PLAN.md:449 says "scale names mapped in the lib", and
-     * :688 says "scale and viewport names from sugar-image (P1-13)". This
-     * map follows :449, because sugar-image exposes no name-to-Scale mapping.
-     * :688 is an open conflict for the owner to resolve.
+     * Kept in candy-image. The upstream plan conflicts with itself: one line
+     * says "scale names mapped in the lib", and a later line says "scale and
+     * viewport names from sugar-image (P1-13)". This map follows the first,
+     * because sugar-image exposes no name-to-Scale mapping. The conflict is
+     * an open question for the owner to resolve; the plan file is not shipped
+     * with this package, so it is not cited by path here.
      */
     private const SCALES = [
         'fit'     => Scale::Fit,
