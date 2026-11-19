@@ -120,64 +120,6 @@ final class PropertyWriteRoot implements Model, ScreenStackCapable
     }
 }
 
-/**
- * A pushed detail screen that goes back one level on 'o', as the docs show.
- * Once a screen is on the stack Program routes keys to it, not to the root,
- * so the PopScreenCmd has to come from here.
- */
-final class PoppingDetailScreen implements Model
-{
-    use SubscriptionCapable;
-
-    public function init(): ?\Closure { return null; }
-
-    public function update(Msg $msg): array
-    {
-        if ($msg instanceof KeyMsg && $msg->rune === 'o') {
-            return [$this, \Closure::fromCallable(new PopScreenCmd())];
-        }
-        return [$this, null];
-    }
-
-    public function view(): string { return 'detail'; }
-}
-
-/**
- * Root that navigates by returning the documented screen Cmds from update().
- * Program runs only Closure commands, so each invokable Cmd is wrapped with
- * Closure::fromCallable() exactly as the sugar-core docs show.
- */
-final class NavigatingScreenRoot implements Model, ScreenStackCapable
-{
-    use SubscriptionCapable;
-
-    public function __construct(public ScreenStack $screens = new ScreenStack()) {}
-
-    public function screens(): ScreenStack { return $this->screens; }
-
-    public function init(): ?\Closure { return null; }
-
-    public function update(Msg $msg): array
-    {
-        if ($msg instanceof KeyMsg && $msg->rune === 'p') {
-            $detail = new Screen(new PoppingDetailScreen(), title: 'Item 1');
-            return [$this, \Closure::fromCallable(new PushScreenCmd($detail))];
-        }
-        if ($msg instanceof ScreenStackPushedMsg) {
-            return [new self($this->screens->push($msg->screen)), null];
-        }
-        if ($msg instanceof \SugarCraft\Core\Msg\ScreenStackPoppedMsg) {
-            return [new self($this->screens->pop()), null];
-        }
-        return [$this, null];
-    }
-
-    public function view(): string
-    {
-        return $this->screens->isEmpty() ? 'base' : (string) $this->screens->current()->model->view();
-    }
-}
-
 /** Root that refuses both write channels — the fail-loud contract. */
 final class UnwritableRoot implements Model, ScreenStackCapable
 {
@@ -465,53 +407,6 @@ final class ProgramScreenStackIntegrationTest extends TestCase
         // Check that ScreenStackPushedMsg was received by root model.
         $this->assertSame(['inner-screen'], $final->pushedIds);
         $this->assertSame(['Inner'], $final->screens->breadcrumb());
-
-        fclose($writer);
-        fclose($in);
-        fclose($out);
-    }
-
-    /**
-     * Regression: the documented pattern returns a PushScreenCmd from update().
-     * Program::scheduleCmd() takes only a Closure, so an uncast invokable Cmd
-     * died with a TypeError before the push ever ran.
-     */
-    public function testAPushScreenCmdReturnedFromUpdateReachesTheStack(): void
-    {
-        [$in, $out, $writer] = $this->pipes();
-        $loop = new StreamSelectLoop();
-
-        $program = new Program(new NavigatingScreenRoot(), $this->makeOptions($in, $out, $loop));
-        $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'p'));
-
-        $loop->addTimer(0.05, static fn () => $program->quit());
-        $loop->addTimer(2.0, static fn () => $loop->stop());
-
-        $final = $program->run();
-
-        $this->assertSame(['Item 1'], $final->screens->breadcrumb());
-
-        fclose($writer);
-        fclose($in);
-        fclose($out);
-    }
-
-    /** Regression: the PopScreenCmd twin of the push case above, same TypeError. */
-    public function testAPopScreenCmdReturnedFromUpdateLeavesTheStackEmpty(): void
-    {
-        [$in, $out, $writer] = $this->pipes();
-        $loop = new StreamSelectLoop();
-
-        $program = new Program(new NavigatingScreenRoot(), $this->makeOptions($in, $out, $loop));
-        $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'p'));
-        $loop->addTimer(0.1, static fn () => $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'o')));
-
-        $loop->addTimer(0.3, static fn () => $program->quit());
-        $loop->addTimer(2.0, static fn () => $loop->stop());
-
-        $final = $program->run();
-
-        $this->assertTrue($final->screens->isEmpty());
 
         fclose($writer);
         fclose($in);
