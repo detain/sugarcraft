@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'L’host SMTP {host} non è un nome host né un indirizzo validi (solo lettere, cifre, punti e trattini)',
     'smtp.invalid_port' => 'La porta SMTP {port} è fuori intervallo (deve essere compresa tra 1 e 65535)',
     'smtp.invalid_timeout' => 'Il timeout SMTP {timeout} non è un numero di secondi tra 1 e 3600',
-    'resend.cid_unsupported' => 'Il payload dell’API Resend non ha un campo Content-ID: l’allegato {filename} è inline; le immagini incorporate viaggiano solo via SMTP o Mailgun.',
+    'resend.cid_unsupported' => 'Il payload dell’API Resend non ha un campo Content-ID: l’allegato {filename} è inline; le immagini incorporate viaggiano solo via SMTP.',
     'smtp.incomplete_credentials' => 'Credenziali SMTP incomplete: specificare utente e password insieme, oppure nessuno dei due per invio anonimo',
     'email.non_ascii_address' => 'L\'indirizzo email {addr} contiene caratteri non ASCII: SMTPUTF8 non è supportato — usare un indirizzo ASCII',
     'smtp.openssl_missing' => 'ext-openssl è necessario per proteggere la connessione SMTP (STARTTLS/SMTPS): installare l\'estensione; nulla viene inviato prima che il canale possa essere cifrato',

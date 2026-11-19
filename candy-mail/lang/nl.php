@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'SMTP-host {host} is geen geldige hostnaam of adres (alleen letters, cijfers, punten en koppeltekens)',
     'smtp.invalid_port' => 'SMTP-poort {port} valt buiten het bereik (moet tussen 1 en 65535 liggen)',
     'smtp.invalid_timeout' => 'SMTP-timeout {timeout} is geen aantal seconden tussen 1 en 3600',
-    'resend.cid_unsupported' => 'De Resend-API-payload heeft geen Content-ID-veld: bijlage {filename} is inline; inline-afbeeldingen reizen alleen via SMTP of Mailgun.',
+    'resend.cid_unsupported' => 'De Resend-API-payload heeft geen Content-ID-veld: bijlage {filename} is inline; inline-afbeeldingen reizen alleen via SMTP.',
     'smtp.incomplete_credentials' => 'SMTP-gegevens onvolledig: geef zowel gebruikersnaam als wachtwoord op, of beide leeg voor anonieme verzending',
     'email.non_ascii_address' => 'E-mailadres {addr} bevat niet-ASCII tekens: SMTPUTF8 wordt niet ondersteund — gebruik een ASCII-adres',
     'smtp.openssl_missing' => 'ext-openssl is vereist om de SMTP-verbinding te beveiligen (STARTTLS/SMTPS) - installeer de extensie; er wordt niets verzonden voordat het kanaal versleuteld kan worden',

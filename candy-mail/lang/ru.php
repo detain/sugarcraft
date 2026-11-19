@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'Хост SMTP {host} — не допустимое имя хоста и не допустимый адрес (только буквы, цифры, точки и дефисы)',
     'smtp.invalid_port' => 'Порт SMTP {port} вне диапазона (должен быть от 1 до 65535)',
     'smtp.invalid_timeout' => 'Тайм-аут SMTP {timeout} — не число секунд от 1 до 3600',
-    'resend.cid_unsupported' => 'Полезная нагрузка API Resend не содержит поля Content-ID: вложение {filename} является inline; встроенные изображения отправляются только через SMTP или Mailgun.',
+    'resend.cid_unsupported' => 'Полезная нагрузка API Resend не содержит поля Content-ID: вложение {filename} является inline; встроенные изображения отправляются только через SMTP.',
     'smtp.incomplete_credentials' => 'Учётные данные SMTP неполны: укажите и имя пользователя, и пароль — или оба пустыми для анонимной отправки',
     'email.non_ascii_address' => 'Адрес электронной почты {addr} содержит не-ASCII символы: SMTPUTF8 не поддерживается — используйте ASCII-адрес',
     'smtp.openssl_missing' => 'ext-openssl требуется для защиты SMTP-соединения (STARTTLS/SMTPS) - установите расширение; ничего не отправляется, пока канал не может быть зашифрован',

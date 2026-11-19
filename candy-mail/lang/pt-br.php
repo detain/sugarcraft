@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'O host SMTP {host} não é um nome de host nem um endereço válido (apenas letras, dígitos, pontos e hífens)',
     'smtp.invalid_port' => 'A porta SMTP {port} está fora do intervalo (deve estar entre 1 e 65535)',
     'smtp.invalid_timeout' => 'O tempo limite SMTP {timeout} não é um número de segundos entre 1 e 3600',
-    'resend.cid_unsupported' => 'A carga útil da API Resend não tem campo Content-ID: o anexo {filename} é inline; imagens embutidas viajam apenas por SMTP ou Mailgun.',
+    'resend.cid_unsupported' => 'A carga útil da API Resend não tem campo Content-ID: o anexo {filename} é inline; imagens embutidas viajam apenas por SMTP.',
     'smtp.incomplete_credentials' => 'Credenciais SMTP incompletas: informe usuário e senha juntos, ou nenhum deles para envio anônimo',
     'email.non_ascii_address' => 'O endereço de e-mail {addr} contém caracteres não ASCII: SMTPUTF8 não é compatível — use um endereço ASCII',
     'smtp.openssl_missing' => 'ext-openssl é necessário para proteger a conexão SMTP (STARTTLS/SMTPS) - instale a extensão; nada é enviado antes que o canal possa ser criptografado',

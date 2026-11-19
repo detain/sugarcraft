@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'SMTP 主機 {host} 不是有效的主機名稱或位址（僅限字母、數字、點和連字元）',
     'smtp.invalid_port' => 'SMTP 端口 {port} 超出範圍（必須介於 1 和 65535 之間）',
     'smtp.invalid_timeout' => 'SMTP 逾時 {timeout} 不是 1 到 3600 之間的秒數',
-    'resend.cid_unsupported' => 'Resend API 負載沒有 Content-ID 字段：附件 {filename} 是內嵌的——內嵌圖像只能經由 SMTP 或 Mailgun 傳送。',
+    'resend.cid_unsupported' => 'Resend API 負載沒有 Content-ID 字段：附件 {filename} 是內嵌的——內嵌圖像只能經由 SMTP 傳送。',
     'smtp.incomplete_credentials' => 'SMTP 憑證不完整: 請同時提供使用者名稱和密碼，或者两者皆空以匿名傳送',
     'email.non_ascii_address' => '郵件位址 {addr} 包含非 ASCII 字元：不支援 SMTPUTF8 — 請使用 ASCII 信封位址',
     'smtp.openssl_missing' => '保護 SMTP 連線（STARTTLS/SMTPS）需要 ext-openssl — 請安裝該擴充；在通道可加密之前不會傳送任何内容',
