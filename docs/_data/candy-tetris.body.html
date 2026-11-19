@@ -43,7 +43,7 @@ $ echo $?
 
     <h3 style="margin-top: 24px;">Remap a key</h3>
     <p>Put overrides in <code>$XDG_CONFIG_HOME/candy-tetris/keys.json</code>, or in <code>$HOME/.config/candy-tetris/keys.json</code> when <code>XDG_CONFIG_HOME</code> is not set. The file is a JSON object that maps an action id to a non-empty list of key tokens:</p>
-    <pre class="code"><code class="language-json">{ "hold": ["b"], "hard-drop": ["enter"] }</code></pre>
+    <pre class="code"><code class="language-text">{ "hold": ["b"], "hard-drop": ["enter"] }</code></pre>
     <p>An override replaces that action's whole list. The actions you do not name keep their shipped keys. The remapped keys show up on the help card, the intro card and the confirm prompts, so the game teaches the keys you actually use. See the table in Remapping keys below for what a malformed file does.</p>
 
     <h3 style="margin-top: 24px;">Start from a known state in code</h3>

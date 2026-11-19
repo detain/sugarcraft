@@ -70,7 +70,7 @@ $acl-&gt;canRead(null, $repo);                  // false: anonymous reads are of
     <p>Each <code>with*()</code> call returns a new immutable <code>Repo</code>, so keep the result of the chain. The <code>init()</code> call creates the repository on disk. The setters only build a new value in memory, and the metadata writers listed in the API reference are the other calls that write to disk. <code>examples/repo.php</code> exercises the same metadata and permission calls in a private temporary directory. It does not call <code>init()</code>, so no git repository is created.</p>
 
     <h3 style="margin-top: 24px;">Let anonymous clients read a public repo</h3>
-    <pre class="code"><code class="language-ini">; config.yaml
+    <pre class="code"><code class="language-text">; config.yaml
 git:
   allow_anonymous_read: true</code></pre>
     <p>Anonymous reads need both the repo marked public and the <code>git.allow_anonymous_read</code> lever on. Either one alone refuses. The same lever is consulted by the smart-HTTP router and by the daemon. Leave it off on a host that serves private work.</p>
