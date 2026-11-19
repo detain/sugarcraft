@@ -216,6 +216,9 @@ flag_management:
     - name: sugar-codec
       paths: ["sugar-codec/src/**"]
       carryforward: true
+    - name: sugar-clipboard
+      paths: ["sugar-clipboard/src/**"]
+      carryforward: true
     - name: sugar-plugin-installer
       paths: ["sugar-plugin-installer/src/**"]
       carryforward: true
@@ -618,6 +621,12 @@ component_management:
         - "sugar-codec/src/**"
       flag_regexes:
         - "^sugar-codec$"
+    - component_id: sugar-clipboard
+      name: sugar-clipboard
+      paths:
+        - "sugar-clipboard/src/**"
+      flag_regexes:
+        - "^sugar-clipboard$"
     - component_id: sugar-plugin-installer
       name: sugar-plugin-installer
       paths:

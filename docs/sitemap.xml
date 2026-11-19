@@ -266,6 +266,11 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-clipboard.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://sugarcraft.github.io/lib/sugar-releases.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>

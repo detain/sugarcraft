@@ -79,6 +79,7 @@
         "sugarcraft/sugar-ws-rpc": "dev-master",
         "sugarcraft/sugar-jwt": "dev-master",
         "sugarcraft/sugar-codec": "dev-master",
+        "sugarcraft/sugar-clipboard": "dev-master",
         "sugarcraft/sugar-plugins": "dev-master",
         "sugarcraft/sugar-plugin-installer": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
@@ -383,6 +384,13 @@
         {
             "type": "path",
             "url": "sugar-codec",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-clipboard",
             "options": {
                 "symlink": true
             }

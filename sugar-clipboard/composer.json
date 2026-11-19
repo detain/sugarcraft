@@ -1,0 +1,44 @@
+{
+    "name": "sugarcraft/sugar-clipboard",
+    "description": "Clipboard access for SugarCraft: one API for reading and writing the system clipboard, with an OSC 52 terminal backend.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "clipboard",
+        "osc52",
+        "terminal",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-clipboard",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-clipboard/issues",
+        "source": "https://github.com/sugarcraft/sugar-clipboard",
+        "docs": "https://sugarcraft.github.io/lib/sugar-clipboard.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Clipboard\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Clipboard\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
