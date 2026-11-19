@@ -428,7 +428,7 @@ The full key map, grouped by the part of the screen that owns each key, is in [d
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions — since the many-Chats deck a switch parks the streaming one and brings the other up, so a turn keeps running in the background |
 | `Ctrl+N` | Start a fresh session, keeping this one open (the deck gives it a new slot) |
-| `Alt+S` | Show or hide the **Sessions** pane — the deck's window list as a docked pane (registry row `sessions.toggle`) — see the fine print below. |
+| `Alt+S` | Show or hide the **Sessions** pane — the deck's window list as a docked pane (registry row `sessions.toggle`). |
 | `Ctrl+L` | Repaint the whole frame — clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: allow once, refuse, allow for the session, save a rule, edit the scope first, refuse with a note, refuse and stop — see the fine print below. |
@@ -436,7 +436,7 @@ The full key map, grouped by the part of the screen that owns each key, is in [d
 
 #### The fine print
 
-Each row above that says *see the fine print* is expanded in full in [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md#the-fine-print). The rule for which chords the chat owns stays here, with the table.
+Each row above that says *see the fine print* is expanded in full in [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md#the-fine-print). The rule for which chords the chat owns is not one of those entries; it stays in this README, below.
 
 `Ctrl+P`, `Ctrl+O`, `Ctrl+F`, `Ctrl+V`, `Ctrl+A`, `Ctrl+W`, `Ctrl+L` and `Ctrl+C` always belong to the chat
 content model — the shell never claims them, in any pane, so hosting chat
@@ -1733,7 +1733,7 @@ command inside bubblewrap, writable only in the project.
 
 - **Read-only shell lines** run unasked under `default` and `accept-edits`, alone or chained or piped, as long as every command is on the read-only list. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#read-only-shell-commands-run-unasked) has the list and what breaks a line out of it.
 - **`ApplyPatch`** is judged per file, and the model's own questions (`AskUser`, and `PlanExit` as plan mode's way out) come up in the same permission modal. See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
-- **`autoReview`** (your own settings only) sends each call that `auto` flags to a reviewer model, and `autoReviewScope` can widen it to writes or to every passed call. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#what-auto-classifies) covers the classifier and the reviewer.
+- **`autoReview`** (your own settings only) sends each call that `auto` flags to a reviewer model, and it is **on by default** whenever a reviewable model exists; `"autoReview": false` in your own settings is the opt-out. With the reviewer on, `autoReviewScope` decides which passed calls it also reviews: `shell` by default, so every non-read-only shell command gets a paid review, and `writes` or `all` widen that. Each review is a paid model call. [docs/PERMISSIONS.md](docs/PERMISSIONS.md#what-auto-classifies) covers the classifier and the reviewer.
 
 ### Hooks and automation
 
