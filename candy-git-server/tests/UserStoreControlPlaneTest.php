@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\UserStore;
 use SugarCraft\GitServer\User;
+use SugarCraft\GitServer\Tests\Support\ShortWriteFileStream;
 
 /**
  * Control-plane persistence pins .
@@ -187,6 +188,35 @@ final class UserStoreControlPlaneTest extends TestCase
             (int) \strpos($body, '$written !=='),
             'the short-write check must precede the settle'
         );
+    }
+
+    public function testFailedTempWriteLeavesNoResidueAndKeepsTheLastGoodStore(): void
+    {
+        // Behavioral twin of the structural pin above: a real short write to
+        // the temp file must throw, unlink that temp (it holds bcrypt hashes
+        // and keys at 0600), and leave the previously published store intact.
+        // The good store is seeded on a plain path because fsync() refuses
+        // user-wrapper streams, so only the armed publish runs through the seam.
+        $path = $this->tmpDir . '/users.json';
+        $seed = new UserStore($path);
+        $seed->add(User::new('alice'));
+        $seed->save();
+
+        ShortWriteFileStream::register();
+        $store = new UserStore(ShortWriteFileStream::SCHEME . '://' . $path);
+        $store->add(User::new('bob'));
+        ShortWriteFileStream::armNextTempWrite();
+        try {
+            $store->save();
+            $this->fail('a short payload write must refuse the publish');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('cannot write user store payload', $e->getMessage());
+        }
+
+        $this->assertSame([], \glob($this->tmpDir . '/users.json.*.tmp') ?: [], 'a failed publish must not strand the temp file');
+        $reread = new UserStore($path);
+        $this->assertNotNull($reread->find('alice'), 'the last good store must survive a failed publish');
+        $this->assertNull($reread->find('bob'), 'a truncated payload must never be renamed over the store');
     }
 
     public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
