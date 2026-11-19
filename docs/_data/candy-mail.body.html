@@ -147,7 +147,7 @@ candy-mail --from ops@example.com --to you@example.com --attach build.zip --rend
       <li><code>examples/html-email.php</code> adds CC and BCC recipients, an HTML body and an inline CID image, then prints the result unless a Resend key is set.</li>
       <li><code>examples/attachments.php</code> attaches two files from disk with <code>withAttachment()</code> and prints the offline MIME preview.</li>
       <li><code>examples/smtp.php</code> sends over SMTP when <code>CANDY_MAIL_SMTP_HOST</code> is set. Without it, the example prints the offline preview.</li>
-      <li><code>examples/pipeline.php</code> reads the message body from stdin, takes an optional recipient and subject from the command line, and sends through Resend when <code>RESEND_API_KEY</code> is set. Otherwise it prints the preview.</li>
+      <li><code>examples/pipeline.php</code> reads the message body from stdin, takes an optional recipient and subject from the command line, and sends through Resend when <code>RESEND_API_KEY</code> is set. Otherwise it prints the preview. It needs a piped body: with stdin empty or closed it prints a usage line and exits 1.</li>
     </ul>
     <pre class="code"><code class="language-shell">php examples/showcase.php
 php examples/html-email.php           # offline preview unless RESEND_API_KEY is set</code></pre>
@@ -166,7 +166,7 @@ php examples/html-email.php           # offline preview unless RESEND_API_KEY is
     <p>The email has no recipient in <code>to</code>, <code>cc</code> or <code>bcc</code>, or it has no sender. Add a recipient with <code>withTo()</code> and a sender with <code>withFrom()</code>. The transports never see an envelope that <code>Mailer</code> refuses.</p>
 
     <h3 style="margin-top: 24px;">An API key is refused at construction</h3>
-    <p>The key contains whitespace or a control character. A stray newline in <code>RESEND_API_KEY</code> is the usual cause. The check exists because the key is written verbatim into an Authorization header, so a carriage return would forge a second header. Trim the value in the environment.</p>
+    <p>The key contains a carriage return, whitespace inside the value, or another control character. A trailing carriage return, as left by a Windows-style line ending in <code>RESEND_API_KEY</code>, is a common cause. The check exists because the key is written verbatim into an Authorization header, so a carriage return would forge a second header. A single trailing line feed is the one exception: it passes the check, so trim the value in the environment or after reading it from a file.</p>
 
     <h3 style="margin-top: 24px;">Resend refuses a message with only cc or bcc recipients</h3>
     <p>The Resend API needs at least one <code>to</code> recipient. SMTP accepts a cc or bcc-only send, so the same email can succeed over SMTP and fail over Resend.</p>
