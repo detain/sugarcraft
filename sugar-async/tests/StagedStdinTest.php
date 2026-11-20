@@ -70,4 +70,27 @@ final class StagedStdinTest extends TestCase
         self::assertTrue(StagedStdin::removeOrRetry($path, false));
         self::assertFalse(StagedStdin::removeOrRetry($path, true));
     }
+
+    public function testNoReapHookIsOwedWithoutAPathOrWithoutARetry(): void
+    {
+        self::assertNull(StagedStdin::reapHook(null, true));
+        self::assertNull(StagedStdin::reapHook('/staged/a', false));
+    }
+
+    public function testTheReapHookRemovesTheRefusedPayloadOnceTheChildIsReaped(): void
+    {
+        // The retry was owed, so the hook runs on the reap: the removal is attempted
+        // with the child reaped, and its path is the one the refused removal kept.
+        $seen = [];
+        $hook = StagedStdin::reapHook('/staged/payload.bin', true, static function (string $p) use (&$seen): bool {
+            $seen[] = $p;
+
+            return true;
+        });
+
+        self::assertInstanceOf(\Closure::class, $hook);
+        self::assertSame([], $seen, 'nothing is removed before the reap');
+        $hook(0);
+        self::assertSame(['/staged/payload.bin'], $seen);
+    }
 }

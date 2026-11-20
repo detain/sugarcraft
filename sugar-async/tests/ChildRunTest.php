@@ -362,6 +362,59 @@ final class ChildRunTest extends TestCase
         $this->assertSame((string) $reported[0], $r->stdout);
     }
 
+    public function testAnOnSpawnThrowKillsTheStartedChildAndRethrows(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the throw.');
+        }
+        $pid = 0;
+
+        try {
+            ChildRun::new($this->php('sleep(30);'))
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->run();
+            self::fail('an onSpawn throw must escape run()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
+
+    public function testAnAbandonedSpawnRemovesTheStagedPayloadAndReapsTheChild(): void
+    {
+        // Runs on every platform: the staged file is a plain temp file here, the
+        // child is a plain proc_open, so the cleanup is exercised without Windows.
+        $staged = \tempnam(\sys_get_temp_dir(), 'staged-abandon-');
+        self::assertIsString($staged);
+        \file_put_contents($staged, 'payload');
+
+        $pipes = [];
+        $proc = \proc_open($this->php('sleep(30);'), [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($proc);
+
+        try {
+            $abandon = new \ReflectionMethod(ChildRun::class, 'abandonSpawn');
+            $abandon->setAccessible(true);
+            $abandon->invoke(null, $proc, $pipes, $staged);
+
+            self::assertFileDoesNotExist($staged);
+            self::assertFalse(\is_resource($proc), 'proc_close must have reaped the child');
+        } finally {
+            @\unlink($staged);
+            if (\is_resource($proc)) {
+                \proc_terminate($proc, 9);
+                \proc_close($proc);
+            }
+        }
+    }
+
     public function testTheSpawnCallbackCarriesThroughTheBuilderAndNullRemovesIt(): void
     {
         $base = ChildRun::new(['true']);

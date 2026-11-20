@@ -30,4 +30,22 @@ final class StagedStdin
 
         return !$childReaped;
     }
+
+    /**
+     * The callback a reap runs to remove a payload the live child refused. Null when
+     * nothing is owed: no path, or a removal that was already final.
+     *
+     * @param null|callable(string): bool $unlink  Removal seam, passed through to {@see removeOrRetry()}
+     * @return null|\Closure(?int): void
+     */
+    public static function reapHook(?string $path, bool $retry, ?callable $unlink = null): ?\Closure
+    {
+        if ($path === null || !$retry) {
+            return null;
+        }
+
+        return static function (?int $status) use ($path, $unlink): void {
+            self::removeOrRetry($path, true, $unlink);
+        };
+    }
 }

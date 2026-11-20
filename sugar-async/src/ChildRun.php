@@ -506,10 +506,38 @@ final class ChildRun
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
         }
         if ($this->onSpawn !== null) {
-            ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
+            try {
+                ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
+            } catch (\Throwable $e) {
+                self::abandonSpawn($proc, $pipes, $staged);
+
+                throw $e;
+            }
         }
 
         return [$proc, $pipes, $staged];
+    }
+
+    /**
+     * A started child the spawn cannot hand back, because onSpawn threw. The child
+     * is killed and reaped here, so no live process outlives the throw, and the
+     * staged payload goes once the child no longer holds it.
+     *
+     * @param resource $proc
+     * @param array<int, resource> $pipes
+     */
+    private static function abandonSpawn($proc, array $pipes, ?string $staged): void
+    {
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+        @proc_terminate($proc, 9);
+        proc_close($proc);
+        if ($staged !== null) {
+            StagedStdin::removeOrRetry($staged, true);
+        }
     }
 
     /**

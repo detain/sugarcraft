@@ -352,9 +352,7 @@ final class ChildRunLaunch
             BoundedShutdown::reapWhenExited(
                 $this->loop,
                 $this->proc,
-                $retry ? static function (?int $status) use ($staged): void {
-                    StagedStdin::removeOrRetry($staged, true);
-                } : null,
+                StagedStdin::reapHook($staged, $retry),
             );
         }
 

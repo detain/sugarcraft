@@ -476,4 +476,30 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertGreaterThan(0, $reported[0]);
         $this->assertSame((string) $reported[0], $r->stdout);
     }
+
+    public function testAnOnSpawnThrowRejectsAndKillsTheStartedChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the rejection.');
+        }
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $pid = 0;
+
+        try {
+            $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->launch($loop));
+            self::fail('an onSpawn throw must reject launch()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
 }
