@@ -64,6 +64,8 @@ final class ChildRunLaunch
     /**
      * @param resource $proc
      * @param array<int, resource> $pipes  0 stdin, 1 stdout, 2 stderr
+     * @param null|int $groupPid  Process group the kill rungs signal, or null for the direct child
+     * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk, or null
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -73,10 +75,12 @@ final class ChildRunLaunch
         private readonly float $timeout,
         int $maxBytes,
         private readonly Deferred $deferred,
+        private readonly ?int $groupPid = null,
+        ?\Closure $onChunk = null,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0];
-        $this->capture = new ChildCapture([1, 2], [], $maxBytes);
+        $this->capture = new ChildCapture([1, 2], [], $maxBytes, $onChunk);
         $this->windows = WindowsPipes::runtimeNeedsIt();
     }
 
@@ -215,7 +219,7 @@ final class ChildRunLaunch
         $this->closeAllPipes();
         $this->closeStdin();
 
-        if ($this->exited) {
+        if ($this->exited && $this->groupGone()) {
             $this->finish(ChildResult::TIMED_OUT);
 
             return;
@@ -223,11 +227,12 @@ final class ChildRunLaunch
 
         // The ladder settles on its own: a child gone after TERM answers at once,
         // and one that survives the kill budget settles whether or not SIGKILL
-        // landed, so the loop never waits on the child.
+        // landed, so the loop never waits on the child. A containment group keeps
+        // the ladder running past a leader that exited, while descendants live.
         BoundedShutdown::escalateAsync(
             $this->loop,
             $this->signal(...),
-            $this->probeGone(...),
+            fn (): bool => $this->probeGone() && $this->groupGone(),
             function (): void {
                 if (!$this->settled) {
                     $this->finish(ChildResult::TIMED_OUT);
@@ -238,10 +243,20 @@ final class ChildRunLaunch
         );
     }
 
-    /** Signals are integer literals (sugar-core doctrine); a gone child takes the signal as a no-op. */
+    /** One kill(-pgid, 0) per check, never a /proc walk: this runs on the loop. True without a group. */
+    private function groupGone(): bool
+    {
+        return $this->groupPid === null || BoundedShutdown::groupEmpty($this->groupPid, false);
+    }
+
+    /**
+     * Signals are integer literals (sugar-core doctrine); a gone child takes the
+     * signal as a no-op. A containment-wrapped child signals its whole group first,
+     * as BoundedShutdown does, and falls back to the direct child.
+     */
     private function signal(int $signal): void
     {
-        @proc_terminate($this->proc, $signal);
+        Containment::signal($this->proc, $this->groupPid, $signal);
     }
 
     private function checkDone(): void

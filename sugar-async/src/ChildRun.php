@@ -55,6 +55,8 @@ final class ChildRun
      * @param list<string> $argv
      * @param null|string $stdin  Payload for the child's stdin, or null for none
      * @param null|array<string, string> $env  Environment, or null to inherit
+     * @param null|int $groupPid  Process group the child leads (a containment wrapper), or null
+     * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk read, or null
      */
     private function __construct(
         private readonly array $argv,
@@ -63,6 +65,8 @@ final class ChildRun
         private readonly ?string $stdin,
         private readonly ?string $cwd,
         private readonly ?array $env,
+        private readonly ?int $groupPid = null,
+        private readonly ?\Closure $onChunk = null,
     ) {
     }
 
@@ -119,6 +123,33 @@ final class ChildRun
     }
 
     /**
+     * The process group the child leads, for a child started behind a containment
+     * wrapper. The caller reads it with {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::groupId()}
+     * while the child is alive. Each kill rung then signals the whole group, so
+     * descendants die with the wrapper. Null keeps the direct-child signal.
+     */
+    public function withGroupPid(?int $pid): self
+    {
+        if ($pid !== null && $pid <= 0) {
+            throw new \InvalidArgumentException('Group pid must be a positive integer or null');
+        }
+
+        return $this->mutate(['groupPid' => $pid]);
+    }
+
+    /**
+     * Live feed: called with (slot, chunk) for every chunk read from stdout (1)
+     * or stderr (2), as it arrives, before the result is assembled. The buffered
+     * result is unchanged; the callback only observes. Null removes it.
+     *
+     * @param null|callable(int|string, string): void $onChunk
+     */
+    public function withOnChunk(?callable $onChunk): self
+    {
+        return $this->mutate(['onChunk' => $onChunk === null ? null : \Closure::fromCallable($onChunk)]);
+    }
+
+    /**
      * Run the child to completion, blocking the caller, and return what it wrote.
      *
      * @throws \LogicException for a non-empty stdin payload on the Windows runtime
@@ -136,6 +167,7 @@ final class ChildRun
                 ->withDeadline($deadline)
                 ->withCap($this->maxBytes)
                 ->withClock($clock)
+                ->withOnChunk($this->onChunk)
                 ->withRunning(WindowsPipes::runningProbe($proc));
             if ($this->stdin !== null && $this->stdin !== '') {
                 $pump = $pump->withStdin($pipes[0], $this->stdin);
@@ -145,7 +177,7 @@ final class ChildRun
             $r = $pump->pump();
         } catch (\Throwable $e) {
             self::closeAll($pipes);
-            BoundedShutdown::terminateBounded($proc);
+            BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
             throw $e;
         }
 
@@ -159,12 +191,12 @@ final class ChildRun
                 return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::EXITED, self::dropped($r));
             }
             // Output closed but the child is still running past the deadline.
-            $code = BoundedShutdown::terminateBounded($proc);
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
 
             return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::TIMED_OUT, self::dropped($r));
         }
 
-        $code = BoundedShutdown::terminateBounded($proc);
+        $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
         $status = $r->reason === DrainResult::EXPIRED ? ChildResult::TIMED_OUT : ChildResult::PIPE_FAILED;
 
         return new ChildResult($r->buffer(1), $r->buffer(2), $code, $status, self::dropped($r));
@@ -203,6 +235,8 @@ final class ChildRun
             $this->timeout,
             $this->maxBytes,
             $deferred,
+            $this->groupPid,
+            $this->onChunk,
         ))->start();
 
         return $deferred->promise();

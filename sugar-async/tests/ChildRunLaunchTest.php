@@ -358,4 +358,106 @@ final class ChildRunLaunchTest extends TestCase
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected);
     }
+
+    public function testOnChunkFeedsLaunchAsItArrives(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            $this->php('fwrite(STDOUT, "tick"); fwrite(STDERR, "tock");'),
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $seen = ['1' => '', '2' => ''];
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            10.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$seen): void {
+                $seen[(string) $slot] .= $chunk;
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame('tick', $result->stdout);
+        $this->assertSame('tock', $result->stderr);
+        $this->assertSame('tick', $seen['1']);
+        $this->assertSame('tock', $seen['2']);
+    }
+
+    public function testGroupPidLaunchKillsGrandchildrenPastTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // setsid execs sh in place, so the status pid is the group leader and
+        // the group id; the background sleep is the grandchild the ladder must reach.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => BoundedShutdown::pidExited($grandchild), 3.0),
+            'the containment group kill must reach the grandchild',
+        );
+    }
 }

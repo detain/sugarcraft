@@ -182,6 +182,8 @@ final class ChildRunTest extends TestCase
         yield 'zero timeout' => [static fn (ChildRun $r): ChildRun => $r->withTimeout(0.0)];
         yield 'infinite timeout' => [static fn (ChildRun $r): ChildRun => $r->withTimeout(INF)];
         yield 'negative cap' => [static fn (ChildRun $r): ChildRun => $r->withMaxBytes(-1)];
+        yield 'zero group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(0)];
+        yield 'negative group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(-4)];
     }
 
     #[DataProvider('badBuilders')]
@@ -230,5 +232,46 @@ final class ChildRunTest extends TestCase
         $this->assertNotSame($base, $tuned);
         $this->assertSame(ChildRun::DEFAULT_MAX_BYTES, (new \ReflectionProperty($base, 'maxBytes'))->getValue($base));
         $this->assertSame(10, (new \ReflectionProperty($tuned, 'maxBytes'))->getValue($tuned));
+    }
+
+    public function testOnChunkSeesEveryChunkOfBothStreamsAsItArrives(): void
+    {
+        $seen = ['1' => '', '2' => ''];
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "out-a"); fwrite(STDERR, "err-b"); fwrite(STDOUT, "out-c");'))
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$seen): void {
+                $seen[(string) $slot] .= $chunk;
+            })
+            ->run();
+
+        $this->assertSame('out-aout-c', $r->stdout);
+        $this->assertSame('err-b', $r->stderr);
+        $this->assertSame('out-aout-c', $seen['1']);
+        $this->assertSame('err-b', $seen['2']);
+    }
+
+    public function testWithOnChunkNullRemovesTheFeed(): void
+    {
+        $calls = 0;
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "quiet");'))
+            ->withOnChunk(static function () use (&$calls): void {
+                $calls++;
+            })
+            ->withOnChunk(null)
+            ->run();
+
+        $this->assertSame('quiet', $r->stdout);
+        $this->assertSame(0, $calls);
+    }
+
+    public function testTheGroupPidAndOnChunkCarryThroughTheBuilder(): void
+    {
+        $base = ChildRun::new(['true']);
+        $tuned = $base->withGroupPid(4242)->withOnChunk(static fn () => null);
+
+        $this->assertNotSame($base, $tuned);
+        $this->assertNull((new \ReflectionProperty($base, 'groupPid'))->getValue($base));
+        $this->assertSame(4242, (new \ReflectionProperty($tuned, 'groupPid'))->getValue($tuned));
+        $this->assertNotNull((new \ReflectionProperty($tuned, 'onChunk'))->getValue($tuned));
+        $this->assertSame(4242, (new \ReflectionProperty($tuned->withTimeout(2.0), 'groupPid'))->getValue($tuned->withTimeout(2.0)));
     }
 }
