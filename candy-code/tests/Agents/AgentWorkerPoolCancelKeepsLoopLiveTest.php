@@ -15,9 +15,11 @@ use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Backend\LoopDrivenTurn;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Tests\Backend\ForkChannelEofIsUnansweredTest;
+use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Audit R3 residual: {@see AgentWorkerPool}'s cancel path ran
@@ -50,6 +52,8 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
 {
     use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
+    use ReapsForkedChildrenTrait;
+
     private const COMMAND_SLEEP_SECONDS = 30;
 
     private string $dir = '';
@@ -69,6 +73,8 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
+
         // Only pids this test's own workers recorded are signalled.
         foreach (\glob($this->dir . '/*') ?: [] as $file) {
             foreach (\explode(' ', \trim((string) \file_get_contents($file))) as $pid) {
@@ -210,7 +216,7 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
     public function testAForkedNonAskingTurnTearsDownAnOverrunningWorkerBeforeItExits(): void
     {
         $result = $this->dir . '/turn-result.json';
-        $pid = \pcntl_fork();
+        $pid = $this->forkTracked();
         self::assertNotSame(-1, $pid, 'fixture: pcntl_fork() failed');
 
         if ($pid === 0) {
@@ -248,10 +254,11 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
                 $state = ['error' => $e->getMessage()];
             }
             \file_put_contents($result, \json_encode($state, JSON_THROW_ON_ERROR));
-            exit(0);
+            ForkedChild::exitNow(0);
         }
 
         \pcntl_waitpid($pid, $status);
+        $this->forgetForkedChild($pid);
         self::assertFileExists($result, 'the forked turn child wrote no result');
         $state = \json_decode((string) \file_get_contents($result), true, 512, JSON_THROW_ON_ERROR);
         self::assertArrayNotHasKey('error', $state, 'the forked turn failed: ' . ($state['error'] ?? ''));
