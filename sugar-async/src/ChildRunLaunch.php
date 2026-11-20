@@ -295,6 +295,7 @@ final class ChildRunLaunch
             $code,
             $status,
             $r->droppedBytes(1) + $r->droppedBytes(2),
+            $r->droppedBytes(2),
         ));
     }
 

@@ -21,6 +21,8 @@ final class ChildResult
     /**
      * @param null|int $exitCode  The exit status, or null when it could not be reaped
      * @param int $droppedBytes  Bytes refused by the per-stream cap, both streams together
+     * @param int $droppedStderrBytes  The part of $droppedBytes that came from stderr, so a caller
+     *                                 that discards stderr can report stdout's drops alone
      */
     public function __construct(
         public readonly string $stdout,
@@ -28,6 +30,7 @@ final class ChildResult
         public readonly ?int $exitCode,
         public readonly string $status,
         public readonly int $droppedBytes,
+        public readonly int $droppedStderrBytes = 0,
     ) {
     }
 

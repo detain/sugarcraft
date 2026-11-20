@@ -177,6 +177,7 @@ final class ChildRun
         $this->guardStdin();
         $clock = Clock::monotonicSeconds(...);
         [$proc, $pipes] = $this->spawn();
+        $group = $this->groupFor($proc);
         $deadline = $clock() + $this->timeout;
 
         try {
@@ -194,7 +195,7 @@ final class ChildRun
             $r = $pump->pump();
         } catch (\Throwable $e) {
             self::closeAll($pipes);
-            BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
+            BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
             throw $e;
         }
 
@@ -205,18 +206,18 @@ final class ChildRun
         if ($r->reason === DrainResult::CLOSED) {
             $code = BoundedShutdown::reapIfExited($proc, max(0.0, $deadline - $clock()));
             if ($code !== null) {
-                return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::EXITED, self::dropped($r));
+                return self::result($r, $code, ChildResult::EXITED);
             }
             // Output closed but the child is still running past the deadline.
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
 
-            return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::TIMED_OUT, self::dropped($r));
+            return self::result($r, $code, ChildResult::TIMED_OUT);
         }
 
-        $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
+        $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
         $status = $r->reason === DrainResult::EXPIRED ? ChildResult::TIMED_OUT : ChildResult::PIPE_FAILED;
 
-        return new ChildResult($r->buffer(1), $r->buffer(2), $code, $status, self::dropped($r));
+        return self::result($r, $code, $status);
     }
 
     /**
@@ -242,6 +243,7 @@ final class ChildRun
         } catch (\RuntimeException $e) {
             return reject($e);
         }
+        $group = $this->groupFor($proc);
 
         $deferred = new Deferred();
         (new ChildRunLaunch(
@@ -252,7 +254,7 @@ final class ChildRun
             $this->timeout,
             $this->maxBytes,
             $deferred,
-            $this->groupPid,
+            $group,
             $this->onChunk,
         ))->start();
 
@@ -260,16 +262,43 @@ final class ChildRun
     }
 
     /**
-     * The group a kill rung signals: the one the caller named, else the group the
-     * child leads right now. Measured while the child is alive, which is the only
-     * time {@see Containment::groupId()} is reliable; an unwrapped child never
-     * leads a group, so this stays null for it and the kill keeps the direct child.
+     * The group the kill rungs signal, measured right after the spawn: the one the
+     * caller named, else the group the child leads. That is the moment the group is
+     * reliably readable: a shell that backgrounds a job and exits leaves the job in
+     * its group, and a group measured after the exit is no longer there to read.
+     * An unwrapped child never leads a group, so this stays null for it.
      *
      * @param resource $proc
      */
-    private function liveGroupId($proc): ?int
+    private function groupFor($proc): ?int
     {
         return $this->groupPid ?? Containment::groupId($proc);
+    }
+
+    /**
+     * The group a kill rung signals: the one measured at spawn when there was one,
+     * else the group the child leads right now. The spawn-time read can miss a
+     * wrapper that has not yet made itself a group leader, and a live child still
+     * answers the live read; a child that already exited answers neither, so the
+     * spawn-time value is the one that reaches its job.
+     *
+     * @param resource $proc
+     */
+    private static function killGroup($proc, ?int $measured): ?int
+    {
+        return $measured ?? Containment::groupId($proc);
+    }
+
+    private static function result(DrainResult $r, ?int $code, string $status): ChildResult
+    {
+        return new ChildResult(
+            $r->buffer(1),
+            $r->buffer(2),
+            $code,
+            $status,
+            self::dropped($r),
+            $r->droppedBytes(2),
+        );
     }
 
     private function guardStdin(): void
