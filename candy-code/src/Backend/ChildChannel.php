@@ -93,17 +93,23 @@ use function React\Promise\resolve;
  * {@see clientCaller()}) keep their return types and suspend the turn's fiber
  * on the promise through {@see awaitTurn()}, so the loop does the waiting.
  *
- * ### Named exception: a nested fiber keeps the blocking wait
+ * ### Named exceptions: paths that block by design
  *
- * An ask or client call raised inside a NESTED fiber of the turn (a
- * workflow's, say) keeps the blocking socket wait. Suspending the nested fiber
- * would hand its own driver a promise it never asked for, so the wait stays
- * on the socket, and the promise {@see ask()} or {@see callClient()} returns
- * is already settled when it comes back. This is the only path where a
- * question blocks the socket. It is documented here and covered by its own
- * follow-up row, not by CC-1 e.
+ * Three paths still block while a question is open. Each is deliberate, and
+ * none of them is the loop-driven turn's own fiber.
  *
- * A turn that is not loop-driven keeps the blocking wait for the same reason.
+ * - An ask or client call raised inside a NESTED fiber of the turn (a
+ *   workflow's, say) keeps the blocking socket wait. Suspending the nested
+ *   fiber would hand its own driver a promise it never asked for, so the wait
+ *   stays on the socket, and the promise {@see ask()} or {@see callClient()}
+ *   returns is already settled when it comes back. It is documented here and
+ *   covered by its own follow-up row, not by CC-1 e.
+ * - A turn that is not loop-driven (no {@see attachLoop()}) has no loop to
+ *   resume a suspended fiber, so its ask or client call blocks on the socket.
+ * - A grandchild member's question goes over its own
+ *   {@see \SugarCraft\Code\Support\PermissionAskRelay}, and the member blocks
+ *   there until its reply arrives. That wait is on the relay socket, never the
+ *   turn socket.
  *
  * ## Owned by one process
  *
