@@ -740,6 +740,7 @@ final class ChildRunLaunchTest extends TestCase
                     $grandchild = (int) trim($chunk);
                 }
             },
+            setsidWrapped: true,
         );
         $result = null;
         $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
@@ -761,6 +762,82 @@ final class ChildRunLaunchTest extends TestCase
             BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
             'the kill must reach the background job the exited shell left in its group',
         );
+    }
+
+    /**
+     * Regression: an unwrapped child never leads a group, so its pid is not a group id.
+     * Once it has exited with no live group read, the kill rungs must not fall back to
+     * that pid: a pid reused by a stranger's group leader would be signalled as a group.
+     * The job the shell left stays out of reach, as it does for any unwrapped child.
+     */
+    public function testUnwrappedChildThatExitedNamesNoGroupToSignal(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to reap the background job the shell left');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['sh', '-c', 'sleep 31 & echo $!; exit 0'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            1.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+
+        // The shell's exit is seen while its background job still holds stdout open,
+        // so the probe reads the group in the state the deadline kill would.
+        $exited = new \ReflectionProperty(ChildRunLaunch::class, 'exited');
+        $killGroup = new \ReflectionMethod(ChildRunLaunch::class, 'killGroup');
+        $probed = false;
+        $groupAtExit = null;
+        $probe = $loop->addPeriodicTimer(0.02, static function () use (&$probed, &$groupAtExit, $exited, $killGroup, $launch): void {
+            if (!$probed && $exited->getValue($launch) === true) {
+                $probed = true;
+                $groupAtExit = $killGroup->invoke($launch);
+            }
+        });
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        try {
+            $launch->start();
+            $loop->run();
+        } finally {
+            $loop->cancelTimer($probe);
+            $loop->cancelTimer($guard);
+            if (is_int($grandchild) && $grandchild > 1 && @posix_kill($grandchild, 0)) {
+                @posix_kill($grandchild, 9);
+            }
+        }
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertTrue($probed, 'the shell never reached exited, so no group was read');
+        $this->assertNull($groupAtExit, 'an unwrapped child that exited must name no group for the kill rungs');
+        $this->assertIsInt($grandchild, 'the background job pid must be read from stdout');
     }
 
     /**

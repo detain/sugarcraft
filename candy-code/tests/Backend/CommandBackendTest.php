@@ -378,8 +378,10 @@ final class CommandBackendTest extends TestCase
                 throw $e;
             } catch (\Throwable $e) {
                 $caught = $e;
+            } finally {
+                // A failed await rethrows past the lines below; the flip must still stop.
+                $loop->cancelTimer($flip);
             }
-            $loop->cancelTimer($flip);
 
             $this->assertInstanceOf(\RuntimeException::class, $caught, 'the cancelled command did not reject');
             $this->assertSame('Request cancelled', $caught->getMessage());

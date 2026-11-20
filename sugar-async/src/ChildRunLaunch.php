@@ -115,6 +115,7 @@ final class ChildRunLaunch
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
      * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle, or on the reap if the child still holds it
      * @param null|float $exitGrace  Seconds of pipe silence read on after the exit is seen, or null to read to EOF
+     * @param bool $setsidWrapped  The child is a setsid wrapper that may not have led its group at the spawn read. Only then does the handle's pid stand in for the group once the child has exited; an unwrapped child leads no group of its own
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -130,6 +131,7 @@ final class ChildRunLaunch
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?string $stagedStdin = null,
         private readonly ?float $exitGrace = null,
+        private readonly bool $setsidWrapped = false,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
@@ -456,9 +458,11 @@ final class ChildRunLaunch
             return $this->liveGroup;
         }
 
-        // A shell that exits before any live read leaves no group to read, yet a
-        // setsid wrapper leads a group whose id is its own pid, which the handle keeps.
-        return $this->exited && $this->spawnPid > 0 ? $this->spawnPid : null;
+        // A setsid wrapper that exits before any live read leaves no group to read, yet
+        // it leads a group whose id is its own pid, which the handle keeps. An unwrapped
+        // child never leads one, and its pid can be reused by a stranger's group leader,
+        // so the fallback is limited to a child declared as a wrapper.
+        return $this->exited && $this->setsidWrapped && $this->spawnPid > 0 ? $this->spawnPid : null;
     }
 
     /**
