@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 
 /**
@@ -54,5 +55,63 @@ final class ShellSendRelayReadyTest extends TestCase
         // gate has always let it through, so the tightened check must not
         // reach that branch.
         $this->assertTrue(ShellSend::relayReady([]));
+    }
+
+    public function testTheAttachedProbeIsTheSameRuleAsTheWaitingOne(): void
+    {
+        $this->assertTrue(ShellSend::relayAttached(['ptyPidPath' => $this->pidFile("4242\n")]));
+        $this->assertFalse(ShellSend::relayAttached(['ptyPidPath' => $this->pidFile('')]));
+        $this->assertTrue(ShellSend::relayAttached([]), 'a pre-relay row is attached by the same control as relayReady');
+    }
+
+    public function testAsyncReadinessResolvesAtOnceWhenTheRecordIsAlreadyThere(): void
+    {
+        $answer = null;
+        ShellSend::relayReadyAsync(['ptyPidPath' => $this->pidFile("4242\n")], new StreamSelectLoop())
+            ->then(static function (bool $ready) use (&$answer): void {
+                $answer = $ready;
+            });
+
+        $this->assertTrue($answer, 'an attached relay answers without touching the loop');
+    }
+
+    public function testAsyncReadinessWaitsOnTheLoopAndResolvesTrueWhenTheRecordLands(): void
+    {
+        $loop = new StreamSelectLoop();
+        $path = $this->pidFile('');
+        // The relay attaches a little after the send is queued: the record is
+        // written from a loop timer, so the wait must be the loop's, not a sleep.
+        $loop->addTimer(0.1, static function () use ($path): void {
+            file_put_contents($path, "4242\n");
+        });
+        $answer = null;
+        $loop->addTimer(10.0, static fn () => $loop->stop());
+        ShellSend::relayReadyAsync(['ptyPidPath' => $path], $loop)
+            ->then(static function (bool $ready) use (&$answer, $loop): void {
+                $answer = $ready;
+                $loop->stop();
+            });
+        $loop->run();
+
+        $this->assertTrue($answer, 'the record that landed mid-wait opens the gate');
+    }
+
+    public function testAsyncReadinessResolvesFalseOnlyAfterTheBudgetPasses(): void
+    {
+        $loop = new StreamSelectLoop();
+        $answer = null;
+        $started = microtime(true);
+        $loop->addTimer(ShellSend::RELAY_ATTACH_BUDGET_MS / 1000 + 5.0, static fn () => $loop->stop());
+        ShellSend::relayReadyAsync(['ptyPidPath' => $this->pidFile('')], $loop)
+            ->then(static function (bool $ready) use (&$answer, $loop): void {
+                $answer = $ready;
+                $loop->stop();
+            });
+        $loop->run();
+        $elapsed = microtime(true) - $started;
+
+        $this->assertFalse($answer, 'no record inside the budget is a refusal, never a lost write');
+        $this->assertGreaterThanOrEqual(ShellSend::RELAY_ATTACH_BUDGET_MS / 1000 * 0.9, $elapsed, 'the wait spans the declared budget');
+        $this->assertLessThan(ShellSend::RELAY_ATTACH_BUDGET_MS / 1000 + 2.0, $elapsed, 'and stops at it');
     }
 }

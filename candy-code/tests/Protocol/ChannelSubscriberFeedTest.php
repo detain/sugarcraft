@@ -19,6 +19,7 @@ use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
 /**
  * GAP-3 seam pins (code-chat P1 step 5/8): the attachFeed closure's third call
@@ -34,6 +35,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 final class ChannelSubscriberFeedTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use DrainsSharedLoopTrait;
 
     private string $sandbox = '';
     private string $project = '';
@@ -159,7 +161,7 @@ final class ChannelSubscriberFeedTest extends TestCase
             'entrypoints' => ['channel' => [['file' => $entryPath, 'class' => $class]]],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
-        return [Bundle::fromDir($dir, 'project'), $name, $entryPath];
+        return [Bundle::fromDir($dir, 'user'), $name, $entryPath];
     }
 
     private function sinkFile(): string

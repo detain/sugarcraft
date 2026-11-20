@@ -306,6 +306,31 @@ final class Bundle
     }
 
     /**
+     * Whether name trust gates anything this bundle carries: channel or
+     * subscriber entrypoints, or hook files. Commands, skills and agents load
+     * for every bundle, so a project-tier copy of a trusted name without this
+     * content withholds nothing, and no trust-refusal notice may name it.
+     */
+    public function hasTrustGatedContent(): bool
+    {
+        $entrypoints = $this->entrypoints();
+
+        if (($entrypoints['channel'] ?? []) !== [] || ($entrypoints['subscriber'] ?? []) !== []) {
+            return true;
+        }
+
+        // A bare hooks/ directory (say, holding only a README) registers nothing;
+        // only a file can be a hook, as TrustedBundleHooks already requires.
+        foreach ($this->hooksPaths() as $path) {
+            if (is_file($path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The manifest's `entrypoints` declaration: contributor KIND => the files
      * it names, each with the class it promises. This is a PARSE, not a load
      * — no bytes of any named file are read here. The decision whether an

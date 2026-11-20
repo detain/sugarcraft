@@ -78,12 +78,12 @@ class KeyMsg implements Msg, Modifiable
     }
 
     /**
-     * {@inheritdoc} — shared idiom with the mouse family (sc-23):
-     * `if ($msg->has(Modifiers::CTRL))` reads the same on a key press
-     * and a click, whatever shape the carrier stores underneath.
+     * {@inheritdoc}
      */
     public function has(int $modifier): bool
     {
+        // Same call as MouseMsg::has(), so `$msg->has(Modifiers::CTRL)` reads
+        // the same on a key press and a click, whatever the carrier stores.
         return $this->modifiers()->has($modifier);
     }
 }

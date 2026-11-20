@@ -157,8 +157,21 @@
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quick-start">Quick Start</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks-and-recipes">Tasks and recipes</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#theming-and-styles">Theming and styles</a></li>
+            <li class="toc-h3"><a href="#keys-and-keybindings">Keys and keybindings</a></li>
+            <li class="toc-h3"><a href="#terminal-mode">Terminal mode</a></li>
+            <li class="toc-h3"><a href="#how-it-works">How it works</a></li>
+            <li class="toc-h3"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#text-prompt">Text prompt</a></li>
             <li class="toc-h3"><a href="#multi-select">Multi-select</a></li>
@@ -166,11 +179,11 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Text, selection, multi-select, textarea and confirmation prompts with full keyboard handling, filter-as-you-type and pagination. Prompts are pure state machines — drive them directly, or let <code class="language-php">Readline</code> wire them to a real TTY. No external readline dependency.</p>
+<p class="lede" style="margin-top: 28px;">SugarReadline is the interactive line-editing layer of the SugarCraft stack: text, selection, multi-select, textarea and confirmation prompts with full keyboard handling, filter-as-you-type, pagination, persistent history and Vi or Emacs editing modes. Every prompt is an immutable state machine, so you can drive one directly from a test or a script, or hand it to <code class="language-php">Readline</code>, which wires it to a real terminal. It has no external readline dependency; the design antecedent is erikgeiser/promptkit, ported in spirit rather than line for line.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-readline</code></pre>
-    <p>No tagged release exists yet; <code class="language-php">dev-master</code> is the only resolvable constraint. From a checkout of the library, run <code class="language-shell">composer install</code> inside <code>sugar-readline/</code> before executing the <code>examples/</code> scripts.</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-readline:dev-master</code></pre>
+    <p>Requires PHP 8.3 or newer and <code>ext-mbstring</code>. The library pulls in <code>sugarcraft/sugar-core</code>, <code>sugarcraft/sugar-forms</code>, <code>sugarcraft/sugar-input</code> and <code>sugarcraft/sugar-style</code>. No tagged release exists yet, so <code>dev-master</code> is the only resolvable constraint: the versionless form fails Packagist's default stability filter. From a checkout, run <code>composer install</code> inside <code>sugar-readline/</code> before executing the <code>examples/</code> scripts.</p>
 
     <h3 id="quick-start" style="margin-top: 32px;">Quick Start</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Readline\{Key, MultiSelectPrompt, SelectionPrompt, TextPrompt};
@@ -194,51 +207,181 @@ $tools = MultiSelectPrompt::new('Pick tools:', ['vim', 'git', 'docker', 'php'])
     -&gt;handleKey(Key::Enter);
 $tools-&gt;selectedValues();                       // ['vim', 'git']</code></pre>
 
-    <p style="margin-top: 16px;">For a real terminal, the same prompts run under <code class="language-php">Readline</code>, which reads keypresses through a sugar-input driver, repaints <code class="language-php">view()</code> as you type and hands back a typed <code class="language-php">ReadlineResult</code> — the finished answer, its submission state and the final prompt. Pass an output stream (the terminal needs non-canonical mode for arrows and chords — the README's "Terminal mode" section carries the stty recipe):</p>
+    <p style="margin-top: 16px;">For a real terminal, the same prompts run under <code class="language-php">Readline</code>. It reads keypresses through a sugar-input driver, repaints <code class="language-php">view()</code> after every change and returns a typed <code class="language-php">ReadlineResult</code> carrying the answer, its submission state and the final prompt. On a live terminal use <code class="language-php">Readline::interactive()</code>, which flips the terminal out of canonical mode around the loop (see <em>Terminal mode</em> below):</p>
     <pre class="code"><code class="language-php">use SugarCraft\Readline\{Readline, TextPrompt};
 
-$result = Readline::fromStdin()-&gt;run(TextPrompt::new('Your name: '), STDOUT);
-$result-&gt;submitted;                         // false (pending) on Esc/Ctrl+C; left unsubmitted at EOF when Readline owns the pump
+$result = Readline::interactive(TextPrompt::new('Your name: '), STDOUT);
+$result-&gt;submitted;                         // false when Esc or Ctrl+C aborted the prompt
 $result-&gt;value;                             // the finished answer
-$result-&gt;prompt;                             // the final prompt object</code></pre>
+$result-&gt;prompt;                            // the final prompt object</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with default value, password masking, completions, validation, history, reverse search and autosuggest (on by default with history).</span></div>
-            <div class="feature"><strong>ConfirmationPrompt</strong><span>Yes/No with customizable labels and default.</span></div>
-            <div class="feature"><strong>SelectionPrompt</strong><span>Arrow-key selection with filter-as-you-type and pagination.</span></div>
-            <div class="feature"><strong>MultiSelectPrompt</strong><span>Multi-item selection with min/max enforcement, marker (◉/○), pagination.</span></div>
-            <div class="feature"><strong>TextareaPrompt</strong><span>Multi-line editor with cursor movement and an explicit newline channel.</span></div>
-            <div class="feature"><strong>Untrusted content</strong><span>Every emission choke sanitizes displayed content (C0/DEL stripped, CR included) so choices and candidates cannot inject escape sequences; returned values keep raw bytes and are the host's to sanitize before printing.</span></div>
-            
+      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with default value, password masking, completions, validation, history, reverse search and autosuggest (on by default, and it only shows when history is attached).</span></div>
+      <div class="feature"><strong>ConfirmationPrompt</strong><span>Yes/No with customizable labels and a default. Keys <code>y</code> and <code>n</code> set the answer directly.</span></div>
+      <div class="feature"><strong>SelectionPrompt</strong><span>Single choice from a list with type-to-filter, cursor navigation and pagination.</span></div>
+      <div class="feature"><strong>MultiSelectPrompt</strong><span>Several choices with min and max enforcement, a marker per selected row, and pagination.</span></div>
+      <div class="feature"><strong>TextareaPrompt</strong><span>Multi-line editor with a line and column cursor, an optional line cap and an explicit newline channel.</span></div>
+      <div class="feature"><strong>Readline</strong><span>The terminal loop: feeds key events into any prompt, repaints it in place and returns a <code>ReadlineResult</code>. It owns every terminal write during a run.</span></div>
+      <div class="feature"><strong>Untrusted content</strong><span>Every emission choke sanitizes displayed content (C0 and DEL bytes stripped, CR included) so choices and candidates cannot inject escape sequences. Returned values keep their raw bytes and are the host's to sanitize before printing.</span></div>
     </div>
+
+    <h3 id="concepts" style="margin-top: 40px;">Concepts</h3>
+    <p>A prompt is a value. Every input method (<code>handleChar()</code>, <code>handleKey()</code>, <code>insertPastedText()</code>, <code>submit()</code>, <code>abort()</code>) returns a new prompt instead of mutating the old one, so a test can keep the state before and after a keystroke and compare them. The answer comes from a per-shape accessor: <code>value()</code> on text and textarea prompts, <code>selectedValue()</code> on a selection, <code>selectedValues()</code> on a multi-select and <code>result()</code> on a confirmation. All five prompt classes implement <code>PromptInterface</code> and <code>SizingInterface</code>, the pair the <code>Readline</code> loop drives.</p>
+    <p>Prompts never write cursor escapes. Only the <code>Readline</code> repaint loop does, which is why a host that renders <code>view()</code> through its own channel gets identical state without any cursor traffic. Key names are normalized at one choke point (<code>Key::normalize()</code>): a raw control byte such as <code>0x08</code> or <code>0x7F</code> and the symbolic name <code>Key::Backspace</code> reach the same handler.</p>
+    <p>Each <code>Readline::run()</code> starts its repaint series from row 0 of the display. Write to the output stream freely between runs, but never while a run is in flight.</p>
+
+    <h3 id="tasks-and-recipes" style="margin-top: 40px;">Tasks and recipes</h3>
+    <p><strong>Validate an answer.</strong> <code>withValidator()</code> gates <code>submit()</code>. Return <code>true</code> to accept, a non-empty string to reject and paint that string as the error row, or <code>false</code>, <code>''</code> or <code>null</code> to reject with the default message. A validator that throws is contained as a default rejection.</p>
+    <pre class="code"><code class="language-php">$port = TextPrompt::new('Port: ')
+    -&gt;withValidator(static fn (string $v): bool|string =&gt;
+        ctype_digit($v) &amp;&amp; (int) $v &lt;= 65535 ? true : 'Enter a port between 0 and 65535');</code></pre>
+
+    <p><strong>Keep history across runs.</strong> <code>FileHistory</code> stores one escaped entry per line in a 0600 file, with a sidecar lock on bounded writes. It refuses a symlinked history path at construction and throws a <code>RuntimeException</code> rather than follow it.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Readline\History\FileHistory;
+
+$history = new FileHistory('/var/tmp/myapp-history', maxHistory: 500);
+$name = TextPrompt::new('> ')-&gt;withHistory($history);</code></pre>
+
+    <p><strong>Hide a secret.</strong> <code>withHidden()</code> renders each typed character as a mask glyph (<code>*</code> by default, changeable with <code>withMask()</code>). The buffer still holds the real value, which <code>value()</code> returns.</p>
+    <pre class="code"><code class="language-php">$token = TextPrompt::new('API token: ')-&gt;withHidden()-&gt;withMask('•');</code></pre>
+
+    <p><strong>Refresh a long choice list.</strong> <code>withChoices($choices, $preserveCursor = true)</code> replaces the options on both list prompts. The active filter is re-applied, and the cursor either stays on its row (clamped to what survives) or moves to the top when you pass <code>false</code>. <code>withPageSize()</code> sets the page length, which defaults to 10.</p>
+    <pre class="code"><code class="language-php">$picker = SelectionPrompt::new('Pick a host:', $hosts)
+    -&gt;withPageSize(15)
+    -&gt;withChoices($freshHosts, preserveCursor: false);</code></pre>
+
+    <p><strong>Use Vi editing keys.</strong> Attach a mode object with <code>withMode()</code>. <code>ViMode</code> adds a Normal submode with motions, operators such as <code>dd</code> and <code>yy</code>, text objects such as <code>diw</code>, a shared unnamed register and undo. <code>EmacsMode</code> adds Emacs-style bindings in which Escape is a meta prefix.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Readline\Mode\ViMode;
+use SugarCraft\Readline\TextPrompt;
+
+$prompt = TextPrompt::new('> ')-&gt;withMode(new ViMode());</code></pre>
+
+    <p><strong>Drive a prompt headlessly.</strong> Pass an explicit <code>null</code> as the output to <code>run()</code> to advance state without writing anything. A test can also feed a socket pair through <code>StreamInputDriver</code>, as the README shows, and close the stream to end the run.</p>
+
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withMask() / withCompletions() / withCompleter() / withValidator() / withCharLimit() / withHistory() / withAutoSuggest(bool) / withUndoManager() / withMode() / withModeIndicator() / withDisplayWidth()</td><td>Single-line input. Autosuggest is enabled by default and shows only while history is attached. A validator returning a non-empty string rejects and paints that string as the error row; <code>false</code>, <code>''</code> or <code>null</code> reject with the default message; a truthy non-string accepts.</td></tr>
+<tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / handleKeyDirect(key) / insertPastedText(text) / submit() / abort() / value() / cursor() / isSubmitted() / isAborted() / error() / mode() / startHistorySearch() / isSearching() / suggestion()</td><td>Drive the prompt and read its state. <code>handleKeyDirect()</code> skips the mode layer.</td></tr>
+<tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel() / withHint() / withAutoSubmit() / handleKey() / submit() / abort() / result() / currentValue() / isSubmitted() / isAborted()</td><td>Yes/No prompt. <code>y</code> and <code>n</code> set the answer, and the Left and Right arrows do the same; Tab or Space toggles. Enter submits and Escape or Ctrl+C aborts. Every key arrives through <code>handleKey()</code>; the prompt has no <code>handleChar()</code>.</td></tr>
+<tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / withChoices() / handleChar() / handleKey() / submit() / selectedValue()</td><td>Single choice with type-to-filter and pagination. PageUp and PageDown jump by one page.</td></tr>
+<tr><td>MultiSelectPrompt</td><td>static new(label, choices) / withMinSelections(n) / withMaxSelections(n) / withChoices() / handleChar() / handleKey() / submit() / selectedValues() / selectionCount() / canSubmit()</td><td>Several choices with min and max enforcement. Enter submits only when <code>canSubmit()</code> holds.</td></tr>
+<tr><td>TextareaPrompt</td><td>static new(label) / withDefault() / withMaxLines() / withViewportRows() / withDisplayWidth() / handleChar() / handleKey() / insertPastedText() / submit() / abort() / value() / lines() / cursorLine() / cursorCol()</td><td>Multi-line editor. Enter submits. Shift+Enter, Alt+Enter and Ctrl+J break a line on terminals that report those chords; where the wire cannot tell them apart, a plain Enter submits.</td></tr>
+<tr><td>Readline</td><td>static fromStdin() / static interactive(prompt, output) / new Readline($input = null, $idleSleeper = null) / onKey() / onMouse() / onFocus() / onPaste() / stop() / isStopped() / run(prompt, output)</td><td>The terminal loop. <code>interactive()</code> wraps <code>run()</code> with the raw-mode flip and restore. <code>run()</code> never touches termios.</td></tr>
+<tr><td>ReadlineResult</td><td>submitted · aborted · stopped · value · prompt</td><td>Readonly outcome of a <code>run()</code>, built by <code>fromPrompt()</code>.</td></tr>
+<tr><td>Mode\EmacsMode · Mode\ViMode</td><td>name() / consumesCharacters() / handleKey(prompt, key) · ViMode also viMode() and register()</td><td>Editing modes, attached with <code>TextPrompt::withMode()</code>. Both implement <code>Mode\ModeInterface</code>.</td></tr>
+<tr><td>History\InMemoryHistory</td><td>new InMemoryHistory(maxHistory = 0) / push() / previous() / next() / search(query, fromIndex, direction) / reset() / clear() / entries() / count()</td><td>Per-process store. A cap of 0 means unlimited. Adjacent duplicates collapse. The <code>getPrevious()</code> and <code>getNext()</code> accessors forward to <code>previous()</code> and <code>next()</code>.</td></tr>
+<tr><td>History\FileHistory</td><td>new FileHistory(filePath, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / path() / setMaxHistory()</td><td>Cross-process history in a 0600 file with escaped one-line entries and bounded, locked writes. A symlinked path is refused at construction. Pushes made with <code>deferWrites</code> stay queued until <code>flush()</code> and are lost on a hard kill.</td></tr>
+<tr><td>UndoManager</td><td>push(state) / undo(current) / redo(current) / canUndo() / canRedo()</td><td>Immutable snapshot stack, bounded at <code>UndoManager::MAX_STATES</code> (512). <code>undo()</code> and <code>redo()</code> return a triple that includes the new manager, so the caller re-attaches it, as <code>TextPrompt</code> does internally.</td></tr>
+<tr><td>Key</td><td>Up, Down, Left, Right, Enter, Tab, ShiftTab, Space, Escape, Backspace, CtrlA … CtrlZ, Undo, Redo, …</td><td>Canonical key names for <code>handleKey()</code>. Raw control bytes normalize to the same names through <code>Key::normalize()</code>.</td></tr>
+<tr><td>Styles</td><td>LABEL · CURSOR · ERROR · COMPLETION · SELECTED · code(Style|string)</td><td>The SGR palette every prompt paints with. <code>code()</code> collapses a sugar-style <code>Style</code> into its code string.</td></tr>
+</table>
+
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>There is no configuration file or global option store. Every behavior is set on the prompt or the history object you construct, and the only process-wide switch is the <code>NO_COLOR</code> environment variable.</p>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>TextPrompt::withCharLimit()</code></td><td>int</td><td>0 (unlimited)</td><td>Caps the buffer length. Order does not matter against <code>withDefault()</code>: whichever runs last enforces the clamp.</td></tr>
+    <tr><td><code>TextPrompt::withAutoSuggest()</code></td><td>bool</td><td>true</td><td>Shows the history suggestion as a dimmed tail. It has no effect without a history attached.</td></tr>
+    <tr><td><code>TextareaPrompt::withMaxLines()</code></td><td>int</td><td>0 (unlimited)</td><td>Caps the number of lines.</td></tr>
+    <tr><td><code>SelectionPrompt::withPageSize()</code> and <code>MultiSelectPrompt</code></td><td>int</td><td>10</td><td>Rows per page. Values below 1 are clamped to 1.</td></tr>
+    <tr><td><code>InMemoryHistory</code> and <code>FileHistory</code> <code>maxHistory</code></td><td>int</td><td>0 (unlimited)</td><td>Caps stored entries. Older entries are dropped first.</td></tr>
+    <tr><td><code>FileHistory</code> <code>tempDir</code></td><td>string</td><td>the history file's directory</td><td>Where the write-then-rename temporary file is created.</td></tr>
+    <tr><td><code>FileHistory</code> <code>deferWrites</code></td><td>bool</td><td>false</td><td>Queues pushes in memory until <code>flush()</code>. A hard kill loses the queued entries.</td></tr>
+    <tr><td><code>UndoManager::MAX_STATES</code></td><td>int</td><td>512</td><td>Upper bound on the undo stack.</td></tr>
+    <tr><td><code>Readline</code> output argument</td><td>stream, null or omitted</td><td>STDOUT when omitted</td><td>Where <code>run()</code> paints. An explicit <code>null</code> paints nothing and only advances state.</td></tr>
+    <tr><td><code>NO_COLOR</code> environment variable</td><td>string</td><td>unset</td><td>Any non-empty value removes all color and style decoration. Prompts print as plain text.</td></tr>
+    </table>
+
+    <h3 id="theming-and-styles" style="margin-top: 40px;">Theming and styles</h3>
+    <p>Every prompt paints with one shared SGR palette, the constants on <code>Styles</code>: <code>LABEL</code> (bold cyan), <code>CURSOR</code> (reverse video), <code>ERROR</code> (red), <code>COMPLETION</code> (bright black) and <code>SELECTED</code> (bold green). Each slot has a matching setter that accepts either a raw SGR code string or a sugar-style <code>Style</code>: <code>withLabelStyle()</code>, <code>withCursorStyle()</code>, <code>withErrorStyle()</code> and <code>withCompletionStyle()</code> on the text prompt, and <code>withSelectedStyle()</code> on the confirmation prompt.</p>
+    <p>A <code>Style</code> passed to a slot is collapsed to its code string by <code>Styles::code()</code>. Only color and text decoration (bold, reverse and similar) have a code-string form. A style that sets padding, margin, border, width, height, a transform or a hyperlink throws an <code>InvalidArgumentException</code>, because it cannot live inside one inline slot. Set <code>NO_COLOR</code> to strip all decoration at once.</p>
+    <p>Chrome text such as the filter bar, the page footer, Yes/No, the search indicator and the default validation message comes from the <code>lang/</code> catalog under the <code>readline</code> namespace. Your labels, choices and validator messages are passed through as written.</p>
+
+    <h3 id="keys-and-keybindings" style="margin-top: 40px;">Keys and keybindings</h3>
+    <p>Bindings fire from both raw control bytes and the symbolic names, so <code>Key::CtrlA</code>, <code>'ctrl_a'</code> and byte <code>0x01</code> all mean the same thing. <code>Key</code> lists the primary bindings; it is not an exhaustive list of every sequence a terminal can send.</p>
+    <ul>
+      <li><strong>Move:</strong> <code>Left</code> and <code>Right</code> move the cursor in text input. <code>Up</code> and <code>Down</code> move through a selection list, the history or textarea lines. Ctrl+P, Ctrl+N, Ctrl+A and Ctrl+E alias those on every text and list surface.</li>
+      <li><strong>Submit and abort:</strong> Enter submits the row under the cursor, the highlighted answer or the buffer. Escape and Ctrl+C abort. Inside an attached <code>EmacsMode</code>, Escape is the meta prefix instead. Inside <code>ViMode</code>, Escape switches submodes and never aborts.</li>
+      <li><strong>Complete:</strong> Tab completes on text prompts. The first press extends the buffer to the longest common prefix, and later presses cycle the matches. Shift+Tab cycles backwards.</li>
+      <li><strong>Filter and select:</strong> Typing filters a list prompt, and Backspace or Ctrl+U clears the filter one character or all of it at a time. Space toggles the mark in <code>MultiSelectPrompt</code> and toggles Yes/No in <code>ConfirmationPrompt</code>. PageUp and PageDown jump one page.</li>
+      <li><strong>Edit:</strong> Backspace erases before the cursor. Ctrl+H is the same. Delete removes under the cursor. Ctrl+K deletes to the end of the line and Ctrl+W deletes the previous word. Ctrl+Z and Ctrl+Y undo and redo.</li>
+      <li><strong>History search:</strong> Ctrl+R searches backwards and Ctrl+S searches forwards. Forward search needs the <code>-ixon</code> terminal setting described under <em>Terminal mode</em>.</li>
+      <li><strong>Confirmation:</strong> <code>y</code> and <code>n</code> set the answer. <code>ConfirmationPrompt::withAutoSubmit()</code> makes that keystroke submit at once; the default is Enter to commit.</li>
+      <li><strong>Textarea:</strong> Shift+Enter, Alt+Enter and Ctrl+J break a line where the terminal reports them.</li>
+      <li><strong>Screen:</strong> Ctrl+L makes <code>Readline</code> clear the screen and repaint the prompt.</li>
+    </ul>
+
+    <h3 id="terminal-mode" style="margin-top: 40px;">Terminal mode</h3>
+    <p><code>run()</code> never changes terminal settings. <code>Readline::interactive()</code> does it for you on a TTY: it saves the <code>stty -g</code> state, switches to <code>-icanon -echo -isig -ixon min 1 time 0</code>, runs the loop and restores the saved state in a <code>finally</code> block. When stdin is not a TTY, <code>interactive()</code> does nothing to the terminal, so piped and CI input never shell out. A host that owns its own loop can apply the same recipe around <code>run()</code>:</p>
+    <pre class="code"><code class="language-php">$isTty = stream_isatty(STDIN);
+$saved = $isTty ? trim((string) shell_exec('stty -g')) : '';
+if ($isTty) {
+    shell_exec('stty -icanon -echo -isig -ixon min 1 time 0');
+}
+try {
+    $result = Readline::fromStdin()-&gt;run(TextPrompt::new('&gt; '), STDOUT);
+} finally {
+    if ($isTty &amp;&amp; $saved !== '') {
+        shell_exec('stty ' . escapeshellarg($saved));
+    }
+}</code></pre>
+    <p>On Windows there is no <code>stty</code>, and the library carries no raw-mode path of its own. <code>interactive()</code> prints one warning to STDERR and continues in cooked mode, where the console may consume arrows and Ctrl chords before the prompt sees them.</p>
+
+    <h3 id="how-it-works" style="margin-top: 40px;">How it works</h3>
+    <p>The loop reads from a <code>SugarCraft\Input\InputDriver</code>. The default driver is <code>php://stdin</code>, and it detects a real end of input. An injected driver cannot tell "no event yet" from "stream ended", because both return <code>null</code>, so the loop keeps idling until the prompt ends or <code>stop()</code> is called. When no key arrives, the idle sleep backs off between 1 microsecond and 20 milliseconds (<code>Readline::IDLE_POLL_MIN_MICROSECONDS</code> to <code>IDLE_POLL_MAX_MICROSECONDS</code>).</p>
+    <p>Each repaint rewrites the frame in place: a carriage return, a cursor-up by the number of rows painted last time, and a clear below. Under <code>TERM=dumb</code> or an unrecognized terminal class the private-mode escape pushes (bracketed paste, kitty keyboard) are skipped, and frames paint as plain lines. Non-TTY sinks keep the escape frames, because a log file or <code>php://memory</code> is the recording.</p>
+    <p>Editing modes sit between the prompt and its key handling. <code>TextPrompt</code> owns the buffer, cursor, history and rendering. An attached mode, <code>EmacsMode</code> or <code>ViMode</code>, receives each key first and may consume it. <code>ViMode</code> keeps its submode in <code>ViModeState</code>, and it shares its key vocabulary with the <code>VimKeyHandler</code> from sugar-forms.</p>
+
+    <h3 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h3>
+    <p><strong>Arrow keys print <code>^[[A</code> or do nothing.</strong> The terminal is still in cooked mode, and its line discipline eats arrows, Backspace and Ctrl chords before the prompt sees them. Run the prompt through <code>Readline::interactive()</code> on a TTY, or apply the recipe under <em>Terminal mode</em>.</p>
+    <p><strong>Ctrl+C leaves the shell without echo.</strong> The process was killed by SIGINT before the restore ran. The <code>-isig</code> flag in the recipe stops that. <code>interactive()</code> already sets it, so this happens only in a hand-rolled recipe that leaves signals enabled.</p>
+    <p><strong>Output freezes after Ctrl+S.</strong> Output flow control (<code>-ixon</code>) is still on, so the terminal reads Ctrl+S as XOFF. Press Ctrl+Q to resume, and set <code>-ixon</code> in your recipe to make Ctrl+S reach forward history search.</p>
+    <p><strong>The console warns about raw mode on Windows.</strong> That is expected. The warning appears once per process, and the prompt then runs in cooked mode, so arrows may not reach it.</p>
+    <p><strong>History constructor throws a <code>RuntimeException</code>.</strong> The history path is a symlink, or the file could not be created with mode 0600 or opened. Point <code>FileHistory</code> at a regular file in a directory you own.</p>
+    <p><strong>Colors are missing.</strong> <code>NO_COLOR</code> is set to a non-empty value somewhere in the environment. Unset it, or accept plain output.</p>
+    <p><strong>Validator message does not appear.</strong> The validator returned <code>true</code>, <code>false</code>, <code>''</code> or <code>null</code>. Only a non-empty string paints as a custom error row; the other falsy returns show the default <em>Invalid input</em>.</p>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <p>Run the suite from the library directory. It uses PHPUnit 10.5 with <code>phpunit.xml</code>, and every test lives under <code>tests/</code>:</p>
+    <pre class="code"><code class="language-shell">cd sugar-readline &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suites cover each prompt, the history stores, both editing modes, the undo stack, the <code>Readline</code> frame contract and the terminal-escape rules. <code>ReadmeApiRosterTest</code> checks that the README's API block names every public symbol. The prompts are pure state machines, so most tests feed key sequences and assert on <code>value()</code>, <code>view()</code> or the submission flags, with no terminal involved.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/basic.php</code> is a scripted walkthrough of every prompt form. It pre-feeds each keypress through <code>handleChar()</code> and <code>handleKey()</code> and never reads STDIN, so it runs the same on a pipe, in CI or on a terminal.</li>
+      <li><code>examples/interactive.php</code> is the live TTY demo. It runs the prompts through <code>Readline::interactive()</code>, with arrow keys, Ctrl chords, Escape and bracketed paste.</li>
+      <li><code>examples/multi-select.php</code> shows <code>MultiSelectPrompt</code> with min and max selection limits.</li>
+    </ul>
+    <p>Run any of them with <code>php examples/basic.php</code> from the library directory after <code>composer install</code>. The <code>.vhs/</code> tapes record <code>basic</code> and <code>multi-select</code> as the demo GIFs shown below.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>SugarReadline has no Charm counterpart, so no <code>Mirrors charmbracelet/…</code> citation applies. Its design antecedent is erikgeiser/promptkit (Go), and the prompt classes are ports of its ideas rather than line-for-line translations.</p>
+    <table class="api-table">
+    <tr><th>SugarCraft class</th><th>Antecedent</th><th>Relation</th></tr>
+    <tr><td><code>TextPrompt</code></td><td>promptkit <code>textinput</code></td><td>Port of spirit, not literal</td></tr>
+    <tr><td><code>SelectionPrompt</code></td><td>promptkit <code>selection</code></td><td>Port of spirit, not literal</td></tr>
+    <tr><td><code>ViModeState</code></td><td>promptkit's submodes</td><td>Not a port: the submode model is this repo's own</td></tr>
+    <tr><td><code>ConfirmationPrompt</code>, <code>MultiSelectPrompt</code>, <code>TextareaPrompt</code></td><td>no antecedent recorded in source</td><td>Built for SugarCraft</td></tr>
+    </table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>The prompt classes and <code>Readline</code> are the two halves of the design. Prompts are values, and <code>Readline</code> is the only object that writes to a terminal. The list prompts share one engine, <code>SelectionEngine</code>, a trait that holds the filter, the cursor, the page and the choice list, so <code>SelectionPrompt</code> and <code>MultiSelectPrompt</code> behave the same way at the keyboard. <code>TextPrompt</code> delegates to an attached mode and to a history object, and it takes an <code>UndoManager</code> for its edit runs.</p>
+    <p>Dependencies run one way. Prompts know nothing about the terminal, and the history stores know nothing about prompts. The <code>History\HistoryInterface</code> contract is the seam: <code>InMemoryHistory</code> and <code>FileHistory</code> both implement it.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>No tagged release exists, so the version is <code>dev-master</code>. The README records the accessor deprecation of 2026-10-24. Use the git history of <code>sugar-readline/</code> to follow changes until a first release is cut.</p>
 
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-readline">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-readline/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-readline/tree/master/examples">Runnable examples</a></li>
-      <li>Design antecedent: <a href="https://github.com/erikgeiser/promptkit">erikgeiser/promptkit</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li>Design antecedent: <a href="https://github.com/erikgeiser/promptkit">erikgeiser/promptkit</a> (Go). SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory() / withAutoSuggest(bool) / withUndoManager(manager) / withDisplayWidth() / withMode()</td><td>Single-line input; autosuggest is enabled by default whenever history is attached; withValidator(): return a non-empty string to reject and paint that string as the error row; return false/''/null to reject with the default Invalid input; a truthy non-string accepts, and a throwing validator is contained as a default rejection</td></tr>
-<tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / insertPastedText(text) / submit() / abort() / value() / isSubmitted() / mode()</td><td>Drive the prompt and read the result</td></tr>
-<tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel() / withHint() / handleKey() / submit() / abort() / result() / currentValue() / isSubmitted() / isAborted()</td><td>Yes/No prompt (y/n or the Left/Right arrows set the choice with one keystroke; Tab or Space toggles; Enter submits, Escape/Ctrl+C aborts — every key, letters included, arrives through the single normalized handleKey() seam; there is no handleChar())</td></tr>
-<tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / handleChar() / handleKey() / selectedValue()</td><td>Single choice with type-to-filter and pagination (PageUp/PageDown jump pages)</td></tr>
-<tr><td>MultiSelectPrompt</td><td>static new(label, choices) / withMinSelections(n) / withMaxSelections(n) / handleChar() / handleKey() / selectedValues() / canSubmit()</td><td>Several choices with min/max enforcement</td></tr>
-<tr><td>TextareaPrompt</td><td>static new(label) / withDefault() / withMaxLines() / handleChar() / handleKey() / insertPastedText() / value() / lines()</td><td>Multi-line editor: Enter submits, Shift+Enter/Ctrl+J break lines on terminals that honor the pump's kitty-keyboard negotiation (where the wire never reports modifiers, both bytes are a plain Enter and submit)</td></tr>
-<tr><td>Readline</td><td>fromStdin() / new Readline($driver = null) / onKey(name, handler) / onMouse() / onFocus() / onPaste() / stop() / run(prompt, output)</td><td>TTY loop: feeds key events into any prompt and repaints it</td></tr>
-<tr><td>Mode\EmacsMode · Mode\ViMode</td><td>attach via TextPrompt::withMode()</td><td>Editing modes; vi normal drives history (j/k), edits (x), the unnamed register (yy/dd/diw → p) and undo (u)</td></tr>
-<tr><td>History\InMemoryHistory</td><td>new(maxHistory = 0) / push() / previous() / next() / search(query, fromIndex, direction) / reset() / clear()</td><td>Per-process store; collapses adjacent duplicates</td></tr>
-<tr><td>History\FileHistory</td><td>new(filePath, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused; deferred pushes stay queued until flush() and are lost on a hard kill (SIGKILL)</td></tr>
-<tr><td>UndoManager</td><td>push(state) / undo(current) / redo(current) / canUndo() / canRedo()</td><td>Immutable bounded (512) snapshot stack; attach via withUndoManager(). undo/redo take the current buffer string and return a [manager, state, ok] triple — a host driving the manager directly must re-attach the returned manager, exactly as TextPrompt does internally</td></tr>
-<tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Canonical key names for handleKey() — raw control bytes normalize to the same language</td></tr>
-</table>
     </div>
   </div>
 </section>
