@@ -38,7 +38,7 @@ final class TextFormatter implements Formatter
      *                         still degrades an opted-in formatter to plain
      *                         output when its destination cannot render
      *                         ANSI (file sinks, pipes — the C2 gate); only a
-     *                         terminal (or CLICOLOR_FORCE=1) receives styling.
+     *                         terminal (or a forcing CLICOLOR_FORCE) receives styling.
      */
     public function __construct(
         bool $reportTimestamp = true,
