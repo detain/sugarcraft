@@ -127,7 +127,12 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      * @param int $idleTimeout Seconds the command may move NO BYTES ON ANY OF
      *        ITS THREE PIPES — it neither writes output nor accepts any more of
      *        the history on stdin — before it is terminated, or 0 (the default)
-     *        for no deadline.
+     *        for no deadline. On Windows the history is staged to a temp file
+     *        with no pipe behind it, so the child's reads of that file are NOT
+     *        counted as stdin acceptance: a child that reads its staged history
+     *        slowly and writes no output is terminated once the budget elapses,
+     *        even while it is still consuming input (see
+     *        {@see \SugarCraft\Async\ChildRun::withIdleTimeout()}).
      *        Measured on ChildRun's monotonic clock ({@see \SugarCraft\Async\Clock::monotonicSeconds()}),
      *        so a configured 1 means silence longer than 1.0s and not "somewhere
      *        in (1.0, 2.0]" — which is what a `time()`-based deadline meant,
