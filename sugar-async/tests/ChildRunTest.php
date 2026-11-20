@@ -103,6 +103,28 @@ final class ChildRunTest extends TestCase
         $this->assertFalse($r->abandonedPipes(), 'the parent never exited, so no pipe was abandoned after an exit');
     }
 
+    /**
+     * The run() counterpart of the launch case: an idle budget shorter than the exit
+     * grace does not cut a child that has already exited. The grace governs its held
+     * pipe, so the run is EXITED with the pipe reported abandoned, not TIMED_OUT.
+     */
+    public function testRunExitGraceGovernsAHeldPipeWhenAnIdleBudgetIsSet(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withIdleTimeout(0.5)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'an exited child is not idle-killed');
+        $this->assertSame(0, $r->exitCode);
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the exit grace');
+        $this->assertLessThan(3.0, $elapsed, 'run settles after the exit grace, not at the idle budget or deadline');
+    }
+
     /** A pipe that is read to EOF with its child is not abandoned, and neither is a child that never held one. */
     public function testPipesClosedByTheChildAreNotAbandoned(): void
     {

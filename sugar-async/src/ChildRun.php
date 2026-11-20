@@ -42,7 +42,9 @@ use function React\Promise\resolve;
  * that writes nothing to either stream for longer than the budget is killed
  * through the same ladder and reported as TIMED_OUT, the same status as the total
  * deadline. Off by default, so a child that is quiet but within its deadline is
- * never killed unless the caller asked for the idle budget.
+ * never killed unless the caller asked for the idle budget. Once the child has
+ * exited, the idle budget no longer applies: the exit grace below governs its
+ * held pipes.
  *
  * A child that exits while a backgrounded grandchild still holds its output
  * pipes ends the run once the pipes have been silent for
@@ -50,8 +52,13 @@ use function React\Promise\resolve;
  * and the last chunk), not at the deadline, unless {@see withExitGrace()} removed
  * that grace. launch() applies the same silence budget. A pipe cut that way while
  * still open is abandoned, and {@see ChildResult::abandonedPipes()} reports it.
- * Output written after a silent stretch longer than the grace is not captured, and
- * nothing reports that drop; output written inside the grace is kept.
+ * Output a descendant writes after a silent stretch longer than the grace is not
+ * captured; the cut itself is reported through {@see ChildResult::abandonedPipes()},
+ * and output written inside the grace is kept. On the Windows runtime the window is
+ * narrower: the poll arm ends at the first pass after the exit that reads nothing,
+ * or {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} after the exit, whichever comes
+ * first, ignores {@see withExitGrace()}, and does not set abandonedPipes(). Output a
+ * descendant writes after that point is not captured there.
  *
  * Stdin: {@see withStdin()} feeds a payload to the child. On POSIX the payload
  * goes through a non-blocking pipe. On the Windows runtime, where a non-blocking
@@ -157,7 +164,8 @@ final class ChildRun
      * many seconds, and reported as TIMED_OUT. Any chunk read resets the budget,
      * dropped bytes included, and so does each stdin write the child takes: a child
      * still consuming its input is working, not idle. Null (the default) disables
-     * it, so a quiet child runs until its deadline.
+     * it, so a quiet child runs until its deadline. Once the child has exited the
+     * budget no longer applies: the exit grace governs its held pipes instead.
      */
     public function withIdleTimeout(?float $seconds): self
     {
@@ -389,8 +397,9 @@ final class ChildRun
                     );
                     $pump = $pump->withHeartbeat(
                         min($idle, self::IDLE_BEAT_SECONDS),
-                        static function () use (&$stop, &$lastActivity, $clock, $idle): void {
-                            if ($stop === null && $clock() - $lastActivity >= $idle) {
+                        static function () use (&$stop, &$lastActivity, $clock, $idle, $running): void {
+                            // Once the child has exited the exit grace governs the pipes, not the idle budget.
+                            if ($stop === null && $running() && $clock() - $lastActivity >= $idle) {
                                 $stop = self::STOP_IDLE;
                             }
                         },

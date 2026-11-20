@@ -216,7 +216,8 @@ final class ChildRunLaunch
         }
 
         $this->probeGone();
-        if ($this->idleTimeout !== null && !$this->killing
+        // Once the child has exited, the exit grace governs the pipes, not the idle budget.
+        if ($this->idleTimeout !== null && !$this->exited && !$this->killing
             && Clock::monotonicSeconds() - $this->lastActivityAt >= $this->idleTimeout) {
             $this->expire();
 
@@ -231,6 +232,10 @@ final class ChildRunLaunch
      * have been silent for the grace, counted from the later of the exit and the
      * last chunk. A pipe still open at that cut is held by a descendant, so it is
      * abandoned and the result reports it. Not run once the kill ladder has started.
+     *
+     * Before a pipe is cut, the bytes it already holds are read. A loop that stalled
+     * past the grace between the last read and this check left them unread, and
+     * cutting the pipe would drop output the child wrote before it exited.
      */
     private function abandonSilentPipesAfterExit(): void
     {
@@ -243,8 +248,45 @@ final class ChildRunLaunch
             return;
         }
 
-        $this->abandonedPipes = true;
-        $this->closeAllPipes();
+        foreach (array_keys($this->open) as $slot) {
+            if ($this->readBuffered($slot)) {
+                continue;
+            }
+            if (isset($this->open[$slot])) {
+                $this->abandonedPipes = true;
+                $this->closeSlot($slot);
+            }
+        }
+    }
+
+    /**
+     * Reads what the pipe already holds, without waiting for more: true when it
+     * yielded bytes, so it is not silent. A pipe at EOF is closed, as onReadable()
+     * would close it. The budget bounds one check against a descendant that keeps
+     * the pipe refilled; such a pipe stays open and the grace restarts from the read.
+     */
+    private function readBuffered(int $slot): bool
+    {
+        $pipe = $this->open[$slot];
+        $yielded = false;
+        $budget = ChildPump::SWEEP_BYTES;
+        while ($budget > 0) {
+            $chunk = fread($pipe, min(ChildPump::READ_BYTES, $budget));
+            if ($chunk === false || $chunk === '') {
+                // feof(), not the empty read: a non-blocking pipe returns '' while nothing is buffered.
+                if (feof($pipe)) {
+                    $this->closeSlot($slot);
+                }
+                break;
+            }
+
+            $yielded = true;
+            $budget -= strlen($chunk);
+            $this->lastActivityAt = Clock::monotonicSeconds();
+            $this->capture->offer($slot, $chunk);
+        }
+
+        return $yielded;
     }
 
     /**

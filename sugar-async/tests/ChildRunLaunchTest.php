@@ -546,6 +546,59 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertFalse($r->abandonedPipes());
     }
 
+    /**
+     * The child writes 60 000 bytes and exits. The loop stalls for 1.5 s just after
+     * the second 8 KiB chunk, which is past the 1 s exit grace, so the exit is seen
+     * with bytes still unread in the pipe. Those bytes were written before the exit,
+     * so launch must read them before it cuts a silent pipe: all 60 000 are kept and
+     * nothing is abandoned.
+     */
+    public function testLaunchKeepsOutputBufferedBehindAStalledLoopAfterTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $chunks = 0;
+
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, str_repeat("x", 60000));'))
+            ->withTimeout(10.0)
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$chunks, $loop): void {
+                if ($slot === 1 && ++$chunks === 2) {
+                    $loop->futureTick(static function (): void {
+                        \usleep(1_500_000);
+                    });
+                }
+            })
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(60000, \strlen($r->stdout), 'output buffered behind the stalled loop is read, not cut');
+        $this->assertFalse($r->abandonedPipes(), 'nothing was held by a descendant, so nothing is abandoned');
+    }
+
+    /**
+     * An idle budget shorter than the exit grace must not cut a child that has
+     * already exited: the grace governs its held pipe, so launch settles EXITED with
+     * the pipe reported abandoned, not TIMED_OUT.
+     */
+    public function testLaunchExitGraceGovernsAHeldPipeWhenAnIdleBudgetIsSet(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withIdleTimeout(0.5)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'an exited child is not idle-killed');
+        $this->assertSame(0, $r->exitCode);
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the exit grace');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the exit grace before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch settles after the exit grace, not at the idle budget or deadline');
+    }
+
     /** The control for the launch grace: with it removed, a held pipe holds launch to its deadline. */
     public function testLaunchWithoutAnExitGraceHoldsAHeldPipeToTheDeadline(): void
     {

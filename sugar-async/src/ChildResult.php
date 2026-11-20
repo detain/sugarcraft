@@ -46,7 +46,8 @@ final class ChildResult
     /**
      * True exactly when a pipe was abandoned after the child exited, before it
      * reached EOF. A pipe closed by the child's exit alone, or cut by a kill on the
-     * deadline, idle budget or cancel, is not abandoned.
+     * deadline, idle budget or cancel, is not abandoned. The Windows poll arm never
+     * reports an abandonment (see {@see ChildRun}).
      */
     public function abandonedPipes(): bool
     {

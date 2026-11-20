@@ -63,8 +63,10 @@ namespace SugarCraft\Async;
  * EOF without a read that might block, so the walk ends when the `running`
  * probe says the child exited and a pass finds nothing left: reason CLOSED,
  * meaning "the child is done and its output is read". Bytes a backgrounded
- * grandchild keeps writing after that are read for at most
- * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS}. Without a `running` probe
+ * grandchild keeps writing after the exit are read only until the first pass
+ * that finds nothing, or {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} after the
+ * exit, whichever comes first. This arm does not apply the silence budget of
+ * {@see withExitGrace()} and does not report abandonment. Without a `running` probe
  * the arm cannot tell a finished child from a silent one, so it reads until
  * the deadline and reports EXPIRED — bounded, never wedged.
  *
@@ -309,6 +311,8 @@ final class ChildPump
      * last chunk read, so a descendant that keeps writing keeps the walk reading
      * (up to the deadline), and one that goes quiet is cut $seconds after its last
      * write. A pipe still open at that cut is reported as abandoned on the result.
+     * The Windows poll arm ignores this budget and ends on the fixed
+     * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} (see the class docblock).
      *
      * A hook can background a child that inherits the output pipes and holds
      * them open long after its parent has exited, so waiting for EOF would stretch
