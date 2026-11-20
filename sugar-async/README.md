@@ -445,6 +445,21 @@ staged to a private temp file that the child reads as its stdin; the file is rem
 once the child is reaped. A null or empty payload gives the child an immediate EOF on
 every runtime.
 
+`withHeartbeat($seconds, $onBeat)` is a liveness hook, not a budget. `$onBeat` runs at
+most every `$seconds` for as long as the child runs, so a watchdog can be fed through a
+silent child. Unlike `withIdleTimeout()`, a beat never ends the run. `run()` beats while
+it reads the pipes and while it waits for an exit after the output closes; `launch()`
+beats on a loop timer until the run settles. `ChildPump::withHeartbeat()` is the same
+knob on the builder.
+
+`withSetsidWrapped(true)` and `withGroupLeader(true)` are for a child started behind a
+containment wrapper, a `setsid` prefix the caller adds to the argv. The first declares
+the wrapper, so the launch path falls back to the child's pid as its process group when
+the group was never read while the child lived. The second takes the group id from the
+pid at spawn, while the child is certainly alive, so the kill rungs signal the right
+group. Leave both false for an unwrapped child: it shares this process's group, and a
+group kill would signal this process.
+
 `ChildPump::new($pipes)` is the builder under `ChildRun`, usable on its own over pipes
 you opened: `withDeadline()`, `withCap()`, `withOnChunk()` (live feed),
 `withStdin($pipe, $bytes)`, `withHeartbeat($seconds, $fn)`, `withReap($fn)` (runs once
