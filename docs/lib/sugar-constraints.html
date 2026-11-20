@@ -194,8 +194,8 @@ use SugarCraft\Constraints\{Direction, GreedySolver, Region};
 $solver = GreedySolver::new();
 
 $rects = $solver-&gt;solve(Region::fromSize(100, 20), Direction::Horizontal, [
-    Constraint::length(24),   // sidebar: 24 cells
-    Constraint::fill(1),      // content: the 76 cells left
+    Constraint::length(24),   // 24: sidebar, 24 cells
+    Constraint::fill(1),      // 76: content, the cells left
 ]);</code></pre>
     <h3 id="constraint-tour" style="margin-top: 24px;">Constraint tour</h3>
     <p>One 100-cell row with every constraint type. This block is a tour, not a script: no file under <code>examples/</code> runs it, and the widths in its comments are what the solver returns for it.</p>
@@ -342,7 +342,7 @@ vendor/bin/phpunit</code></pre>
     <h3 id="troubleshooting" style="margin-top: 32px;">Troubleshooting</h3>
     <ul>
       <li><strong><code>solve()</code> throws "Constraints must be a list".</strong> The array is keyed or sparse. Pass a sequential list, for example by calling <code>array_values()</code> on it.</li>
-      <li><strong>A static call through the interface name is a fatal error.</strong> Interface static methods have no body, so call a concrete class such as <code>GreedySolver::greedy()</code> or <code>GreedySolver::new()</code>.</li>
+      <li><strong>A static call through the interface name is a fatal error.</strong> <code>LayoutSolver</code> declares only the instance method <code>solve()</code>, so a static factory such as <code>greedy()</code> called on the interface name fails with <code>Error: Call to undefined method</code>, followed by the interface and method name. Call a concrete class such as <code>GreedySolver::greedy()</code> or <code>GreedySolver::new()</code>.</li>
       <li><strong>Sizes sum to less than the span.</strong> One of the carve-outs applies. For example, <code>[percentage(30)]</code> at 100 yields 30. Add a <code>fill(1)</code> to absorb the rest, or check the set with <code>demandOf()</code>.</li>
       <li><strong>Sizes sum to more than the span.</strong> The set was solved with compat mode or <code>withoutOverflowTruncation()</code>. <code>[length(60), length(60)]</code> at 100 yields 60 and 60 under those settings, and 50 and 50 under the default policy.</li>
       <li><strong><code>E_USER_DEPRECATED</code> on every solve.</strong> The call uses <code>CassowarySolver</code>, which delegates to <code>GreedySolver</code>. Switch to <code>GreedySolver::new()</code>.</li>
