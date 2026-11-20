@@ -36,7 +36,19 @@ if ($choice = $quickpick->selected()) {
 }
 $allItems = $history->all(); // renumbered 1..N by current load position — archived write-time ordinals are display-ignored</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+        <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>QuickPick is a render-and-state component. It owns the filter text, the item list, the cursor and the window offset. Your event loop owns the keys: it decodes them and forwards calls such as <code>type()</code>, <code>cursorDown()</code> and <code>backspace()</code>, then renders <code>view()</code> over the background string the host already has.</p>
+    <p>Items are plain strings or <code>Item</code> objects. Strings are coerced by <code>ItemFactory</code>, and each coerced string takes its input position as its ordinal. <code>FilteredItem</code> is the numbered <code>Item</code> implementation. The default filter is a case-folded substring match. <code>withRanker()</code> swaps in subsequence scoring, and <code>withFilterFn()</code> adds a predicate that decides which items are candidates at all.</p>
+    <p>Accepting is two calls, and their order matters. Read <code>selected()</code> first, which returns the highlighted item or <code>null</code> when nothing matches. Then call <code>hide()</code>. <code>hide()</code> is the lifecycle call, not an accept, so reading the selection after hiding is too late.</p>
+    <h3 style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Pick one value from a fixed list.</strong> Build <code>QuickPick::new(['Ruby', 'PHP', 'Go'])-&gt;withPrompt('Choose language: ')</code>, forward keys to <code>type()</code>, <code>cursorUp()</code> and <code>cursorDown()</code>, and on Enter read <code>selected()</code> before calling <code>hide()</code>.</li>
+      <li><strong>Remember recent choices.</strong> After an accept, call <code>FileHistory::append()</code> with the choice. On the next run, <code>all()</code> returns the saved entries, renumbered by their current load position. <code>appendDistinct()</code> skips duplicates, and the optional entry cap bounds growth.</li>
+      <li><strong>Restrict the candidates.</strong> Pass a predicate such as <code>fn(Item $item): bool =&gt; ...</code> to <code>withFilterFn()</code>. Only items the predicate accepts reach the text match.</li>
+      <li><strong>Place the overlay over a background.</strong> Render the host's own view string, then position the picker with <code>withOffset($x, $y)</code>, cap it with <code>withWindowHeight()</code>, and add a border with <code>withBorder()</code>. Positioning is manual, so centering stays with the host.</li>
+      <li><strong>Follow terminal resizes.</strong> Call <code>withOnResize()</code> to receive resize events. Call <code>attachSigwinch()</code> to forward <code>SIGWINCH</code> automatically when <code>ext-pcntl</code> or sugar-pty is available. Otherwise call <code>invalidateAutoWidth()</code> once per resize, or supply your own size source with <code>withTtySizeProvider()</code>.</li>
+    </ul>
+<h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). withRanker() swaps in true subsequence scoring; a rejected-by-bias count surfaces as “N hidden by anchor bias”.</span></div>
             <div class="feature"><strong>Composition wrapper</strong><span>QuickPickHost contract: update() answers [host, picker] — the updated QuickPick rides the tuple, the host needs no mutable state.</span></div>
@@ -62,10 +74,58 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
     <tr><td>Esc (cancel)</td><td><code>hide()</code></td></tr>
     </table>
 
-    <h3 style="margin-top: 40px;">Accessibility &amp; color policy</h3>
+        <h3 style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>items</code></td><td><code>array</code> of <code>string</code> or <code>Item</code></td><td><code>[]</code></td><td>Seed list, set in <code>new()</code> or replaced with <code>withItems()</code>. The filter text is kept and re-applied.</td></tr>
+    <tr><td><code>withPrompt()</code></td><td><code>string</code></td><td><code>'&gt; '</code></td><td>Label in front of the filter line.</td></tr>
+    <tr><td><code>withFilterFn()</code></td><td><code>Closure(Item): bool</code></td><td>accepts every item</td><td>Predicate that decides which items are candidates.</td></tr>
+    <tr><td><code>withRanker()</code></td><td><code>?FuzzyMatcher</code></td><td><code>null</code></td><td>Null keeps the case-folded substring match. A matcher from sugar-fuzzy adds subsequence scoring.</td></tr>
+    <tr><td><code>withItemFormatter()</code></td><td><code>Closure(string, bool, int): string</code></td><td>a <code>●</code> or two spaces, then the ordinal, then the item</td><td>Renders one row. The third argument is the printed ordinal, or <code>0</code> when numbering is off.</td></tr>
+    <tr><td><code>withNumbered()</code></td><td><code>bool</code></td><td><code>true</code></td><td><code>false</code> hands the formatter <code>0</code> for every row, so the row shows only the cursor dot.</td></tr>
+    <tr><td><code>withWindowHeight()</code></td><td><code>int</code></td><td><code>10</code></td><td>Maximum number of list rows. Values below 2 are raised to 2, and the window is clamped to the terminal's row budget on short screens.</td></tr>
+    <tr><td><code>withWindowWidth()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> sizes the overlay automatically. A positive value caps the outer width in cells.</td></tr>
+    <tr><td><code>withOffset()</code></td><td><code>int, int</code></td><td><code>0, 0</code></td><td>Top-left position over the background. Negative values clamp to <code>0</code>, and the column is clamped so the overlay never starts past the right edge.</td></tr>
+    <tr><td><code>withMatchStyle()</code></td><td><code>string</code> (ANSI)</td><td><code>''</code></td><td>SGR applied to the matched characters. Empty means no color.</td></tr>
+    <tr><td><code>withBorder()</code></td><td><code>?Border</code></td><td><code>null</code></td><td>Frames every row with a T-junction separator. Off by default.</td></tr>
+    <tr><td><code>withStyle()</code></td><td><code>?Style</code></td><td><code>null</code></td><td>Paints each rendered row through sugar-style. Off by default.</td></tr>
+    <tr><td><code>withOnResize()</code></td><td><code>?Closure</code></td><td><code>null</code></td><td>Callback run on terminal resize, used with <code>attachSigwinch()</code>.</td></tr>
+    </table>
+<h3 style="margin-top: 40px;">Theme, style and color policy</h3>
     <p><strong>Colorless by default.</strong> The frame emits no SGR at all; emphasis reaches the cursor row through text channels a screen reader can speak — the <code>●</code> bullet and ordinal (both your <code>withItemFormatter</code>'s bytes, substitutable to plain ASCII; <code>withNumbered(false)</code> drops the ordinals and keeps the dot) and plain-language chrome rows rendered from the <code>Lang</code> catalog (<code>“↕ showing 1-10 of 40”</code>, <code>“no matches”</code>, <code>“no items”</code>, <code>“N hidden by anchor bias”</code>). Every printed ordinal is a POSITION: coerced strings take their input position across the whole list, replayed history renumbers 1..N at load, and <code>cursor()</code> is the accessor for the selected row's position in what is on screen. SGR appears only where the host opts in (<code>withMatchStyle()</code>, <code>withStyle()</code>, the formatter); honoring <code>NO_COLOR</code>/<code>CLICOLOR</code> is host-side — skip the opt-ins on dumb terminals (the default already needs no color).</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+        <h3 style="margin-top: 32px;">Examples</h3>
+    <p>The examples are package-internal demo drivers. They run from a clone with <code>composer install</code> in the lib root, and they drive the VHS tapes.</p>
+    <ul>
+      <li><code>examples/basic.php</code>: a fuzzy finder over ten fruit names, drawn over a background view. Run it with <code>php examples/basic.php</code>.</li>
+      <li><code>examples/interaction.php</code>: scripted keystrokes against a list of command names. It prints the overlay after the initial state, after <code>type('p')</code> and after <code>type('ph')</code>, and it shows the anchor-bias count when some candidates are hidden. Run it with <code>php examples/interaction.php</code>.</li>
+    </ul>
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <p>Run the lib's suite from its root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite covers the filter and ranker, the geometry and anchor-bias rules, UTF-8 filtering, the SIGWINCH attach, the history store and the help and status bars. <code>ReadmeExampleTest</code> keeps the README's examples executable.</p>
+    <h3 style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The chrome shows question marks or mojibake.</strong> The built-in chrome draws <code>↕ ─ ▏ ⋯</code>. A legacy non-UTF-8 terminal cannot show them, so run the picker in a UTF-8 terminal.</li>
+      <li><strong><code>attachSigwinch()</code> returns <code>false</code>.</strong> Automatic resize needs <code>ext-pcntl</code> or sugar-pty. Without either, call <code>invalidateAutoWidth()</code> once per resize, or pass a size source with <code>withTtySizeProvider()</code>.</li>
+      <li><strong>Composer refuses to resolve the <code>sugarcraft/*</code> siblings.</strong> The siblings require <code>dev-master</code>. Add <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code> to the consuming root, or pin released tags once they are cut.</li>
+      <li><strong>Enter returns nothing.</strong> <code>selected()</code> returns <code>null</code> when the filter matches nothing or the cursor is out of bounds. Check for <code>null</code> before using the value.</li>
+      <li><strong>The history file is never created.</strong> <code>FileHistory</code> creates the file but never its parent directory. Create the directory first, and expect files to be written with mode <code>0600</code>.</li>
+      <li><strong>Ordinals look wrong after a reload.</strong> Ordinals are positions in the list on screen. Replayed history renumbers <code>1..N</code> at load, and the archived write-time ordinals are ignored for display.</li>
+    </ul>
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The lib is inspired by the quick-pick overlay in <a href="https://github.com/Genekkion/theHermit">Genekkion/theHermit</a> (Go). It is a native PHP port, and three upstream behaviors were deliberately not carried over.</p>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>SugarCraft</th><th>Divergence</th></tr>
+    <tr><td>Framed title row above the list</td><td>The header is the prompt and filter line</td><td>No <code>title</code> channel. <code>withPrompt()</code> covers the in-frame label, and hosts render titles in the background view or a <code>StatusBar</code>.</td></tr>
+    <tr><td>Auto-centering on each resize</td><td><code>withOffset(x, y)</code></td><td>Positioning stays manual, because the frame is composed over the host's own string and automatic padding would fight non-full-screen layouts.</td></tr>
+    <tr><td>Bordered, colored lipgloss styling by default</td><td>Frameless, colorless by default</td><td><code>withBorder()</code>, <code>withStyle()</code> and <code>withMatchStyle()</code> are opt-in.</td></tr>
+    </table>
+    <h3 style="margin-top: 32px;">Architecture</h3>
+    <p>The package is one main class and a few helpers. <code>QuickPick</code> is the fuzzy finder overlay. <code>QuickPickHost</code> is the <code>update()</code> and <code>view()</code> composition contract, which carries its state in the return tuple. <code>Item</code> and <code>FilteredItem</code> model the candidates. <code>HelpBar</code> and <code>StatusBar</code> render the lines below the overlay, and both use the <code>Visible</code> concern. <code>ItemFactory</code> coerces string and <code>Item</code> lists. <code>Lang</code> is the chrome text catalog, loaded from <code>lang/en.php</code>. <code>History\FileHistory</code> is the JSONL-backed store. <code>Support\AnsiWalk</code> walks escape sequences by codepoint when highlighting, and <code>Support\UntrustedText</code> guards rendered strings at the trust boundary.</p>
+    <h3 style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-quickpick/</code> in the monorepo is the record of changes. Its siblings resolve at <code>dev-master</code>, as the Install section notes.</p>
+<h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick/blob/master/README.md">Full README</a></li>
@@ -75,7 +135,7 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter, ?Closure $filterFn)</td><td>Create fuzzy finder (items: string[] or Item[]; coerced strings take their input position as ordinal; all three seeds factory-reachable)</td></tr>
