@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} 需要值，但参数列表已结束',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} 不接受值',
     'cli.argv.worktree.with_subcommand' => '--worktree 为一个主会话指定工作树；子命令动词运行自身流程，只能忽略它',
+    'cli.attach.bad_record_url' => '正在运行的服务器记录中的 {url} 不是可用的 http(s):// 或 ws(s):// 地址',
     'cli.attach.bad_url' => 'candy-code attach：--url {url} 不是 http(s):// 或 ws(s):// 地址',
     'cli.attach.closed_during_handshake' => '服务器在握手期间关闭了连接',
     'cli.attach.flag_does_not_apply' => 'candy-code attach：{flag} 不适用于 attach',

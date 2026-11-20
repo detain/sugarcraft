@@ -26,8 +26,8 @@ use SugarCraft\Style\Style;
  * Color destination gate: ANSI styling is delivered only to destinations
  * that can render it. When a record's target stream is not a terminal, a
  * {@see TextFormatter} is transparently swapped for its plain (useColors:
- * false) mirror, so log files never bake SGR bytes. `CLICOLOR_FORCE=1`
- * overrides the gate; JSON and logfmt formatters emit no ANSI anyway and
+ * false) mirror, so log files never bake SGR bytes. A non-empty
+ * `CLICOLOR_FORCE` other than `0` overrides the gate; JSON and logfmt formatters emit no ANSI anyway and
  * pass through untouched.
  *
  * Hooks: {@see Hook\HookRegistry} callbacks fire only when records pass
@@ -210,7 +210,7 @@ final class Logger
 
         // C2 destination gate: ANSI never bakes into file/pipe output. A
         // TextFormatter aimed at a destination that cannot render styling is
-        // swapped for its cached plain mirror; CLICOLOR_FORCE=1 opts back in.
+        // swapped for its cached plain mirror; a forcing CLICOLOR_FORCE opts back in.
         $formatter = $this->formatter;
         if ($formatter instanceof TextFormatter && !ColorGate::allowsColor($target)) {
             $formatter = $this->plainMirrorOf($formatter);
