@@ -679,6 +679,10 @@ final class CheckDocsAssets
      * Every finding names the body and the claim, so a wrong claim is fixed in
      * the body, never by loosening the guard.
      *
+     * Scope: leg (i) reads static calls (`Name::method(`) and constructors
+     * (`new Name(`, in code only). An instance call (`$var->method(`) is not
+     * read, so a method a body names on an object is not checked here.
+     *
      * $census receives what the legs looked at (`bodies`, `claims`), so a caller
      * can pin a non-trivial corpus: no findings is vacuous on a tree the legs
      * never scanned (RT-20).
@@ -717,13 +721,16 @@ final class CheckDocsAssets
             foreach ($calls as $hit) {
                 $claims[] = [$hit[1], $hit[2]];
             }
-            preg_match_all('~\bnew\s+(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)\s*\(~', $html, $news, PREG_SET_ORDER);
+            // A constructor is a code claim only inside code: prose such as "a new
+            // Session (opened by the loop)" names no class the body uses.
+            preg_match_all('~<(pre|code)\b[^>]*>(.*?)</\1>~s', $html, $codeSpans, PREG_PATTERN_ORDER);
+            preg_match_all('~\bnew\s+(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)\s*\(~', implode("\n", $codeSpans[2]), $news, PREG_SET_ORDER);
             foreach ($news as $hit) {
                 $claims[] = [$hit[1], null];
             }
             foreach (array_unique(array_map('serialize', $claims)) as $key) {
                 [$name, $method] = unserialize($key);
-                if (self::isIllustrativeName($name, $declared, $external)) {
+                if (self::isIllustrativeName($name, $declared, $external, $imports)) {
                     continue;
                 }
                 $census['claims']++;
@@ -820,16 +827,18 @@ final class CheckDocsAssets
             foreach ($decl[1] as $name) {
                 $declared[$name] = true;
             }
-            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)\s*;~', $code, $uses, PREG_SET_ORDER);
+            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;~', $code, $uses, PREG_SET_ORDER);
             foreach ($uses as $hit) {
                 if ($hit[1] === '') {
                     continue;
                 }
+                // `use X as Y` binds the name Y, so the claims in the snippet name X through Y.
+                $bound = $hit[3] ?? $hit[2];
                 $fqn = $hit[1] . $hit[2];
                 if (self::isSugarcraftName($fqn)) {
-                    $imports[strtolower($hit[2])][$fqn] = $fqn;
+                    $imports[strtolower($bound)][$fqn] = $fqn;
                 } else {
-                    $external[$hit[2]] = true;
+                    $external[$bound] = true;
                 }
             }
         }
@@ -842,12 +851,15 @@ final class CheckDocsAssets
      * qualified name outside SugarCraft\, a bare name the body imports from
      * outside SugarCraft, or a bare class the body declares for its own example.
      * A SugarCraft\ name is never illustrative, even when the body declares a
-     * class with the same short name.
+     * class with the same short name, and neither is a bare name the body
+     * imports from SugarCraft: that import says which class the name means, and
+     * a same-named declaration in another snippet does not change it.
      *
      * @param array<string,true> $declared
      * @param array<string,true> $external
+     * @param array<string,list<string>> $imports
      */
-    private static function isIllustrativeName(string $name, array $declared, array $external): bool
+    private static function isIllustrativeName(string $name, array $declared, array $external, array $imports): bool
     {
         $trimmed = ltrim($name, '\\');
         if (self::isSugarcraftName($trimmed)) {
@@ -857,6 +869,9 @@ final class CheckDocsAssets
             return true;
         }
         $short = self::shortName($trimmed);
+        if (isset($imports[strtolower($short)])) {
+            return false;
+        }
 
         return isset($declared[$short]) || isset($external[$short]);
     }
@@ -1046,7 +1061,7 @@ final class CheckDocsAssets
             }
             $visited[$file] = true;
             $text = self::readCached($file);
-            if (preg_match('~\bfunction\s+&?' . preg_quote($method, '~') . '\s*\(~', $text) === 1) {
+            if (self::declaresPublicMethod($text, $method)) {
                 return true;
             }
             // PHP supplies cases() on every enum and from()/tryFrom() on a backed
@@ -1063,6 +1078,26 @@ final class CheckDocsAssets
                 if (self::declaresMethod($index, self::resolveName($ref, $scope), $method, $visited)) {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when $text declares $method with public visibility. A declaration
+     * with no modifier is public; a private or protected one cannot be called as
+     * `Name::method()` from a body (PHP fatals), so it does not satisfy a claim.
+     */
+    private static function declaresPublicMethod(string $text, string $method): bool
+    {
+        $pattern = '~(?<![\w$])((?:(?:public|protected|private|static|final|abstract)\s+)*)function\s+&?'
+            . preg_quote($method, '~') . '\s*\(~';
+        preg_match_all($pattern, $text, $hits, PREG_SET_ORDER);
+        foreach ($hits as $hit) {
+            $modifiers = strtolower($hit[1]);
+            if (!str_contains($modifiers, 'private') && !str_contains($modifiers, 'protected')) {
+                return true;
             }
         }
 

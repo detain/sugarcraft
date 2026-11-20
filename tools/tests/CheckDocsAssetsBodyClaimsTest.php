@@ -359,6 +359,93 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         $this->assertGreaterThanOrEqual(1500, $census['claims']);
     }
 
+    public function testAnAliasedImportResolvesToTheClassItBinds(): void
+    {
+        $root = $this->makeFixture();
+
+        // `use X as W` binds W to X: a claim through W is checked against X, and a
+        // third-party alias is illustrative, exactly as an unaliased import is.
+        $this->assertSame([], $this->claimsFor($root, "<pre><code>use SugarCraft\\Alpha\\Widget as W;\nW::make();</code></pre>"));
+        $this->assertSame([], $this->claimsFor($root, "<pre><code>use App\\Ext as E;\nE::make();</code></pre>"));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Widget::nope(), but no declaration of SugarCraft\Alpha\Widget carries that method'],
+            $this->claimsFor($root, "<pre><code>use SugarCraft\\Alpha\\Widget as W;\nW::nope();</code></pre>"),
+        );
+    }
+
+    public function testAConstructorInProseIsNotAClaimButOneInCodeIs(): void
+    {
+        $root = $this->makeFixture();
+
+        // "a new Session" in running text names no class the body uses; the same
+        // shape inside a code block is a claim.
+        $this->assertSame([], $this->claimsFor($root, '<p>Each new Session (opened by the loop) keeps its own state.</p>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class Session, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Each new Session (opened by the loop).</p><pre><code>$s = new Session();</code></pre>'),
+        );
+    }
+
+    public function testAPrivateOrProtectedMethodDoesNotSatisfyAStaticCall(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/src/Vault.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Vault
+            {
+                public static function open(): void
+                {
+                }
+
+                private static function secret(): void
+                {
+                }
+
+                protected function guard(): void
+                {
+                }
+            }
+
+            PHP);
+
+        // PHP fatals on Vault::secret() and Vault::guard() from outside the class,
+        // so a body naming them as API is wrong; the public open() is not.
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Vault::open();</code></pre>'));
+        $this->assertSame(
+            [
+                'claims: docs/_data/alpha.body.html names Vault::secret(), but no declaration of Vault carries that method',
+                'claims: docs/_data/alpha.body.html names Vault::guard(), but no declaration of Vault carries that method',
+            ],
+            $this->claimsFor($root, '<pre><code>Vault::secret(); Vault::guard();</code></pre>'),
+        );
+    }
+
+    public function testAnImportedSugarcraftNameIsCheckedEvenWhenAnotherSnippetDeclaresTheShortName(): void
+    {
+        $root = $this->makeFixture();
+
+        // Snippet 1 imports alpha's Widget; snippet 2 declares its own Widget. The
+        // claim in snippet 3 means the imported class, so vanish() is not carried.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Widget::vanish(), but no declaration of SugarCraft\Alpha\Widget carries that method'],
+            $this->claimsFor($root,
+                '<pre><code>use SugarCraft\\Alpha\\Widget;</code></pre>'
+                . '<pre><code>final class Widget {}</code></pre>'
+                . '<pre><code>Widget::vanish();</code></pre>',
+            ),
+        );
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>use SugarCraft\\Alpha\\Widget;</code></pre>'
+            . '<pre><code>final class Widget {}</code></pre>'
+            . '<pre><code>Widget::make();</code></pre>',
+        ));
+    }
+
     /** @return list<string> the claim findings for one body written into the fixture */
     private function claimsFor(string $root, string $html): array
     {
