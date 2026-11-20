@@ -17,9 +17,12 @@ declare(strict_types=1);
  * PHPDoc paragraph and a method table (signature and summary). The output is
  * marked GENERATED in its first line and must never be hand-edited.
  *
- * TOP-10 COVERAGE. The same measure tools/depth-score.php uses: take the ten
- * largest public types by source bytes, then count how many are named in the
- * fragment. Target is at least 80 percent (plan section 5.3, item 6).
+ * TOP-10 COVERAGE. A companion to the class coverage in tools/depth-score.php,
+ * not the same figure. This generator takes the ten largest public types by
+ * source bytes and counts how many are named in the fragment, since the fragment
+ * is what it controls. depth-score ranks every first declaration, @internal ones
+ * included, and counts names in the page body, so the two can grade different
+ * sets. Target is at least 80 percent (plan section 5.3, item 6).
  *
  * PILOT SCOPE. Only the libs in ApiReference::ENABLED are built. Phase 4 widens
  * that list as a reviewed edit; nothing else changes.
@@ -372,7 +375,8 @@ final class ApiReference
 
     private static function isInternal(?string $doc): bool
     {
-        return $doc !== null && preg_match('/^\s*\*?\s*@internal\b/m', $doc) === 1;
+        // The leading run covers `/**` so the one-line form `/** @internal */` counts too.
+        return $doc !== null && preg_match('~^[\s/*]*@internal\b~m', $doc) === 1;
     }
 
     /**
