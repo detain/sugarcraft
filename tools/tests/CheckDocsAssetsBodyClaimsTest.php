@@ -487,6 +487,71 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testAThirdPartyOrUpstreamNameInACodeSpanIsNotChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // Upstream Go identifiers, PHP package interfaces and a TypeScript component
+        // are named as what they are, not as classes this monorepo should declare.
+        $this->assertSame([], $this->claimsFor($root,
+            '<p>Use <code>LoggerInterface</code>, <code>StreamSelectLoop</code> and <code>RecordOnly</code>; '
+            . 'the <code>DiffView</code> component, a <code>HIcd</code> row and <code>JetBrainsMono</code>.</p>',
+        ));
+    }
+
+    public function testAQuotedWordInSourceDoesNotExcuseAPhantomClassName(): void
+    {
+        $root = $this->makeFixture();
+        // A quoted word is a string in a source file, not a registered name: the
+        // phantom class in the body must still be named.
+        $this->put("$root/alpha/src/Labels.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Labels
+            {
+                public function title(): string
+                {
+                    return 'ResizeMsg';
+                }
+            }
+
+            PHP);
+
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class ResizeMsg, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Re-solve on every <code>ResizeMsg</code>.</p>'),
+        );
+    }
+
+    public function testARegisteredToolNameInSourceIsNotAClassClaim(): void
+    {
+        $root = $this->makeFixture();
+        // A built-in tool registers its name as NAME and as the attribute name; a
+        // body naming the tool in a code span is naming a registered name.
+        $this->put("$root/alpha/src/AskUserTool.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            #[BuiltInTool(name: 'PlanExit')]
+            final class AskUserTool
+            {
+                public const NAME = 'AskUser';
+            }
+
+            PHP);
+
+        $this->assertSame([], $this->claimsFor($root,
+            '<p>The agent calls <code>AskUser</code> and <code>PlanExit</code> to ask.</p>',
+        ));
+    }
+
     public function testAPackageNameInACodeSpanIsNotAClassClaim(): void
     {
         $root = $this->makeFixture();

@@ -96,15 +96,22 @@ final class CheckDocsAssets
      *  - keyboard key names (EXCLUDED_KEY_NAMES);
      *  - products, tools and protocols a body names as text (EXCLUDED_PRODUCT_NAMES);
      *  - configuration directives the body quotes from ssh/OS config files
-     *    (EXCLUDED_CONFIG_NAMES).
+     *    (EXCLUDED_CONFIG_NAMES);
+     *  - names for things outside the monorepo, upstream Go identifiers, PHP
+     *    package interfaces and a TypeScript component (EXCLUDED_THIRD_PARTY_NAMES);
+     *  - registered tool names and enum cases, constants and methods the monorepo
+     *    declares (nonClassSymbols()).
      * A name the body imports or declares itself is illustrative, as in leg (i).
      */
     private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$~';
 
-    /** @var list<string> keyboard key names a body writes in code spans */
+    /**
+     * @var list<string> keyboard key names a body writes in code spans; `ReleaseA`
+     *      is the Kitty release-event form of a key, the name KeyEvent documents
+     */
     private const EXCLUDED_KEY_NAMES = [
         'PageUp', 'PageDown', 'PgUp', 'PgDn', 'ArrowUp', 'ArrowDown', 'ArrowLeft',
-        'ArrowRight', 'WheelUp', 'WheelDown',
+        'ArrowRight', 'WheelUp', 'WheelDown', 'ReleaseA',
     ];
 
     /** @var list<string> environment variables that are not all capitals */
@@ -112,7 +119,21 @@ final class CheckDocsAssets
 
     /** @var list<string> products, tools and protocols written as plain text */
     private const EXCLUDED_PRODUCT_NAMES = [
-        'MySQL', 'MariaDB', 'ITerm2', 'WindowsTerminal',
+        'MySQL', 'MariaDB', 'ITerm2', 'WindowsTerminal', 'JetBrainsMono',
+    ];
+
+    /**
+     * @var list<string> names a body writes for something outside the monorepo:
+     *      an upstream Go identifier (charmbracelet vhs modes, bubbletea options,
+     *      bubbles list and glamour renderer names), a PHP package's interface or
+     *      class (psr/log, react/event-loop), a candy-code-web TypeScript component,
+     *      or an output string a body quotes. None is declared under a `<slug>/src/`
+     *      tree, and the body names each one as the thing it is, not as a claim.
+     */
+    private const EXCLUDED_THIRD_PARTY_NAMES = [
+        'RecordOnly', 'ReplayOnly', 'WithReporter', 'WithSignalHandler', 'SetFilterText',
+        'TermRenderer', 'LoggerInterface', 'ExtUvLoop', 'StreamSelectLoop', 'DiffView',
+        'HIcd',
     ];
 
     /** @var list<string> ssh and OS config directives quoted in code spans */
@@ -868,6 +889,12 @@ final class CheckDocsAssets
      * (the Pascal form of a `<slug>/` directory, such as `SugarSpring`). Keys
      * are lowercase.
      *
+     * Only a registered tool name counts as a string: the value of a `const NAME`
+     * or a `name:` attribute argument (`#[BuiltInTool(name: 'AskUser')]`). Any
+     * other quoted word is left checked, so a body's phantom class that merely
+     * appears as a string in a source file is still named. Excluding every quoted
+     * word would also excuse exactly that class.
+     *
      * @return array<string,true>
      */
     private static function nonClassSymbols(string $root): array
@@ -879,8 +906,9 @@ final class CheckDocsAssets
                 preg_match_all('~\bfunction\s+&?([A-Za-z_]\w*)\s*\(~', $text, $m);
                 preg_match_all('~^\s*case\s+([A-Za-z_]\w*)\s*[=;]~m', $text, $c);
                 preg_match_all('~\bconst\s+(?:[A-Za-z_]\w*\s+)?([A-Za-z_]\w*)\s*=~', $text, $k);
-                preg_match_all('~[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $str);
-                foreach ([$m[1], $c[1], $k[1], $str[1]] as $names) {
+                preg_match_all('~\bconst\s+NAME\s*=\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $tool);
+                preg_match_all('~\bname:\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $attr);
+                foreach ([$m[1], $c[1], $k[1], $tool[1], $attr[1]] as $names) {
                     foreach ($names as $name) {
                         $symbols[strtolower($name)] = true;
                     }
@@ -947,7 +975,7 @@ final class CheckDocsAssets
         if (preg_match('~^[A-Z][A-Z0-9_]*$~', $bare) === 1 || isset($nonClass[strtolower($bare)])) {
             return true;
         }
-        foreach ([self::EXCLUDED_KEY_NAMES, self::EXCLUDED_ENV_NAMES, self::EXCLUDED_PRODUCT_NAMES, self::EXCLUDED_CONFIG_NAMES] as $list) {
+        foreach ([self::EXCLUDED_KEY_NAMES, self::EXCLUDED_ENV_NAMES, self::EXCLUDED_PRODUCT_NAMES, self::EXCLUDED_CONFIG_NAMES, self::EXCLUDED_THIRD_PARTY_NAMES] as $list) {
             foreach ($list as $excluded) {
                 if (strcasecmp($excluded, $bare) === 0) {
                     return true;
