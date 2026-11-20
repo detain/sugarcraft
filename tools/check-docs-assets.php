@@ -50,8 +50,12 @@ declare(strict_types=1);
  *  i) body class and method claims: every `Name::method(` and `new Name(` a
  *     `docs/_data/<slug>.body.html` names must resolve to a class declared
  *     under a `<slug>/src/` tree (or a PHP built-in), and `Name::method(` must
- *     name a method some declaration of that class carries, directly or through
- *     the traits and parents it pulls in.
+ *     name a public method of that class, directly or through the traits and
+ *     parents it pulls in. A bare PascalCase name alone in an inline `<code>`
+ *     span (`<code>ResizeMsg</code>`) is a class claim too. The bare-name rule,
+ *     its exclusion list (test classes, env vars, key names, products, config
+ *     directives) and the single-word scope limit are documented at
+ *     BARE_CLASS_SHAPE and isNonClassName() below.
  *  j) body example claims: every `examples/<file>` path a body names must exist
  *     under the package it belongs to.
  *  k) body vhs claims: every `.vhs/<file>.tape|gif` a body names must exist.
@@ -76,6 +80,47 @@ final class CheckDocsAssets
 
     /** The published site origin every sitemap `<loc>` row must sit under. */
     private const SITE_BASE = 'https://sugarcraft.github.io/';
+
+    /**
+     * Leg (i), bare names: an inline `<code>` span whose whole text is a
+     * PascalCase identifier with at least two capital humps and one lowercase
+     * letter (`ResizeMsg`, `ITerm2`, `MySQL`) is a class claim. A single-word
+     * name (`Model`, `Enter`, `Ascii`) is not checked: too many of them are
+     * English, key names or option values to tell apart from a class.
+     *
+     * Names that are not classes and are excluded from that check:
+     *  - fixture and test classes (a `*Test` or `*Tests` suffix): they live
+     *    under `<slug>/tests/`, which the class index never reads;
+     *  - environment variables (all capitals with underscores, or a listed
+     *    Windows variable);
+     *  - keyboard key names (EXCLUDED_KEY_NAMES);
+     *  - products, tools and protocols a body names as text (EXCLUDED_PRODUCT_NAMES);
+     *  - configuration directives the body quotes from ssh/OS config files
+     *    (EXCLUDED_CONFIG_NAMES).
+     * A name the body imports or declares itself is illustrative, as in leg (i).
+     */
+    private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$~';
+
+    /** @var list<string> keyboard key names a body writes in code spans */
+    private const EXCLUDED_KEY_NAMES = [
+        'PageUp', 'PageDown', 'PgUp', 'PgDn', 'ArrowUp', 'ArrowDown', 'ArrowLeft',
+        'ArrowRight', 'WheelUp', 'WheelDown',
+    ];
+
+    /** @var list<string> environment variables that are not all capitals */
+    private const EXCLUDED_ENV_NAMES = ['ComSpec'];
+
+    /** @var list<string> products, tools and protocols written as plain text */
+    private const EXCLUDED_PRODUCT_NAMES = [
+        'MySQL', 'MariaDB', 'ITerm2', 'WindowsTerminal',
+    ];
+
+    /** @var list<string> ssh and OS config directives quoted in code spans */
+    private const EXCLUDED_CONFIG_NAMES = [
+        'HostName', 'ProxyCommand', 'ProxyJump', 'LocalCommand', 'StrictHostKeyChecking',
+        'UserKnownHostsFile', 'GlobalKnownHostsFile', 'IdentityAgent', 'IdentityFile',
+        'CertificateFile', 'ForceCommand', 'ClientAliveInterval', 'ExecReload',
+    ];
 
     /**
      * Chrome-bearing pages deliberately OUT of the advertised universe:
@@ -701,6 +746,7 @@ final class CheckDocsAssets
             return [];
         }
         $index = self::classIndex($root);
+        $nonClass = self::nonClassSymbols($root);
 
         $findings = [];
         foreach ($bodies as $file) {
@@ -740,6 +786,22 @@ final class CheckDocsAssets
                 }
             }
 
+            // (i) bare names: a PascalCase name alone in an inline code span
+            // names a class too (`<code>ResizeMsg</code>`), so it must resolve
+            // like a `Name::method()` claim. Only inline spans count; a `<pre>`
+            // block is code that the static-call and constructor shapes above
+            // already read.
+            foreach (self::bareCodeSpanNames($html) as $name) {
+                if (self::isIllustrativeName($name, $declared, $external, $imports) || self::isNonClassName($name, $nonClass)) {
+                    continue;
+                }
+                $census['claims']++;
+                $problem = self::undeclaredClaim($index, $name, null, $imports);
+                if ($problem !== null) {
+                    $findings[] = "claims: $rel $problem";
+                }
+            }
+
             // (j) `examples/<file>` — a file path, so the extension is required
             // and a bare directory mention ("examples/") is not a claim.
             preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
@@ -771,6 +833,129 @@ final class CheckDocsAssets
         }
 
         return array_values(array_unique($findings));
+    }
+
+    /**
+     * The bare class-shaped names a body writes alone in an inline code span
+     * (`<code>ResizeMsg</code>`), with `<pre>` blocks removed first. A span with
+     * anything else in it (`<code>Foo::bar()</code>`, `<code>php examples/x.php</code>`)
+     * is not a bare name and is read by the other legs.
+     *
+     * @return list<string>
+     */
+    private static function bareCodeSpanNames(string $html): array
+    {
+        $prose = (string) preg_replace('~<pre\b[^>]*>.*?</pre>~s', '', $html);
+        preg_match_all('~<code\b[^>]*>([^<]*)</code>~', $prose, $spans);
+
+        $names = [];
+        foreach ($spans[1] as $span) {
+            $name = trim($span);
+            if (preg_match(self::BARE_CLASS_SHAPE, $name) === 1 && preg_match('~[a-z]~', $name) === 1) {
+                $names[] = $name;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * The names the monorepo itself declares as something other than a class:
+     * every method, enum case and constant under a `<slug>/src/` tree, every
+     * quoted word a source file uses as a string (tool, hook, option and theme
+     * names are registered that way), every class a `<slug>/tests/` tree
+     * declares (a test fixture, never a library class), and every package name
+     * (the Pascal form of a `<slug>/` directory, such as `SugarSpring`). Keys
+     * are lowercase.
+     *
+     * @return array<string,true>
+     */
+    private static function nonClassSymbols(string $root): array
+    {
+        $symbols = [];
+        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
+            foreach (self::phpFiles($src) as $path) {
+                $text = self::readCached($path);
+                preg_match_all('~\bfunction\s+&?([A-Za-z_]\w*)\s*\(~', $text, $m);
+                preg_match_all('~^\s*case\s+([A-Za-z_]\w*)\s*[=;]~m', $text, $c);
+                preg_match_all('~\bconst\s+(?:[A-Za-z_]\w*\s+)?([A-Za-z_]\w*)\s*=~', $text, $k);
+                preg_match_all('~[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $str);
+                foreach ([$m[1], $c[1], $k[1], $str[1]] as $names) {
+                    foreach ($names as $name) {
+                        $symbols[strtolower($name)] = true;
+                    }
+                }
+            }
+        }
+        // A package name is the library, not a class: `SugarSpring` names the
+        // sugar-spring package, so it is never a class claim.
+        foreach (glob("$root/*/composer.json") ?: [] as $manifest) {
+            $pascal = str_replace(' ', '', ucwords(str_replace('-', ' ', basename(dirname($manifest)))));
+            $symbols[strtolower($pascal)] = true;
+        }
+        foreach (glob("$root/*/tests", GLOB_ONLYDIR) ?: [] as $tests) {
+            foreach (self::phpFiles($tests) as $path) {
+                preg_match_all(
+                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    self::readCached($path),
+                    $decl,
+                );
+                foreach ($decl[1] as $name) {
+                    $symbols[strtolower($name)] = true;
+                }
+            }
+        }
+
+        return $symbols;
+    }
+
+    /**
+     * Every `.php` file under $dir, recursively.
+     *
+     * @return list<string>
+     */
+    private static function phpFiles(string $dir): array
+    {
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+        foreach ($walk as $file) {
+            /** @var \SplFileInfo $file */
+            if ($file->isFile() && str_ends_with($file->getFilename(), '.php')) {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * True for a bare code-span name that is not a class: a test or fixture
+     * class, an environment variable, a key name, a product or tool name, a
+     * configuration directive, or a name the monorepo declares as a method, enum
+     * case, constant or string (see nonClassSymbols()). The fixed lists are the
+     * constants above; every entry is one a body has written and the guard must
+     * not read as a class claim.
+     *
+     * @param array<string,true> $nonClass from nonClassSymbols()
+     */
+    private static function isNonClassName(string $name, array $nonClass): bool
+    {
+        $bare = ltrim($name, '\\');
+        if (str_ends_with($bare, 'Test') || str_ends_with($bare, 'Tests')) {
+            return true;
+        }
+        if (preg_match('~^[A-Z][A-Z0-9_]*$~', $bare) === 1 || isset($nonClass[strtolower($bare)])) {
+            return true;
+        }
+        foreach ([self::EXCLUDED_KEY_NAMES, self::EXCLUDED_ENV_NAMES, self::EXCLUDED_PRODUCT_NAMES, self::EXCLUDED_CONFIG_NAMES] as $list) {
+            foreach ($list as $excluded) {
+                if (strcasecmp($excluded, $bare) === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -989,10 +1174,39 @@ final class CheckDocsAssets
                     $fqn[strtolower($full)][] = $path;
                     $short[strtolower($name)][$full] = $full;
                 }
+                // A façade binds its public name with class_alias(); the alias is a
+                // real class name in the tree, so it is declared here too.
+                foreach (self::classAliases($text, self::fileScope($text)) as $alias => $target) {
+                    $fqn[strtolower($alias)][] = $path;
+                    $short[strtolower(self::shortName($alias))][$alias] = $alias;
+                }
             }
         }
 
         return ['fqn' => $fqn, 'short' => array_map('array_values', $short)];
+    }
+
+    /**
+     * The `class_alias(Target::class, 'Alias')` bindings a file makes, as alias
+     * FQN => target FQN, both resolved in the file's own namespace and imports.
+     *
+     * @param array{ns: string, uses: array<string,string>} $scope
+     * @return array<string,string>
+     */
+    private static function classAliases(string $text, array $scope): array
+    {
+        $aliases = [];
+        preg_match_all(
+            '~class_alias\(\s*(\\\\?[A-Za-z_][\w\\\\]*)::class\s*,\s*[\'"]\\\\?([A-Za-z_][\w\\\\]*)[\'"]~',
+            $text,
+            $hits,
+            PREG_SET_ORDER,
+        );
+        foreach ($hits as $hit) {
+            $aliases[ltrim($hit[2], '\\')] = self::resolveName($hit[1], $scope);
+        }
+
+        return $aliases;
     }
 
     /**
@@ -1061,19 +1275,25 @@ final class CheckDocsAssets
             }
             $visited[$file] = true;
             $text = self::readCached($file);
-            if (self::declaresPublicMethod($text, $method)) {
+            if (self::declaresPublicMethod($text, $short, $method)) {
                 return true;
             }
             // PHP supplies cases() on every enum and from()/tryFrom() on a backed
             // one, so no `function` line declares them.
-            if (in_array($method, ['cases', 'from', 'tryFrom'], true)
+            $implied = strtolower($method);
+            if (in_array($implied, ['cases', 'from', 'tryfrom'], true)
                 && preg_match('~\benum\s+' . preg_quote($short, '~') . '\b(\s*:)?~', $text, $enum) === 1
             ) {
-                if ($method === 'cases' || isset($enum[1])) {
+                if ($implied === 'cases' || isset($enum[1])) {
                     return true;
                 }
             }
             $scope = self::fileScope($text);
+            foreach (self::classAliases($text, $scope) as $alias => $target) {
+                if (strtolower($alias) === strtolower($fqn) && self::declaresMethod($index, $target, $method, $visited)) {
+                    return true;
+                }
+            }
             foreach (array_unique(self::typeRefs($text)) as $ref) {
                 if (self::declaresMethod($index, self::resolveName($ref, $scope), $method, $visited)) {
                     return true;
@@ -1085,23 +1305,101 @@ final class CheckDocsAssets
     }
 
     /**
-     * True when $text declares $method with public visibility. A declaration
-     * with no modifier is public; a private or protected one cannot be called as
-     * `Name::method()` from a body (PHP fatals), so it does not satisfy a claim.
+     * True when the type $short declared in $text carries $method with public
+     * visibility. A declaration with no modifier is public; a private or
+     * protected one cannot be called as `Name::method()` from a body (PHP
+     * fatals), so it does not satisfy a claim.
+     *
+     * Only the named type's own member level counts. The body is found by its
+     * header and brace depth, so a method inside an anonymous class (`new class
+     * { ... }`), a closure, or any other type the file declares never satisfies
+     * a claim about $short. Method names compare case-insensitively, as PHP's do.
      */
-    private static function declaresPublicMethod(string $text, string $method): bool
+    private static function declaresPublicMethod(string $text, string $short, string $method): bool
     {
-        $pattern = '~(?<![\w$])((?:(?:public|protected|private|static|final|abstract)\s+)*)function\s+&?'
-            . preg_quote($method, '~') . '\s*\(~';
-        preg_match_all($pattern, $text, $hits, PREG_SET_ORDER);
-        foreach ($hits as $hit) {
-            $modifiers = strtolower($hit[1]);
+        $tokens = \PhpToken::tokenize($text);
+        $count = count($tokens);
+        $wantedType = strtolower($short);
+        $wantedMethod = strtolower($method);
+        $depth = 0;
+        $memberDepth = null;
+        $awaitBody = false;
+
+        for ($i = 0; $i < $count; $i++) {
+            $tok = $tokens[$i];
+            if ($tok->id === T_CURLY_OPEN || $tok->id === T_DOLLAR_OPEN_CURLY_BRACES || $tok->text === '{') {
+                if ($awaitBody) {
+                    $memberDepth = $depth + 1;
+                    $awaitBody = false;
+                }
+                $depth++;
+                continue;
+            }
+            if ($tok->text === '}') {
+                $depth--;
+                if ($memberDepth !== null && $depth < $memberDepth) {
+                    return false;
+                }
+                continue;
+            }
+            if ($memberDepth === null) {
+                if ($tok->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM])) {
+                    $name = self::nextSignificant($tokens, $i + 1);
+                    $awaitBody = $name !== null
+                        && $tokens[$name]->id === T_STRING
+                        && strtolower($tokens[$name]->text) === $wantedType;
+                }
+                continue;
+            }
+            if ($depth !== $memberDepth || $tok->id !== T_FUNCTION) {
+                continue;
+            }
+            // A method may be named with a reserved word (`new()`, `match()`,
+            // `list()`), which the tokenizer reads as a keyword, not T_STRING.
+            $name = self::nextSignificant($tokens, $i + 1, '&');
+            if ($name === null || preg_match('~^[A-Za-z_]\w*$~', $tokens[$name]->text) !== 1
+                || strtolower($tokens[$name]->text) !== $wantedMethod
+            ) {
+                continue;
+            }
+            // The modifiers sit in the run of keywords directly before `function`.
+            $modifiers = '';
+            for ($j = $i - 1; $j >= 0; $j--) {
+                if ($tokens[$j]->isIgnorable()) {
+                    continue;
+                }
+                if (!$tokens[$j]->is([T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT])) {
+                    break;
+                }
+                $modifiers .= ' ' . strtolower($tokens[$j]->text);
+            }
             if (!str_contains($modifiers, 'private') && !str_contains($modifiers, 'protected')) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * The index of the first token at or after $from that is neither whitespace
+     * nor a comment, skipping any listed single-character tokens too; null at the
+     * end of the file.
+     *
+     * @param list<\PhpToken> $tokens
+     * @param string ...$skip single-character tokens to step over (`&` in `function &name`)
+     */
+    private static function nextSignificant(array $tokens, int $from, string ...$skip): ?int
+    {
+        for ($k = $from, $n = count($tokens); $k < $n; $k++) {
+            if ($tokens[$k]->isIgnorable() || in_array($tokens[$k]->text, $skip, true)) {
+                continue;
+            }
+
+            return $k;
+        }
+
+        return null;
     }
 
     /**

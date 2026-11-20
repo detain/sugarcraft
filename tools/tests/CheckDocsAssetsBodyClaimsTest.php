@@ -446,6 +446,139 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testABareUnknownClassNameInACodeSpanIsNamed(): void
+    {
+        $root = $this->makeFixture();
+
+        // A PascalCase name alone in <code> is a class claim, as a Name::method() is.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class PhantomWidget, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Pass a <code>PhantomWidget</code> to the loop.</p>'),
+        );
+    }
+
+    public function testABareKnownClassNameInACodeSpanIsAccepted(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/src/SpinnerWidget.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class SpinnerWidget
+            {
+            }
+
+            PHP);
+
+        $this->assertSame([], $this->claimsFor($root, '<p>Pass a <code>SpinnerWidget</code> to the loop.</p>'));
+    }
+
+    public function testANonClassNameInACodeSpanIsNotChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // Test classes, key names and environment variables are not library classes.
+        $this->assertSame([], $this->claimsFor($root,
+            '<p>Press <code>PageUp</code>, set <code>ComSpec</code>, see <code>AlphaWidgetTest</code>, '
+            . 'and read <code>SUGAR_DEBUG_LOG</code>.</p>',
+        ));
+    }
+
+    public function testAPackageNameInACodeSpanIsNotAClassClaim(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/composer.json", '{"name": "sugarcraft/alpha"}');
+        $this->put("$root/sugar-spring/composer.json", '{"name": "sugarcraft/sugar-spring"}');
+
+        // SugarSpring names the sugar-spring package, which is not a class here.
+        $this->assertSame([], $this->claimsFor($root, '<p>Built on <code>SugarSpring</code>.</p>'));
+    }
+
+    public function testAMethodDeclaredOnlyInAnAnonymousClassDoesNotSatisfyAClaim(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/src/Holder.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Holder
+            {
+                public function make(): object
+                {
+                    return new class () {
+                        public function ghost(): void
+                        {
+                        }
+                    };
+                }
+            }
+
+            PHP);
+
+        // ghost() exists only on the anonymous class the method returns, not on Holder.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Holder::ghost(), but no declaration of Holder carries that method'],
+            $this->claimsFor($root, '<pre><code>Holder::ghost();</code></pre>'),
+        );
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Holder::make();</code></pre>'));
+    }
+
+    public function testAMethodNameIsMatchedCaseInsensitively(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/src/Foo.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Foo
+            {
+                public static function makeThing(): void
+                {
+                }
+            }
+
+            PHP);
+
+        // PHP method names are case-insensitive, so the claim in any case holds.
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Foo::MakeThing();</code></pre>'));
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Foo::makething();</code></pre>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Foo::unmakeThing(), but no declaration of Foo carries that method'],
+            $this->claimsFor($root, '<pre><code>Foo::unmakeThing();</code></pre>'),
+        );
+    }
+
+    public function testAClassAliasNameIsDeclaredAndItsMethodsForwardToTheTarget(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/alpha/src/FacadeWidget.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            class_alias(Widget::class, 'SugarCraft\Alpha\FacadeWidget');
+            PHP);
+
+        // FacadeWidget is bound by class_alias() to Widget, so it names a real
+        // class and carries Widget's methods, but not methods Widget lacks.
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>FacadeWidget::make();</code></pre><p>Use <code>FacadeWidget</code>.</p>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names FacadeWidget::nope(), but no declaration of FacadeWidget carries that method'],
+            $this->claimsFor($root, '<pre><code>FacadeWidget::nope();</code></pre>'),
+        );
+    }
+
     /** @return list<string> the claim findings for one body written into the fixture */
     private function claimsFor(string $root, string $html): array
     {
