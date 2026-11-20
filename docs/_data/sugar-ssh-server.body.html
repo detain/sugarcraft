@@ -126,7 +126,7 @@ exit(Server::new()
     <p>Each option is set on <code>Server</code> or on the middleware that owns it. The defaults are the values the classes ship with.</p>
     <ul>
       <li><code>Server::withTransport(Transport)</code>: Transport, default <code>InProcessTransport</code>. Selects the transport the middleware stack runs under.</li>
-      <li><code>Server::withKeepalive(int $intervalSeconds)</code>: int, default <code>60</code>. Sends a NUL byte to the child's stdin when the pump loop has been idle for this many seconds. This is not an SSH-level keepalive.</li>
+      <li><code>Server::withKeepalive(int $intervalSeconds)</code>: int. Keepalive is opt-in and off unless <code>withKeepalive()</code> is called; <code>Server::$keepalive</code> stays null until then. <code>60</code> is the argument default, not a shipped default. Once armed, it sends a NUL byte to the child's stdin when the pump loop has been idle for this many seconds. This is not an SSH-level keepalive.</li>
       <li><code>Logger</code> sink: string, resource or null, default <code>$SSH_SERVER_LOG</code> when set, else stderr. Where the one-line JSON session records go. Files the logger creates are <code>0600</code>.</li>
       <li><code>new RateLimit($statePath, $burst, $ratePerSec, ..., $failClosed)</code>: int, float, bool, default <code>5</code>, <code>0.5</code>, <code>false</code>. Per-IP token bucket. With <code>$failClosed</code> left false, a connection is let through when the state file cannot be read.</li>
       <li><code>Auth::__construct(array $users, array $keyFingerprints, ...)</code>: list, default empty lists. The allowlists. With both empty, every session is admitted.</li>
