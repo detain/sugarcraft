@@ -13,10 +13,11 @@ final class PluginCandidateTest extends TestCase
 {
     public function testTheCandidateExposesItsNameAndDirectory(): void
     {
-        $candidate = new PluginCandidate('demo', '/plugins/demo', static fn (): ?PluginManifest => null);
+        $candidate = new PluginCandidate('demo', '/plugins/demo', static fn (): ?PluginManifest => null, trustable: true);
 
         $this->assertSame('demo', $candidate->name);
         $this->assertSame('/plugins/demo', $candidate->dir);
+        $this->assertTrue($candidate->trustable);
     }
 
     public function testTheManifestIsReadOnlyWhenAskedFor(): void
@@ -28,7 +29,7 @@ final class PluginCandidateTest extends TestCase
             $reads++;
 
             return PluginManifest::fromDir($dir);
-        });
+        }, trustable: true);
 
         $this->assertSame(0, $reads, 'constructing a candidate reads nothing');
         $this->assertNotNull($candidate->manifest());
@@ -40,7 +41,7 @@ final class PluginCandidateTest extends TestCase
 
     public function testAnAbsentManifestYieldsNoEntrypoints(): void
     {
-        $candidate = new PluginCandidate('none', '/nowhere', static fn (): ?PluginManifest => null);
+        $candidate = new PluginCandidate('none', '/nowhere', static fn (): ?PluginManifest => null, trustable: true);
 
         $this->assertNull($candidate->manifest());
         $this->assertSame([], $candidate->entrypoints());

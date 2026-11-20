@@ -72,6 +72,7 @@ final class Plugins
 
                 return PluginManifest::fromDir($dir);
             },
+            trustable: true,
         );
     }
 }

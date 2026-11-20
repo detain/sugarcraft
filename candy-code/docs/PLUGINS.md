@@ -134,7 +134,10 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    that carries a trusted name is refused and never loads, and the launch says
    so. When a user-tier and a project-tier bundle share a trusted name, the
    user-tier copy is the one that loads and the project copy is skipped with a
-   warning. An untrusted name keeps both copies, as it always did.
+   warning. The skipped copy's commands, skills, agents and hooks do not load
+   either, so a user-tier copy that lacks one of them hides it; to keep the
+   project copy's content, move that copy under a different name. An untrusted
+   name keeps both copies, as it always did.
 
 **Bundle hooks ride the same gate.** A bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
@@ -298,9 +301,9 @@ What matters from the plugin side:
   repository is never read, which is the same law that keeps a bundle's
   `.mcp.json` from auto-starting;
 - bundles run their commands, skills and agents always; their hooks and
-  channel/subscriber entrypoints only when the bundle is named in
-  `trustedBundleChannels`; and MCP servers only through a declaration you
-  imported deliberately.
+  channel/subscriber entrypoints only when a user-tier bundle is named in
+  `trustedBundleChannels` (a project-tier copy of that name is refused); and
+  MCP servers only through a declaration you imported deliberately.
 
 ## Installing and listing
 
