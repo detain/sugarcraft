@@ -10,8 +10,9 @@ namespace SugarCraft\Plugins\Trust;
  * First sight quarantines: a newly seen entrypoint path is recorded now and
  * loads at the next launch, so a newly trusted file is listed for one launch
  * before any of its code runs. The ledger is keyed by path alone, so a rewrite
- * of a path already recorded is not listed again, so an in-place rewrite of
- * such a file loads without a quarantine stop. That gap is open.
+ * of a path already recorded is not listed again: a rewrite of such a file (in
+ * place, or by replace-by-rename where the private-bytes gate allows it) loads
+ * without a quarantine stop. That gap is open; see PluginLoader law 3.
  */
 interface QuarantineLedger
 {
