@@ -406,6 +406,99 @@ final class CommandBackendTest extends TestCase
     }
 
     /**
+     * A cancel reaches a job the shell left behind after the shell itself exited.
+     *
+     * The script backgrounds a `sleep` (a grandchild that inherits the stdout pipe, so the
+     * launch does not settle on the shell's exit), records its pid, then exits 0. The
+     * cancel is issued only once the shell is gone, so the kill ladder has to find the
+     * sleep through the containment group the wrapper led, not through the shell. The
+     * launch path declares that wrapper to ChildRunLaunch via withSetsidWrapped(), and
+     * the ladder reaches the group id of the exited wrapper from that declaration.
+     *
+     * Both pid files are waited for, and the cancel is held until the shell pid is no
+     * longer live. The 5 s ceiling only stops a script that never starts from hanging the
+     * test; the assertions below then report what was missing.
+     */
+    public function testCancelReachesTheJobOfAShellThatExitedBeforeTheCancel(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the grandchild pid.');
+        }
+
+        $base = sys_get_temp_dir() . '/cmd_backend_exited_' . uniqid('', true);
+        $grandFile = $base . '.grand';
+        $shellFile = $base . '.shell';
+        $body = <<<SH
+        #!/bin/bash
+        cat > /dev/null
+        sleep 31 &
+        echo \$! > '{$grandFile}.tmp' && mv '{$grandFile}.tmp' '{$grandFile}'
+        echo \$\$ > '{$shellFile}.tmp' && mv '{$shellFile}.tmp' '{$shellFile}'
+        exit 0
+        SH;
+        $script = $this->writeScript($body . "\n");
+        $pid = 0;
+
+        try {
+            $backend = new CommandBackend($script);
+            $cancellation = new CancellationToken();
+            $loop = \React\EventLoop\Loop::get();
+
+            $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+
+            $armedAt = microtime(true);
+            $shellGoneBeforeCancel = false;
+            $flip = null;
+            $flip = $loop->addPeriodicTimer(
+                0.02,
+                static function () use (&$flip, &$shellGoneBeforeCancel, $loop, $cancellation, $grandFile, $shellFile, $armedAt): void {
+                    if (is_file($grandFile) && is_file($shellFile)) {
+                        $shellPid = (int) trim((string) file_get_contents($shellFile));
+                        $shellGoneBeforeCancel = $shellPid > 1 && !self::isLive($shellPid);
+                    }
+                    if ($shellGoneBeforeCancel || microtime(true) - $armedAt > 5.0) {
+                        $loop->cancelTimer($flip);
+                        $cancellation->cancel();
+                    }
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                $caught = $e;
+            } finally {
+                // A failed await rethrows past the lines below; the flip must still stop.
+                $loop->cancelTimer($flip);
+            }
+
+            $this->assertTrue($shellGoneBeforeCancel, 'the shell was not seen to exit before the cancel, so the scenario did not run');
+            $this->assertInstanceOf(\RuntimeException::class, $caught, 'the cancelled command did not reject');
+            $this->assertSame('Request cancelled', $caught->getMessage());
+            $this->assertFileExists($grandFile, 'the script never wrote the grandchild pid');
+
+            $pid = (int) trim((string) file_get_contents($grandFile));
+            $this->assertGreaterThan(1, $pid, "the pid file held no usable pid: {$pid}");
+            $this->assertTrue(
+                self::waitUntilGone($pid, 2.0),
+                "grandchild sleep (pid {$pid}) survived the cancel after its shell exited: the kill ladder lost the group",
+            );
+        } finally {
+            if ($pid > 1 && self::isLive($pid)) {
+                @posix_kill($pid, 9);
+            }
+            foreach ([$grandFile, $shellFile] as $file) {
+                @unlink($file);
+                @unlink($file . '.tmp');
+            }
+            unlink($script);
+        }
+    }
+
+    /**
      * Polls until $pid has exited, bounded by $seconds. True when it is gone.
      * A pid that has exited but not yet been reaped counts as gone: the test is
      * about where the kill landed, not about who reaps the orphan.

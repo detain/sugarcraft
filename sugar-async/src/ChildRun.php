@@ -104,6 +104,8 @@ final class ChildRun
      * @param null|CancellationToken $cancellation  Kills the child and reports CANCELLED when cancelled, or null
      * @param null|float $idleTimeout  Seconds of silence before the child is killed, or null for none
      * @param bool $commandLine  True when $argv holds one command line for proc_open() to take as a string
+     * @param bool $setsidWrapped  True when the child was started behind a containment wrapper that makes it a
+     *                             group leader ({@see withSetsidWrapped()})
      */
     private function __construct(
         private readonly array $argv,
@@ -119,6 +121,7 @@ final class ChildRun
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?float $idleTimeout = null,
         private readonly bool $commandLine = false,
+        private readonly bool $setsidWrapped = false,
     ) {
     }
 
@@ -263,6 +266,20 @@ final class ChildRun
     }
 
     /**
+     * Declares that the child was started behind a containment wrapper (a setsid
+     * prefix the caller adds to the argv), so the child leads its own process group
+     * once it has run. The launch path
+     * then falls back to the child's pid as the group id when the group was never
+     * read while the child lived, which is the case for a shell that backgrounds a
+     * job and exits before the first status poll. An unwrapped child leads no group
+     * of its own, so leave this false for it.
+     */
+    public function withSetsidWrapped(bool $wrapped): self
+    {
+        return $this->mutate(['setsidWrapped' => $wrapped]);
+    }
+
+    /**
      * Live feed: called with (slot, chunk) for every chunk read from stdout (1)
      * or stderr (2), as it arrives, before the result is assembled. The buffered
      * result is unchanged; the callback only observes. Null removes it.
@@ -353,6 +370,7 @@ final class ChildRun
             $this->cancellation,
             $staged,
             $this->exitGrace,
+            $this->setsidWrapped,
         ))->start();
 
         return $deferred->promise();

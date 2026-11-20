@@ -765,6 +765,42 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression through the production wiring: ChildRun::launch() of a containment-wrapped
+     * child, declared with withSetsidWrapped() as CommandBackend::childRun() does, and no
+     * spawn-time group. The shell backgrounds a job and exits before the first status poll,
+     * so no live read can latch the group; the deadline kill must still reach the job
+     * through the setsid-wrapper fallback. Without the flag reaching ChildRunLaunch, the
+     * kill rungs have no group and the job survives.
+     */
+    public function testChildRunLaunchKillsTheJobOfAContainedShellThatExitedBeforeAnyPoll(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+
+        $grandchild = null;
+        $loop = new StreamSelectLoop();
+        $run = ChildRun::new(['/usr/bin/setsid', 'sh', '-c', 'sleep 31 & echo $!; exit 0'])
+            ->withTimeout(0.5)
+            ->withSetsidWrapped(true)
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            });
+
+        $result = $this->settle($loop, $run->launch($loop));
+
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
+            'the kill must reach the background job of a contained shell that exited before any poll',
+        );
+    }
+
+    /**
      * Regression: an unwrapped child never leads a group, so its pid is not a group id.
      * Once it has exited with no live group read, the kill rungs must not fall back to
      * that pid: a pid reused by a stranger's group leader would be signalled as a group.
