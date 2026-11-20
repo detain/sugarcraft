@@ -31,6 +31,18 @@ use React\Promise\PromiseInterface;
 final class LoopDrivenTurn
 {
     /**
+     * How long a bare suspension waits before the turn resumes: one loop turn
+     * at the cadence the blocking `usleep()` it replaces used
+     * ({@see \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US}, 5 ms).
+     *
+     * WHY A TIMER AND NOT A RESUME AT ONCE. {@see \SugarCraft\Code\Agents\AgentWorkerPool::idle()}
+     * suspends with no value and expects its driver to resume it later. Resuming
+     * straight away spins the turn at full CPU and never returns control to the
+     * loop, so the loop's own probes and its socket reads never run.
+     */
+    private const YIELD_SECONDS = 0.005;
+
+    /**
      * @template T
      *
      * @param \Closure(): T $turn
@@ -45,46 +57,42 @@ final class LoopDrivenTurn
 
         $finished = false;
         $failure = null;
+        $advance = null;
         $wait = null;
-        $wait = static function (mixed $suspended) use (&$wait, $fiber, $loop, &$finished, &$failure): void {
-            // Only the channel suspends this fiber, always on a promise. Anything
-            // else is not ours to wait for, so it is resumed at once with nothing.
-            while (!$suspended instanceof PromiseInterface) {
-                try {
-                    $suspended = $fiber->resume(null);
-                } catch (\Throwable $e) {
-                    $failure = $e;
-                    $finished = true;
-                    $loop->stop();
+        $advance = static function (mixed $value) use (&$advance, &$wait, $fiber, $loop, &$finished, &$failure): void {
+            try {
+                $suspended = $fiber->resume($value);
+            } catch (\Throwable $e) {
+                $failure = $e;
+                $finished = true;
+                $loop->stop();
 
-                    return;
-                }
-                if ($fiber->isTerminated()) {
-                    $finished = true;
-                    $loop->stop();
+                return;
+            }
+            if ($fiber->isTerminated()) {
+                $finished = true;
+                $loop->stop();
 
-                    return;
-                }
+                return;
+            }
+            $wait($suspended);
+        };
+        $wait = static function (mixed $suspended) use (&$advance, $loop, &$finished, &$failure): void {
+            // A promise is the channel's wait for an answer: resume the turn
+            // with it when it settles. Anything else is a bare yield, not an
+            // answer, so the turn resumes on the loop's next timer, never in
+            // the same call stack.
+            if (!$suspended instanceof PromiseInterface) {
+                $loop->addTimer(self::YIELD_SECONDS, static function () use (&$advance): void {
+                    $advance(null);
+                });
+
+                return;
             }
 
             $suspended->then(
-                static function (mixed $answer) use (&$wait, $fiber, $loop, &$finished, &$failure): void {
-                    try {
-                        $next = $fiber->resume($answer);
-                    } catch (\Throwable $e) {
-                        $failure = $e;
-                        $finished = true;
-                        $loop->stop();
-
-                        return;
-                    }
-                    if ($fiber->isTerminated()) {
-                        $finished = true;
-                        $loop->stop();
-
-                        return;
-                    }
-                    $wait($next);
+                static function (mixed $answer) use (&$advance): void {
+                    $advance($answer);
                 },
                 static function (\Throwable $e) use (&$failure, &$finished, $loop): void {
                     $failure = $e;

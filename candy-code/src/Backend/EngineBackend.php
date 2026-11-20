@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Backend;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\StreamSelectLoop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\RateGate;
@@ -5553,6 +5554,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
+            // P4-12 CC-1 e0: the fork copied the parent's loop, timers, and
+            // read streams. The turn runs on the loop (LoopDrivenTurn), so
+            // it must not drive the parent's copy, which would fire the
+            // parent's render and signal callbacks and read the parent's
+            // keystrokes. A fresh loop belongs to this child alone.
+            Loop::set(new StreamSelectLoop());
             // C-PRV-4.a: the child's provider copy carries the gate's mode
             // for THIS turn (the fork inherited the same PermissionGate
             // object the parent had at fork time — the ChildChannel below

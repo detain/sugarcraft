@@ -134,6 +134,44 @@ final class LoopDrivenTurnTest extends TestCase
         self::assertFalse($resolution->permits());
     }
 
+    /**
+     * AgentWorkerPool::idle() suspends with no value and expects its driver to
+     * resume it later. A driver that resumes at once never returns to the loop,
+     * so the loop's probes and reads never run and the turn spins. This turn
+     * suspends bare until a loop timer has fired three times. A driver that
+     * spins never lets that timer run, so the resume cap turns the spin into a
+     * failure instead of a hang.
+     */
+    public function testABareSuspensionYieldsALoopTickBeforeTheTurnResumes(): void
+    {
+        [, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $ticks = 0;
+        $loop->addPeriodicTimer(0.001, function () use (&$ticks): void {
+            $ticks++;
+        });
+
+        $resumes = 0;
+        $value = LoopDrivenTurn::run(
+            static function () use (&$ticks, &$resumes): string {
+                while ($ticks < 3) {
+                    if (++$resumes > 1000) {
+                        throw new \RuntimeException('busy spin: the turn resumed 1000 times without the loop turning');
+                    }
+                    \Fiber::suspend();
+                }
+
+                return 'yielded';
+            },
+            $this->channel($child),
+            $loop,
+        );
+
+        self::assertSame('yielded', $value);
+        self::assertGreaterThanOrEqual(3, $ticks, 'the loop must turn between the bare suspensions');
+        self::assertLessThanOrEqual(1000, $resumes);
+    }
+
     private function channel($child): ChildChannel
     {
         return ChildChannel::new(
