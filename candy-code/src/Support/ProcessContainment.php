@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Containment;
 use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 
@@ -731,17 +732,7 @@ final class ProcessContainment
      */
     public static function groupId(mixed $process): ?int
     {
-        if (!\is_resource($process) || !\function_exists('posix_getpgid')) {
-            return null;
-        }
-
-        $status = \proc_get_status($process);
-        $pid = (int) ($status['pid'] ?? 0);
-        if ($pid <= 0) {
-            return null;
-        }
-
-        return \posix_getpgid($pid) === $pid ? $pid : null;
+        return Containment::groupId($process);
     }
 
     /**
@@ -776,12 +767,7 @@ final class ProcessContainment
             return \proc_terminate($process, $signal);
         }
 
-        $groupId = self::groupId($process);
-        if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
-            return true;
-        }
-
-        return \proc_terminate($process, $signal);
+        return Containment::terminate($process, $signal);
     }
 
     /**
