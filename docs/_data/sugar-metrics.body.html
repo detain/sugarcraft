@@ -15,7 +15,7 @@ $reg-&gt;gauge('queue.depth', 42);
 $stop = $reg-&gt;time('http.duration', ['route' =&gt; '/api/foo']);
 // ... do the work ...
 $stop();                       // records the elapsed seconds as a histogram sample</code></pre>
-    <p>The same work through instrument objects, which keep their name and help text next to the code that emits them:</p>
+    <p>The same work through instrument objects, which keep their name next to the code that emits them. The help text is published only when the family is also registered with a <code>Descriptor</code>, as described under Troubleshooting:</p>
     <pre class="code"><code class="language-php">$requests = $reg-&gt;newCounter('http_requests', 'Requests served');
 $requests-&gt;inc(1.0, ['route' =&gt; '/api/foo']);</code></pre>
     <p><img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="Terminal recording of php examples/showcase.php: session counters, gauges and latency samples are recorded, then the collected InMemory totals are printed"></p>
@@ -135,7 +135,7 @@ Server::new()
     <h3>RuntimeException: a metric name is registered twice with different metadata</h3>
     <p><code>Registry::register()</code> accepts a re-registration only when the type, help text and label keys all match. Any difference throws a <code>RuntimeException</code>. Give the metric one <code>Descriptor</code> and reuse it.</p>
     <h3>InvalidArgumentException for a descriptor name containing a dot</h3>
-    <p>A <code>Descriptor</code> name must match <code>[a-zA-Z_:][a-zA-Z0-9_:]*</code>, so <code>http.requests</code> is refused. The emit path can keep the dotted name, but on the Prometheus wire it becomes <code>http_requests</code>. Register the underscore form, as in <code>newCounter('http_requests', ...)</code>, to publish <code># TYPE</code> and <code># HELP</code> lines.</p>
+    <p>A <code>Descriptor</code> name must match <code>[a-zA-Z_:][a-zA-Z0-9_:]*</code>, so <code>http.requests</code> is refused. The emit path can keep the dotted name, but on the Prometheus wire it becomes <code>http_requests</code>. Register the underscore form with a descriptor, as in <code>$reg-&gt;register(Descriptor::new('http_requests', 'Requests served', 'counter'))</code>, to publish <code># TYPE</code> and <code># HELP</code> lines before the first emit. The instrument returned by <code>newCounter()</code> keeps its help text but does not register it, so <code>newCounter('http_requests', 'Requests served')</code> alone never publishes the <code># HELP</code> line.</p>
     <h3>RuntimeException on a negative counter or histogram sample</h3>
     <p>Counters and histograms are monotonic in the sense that they refuse negative samples. Use <code>upDownCounter()</code> for a value that rises and falls, such as active connections, or a gauge for an instantaneous reading.</p>
     <h3>RuntimeException about two series that fold to the same Prometheus name</h3>

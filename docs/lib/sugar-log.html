@@ -316,7 +316,7 @@ $styles = Styles::snapshot();   // an independent copy; default() is the shared 
 $styles-&gt;padLevelText = true;
 $log = Logger::new();
 $log-&gt;setStyles($styles);</code></pre>
-    <p>Color is chosen at construction by the color-profile probe, where <code>NO_COLOR</code> is honored. <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> outrank <code>NO_COLOR</code> there. A non-terminal destination still receives plain bytes on every write, and <code>CLICOLOR_FORCE</code> reaches that per-write gate only when it is exactly <code>1</code>.</p>
+    <p>Color is chosen at construction by the color-profile probe, where <code>NO_COLOR</code> is honored. <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> outrank <code>NO_COLOR</code> there. A non-terminal destination still receives plain bytes on every write, and <code>CLICOLOR_FORCE</code> reaches that per-write gate when it is set to any non-empty value other than <code>0</code>.</p>
 
     <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <ul>
@@ -333,7 +333,7 @@ $log-&gt;setStyles($styles);</code></pre>
     <h3 id="debug-lines-never-appear">Debug lines never appear</h3>
     <p>The default threshold is <code>Level::Info</code>. Pass <code>level: Level::Debug</code> to <code>Logger::new()</code>, or call <code>setMinLevel(Level::Debug)</code> on an existing logger. The shared logger behind the <code>Log</code> facade is changed with <code>Log::default()-&gt;setMinLevel(Level::Debug)</code>.</p>
     <h3 id="colors-appear-in-a-log-file-or-never-appear-in-a-terminal">Colors appear in a log file, or never appear in a terminal</h3>
-    <p>Files and pipes receive plain bytes by design. The per-write gate turns color on for a non-terminal destination only when <code>CLICOLOR_FORCE</code> is exactly <code>1</code>. <code>NO_COLOR</code> is read once, when the logger is constructed. Exporting it later does not change a logger that already exists.</p>
+    <p>Files and pipes receive plain bytes by design. The per-write gate turns color on for a non-terminal destination only when <code>CLICOLOR_FORCE</code> is set to any non-empty value other than <code>0</code>, such as <code>1</code> or <code>true</code>. <code>NO_COLOR</code> is read once, when the logger is constructed. Exporting it later does not change a logger that already exists.</p>
     <h3 id="hooks-never-run-for-a-direct-logger-call">Hooks never run for a direct logger call</h3>
     <p><code>HookRegistry</code> callbacks are dispatched only by <code>PsrBridge</code> or by an explicit <code>fire()</code>. Log through a <code>PsrBridge</code> built with the registry, or call <code>fire()</code> yourself.</p>
     <h3 id="a-script-stops-after-fatal">A script stops after fatal()</h3>
