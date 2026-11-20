@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
 use SugarCraft\Code\Protocol\ErrorCode;
@@ -192,6 +193,108 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame('ask_not_found', $refused->refusalKind(), 'the child host answers the refusal, as the wire does');
     }
 
+    public function testAHostKilledWhileATurnIsInFlightIsWorkspaceFailedAndTheDoorDoesNotReplayIt(): void
+    {
+        $sessionId = $this->createOther();
+        $pid = $this->gateway->host($this->other)?->pid();
+        self::assertIsInt($pid);
+
+        // A stopped host cannot read the turn, so no answer can land before the kill.
+        \posix_kill($pid, \SIGSTOP);
+        $refusals = $this->refusalsOf($this->door->sendTurn($sessionId, 'in flight', 'queue', null, [], []));
+        \posix_kill($pid, 9);
+
+        self::assertTrue($this->runUntil(fn (): bool => \count($refusals) > 0, 10.0), 'the in-flight turn was never refused');
+        self::assertCount(1, $refusals);
+        self::assertSame('workspace_failed', $refusals[0]->refusalKind(), 'a host lost mid-call is workspace_failed, not dropped');
+        self::assertSame(ErrorCode::Internal, $refusals[0]->errorCode);
+
+        // The refusal is final: the door starts no host and sends no second session.send.
+        $this->fixture->run(0.3);
+        self::assertCount(1, $refusals, 'the refused turn is not replayed');
+        self::assertNull($this->gateway->host($this->other), 'no retry started a fresh host for the turn');
+        self::assertSame([], $this->startingOf(), 'no retry is starting a host either');
+    }
+
+    public function testARoutedCallAfterTheGatewayStopsIsRefusedBusyDraining(): void
+    {
+        $this->gateway->stop('test: draining');
+
+        $refused = $this->fixture->await($this->door->createSessionIn($this->other, null, null));
+
+        self::assertInstanceOf(RpcError::class, $refused, 'the gateway refusal passes through the door as the wire\'s RpcError');
+        self::assertSame('draining', $refused->refusalKind());
+        self::assertSame(ErrorCode::Busy, $refused->errorCode, 'busy is what the bundles\' retry rules key on');
+    }
+
+    public function testANinthRootIsRefusedBusyTooManyWorkspaces(): void
+    {
+        // Eight hosts still starting fill the gateway's host limit without starting eight real processes.
+        $starting = new \ReflectionProperty(Gateway::class, 'starting');
+        $filled = [];
+        for ($i = 0; $i < Gateway::MAX_HOSTS; $i++) {
+            $filled['/fill/' . $i] = (new Deferred())->promise();
+        }
+        $starting->setValue($this->gateway, $filled);
+
+        $refused = $this->fixture->await($this->door->createSessionIn($this->other, null, null));
+        $starting->setValue($this->gateway, []);
+
+        self::assertInstanceOf(RpcError::class, $refused);
+        self::assertSame('too_many_workspaces', $refused->refusalKind());
+        self::assertSame(ErrorCode::Busy, $refused->errorCode);
+    }
+
+    public function testARoutedCreateRegistersTheSinkWithItsRootBeforeAnySubscribe(): void
+    {
+        $this->call($this->door->createSessionIn($this->other, null, null));
+
+        $sink = $this->sinkOf($this->door);
+        self::assertNotNull($sink, 'a routed call makes the client\'s sink');
+        self::assertContains($sink->id(), $this->rootClientIds($this->other), 'the sink hears the root\'s server-scope events, as forward() does for a connection');
+    }
+
+    public function testAPrimarySessionIsNeverBoundToARoot(): void
+    {
+        $primary = (string) $this->call($this->door->createSession(null, null))['id'];
+
+        self::assertNull($this->gateway->rootOf($primary), 'the primary dispatcher\'s ids stay out of sessionRoots (design Q7)');
+        self::assertNull($this->gateway->rootFor((object) ['sessionId' => $primary]));
+    }
+
+    public function testAPrimaryCallSettlesBeforeItReturnsAndARoutedCallOnALaterTick(): void
+    {
+        $primary = (string) $this->call($this->door->createSession(null, null))['id'];
+        $sessionId = $this->createOther();
+
+        $primarySettled = false;
+        $this->door->sessionSnapshot($primary, 10)->then(function () use (&$primarySettled): void {
+            $primarySettled = true;
+        });
+        self::assertTrue($primarySettled, 'a primary call settles before its method returns');
+
+        $routedSettled = false;
+        $answer = null;
+        $rejection = null;
+        $this->door->sessionSnapshot($sessionId, 10)->then(function (mixed $value) use (&$routedSettled, &$answer): void {
+            $routedSettled = true;
+            $answer = $value;
+        }, function (\Throwable $e) use (&$routedSettled, &$rejection): void {
+            $routedSettled = true;
+            $rejection = $e;
+        });
+        self::assertFalse($routedSettled, 'a routed call never settles synchronously');
+
+        // An arrow function would copy $routedSettled at creation, so the condition reads it by reference.
+        $ran = $this->runUntil(static function () use (&$routedSettled): bool {
+            return $routedSettled;
+        }, 10.0);
+        self::assertTrue($ran, 'the routed call settles on a later tick: ' . ($rejection instanceof \Throwable ? \get_class($rejection) . ' ' . $rejection->getMessage() : 'no answer'));
+        self::assertIsArray($answer);
+        self::assertSame($this->other, $answer['root']);
+        self::assertSame(0, $this->inFlightOf($this->other), 'the answer returns the root\'s in-flight count to zero');
+    }
+
     public function testSessionDeleteTellsTheSinkTheSessionIsNoLongerFollowed(): void
     {
         $sessionId = $this->createOther();
@@ -232,7 +335,10 @@ final class InProcessRoutedTest extends TestCase
 
         self::assertFalse($this->gateway->hasSubscribers($sessionId), 'the late answer records no subscriber');
         self::assertSame([], $this->call($timed->followedSessions()));
-        self::assertSame([], $this->rootClientIds($this->other), 'a refused subscribe leaves no root client behind');
+        // The main door's sink is a client of the root once its own create ran; only the refused subscribe's sink must not be.
+        $timedSink = $this->sinkOf($timed);
+        self::assertNotNull($timedSink);
+        self::assertNotContains($timedSink->id(), $this->rootClientIds($this->other), 'a refused subscribe leaves no root client behind');
         $after = (array) $this->call($this->gateway->callRoot($this->other, 'session.unsubscribe', (object) ['sessionId' => $sessionId]));
         self::assertFalse($after['unsubscribed'] ?? true, 'the compensating unsubscribe already left the host with no subscription');
     }
@@ -333,6 +439,12 @@ final class InProcessRoutedTest extends TestCase
         $counts = (new \ReflectionProperty(Gateway::class, 'inFlight'))->getValue($this->gateway);
 
         return (int) ($counts[$root] ?? 0);
+    }
+
+    /** @return array<mixed> the starting-host table: a call for a root in it waits on that start */
+    private function startingOf(): array
+    {
+        return (array) (new \ReflectionProperty(Gateway::class, 'starting'))->getValue($this->gateway);
     }
 
     /** @return list<string> the target ids registered for $root */

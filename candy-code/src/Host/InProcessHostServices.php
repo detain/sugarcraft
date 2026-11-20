@@ -599,6 +599,12 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             }
         });
 
+        // The first routed call registers this client's sink as a client of the root, as forward() does for
+        // a connection, so the root's server-scope events reach it (design 3.5). A subscribe registers its
+        // sink only once it is answered (subscribeRouted), so a refused one leaves no row (design 4.1).
+        if ($method !== 'session.subscribe') {
+            $gateway->useRoot($root, $this->sinkFor());
+        }
         $promise = $gateway->callRoot($root, $method, (object) $params);
         $generation = $gateway->subscribeGeneration($sessionId);
         $promise->then(
