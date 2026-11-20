@@ -506,10 +506,13 @@ final class ChildRun
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
         }
         if ($this->onSpawn !== null) {
+            // Read before onSpawn runs: a wrapped child's group is reliably readable only
+            // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
+            $group = $this->groupFor($proc);
             try {
                 ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
             } catch (\Throwable $e) {
-                self::abandonSpawn($proc, $pipes, $staged);
+                self::abandonSpawn($proc, $pipes, $staged, $group);
 
                 throw $e;
             }
@@ -521,17 +524,25 @@ final class ChildRun
     /**
      * A started child the spawn cannot hand back, because onSpawn threw. The child
      * is killed and reaped here, so no live process outlives the throw, and the
-     * staged payload goes once the child no longer holds it.
+     * staged payload goes once the child no longer holds it. A wrapped child takes
+     * its process group down too: its descendants are not reachable through the
+     * wrapper pid alone.
      *
      * @param resource $proc
      * @param array<int, resource> $pipes
      */
-    private static function abandonSpawn($proc, array $pipes, ?string $staged): void
+    private static function abandonSpawn($proc, array $pipes, ?string $staged, ?int $group = null): void
     {
         foreach ($pipes as $pipe) {
             if (is_resource($pipe)) {
                 fclose($pipe);
             }
+        }
+        // The spawn-time read can precede the wrapper's own setsid, so the kill rung's
+        // live fallback is what reaches a group the child only now leads.
+        $target = self::killGroup($proc, $group);
+        if ($target !== null && \function_exists('posix_kill')) {
+            @\posix_kill(-$target, 9);
         }
         @proc_terminate($proc, 9);
         proc_close($proc);

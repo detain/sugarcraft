@@ -387,6 +387,58 @@ final class ChildRunTest extends TestCase
         $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
     }
 
+    /**
+     * A throwing onSpawn on a wrapped child must take the wrapper's process group
+     * down, not only the wrapper pid: the descendant it started is still alive when
+     * the throw happens, and the abandon path has to reach it.
+     */
+    public function testAnOnSpawnThrowKillsTheWrappedChildsGroupDescendants(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || trim((string) shell_exec('command -v setsid')) === '') {
+            $this->markTestSkipped('Needs setsid and ext-posix to lead a process group.');
+        }
+        $marker = \tempnam(\sys_get_temp_dir(), 'cr-abandon-grandchild-');
+        self::assertIsString($marker);
+        $code = '$p = proc_open(["sleep", "30"], [], $pipes); $s = proc_get_status($p); '
+            . 'file_put_contents(' . \var_export($marker, true) . ', (string) $s["pid"]); sleep(30);';
+        $grandchild = 0;
+        $wrapper = 0;
+        try {
+            ChildRun::new(['setsid', '-w', '--', PHP_BINARY, '-r', $code])
+                ->withOnSpawn(static function (int $spawned) use (&$grandchild, &$wrapper, $marker): void {
+                    $wrapper = $spawned;
+                    // Hold the throw until the descendant exists, so the group has a live member.
+                    $until = \microtime(true) + 5.0;
+                    while (\microtime(true) < $until) {
+                        $written = (string) @\file_get_contents($marker);
+                        if (\ctype_digit($written)) {
+                            $grandchild = (int) $written;
+
+                            break;
+                        }
+                        \usleep(20_000);
+                    }
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->run();
+            self::fail('an onSpawn throw must escape run()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        } finally {
+            @\unlink($marker);
+        }
+
+        $this->assertGreaterThan(0, $grandchild, 'the grandchild must have started before the throw');
+        $this->assertFalse(\posix_kill($wrapper, 0), 'the wrapper must be killed and reaped');
+        $until = \microtime(true) + 2.0;
+        while (\posix_kill($grandchild, 0) && \microtime(true) < $until) {
+            \usleep(20_000);
+        }
+        $this->assertFalse(\posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+    }
+
     public function testAnAbandonedSpawnRemovesTheStagedPayloadAndReapsTheChild(): void
     {
         // Runs on every platform: the staged file is a plain temp file here, the
