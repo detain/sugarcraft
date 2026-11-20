@@ -1075,9 +1075,9 @@ final class RemoteSessionHost
             $this->reconnecting = false;
             $this->attempt = 0;
         })->then(null, function (\Throwable $failure) use ($stream): void {
-            // A refused hello, a call deadline, or a socket that died mid-hello:
-            // the attempt is over and its socket is the host's no longer.
-            $this->abandon($stream);
+            // A refused hello or a socket that died mid-hello: the attempt is over
+            // and its socket is the host's no longer.
+            $this->abandon($stream, $failure);
 
             throw $failure;
         });
@@ -1086,11 +1086,15 @@ final class RemoteSessionHost
     /**
      * Close the socket a failed resume opened, before the ladder redials. It is
      * marked dead first, so its close event is silenced and it cannot count as a
-     * second verdict.
+     * second verdict. The pause that follows carries the failure as its reason,
+     * as dropped() does; a close that already ended the attachment keeps its own.
      */
-    private function abandon(DuplexStreamInterface $stream): void
+    private function abandon(DuplexStreamInterface $stream, \Throwable $failure): void
     {
         if ($stream === $this->stream) {
+            if ($this->open) {
+                $this->closeReason = $failure->getMessage() !== '' ? $failure->getMessage() : $this->dropReason;
+            }
             $this->deadEpoch = $this->epoch;
             $this->open = false;
         }

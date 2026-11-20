@@ -16,22 +16,31 @@ use function React\Promise\resolve;
 
 /**
  * CC-1 (P4-12-cc1-g-fix): every socket a resume opens is closed by the time the
- * attempt that opened it is over. A refused or timed-out server.hello used to
- * leave its socket attached while the ladder redialed, and gone() closed only
- * the newest socket, so a server that refused every attempt kept them all.
+ * attempt that opened it is over. A refused server.hello used to leave its
+ * socket attached while the ladder redialed, and gone() closed only the newest
+ * socket, so a server that refused every attempt kept them all.
  */
 final class RemoteSessionHostResumeCloseTest extends TestCase
 {
     /**
      * A reopen seam whose server answers each `server.hello` on the socket it
      * dials: the first $refuseCount hellos get a JSON-RPC error, later ones a
-     * successful resume. Every dialed socket is appended to $opened.
+     * successful resume. Every dialed socket is appended to $opened. Each dial
+     * first records into $dials how many earlier sockets were still readable or
+     * writable, and the host's close reason at that moment.
      *
      * @param list<CompositeStream> $opened
+     * @param list<array{attached: int, reason: ?string}> $dials
      */
-    private function fakeServer(array &$opened, int $refuseCount): \Closure
+    private function fakeServer(array &$opened, int $refuseCount, array &$dials, ?RemoteSessionHost &$host): \Closure
     {
-        return static function () use (&$opened, $refuseCount): PromiseInterface {
+        return static function () use (&$opened, $refuseCount, &$dials, &$host): PromiseInterface {
+            $attached = 0;
+            foreach ($opened as $earlier) {
+                $attached += $earlier->isReadable() || $earlier->isWritable() ? 1 : 0;
+            }
+            $dials[] = ['attached' => $attached, 'reason' => $host?->closeReason()];
+
             $in = new ThroughStream();
             $out = new ThroughStream();
             $stream = new CompositeStream($in, $out);
@@ -57,18 +66,32 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
     }
 
     /**
+     * Every redial found the earlier sockets already closed.
+     *
+     * @param list<array{attached: int, reason: ?string}> $dials
+     */
+    private function assertNothingAttachedAtDial(array $dials): void
+    {
+        foreach ($dials as $attempt => $dial) {
+            self::assertSame(0, $dial['attached'], 'attempt ' . ($attempt + 1) . ' dialed while an earlier socket was still attached');
+        }
+    }
+
+    /**
      * Attach a host to a live session, then drop its link and run the loop
      * until the ladder settles or the guard fires.
      *
      * @param list<CompositeStream> $opened
+     * @param list<array{attached: int, reason: ?string}> $dials
      * @return array{0: RemoteSessionHost, 1: list<string>} the host and the close verdicts it delivered
      */
-    private function dropAndRedial(array &$opened, int $refuseCount): array
+    private function dropAndRedial(array &$opened, int $refuseCount, array &$dials): array
     {
         $link = new ThroughStream();
+        $host = null;
         $host = RemoteSessionHost::overStream(
             new CompositeStream($link, new ThroughStream()),
-            reopen: $this->fakeServer($opened, $refuseCount),
+            reopen: $this->fakeServer($opened, $refuseCount, $dials, $host),
             after: static function (float $seconds, \Closure $run): void {
                 Loop::futureTick($run);
             },
@@ -94,9 +117,14 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
     public function testARefusedServerHelloClosesEverySocketItOpened(): void
     {
         $opened = [];
-        [, $verdicts] = $this->dropAndRedial($opened, PHP_INT_MAX);
+        $dials = [];
+        [, $verdicts] = $this->dropAndRedial($opened, PHP_INT_MAX, $dials);
 
         self::assertCount(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $opened, 'one socket per attempt');
+        $this->assertNothingAttachedAtDial($dials);
+        foreach (\array_slice($dials, 1) as $attempt => $dial) {
+            self::assertSame('server refused', $dial['reason'], 'attempt ' . ($attempt + 2) . ' redialed into a pause with no reason');
+        }
         foreach ($opened as $attempt => $stream) {
             self::assertFalse($stream->isReadable(), 'attempt ' . ($attempt + 1) . ' left its socket readable');
             self::assertFalse($stream->isWritable(), 'attempt ' . ($attempt + 1) . ' left its socket writable');
@@ -108,11 +136,13 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
     public function testASuccessfulReconnectLeavesOnlyTheResumedSocketAttached(): void
     {
         $opened = [];
-        [$host, $verdicts] = $this->dropAndRedial($opened, 2);
+        $dials = [];
+        [$host, $verdicts] = $this->dropAndRedial($opened, 2, $dials);
 
         self::assertSame([], $verdicts, 'the third attempt resumes, so no verdict is delivered');
         self::assertTrue($host->isOpen(), 'the host is attached to the resumed socket');
         self::assertCount(3, $opened);
+        $this->assertNothingAttachedAtDial($dials);
         self::assertFalse($opened[0]->isReadable(), 'the first refused socket is closed');
         self::assertFalse($opened[1]->isReadable(), 'the second refused socket is closed');
         self::assertTrue($opened[2]->isReadable(), 'the resumed socket stays attached');
