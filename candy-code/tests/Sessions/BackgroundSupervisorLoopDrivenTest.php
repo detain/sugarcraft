@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
@@ -98,11 +99,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $session = $settled;
         });
 
-        $deadline = microtime(true) + 20.0;
-        while ($session === null && microtime(true) < $deadline) {
-            $supervisor->tick();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => $session !== null);
 
         $this->assertInstanceOf(BackgroundSession::class, $session, 'tick() must advance the pending accept');
         $ipc = $this->ipcOf($supervisor, $session->id);
@@ -226,11 +223,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
     /** Tick until nothing this supervisor spawned is still active, bounded. */
     private function settle(BackgroundSupervisor $supervisor): void
     {
-        $deadline = microtime(true) + 20.0;
-        while (microtime(true) < $deadline && $supervisor->hasActiveSessions()) {
-            $supervisor->tick();
-            usleep(100_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => !$supervisor->hasActiveSessions());
     }
 
     private function agent(): Agent

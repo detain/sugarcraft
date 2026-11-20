@@ -152,11 +152,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
         ],
 
 
-        // E366 HIGH. Deliberately double-forks into a session daemon, and the
-        // only `proc_close()` is on the handshake-timeout branch - the happy
-        // path never reaps. The scanner reports `unclassified` for exactly
-        // that reason and is right to.
-        'Background/BackgroundSupervisor.php::spawnSession' => [
+        // E366 HIGH. Deliberately double-forks into a session daemon. The launch
+        // lives in spawnSessionAsync(); the only `proc_close()` is the
+        // handshake-timeout branch in failSpawn(), and the happy path reaps
+        // through reapIfExited() instead. The scanner reports `unclassified`
+        // for exactly that reason and is right to.
+        'Background/BackgroundSupervisor.php::spawnSessionAsync' => [
             'count' => 1,
             'reason' => 'double-forked session daemon whose happy path never reaps; E366 HIGH',
         ],

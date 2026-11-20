@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -249,11 +250,7 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
         )->then(static function (\SugarCraft\Code\Background\BackgroundSession $settled) use (&$session): void {
             $session = $settled;
         });
-        $deadline = microtime(true) + 20.0;
-        while ($session === null && microtime(true) < $deadline) {
-            $first->advanceSpawns();
-            usleep(20_000);
-        }
+        SupervisorPump::until($first, static fn (): bool => $session !== null);
         $this->assertNotNull($session, 'the loop never accepted the daemon');
 
         $ipc = $this->ipcOf($first, $session->id);
@@ -271,11 +268,7 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
         $adopted = $second->reconnect($this->fixtureHome);
         $this->assertArrayHasKey($session->id, $adopted, 'the restarted process must adopt the loop-spawned daemon');
 
-        $deadline = microtime(true) + 20.0;
-        while (microtime(true) < $deadline && $second->getSession($session->id)?->isActive()) {
-            $second->tick();
-            usleep(100_000);
-        }
+        SupervisorPump::until($second, static fn (): bool => !$second->getSession($session->id)?->isActive());
 
         $settled = $second->getSession($session->id);
         $this->assertSame(BackgroundSessionStatus::Completed, $settled?->status, 'the adopted daemon never settled');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -344,11 +345,7 @@ final class ForkCarriesHistoryTest extends TestCase
         $cmd()->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
-        $deadline = microtime(true) + 20.0;
-        while ($resolved === null && microtime(true) < $deadline) {
-            $supervisor->tick();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => $resolved !== null);
 
         return $resolved;
     }

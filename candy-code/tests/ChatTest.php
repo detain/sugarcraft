@@ -39,6 +39,7 @@ use SugarCraft\Code\Theme;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -4233,9 +4234,8 @@ final class ChatTest extends TestCase
         };
     }
 
-    /** Drive a Cmd built by Cmd::promise() and return the Msg it resolves to. */
     /**
-     * resolveAsyncCmd(), for an off-loop effect whose promise settles only as the
+     * resolveAsyncCmd() for an off-loop effect whose promise settles only as the
      * supervisor's loop advances (the daemon's handshake is accepted from tick()).
      */
     private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
@@ -4246,15 +4246,12 @@ final class ChatTest extends TestCase
         $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
-        $deadline = microtime(true) + 20.0;
-        while ($resolved === null && microtime(true) < $deadline) {
-            $supervisor->tick();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => $resolved !== null);
 
         return $resolved;
     }
 
+    /** Drive a Cmd built by Cmd::promise() and return the Msg it resolves to. */
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $asyncCmd = $cmd();
