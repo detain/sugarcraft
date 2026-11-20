@@ -20,6 +20,12 @@ use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Tests\Backend\ForkChannelEofIsUnansweredTest;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
+use SugarCraft\Code\Workflows\Tasks;
+use SugarCraft\Code\Workflows\Workflow;
+use SugarCraft\Code\Workflows\WorkflowBuilder;
+use SugarCraft\Code\Workflows\WorkflowEngine;
+use SugarCraft\Code\Workflows\WorkflowRegistry;
+use SugarCraft\Code\Workflows\WorkflowResult;
 
 /**
  * Audit R3 residual: {@see AgentWorkerPool}'s cancel path ran
@@ -267,6 +273,81 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
         self::assertSame(0, $state['unreapedChildren'], 'a worker was still unreaped when the turn returned');
         self::assertTrue($state['workerReaped'], 'the overrunning worker was not reaped before the turn returned');
         self::assertTrue($state['commandGone'], 'the command the overrunning worker started survived the turn');
+    }
+
+    /**
+     * P4-12 CC-1 e0 review. The Workflow tool's `probeLoop: false` reaches only
+     * its own top-level pool. A workflow's stage pools are built inside
+     * {@see WorkflowEngine} with the default flag, so a stage dispatched from a
+     * forked turn still armed the loop probe, took the loop-driven kill, and
+     * let the turn return with that kill pending. This drives a real stage the
+     * way the Workflow tool does, so the engine's own pool is the one under
+     * test.
+     *
+     * The worker is read where the turn returns, before the child exits. The
+     * stage pool is gone by then, and a kill left pending leaves the worker
+     * SIGSTOPped and unreaped.
+     */
+    public function testAWorkflowStageInAForkedTurnTearsDownAnOverrunningWorkerBeforeTheTurnReturns(): void
+    {
+        $result = $this->dir . '/stage-turn-result.json';
+        $pid = $this->forkTracked();
+        self::assertNotSame(-1, $pid, 'fixture: pcntl_fork() failed');
+
+        if ($pid === 0) {
+            $state = [];
+            try {
+                $engine = new WorkflowEngine(
+                    new WorkflowRegistry(),
+                    new AgentWorkerPool(forkedExecutor: $this->workerStartingACommand(trapsTerm: false)),
+                );
+                $workflow = (new WorkflowBuilder())
+                    ->name('overrun-in-a-turn')
+                    ->stage('overrun', Tasks::agent('coder')->prompt('never finishes')->timeout(1))
+                    ->build();
+                $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+                $channel = ChildChannel::new(
+                    $pair[0],
+                    static function (array $frame): void {},
+                    ForkChannelEofIsUnansweredTest::drain(),
+                    'default',
+                    null,
+                );
+                $workflowResult = LoopDrivenTurn::run(
+                    static fn (): WorkflowResult => $engine->runFromPhp(static fn (): Workflow => $workflow),
+                    $channel,
+                );
+
+                $recorded = \array_values(\array_filter(
+                    \glob($this->dir . '/*') ?: [],
+                    static fn (string $file): bool => !\str_ends_with($file, '.json') && !\str_ends_with($file, '.tmp'),
+                ));
+                $state['recorded'] = \count($recorded);
+                if ($recorded !== []) {
+                    [$worker, $command] = $this->recordedPids(\basename($recorded[0]));
+                    $status = 0;
+                    $state['timedOut'] = ($workflowResult->stageResults[0]->agents[0]->status ?? null) === AgentStatus::TimedOut;
+                    $state['workerStopped'] = (ProcessTree::stat($worker)['state'] ?? 'X') === 'T';
+                    $state['workerReaped'] = \pcntl_waitpid($worker, $status, \WNOHANG) === -1;
+                    $state['commandGone'] = self::goneWithin($command, 2.0);
+                }
+            } catch (\Throwable $e) {
+                $state['error'] = $e->getMessage();
+            }
+            \file_put_contents($result, \json_encode($state, JSON_THROW_ON_ERROR));
+            ForkedChild::exitNow(0);
+        }
+
+        \pcntl_waitpid($pid, $status);
+        $this->forgetForkedChild($pid);
+        self::assertFileExists($result, 'the forked turn child wrote no result');
+        $state = \json_decode((string) \file_get_contents($result), true, 512, JSON_THROW_ON_ERROR);
+        self::assertArrayNotHasKey('error', $state, 'the forked turn failed: ' . ($state['error'] ?? ''));
+        self::assertSame(1, $state['recorded'] ?? 0, 'the stage worker never recorded its pids');
+        self::assertTrue($state['timedOut'] ?? false, 'the overrunning stage agent did not settle TimedOut');
+        self::assertFalse($state['workerStopped'] ?? true, 'the stage kill was still pending when the turn returned: the worker is SIGSTOPped');
+        self::assertTrue($state['workerReaped'] ?? false, 'the overrunning stage worker was not reaped before the turn returned');
+        self::assertTrue($state['commandGone'] ?? false, 'the command the overrunning stage worker started survived the turn');
     }
 
     /**

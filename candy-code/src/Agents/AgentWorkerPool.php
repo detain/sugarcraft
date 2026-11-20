@@ -270,6 +270,14 @@ final class AgentWorkerPool
     private bool $loopProbeArmed = false;
 
     /**
+     * PID of the process whose forked turn runs on its own event loop
+     * ({@see \SugarCraft\Code\Backend\LoopDrivenTurn}), or null. Set for the
+     * whole turn, so every pool built inside that child, whatever its
+     * constructor says, keeps its teardown synchronous. See {@see enterTurnOwnedLoop()}.
+     */
+    private static ?int $turnOwnedLoopPid = null;
+
+    /**
      * How recent {@see $loopTickNs} must be for a teardown to count as running
      * on the loop. The TUI's workflow driver resumes the run every few
      * milliseconds, so a live loop is always well inside this; a loop that has
@@ -421,7 +429,9 @@ final class AgentWorkerPool
          * moment the turn returns, so a kill armed on it could still be
          * pending when the child exits, leaving the worker stopped and
          * unreaped. Such a pool keeps the synchronous kill it had before the
-         * turn ran on the loop.
+         * turn ran on the loop. {@see enterTurnOwnedLoop()} applies the same
+         * rule to every pool in a turn child, including those built with the
+         * default, so this flag is the Workflow tool's explicit spelling of it.
          */
         private readonly bool $probeLoop = true,
     ) {
@@ -1820,7 +1830,7 @@ final class AgentWorkerPool
         }
 
         if (\Fiber::getCurrent() !== null) {
-            if ($this->probeLoop) {
+            if ($this->probeLoop && !self::loopOwnedByTurn()) {
                 $this->armLoopProbe();
             }
             \Fiber::suspend();
@@ -1829,6 +1839,42 @@ final class AgentWorkerPool
         }
 
         usleep(self::WAIT_POLL_INTERVAL_USEC);
+    }
+
+    /**
+     * Mark this process as a forked turn child whose turn runs on its own
+     * event loop, so a teardown inside it never arms its kill timers there.
+     *
+     * WHY A PROCESS MARK AND NOT A FLAG ON EACH POOL. The turn's workflow and
+     * agent runs build their own pools (WorkflowEngine's stage pools,
+     * AgentManager's default), and those do not carry the Workflow tool's
+     * `probeLoop: false`. The turn's loop stops the moment the turn returns, so
+     * a kill armed on it could still be pending when the child exits, leaving
+     * the worker SIGSTOPped and unreaped. A synchronous kill finishes before
+     * the turn returns, which is what the mark buys.
+     *
+     * Called by {@see \SugarCraft\Code\Backend\LoopDrivenTurn::run()}, which
+     * undoes it with {@see leaveTurnOwnedLoop()} in its finally.
+     */
+    public static function enterTurnOwnedLoop(): void
+    {
+        self::$turnOwnedLoopPid = (int) getmypid();
+    }
+
+    /** Undo {@see enterTurnOwnedLoop()}. */
+    public static function leaveTurnOwnedLoop(): void
+    {
+        self::$turnOwnedLoopPid = null;
+    }
+
+    /**
+     * Whether this process is a forked turn child that {@see enterTurnOwnedLoop()}
+     * marked. A probe armed on that loop would only be read by a kill the
+     * turn's return outlives.
+     */
+    private static function loopOwnedByTurn(): bool
+    {
+        return self::$turnOwnedLoopPid === (int) getmypid();
     }
 
     /**

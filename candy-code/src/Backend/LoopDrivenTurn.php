@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Backend;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Agents\AgentWorkerPool;
 
 /**
  * Runs a forked turn child's work on the event loop (P4-12 CC-1 step e0).
@@ -57,6 +58,10 @@ final class LoopDrivenTurn
         $loop ??= Loop::get();
         $fiber = new \Fiber($turn);
         $channel->attachLoop($loop, $fiber);
+        // Every pool the turn builds, not only one that asks, tears down
+        // synchronously: this loop stops when the turn returns (see
+        // AgentWorkerPool::enterTurnOwnedLoop()).
+        AgentWorkerPool::enterTurnOwnedLoop();
 
         $finished = false;
         $failure = null;
@@ -124,6 +129,7 @@ final class LoopDrivenTurn
 
             return $fiber->getReturn();
         } finally {
+            AgentWorkerPool::leaveTurnOwnedLoop();
             $channel->detachLoop();
         }
     }
