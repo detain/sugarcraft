@@ -156,23 +156,36 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#accessors">Accessors</a></li>
             <li class="toc-h3"><a href="#security-untrusted-content">Security &amp; untrusted content</a></li>
             <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-controls">Keys and controls</a></li>
+            <li class="toc-h3"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
-            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#demos">Demos</a></li>
             <li class="toc-h3"><a href="#frozen-paginated">Frozen + paginated</a></li>
             <li class="toc-h3"><a href="#basic-sort-filter">Basic + sort + filter</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen columns, per-cell styling, pagination, and a programmatic row cursor. Per-cell styling rides a restricted SGR attribute set canonicalised to 24-bit at render.</p>
+<p class="lede" style="margin-top: 28px;">SugarTable is a column-definition data table for terminal UIs. It has sortable and filterable columns, frozen columns, per-cell styling, pagination, a programmatic row cursor, and viewport virtualization. Output is styled with a restricted SGR attribute set that is canonicalized to 24-bit color at render time. The design is inspired by the Go project <a href="https://github.com/Evertras/bubble-table">Evertras/bubble-table</a>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-table</code></pre>
+    <p>Requires PHP 8.3 or newer. Composer pulls in the SugarCraft core, input, style and cell-buffer packages. The table draws nothing by itself. It returns a string from <code>view()</code>, and your program writes it.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Table\{Table, Column, Row, RowData, ColumnWidth, WrapMode};
@@ -190,31 +203,222 @@ $table = Table::fromColumns([
     -&gt;withPageSize(25);
 
 echo $table-&gt;view();</code></pre>
+    <p>Each column has a key, a title and a width. Rows are <code>Row</code> objects that wrap a <code>RowData</code> map keyed by column key. <code>withPageSize(25)</code> turns on pagination, and the footer shows the page count.</p>
+
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A <code>Table</code> is an immutable value. Every <code>with*()</code> call returns a new table, and the table you started from is unchanged. Columns define the layout: their key, title, width mode, alignment, wrap mode and sort type. Rows hold data, and a column is looked up by its key, not its position.</p>
+    <p>The table is not a TEA <code>Model</code>. It has no <code>update()</code>. Your program owns the state. It calls <code>selectNext()</code>, <code>handleScrollKey()</code>, <code>sortBy()</code> or <code>filter()</code>, stores the returned table, and calls <code>view()</code> when it paints. Every value passes through <code>Sanitize::value()</code> before it reaches the frame.</p>
+    <p>Filters and search narrow the rows first. Sorting then orders what is left, and pagination takes the slice for the current page. <code>view()</code> renders only that page, and the cursor stays inside it.</p>
+
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <p><strong>Sort by a column, numerically when possible.</strong> <code>sortBy()</code> compares numbers as numbers when both values are numeric, and compares text case-insensitively otherwise. Calling it again with the same key and direction toggles the order:</p>
+    <pre class="code"><code class="language-php">$table = $table-&gt;sortBy('age');          // ascending
+$table = $table-&gt;sortBy('age');          // toggled to descending</code></pre>
+
+    <p><strong>Filter one column, or search all of them.</strong> <code>filter()</code> keeps rows whose value in one column contains the text. <code>search()</code> keeps rows where any scanned column matches:</p>
+    <pre class="code"><code class="language-php">$table = $table-&gt;filter('name', 'a');     // name contains "a"
+$table = $table-&gt;search('dev');          // any column contains "dev"
+$table = $table-&gt;clearAllFilters()-&gt;clearSearch();</code></pre>
+
+    <p><strong>Page through a large data set.</strong> Set a page size, then move between pages. Navigation clamps to the valid range, and the cursor moves to the new page:</p>
+    <pre class="code"><code class="language-php">$table = $table-&gt;withPageSize(20)-&gt;nextPage();
+echo $table-&gt;pageFooter(), PHP_EOL;     // the localized page label, for example "Page 2 of 5"</code></pre>
+
+    <p><strong>Keep the first column visible while scrolling sideways.</strong> Freeze a prefix of columns, then pan the rest with <code>scrollRight()</code>:</p>
+    <pre class="code"><code class="language-php">$table = $table
+    -&gt;withFrozenCols([0])            // freeze column 0 (must be a contiguous prefix)
+    -&gt;withMaxTotalWidth(60)         // render a 60-cell window
+    -&gt;scrollRight();</code></pre>
+
+    <p><strong>Mark rows for a multi-select.</strong> Checked rows are tracked by row identity. Turn on the checkbox gutter with <code>withCheckMarks()</code>:</p>
+    <pre class="code"><code class="language-php">$table = $table-&gt;withCheckMarks()-&gt;toggleChecked();   // check the row under the cursor
+$chosen = $table-&gt;checkedRows();                    // list of Row objects</code></pre>
+
+    <p><strong>Virtualize a long list.</strong> Render only the rows that fit the screen. Keep the scroll offset in your own state, and move it with <code>handleScrollKey()</code>:</p>
+    <pre class="code"><code class="language-php">$table = $table-&gt;withViewportHeight(15)-&gt;withScrollY(0);
+$table = $table-&gt;handleScrollKey('pageDown');   // clamps to maxScrollY()</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Column definitions</strong><span>Width, alignment, style, wrap per column; frozen columns and sorting handled at the table level.</span></div>
-            <div class="feature"><strong>StyledCell</strong><span>Per-cell SGR styling — bold, underline and colors from a restricted attribute set.</span></div>
-            <div class="feature"><strong>Pagination</strong><span>Paginate large datasets, navigate between pages.</span></div>
-            <div class="feature"><strong>Frozen columns</strong><span>Pin the leftmost columns with withFrozenCols([0..k]) so they stay put during horizontal scroll.</span></div>
-            <div class="feature"><strong>Row selection</strong><span>Programmatic cursor - SelectNext/SelectPrevious/withSelectedIndex; handleScrollKey(key|KeyEvent) scrolls; a checked-row set (toggleChecked, optional checkbox gutter) gives multi-select. No mouse handling: wire input events yourself.</span></div>
-            <div class="feature"><strong>Viewport virtualization</strong><span>Render only visible rows with withViewportHeight() + withScrollY().</span></div>
-            <div class="feature"><strong>Column width modes</strong><span>ColumnWidth enum — Fixed, Percent, Dynamic, Content, Flex.</span></div>
-            <div class="feature"><strong>Borderless + width-exact</strong><span>withBorderless() + withWidth() — compose inside another box at an exact width, with continuous reverse-video selection.</span></div>
-            <div class="feature"><strong>Cell text wrapping</strong><span>WrapMode enum — None, WordWrap, Character.</span></div>
-            <div class="feature"><strong>Border styling</strong><span>withBorder(Border) — 8 border families from \SugarCraft\Style\Border; markdownBorder() is visual style only — its output is not GFM-parseable.</span></div>
-            <div class="feature"><strong>Multi-line rows</strong><span>withMultilineMode(bool) — rows expand to max cell height.</span></div>
-            <div class="feature"><strong>Empty states</strong><span>No visible columns render as the empty string; no rows render a centered translatable No data line (header shown or not, borderless and footer-armed included).</span></div>
+      <div class="feature"><strong>Column definitions</strong><span>Width, alignment, style and wrap mode per column. Frozen columns and sorting are handled at the table level.</span></div>
+      <div class="feature"><strong>StyledCell</strong><span>Per-cell SGR styling with bold, underline and colors from a restricted attribute set. Casting a <code>StyledCell</code> to a string skips sanitization, so render through <code>view()</code>.</span></div>
+      <div class="feature"><strong>Pagination</strong><span>Page size, page navigation with optional wrapping, and footers that show the page, the row count or both.</span></div>
+      <div class="feature"><strong>Frozen columns</strong><span>Pin a contiguous prefix with <code>withFrozenCols()</code> so it stays put during horizontal scroll. <code>withFrozenKeys()</code> takes column keys.</span></div>
+      <div class="feature"><strong>Row selection</strong><span>A programmatic cursor with <code>selectNext()</code>, <code>selectPrevious()</code> and <code>withSelectedIndex()</code>. <code>handleScrollKey()</code> maps key names to scroll moves. A checked-row set with <code>toggleChecked()</code> gives multi-select. The table has no mouse handling, so wire input events yourself.</span></div>
+      <div class="feature"><strong>Viewport virtualization</strong><span>Render only the visible rows with <code>withViewportHeight()</code> and <code>withScrollY()</code>, and cap the line budget with <code>withMaxLines()</code>.</span></div>
+      <div class="feature"><strong>Column width modes</strong><span><code>ColumnWidth</code> enum: Fixed, Percent, Dynamic, Content and Flex.</span></div>
+      <div class="feature"><strong>Borderless and width-exact</strong><span><code>withBorderless()</code> and <code>withWidth()</code> fit a table inside another box at an exact width, with a continuous reverse-video selection.</span></div>
+      <div class="feature"><strong>Cell text wrapping</strong><span><code>WrapMode</code> enum: None, WordWrap and Character.</span></div>
+      <div class="feature"><strong>Border styling</strong><span><code>withBorder()</code> takes one of the border families from <code>\SugarCraft\Style\Border</code>. <code>markdownBorder()</code> is a visual style only, and its output is not parseable as GFM.</span></div>
+      <div class="feature"><strong>Multi-line rows</strong><span><code>withMultilineMode()</code> expands each row to the height of its tallest cell.</span></div>
+      <div class="feature"><strong>Empty states</strong><span>No visible columns render as an empty string. No rows render a centered, translatable "No data" line.</span></div>
     </div>
 
     <h3 id="accessors" style="margin-top: 32px;">Accessors</h3>
-    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Columns()</code>, <code>Table::CurrentRow()</code>, <code>Table::scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
+    <p>Property reads are bare. Public <code>readonly</code> state, such as <code>$column-&gt;style</code>, <code>$row-&gt;data</code> and <code>$cell-&gt;value</code>, is read directly. Derived values are bare methods, such as <code>columns()</code>, <code>currentRow()</code> and <code>scrollY()</code>. The library ships no <code>get*()</code> accessors. <code>RowData</code> keeps its keyed map lookup with <code>get()</code>, <code>has()</code> and <code>all()</code>.</p>
 
     <h3 id="security-untrusted-content" style="margin-top: 32px;">Security &amp; untrusted content</h3>
-    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>View()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
+    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>view()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
 
     <h3 id="accessibility" style="margin-top: 32px;">Accessibility</h3>
     <p>Selection is pure reverse video (<code>ESC[0;7m</code>) — color-independent — and zebra striping is a fixed black-on-white inversion; both stay readable on any palette, and <code>withSelectable(false)</code> drops the highlight entirely. The empty-state message is translatable. There is no <code>NO_COLOR</code>, non-TTY or plain-text degrade path (SGR is always emitted); for assistive tech prefer <code>Border::ascii()</code> or <code>Border::hidden()</code> with <code>withHeaderStyle('')</code>, since box glyphs and the default TrueColor header add noise and light-theme contrast risk, and no semantic header/column association exists beyond visual alignment.</p>
+
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <p>The table has no configuration file and no environment variables. Its options are builder calls. Each one returns a new table. The defaults below are the values a new <code>Table::fromColumns()</code> starts with.</p>
+    <table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
+<tr><td><code>withShowHeader()</code> / <code>withShowFooter()</code></td><td>bool</td><td><code>true</code> / <code>true</code></td><td>Show the header row and the footer row.</td></tr>
+<tr><td><code>withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
+<tr><td><code>withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
+<tr><td><code>withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
+<tr><td><code>withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
+<tr><td><code>withSelectable()</code></td><td>bool</td><td><code>true</code></td><td>Show the selection highlight. <code>false</code> drops it.</td></tr>
+<tr><td><code>withZebra()</code></td><td>bool</td><td><code>false</code></td><td>Alternate the row stripe. Suppressed under the cursor row.</td></tr>
+<tr><td><code>withZebraStyleEven()</code> / <code>withZebraStyleOdd()</code></td><td>SGR string</td><td><code>'30;47'</code> / <code>''</code></td><td>Stripe for even and odd rows.</td></tr>
+<tr><td><code>withHeaderStyle()</code></td><td>SGR string</td><td><code>'1;37'</code></td><td>Header row style. Pass <code>''</code> for a plain header.</td></tr>
+<tr><td><code>withMissingIndicator()</code></td><td>string</td><td><code>'--'</code></td><td>Shown for a cell whose row has no entry for its column.</td></tr>
+<tr><td><code>withStrictPercent()</code></td><td>bool</td><td><code>false</code></td><td>Throw instead of normalizing percent column sets that total more than 100.</td></tr>
+<tr><td><code>withRowSeparator()</code></td><td>bool</td><td><code>false</code></td><td>Draw a rule between rows.</td></tr>
+<tr><td><code>withMultilineMode()</code></td><td>bool</td><td>off until set</td><td>Expand rows to their tallest cell.</td></tr>
+</table>
+
+    <h3 id="keys-and-controls" style="margin-top: 32px;">Keys and controls</h3>
+    <p><code>handleScrollKey()</code> accepts a key name or a <code>KeyEvent</code>. It maps the spellings below to scroll moves, and <code>handleKey()</code> is an older alias. The clamping keeps the scroll offset inside <code>maxScrollY()</code>. The table does not listen for keys itself. Your program reads the key, then passes it in.</p>
+    <table class="api-table">
+<tr><th>Key name</th><th>Action</th></tr>
+<tr><td><code>arrowUp</code> or <code>ArrowUp</code></td><td>Scroll up one row.</td></tr>
+<tr><td><code>arrowDown</code> or <code>ArrowDown</code></td><td>Scroll down one row.</td></tr>
+<tr><td><code>pageUp</code> or <code>pageup</code></td><td>Scroll up one page of rows.</td></tr>
+<tr><td><code>pageDown</code> or <code>pagedown</code></td><td>Scroll down one page of rows.</td></tr>
+<tr><td><code>home</code></td><td>Jump to the first row.</td></tr>
+<tr><td><code>end</code></td><td>Jump to the last row.</td></tr>
+</table>
+    <p>Use <code>selectNext()</code> and <code>selectPrevious()</code> to move the row cursor in code. The cursor follows the viewport. <code>scrollYForKey()</code> returns the offset a key would produce, without changing the table.</p>
+
+    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
+    <p>Styles are SGR parameter strings. They are parsed into a structured attribute set and canonicalized to 24-bit color at render time. <code>withBaseStyle()</code> styles every cell. <code>withHeaderStyle()</code> and <code>withBorderStyle()</code> style the header and the border. <code>Column::withStyle()</code> and <code>Row::withStyle()</code> style one column or one row. A cell-level callback is set with <code>withStyleFunc()</code>. It receives the row, the column and the value, and returns a style or an SGR string. The callback output is not sanitized, so return only trusted styles. Zebra striping uses <code>withZebra()</code>, <code>withZebraStyleEven()</code> and <code>withZebraStyleOdd()</code>. Border families come from <code>withBorder()</code>, and the checkbox marks come from <code>withCheckMarks()</code>.</p>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/basic.php"><code>examples/basic.php</code></a>: sort by score, filter the name column, and paginate.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/features.php"><code>examples/features.php</code></a>: a wide host-telemetry table with pagination and a frozen first column.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/features.php</code></pre>
+    <p>Both scripts print one frame and exit. They work without a terminal, so you can capture their output.</p>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite runs with PHPUnit 10. <code>GoldenRenderTest</code> compares full frames against files in <code>tests/fixtures/</code>, and <code>TableTest</code> covers the table's core behavior. Focused files pin the features one at a time, including <code>TableFrozenColsTest</code>, <code>TableCheckedRowsTest</code>, <code>TableExpansionTest</code>, <code>TableGlobalSearchTest</code>, <code>TableSanitizeTest</code>, <code>TableLineBudgetTest</code> and <code>TableMultilineCjkTest</code>. <code>LangCoverageTest</code> checks that every key passed to <code>Lang::t()</code> exists in <code>lang/en.php</code>.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Sorting or filtering has no effect on the output.</strong> Those methods return a new table. Store the result, then call <code>view()</code> on it. Once any column is marked with <code>withFilterable()</code>, only marked columns take a filter, so mark the column you want to filter.</li>
+      <li><strong>A percent-width column is larger than expected.</strong> Percent sets that total more than 100 are normalized by default. Turn on <code>withStrictPercent()</code> to throw instead.</li>
+      <li><strong><code>withFrozenCols()</code> throws.</strong> Frozen columns must be a contiguous prefix that starts at column 0, such as <code>[0, 1]</code>. A set like <code>[0, 2]</code> is refused.</li>
+      <li><strong>Text from a user shows up as <code>·</code> or <code>&lt;U+XXXX&gt;</code>.</strong> That is the sanitizer working. Control bytes, bidi overrides and zero-width characters become visible markers. Clean the data before you add it, if you want plain text.</li>
+      <li><strong>Output has escape codes when piped.</strong> The table always emits SGR. There is no <code>NO_COLOR</code> or non-TTY fallback. Use <code>withBaseStyle('')</code>, <code>withHeaderStyle('')</code> and <code>withZebra(false)</code> for plainer output.</li>
+      <li><strong>A cell that looks styled is printed raw.</strong> Casting a <code>StyledCell</code> to a string bypasses sanitization. Render the whole table through <code>view()</code> instead.</li>
+    </ul>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Upstream idea (Evertras/bubble-table)</th><th>SugarTable class</th><th>Notes</th></tr>
+<tr><td>Table with columns and rows</td><td><code>Table</code>, <code>Column</code>, <code>Row</code></td><td>Native PHP. The API is shaped for PHP, not a line-for-line port.</td></tr>
+<tr><td>Row data keyed by column</td><td><code>RowData</code></td><td>A keyed map with immutable <code>with()</code>.</td></tr>
+<tr><td>Pagination and cursor</td><td><code>Table::selectNext()</code>, <code>nextPage()</code></td><td>Native PHP. The cursor follows the page.</td></tr>
+<tr><td>Per-cell styling</td><td><code>StyledCell</code>, <code>withStyleFunc()</code></td><td>Limited to a restricted SGR set, with sanitization applied.</td></tr>
+</table>
+    <p>The deliberate differences from upstream are listed in the library README under Divergences from Upstream.</p>
+
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>Layout is pure. <code>computeColumnWidths()</code> turns the column width modes into cell counts for a given table width. <code>view()</code> then renders the header, the page of rows and the footer through a <code>RenderCanvas</code>. <code>CellLineMemo</code> caches the rendered lines of a cell, so a table that repaints the same rows does less work. Every value is sanitized at the point it enters, and the frame is built from sanitized text only.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package has no separate changelog file. The history of <code>sugar-table/</code> is the commit log in the monorepo. The README has two sections that explain the choices behind the API. The Naming section covers the camelCase house API. The Divergences from Upstream section lists the deliberate differences from the Go project. The package is published as <code>sugarcraft/sugar-table</code> on Packagist and follows the monorepo release flow.</p>
+
+    <h3 id="api" style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Call</th><th>Signature</th><th>Description</th></tr>
+<tr><td>Table::fromColumns()</td><td>static fromColumns(array $columns): self</td><td>Create a table from its column definitions.</td></tr>
+<tr><td>Table::withColumns()</td><td>withColumns(array $columns): self</td><td>Replace the column definitions.</td></tr>
+<tr><td>Table::withRows()</td><td>withRows(array $rows): self</td><td>Replace the rows. Each element is a <code>Row</code> or a plain array.</td></tr>
+<tr><td>Table::addRow()</td><td>addRow(Row $row): self</td><td>Append one row.</td></tr>
+<tr><td>Table::addRows()</td><td>addRows(array $rows): self</td><td>Append a batch of rows.</td></tr>
+<tr><td>Table::sortBy()</td><td>sortBy(string $colKey, bool $ascending = true, bool $primary = true): self</td><td>Sort by a column. Repeating the sole active sort with the same direction toggles it.</td></tr>
+<tr><td>Table::clearSort()</td><td>clearSort(): self</td><td>Remove all sorting.</td></tr>
+<tr><td>Table::filter()</td><td>filter(string $colKey, string $text): self</td><td>Keep rows whose value in one column contains the text.</td></tr>
+<tr><td>Table::clearFilter()</td><td>clearFilter(string $colKey): self</td><td>Remove the filter on one column.</td></tr>
+<tr><td>Table::clearAllFilters()</td><td>clearAllFilters(): self</td><td>Remove every column filter.</td></tr>
+<tr><td>Table::search()</td><td>search(string $text): self</td><td>Keep rows where any scanned column contains the text.</td></tr>
+<tr><td>Table::clearSearch()</td><td>clearSearch(): self</td><td>Remove the search.</td></tr>
+<tr><td>Table::withFilterFunc()</td><td>withFilterFunc(?callable $fn): self</td><td>Set a custom row predicate for the search.</td></tr>
+<tr><td>Table::withPageSize()</td><td>withPageSize(int $n): self</td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
+<tr><td>Table::withPage()</td><td>withPage(int $n): self</td><td>Jump to a page, counting from 0.</td></tr>
+<tr><td>Table::selectPage()</td><td>selectPage(int $page): self</td><td>Move to a page, clamped to the valid range.</td></tr>
+<tr><td>Table::nextPage()</td><td>nextPage(): self</td><td>Move to the next page.</td></tr>
+<tr><td>Table::previousPage()</td><td>previousPage(): self</td><td>Move to the previous page.</td></tr>
+<tr><td>Table::selectNext()</td><td>selectNext(): self</td><td>Move the row cursor down. The cursor follows the viewport.</td></tr>
+<tr><td>Table::selectPrevious()</td><td>selectPrevious(): self</td><td>Move the row cursor up.</td></tr>
+<tr><td>Table::withSelectedIndex()</td><td>withSelectedIndex(int $index): self</td><td>Set the row cursor directly.</td></tr>
+<tr><td>Table::selectedRow()</td><td>selectedRow(): ?Row</td><td>The row under the cursor, or <code>null</code>.</td></tr>
+<tr><td>Table::currentRow()</td><td>currentRow(): ?Row</td><td>The current row. Use it with <code>currentRowData()</code> to read the data.</td></tr>
+<tr><td>Table::withViewportHeight()</td><td>withViewportHeight(int $height): self</td><td>Render only this many rows at once.</td></tr>
+<tr><td>Table::withScrollY()</td><td>withScrollY(int $offset): self</td><td>Set the vertical scroll offset, in rows.</td></tr>
+<tr><td>Table::scrollY()</td><td>scrollY(): int</td><td>The current vertical scroll offset.</td></tr>
+<tr><td>Table::maxScrollY()</td><td>maxScrollY(): int</td><td>The highest valid scroll offset for the current page and viewport.</td></tr>
+<tr><td>Table::handleScrollKey()</td><td>handleScrollKey(string|KeyEvent $key): self</td><td>Apply a key name as a scroll move. <code>handleKey()</code> is the older alias.</td></tr>
+<tr><td>Table::scrollYForKey()</td><td>scrollYForKey(string|KeyEvent $key): int</td><td>The offset a key would produce, without changing the table.</td></tr>
+<tr><td>Table::withFrozenCols()</td><td>withFrozenCols(array $indices): self</td><td>Pin a contiguous prefix of columns. Any other set throws.</td></tr>
+<tr><td>Table::withFrozenKeys()</td><td>withFrozenKeys(array $keys): self</td><td>Pin columns by key.</td></tr>
+<tr><td>Table::withHiddenCols()</td><td>withHiddenCols(array $indices): self</td><td>Hide columns. They must stay out of the frozen prefix.</td></tr>
+<tr><td>Table::withHiddenKeys()</td><td>withHiddenKeys(array $keys): self</td><td>Hide columns by key.</td></tr>
+<tr><td>Table::withScrollX()</td><td>withScrollX(int $offset): self</td><td>Set the horizontal pan offset of the scrollable columns.</td></tr>
+<tr><td>Table::scrollLeft()</td><td>scrollLeft(): self</td><td>Pan one step to the left.</td></tr>
+<tr><td>Table::scrollRight()</td><td>scrollRight(): self</td><td>Pan one step to the right.</td></tr>
+<tr><td>Table::withMaxTotalWidth()</td><td>withMaxTotalWidth(int $cells): self</td><td>Limit the rendered width. Combine it with overflow arrows and pan helpers.</td></tr>
+<tr><td>Table::withOverflowArrows()</td><td>withOverflowArrows(bool $v = true): self</td><td>Mark the edges that have more columns.</td></tr>
+<tr><td>Table::toggleChecked()</td><td>toggleChecked(?int $viewIndex = null): self</td><td>Check or uncheck a row, by default the one under the cursor.</td></tr>
+<tr><td>Table::withRowChecked()</td><td>withRowChecked(Row $row, bool $checked = true): self</td><td>Set the checked state of a row.</td></tr>
+<tr><td>Table::checkedRows()</td><td>checkedRows(): array</td><td>The checked rows.</td></tr>
+<tr><td>Table::withCheckMarks()</td><td>withCheckMarks(string $unchecked = '[ ]', string $checked = '[x]'): self</td><td>Show a checkbox gutter with these marks.</td></tr>
+<tr><td>Table::toggleExpanded()</td><td>toggleExpanded(int $rowIndex): self</td><td>Show or hide the detail lines of a row.</td></tr>
+<tr><td>Table::isExpanded()</td><td>isExpanded(int $rowIndex): bool</td><td>Whether a row is expanded.</td></tr>
+<tr><td>Table::withBaseStyle()</td><td>withBaseStyle(string $ansiStyle): self</td><td>SGR style for every cell.</td></tr>
+<tr><td>Table::withHeaderStyle()</td><td>withHeaderStyle(string $s): self</td><td>SGR style for the header row.</td></tr>
+<tr><td>Table::withBorder()</td><td>withBorder(Border $border): self</td><td>Set the border family.</td></tr>
+<tr><td>Table::withBorderStyle()</td><td>withBorderStyle(string $ansiStyle): self</td><td>SGR style for the border.</td></tr>
+<tr><td>Table::withBorderless()</td><td>withBorderless(bool $v = true): self</td><td>Draw no border. Use this inside another box.</td></tr>
+<tr><td>Table::withWidth()</td><td>withWidth(int $cols): self</td><td>Fix the table width in cells.</td></tr>
+<tr><td>Table::withStyleFunc()</td><td>withStyleFunc(?callable $fn): self</td><td>Per-cell style callback, which receives the row, column and value.</td></tr>
+<tr><td>Table::withMissingIndicator()</td><td>withMissingIndicator(string|StyledCell $s): self</td><td>Placeholder for a cell with no entry.</td></tr>
+<tr><td>Table::withStaticFooter()</td><td>withStaticFooter(string $text): self</td><td>A fixed footer text.</td></tr>
+<tr><td>Table::pageFooter()</td><td>pageFooter(): string</td><td>The page footer text, such as "Page 2/5".</td></tr>
+<tr><td>Table::rowsFooter()</td><td>rowsFooter(): string</td><td>The row-count footer text.</td></tr>
+<tr><td>Table::computeColumnWidths()</td><td>computeColumnWidths(int $tableWidth): array</td><td>Compute the actual column widths for a table width.</td></tr>
+<tr><td>Table::view()</td><td>view(): string</td><td>Render the table. Every value passes through <code>Sanitize::value()</code>.</td></tr>
+<tr><td>Column::new()</td><td>static new(string $key, string $title, int $width): self</td><td>Create a column.</td></tr>
+<tr><td>Column::withColumnWidth()</td><td>withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self</td><td>Set the width mode and its value.</td></tr>
+<tr><td>Column::withAlignLeft()</td><td>withAlignLeft(bool $v = true): self</td><td>Left-align the column. The default is right.</td></tr>
+<tr><td>Column::withWrapMode()</td><td>withWrapMode(WrapMode $wrapMode): self</td><td>Set the wrap mode: None, WordWrap or Character.</td></tr>
+<tr><td>Column::withSortType()</td><td>withSortType(SortType $type): self</td><td>Set the sort mode: Auto, Text or Natural.</td></tr>
+<tr><td>Column::withSortFunc()</td><td>withSortFunc(?callable $fn): self</td><td>Set a comparator over the raw values.</td></tr>
+<tr><td>Column::withFormatString()</td><td>withFormatString(string $format): self</td><td>Set a sprintf-style display template.</td></tr>
+<tr><td>Column::withFilterable()</td><td>withFilterable(bool $v = true): self</td><td>Mark the column as filterable.</td></tr>
+<tr><td>Column::withStyle()</td><td>withStyle(string $ansiStyle): self</td><td>SGR style for the column's cells.</td></tr>
+<tr><td>Row::new()</td><td>static new(RowData $data): self</td><td>Create a row from a <code>RowData</code>.</td></tr>
+<tr><td>RowData::from()</td><td>static from(array $data): self</td><td>Create row data from a key-value array.</td></tr>
+<tr><td>RowData::get()</td><td>get(string $key): mixed</td><td>Read one value by key.</td></tr>
+<tr><td>RowData::has()</td><td>has(string $key): bool</td><td>Whether the key is present.</td></tr>
+<tr><td>RowData::with()</td><td>with(string $key, mixed $value): self</td><td>Return a new row data with one value set.</td></tr>
+<tr><td>StyledCell::new()</td><td>static new(mixed $value, string $ansiStyle = ''): self</td><td>A value with its own SGR style.</td></tr>
+<tr><td>ColumnWidth</td><td>enum</td><td>Fixed, Percent, Dynamic, Content, Flex.</td></tr>
+<tr><td>WrapMode</td><td>enum</td><td>None, WordWrap, Character.</td></tr>
+<tr><td>SortType</td><td>enum</td><td>Auto, Text, Natural.</td></tr>
+<tr><td>FooterType</td><td>enum</td><td>Page, Rows, Both. The footer renders only when pagination is on.</td></tr>
+</table>
 
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -223,81 +427,37 @@ echo $table-&gt;view();</code></pre>
       <li><a href="https://github.com/sugarcraft/sugar-table/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/Evertras/bubble-table">Evertras/bubble-table</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Table</td><td>static fromColumns(columns) / withColumns(columns)</td><td>Create a table from its columns / replace them</td></tr>
-<tr><td>Table</td><td>withRows(rows)</td><td>Set table rows</td></tr>
-<tr><td>Table</td><td>addRow(row) / addRows(rows)</td><td>Append one row / a batch</td></tr>
-<tr><td>Table</td><td>withBaseStyle(style) / withHeaderStyle(style)</td><td>Base cell SGR / header-row SGR (default '1;37')</td></tr>
-<tr><td>Table</td><td>withShowHeader(bool) / withShowFooter(bool)</td><td>Toggle the header row / footer row</td></tr>
-<tr><td>Table</td><td>withZebra(bool) / withZebraStyleEven(style) / withZebraStyleOdd(style)</td><td>Table-level alternating-row stripe (default 30;47 even); suppressed under the cursor row</td></tr>
-<tr><td>Table</td><td>withMaxLines(n) / renderedLineCount()</td><td>Line budget for the data region / lines the frame paints (withViewportHeight counts rows)</td></tr>
-<tr><td>Table</td><td>withFilterFunc(fn) / withPaginationWrap(bool) / withStaticFooter(text)</td><td>Search predicate, cycling cursor+pages, fixed footer text</td></tr>
-<tr><td>Table</td><td>withRowSeparator(bool) / withMaxTotalWidth(n) / withOverflowArrows(bool) / scrollLeft() / scrollRight()</td><td>Rules between rows, horizontal window with overflow marks and pan helpers</td></tr>
-<tr><td>Table</td><td>toggleChecked() / checkedRows() / withCheckMarks()</td><td>Multi-row checked set with optional checkbox gutter</td></tr>
-<tr><td>Table</td><td>withStrictPercent(bool)</td><td>Throw instead of normalising Percent sets over 100</td></tr>
-<tr><td>Column</td><td>withSortType(SortType) / withSortFunc(fn) / withFormatString(fmt)</td><td>Auto/Text/Natural sort, raw-value comparator, sprintf display template</td></tr>
-<tr><td>Table</td><td>withStyleFunc(callable)</td><td>Per-cell style callback (row, col, value) → CellBuffer\Style|string</td></tr>
-<tr><td>Table</td><td>withMissingIndicator(text)</td><td>Placeholder for cells whose row has no entry (default '--')</td></tr>
-<tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
-<tr><td>Table</td><td>withPage(n)</td><td>Jump to page n (0-based; PageFooter shows n+1)</td></tr>
-<tr><td>Table</td><td>SelectPage(n) / nextPage() / previousPage()</td><td>Page navigation (clamped to valid pages; cursor snaps to the page)</td></tr>
-<tr><td>Table</td><td>withFooterType(FooterType) / rowsFooter()</td><td>Choose footer content (Page|Rows|Both) / read the rows-count footer string</td></tr>
-<tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
-<tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
-<tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
-<tr><td>Table</td><td>View()</td><td>Render the table to string — every value passes the <code>Sanitize::value()</code> ingress (see Security &amp; untrusted content)</td></tr>
-<tr><td>Table</td><td>SortBy(colKey, ascending, primary)</td><td>Sort rows by a column — numeric-aware when both values are numeric, case-insensitive otherwise; repeating the sole active sort key with the same direction toggles it</td></tr>
-<tr><td>Table</td><td>ClearSort()</td><td>Remove all sorting</td></tr>
-<tr><td>Table</td><td>Filter(key, text) / clearFilter(key) / clearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
-<tr><td>Table</td><td>search(text) / clearSearch()</td><td>OR search across the scanned columns</td></tr>
-<tr><td>Table</td><td>handleScrollKey(key|KeyEvent)</td><td>Keyboard scrolling - arrowUp/ArrowUp spellings, PageUp/Down, Home, End; clamps to maxScrollY(); handleKey() is the older alias</td></tr>
-<tr><td>Table</td><td>SelectNext() / selectPrevious()</td><td>Move the row cursor (follows the viewport)</td></tr>
-<tr><td>Table</td><td>maxScrollY()</td><td>Highest valid scrollY for the current page + viewport (public, page-aware)</td></tr>
-<tr><td>Table</td><td>withFrozenCols(indices)</td><td>Pin a contiguous prefix [0..k]; anything else throws</td></tr>
-<tr><td>Table</td><td>withHiddenCols(indices) / withScrollX(cols)</td><td>Hide columns (must stay disjoint from the frozen prefix) / pan the scrollable region</td></tr>
-<tr><td>Table</td><td>withExpandedRows(i) / toggleExpanded(i) / isExpanded(i)</td><td>Row detail expansion tracked by Row object identity (withRows() prunes stale identities)</td></tr>
-<tr><td>Table</td><td>computeColumnWidths(total)</td><td>Compute actual widths from ColumnWidth enum values</td></tr>
-<tr><td>Table</td><td>withBorder(border)</td><td>Set border family (Border::normal/rounded/thick/double/block/ascii/hidden/markdownBorder)</td></tr>
-<tr><td>Table</td><td>withBorderStyle(ansiStyle)</td><td>Apply ANSI SGR style to default border</td></tr>
-<tr><td>Table</td><td>withMultilineMode(bool)</td><td>Enable multi-line rows (expands to max cell height)</td></tr>
-<tr><td>Column</td><td>new(key, title, width)</td><td>Create a column</td></tr>
-<tr><td>Column</td><td>withAlignLeft(bool)</td><td>Left-align (default is right)</td></tr>
-<tr><td>Column</td><td>withColumnWidth(mode, value)</td><td>Set ColumnWidth::Fixed|Percent|Dynamic|Content|Flex</td></tr>
-<tr><td>Column</td><td>withWrapMode(mode)</td><td>Set WrapMode::None|WordWrap|Character</td></tr>
-<tr><td>Row</td><td>new(rowData)</td><td>Create a row from RowData</td></tr>
-<tr><td>RowData</td><td>from(array)</td><td>Create from key-value array</td></tr>
-<tr><td>RowData</td><td>get(key) / has(key) / all() / with(key, value)</td><td>Keyed map lookup, presence test, full map, immutable set (ruling-3b keepers — not getFoo()-form accessors)</td></tr>
-<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style; casting to string bypasses sanitization — render via Table::View()</td></tr>
-<tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content | Flex</td></tr>
-<tr><td>WrapMode</td><td>enum</td><td>None | WordWrap | Character</td></tr>
-<tr><td>FooterType</td><td>enum</td><td>Page | Rows | Both (footer renders only when pagination is active)</td></tr>
-</table>
     </div>
   </div>
 </section>
 
-
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2 id="demos">Demos.</h2>
+        <h3 id="demos">Demos</h3>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/features.gif" alt="Terminal GIF of the features example" onerror="this.parentElement.style.display='none'">
-                <h3 id="frozen-paginated"><a href="https://github.com/sugarcraft/sugar-table/tree/master/sugar-table/examples/features.php">Frozen + paginated</a></h3>
+                <h3 id="frozen-paginated"><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/features.php">Frozen + paginated</a></h3>
                 <span class="demo-caption">Wide host-telemetry table with pagination and a frozen first column.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/basic.gif" alt="Terminal GIF of the basic example" onerror="this.parentElement.style.display='none'">
-                <h3 id="basic-sort-filter"><a href="https://github.com/sugarcraft/sugar-table/tree/master/sugar-table/examples/basic.php">Basic + sort + filter</a></h3>
+                <h3 id="basic-sort-filter"><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/basic.php">Basic + sort + filter</a></h3>
                 <span class="demo-caption">Sort by score, filter <code>name</code> contains <code>a</code>, paginate.</span>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="related">Related</h2>
+        <ul>
+            <li><a href="sugar-flexbox.html">SugarFlexbox</a>: a lighter sortable table, plus the FlexBox layout and sticky Viewport.</li>
+            <li><a href="sugar-cellbuffer.html">SugarCellbuffer</a>: the cell grid and style model that the table renders into.</li>
+            <li><a href="sugar-core.html">SugarCore</a>: the TEA runtime and the input messages that drive the table in a program.</li>
+        </ul>
     </div>
 </section>
 </main>
