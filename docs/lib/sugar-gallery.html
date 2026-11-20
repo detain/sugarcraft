@@ -158,14 +158,31 @@
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#postergrid-virtualized-sparse-owner-paged">PosterGrid — virtualized, sparse, owner-paged</a></li>
-            <li class="toc-h3"><a href="#rail-horizontal-browse-strip">Rail — horizontal browse strip</a></li>
-            <li class="toc-h3"><a href="#postercard-one-tile">PosterCard — one tile</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#move-the-cursor-and-page-results-in">Move the cursor and page results in</a></li>
+            <li class="toc-h3"><a href="#build-a-browse-row-with-rail">Build a browse row with Rail</a></li>
+            <li class="toc-h3"><a href="#render-one-tile-with-postercard">Render one tile with PosterCard</a></li>
             <li class="toc-h3"><a href="#behavior">Behavior</a></li>
             <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#dependencies">Dependencies</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#the-grid-renders-an-empty-string">The grid renders an empty string</a></li>
+            <li class="toc-h3"><a href="#stale-cards-stay-on-screen-after-the-page-shrinks">Stale cards stay on screen after the page shrinks</a></li>
+            <li class="toc-h3"><a href="#clicks-on-the-grid-do-nothing">Clicks on the grid do nothing</a></li>
+            <li class="toc-h3"><a href="#a-stray-glyph-appears-in-copied-text">A stray glyph appears in copied text</a></li>
+            <li class="toc-h3"><a href="#injected-escape-codes-change-the-look-of-a-title">Injected escape codes change the look of a title</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#postergrid-demo">PosterGrid demo</a></li>
         </ul>
@@ -177,7 +194,28 @@
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-gallery</code></pre>
 
-    <h3 id="postergrid-virtualized-sparse-owner-paged" style="margin-top: 32px;">PosterGrid — virtualized, sparse, owner-paged</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
+use SugarCraft\Gallery\PosterGrid;
+
+$grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
+    -&gt;withViewport(60, 12)
+    -&gt;withReset(total: 40)
+    -&gt;withItems([
+        0 =&gt; new PosterCard(id: '1', title: 'The Matrix'),
+        1 =&gt; new PosterCard(id: '2', title: 'Heat'),
+    ]);
+
+echo $grid-&gt;render(focused: true);</code></pre>
+    <p style="margin-top: 12px;">The grid holds 40 items but only two cards. The other 38 indices draw as <code>░</code> skeleton cells, and the <code>▸</code> cursor sits on the first tile. The full program with poster art is <code>examples/poster-grid.php</code>.</p>
+
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A <code>PosterGrid</code> is a sparse array of cards keyed by absolute index. <code>withReset(total:)</code> sets how many items exist, and <code>withItems()</code> splices in the cards the owner has fetched. Any index without a card is a skeleton. The grid never asks for data itself, so the owner decides what to fetch and when, by reading <code>visibleRange()</code> after each cursor move.</p>
+    <p>A <code>PosterCard</code> holds the already-rendered poster bytes, a title and an optional progress value. A <code>Rail</code> is a horizontal strip of cards with its own cursor and scroll. Each widget is an immutable value: a method that changes state returns a new instance and leaves the receiver alone.</p>
+
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+
+    <h3 id="move-the-cursor-and-page-results-in" style="margin-top: 24px;">Move the cursor and page results in</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Gallery\PosterCard;
 
@@ -217,7 +255,7 @@ $frame = $grid->render(true, $zones);
 $clean = $zones->scan($frame);                 // strip markers, record bounds
 $zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone-&gt;id ("cell:42")</code></pre>
 
-    <h3 id="rail-horizontal-browse-strip" style="margin-top: 32px;">Rail — horizontal browse strip</h3>
+    <h3 id="build-a-browse-row-with-rail" style="margin-top: 24px;">Build a browse row with Rail</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\Rail;
 
 $rail = Rail::new('Continue Watching', $cards);
@@ -226,7 +264,7 @@ echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</
 
     <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localized via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a <em>delta</em>. To restore an arbitrary <code>(cursor, scroll)</code> pair — e.g. a remembered position — construct via <code>Rail::new(...)</code>: its third and fourth arguments are that pair. A stale pair is clamped on construction, not restored verbatim: the cursor lands inside the card list and the scroll at or below it. The rail composes card bodies raw — the heading is swept, the joined cards are not — so if zones mark the same frame, run <code>render()</code>&#39;s output through <code>AnsiGuard::stripSentinels()</code> before composing it.</p>
 
-    <h3 id="postercard-one-tile" style="margin-top: 32px;">PosterCard — one tile</h3>
+    <h3 id="render-one-tile-with-postercard" style="margin-top: 24px;">Render one tile with PosterCard</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
 
 $card = new PosterCard(id: '42', title: 'The Matrix', posterUrl: $url);
@@ -276,7 +314,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>CardSize</td><td>static new(int $width, int $height, int $hSpacing = 2, int $vSpacing = 1): self</td><td>One clamped size value (width ≥ 4, height ≥ 1, gutters ≥ 0) accepted by PosterGrid::new/withCardSize, Rail::render/perRow/frameHeight and PosterCard::render alongside the int signatures</td></tr>
@@ -338,7 +376,73 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>AnsiGuard</td><td>static stripSentinels(string $text): string</td><td>Surgically drop forged <code>U+E000/U+E001</code> zone sentinels (delegates to sugar-core <code>Sanitize::stripZoneSentinels()</code>) — anything handed to a zone-marking <code>Manager</code> must pass this sweep first; legitimate <code>U+E002</code>-and-up image markers survive untouched</td></tr>
 <tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>i18n facade over the 16-locale <code>lang/</code> family — three keys today: <code>rail.empty</code> (the Rail heading's empty-state line), <code>card.failed</code> (a PosterCard in the failed-fetch state) and <code>grid.empty</code> (the empty PosterGrid message)</td></tr>
 </table>
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>The grid has no config file. Its geometry, its item count and its viewport are set by the setters below, and the card geometry can also be passed as one <code>CardSize</code> value.</p>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>PosterGrid::new()</code> card width</td><td><code>int|CardSize</code></td><td>required</td><td>Cell width in columns. A <code>CardSize</code> is clamped to a width of at least 4, a height of at least 1, and gutters of at least 0.</td></tr>
+<tr><td><code>PosterGrid::new()</code> poster height</td><td><code>?int</code></td><td><code>null</code></td><td>Poster rows in each cell. Each cell adds two rows for the title and the progress bar.</td></tr>
+<tr><td><code>hSpacing</code> / <code>vSpacing</code></td><td><code>int</code></td><td><code>2</code> / <code>1</code></td><td>Columns between cells and lines between rows.</td></tr>
+<tr><td><code>withViewport(cols, rows)</code></td><td><code>int</code>, <code>int</code></td><td>none</td><td>The area the grid may paint. Only the rows inside it are rendered.</td></tr>
+<tr><td><code>withReset(total:)</code></td><td><code>int</code></td><td>none</td><td>Starts a fresh result set. Drops the cached cards and returns the cursor to the top.</td></tr>
+<tr><td><code>visibleRange(overscanRows:)</code></td><td><code>int</code></td><td><code>0</code></td><td>Absolute-index window on screen, widened by the given number of rows for prefetch.</td></tr>
+<tr><td><code>render(focused:)</code></td><td><code>bool</code></td><td><code>true</code></td><td>Paints the cursor only when the grid has focus. Pass <code>false</code> for an unfocused grid.</td></tr>
+<tr><td><code>Rail::new()</code> cursor and scroll</td><td><code>int</code>, <code>int</code></td><td><code>0</code>, <code>0</code></td><td>Restores a remembered position. A stale pair is clamped on construction.</td></tr>
+<tr><td><code>PosterCard::withProgress()</code></td><td><code>?float</code></td><td><code>null</code></td><td>Continue-watching bar under the title. <code>null</code> leaves the row empty.</td></tr>
+</table>
+
+    <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
+    <p>The library binds no keys. The host maps its own keys to the navigation methods: <code>left()</code>, <code>right()</code>, <code>up()</code>, <code>down()</code>, <code>pageUp()</code>, <code>pageDown()</code>, <code>home()</code>, <code>end()</code> and <code>moveTo()</code>. Each one clamps into range and scrolls the minimum needed to keep the cursor visible. For the mouse, pass a sugar-mouse <code>Manager</code> to <code>render()</code>. Each cell is then wrapped in the zone id <code>cell:&lt;index&gt;</code>, and the host resolves a click with <code>anyInBounds()</code>.</p>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p>The chrome uses a fixed glyph set. The focus marker is <code>▸</code> (U+25B8), which is width-neutral. The skeleton is <code>░</code> (U+2591). The rail bullets <code>●</code> and <code>○</code>, the bar's filled leg <code>▓</code> and the truncation mark <code>…</code> are East Asian Ambiguous. Most terminals draw them one cell wide, but a user's ambiguous-width setting can widen them. Poster art is pre-rendered ANSI that the owner supplies. Use <code>withSafePoster()</code> for bytes from a cache or a network, since it keeps SGR styling and removes every control sequence. The rail and card titles use <code>AnsiGuard::stripControls()</code>, and <code>Lang::t()</code> localizes every notice.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/poster-grid.php</code> builds a handful of cards with hand-written poster art, paints one focused frame, and prints it. It shows the skeleton and cursor glyphs.</li>
+      <li><code>examples/poster-grid-mosaic.php</code> runs the real poster pipeline without a network: image bytes go through sugar-image's <code>Mosaic</code> into <code>PosterCard::withPoster()</code> and <code>PosterGrid::withItem()</code>. It needs <code>ext-gd</code> and the dev-only sugar-image package.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/poster-grid.php
+php examples/poster-grid-mosaic.php</code></pre>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite covers the grid (<code>PosterGridTest</code>), the rail (<code>RailTest</code>, <code>RailGuardTest</code>), the card (<code>PosterCardTest</code>), the sanitizer (<code>AnsiGuardTest</code>) and the sizing value (<code>CardSizeTest</code>). <code>ExampleSmokeTest</code> runs both examples and checks the frame each one paints. <code>LocaleParityTest</code> checks that the 16 locale catalogs match, and <code>UntrustedFrameIngressTest</code> pins the untrusted-text path.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="the-grid-renders-an-empty-string" style="margin-top: 24px;">The grid renders an empty string</h3>
+    <p>An empty grid renders nothing, which is deliberate. Call <code>withReset(total:)</code> with the real item count first. When the library is genuinely empty, paint the sentence from <code>emptyMessage()</code> yourself, since the grid does not paint one.</p>
+
+    <h3 id="stale-cards-stay-on-screen-after-the-page-shrinks" style="margin-top: 24px;">Stale cards stay on screen after the page shrinks</h3>
+    <p>The bottom page can be shorter than its window, and the frame then has fewer rows. A line-diff painter must clear the leftover tail of its reserved box. Otherwise ghost cards remain exactly where the user last scrolled.</p>
+
+    <h3 id="clicks-on-the-grid-do-nothing" style="margin-top: 24px;">Clicks on the grid do nothing</h3>
+    <p>Pass a sugar-mouse <code>Manager</code> to <code>render()</code>, and scan the frame with <code>scan()</code> before painting it. Cells are only marked when a manager is passed. Resolve the click with <code>anyInBounds()</code>, and read the item index from the zone id <code>cell:&lt;index&gt;</code>.</p>
+
+    <h3 id="a-stray-glyph-appears-in-copied-text" style="margin-top: 24px;">A stray glyph appears in copied text</h3>
+    <p>A card with <code>withImage()</code> draws one private-use marker from the U+E002 range where its image goes. The marker survives text sweeps, so text extracted from the frame can show it. Remove the whole block with <code>Sanitize::stripPrivateUse()</code>. Better still, extract text from the model: the card's <code>title</code> and <code>positionText()</code> carry no frame artifacts.</p>
+
+    <h3 id="injected-escape-codes-change-the-look-of-a-title" style="margin-top: 24px;">Injected escape codes change the look of a title</h3>
+    <p>Titles and poster bytes from an untrusted source can carry SGR styling or control sequences. Use <code>withSafePoster()</code> for poster bytes, and <code>AnsiGuard::stripControls()</code> for text that must carry no styling at all. A poster that has already been trusted can go through <code>withPoster()</code>.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>This is an original SugarCraft component, with no charmbracelet upstream. It takes its shape from terminal list and viewport widgets, and from the need-range pattern that web media grids use for lazy loading.</p>
+<table class="api-table">
+<tr><th scope="col">Web or terminal idiom</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
+<tr><td>need-range event (web media grid)</td><td><code>visibleRange()</code> with <code>needsFetch()</code>, then <code>withItems()</code></td><td>The owner fetches the covering page and splices it in at its absolute index.</td></tr>
+<tr><td>Loading placeholders</td><td>Skeleton cells, <code>withFailed()</code></td><td>A failed cell falls back to the skeleton, so a retry policy can re-queue it.</td></tr>
+<tr><td>Clickable tiles</td><td>sugar-mouse zones <code>cell:&lt;index&gt;</code></td><td>Opt-in. Nothing is marked unless a manager is passed.</td></tr>
+</table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>The grid, the rail and the card are immutable values. Only the visible rows are rendered, so drawing cost depends on the viewport and not on the item count. Rendered cells are memoized in a process-wide cache. When the cache reaches its cap, the oldest half is dropped, and a dropped key simply recomputes to identical bytes. Poster bytes come in already rendered, and the library never decodes an image itself.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0, so consume <code>dev-master</code>. Behavior changes that alter a rendered frame are pinned by the test suite.</p>
     </div>
+
   </div>
 </section>
 
