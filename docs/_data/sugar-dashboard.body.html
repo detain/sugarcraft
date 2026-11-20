@@ -131,7 +131,7 @@ $keys = KeyMap::new($content)
     <p><code>Keys\KeyRegistry</code> is a separate, process-wide table. It stores each binding with a description and a category, so status bars and help screens can list them. <code>register()</code>, <code>get()</code>, <code>byCategory()</code>, <code>categories()</code> and <code>match()</code> read and write that table, and <code>reset()</code> empties it.</p>
 
     <h3 style="margin-top: 32px;">Theming</h3>
-    <p><code>Foundation\Theme</code> has five presets: <code>dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>oneDark()</code> and <code>githubDark()</code>. Pass one to <code>StackedGrid::withTheme()</code>, which applies it to every item in the grid.</p>
+    <p><code>Foundation\Theme</code> has five presets: <code>dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>oneDark()</code> and <code>githubDark()</code>. Pass one to <code>StackedGrid::withTheme()</code>, which applies it to every theme-aware item in the grid. Items that do not implement <code>Foundation\Drawable</code> are passed through unchanged and keep their own theme.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Foundation\Theme;
 
 $grid = $grid-&gt;withTheme(Theme::dracula());</code></pre>
