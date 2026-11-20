@@ -70,8 +70,8 @@ use function React\Promise\resolve;
  * Consumers: sugar-dashboard's BoundedCommand runs every child through run() and
  * launch() and maps the ChildResult onto its outcome. candy-code's CommandBackend
  * runs its child through ChildRun as well, from both its blocking and its launch
- * entry points. candy-code's StreamingCommandBackend still spawns with its own
- * proc_open() and is not yet on this class.
+ * entry points, and its StreamingCommandBackend runs its child through launch() and
+ * run() as well, with the idle budget, the exit grace and the cancel handle.
  */
 final class ChildRun
 {
