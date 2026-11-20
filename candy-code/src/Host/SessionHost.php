@@ -174,6 +174,13 @@ final class SessionHost
     private int $consecutiveRefills = 0;
 
     /**
+     * The transcript generation (P4-12 CC-1): a `/clear` moves it on, so a
+     * shell-send answer that settles after the clear drops instead of landing
+     * in the emptied transcript. The TUI's Chat keeps the same counter.
+     */
+    private int $transcriptEpoch = 0;
+
+    /**
      * When the last prompt was accepted (ISS-064): the anchor for the idle
      * compaction advisory in {@see submit()}. Null until this process's first
      * prompt, so a cold session never advises.

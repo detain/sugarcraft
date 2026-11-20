@@ -6,10 +6,13 @@ namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -17,6 +20,7 @@ use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
+use SugarCraft\Code\Host\Commands\ShellsCommand;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\TurnTicket;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -137,6 +141,48 @@ final class SessionHostCommandsTest extends TestCase
 
         self::assertSame(TurnTicket::HANDLED, $host->submit('/clear')->admitted);
         self::assertSame([], $host->history());
+    }
+
+    public function testAShellSendAnsweredAfterAClearLeavesNoRowHeadless(): void
+    {
+        $registry = BackgroundShellRegistry::forSession('headless-clear', $this->dir . '/shells');
+        [$id, $gate] = $this->heldShell($registry);
+        try {
+            $host = $this->host(shells: $registry);
+            self::assertSame(TurnTicket::HANDLED, $host->submit('/shells send ' . $id . ' typed<Enter>')->admitted);
+            self::assertSame(TurnTicket::HANDLED, $host->submit('/clear')->admitted);
+            self::assertSame([], $host->history());
+
+            // The send waits on its relay; the answer settles after the clear.
+            $gate->resolve(true);
+            $this->runLoopFor(3.0);
+
+            self::assertSame([], $host->history(), 'the settled answer must not land in the transcript the clear emptied');
+        } finally {
+            $registry->stop($id);
+        }
+    }
+
+    public function testAShellSendAnsweredInTheSameTranscriptLandsHeadless(): void
+    {
+        $registry = BackgroundShellRegistry::forSession('headless-same', $this->dir . '/shells');
+        [$id, $gate] = $this->heldShell($registry);
+        try {
+            $host = $this->host(shells: $registry);
+            self::assertSame(TurnTicket::HANDLED, $host->submit('/shells send ' . $id . ' typed<Enter>')->admitted);
+
+            $gate->resolve(true);
+            $this->runLoopFor(3.0);
+
+            $answers = array_values(array_filter(
+                $host->history(),
+                static fn (Message $m): bool => $m->role === Role::Assistant && $m->uiOnly,
+            ));
+            self::assertCount(1, $answers, 'with no clear in between, the settled answer lands in its own transcript');
+            self::assertStringContainsString($id, $answers[0]->content);
+        } finally {
+            $registry->stop($id);
+        }
     }
 
     public function testRunCommandIsTheWireDoorAndNeverSendsProse(): void
@@ -628,6 +674,33 @@ final class SessionHostCommandsTest extends TestCase
     }
 
     /**
+     * A running interactive shell whose send queue $gate holds, so a
+     * `/shells send` to it waits on the loop the way one behind a relay does.
+     *
+     * @return array{0: string, 1: Deferred}
+     */
+    private function heldShell(BackgroundShellRegistry $registry): array
+    {
+        $start = $registry->startInteractive('cat', 'headless send', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $gate = new Deferred();
+        ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+
+        return [$id, $gate];
+    }
+
+    /** Run the shared loop for $seconds, then stop it; the timer bounds the run. */
+    private function runLoopFor(float $seconds): void
+    {
+        $loop = Loop::get();
+        $loop->addTimer($seconds, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+    }
+
+    /**
      * @param list<Message> $history
      */
     private function host(
@@ -637,16 +710,22 @@ final class SessionHostCommandsTest extends TestCase
         ?\SugarCraft\Code\Backend $backend = null,
         array $commands = [],
         ?\SugarCraft\Code\Agents\AgentManager $agentManager = null,
+        ?BackgroundShellRegistry $shells = null,
     ): SessionHost {
+        $workspace = WorkspaceContext::new(
+            root: $root,
+            sessionStore: $this->store,
+            permissionGate: $gate,
+            backend: $backend ?? new EchoBackend(),
+            agentManager: $agentManager,
+        );
+        if ($shells !== null) {
+            $workspace = $workspace->withService(BackgroundShellRegistry::class, $shells);
+        }
+
         return SessionHost::new(
             's',
-            WorkspaceContext::new(
-                root: $root,
-                sessionStore: $this->store,
-                permissionGate: $gate,
-                backend: $backend ?? new EchoBackend(),
-                agentManager: $agentManager,
-            ),
+            $workspace,
             history: $history,
             customCommands: $commands,
         );
