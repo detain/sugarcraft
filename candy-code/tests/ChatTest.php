@@ -4246,7 +4246,9 @@ final class ChatTest extends TestCase
         $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
-        SupervisorPump::until($supervisor, static fn (): bool => $resolved !== null);
+        SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+            return $resolved !== null;
+        });
 
         return $resolved;
     }
@@ -5483,10 +5485,10 @@ final class ChatTest extends TestCase
         $supervisor = new BackgroundSupervisor();
         $chat = new Chat(backgroundSupervisor: $supervisor);
 
-        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat, $supervisor): array {
             [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
 
-            return [$next, $this->resolveAsyncCmd($cmd)];
+            return [$next, $this->resolveAsyncCmdPumping($cmd, $supervisor)];
         });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);

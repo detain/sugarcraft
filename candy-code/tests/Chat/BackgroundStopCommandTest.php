@@ -96,7 +96,7 @@ final class BackgroundStopCommandTest extends TestCase
         $chat = new Chat(backgroundSupervisor: new BackgroundSupervisor());
 
         [, $cmd] = $this->submit(new BackgroundSupervisor(), '/bg stop sess_20260101000000_deadbeef');
-        $stopped = $this->resolve($cmd, $supervisor);
+        $stopped = $this->resolve($cmd);
 
         $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $stopped);
         $this->assertSame(BackgroundStopOutcome::UnknownSession, $stopped->outcome);
@@ -174,7 +174,9 @@ final class BackgroundStopCommandTest extends TestCase
             $resolved = $msg;
         });
         if ($supervisor !== null) {
-            SupervisorPump::until($supervisor, static fn (): bool => $resolved !== null);
+            SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+                return $resolved !== null;
+            });
         }
 
         return $resolved;

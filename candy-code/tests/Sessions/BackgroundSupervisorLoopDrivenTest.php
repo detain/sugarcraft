@@ -99,7 +99,9 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $session = $settled;
         });
 
-        SupervisorPump::until($supervisor, static fn (): bool => $session !== null);
+        SupervisorPump::until($supervisor, static function () use (&$session): bool {
+            return $session !== null;
+        });
 
         $this->assertInstanceOf(BackgroundSession::class, $session, 'tick() must advance the pending accept');
         $ipc = $this->ipcOf($supervisor, $session->id);

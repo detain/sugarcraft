@@ -250,7 +250,9 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
         )->then(static function (\SugarCraft\Code\Background\BackgroundSession $settled) use (&$session): void {
             $session = $settled;
         });
-        SupervisorPump::until($first, static fn (): bool => $session !== null);
+        SupervisorPump::until($first, static function () use (&$session): bool {
+            return $session !== null;
+        });
         $this->assertNotNull($session, 'the loop never accepted the daemon');
 
         $ipc = $this->ipcOf($first, $session->id);

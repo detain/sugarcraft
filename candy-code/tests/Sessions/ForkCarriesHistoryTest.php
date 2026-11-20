@@ -345,7 +345,9 @@ final class ForkCarriesHistoryTest extends TestCase
         $cmd()->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
-        SupervisorPump::until($supervisor, static fn (): bool => $resolved !== null);
+        SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+            return $resolved !== null;
+        });
 
         return $resolved;
     }
