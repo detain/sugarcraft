@@ -12,8 +12,10 @@ declare(strict_types=1);
  * text, not from Reflection, so the generator never autoloads or runs a lib's
  * code and its output is a pure function of the committed tree. A type or
  * method whose PHPDoc carries `@internal` is not public API and is left out.
- * The public methods a class inherits from a trait it `use`s are listed under
- * the class, as PHP exposes them.
+ * The public methods a type inherits are listed under it, as PHP exposes them:
+ * those of each trait it `use`s, and those of its parent class or extended
+ * interfaces when that parent is declared under the same src tree. A parent
+ * outside the tree has no source here, so its methods are not listed.
  *
  * WHAT IT WRITES. Namespace headings, then one entry per type with its first
  * PHPDoc paragraph and a method table (signature and summary). The output is
@@ -88,17 +90,23 @@ final class ApiReference
 
     /**
      * Top-10 coverage of a fragment: the ten largest public types by declaration
-     * span (ties broken by name), and how many of them the HTML gives a heading.
+     * span (ties broken by name), and how many of them are covered. A type is
+     * covered when the HTML gives it a heading and its source documents it.
      *
      * The heading's anchor id is the measure, not the name. Most public types are
      * already named in a lib's prose, so a name match would read 100 percent
      * whether or not the fragment carries the type at all.
      *
+     * The heading alone is not enough. render() writes a heading for every public
+     * type, documented or not, so a heading-only count reads 100 percent over an
+     * undocumented API. The documented flag comes from the source for the same
+     * reason the ranking does.
+     *
      * The ranking comes from declaredPublic(), not from the types the fragment is
      * rendered from. A set measured against its own render can never fail: a type
      * the page dropped would also have dropped out of the ranking.
      *
-     * @param list<array{fqn: string, size: int}> $ranked declaredPublic()'s output
+     * @param list<array{fqn: string, size: int, documented: bool}> $ranked declaredPublic()'s output
      * @return array{top: list<string>, covered: int, percent: float}
      */
     public static function coverage(array $ranked, string $html): array
@@ -111,7 +119,7 @@ final class ApiReference
         $top = array_slice($ranked, 0, 10);
         $covered = 0;
         foreach ($top as $type) {
-            if (str_contains($html, 'id="' . self::anchor($type['fqn']) . '"')) {
+            if ($type['documented'] && str_contains($html, 'id="' . self::anchor($type['fqn']) . '"')) {
                 $covered++;
             }
         }
@@ -130,24 +138,63 @@ final class ApiReference
      * scanTree() fails the run on any disagreement, and the page has to carry its
      * heading.
      *
-     * @return list<array{fqn: string, size: int}>
+     * @return list<array{fqn: string, size: int, documented: bool}>
      */
     public static function declaredPublic(string $root, string $slug): array
     {
         $tree = self::scanTree($root, $slug);
-        $sizes = [];
-        foreach ($tree['parsed'] as $type) {
-            $sizes[$type['fqn']] = $type['size'];
-        }
+        $index = self::indexOf($tree['parsed']);
 
         $public = [];
         foreach ($tree['declared'] as $decl) {
-            if (!$decl['internal']) {
-                $public[] = ['fqn' => $decl['fqn'], 'size' => $sizes[$decl['fqn']]];
+            if ($decl['internal']) {
+                continue;
             }
+            $type = $index[$decl['fqn']];
+            $public[] = [
+                'fqn' => $decl['fqn'],
+                'size' => $type['size'],
+                'documented' => self::isDocumented($type['summary'], self::withInheritedMethods($index, $decl['fqn'], $slug)),
+            ];
         }
 
         return $public;
+    }
+
+    /**
+     * A type is documented when its PHPDoc has a summary or its method table has
+     * one documented row. A type with neither renders as a bare heading.
+     *
+     * @param list<array{name: string, signature: string, summary: string}> $methods
+     */
+    private static function isDocumented(string $summary, array $methods): bool
+    {
+        if ($summary !== '') {
+            return true;
+        }
+        foreach ($methods as $method) {
+            if ($method['summary'] !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Every parsed type keyed by FQN, so a lookup by a declared name cannot miss.
+     *
+     * @param list<array<string, mixed>> $parsed
+     * @return array<string, array<string, mixed>>
+     */
+    private static function indexOf(array $parsed): array
+    {
+        $index = [];
+        foreach ($parsed as $type) {
+            $index[$type['fqn']] = $type;
+        }
+
+        return $index;
     }
 
     /**
@@ -209,11 +256,7 @@ final class ApiReference
     public static function collect(string $root, string $slug): array
     {
         $parsed = self::scanTree($root, $slug)['parsed'];
-
-        $index = [];
-        foreach ($parsed as $type) {
-            $index[$type['fqn']] = $type;
-        }
+        $index = self::indexOf($parsed);
 
         $types = [];
         foreach ($parsed as $type) {
@@ -229,7 +272,7 @@ final class ApiReference
                 'summary' => $type['summary'],
                 'cases' => $type['cases'],
                 'backed' => $type['backed'],
-                'methods' => self::withTraitMethods($index, $type['fqn'], $slug),
+                'methods' => self::withInheritedMethods($index, $type['fqn'], $slug),
             ];
         }
         usort($types, static fn (array $a, array $b): int => strcmp($a['fqn'], $b['fqn']));
@@ -329,7 +372,7 @@ final class ApiReference
      * braced namespaces are rejected loudly rather than skipped, since a silently
      * dropped type would pass the coverage check for the wrong reason.
      *
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}>
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, parents: list<string>, methods: list<array{name: string, signature: string, summary: string}>}>
      */
     private static function parse(string $source): array
     {
@@ -469,6 +512,7 @@ final class ApiReference
                         'methods' => [],
                         'cases' => [],
                         'traits' => [],
+                        'parents' => self::parentsOf($tokens, $name, $imports, $namespace),
                     ];
                     $i = $name;
                     $doc = null;
@@ -596,26 +640,32 @@ final class ApiReference
     }
 
     /**
-     * The public methods of one type: its own, then those of each trait it uses.
-     * A method the type declares itself wins over a trait's method of the same
-     * name, as PHP resolves it.
+     * The public methods of one type, as PHP exposes them: its own, then those
+     * of each trait it uses, then those of its parent class or extended
+     * interfaces. A method earlier in that order wins over a later one of the
+     * same name, which is how PHP resolves an override. A parent declared outside
+     * src/ has no source in this tree, so only the members of in-tree parents are
+     * known and listed.
      *
      * @param array<string, array<string, mixed>> $index every parsed type, keyed by FQN
-     * @param list<string> $trail the types already on the path, a guard against a trait cycle
+     * @param list<string> $trail the types already on the path, a guard against an inheritance cycle
      * @return list<array{name: string, signature: string, summary: string}>
      */
-    private static function withTraitMethods(array $index, string $fqn, string $slug, array $trail = []): array
+    private static function withInheritedMethods(array $index, string $fqn, string $slug, array $trail = []): array
     {
-        $methods = $index[$fqn]['methods'];
-        $names = array_column($methods, 'name');
         foreach ($index[$fqn]['traits'] as $traitFqn) {
             if (!isset($index[$traitFqn]) || $index[$traitFqn]['kind'] !== 'trait') {
                 throw new \RuntimeException("gen-api-reference: $fqn uses $traitFqn, which is not a trait declared under $slug/src");
             }
-            if (in_array($traitFqn, $trail, true)) {
+        }
+
+        $methods = $index[$fqn]['methods'];
+        $names = array_column($methods, 'name');
+        foreach ([...$index[$fqn]['traits'], ...$index[$fqn]['parents']] as $sourceFqn) {
+            if (!isset($index[$sourceFqn]) || in_array($sourceFqn, $trail, true)) {
                 continue;
             }
-            foreach (self::withTraitMethods($index, $traitFqn, $slug, [...$trail, $fqn]) as $method) {
+            foreach (self::withInheritedMethods($index, $sourceFqn, $slug, [...$trail, $fqn]) as $method) {
                 if (!in_array($method['name'], $names, true)) {
                     $methods[] = $method;
                     $names[] = $method['name'];
@@ -715,7 +765,7 @@ final class ApiReference
 
     /**
      * @param array<string, mixed> $type
-     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}
+     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, parents: list<string>, methods: list<array{name: string, signature: string, summary: string}>}
      */
     private static function finish(array $type, int $size): array
     {
@@ -739,8 +789,40 @@ final class ApiReference
             'backed' => $type['backed'],
             'internal' => self::isInternal($type['doc']),
             'traits' => $type['traits'],
+            'parents' => $type['parents'],
             'methods' => $type['methods'],
         ];
+    }
+
+    /**
+     * The names a type header extends: one parent for a class, a list for an
+     * interface. Each name resolves while the file's imports are known, as a
+     * trait name does, so a parent imported under an alias still reaches its
+     * declaration.
+     *
+     * @param list<mixed> $tokens
+     * @param array<string, string> $imports
+     * @return list<string>
+     */
+    private static function parentsOf(array $tokens, int $from, array $imports, string $namespace): array
+    {
+        $parents = [];
+        $extending = false;
+        for ($k = $from + 1, $n = count($tokens); $k < $n && $tokens[$k] !== '{'; $k++) {
+            $t = $tokens[$k];
+            if (!is_array($t)) {
+                continue;
+            }
+            if ($t[0] === T_EXTENDS) {
+                $extending = true;
+            } elseif ($t[0] === T_IMPLEMENTS) {
+                $extending = false;
+            } elseif ($extending && in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
+                $parents[] = self::resolveName($t[1], $imports, $namespace);
+            }
+        }
+
+        return $parents;
     }
 
     private static function isInternal(?string $doc): bool

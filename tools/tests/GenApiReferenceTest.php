@@ -525,6 +525,133 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('<tr><td><code>run(int $x): ?string</code></td><td>Runs the contract.</td></tr>', $html);
     }
 
+    public function testAParentsPublicMethodsAreListedOnTheChild(): void
+    {
+        // The child inherits the parent's public method and not its private one. An override
+        // appears once per table: the parent's table keeps its own text, the child shows its own.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Base.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Base. */
+                abstract class Base
+                {
+                    /** Names the base. */
+                    public function name(): string
+                    {
+                        return 'base';
+                    }
+
+                    /** Overridden below. */
+                    public function label(): string
+                    {
+                        return 'base';
+                    }
+
+                    private function secret(): void
+                    {
+                    }
+                }
+
+                PHP,
+            'sugar-core/src/Child.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Child. */
+                final class Child extends Base
+                {
+                    /** Own label. */
+                    public function label(): string
+                    {
+                        return 'child';
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(2, \substr_count($html, 'Names the base.'), 'the parent row appears under Base and under Child');
+        self::assertSame(1, \substr_count($html, 'Overridden below.'), 'the overridden row appears once, under Base');
+        self::assertSame(1, \substr_count($html, 'Own label.'), 'the child lists its own override');
+        self::assertStringNotContainsString('secret', $html);
+    }
+
+    public function testAnInterfaceListsTheMethodsOfTheInterfacesItExtends(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Readable.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                interface Readable
+                {
+                    /** Reads one line. */
+                    public function read(): string;
+                }
+
+                PHP,
+            'sugar-core/src/Stream.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                interface Stream extends Readable
+                {
+                    /** Writes one line. */
+                    public function write(string $line): void;
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(2, \substr_count($html, 'Reads one line.'), 'read() is listed under Readable and under Stream');
+        self::assertStringContainsString('<tr><td><code>read(): string</code></td><td>Reads one line.</td></tr>', $html);
+    }
+
+    public function testAParentOutsideTheTreeDoesNotFailTheRun(): void
+    {
+        // A built-in parent has no source under src/, so its members are not listed. The child
+        // still renders from its own declarations, and the run does not fail on the parent.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Oops.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Wraps a failure. */
+                final class Oops extends \RuntimeException
+                {
+                    /** Own method. */
+                    public function own(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('<tr><td><code>own(): void</code></td><td>Own method.</td></tr>', $html);
+        self::assertStringNotContainsString('getMessage', $html);
+    }
+
     public function testFixtureFragmentGoesStaleWhenTheSourceChanges(): void
     {
         $files = self::sugarCoreFixture();
@@ -540,6 +667,66 @@ final class GenApiReferenceTest extends TestCase
 
         self::assertNotSame($committed, $regenerated, 'a new public method must change the fragment, or the drift guard cannot see it');
         self::assertStringContainsString('extra(): int', $regenerated);
+    }
+
+    public function testAnUndocumentedTopTypeDoesNotCountAsCovered(): void
+    {
+        // render() writes a heading for every public type, so a heading-only count would read 100
+        // percent over an undocumented API. Bare has a heading and one undocumented method row, so
+        // it is not covered, and three covered types out of four falls below the target.
+        $root = $this->fixtureRoot(self::sugarCoreFixture() + [
+            'sugar-core/src/Bare.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                final class Bare
+                {
+                    public function go(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+        self::assertStringContainsString('<h4 id="api-demo-fixture-bare">', $html, 'the heading is rendered, so only the documentation check can fail the type');
+
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'sugar-core'), $html);
+
+        self::assertCount(4, $result['top']);
+        self::assertSame(3, $result['covered']);
+        self::assertSame(75.0, $result['percent']);
+        self::assertLessThan(\ApiReference::TOP_COVERAGE_TARGET, $result['percent']);
+    }
+
+    public function testATypeDocumentedOnlyThroughAMethodRowIsCovered(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Terse.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                final class Terse
+                {
+                    /** Does the work. */
+                    public function work(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'sugar-core'), $html);
+
+        self::assertSame(1, $result['covered'], 'a documented method row is enough, as the table shows it');
+        self::assertSame(100.0, $result['percent']);
     }
 
     public function testCoverageCountsTheTenLargestTypes(): void

@@ -629,6 +629,10 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <tbody>
 <tr><td><code>onMount(): ?\Closure</code></td><td>Fired once when the component is first mounted into a tree. Return a Cmd to run immediately (e.g. to start a subscription), or null for no-op.</td></tr>
 <tr><td><code>onUnmount(): ?\Closure</code></td><td>Fired once when the component is removed from a tree. Return a Cmd to run immediately (e.g. to cancel a subscription), or null for no-op.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>Return an initial Cmd to run on startup, or null.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td>Handle a Msg, returning <code>[nextModel, optionalCmd]</code>.</td></tr>
+<tr><td><code>view(): string|View</code></td><td>Render the model. Return a plain <code>string</code> for the common case, or a View when you need per-frame control over cursor shape / position, window title, etc. — matches Bubble Tea v2&#039;s <code>tea.View</code> struct.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td>Declare the subscriptions this model wants.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-componentaddressedmsg"><code>ComponentAddressedMsg</code> <small>interface</small></h4>
@@ -714,6 +718,12 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <p>PHP also provides <code>cases()</code>.</p>
 <h4 id="api-sugarcraft-core-lang"><code>Lang</code> <small>final class</small></h4>
 <p>Per-library translation facade for sugar-core.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static t(string $key, array $params = []): string</code></td><td>Translate a message key within this namespace.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-modestate"><code>ModeState</code> <small>enum</small></h4>
 <p>Reply states from a DECRPM (Mode Report) reply, returned in \SugarCraft\Core\Msg\ModeReportMsg::$state. Mirrors the values defined in xterm&#039;s ctlseqs reference and ECMA-48.</p>
 <p>Cases: <code>NotRecognized</code> · <code>Set</code> · <code>Reset</code> · <code>PermanentlySet</code> · <code>PermanentlyReset</code></p>
@@ -1297,10 +1307,43 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 </table>
 <h4 id="api-sugarcraft-core-msg-keypressmsg"><code>KeyPressMsg</code> <small>final class</small></h4>
 <p>Key-press event under the Kitty progressive-keyboard protocol (event type 1 — the default when a <code>CSI ... u</code> sequence carries no event field). Legacy CSI/SS3/printable keys do NOT arrive as this class: the parser hands them over as plain KeyMsg. That is the verified home for the legacy path (finding sugar-core-041; the only construction site is InputReader&#039;s kitty decoder) — the old docblock claimed emission for every key and misdirected handlers into instanceof branches that never matched.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly KeyType $type, public readonly string $rune = &#039;&#039;, public readonly bool $alt = false, public readonly bool $ctrl = false, public readonly bool $shift = false)</code></td><td></td></tr>
+<tr><td><code>string(): string</code></td><td>Human-readable label, e.g. &quot;ctrl+c&quot;, &quot;shift+up&quot;, &quot;alt+a&quot;, &quot;a&quot;.</td></tr>
+<tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
+<tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-keyreleasemsg"><code>KeyReleaseMsg</code> <small>final class</small></h4>
 <p>Key-release event. Only emitted under the Kitty progressive- keyboard protocol&#039;s <code>REPORT_EVENT_TYPES</code> flag; legacy mode delivers nothing on key release.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly KeyType $type, public readonly string $rune = &#039;&#039;, public readonly bool $alt = false, public readonly bool $ctrl = false, public readonly bool $shift = false)</code></td><td></td></tr>
+<tr><td><code>string(): string</code></td><td>Human-readable label, e.g. &quot;ctrl+c&quot;, &quot;shift+up&quot;, &quot;alt+a&quot;, &quot;a&quot;.</td></tr>
+<tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
+<tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-keyrepeatmsg"><code>KeyRepeatMsg</code> <small>final class</small></h4>
 <p>Auto-repeat event — emitted while a key is held under the Kitty progressive-keyboard protocol&#039;s <code>REPORT_EVENT_TYPES</code> flag (Kitty event type 2). Mirrors charmbracelet/bubbletea.Key.IsRepeat.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly KeyType $type, public readonly string $rune = &#039;&#039;, public readonly bool $alt = false, public readonly bool $ctrl = false, public readonly bool $shift = false)</code></td><td></td></tr>
+<tr><td><code>string(): string</code></td><td>Human-readable label, e.g. &quot;ctrl+c&quot;, &quot;shift+up&quot;, &quot;alt+a&quot;, &quot;a&quot;.</td></tr>
+<tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
+<tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-keyboardenhancementsmsg"><code>KeyboardEnhancementsMsg</code> <small>final class</small></h4>
 <p>Reply to a \SugarCraft\Core\Cmd::requestKittyKeyboard(). The terminal answers <code>CSI ? &lt;flags&gt; u</code> — <code>$flags</code> is a bitfield against the Kitty progressive-keyboard flag constants below.</p>
 <table class="api-table">
@@ -1329,8 +1372,24 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 </table>
 <h4 id="api-sugarcraft-core-msg-mouseclickmsg"><code>MouseClickMsg</code> <small>final class</small></h4>
 <p>Mouse-button press. Adds no new fields over MouseMsg; the separate type lets handlers pattern-match without checking \SugarCraft\Core\MouseAction.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-mousemotionmsg"><code>MouseMotionMsg</code> <small>final class</small></h4>
 <p>Mouse-motion event. Emitted while the mouse moves with a button held (cell-motion mode) or always (all-motion mode). Held button is in MouseMsg::$button.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-mousemsg"><code>MouseMsg</code> <small>class</small></h4>
 <p>A single mouse event (press, release, motion, or wheel). Coordinates are 1-based, exactly as reported by the terminal: the only mouse decoder is the SGR (CSI ?1006) one, and it passes the wire values through unchanged (<code>ESC[&lt;0;10;20M</code> arrives as x=10, y=20), so there is no off-by-one translation layer between the terminal and these fields.</p>
 <table class="api-table">
@@ -1343,8 +1402,24 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 </table>
 <h4 id="api-sugarcraft-core-msg-mousereleasemsg"><code>MouseReleaseMsg</code> <small>final class</small></h4>
 <p>Mouse-button release. MouseClickMsg&#039;s counterpart.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-mousewheelmsg"><code>MouseWheelMsg</code> <small>final class</small></h4>
 <p>Mouse-wheel scroll event. The direction is in MouseMsg::$button (\SugarCraft\Core\MouseButton::WheelUp or \SugarCraft\Core\MouseButton::WheelDown).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-core-msg-pasteendmsg"><code>PasteEndMsg</code> <small>final class</small></h4>
 <p>Marks the end of a bracketed-paste region. Emitted *just before* the PasteMsg that carries the collected content (the remainder, for a paste big enough to have been surfaced in chunks), so models that flipped state on PasteStartMsg can settle back before they see the data. Also emitted when a paste whose end marker was lost is closed after \SugarCraft\Core\InputReader::PASTE_IDLE_TIMEOUT seconds of input silence.</p>
 <h4 id="api-sugarcraft-core-msg-pastemsg"><code>PasteMsg</code> <small>final class</small></h4>
