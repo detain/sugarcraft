@@ -66,8 +66,9 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * Shell output is the least predictable of any tool's — `find /`, a `cat`
      * of a build artefact or a verbose test run all produce megabytes with no
      * warning — so the bound applies during capture as well as after it (see
-     * {@see CapturesProcessOutput::runCaptured()}). Zero or negative disables
-     * the cap for a caller that has arranged its own containment.
+     * {@see CapturesProcessOutput::runCaptured()}). Zero or negative no longer
+     * means unbounded: capture falls back to CapturesProcessOutput::DEFAULT_RETAINED_BYTES
+     * per stream, and only the post-capture trim is skipped.
      *
      * $includeGitInstructions, $commitAttribution and $prAttribution are the
      * `includeGitInstructions` and `attribution` layered settings (step 0.3),

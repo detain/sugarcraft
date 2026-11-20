@@ -84,6 +84,16 @@ use SugarCraft\Code\Support\WindowsTaskKill;
  * pty is a terminal, not a typist, and no askpass surface exists here.
  * InteractivePromptContainmentTest pinned this parameter's ABSENCE until
  * the mechanism landed; the flip of that pin is the chosen change.
+ *
+ * ## OUTPUT CAP — the default when a caller names none
+ *
+ * Every captured stream is RETAINED up to {@see DEFAULT_RETAINED_BYTES} (8 MiB)
+ * when the caller passes no bound, or a zero or negative one. Bytes past that are
+ * read, counted as dropped per stream, and discarded; they are never concatenated.
+ * The old no-bound path appended every chunk unboundedly, so a runaway child could
+ * grow the agent's memory without limit. The cap is the same figure
+ * TestRunner::MAX_CAPTURE_BYTES uses for its own capture, so the two read alike.
+ * A caller that needs a different ceiling passes its own positive $maxBytes.
  */
 trait CapturesProcessOutput
 {
@@ -98,13 +108,20 @@ trait CapturesProcessOutput
         '... [stderr suppressed: the command succeeded and also wrote to stderr; re-run with 2>&1 to see it]';
 
     /**
+     * Bytes RETAINED per captured stream when the caller names no bound (null,
+     * zero or negative). Output past it is counted as dropped, never kept.
+     */
+    public const DEFAULT_RETAINED_BYTES = 8 * 1024 * 1024;
+
+    /**
      * $maxBytes bounds what is RETAINED per stream, not what is read: the
      * pipes are still drained to completion so the child never blocks on a
      * full buffer, but bytes past the bound are counted and discarded instead
      * of accumulated. Without it a `cat` of a multi-gigabyte file is an
      * out-of-memory kill of the agent itself, long before {@see
-     * TruncatesOutput} would get a chance to clip the finished string. Null
-     * keeps the capture unbounded for callers that want the whole thing.
+     * TruncatesOutput} would get a chance to clip the finished string. Null,
+     * or zero or less, takes {@see DEFAULT_RETAINED_BYTES}: there is no
+     * unbounded capture, so a caller that wants more than the default passes it.
      *
      * The discard counts are reported PER STREAM, not only as a total. Which
      * stream lost bytes is not bookkeeping trivia: {@see
@@ -878,8 +895,10 @@ trait CapturesProcessOutput
      */
     private static function appendBounded(string $buffer, string $chunk, ?int $maxBytes, int &$discarded): string
     {
+        // No unbounded append: a null or non-positive bound takes the default cap,
+        // so every captured stream stays bounded whatever the caller passed.
         if ($maxBytes === null || $maxBytes <= 0) {
-            return $buffer . $chunk;
+            $maxBytes = self::DEFAULT_RETAINED_BYTES;
         }
 
         $room = $maxBytes - strlen($buffer);
