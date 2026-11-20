@@ -471,7 +471,8 @@ use SugarCraft\Log\PanicFormatter;
 // Install a panic handler that catches uncaught exceptions and fatal errors,
 // restores the terminal from altscreen mode, and prints a panic report —
 // styled only when STDERR is a color-capable terminal at install time (or
-// CLICOLOR_FORCE=1), plain ANSI-free text otherwise.
+// CLICOLOR_FORCE set to any non-empty value other than 0), plain ANSI-free
+// text otherwise.
 Log::installPanicHandler();
 
 // $showLocals/$redactPaths configure only the formatter chosen by default.
