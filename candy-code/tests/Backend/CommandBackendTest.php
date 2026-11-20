@@ -325,8 +325,9 @@ final class CommandBackendTest extends TestCase
      * That spawn-time read is a race: when it happens to succeed, this test passes
      * even on the unfixed kill path, so it is not a deterministic guard for the
      * missed-group case. The assertion is on the sleep itself, so an orphan is caught
-     * when the read misses, even when the promise rejects on time. The deterministic
-     * fix and its regression belong in sugar-async, which this branch does not change.
+     * when the read misses, even when the promise rejects on time. sugar-async reads
+     * the group live while the child lives (ChildRunLaunch::killGroup()), and
+     * ChildRunLaunchTest pins that deterministically with no spawn-time group.
      *
      * The cancel waits for the pid file rather than a fixed delay: a fixed delay
      * can fire before bash has started, and then no grandchild exists to check.

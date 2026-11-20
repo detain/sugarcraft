@@ -36,10 +36,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *
  * The kill ladder normally ends with the result: settling cancels every timer,
  * the ladder's included. One exception is kept on purpose. A group-path launch
- * (a containment group is named) keeps its ladder poll armed past settle, for at
- * most the TERM and KILL grace, and only while a group member is still alive, so
- * a descendant that ignores TERM is not orphaned once its leader has settled the
- * run. The group-path ladder test in ChildRunLaunchTest pins this behavior.
+ * (a containment group is named or read from the live child) keeps its ladder
+ * poll armed past settle, for at most the TERM and KILL grace, and only while a
+ * group member is still alive, so a descendant that ignores TERM is not orphaned
+ * once its leader has settled the run. The group-path ladder test in
+ * ChildRunLaunchTest pins this behavior.
  */
 final class ChildRunLaunch
 {
@@ -77,6 +78,12 @@ final class ChildRunLaunch
     private bool $cancelled = false;
 
     /**
+     * The group read from the live child when the spawn-time snapshot named none.
+     * Latched, since a reaped leader reads as no group.
+     */
+    private ?int $liveGroup = null;
+
+    /**
      * Last sign of life: a chunk read from either stream, or a stdin write the child
      * accepted. The idle budget counts from here, as ChildRun::run() counts it.
      */
@@ -99,7 +106,7 @@ final class ChildRunLaunch
     /**
      * @param resource $proc
      * @param array<int, resource> $pipes  0 stdin (absent when the stdin is a staged file), 1 stdout, 2 stderr
-     * @param null|int $groupPid  Process group the kill rungs signal, or null for the direct child
+     * @param null|int $groupPid  Process group the kill rungs signal, or null to read it from the live child
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk, or null
      * @param null|float $idleTimeout  Seconds of silence before the kill ladder starts, or null for none
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
@@ -419,7 +426,28 @@ final class ChildRunLaunch
     /** One kill(-pgid, 0) per check, never a /proc walk: this runs on the loop. True without a group. */
     private function groupGone(): bool
     {
-        return $this->groupPid === null || BoundedShutdown::groupEmpty($this->groupPid, false);
+        $group = $this->killGroup();
+
+        return $group === null || BoundedShutdown::groupEmpty($group, false);
+    }
+
+    /**
+     * The group the kill rungs signal: the spawn-time one, else the group a live
+     * child leads now. ChildRun::launch() reads the group before the setsid wrapper
+     * has become a leader, so the snapshot can be null for a containment-wrapped
+     * child. ChildRun::killGroup() takes the same live fallback on the blocking path.
+     */
+    private function killGroup(): ?int
+    {
+        if ($this->groupPid !== null) {
+            return $this->groupPid;
+        }
+
+        if (!$this->exited) {
+            $this->liveGroup = Containment::groupId($this->proc) ?? $this->liveGroup;
+        }
+
+        return $this->liveGroup;
     }
 
     /**
@@ -429,7 +457,7 @@ final class ChildRunLaunch
      */
     private function signal(int $signal): void
     {
-        Containment::signal($this->proc, $this->groupPid, $signal);
+        Containment::signal($this->proc, $this->killGroup(), $signal);
     }
 
     private function checkDone(): void
