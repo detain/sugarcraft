@@ -320,11 +320,14 @@ final class CommandBackendTest extends TestCase
      * the sleep is a grandchild of the PHP process. The kill ladder signals the
      * child's process group only when a containment prefix made the child a group
      * leader ({@see ProcessContainment::spawnSpec()}). The launch path reads that
-     * group once, at spawn, before the setsid wrapper has become a leader, so the
-     * read can miss the group and only the shell dies while the sleep is orphaned.
-     * On this host that is the failure this test exists to catch, and the fix
-     * belongs in sugar-async, which this branch does not change. The assertion is on
-     * the sleep itself, so an orphan is caught even when the promise rejects on time.
+     * group at spawn, before the setsid wrapper has become a leader, and can miss
+     * it. ChildRunLaunch then latches the group from a live read while the leader
+     * is alive, so the kill still reaches the sleep. The spawn-time read is a race,
+     * so this end-to-end test does not always take the no-spawn-group path; the
+     * deterministic regression for that path is
+     * ChildRunLaunchTest::testLaunchWithoutASpawnTimeGroupKillsTheGroupTheWrapperLeads.
+     * The assertion is on the sleep itself, so an orphan is caught even when the
+     * promise rejects on time.
      *
      * The cancel waits for the pid file rather than a fixed delay: a fixed delay
      * can fire before bash has started, and then no grandchild exists to check.
