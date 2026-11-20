@@ -50,6 +50,9 @@ final class ChildRunLaunch
     /** @var list<TimerInterface> */
     private array $timers = [];
 
+    /** The kill ladder's poll; kept past settle while a containment group still has live descendants. */
+    private ?TimerInterface $ladder = null;
+
     private ChildCapture $capture;
 
     private bool $exited = false;
@@ -373,9 +376,10 @@ final class ChildRunLaunch
         // and one that survives the kill budget settles whether or not SIGKILL
         // landed, so the loop never waits on the child. A containment group keeps
         // the ladder running past a leader that exited, while descendants live.
-        // The poll's handle joins $timers so finish() cancels it when the child is
-        // seen gone by checkExit() before the ladder's own poll gets to it.
-        $this->timers[] = BoundedShutdown::escalateAsync(
+        // The handle is kept apart from $timers: finish() cancels it only once the
+        // group is empty, so a launch settling on the leader's exit still escalates
+        // to the descendants the containment group holds.
+        $this->ladder = BoundedShutdown::escalateAsync(
             $this->loop,
             $this->signal(...),
             fn (): bool => $this->probeGone() && $this->groupGone(),
@@ -431,6 +435,12 @@ final class ChildRunLaunch
             $this->loop->cancelTimer($timer);
         }
         $this->timers = [];
+        // Cancelling a ladder that is still signalling descendants would orphan them:
+        // it stops on its own once the group is empty or the kill budget is spent.
+        if ($this->ladder !== null && $this->groupGone()) {
+            $this->loop->cancelTimer($this->ladder);
+            $this->ladder = null;
+        }
         $this->closeAllPipes();
         $this->closeStdin();
         $this->cancelSubscription?->unsubscribe();

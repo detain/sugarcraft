@@ -302,6 +302,90 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertSame(0, $this->armedTimers($loop), 'no ladder poll stays armed on the loop once the launch has settled');
     }
 
+    /**
+     * A leader that dies on TERM settles the launch on its exit, but the group still
+     * holds a grandchild that ignores TERM. The ladder must outlive that settle and
+     * KILL the group, or the grandchild survives the launch.
+     */
+    public function testGroupPidLaunchKillsATermIgnoringGrandchildAfterTheLeaderSettlesTheRun(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // The subshell's ignored TERM survives exec, so only the group KILL reaches
+        // the sleep; the leader sh dies on TERM from the first rung.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', '(trap "" TERM; exec sleep 300) & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the leader exit must settle the run');
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+
+        try {
+            // Settling must not stop the ladder: the loop keeps running until the
+            // group KILL lands, bounded by the TERM and KILL graces plus slack.
+            $gone = false;
+            $poll = $loop->addPeriodicTimer(0.02, static function () use ($loop, $grandchild, &$gone): void {
+                if (BoundedShutdown::pidExited($grandchild)) {
+                    $gone = true;
+                    $loop->stop();
+                }
+            });
+            $bound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $loop->run();
+            $loop->cancelTimer($poll);
+            $loop->cancelTimer($bound);
+
+            $this->assertTrue($gone, 'the kill ladder must reach the TERM-ignoring grandchild after the run settled');
+        } finally {
+            if (!BoundedShutdown::pidExited($grandchild)) {
+                @posix_kill($grandchild, 9);
+            }
+        }
+    }
+
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void
     {
         $this->requirePosixPipes();
