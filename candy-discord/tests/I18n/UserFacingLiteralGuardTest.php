@@ -21,10 +21,12 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * one flow where a bare English string reaches a user without a slot name, so
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
  * written into `$notes` (by any assignment or `array_push`), used as the
- * attachment `$name` fallback, or passed as a top-level argument to a send call
- * or to the `$say` / `$reply` closures must go through `Lang::t` instead. The
- * `Lang::t` key itself must be a `channels.discord.*` literal, since a key is
- * the text a user reads when the catalog misses it.
+ * attachment `$name` fallback, or anywhere inside the arguments of a send call
+ * or of the `$say` / `$reply` closures (including inside nested calls and
+ * arrays) must go through `Lang::t` instead. A `Lang::t` placeholder value is
+ * user text too, so a bare literal there is a hit. The `Lang::t` key itself
+ * must be a `channels.discord.*` literal, since a key is the text a user reads
+ * when the catalog misses it.
  */
 final class UserFacingLiteralGuardTest extends TestCase
 {
@@ -100,6 +102,10 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'bare English as a Lang::t key in a qualified call' => ["<?php\n\$notes[] = \\CandyCode\\Bundles\\Discord\\Lang::t('Attachment dropped');\n", 2];
         yield 'bare English passed to $say' => ["<?php\n\$say('Only the approver can use this');\n", 2];
         yield 'bare English passed to $reply' => ["<?php\n\$reply('Attachment dropped');\n", 2];
+        yield 'bare literal inside a call nested in a send argument' => ["<?php\n\$this->rest->send(\$channelId, \$this->safety->outbound('Attachments were skipped'), []);\n", 2];
+        yield 'bare literal inside a call nested in $say' => ["<?php\n\$say(\$this->format('Only the approver'));\n", 2];
+        yield 'bare English as a Lang::t placeholder value in $notes' => ["<?php\n\$notes[] = Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name . ' (unsupported type)']);\n", 2];
+        yield 'bare English as a Lang::t placeholder value in a send argument' => ["<?php\n\$this->rest->send(\$channelId, Lang::t('channels.discord.attachments.skipped', ['notes' => 'Attachment dropped']), []);\n", 2];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -133,6 +139,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         $notes[] = $slot === 'images'
             ? Lang::t('channels.discord.attachments.reason.past_image_limit', ['name' => $name, 'limit' => (string) $cap])
             : Lang::t('channels.discord.attachments.reason.past_document_limit', ['name' => $name, 'limit' => (string) $cap]);
+        $notes[] = Lang::t('channels.discord.attachments.reason.download_failed', ['name' => $job['name']]);
         $name = (string) ($attachment['filename'] ?? Lang::t('channels.discord.attachments.unnamed'));
         $this->rest->send($channelId, $this->safety->outbound($notice), ['allowed_mentions' => ['parse' => []]]);
         $say(Lang::t('channels.discord.pair.only_approver'));
@@ -145,13 +152,16 @@ final class UserFacingLiteralGuardTest extends TestCase
 
     /**
      * Each hit is "line: literal" for a letter-bearing string that reaches
-     * `$notes` (any write form), the attachment `$name`, or a top-level argument
-     * of a send call or of the `$say` / `$reply` closures without going through
-     * `Lang::t`. A `Lang::t` call is never a hit for its arguments, but its key
-     * is: a key outside `channels.discord.*` is the English a user reads when the
-     * catalog misses it. Works on tokens, so a multi-line call or an interpolated
-     * string is read the same way. A literal that is only compared with
-     * `===` or `!==` is a value test, not text a user reads.
+     * `$notes` (any write form), the attachment `$name`, or anywhere inside the
+     * arguments of a send call or of the `$say` / `$reply` closures (nested calls
+     * and arrays included) without going through `Lang::t`. A `Lang::t` call is
+     * a hit for its key and for any bare literal among its placeholder values:
+     * a key outside `channels.discord.*` is the English a user reads when the
+     * catalog misses it, and a placeholder value is spliced into the user's text.
+     * Array keys (`'parse' =>`) and subscript keys (`$row['name']`) name data,
+     * not text. Works on tokens, so a multi-line call or an interpolated string
+     * is read the same way. A literal that is only compared with `===` or `!==`
+     * is a value test, not text a user reads.
      *
      * @return list<string>
      */
@@ -171,15 +181,15 @@ final class UserFacingLiteralGuardTest extends TestCase
         $n = \count($toks);
         for ($i = 0; $i < $n; ++$i) {
             if (self::is($toks, $i, T_VARIABLE, '$notes') && ($op = self::noteWriteOperator($toks, $i + 1)) !== null) {
-                \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1), false));
+                \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1)));
             } elseif (self::is($toks, $i, T_VARIABLE, '$name') && self::is($toks, $i + 1, '=')) {
-                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2), false));
+                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2)));
             } elseif (self::isCall($toks, $i, 'array_push') && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
-                \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1), false));
+                \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1)));
             } elseif (self::is($toks, $i, T_OBJECT_OPERATOR) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
-                \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2), true));
+                \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2)));
             } elseif ((self::is($toks, $i, T_VARIABLE, '$say') || self::is($toks, $i, T_VARIABLE, '$reply')) && self::is($toks, $i + 1, '(')) {
-                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::closeIndex($toks, $i + 1), true));
+                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::closeIndex($toks, $i + 1)));
             }
         }
 
@@ -352,38 +362,30 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
+     * Every letter-bearing literal in `[$from, $to)` that is text a user reads,
+     * at any nesting depth. A `Lang::t` call is checked for its key, then its
+     * placeholder values are scanned the same way as any other argument.
+     *
      * @param list<array{id: int|string, text: string, line: int}> $toks
      * @return list<string>
      */
-    private static function bareLiterals(array $toks, int $from, int $to, bool $topLevelOnly): array
+    private static function bareLiterals(array $toks, int $from, int $to): array
     {
         $hits = [];
-        $depth = 0;
         for ($i = $from; $i < $to; ++$i) {
             if (self::isLangClass($toks, $i) && self::is($toks, $i + 1, T_DOUBLE_COLON) && self::is($toks, $i + 2, T_STRING, 't') && self::is($toks, $i + 3, '(')) {
+                $close = self::closeIndex($toks, $i + 3);
                 $key = self::langKeyHit($toks, $i + 4);
                 if ($key !== null) {
                     $hits[] = $key;
                 }
-                $i = self::closeIndex($toks, $i + 3);
-
-                continue;
-            }
-            if (self::opens($toks[$i])) {
-                ++$depth;
-
-                continue;
-            }
-            if (self::closes($toks[$i])) {
-                --$depth;
+                \array_push($hits, ...self::bareLiterals($toks, self::langKeyEnd($toks, $i + 4), $close));
+                $i = $close;
 
                 continue;
             }
             $literal = $toks[$i]['id'] === T_CONSTANT_ENCAPSED_STRING || $toks[$i]['id'] === T_ENCAPSED_AND_WHITESPACE;
-            if (!$literal || !self::hasWords($toks[$i]['text']) || self::isSubscriptKey($toks, $i)) {
-                continue;
-            }
-            if ($topLevelOnly && $depth !== 0) {
+            if (!$literal || !self::hasWords($toks[$i]['text']) || self::isSubscriptKey($toks, $i) || self::isArrayKey($toks, $i)) {
                 continue;
             }
             if (self::comparedByValue($toks, $i)) {
@@ -393,6 +395,42 @@ final class UserFacingLiteralGuardTest extends TestCase
         }
 
         return $hits;
+    }
+
+    /**
+     * An array key (`'parse' => ...`) names data, not text a user reads. The
+     * value after the arrow is still checked, since it is the text itself.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function isArrayKey(array $toks, int $i): bool
+    {
+        $next = $i + 1;
+        while (isset($toks[$next]) && $toks[$next]['id'] === '"') {
+            ++$next;
+        }
+
+        return self::is($toks, $next, T_DOUBLE_ARROW);
+    }
+
+    /**
+     * Index just past the key of a `Lang::t` call, so the placeholder list that
+     * follows is scanned without re-reading the key as bare English. A key that
+     * is not a literal (a variable, a call) ends nowhere and returns `$k`.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function langKeyEnd(array $toks, int $k): int
+    {
+        $j = $k;
+        while (isset($toks[$j]) && $toks[$j]['id'] === '"') {
+            ++$j;
+        }
+        if (!isset($toks[$j]) || !\in_array($toks[$j]['id'], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+            return $k;
+        }
+
+        return $j + 1;
     }
 
     /**
@@ -422,13 +460,63 @@ final class UserFacingLiteralGuardTest extends TestCase
             || (isset($toks[$next]) && \in_array($toks[$next]['id'], $compare, true));
     }
 
+    /**
+     * The `channels.discord.*` literal keys that `Lang::t` calls in `$source`
+     * name, single- or double-quoted. A double-quoted typo must reach the
+     * catalog check the same way a single-quoted one does.
+     *
+     * @return list<string>
+     */
+    private static function langKeysIn(string $source): array
+    {
+        \preg_match_all('/Lang::t\(\s*([\'"])(channels\.discord\.[A-Za-z0-9_.]+)\1/', $source, $m);
+
+        return $m[2];
+    }
+
+    /**
+     * Each "catalog key" pair, one per `lang/` file, for a key that file does
+     * not carry.
+     *
+     * @param list<string> $keys
+     * @return list<string>
+     */
+    private static function missingFromCatalogs(array $keys): array
+    {
+        $missing = [];
+        foreach (\glob(self::LANG . '/*.php') as $catalog) {
+            $table = require $catalog;
+            foreach ($keys as $k) {
+                if (!isset($table[$k])) {
+                    $missing[] = \basename($catalog) . ' ' . $k;
+                }
+            }
+        }
+
+        return $missing;
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function typoLangKeyFixtureProvider(): iterable
+    {
+        yield 'double-quoted typo key' => ["<?php\n\$notes[] = Lang::t(\"channels.discord.attachments.reason.unsuported\", []);\n"];
+        yield 'single-quoted typo key' => ["<?php\n\$notes[] = Lang::t('channels.discord.attachments.reason.unsuported', []);\n"];
+    }
+
+    #[DataProvider('typoLangKeyFixtureProvider')]
+    public function testTypoLangKeyIsMissingFromEveryCatalog(string $fixture): void
+    {
+        $missing = self::missingFromCatalogs(self::langKeysIn($fixture));
+
+        self::assertNotSame([], $missing, 'the catalog check must read the key whichever quote it uses');
+        self::assertContains('en.php channels.discord.attachments.reason.unsuported', $missing);
+    }
+
     public function testEveryLangKeyUsedExistsInEnglishAndEveryLocale(): void
     {
         $keys = [];
         foreach (self::sources() as $file) {
-            if (\preg_match_all('/Lang::t\(\s*\'(channels\.discord\.[A-Za-z0-9_.]+)\'/', (string) \file_get_contents($file), $m)) {
-                \array_push($keys, ...$m[1]);
-            }
+            \array_push($keys, ...self::langKeysIn((string) \file_get_contents($file)));
         }
 
         // The shared core asks for core-relative keys ($this->t('turn.eror')) and the
@@ -451,16 +539,7 @@ final class UserFacingLiteralGuardTest extends TestCase
 
         $keys = \array_values(\array_unique($keys));
         self::assertNotEmpty($keys);
-        $missing = [];
-        foreach (\glob(self::LANG . '/*.php') as $catalog) {
-            $table = require $catalog;
-            foreach ($keys as $k) {
-                if (!isset($table[$k])) {
-                    $missing[] = \basename($catalog) . ' ' . $k;
-                }
-            }
-        }
-        self::assertSame([], $missing);
+        self::assertSame([], self::missingFromCatalogs($keys));
     }
 
     public function testSlashRosterTextComesFromTheCatalogNotRawKeys(): void
