@@ -9,9 +9,12 @@ declare(strict_types=1);
  * and the tree the scores came from, so this guard reads both values from the
  * committed file and regenerates the table from them. It never reads today's
  * date or the working tree: a table is current when the scorer, run on the
- * commit it names, writes exactly this file. Editing a body file, adding a lib
- * or changing the scorer makes the table stale, and this guard names the rows
- * that no longer match.
+ * commit it names, writes exactly this file. Because the check is pinned to
+ * that header commit, this guard fails on a changed scorer or a hand edit to
+ * the table or its header, and names the rows that no longer match. It does not
+ * see a body file edited or a lib added after the header commit: the committed
+ * table then goes stale against master without failing here, and it is only
+ * refreshed when the table is regenerated at a newer --tree.
  *
  * The regeneration reads the header commit through git, so the commit must be
  * present in the clone. A shallow checkout that lacks it fails here, loudly,
