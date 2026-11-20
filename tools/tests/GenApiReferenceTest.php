@@ -668,6 +668,34 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringNotContainsString('secret', $html);
     }
 
+    public function testAnOverrideWrittenWithDifferentLetterCaseReplacesTheParentRow(): void
+    {
+        // PHP matches Child::Name to Base::name, so the parent's row must not survive beside the override.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Base.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Base. */\nclass Base\n{\n    /** Names the base. */\n    public function name(): string\n    {\n        return 'base';\n    }\n}\n",
+            'sugar-core/src/Child.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Child. */\nfinal class Child extends Base\n{\n    /** Own name. */\n    public function Name(): string\n    {\n        return 'child';\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(1, \substr_count($html, '<code>name(): string</code>'), 'only Base lists name()');
+        self::assertSame(1, \substr_count($html, '<code>Name(): string</code>'), 'Child lists its own override once');
+        self::assertSame(1, \substr_count($html, 'Own name.'), 'the override keeps its own summary');
+        self::assertSame(1, \substr_count($html, 'Names the base.'), 'the parent summary is not carried onto Child');
+    }
+
+    public function testAParentNamedWithDifferentLetterCaseStillContributesItsMethods(): void
+    {
+        // `extends base` names `class Base`; PHP resolves it, so the child lists the inherited method.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Base.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Base. */\nclass Base\n{\n    /** Names the base. */\n    public function name(): string\n    {\n        return 'base';\n    }\n}\n",
+            'sugar-core/src/Child.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Child. */\nfinal class Child extends base\n{\n    /** Own label. */\n    public function own(): int\n    {\n        return 1;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(2, \substr_count($html, '<tr><td><code>name(): string</code></td><td>Names the base.</td></tr>'), 'Base and Child both list name()');
+        self::assertStringContainsString('<tr><td><code>own(): int</code></td><td>Own label.</td></tr>', $html);
+    }
+
     public function testAnInterfaceListsTheMethodsOfTheInterfacesItExtends(): void
     {
         $root = $this->fixtureRoot([

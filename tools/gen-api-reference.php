@@ -671,22 +671,36 @@ final class ApiReference
      */
     private static function withInheritedMethods(array $index, string $fqn, string $slug, array $trail = []): array
     {
-        foreach ($index[$fqn]['traits'] as $traitFqn) {
-            if (!isset($index[$traitFqn]) || $index[$traitFqn]['kind'] !== 'trait') {
-                throw new \RuntimeException("gen-api-reference: $fqn uses $traitFqn, which is not a trait declared under $slug/src");
+        // PHP resolves class and trait names case-insensitively, so a `use base;` or `extends base`
+        // names the type declared as `Base`. Each name resolves to its declared FQN before any lookup.
+        $traits = [];
+        foreach ($index[$fqn]['traits'] as $traitName) {
+            $traitFqn = self::declaredFqn($index, $traitName);
+            if ($traitFqn === null || $index[$traitFqn]['kind'] !== 'trait') {
+                throw new \RuntimeException("gen-api-reference: $fqn uses $traitName, which is not a trait declared under $slug/src");
+            }
+            $traits[] = $traitFqn;
+        }
+        $parents = [];
+        foreach ($index[$fqn]['parents'] as $parentName) {
+            // A parent declared outside src/ has no entry in the index and contributes no rows.
+            $parentFqn = self::declaredFqn($index, $parentName);
+            if ($parentFqn !== null) {
+                $parents[] = $parentFqn;
             }
         }
 
         // Each in-tree source is resolved before the merge, so an own method's {@inheritdoc}
         // can read the summary its nearest documented ancestor already resolved.
         $sources = [];
-        foreach ([...$index[$fqn]['traits'], ...$index[$fqn]['parents']] as $sourceFqn) {
-            if (!isset($index[$sourceFqn]) || in_array($sourceFqn, $trail, true)) {
+        foreach ([...$traits, ...$parents] as $sourceFqn) {
+            if (in_array($sourceFqn, $trail, true)) {
                 continue;
             }
             $sources[] = self::withInheritedMethods($index, $sourceFqn, $slug, [...$trail, $fqn]);
         }
 
+        // Method names compare without case, as PHP matches an override to the method it replaces.
         $methods = [];
         $names = [];
         foreach ($index[$fqn]['methods'] as $own) {
@@ -695,18 +709,38 @@ final class ApiReference
                 'signature' => $own['signature'],
                 'summary' => $own['inherits'] ? self::inheritedSummary($own['name'], $own['summary'], $sources) : $own['summary'],
             ];
-            $names[] = $own['name'];
+            $names[] = strtolower($own['name']);
         }
         foreach ($sources as $source) {
             foreach ($source as $method) {
-                if (!in_array($method['name'], $names, true)) {
+                if (!in_array(strtolower($method['name']), $names, true)) {
                     $methods[] = $method;
-                    $names[] = $method['name'];
+                    $names[] = strtolower($method['name']);
                 }
             }
         }
 
         return $methods;
+    }
+
+    /**
+     * The key under which a type name is indexed: the name as written when it matches a declaration
+     * exactly, otherwise the declaration it matches without regard to case, or null when none does.
+     *
+     * @param array<string, array<string, mixed>> $index
+     */
+    private static function declaredFqn(array $index, string $name): ?string
+    {
+        if (isset($index[$name])) {
+            return $name;
+        }
+        foreach (array_keys($index) as $declared) {
+            if (strcasecmp($declared, $name) === 0) {
+                return $declared;
+            }
+        }
+
+        return null;
     }
 
     /**
