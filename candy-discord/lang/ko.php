@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => '사용법: `/approve <askId> [once|always|deny]` (승인 메시지에 ID가 있음).',
     'channels.discord.attach.none' => '여기에는 아직 연결된 것이 없습니다. 먼저 메시지를 보내세요.',
     'channels.discord.attachments.skipped' => '첨부 파일 {count}개를 건너뛰었습니다: {notes}',
+    'channels.discord.attachments.unnamed' => '첨부 파일',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

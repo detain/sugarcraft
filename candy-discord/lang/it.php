@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => 'Uso: `/approve <askId> [once|always|deny]` (l\'id è nel messaggio di approvazione).',
     'channels.discord.attach.none' => 'Qui non c\'è ancora nulla di collegato — invia prima un messaggio.',
     'channels.discord.attachments.skipped' => 'Saltati {count} allegato/i: {notes}',
+    'channels.discord.attachments.unnamed' => 'allegato',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

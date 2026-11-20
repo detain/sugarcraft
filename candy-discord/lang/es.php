@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => 'Uso: `/approve <askId> [once|always|deny]` (el id está en el mensaje de aprobación).',
     'channels.discord.attach.none' => 'Todavía no hay nada adjunto aquí. Envía primero un mensaje.',
     'channels.discord.attachments.skipped' => 'Se omitieron {count} adjunto(s): {notes}',
+    'channels.discord.attachments.unnamed' => 'adjunto',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

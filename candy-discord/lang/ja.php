@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => '使い方：`/approve <askId> [once|always|deny]`（ID は承認メッセージにあります）。',
     'channels.discord.attach.none' => 'ここにはまだ何も紐づいていません。先にメッセージを送ってください。',
     'channels.discord.attachments.skipped' => '添付ファイル {count} 件をスキップしました: {notes}',
+    'channels.discord.attachments.unnamed' => '添付ファイル',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

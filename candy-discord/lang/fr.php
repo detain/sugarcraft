@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => 'Utilisation : `/approve <askId> [once|always|deny]` (l\'id est dans le message d\'approbation).',
     'channels.discord.attach.none' => 'Rien n\'est encore rattaché ici — envoyez d\'abord un message.',
     'channels.discord.attachments.skipped' => '{count} pièce(s) jointe(s) ignorée(s) : {notes}',
+    'channels.discord.attachments.unnamed' => 'pièce jointe',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

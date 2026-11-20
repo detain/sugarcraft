@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => 'Verwendung: `/approve <askId> [once|always|deny]` (die ID steht in der Genehmigungsnachricht).',
     'channels.discord.attach.none' => 'Hier ist noch nichts angehängt — sende zuerst eine Nachricht.',
     'channels.discord.attachments.skipped' => '{count} Anhang/Anhänge übersprungen: {notes}',
+    'channels.discord.attachments.unnamed' => 'Anhang',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

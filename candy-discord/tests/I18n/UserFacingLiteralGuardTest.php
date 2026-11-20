@@ -20,8 +20,9 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * messages, SQL) is deliberately outside it. The attachment skip path is the
  * one flow where a bare English string reaches a user without a slot name, so
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
- * put into `$notes` or passed as a top-level argument to a send call must go
- * through `Lang::t` instead.
+ * written into `$notes` (by any assignment or `array_push`), used as the
+ * attachment `$name` fallback, or passed as a top-level argument to a send call
+ * must go through `Lang::t` instead.
  */
 final class UserFacingLiteralGuardTest extends TestCase
 {
@@ -82,6 +83,12 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'concatenated reason in $notes' => ["<?php\n\n\$notes[] = 'Skipped ' . \$name;\n", 3];
         yield 'bare literal passed to a send call' => ["<?php\n\$this->rest->send(\$channelId, 'Attachments were skipped', []);\n", 2];
         yield 'multi-line send call with a bare literal' => ["<?php\n\$this->rest->send(\n    \$channelId,\n    'Attachment dropped',\n);\n", 4];
+        yield 'indexed assignment into $notes' => ["<?php\n\$notes[\$idx] = 'Attachment dropped';\n", 2];
+        yield 'whole-array assignment into $notes' => ["<?php\n\$notes = ['Attachments were skipped'];\n", 2];
+        yield 'concatenation-assign into $notes' => ["<?php\n\$notes .= 'Attachment dropped';\n", 2];
+        yield 'array_push into $notes' => ["<?php\narray_push(\$notes, 'Attachment dropped');\n", 2];
+        yield 'fully qualified array_push into $notes' => ["<?php\n\\array_push(\$notes, 'Attachment dropped');\n", 2];
+        yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -101,6 +108,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         $notes[] = $slot === 'images'
             ? Lang::t('channels.discord.attachments.reason.past_image_limit', ['name' => $name, 'limit' => (string) $cap])
             : Lang::t('channels.discord.attachments.reason.past_document_limit', ['name' => $name, 'limit' => (string) $cap]);
+        $name = (string) ($attachment['filename'] ?? Lang::t('channels.discord.attachments.unnamed'));
         $this->rest->send($channelId, $this->safety->outbound($notice), ['allowed_mentions' => ['parse' => []]]);
         PHP;
 
@@ -109,8 +117,8 @@ final class UserFacingLiteralGuardTest extends TestCase
 
     /**
      * Each hit is "line: literal" for a letter-bearing string that reaches
-     * `$notes` or a top-level argument of a send call without going through
-     * `Lang::t`. Works on tokens, so a multi-line call or an interpolated
+     * `$notes` (any write form), the attachment `$name`, or a top-level argument
+     * of a send call without going through `Lang::t`. Works on tokens, so a multi-line call or an interpolated
      * string is read the same way. A literal that is only compared with
      * `===` or `!==` is a value test, not text a user reads.
      *
@@ -131,14 +139,54 @@ final class UserFacingLiteralGuardTest extends TestCase
         $hits = [];
         $n = \count($toks);
         for ($i = 0; $i < $n; ++$i) {
-            if (self::is($toks, $i, T_VARIABLE, '$notes') && self::is($toks, $i + 1, '[') && self::is($toks, $i + 2, ']') && self::is($toks, $i + 3, '=')) {
-                \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::statementEnd($toks, $i + 4), false));
+            if (self::is($toks, $i, T_VARIABLE, '$notes') && ($op = self::noteWriteOperator($toks, $i + 1)) !== null) {
+                \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1), false));
+            } elseif (self::is($toks, $i, T_VARIABLE, '$name') && self::is($toks, $i + 1, '=')) {
+                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2), false));
+            } elseif (self::isCall($toks, $i, 'array_push') && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
+                \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1), false));
             } elseif (self::is($toks, $i, T_OBJECT_OPERATOR) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2), true));
             }
         }
 
         return $hits;
+    }
+
+    /**
+     * Index of the assignment operator after `$notes`, `$notes[...]`, or the
+     * append form `.=`; null when `$notes` is only read.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function noteWriteOperator(array $toks, int $from): ?int
+    {
+        $op = $from;
+        if (self::is($toks, $op, '[')) {
+            $op = self::closeIndex($toks, $op) + 1;
+        }
+
+        return self::is($toks, $op, '=') || self::is($toks, $op, T_CONCAT_EQUAL) ? $op : null;
+    }
+
+    /** @param list<array{id: int|string, text: string, line: int}> $toks */
+    private static function isCall(array $toks, int $i, string $function): bool
+    {
+        return self::is($toks, $i, T_STRING, $function) || self::is($toks, $i, T_NAME_FULLY_QUALIFIED, '\\' . $function);
+    }
+
+    /**
+     * A literal that is the key of a subscript (`$row['filename']`) names data,
+     * not text a user reads. An array literal such as `['x']` is not a subscript.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function isSubscriptKey(array $toks, int $i): bool
+    {
+        return self::is($toks, $i - 1, '[')
+            && self::is($toks, $i + 1, ']')
+            && isset($toks[$i - 2])
+            && \in_array($toks[$i - 2]['id'], [T_VARIABLE, T_STRING, ']', ')'], true);
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
@@ -220,7 +268,7 @@ final class UserFacingLiteralGuardTest extends TestCase
                 continue;
             }
             $literal = $toks[$i]['id'] === T_CONSTANT_ENCAPSED_STRING || $toks[$i]['id'] === T_ENCAPSED_AND_WHITESPACE;
-            if (!$literal || \preg_match('/[A-Za-z]/', $toks[$i]['text']) !== 1) {
+            if (!$literal || \preg_match('/[A-Za-z]/', $toks[$i]['text']) !== 1 || self::isSubscriptKey($toks, $i)) {
                 continue;
             }
             if ($topLevelOnly && $depth !== 0) {

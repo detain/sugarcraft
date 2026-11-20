@@ -555,7 +555,7 @@ final class DiscordAccount implements PlatformFace
             if (!\is_array($attachment)) {
                 continue;
             }
-            $name = (string) ($attachment['filename'] ?? 'attachment');
+            $name = (string) ($attachment['filename'] ?? Lang::t('channels.discord.attachments.unnamed'));
             $mime = (string) ($attachment['content_type'] ?? '');
             $url = (string) ($attachment['url'] ?? '');
             if ($url === '') {

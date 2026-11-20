@@ -31,6 +31,7 @@ return [
     'channels.discord.approve.usage' => 'Использование: `/approve <askId> [once|always|deny]` (id — в сообщении одобрения).',
     'channels.discord.attach.none' => 'Здесь пока ничего не прикреплено — сначала отправьте сообщение.',
     'channels.discord.attachments.skipped' => 'Пропущено вложений: {count}: {notes}',
+    'channels.discord.attachments.unnamed' => 'вложение',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',
