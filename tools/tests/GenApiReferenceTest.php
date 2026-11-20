@@ -1410,6 +1410,28 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('drift:', $r['stderr']);
     }
 
+    public function testCliCheckPassesASkeletonWhoseSourceHoldsNoPublicType(): void
+    {
+        $root = $this->cliRoot(['sugar-jwt/src/.gitkeep' => '']);
+
+        $r = $this->runCli($root, ['sugar-jwt', '--check']);
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertStringContainsString('ok:', $r['stdout']);
+    }
+
+    public function testCliCheckRefusesASkeletonThatGainedAPublicType(): void
+    {
+        $root = $this->cliRoot([
+            'sugar-jwt/src/Verifier.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Checks a token. */\nfinal class Verifier\n{\n    /** Verifies the token. */\n    public function verify(): void\n    {\n    }\n}\n",
+        ]);
+
+        $r = $this->runCli($root, ['sugar-jwt', '--check']);
+        self::assertSame(1, $r['exit'], 'a skeleton that declares a public type must fail the check, not pass it as ok');
+        self::assertStringContainsString('drift:', $r['stderr']);
+        self::assertStringContainsString('ENABLED', $r['stderr']);
+        self::assertStringNotContainsString('ok:', $r['stdout']);
+    }
+
     public function testCliWriteModeReplacesAStaleFragmentAndThePassingCheckFollows(): void
     {
         $root = $this->cliRoot(self::documentedCoreFixture());

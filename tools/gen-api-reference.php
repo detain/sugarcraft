@@ -1491,6 +1491,20 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === realpath(__F
             // No fragment to write or compare: the body states the absence. A fragment left
             // behind from a lib that once had classes would be spliced without being checked.
             $stale = is_file(ApiReference::fragmentPath($root, $slug));
+            // The skeleton list is a claim about src/, so the claim is checked here: a public
+            // type added under a listed skeleton must fail the check, not pass it as "ok".
+            try {
+                $declared = ApiReference::declaredPublic($root, $slug);
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                fwrite(STDERR, $e->getMessage() . "\n");
+
+                return 2;
+            }
+            if ($declared !== []) {
+                fwrite(STDERR, "drift: $slug declares " . count($declared) . " public type(s) but is listed in ApiReference::NO_PUBLIC_CLASSES; move it to ENABLED and write its fragment and body marker\n");
+
+                return 1;
+            }
             if ($report) {
                 fwrite(STDOUT, "$slug: no public classes, so no top-10 figure\n");
 
