@@ -111,7 +111,7 @@ final class DoctorChannelsChecks
             // ProjectRoot, so a subdirectory launch sees the repository's
             // bundles; doctor must read the same tree or it calls them stale.
             $projectRoot = ProjectRoot::lookup($root ?? (getcwd() ?: ''));
-            $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : []))->discover();
+            $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : [], $trusted))->discover();
         }
         $store ??= ChannelsStore::new();
 

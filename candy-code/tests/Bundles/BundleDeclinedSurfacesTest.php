@@ -488,6 +488,27 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertSame([], $this->noticesCarrying(['not trusted them by name', $name]), 'the generic decline does not also fire for it');
     }
 
+    /**
+     * An untrusted project-tier bundle with hooks is declined like any other, but
+     * the remedy names the user tier: trust by name cannot make a project-tier
+     * copy load, so "add it to trustedBundleChannels" alone would mislead.
+     */
+    public function testAnUntrustedProjectTierBundleWithHooksNamesTheUserTierRemedy(): void
+    {
+        $root = $this->tempDir . '/project-untrusted-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'project-untrusted-hooks-' . getmypid();
+        $this->plantProjectBundle($root, $name, [
+            'hooks/hooks.json' => (string) json_encode(['hooks' => ['x' => ['command' => 'true']]]),
+        ]);
+
+        Bootstrap::bundles($root);
+
+        $notices = $this->noticesCarrying(['not trusted them by name', $name]);
+        self::assertCount(1, $notices, 'the untrusted project-tier hooks still draw the decline notice');
+        self::assertStringContainsString('user-tier', $notices[0], 'the remedy says trust by name needs a user-tier bundle');
+        self::assertStringContainsString('candy-code bundles install', $notices[0], 'the remedy names the install that moves the bundle to the user tier');
+    }
     /** The P1 trust list is a user-tier setting typed into the launch's own config. */
     private function trustBundleNamed(string $name): void
     {

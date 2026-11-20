@@ -2544,10 +2544,14 @@ final class Bootstrap
             return LaunchContext::bundlesMemo($key);
         }
 
+        // Name trust is user-tier only (ruling 2026-11-20): discovery dedupes a
+        // trusted name to its user-tier copy, so it needs the trusted names too.
+        $trustedNames = self::trustedBundleChannelNames();
+
         // The project tier is the repository the launch resolves its settings
         // from, not the raw working directory, so a launch from a subdirectory
         // sees the bundles `bundles install --project` placed at the root.
-        $discovery = new BundleDiscovery(ProjectRoot::resolve($root ?? ''), $paths);
+        $discovery = new BundleDiscovery(ProjectRoot::resolve($root ?? ''), $paths, $trustedNames);
         $bundles = $discovery->discover();
 
         foreach ($discovery->warnings() as $warning) {
@@ -2564,7 +2568,6 @@ final class Bootstrap
         // untrusted bundles; one user-tier list consents both surfaces. Name
         // trust is user-tier only (ruling 2026-11-20), so a project-tier bundle
         // carrying a trusted name is refused with its own notice, not declined.
-        $trustedNames = self::trustedBundleChannelNames();
 
         foreach ($bundles as $bundle) {
             $named = \in_array($bundle->name, $trustedNames, true);

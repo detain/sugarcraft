@@ -43,10 +43,15 @@ final class BundleDiscovery
     /** The generic walk: containment, manifest detection, warnings and refusals. */
     private readonly PluginDiscovery $scanner;
 
-    /** @param list<string> $configPaths the user-tier pluginPaths entries */
+    /**
+     * @param list<string> $configPaths  the user-tier pluginPaths entries
+     * @param list<string> $trustedNames the names listed in `trustedBundleChannels`; only these
+     *                                  are deduped by name (see {@see dedupeByName()})
+     */
     public function __construct(
         private readonly string $projectRoot,
         private readonly array $configPaths = [],
+        private readonly array $trustedNames = [],
     ) {
         // A manifest that links outside its bundle is not a bundle, and it is not
         // passed over quietly either: warnRefusedLink() names the link. It is NOT
@@ -126,11 +131,14 @@ final class BundleDiscovery
     }
 
     /**
-     * One bundle per name: when a user-tier bundle and a project-tier bundle
-     * share a name, the user-tier copy is the one that loads and the project
-     * copy is skipped with a warning. Trust is by name, so two copies of one
-     * name would otherwise both answer to the same consent; the user tier is
-     * the only tier that may hold it (ruling 2026-11-20).
+     * One bundle per TRUSTED name: when a user-tier bundle and a project-tier
+     * bundle share a name listed in `trustedBundleChannels`, the user-tier copy
+     * is the one that loads and the project copy is skipped with a warning.
+     * Trust is by name, so two copies of one trusted name would otherwise both
+     * answer to the same consent; the user tier is the only tier that may hold
+     * it (ruling 2026-11-20). An untrusted name keeps every copy it was found
+     * with, so a project-tier bundle that was never trusted is discovered as it
+     * always was.
      *
      * @param list<Bundle> $bundles
      *
@@ -141,7 +149,7 @@ final class BundleDiscovery
         $userNames = [];
 
         foreach ($bundles as $bundle) {
-            if ($bundle->tier === 'user') {
+            if ($bundle->tier === 'user' && \in_array($bundle->name, $this->trustedNames, true)) {
                 $userNames[$bundle->name] = true;
             }
         }

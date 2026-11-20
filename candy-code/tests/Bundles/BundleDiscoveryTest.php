@@ -253,10 +253,10 @@ final class BundleDiscoveryTest extends TestCase
         $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
         $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
 
-        $discovery = new BundleDiscovery($project);
+        $discovery = new BundleDiscovery($project, [], ['twin']);
         $bundles = $discovery->discover();
 
-        self::assertCount(1, $bundles, 'the duplicate name is listed once');
+        self::assertCount(1, $bundles, 'the duplicate trusted name is listed once');
         self::assertSame('user', $bundles[0]->tier, 'the user-tier copy is the one that loads');
         self::assertSame(
             realpath($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin'),
@@ -269,6 +269,30 @@ final class BundleDiscoveryTest extends TestCase
         self::assertCount(1, $shadowed, 'the skipped project copy is named by its directory');
     }
 
+    /**
+     * Dedupe is scoped to trusted names: an untrusted name keeps both copies it
+     * was found with, so a project-tier bundle that was never trusted is
+     * discovered exactly as it was before the trust ruling.
+     */
+    public function testAnUntrustedDuplicateNameKeepsBothCopies(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project, [], ['some-other-bundle']);
+        $bundles = $discovery->discover();
+
+        self::assertCount(2, $bundles, 'an untrusted duplicate name is not collapsed');
+        $tiers = array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles);
+        sort($tiers);
+        self::assertSame(['project', 'user'], $tiers, 'both copies are discovered under their own tiers');
+        $shadowed = array_filter(
+            $discovery->warnings(),
+            static fn (string $warning): bool => str_contains($warning, 'twin') && str_contains($warning, (string) realpath($project)),
+        );
+        self::assertSame([], array_values($shadowed), 'no project copy is skipped as shadowed');
+    }
     /** A project-tier bundle with no user-tier twin is kept under its own tier. */
     public function testAProjectTierBundleWithoutAUserTwinIsKept(): void
     {
