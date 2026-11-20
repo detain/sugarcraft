@@ -193,7 +193,22 @@ final class CommandBackend implements Backend, TracksActiveChildren
      */
     private function child(string $payload, \Closure $onSpawn): ChildRun
     {
-        $argv = self::shellArgv($this->command, PHP_OS_FAMILY === 'Windows');
+        return self::childRun($this->command, $payload)
+            ->withExitGrace(null)
+            ->withOnSpawn($onSpawn);
+    }
+
+    /**
+     * The spawn both shell-out tiers share: the command's argv behind the
+     * containment wrapper, the history on stdin, no byte cap and the no-deadline
+     * stand-in. Each caller picks its own exit grace, idle budget and hooks, so
+     * {@see StreamingCommandBackend} starts its child exactly as this class does.
+     *
+     * @internal public only so StreamingCommandBackend shares it.
+     */
+    public static function childRun(string|array $command, string $payload): ChildRun
+    {
+        $argv = self::shellArgv($command, PHP_OS_FAMILY === 'Windows');
         /** @var list<string> $argv */
         $argv = array_values((array) ProcessContainment::spawnSpec($argv));
 
@@ -201,9 +216,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
             ->withEnv(ProcessContainment::env())
             ->withStdin($payload)
             ->withMaxBytes(PHP_INT_MAX)
-            ->withTimeout(self::NO_DEADLINE_SECONDS)
-            ->withExitGrace(null)
-            ->withOnSpawn($onSpawn);
+            ->withTimeout(self::NO_DEADLINE_SECONDS);
     }
 
     /**

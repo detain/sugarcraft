@@ -255,7 +255,7 @@ final class StreamingCommandBackendTest extends TestCase
      * payload is the two bytes `[]` and the stdin transfer is instantaneous —
      * which makes "silence since spawn" and "silence since the history was
      * delivered" indistinguishable, and they are not the same clock. The
-     * blocking `fwrite()` that {@see StreamingCommandBackend::pump()} replaced
+     * blocking `fwrite()` that the old pump replaced
      * returned only once the WHOLE payload had been handed over, and the old
      * code armed the deadline after it; arming it at spawn and re-arming it on
      * stdout/stderr alone silently redefined it, and a healthy wrapper reading
@@ -846,8 +846,8 @@ printf 'ok\n'
      * flushed when the completion settles.
      *
      * Counting the ticks alone cannot tell those two apart, and neither can
-     * counting the tokens: a `pump()` that buffered every line and emitted them
-     * all from `finish()` would still deliver six callbacks under a loop that
+     * counting the tokens: a sink that buffered every line and emitted them
+     * all after the child exited would still deliver six callbacks under a loop that
      * ticked throughout. What separates them is WHEN each callback fired
      * relative to the ticker, so every token records the tick count at its own
      * instant. Six tokens 150ms apart against a 20ms ticker must land at six
@@ -1027,7 +1027,7 @@ printf 'ok\n'
      * the other. Not a slow case — unbounded; a child that could exit would at
      * least hand the writer an EPIPE, and this one cannot reach its exit.
      *
-     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::pump()} writes a
+     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend} writes a
      * slice of stdin from the same iteration that drains stdout, so neither pipe
      * can fill without the other being emptied — which is why hoisting the loop
      * fixed `complete()` too, and not only the method this round set out to unblock.
