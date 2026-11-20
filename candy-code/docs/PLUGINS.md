@@ -131,8 +131,9 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    stop. Who can make one depends on how it is written. An in-place write by
    another account needs group write on the file itself. A replace-by-rename by
    another account is refused by the owner check (item 2) when the posix
-   extension is available, and loads only without it, from a group-writable
-   directory. A rewrite by your own account loads everywhere. That gap is open.
+   extension is available, and loads only without it, from a directory another
+   account can write (group-writable, or owned by that account). A rewrite by
+   your own account loads everywhere. That gap is open.
 2. **The bytes must be private.** The file and its directory must be
    not world-writable and, when the posix extension is available, owned by
    your account, or the entry is refused. A trusted name records who consented;

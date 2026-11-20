@@ -33,7 +33,8 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    a foreign owner. An in-place write by another account needs group write on
  *    the file itself, since the owner stays the same. A replace-by-rename by
  *    another account creates a file that account owns, which ext-posix refuses;
- *    it loads only without ext-posix, and only from a group-writable directory.
+ *    it loads only without ext-posix, and only from a directory another account
+ *    can write (group-writable, or owned by that account).
  *    A rewrite by the file's own uid loads everywhere. This is an open gap,
  *    carried over from the original loader and not closed here.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
