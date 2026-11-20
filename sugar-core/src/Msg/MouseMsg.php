@@ -39,8 +39,8 @@ class MouseMsg implements Msg, Modifiable
      * Bundle the modifier booleans into the shared value shape — the
      * exact parity table: `$shift` ↔ {@see Modifiers::SHIFT},
      * `$alt` ↔ {@see Modifiers::ALT}, `$ctrl` ↔ {@see Modifiers::CTRL}.
-     * sc-23 (finding sugar-core-024): key and mouse events now answer
-     * the same {@see Modifiable} questions; the public booleans stay.
+     * Key and mouse events answer the same {@see Modifiable} questions;
+     * the public booleans stay.
      */
     public function modifiers(): Modifiers
     {

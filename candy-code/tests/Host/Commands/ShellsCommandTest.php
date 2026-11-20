@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Host\Commands;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Host\Commands\CommandContext;
+use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\ShellsCommand;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -299,7 +304,7 @@ final class ShellsCommandTest extends TestCase
         $this->trackShell($registry, $id);
 
         $marker = 'c6kc' . bin2hex(random_bytes(4));
-        $body = self::body($this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>'));
+        $body = $this->settledBody($this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>'));
         self::assertStringContainsString('Typed into shell ' . $id, $body);
         self::assertStringContainsString('(' . (strlen($marker) + 1) . ' bytes)', $body, 'the byte count is the DECODED size — <Enter> folded to one byte');
         self::assertMatchesRegularExpression('/cursor \d+/', $body, 'the human answer threads the cursor to read from');
@@ -315,19 +320,242 @@ final class ShellsCommandTest extends TestCase
         self::assertStringContainsString($marker, $shown, 'what the human typed is on the screen the human can read back');
     }
 
-    private function shellsContext(?BackgroundShellRegistry $registry): CommandContext
+    public function testSendWhileTheRelayIsNotAttachedAnswersLaterAndNeverHoldsTheDispatch(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'attach wait', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $marker = 'att' . bin2hex(random_bytes(3));
+        $began = microtime(true);
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>');
+        $held = microtime(true) - $began;
+
+        // Whether the relay had attached by now or not, the dispatch answers
+        // at once: a not-yet-attached relay is waited for on the loop, never
+        // in a sleep that would hold the interface for the whole budget.
+        self::assertLessThan(1.0, $held, 'the dispatch must not wait out the attach budget itself');
+        if ($result->effect(CommandEffectKind::Async) !== null) {
+            self::assertCount(1, $result->rows, 'an unattached send echoes the command and nothing else yet');
+            self::assertSame('/shells send ' . $id . ' ' . $marker . '<Enter>', self::body($result));
+        }
+
+        $settled = $this->settledBody($result);
+        self::assertTrue(
+            str_contains($settled, 'Typed into shell ' . $id) || str_contains($settled, 'had not opened its input'),
+            'the settled row is the send answer or the honest not-ready refusal, got: ' . $settled,
+        );
+    }
+
+    public function testASendQueuedBehindAPendingOneRunsOnlyAfterItSettles(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+        $settled = [];
+
+        $first = ShellsCommand::sequenced($registry, 'sh-0000000a', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        });
+        $second = ShellsCommand::sequenced($registry, 'sh-0000000a', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'second';
+
+            return \React\Promise\resolve(true);
+        });
+        $first->then(static function () use (&$settled): void {
+            $settled[] = 'first';
+        });
+        $second->then(static function () use (&$settled): void {
+            $settled[] = 'second';
+        });
+
+        self::assertSame(['first'], $ran, 'the later send must not type while the earlier one still waits on its relay');
+
+        $gate->resolve(true);
+        $this->drainLoop();
+
+        self::assertSame(['first', 'second'], $ran, 'the later send runs once the earlier one has settled');
+        self::assertSame(['first', 'second'], $settled, 'the settled rows keep dispatch order too');
+    }
+
+    public function testAFailedEarlierSendDoesNotHoldBackTheNextOne(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+
+        ShellsCommand::sequenced($registry, 'sh-0000000b', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        })->then(null, static function (): void {
+        });
+        $later = ShellsCommand::sequenced($registry, 'sh-0000000b', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'second';
+
+            return \React\Promise\resolve(true);
+        });
+
+        $gate->reject(new \RuntimeException('the attach wait broke'));
+        $this->drainLoop();
+
+        self::assertSame(['first', 'second'], $ran, 'a send that rejected must release the queue, not wedge it');
+        $later->then(null, static function (): void {
+        });
+    }
+
+    public function testBuildingAQueuedSendClaimsNoQueueSlotAndRunsNoWork(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'build only', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $gate = new Deferred();
+        $held = ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' queued<Enter>');
+        self::assertNotNull($result->effect(CommandEffectKind::Async), 'a send behind a pending one is queued');
+        self::assertSame(
+            $held,
+            $this->sendTails($registry)[$id] ?? null,
+            'building the result must not replace the slot the earlier send holds',
+        );
+
+        $gate->resolve(true);
+        $this->drainLoop();
+        $settled = $this->settledBody($result);
+        self::assertNotSame('', $settled, 'running the effect performs the queued send and settles its row');
+    }
+
+    public function testTheSettledSendCarriesTheTranscriptEpochItWasTypedUnder(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'epoch stamp', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        // Hold the shell's queue slot, so the send is queued and waits on the loop
+        // whatever the relay's state is.
+        $gate = new Deferred();
+        ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' epoch<Enter>', 4);
+        $gate->resolve(true);
+        $this->drainLoop();
+        $settled = $this->settledSend($result);
+
+        self::assertSame(4, $settled->transcriptEpoch, 'the answer must carry the generation its send was typed under');
+        self::assertSame('session-A', $settled->sessionId);
+    }
+
+    /**
+     * The send-queue slots of $registry, read through the private WeakMap so a
+     * test can see whether building a command claimed one.
+     *
+     * @return array<string, PromiseInterface<mixed>>
+     */
+    private function sendTails(BackgroundShellRegistry $registry): array
+    {
+        $tails = (new \ReflectionProperty(ShellsCommand::class, 'sendTails'))->getValue();
+
+        return $tails instanceof \WeakMap ? ($tails[$registry] ?? []) : [];
+    }
+
+    /** Run the loop until the ticks queued by a settled send have fired. */
+    private function drainLoop(): void
+    {
+        $loop = Loop::get();
+        $loop->addTimer(0.01, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+    }
+
+    public function testSendsToDifferentShellsDoNotQueueBehindEachOther(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+
+        ShellsCommand::sequenced($registry, 'sh-0000000c', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        });
+        ShellsCommand::sequenced($registry, 'sh-0000000d', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'other shell';
+
+            return \React\Promise\resolve(true);
+        });
+
+        self::assertSame(['first', 'other shell'], $ran, 'the queue is per shell id, so another shell is typed at once');
+        $gate->resolve(true);
+    }
+
+    /**
+     * The row a `send` answers with. A send that waited for its relay answers
+     * through its async effect, so the thunk runs here and the loop is driven
+     * until its promise settles; an on-turn answer is read as it stands.
+     */
+    private function settledBody(CommandResult $result): string
+    {
+        if ($result->effect(CommandEffectKind::Async) === null) {
+            return self::body($result);
+        }
+
+        return $this->settledSend($result)->message->content;
+    }
+
+    /** Run a queued or relay-waiting send's effect and hand back the settled message. */
+    private function settledSend(CommandResult $result): ShellSendSettledMsg
+    {
+        $effect = $result->effect(CommandEffectKind::Async);
+        self::assertNotNull($effect, 'the send waits, so it answers through an async effect');
+
+        $loop = Loop::get();
+        $settled = null;
+        $guard = $loop->addTimer(15.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        ($effect->run())()->then(static function (mixed $msg) use (&$settled, $loop): void {
+            $settled = $msg;
+            $loop->stop();
+        });
+        if ($settled === null) {
+            $loop->run();
+        }
+        $loop->cancelTimer($guard);
+
+        self::assertInstanceOf(ShellSendSettledMsg::class, $settled, 'the send settles with its row inside the guard');
+
+        return $settled;
+    }
+
+    private function shellsContext(?BackgroundShellRegistry $registry, int $transcriptEpoch = 0): CommandContext
     {
         $workspace = WorkspaceContext::new(root: $this->root);
         if ($registry !== null) {
             $workspace = $workspace->withService(BackgroundShellRegistry::class, $registry);
         }
 
-        return CommandContext::new(root: $this->root, sessionId: 'session-A', workspace: $workspace);
+        return CommandContext::new(
+            root: $this->root,
+            sessionId: 'session-A',
+            workspace: $workspace,
+            transcriptEpoch: $transcriptEpoch,
+        );
     }
 
-    private function dispatchShells(BackgroundShellRegistry $registry, string $text): CommandResult
+    private function dispatchShells(BackgroundShellRegistry $registry, string $text, int $transcriptEpoch = 0): CommandResult
     {
-        return (new ShellsCommand())->run($this->shellsContext($registry), $text);
+        return (new ShellsCommand())->run($this->shellsContext($registry, $transcriptEpoch), $text);
     }
 
     private function trackShell(BackgroundShellRegistry $registry, string $id): void

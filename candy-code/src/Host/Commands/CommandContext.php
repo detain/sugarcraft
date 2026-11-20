@@ -83,6 +83,8 @@ final class CommandContext
         public readonly ?float $spendCap,
         public readonly ?CompactionSource $lastCompaction = null,
         public readonly bool $windowAssumed = false,
+        /** The transcript generation this command runs under; a `/clear` moves it on. */
+        public readonly int $transcriptEpoch = 0,
     ) {
     }
 
@@ -116,6 +118,7 @@ final class CommandContext
         ?float $spendCap = null,
         ?CompactionSource $lastCompaction = null,
         bool $windowAssumed = false,
+        int $transcriptEpoch = 0,
     ): self {
         return new self(
             history: array_values($history),
@@ -144,6 +147,7 @@ final class CommandContext
             spendCap: $spendCap,
             lastCompaction: $lastCompaction,
             windowAssumed: $windowAssumed,
+            transcriptEpoch: $transcriptEpoch,
         );
     }
 

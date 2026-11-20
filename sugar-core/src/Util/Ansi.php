@@ -538,7 +538,7 @@ final class Ansi
 
     /**
      * The classic VT100 line-drawing idiom: DEC Special Graphics into G0
-     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐` (ansicode.txt:223).
+     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐`.
      */
     public static function decSpecialGraphics(): string
     {
