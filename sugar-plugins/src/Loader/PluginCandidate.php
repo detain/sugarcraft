@@ -20,20 +20,20 @@ use SugarCraft\Plugins\Manifest\PluginManifest;
  * name trust at all. The library treats tier labels as opaque, so it cannot
  * tell a user-tier copy from a project-tier one; a host whose project tier
  * never inherits trust passes false for that tier, and the loader refuses the
- * candidate before reading its manifest. Required, with no default, so a host
- * cannot reach the trust path by omission.
+ * candidate before reading its manifest. It defaults to false, so a host that
+ * predates the flag is refused rather than trusted by omission.
  */
 final readonly class PluginCandidate
 {
     /**
      * @param \Closure(): ?PluginManifest $manifest  reads the manifest, or answers null when it has none
-     * @param bool                        $trustable whether name trust may load this candidate
+     * @param bool                        $trustable whether name trust may load this candidate; false refuses it
      */
     public function __construct(
         public string $name,
         public string $dir,
         private \Closure $manifest,
-        public bool $trustable,
+        public bool $trustable = false,
     ) {
     }
 

@@ -39,6 +39,15 @@ final class PluginCandidateTest extends TestCase
         Scratch::remove($dir);
     }
 
+    public function testOmittingTrustableRefusesTheCandidate(): void
+    {
+        // A host written before the flag existed must not reach the trust path by
+        // omission, so the default answers false.
+        $candidate = new PluginCandidate('demo', '/plugins/demo', static fn (): ?PluginManifest => null);
+
+        $this->assertFalse($candidate->trustable);
+    }
+
     public function testAnAbsentManifestYieldsNoEntrypoints(): void
     {
         $candidate = new PluginCandidate('none', '/nowhere', static fn (): ?PluginManifest => null, trustable: true);

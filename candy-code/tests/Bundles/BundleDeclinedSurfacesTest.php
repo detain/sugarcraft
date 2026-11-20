@@ -489,6 +489,48 @@ final class BundleDeclinedSurfacesTest extends TestCase
     }
 
     /**
+     * A project copy of a trusted name that carries only skills loads its skills
+     * as it always did, and withholds no channel or hook content, so no
+     * trust-refusal notice names it.
+     */
+    public function testAProjectTierCopyOfATrustedNameWithOnlySkillsDrawsNoRefusalNotice(): void
+    {
+        $root = $this->tempDir . '/project-trusted-skills-root';
+        mkdir($root, 0777, true);
+        $name = 'project-trusted-skills-' . getmypid();
+        $this->trustBundleNamed($name);
+        $this->plantProjectBundle($root, $name, [
+            'skills/demo/SKILL.md' => "demo\n",
+        ]);
+
+        Bootstrap::bundles($root);
+
+        self::assertSame([], $this->noticesCarrying(['carry a name you trusted', $name]), 'a skills-only project copy has no trust-gated content to refuse');
+    }
+
+    /**
+     * A project copy of a trusted name that a user-tier twin shadows is dropped
+     * from the bundle list, but its hook content is still refused by trust, and
+     * the operator is told so under the project-tier refusal notice.
+     */
+    public function testAShadowedProjectCopyOfATrustedNameWithHooksIsAnnouncedAsRefused(): void
+    {
+        $root = $this->tempDir . '/project-shadowed-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'project-shadowed-hooks-' . getmypid();
+        $this->trustBundleNamed($name);
+        $this->plantUserBundle($name, []);
+        $this->plantProjectBundle($root, $name, [
+            'hooks/hooks.json' => (string) json_encode(['hooks' => ['x' => ['command' => 'true']]]),
+        ]);
+
+        $bundles = Bootstrap::bundles($root);
+
+        self::assertSame(['user'], array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles), 'only the user-tier copy loads');
+        self::assertCount(1, $this->noticesCarrying(['carry a name you trusted', $name]), 'the shadowed project copy is announced as trust-refused');
+    }
+
+    /**
      * An untrusted project-tier bundle with hooks is declined like any other, but
      * the remedy names the user tier: trust by name cannot make a project-tier
      * copy load, so "add it to trustedBundleChannels" alone would mislead.

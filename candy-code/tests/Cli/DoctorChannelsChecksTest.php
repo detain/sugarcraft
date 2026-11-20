@@ -180,6 +180,21 @@ final class DoctorChannelsChecksTest extends TestCase
         self::assertStringNotContainsString('not yet armed', $row['detail']);
     }
 
+    public function testAProjectTierCopyWithOnlySkillsOfATrustedNameIsNotReportedAsProjectTier(): void
+    {
+        // Skills load for every bundle, so a project copy with nothing trust-gated
+        // has no refused content to name, and the row stays OK.
+        $dir = $this->dir . '/skills-only';
+        \mkdir($dir . '/skills/demo', 0755, true);
+        \file_put_contents($dir . '/skills/demo/SKILL.md', "demo\n");
+        $bundle = new Bundle($dir, 'alpha', 'project', '', '', []);
+
+        $row = DoctorChannelsChecks::channelBundlesRow(null, [$bundle], ['alpha'], $this->store());
+
+        self::assertSame('OK', $row['status']);
+        self::assertStringNotContainsString('project-tier', $row['detail']);
+    }
+
     public function testAFirstSightEntryPointWarnsQuarantine(): void
     {
         $bundle = $this->bundleNamed('alpha');

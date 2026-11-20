@@ -135,7 +135,9 @@ final class DoctorChannelsChecks
             // of a trusted name is refused by the loader, so it is reported as such
             // and never counted as armed or first-sight.
             if ($bundle->tier !== 'user') {
-                $projectTier[] = $name;
+                if ($bundle->hasTrustGatedContent()) {
+                    $projectTier[] = $name;
+                }
                 continue;
             }
             foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {

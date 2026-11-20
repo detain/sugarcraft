@@ -43,6 +43,9 @@ final class BundleDiscovery
     /** The generic walk: containment, manifest detection, warnings and refusals. */
     private readonly PluginDiscovery $scanner;
 
+    /** @var list<Bundle> project-tier copies of trusted names that dedupeByName() dropped this walk */
+    private array $shadowedTrusted = [];
+
     /**
      * @param list<string> $configPaths  the user-tier pluginPaths entries
      * @param list<string> $trustedNames the names listed in `trustedBundleChannels`; only these
@@ -86,6 +89,7 @@ final class BundleDiscovery
     public function discover(): array
     {
         $this->scanner->reset();
+        $this->shadowedTrusted = [];
 
         $home = HomeDirectory::owned();
         $userFloor = $home === null ? null : $home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
@@ -166,6 +170,7 @@ final class BundleDiscovery
                     'name' => $bundle->name,
                     'dir' => $bundle->dir,
                 ]));
+                $this->shadowedTrusted[] = $bundle;
 
                 continue;
             }
@@ -209,6 +214,19 @@ final class BundleDiscovery
         ]));
 
         return true;
+    }
+
+    /**
+     * The project-tier copies of trusted names that the last discover() dropped
+     * for a user-tier twin. They are absent from discover()'s list, so a caller
+     * that announces trust refusals reads them here; the shadow warning alone
+     * says nothing about trust.
+     *
+     * @return list<Bundle>
+     */
+    public function shadowedTrustedCopies(): array
+    {
+        return $this->shadowedTrusted;
     }
 
     /** @return list<string> per-bundle problems, worded for a launch notice */

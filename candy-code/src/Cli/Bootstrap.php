@@ -2572,14 +2572,27 @@ final class Bootstrap
         foreach ($bundles as $bundle) {
             $named = \in_array($bundle->name, $trustedNames, true);
 
+            // Only channel and hook content is refused for a project copy of a
+            // trusted name; its commands, skills and agents still load, so a copy
+            // carrying none of that content has nothing to announce.
             if ($named && $bundle->tier !== 'user') {
-                $projectTrusted[] = $bundle->name;
+                if ($bundle->hasTrustGatedContent()) {
+                    $projectTrusted[] = $bundle->name;
+                }
             } elseif ($bundle->hooksPaths() !== [] && !$named) {
                 $hooked[] = $bundle->name;
             }
 
             if ($bundle->mcpFile() !== null) {
                 $mcped[] = $bundle->name;
+            }
+        }
+
+        // A project copy shadowed by its user-tier twin never reaches $bundles,
+        // yet its channel and hook content is refused just the same.
+        foreach ($discovery->shadowedTrustedCopies() as $shadowed) {
+            if ($shadowed->hasTrustGatedContent()) {
+                $projectTrusted[] = $shadowed->name;
             }
         }
 

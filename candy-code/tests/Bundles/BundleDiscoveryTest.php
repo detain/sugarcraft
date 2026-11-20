@@ -323,4 +323,65 @@ final class BundleDiscoveryTest extends TestCase
         self::assertCount(1, $bundles);
         self::assertSame('project', $bundles[0]->tier);
     }
+
+    /**
+     * Only channel, subscriber and hook content is refused for a project copy of
+     * a trusted name; skills, commands and agents load regardless, so a bundle
+     * carrying none of the trust-gated kinds reports no trust-gated content.
+     */
+    public function testOnlyChannelSubscriberAndHookContentIsTrustGated(): void
+    {
+        $skillsOnly = $this->tempDir . '/skills-only';
+        $this->writeBundleRoot($skillsOnly, ['name' => 'skills-only']);
+        mkdir($skillsOnly . '/skills/demo', 0777, true);
+        file_put_contents($skillsOnly . '/skills/demo/SKILL.md', "demo\n");
+
+        $skills = Bundle::fromDir($skillsOnly, 'project');
+        self::assertNotNull($skills);
+        self::assertFalse($skills->hasTrustGatedContent(), 'skills alone are never refused by trust');
+
+        $withHooks = $this->tempDir . '/with-hooks';
+        $this->writeBundleRoot($withHooks, ['name' => 'with-hooks']);
+        mkdir($withHooks . '/hooks', 0777, true);
+        file_put_contents($withHooks . '/hooks/hooks.json', '{"hooks":{}}');
+
+        $hooked = Bundle::fromDir($withHooks, 'project');
+        self::assertNotNull($hooked);
+        self::assertTrue($hooked->hasTrustGatedContent(), 'a hooks/ directory is trust-gated');
+
+        $withChannel = $this->tempDir . '/with-channel';
+        $this->writeBundleRoot($withChannel, ['name' => 'with-channel', 'entrypoints' => ['channel' => 'channel.php']]);
+        file_put_contents($withChannel . '/channel.php', "<?php\n");
+
+        $channel = Bundle::fromDir($withChannel, 'project');
+        self::assertNotNull($channel);
+        self::assertTrue($channel->hasTrustGatedContent(), 'a channel entrypoint is trust-gated');
+    }
+
+    /**
+     * A project-tier copy shadowed by its user-tier twin never reaches discover()'s
+     * list, but the trust notice still needs it: it is listed by
+     * shadowedTrustedCopies(), so the refusal of its channel content is announced.
+     */
+    public function testAShadowedProjectCopyOfATrustedNameIsListedForTheTrustNotice(): void
+    {
+        $project = $this->tempDir . '/project';
+        $projectCopy = $project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin';
+        $this->writeBundleRoot($projectCopy, ['name' => 'twin', 'entrypoints' => ['channel' => 'channel.php']]);
+        file_put_contents($projectCopy . '/channel.php', "<?php\n");
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project, [], ['twin']);
+        $bundles = $discovery->discover();
+        $shadowed = $discovery->shadowedTrustedCopies();
+
+        self::assertSame(['user'], array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles));
+        self::assertCount(1, $shadowed, 'the shadowed project copy is recorded for the trust notice');
+        self::assertSame('project', $shadowed[0]->tier);
+        self::assertTrue($shadowed[0]->hasTrustGatedContent());
+
+        $again = new BundleDiscovery($project, [], []);
+        $again->discover();
+        self::assertSame([], $again->shadowedTrustedCopies(), 'an untrusted name is never shadowed, so nothing is recorded');
+    }
 }
