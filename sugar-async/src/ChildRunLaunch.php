@@ -105,6 +105,8 @@ final class ChildRunLaunch
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
      * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle, or on the reap if the child still holds it
      * @param null|float $exitGrace  Seconds of pipe silence read on after the exit is seen, or null to read to EOF
+     * @param null|float $heartbeatSeconds  Interval of the heartbeat timer, or null for none
+     * @param null|\Closure(): void $onHeartbeat  The heartbeat hook, called on that interval until the run settles
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -120,6 +122,8 @@ final class ChildRunLaunch
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?string $stagedStdin = null,
         private readonly ?float $exitGrace = null,
+        private readonly ?float $heartbeatSeconds = null,
+        private readonly ?\Closure $onHeartbeat = null,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
@@ -132,6 +136,10 @@ final class ChildRunLaunch
         $this->lastActivityAt = Clock::monotonicSeconds();
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
         $this->timers[] = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, fn () => $this->checkExit());
+        if ($this->heartbeatSeconds !== null && $this->onHeartbeat !== null) {
+            $beat = $this->onHeartbeat;
+            $this->timers[] = $this->loop->addPeriodicTimer($this->heartbeatSeconds, static fn () => $beat());
+        }
 
         if ($this->windows) {
             // No readable stream on the Windows runtime: poll each pipe's readable bytes.

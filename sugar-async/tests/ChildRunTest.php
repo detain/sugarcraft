@@ -606,4 +606,61 @@ final class ChildRunTest extends TestCase
             @unlink($marker);
         }
     }
+
+    /**
+     * withHeartbeat() beats while a silent child runs, so a watchdog keyed on the beat
+     * is not starved by a child that writes nothing for its whole run.
+     */
+    public function testRunBeatsWhileASilentChildRuns(): void
+    {
+        $this->requirePosixPipes();
+        $beats = 0;
+        $r = ChildRun::new($this->php('usleep(400000); fwrite(STDOUT, "done");'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->run();
+
+        $this->assertSame('done', $r->stdout);
+        $this->assertTrue($r->succeeded());
+        $this->assertGreaterThanOrEqual(2, $beats, 'a 0.4 s silent run at a 0.05 s heartbeat must beat several times');
+    }
+
+    /**
+     * A child that closes both pipes and then lingers still needs its beats: the
+     * post-close wait for the exit is where it spends its time.
+     */
+    public function testRunBeatsWhileAChildThatClosedItsPipesStillRuns(): void
+    {
+        $this->requirePosixPipes();
+        $beats = 0;
+        $r = ChildRun::new($this->php('fclose(STDOUT); fclose(STDERR); usleep(400000);'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->run();
+
+        $this->assertTrue($r->succeeded());
+        $this->assertGreaterThanOrEqual(2, $beats, 'the post-close exit wait must beat too');
+    }
+
+    /**
+     * The heartbeat is a liveness signal and never a verdict: beating does not end a run.
+     */
+    public function testAHeartbeatDoesNotEndTheRun(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new($this->php('usleep(200000); fwrite(STDOUT, "still here");'))
+            ->withHeartbeat(0.02, static fn () => null)
+            ->run();
+
+        $this->assertSame('still here', $r->stdout);
+        $this->assertSame(ChildResult::EXITED, $r->status);
+    }
+
+    public function testWithHeartbeatRejectsANonPositiveInterval(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::new(['true'])->withHeartbeat(0.0, static fn () => null);
+    }
 }

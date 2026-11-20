@@ -971,4 +971,24 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertSame(ChildResult::CANCELLED, $result->status);
         $this->assertSame(0, $this->armedTimers($loop), 'no timer stays armed once the launch has settled');
     }
+
+    /** launch() beats on a loop timer until the run settles, and the beats stop with it. */
+    public function testLaunchBeatsUntilTheRunSettles(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $beats = 0;
+        $r = $this->settle($loop, ChildRun::new($this->php('usleep(300000); fwrite(STDOUT, "ok");'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->launch($loop));
+
+        $this->assertSame('ok', $r->stdout);
+        $this->assertGreaterThanOrEqual(2, $beats, 'a 0.3 s launch at a 0.05 s heartbeat must beat several times');
+        $settledAt = $beats;
+        $loop->addTimer(0.15, static fn () => $loop->stop());
+        $loop->run();
+        $this->assertSame($settledAt, $beats, 'no beat fires after the run has settled');
+    }
 }

@@ -104,6 +104,8 @@ final class ChildRun
      * @param null|CancellationToken $cancellation  Kills the child and reports CANCELLED when cancelled, or null
      * @param null|float $idleTimeout  Seconds of silence before the child is killed, or null for none
      * @param bool $commandLine  True when $argv holds one command line for proc_open() to take as a string
+     * @param null|float $heartbeatSeconds  Interval between heartbeats, or null for none
+     * @param null|\Closure(): void $onHeartbeat  The heartbeat hook, or null
      */
     private function __construct(
         private readonly array $argv,
@@ -119,6 +121,8 @@ final class ChildRun
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?float $idleTimeout = null,
         private readonly bool $commandLine = false,
+        private readonly ?float $heartbeatSeconds = null,
+        private readonly ?\Closure $onHeartbeat = null,
     ) {
     }
 
@@ -290,6 +294,28 @@ final class ChildRun
     }
 
     /**
+     * Heartbeat: $onBeat is called at most every $seconds for as long as the child
+     * runs, so a caller can keep a liveness watchdog fed through a silent child. The
+     * first call comes one interval in. run() beats while it reads the pipes and while
+     * it waits for an exit after the output has closed; launch() beats on a loop timer
+     * until the run settles. Calls come from this process only. Unlike the idle budget,
+     * a beat never ends the run.
+     *
+     * @param callable(): void $onBeat
+     */
+    public function withHeartbeat(float $seconds, callable $onBeat): self
+    {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Heartbeat must be a positive finite number of seconds');
+        }
+
+        return $this->mutate([
+            'heartbeatSeconds' => $seconds,
+            'onHeartbeat' => \Closure::fromCallable($onBeat),
+        ]);
+    }
+
+    /**
      * Run the child to completion, blocking the caller, and return what it wrote.
      *
      * @throws \RuntimeException when the child cannot be started, or its stdin cannot be staged
@@ -353,6 +379,8 @@ final class ChildRun
             $this->cancellation,
             $staged,
             $this->exitGrace,
+            $this->heartbeatSeconds,
+            $this->onHeartbeat,
         ))->start();
 
         return $deferred->promise();
@@ -397,6 +425,10 @@ final class ChildRun
             return $stop === null ? $clock() : $deadline;
         };
 
+        // The caller's beat, throttled to its own interval: the pump may beat more often
+        // when the idle budget needs a finer tick, and the post-close wait beats on its own slice.
+        $beat = self::throttledBeat($clock, $this->heartbeatSeconds, $this->onHeartbeat);
+
         $onChunk = $this->onChunk;
         if ($this->idleTimeout !== null) {
             $onChunk = static function (int|string $slot, string $chunk) use (&$lastActivity, $clock, $onChunk): void {
@@ -424,19 +456,25 @@ final class ChildRun
                     ->withOnChunk($onChunk)
                     ->withRunning($running)
                     ->withExitGrace($this->exitGrace);
-                if ($this->idleTimeout !== null) {
+                $beatEvery = self::shortestBeat($this->idleTimeout === null ? null : min($this->idleTimeout, self::IDLE_BEAT_SECONDS), $this->heartbeatSeconds);
+                if ($beatEvery !== null) {
                     $idle = $this->idleTimeout;
-                    $pump = $pump->withOnStdinWrite(
-                        static function () use (&$lastActivity, $clock): void {
-                            $lastActivity = $clock();
-                        },
-                    );
+                    if ($idle !== null) {
+                        $pump = $pump->withOnStdinWrite(
+                            static function () use (&$lastActivity, $clock): void {
+                                $lastActivity = $clock();
+                            },
+                        );
+                    }
                     $pump = $pump->withHeartbeat(
-                        min($idle, self::IDLE_BEAT_SECONDS),
-                        static function () use (&$stop, &$lastActivity, $clock, $idle, $running): void {
+                        $beatEvery,
+                        static function () use (&$stop, &$lastActivity, $clock, $idle, $running, $beat): void {
                             // Once the child has exited the exit grace governs the pipes, not the idle budget.
-                            if ($stop === null && $running() && $clock() - $lastActivity >= $idle) {
+                            if ($idle !== null && $stop === null && $running() && $clock() - $lastActivity >= $idle) {
                                 $stop = self::STOP_IDLE;
+                            }
+                            if ($beat !== null) {
+                                $beat();
                             }
                         },
                     );
@@ -467,7 +505,7 @@ final class ChildRun
 
                     return self::result($r, $exitCode, ChildResult::EXITED);
                 }
-                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop);
+                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat);
                 if ($code !== null) {
                     return self::result($r, $code, ChildResult::EXITED);
                 }
@@ -505,12 +543,16 @@ final class ChildRun
      *
      * @param resource $proc
      * @param callable(): float $clock
+     * @param null|\Closure(): void $beat  The throttled heartbeat, beaten once per slice while the wait lasts
      */
-    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop): ?int
+    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop, ?\Closure $beat = null): ?int
     {
         while (true) {
             if ($stop !== null) {
                 return null;
+            }
+            if ($beat !== null) {
+                $beat();
             }
             $remaining = max(0.0, $deadline - $clock());
             $code = BoundedShutdown::reapIfExited($proc, min($remaining, self::IDLE_BEAT_SECONDS));
@@ -687,6 +729,40 @@ final class ChildRun
     private static function killGroup($proc, ?int $measured): ?int
     {
         return $measured ?? Containment::groupId($proc);
+    }
+
+    /**
+     * The caller's heartbeat as a closure that fires at most once per $every seconds,
+     * or null when there is no heartbeat. The first call is one interval in.
+     *
+     * @param callable(): float $clock
+     * @return null|\Closure(): void
+     */
+    private static function throttledBeat(callable $clock, ?float $every, ?\Closure $hook): ?\Closure
+    {
+        if ($every === null || $hook === null) {
+            return null;
+        }
+        $nextAt = $clock() + $every;
+
+        return static function () use (&$nextAt, $clock, $every, $hook): void {
+            $now = $clock();
+            if ($now < $nextAt) {
+                return;
+            }
+            $nextAt = $now + $every;
+            $hook();
+        };
+    }
+
+    /** The finer of two optional beat intervals, or null when neither is set. */
+    private static function shortestBeat(?float $a, ?float $b): ?float
+    {
+        if ($a === null) {
+            return $b;
+        }
+
+        return $b === null ? $a : min($a, $b);
     }
 
     private function alreadyCancelled(): bool
