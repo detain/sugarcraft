@@ -540,10 +540,14 @@ final class CommandSpec
     /**
      * Longest wait for a detached shell to become its own process-group leader
      * before the timeout kill reads that group ({@see awaitGroupLeader()}). The
-     * wrapper leads within a millisecond or two; the cap only bounds a wrapper
-     * that never does.
+     * wrapper leads within a millisecond or two on an idle host, but the exec
+     * of `setsid` before its setsid() call can take hundreds of milliseconds
+     * under load, and a cap that expires first leaves the spawn-time group
+     * unrecorded: a backgrounded job then survives its timeout kill. The wait
+     * ends at once on leadership or on the wrapper's exit, so this cap is only
+     * ever paid by a wrapper that never leads.
      */
-    private const GROUP_LEADER_WAIT_SECONDS = 0.05;
+    private const GROUP_LEADER_WAIT_SECONDS = 1.0;
 
     /**
      * The prompt this file-based command sends, with its argument placeholders

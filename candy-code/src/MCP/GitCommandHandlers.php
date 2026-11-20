@@ -57,15 +57,6 @@ final readonly class GitCommandHandlers
     private const OUTPUT_CAP_BYTES = 1 << 30;
 
     /**
-     * After git itself has exited, how long the drain still waits for EOF.
-     * A hook can background a child that inherits git's stdout/stderr and
-     * holds them open long after git is gone; waiting for that EOF would
-     * stretch every such call to the full timeout.
-     */
-
-    /** Longest single `stream_select()` wait, so exit and deadline are re-checked. */
-
-    /**
      * Inherited variables that tell git WHICH repository to operate on —
      * exactly the list `git rev-parse --local-env-vars` prints, which is the
      * set git itself clears when it runs a command in another repository.

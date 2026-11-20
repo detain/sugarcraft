@@ -302,6 +302,41 @@ final class CustomCommandShellAsyncTest extends TestCase
         ];
     }
 
+    /**
+     * The spawn-time group read must outlast a wrapper that is slow to lead its
+     * group. A detached shell is only group-killable once setsid() has run, and
+     * under load the wrapper can spend well over the old 50 ms cap in exec
+     * before it gets there; a read that gave up first recorded no group, and a
+     * backgrounded job then survived the timeout kill. This child is a
+     * non-leader for 200 ms, then leads its own group.
+     */
+    public function testTheSpawnTimeGroupReadWaitsForAWrapperSlowToLeadItsGroup(): void
+    {
+        if (!\function_exists('posix_setsid') || !\function_exists('posix_getpgid')) {
+            self::markTestSkipped('needs ext-posix');
+        }
+
+        $pipes = [];
+        $proc = proc_open(
+            [\PHP_BINARY, '-r', 'usleep(200000); posix_setsid(); usleep(3000000);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        $pid = (int) proc_get_status($proc)['pid'];
+
+        try {
+            (new \ReflectionMethod(CommandSpec::class, 'awaitGroupLeader'))->invoke(null, $pid);
+            self::assertSame($pid, posix_getpgid($pid), 'the wait returned before the wrapper led its own group');
+        } finally {
+            foreach ($pipes as $pipe) {
+                fclose($pipe);
+            }
+            proc_terminate($proc, 9);
+            proc_close($proc);
+        }
+    }
+
     // -------------------------------------------------------------------------
 
     private function chat(Backend $backend, string $template, ?HookManager $hooks = null): Chat
