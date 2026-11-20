@@ -314,6 +314,129 @@ final class CommandBackendTest extends TestCase
     }
 
     /**
+     * A cancel has to reach the grandchildren, not only the shell it started.
+     *
+     * The script backgrounds a `sleep` and writes that pid to a scratch file, so
+     * the sleep is a grandchild of the PHP process. ChildRun's kill ladder signals
+     * the child's process group only when a containment prefix made the child a
+     * group leader ({@see ProcessContainment::spawnSpec()}). With setsid the group
+     * takes the sleep down with the shell; without it only the shell dies and the
+     * sleep is orphaned. The assertion is on the sleep itself, so an orphan is
+     * caught even when the promise rejects on time.
+     *
+     * The cancel waits for the pid file rather than a fixed delay: a fixed delay
+     * can fire before bash has started, and then no grandchild exists to check.
+     */
+    public function testCancelKillsTheGrandchildNotOnlyTheShell(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the grandchild pid.');
+        }
+
+        $pidFile = sys_get_temp_dir() . '/cmd_backend_grandchild_' . uniqid('', true) . '.pid';
+        $body = <<<SH
+        #!/bin/bash
+        cat > /dev/null
+        sleep 30 &
+        echo \$! > '{$pidFile}.tmp' && mv '{$pidFile}.tmp' '{$pidFile}'
+        wait
+        printf 'too late\\n'
+        SH;
+        $script = $this->writeScript($body . "\n");
+        $pid = 0;
+
+        try {
+            $backend = new CommandBackend($script);
+            $cancellation = new CancellationToken();
+            $loop = \React\EventLoop\Loop::get();
+
+            $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+
+            $armedAt = microtime(true);
+            $flip = null;
+            $flip = $loop->addPeriodicTimer(
+                0.02,
+                static function () use (&$flip, $loop, $cancellation, $pidFile, $armedAt): void {
+                    // The 5 s ceiling only stops a script that never starts from hanging
+                    // the test; the assertions below then report the missing pid.
+                    if (is_file($pidFile) || microtime(true) - $armedAt > 5.0) {
+                        $loop->cancelTimer($flip);
+                        $cancellation->cancel();
+                    }
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                $caught = $e;
+            }
+            $loop->cancelTimer($flip);
+
+            $this->assertInstanceOf(\RuntimeException::class, $caught, 'the cancelled command did not reject');
+            $this->assertSame('Request cancelled', $caught->getMessage());
+            $this->assertFileExists($pidFile, 'the script never wrote the grandchild pid, so the cancel was not checked against a running grandchild');
+
+            $pid = (int) trim((string) file_get_contents($pidFile));
+            $this->assertGreaterThan(1, $pid, "the pid file held no usable pid: {$pid}");
+            $this->assertTrue(
+                self::waitUntilGone($pid, 2.0),
+                "grandchild sleep (pid {$pid}) survived the cancel: the kill ladder reached the shell but not its process group",
+            );
+        } finally {
+            if ($pid > 1 && self::isLive($pid)) {
+                @posix_kill($pid, 9);
+            }
+            if (is_file($pidFile)) {
+                unlink($pidFile);
+            }
+            @unlink($pidFile . '.tmp');
+            unlink($script);
+        }
+    }
+
+    /**
+     * Polls until $pid has exited, bounded by $seconds. True when it is gone.
+     * A pid that has exited but not yet been reaped counts as gone: the test is
+     * about where the kill landed, not about who reaps the orphan.
+     */
+    private static function waitUntilGone(int $pid, float $seconds): bool
+    {
+        $deadline = microtime(true) + $seconds;
+        while (self::isLive($pid)) {
+            if (microtime(true) >= $deadline) {
+                return false;
+            }
+            usleep(50_000);
+        }
+
+        return true;
+    }
+
+    /** Live means signalable and not a zombie. Reads /proc where it exists, `ps` elsewhere. */
+    private static function isLive(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return false;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat !== false) {
+            $after = strrpos($stat, ')');
+            $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+            return $state !== 'Z' && $state !== 'X';
+        }
+
+        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>/dev/null'));
+
+        return $state !== '' && $state[0] !== 'Z';
+    }
+
+    /**
      * THE CLASSIC DOUBLE-DEADLOCK, and the reason stdin goes non-blocking here
      * and not just stdout.
      *
