@@ -34,6 +34,18 @@ while (!$driver->isEof()) {
 
     <p>One termination caveat: <code>isEof()</code> means "ended <em>and</em> drained", not "ended". A stream that stops mid-sequence leaves the decoder holding a partial, so <code>isEof()</code> stays false and <code>read()</code> answers null forever — call <code>escapeDecoder()->reset()</code> (or bound the loop with a grace period) when shutdown must win over an unfinished frame.</p>
 
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The lib is a byte decoder. It never reads the terminal and never writes to it. The host puts the terminal into raw mode and negotiates the mouse, paste, focus and Kitty modes, then hands the decoder the bytes the terminal sends. <code>EscapeDecoder::decode()</code> turns each complete sequence into one typed <code>Event</code>, and it buffers a partial sequence until the rest arrives, so the output does not depend on how the bytes were chunked.</p>
+    <p>Each sequence belongs to one protocol family: legacy keys, Kitty keyboard, mouse, focus, bracketed paste, or a terminal reply. <code>EscapeDecoderOptions</code> switches families on and off. A frame from a disabled or unknown family is counted in <code>droppedUnknownCount()</code>, never decoded as a different key. Terminal replies, such as a cursor position report, are drained as <code>TerminalReplyEvent</code> values instead of being dropped.</p>
+    <h3 style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Read keys from a non-blocking stream.</strong> Build a <code>StreamInputDriver</code> over <code>STDIN</code>, call <code>read()</code> in a loop, and sleep briefly when it returns null with <code>hasPending()</code> false.</li>
+      <li><strong>Put the terminal in the right shape first.</strong> Disable canonical mode and echo before decoding, for example with <code>stty -icanon -echo</code> or sugar-pty. Then enable the modes you need: <code>?1006</code> for mouse, <code>?2004</code> for bracketed paste, <code>?1004</code> for focus. The decoder never writes these itself.</li>
+      <li><strong>Handle a Kitty key release.</strong> Check <code>KeyEvent::isRelease()</code>. Release events arrive with a <code>Release</code> prefix on the key name, and autorepeat frames set <code>isRepeat</code> and decode as presses.</li>
+      <li><strong>Turn off trailing-ESC deferral when you need an immediate Escape.</strong> The default settles a lone ESC at once. Set <code>deferTrailingEscape</code> to hold it, then call <code>flushDeferredEscape()</code> on an input-idle timer.</li>
+      <li><strong>Recover from an unterminated paste or partial frame.</strong> Call <code>reset()</code> on the decoder, or bound the loop with a grace period, so shutdown wins over an unfinished frame.</li>
+      <li><strong>Resize without polling.</strong> Create a <code>SignalResizeDriver</code>, call <code>arm()</code> to install the SIGWINCH handler, and read <code>ResizeEvent</code> values from it. <code>arm()</code> returns false without ext-pcntl.</li>
+    </ul>
     <h3 style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
       <div class="feature"><strong>__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
@@ -66,6 +78,51 @@ while (!$driver->isEof()) {
     <h3 style="margin-top: 32px;">KeyModifier</h3>
     <p>Modifiers arrive on events and are read with <code>includes()</code> / <code>value()</code>. The constants <code>SHIFT</code>, <code>ALT</code>, <code>CTRL</code>, <code>META</code>, <code>SUPER</code>, <code>HYPER</code>, <code>CAPS_LOCK</code>, <code>NUM_LOCK</code> document the wire bit layout the decoder maps from — Kitty lock-state bits arrive on the explicit-event-type form — and the constructor is private, so masks are not built by hand.</p>
 
+    <h3 style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>enableMouse</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes X10, urxvt 1015 and SGR 1006/1016 mouse frames. Disabled frames count as drops.</td></tr>
+    <tr><td><code>enableKitty</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes Kitty keyboard protocol frames, including releases and repeats.</td></tr>
+    <tr><td><code>enableFocus</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes focus gained and lost reports (DECSET 1004).</td></tr>
+    <tr><td><code>enablePaste</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes bracketed paste into <code>PasteEvent</code>, capped at 1 MiB.</td></tr>
+    <tr><td><code>deferTrailingEscape</code></td><td><code>bool</code></td><td><code>false</code></td><td>Holds a lone trailing ESC until <code>flushDeferredEscape()</code> settles it on input idle.</td></tr>
+    </table>
+    <p>The options are readonly values passed to the <code>EscapeDecoder</code> constructor. A null argument uses the defaults. The options change parsing only. They do not turn modes on or off on the terminal, and the host still sends those sequences.</p>
+    <h3 style="margin-top: 32px;">Keys and key names</h3>
+    <p>Key events carry a symbolic <code>key</code> name, a <code>KeyModifier</code> bitmask and the <code>raw</code> bytes. Names cover literal characters, the arrows, Home, End, PageUp, PageDown, Insert, Delete, Backspace, Tab, Enter, Escape, and Ctrl plus a letter. Legacy function keys run from F1 to F24, and the Kitty protocol reaches F35. Modifiers are read with <code>includes()</code> and <code>value()</code>, and <code>KeyModifier::none()</code>, <code>shift()</code>, <code>ctrl()</code> and their combinations are the named constructors.</p>
+    <p>Mouse events carry <code>x</code>, <code>y</code>, <code>button</code> and <code>action</code>. X10 release frames report button 3, so match releases on <code>action</code>, not on the button index.</p>
+    <h3 style="margin-top: 32px;">Theme and styling</h3>
+    <p>Not applicable. This lib decodes input and draws nothing, so it has no theme, color or style surface. Rendering belongs to the host or to the output libraries, and the decoded events are plain PHP values.</p>
+    <h3 style="margin-top: 32px;">Examples</h3>
+    <p><code>examples/decode.php</code> is an <code>EscapeDecoder</code> micro-demo. It feeds labeled byte frames through the decoder and prints each event: literal keys, legacy arrows, Kitty arrows and releases, forged paste frames, and drained replies. Every frame is written with explicit hex escapes, so the file survives editor and terminal mangling of control bytes. Run it with <code>php examples/decode.php</code>.</p>
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <p>Run the suite from the lib root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suites cover the decoder and its options, each driver, the event classes, the modifier bitmask, the terminal-reply drain, and a key table parity check. Feed the decoder split byte streams in your own tests and compare the events. The result should match a single-call decode, because the decoder is chunk-invariant.</p>
+    <h3 style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Arrow keys do not reach the decoder, or echo back as escape text.</strong> The terminal is still in canonical mode with echo on, so the bytes wait in the line buffer or echo to the screen. Disable ICANON and ECHO before decoding.</li>
+      <li><strong>The loop never ends after the stream closes.</strong> <code>isEof()</code> means ended and drained. A stream that stops mid-sequence leaves a partial in the decoder, so call <code>escapeDecoder()-&gt;reset()</code> or bound the loop with a grace period.</li>
+      <li><strong>A key from a Kitty-capable terminal is missing.</strong> Check <code>droppedUnknownCount()</code>. A frame from a disabled family, or an unknown one, is refused and counted, and the decoder never guesses at it.</li>
+      <li><strong>Paste text is truncated.</strong> Paste above 1 MiB is clipped, and <code>PasteEvent::truncated</code> is true. The overflow is discarded and counted in <code>discardedPasteBytes()</code>, and the announcement fires once.</li>
+      <li><strong>Parameterized focus reports such as <code>CSI 1;3I</code> are ignored.</strong> This is intentional. Those forms are dropped, as xterm never sends them. 8-bit C1 controls are also not treated as sequence starts.</li>
+      <li><strong><code>arm()</code> returns false on Windows or without pcntl.</strong> SIGWINCH detection is POSIX-only and needs ext-pcntl. Without it, the resize driver is inert and the host must detect resizes some other way.</li>
+    </ul>
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The decoding semantics follow the input handling in <a href="https://github.com/charmbracelet/bubbletea">charmbracelet/bubbletea</a>. The port is native PHP. The README and body describe the typed terminal-reply draining and the 1 MiB paste cap as additions beyond the upstream surface.</p>
+    <table class="api-table">
+    <tr><th>Concern (bubbletea input)</th><th>SugarInput</th></tr>
+    <tr><td>Key message from raw bytes</td><td><code>EscapeDecoder::decode()</code> returning <code>KeyEvent</code></td></tr>
+    <tr><td>Mouse message</td><td><code>MouseEvent</code> (X10, 1006, 1015)</td></tr>
+    <tr><td>Paste message</td><td><code>PasteEvent</code>, capped at 1 MiB</td></tr>
+    <tr><td>Focus message</td><td><code>FocusEvent</code></td></tr>
+    <tr><td>Terminal replies</td><td><code>TerminalReplyEvent</code>, drained instead of dropped</td></tr>
+    </table>
+    <h3 style="margin-top: 32px;">Architecture</h3>
+    <p><code>EscapeDecoder</code> is the core. It holds the partial-sequence buffer, the paste state and the counters, and it applies the <code>EscapeDecoderOptions</code> family switches. The drivers wrap a source and call the decoder. <code>StreamInputDriver</code> reads a non-blocking stream. <code>ReactInputDriver</code> emits events from a ReactPHP readable stream. <code>SignalResizeDriver</code> turns SIGWINCH into <code>ResizeEvent</code>. Each driver exposes its owned decoder through <code>escapeDecoder()</code>, which is the seam for <code>reset()</code>, the flush helper and the counters. Events are value classes in the <code>Event</code> namespace.</p>
+    <p>Two decoders exist in the fleet. sugar-input is the byte-level decoder used by sugar-readline, sugar-pty and the input-facing apps. sugar-core's <code>InputReader</code> runs on every sugar-core <code>Program</code>. A program should use one of them for its whole input path, not both.</p>
+    <h3 style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-input/</code> in the monorepo is the record of changes. The install line takes the monorepo's current release line.</p>
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Real-TTY input</strong> — decode raw bytes instead of symbolic key names, on plain streams or ReactPHP loops.</li>
