@@ -70,13 +70,18 @@ use React\Promise\Deferred;
  *
  * ## No deadline in the child
  *
- * {@see ask()} blocks on the socket for as long as it takes. The parent owns
- * the policy — it pauses its idle ceiling while a question is open, and tears
- * the turn down on cancel — and the parent going away shows up here as EOF,
- * which settles the question as unanswered (`Permission required:`), never as
- * a grant. {@see callClient()} obeys the same law for a client's answer: the
- * deadline rides the parent's timer, and EOF settles as an error result,
- * never as content.
+ * {@see ask()} waits for as long as it takes, with no deadline of its own. The
+ * parent owns the policy — it pauses its idle ceiling while a question is open,
+ * and tears the turn down on cancel — and the parent going away shows up here
+ * as EOF, which settles the question as unanswered (`Permission required:`),
+ * never as a grant. {@see callClient()} obeys the same law for a client's
+ * answer: the deadline rides the parent's timer, and EOF settles as an error
+ * result, never as content.
+ *
+ * The wait is a suspension when the turn runs on the loop ({@see LoopDrivenTurn},
+ * P4-12 CC-1 e0): the turn's fiber parks on a pending promise and the loop
+ * resumes it when the reply frame arrives, so nothing blocks on the socket.
+ * A turn that is not loop-driven keeps the blocking wait.
  *
  * ## Owned by one process
  *
