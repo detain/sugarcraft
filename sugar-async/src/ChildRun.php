@@ -116,8 +116,8 @@ final class ChildRun
      */
     public function withExitGrace(?float $seconds): self
     {
-        if ($seconds !== null && ($seconds < 0 || !is_finite($seconds))) {
-            throw new \InvalidArgumentException('Exit grace must be null or a finite number of seconds >= 0');
+        if ($seconds !== null && ($seconds <= 0 || !is_finite($seconds))) {
+            throw new \InvalidArgumentException('Exit grace must be null or a positive finite number of seconds');
         }
 
         return $this->mutate(['exitGrace' => $seconds]);

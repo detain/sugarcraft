@@ -90,21 +90,6 @@ final class ChildRunTest extends TestCase
         $this->assertLessThan(5.0, $elapsed, 'the deadline and the kill ladder bound the run');
     }
 
-    /** Zero is a grace of no time at all: the exit ends the run at once, unlike null. */
-    public function testAZeroExitGraceEndsTheRunOnceTheExitIsSeen(): void
-    {
-        $this->requirePosixPipes();
-        $started = $this->now();
-        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
-            ->withTimeout(4.0)
-            ->withExitGrace(0.0)
-            ->run();
-        $elapsed = $this->now() - $started;
-
-        $this->assertSame(ChildResult::EXITED, $r->status);
-        $this->assertLessThan(3.0, $elapsed, 'a zero grace must not wait out the deadline');
-    }
-
     /**
      * Pins the exit grace's cut-off: a line a backgrounded grandchild writes inside
      * the grace after the parent exits is kept, and one written after it is not.
@@ -270,6 +255,7 @@ final class ChildRunTest extends TestCase
         yield 'negative group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(-4)];
         yield 'negative exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(-0.5)];
         yield 'infinite exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(INF)];
+        yield 'zero exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(0.0)];
     }
 
     #[DataProvider('badBuilders')]
