@@ -19,8 +19,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * returned after **7.77s** — it did NOT orphan the child, it blocked for the
  * child's whole remaining lifetime. Two places in this package had already
  * grown the escalation independently
- * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
- * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
+ * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
  * escalation, each with its own private `waitForExit()` and its own copy of the three
  * constants), and E366's sweep found three more call sites needing it. Five
  * hand-rolled copies of a signal-escalation ladder is how one of them ends up

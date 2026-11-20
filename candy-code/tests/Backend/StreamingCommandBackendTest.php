@@ -702,6 +702,155 @@ printf 'ok\n'
         }
     }
 
+    /**
+     * Finding 1, pinned as intended. The child exits 0 and a descendant keeps
+     * the pipes open with no token streamed. The idle budget stops applying
+     * once the direct child has exited, so the grace bounds the drain and the
+     * result is the notice, not an error, even though the idle budget is shorter
+     * than the grace.
+     */
+    public function testAnAbandonedPipeUnderAnIdleBudgetWithNoTokenIsANoticeNotAnExpiryError(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\n( sleep 5 ) &\nexit 0\n");
+
+        try {
+            $started = microtime(true);
+            $result = (new StreamingCommandBackend($script, idleTimeout: 1))->complete([], null);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertFalse($result->error, 'the command exited 0, so this is not an error');
+            $this->assertStringContainsString('pipes', $result->content);
+            $this->assertLessThan(
+                4.0,
+                $elapsed,
+                'the post-exit grace has to end the drain, or the loop waits out the grandchild',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Finding 2. A TERM-trapping child must not hold the cancel rejection for the
+     * TERM grace: the cancel is SIGKILL at once, as the replaced timer path was.
+     * The 1.0s TERM grace is the line between the two behaviours, so the bound
+     * sits below it.
+     */
+    public function testACancelledCompletionKillsATermTrappingChildAtOnce(): void
+    {
+        $backend = new StreamingCommandBackend("trap '' TERM; cat > /dev/null; sleep 5");
+        $cancellation = new CancellationToken();
+        $loop = \React\EventLoop\Loop::get();
+
+        $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+        $flip = $loop->addTimer(0.2, static function () use ($cancellation): void { $cancellation->cancel(); });
+
+        $started = microtime(true);
+        $caught = null;
+        try {
+            $this->awaitPromise($promise);
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            // The harness's own "did not settle" failure is a RuntimeException too:
+            // rethrow it so a hang reports as a hang, not as a cancel rejection.
+            throw $e;
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $elapsed = microtime(true) - $started;
+        $loop->cancelTimer($flip);
+
+        $this->assertInstanceOf(\RuntimeException::class, $caught);
+        $this->assertSame('Request cancelled', $caught->getMessage());
+        $this->assertLessThan(
+            0.9,
+            $elapsed,
+            'a TERM-trapping child held the cancel for the TERM grace: ' . sprintf('%.2fs after the cancel', $elapsed),
+        );
+    }
+
+    /**
+     * Finding 3, blocking entry point. A throwing $onToken stops the child, which
+     * would otherwise run for 5s, and the exception is rethrown from complete().
+     * The census confirms the child was reaped rather than left as a zombie.
+     */
+    public function testAThrowingOnTokenStopsTheChildAndRethrowsFromComplete(): void
+    {
+        if (!is_dir('/proc/self')) {
+            $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
+        }
+
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $before = self::ownZombieCount();
+            $started = microtime(true);
+            $caught = null;
+            try {
+                (new StreamingCommandBackend($script))->complete([], static function (string $token): void {
+                    throw new \DomainException("stop at {$token}");
+                });
+            } catch (\DomainException $e) {
+                $caught = $e;
+            }
+            $elapsed = microtime(true) - $started;
+
+            $this->assertInstanceOf(\DomainException::class, $caught);
+            $this->assertSame('stop at first', $caught->getMessage());
+            $this->assertLessThan(4.0, $elapsed, 'the child was waited out rather than stopped');
+            $this->assertSame(
+                $before,
+                self::ownZombieCount(),
+                'the stopped child was never waited for',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Finding 3, promise entry point. Same contract as the blocking test: a
+     * throwing $onToken stops the child and the promise rejects with that
+     * exception, and the child is reaped.
+     */
+    public function testAThrowingOnTokenStopsTheChildAndRejectsCompleteAsync(): void
+    {
+        if (!is_dir('/proc/self')) {
+            $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
+        }
+
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $before = self::ownZombieCount();
+            $started = microtime(true);
+            $promise = (new StreamingCommandBackend($script))->completeAsync(
+                [Message::user('hello')],
+                static function (string $token): void {
+                    throw new \DomainException("stop at {$token}");
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\DomainException $e) {
+                $caught = $e;
+            }
+            $elapsed = microtime(true) - $started;
+
+            $this->assertInstanceOf(\DomainException::class, $caught);
+            $this->assertSame('stop at first', $caught->getMessage());
+            $this->assertLessThan(4.0, $elapsed, 'the child was waited out rather than stopped');
+            $this->assertSame(
+                $before,
+                self::ownZombieCount(),
+                'the stopped child was never waited for',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
     /** User + system CPU seconds consumed by THIS process so far. */
     private static function cpuSeconds(): float
     {

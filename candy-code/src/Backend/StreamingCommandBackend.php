@@ -12,6 +12,7 @@ use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Support\ProcessContainment;
 
 /**
  * Streaming-capable backend that shells out to an external command and calls
@@ -146,8 +147,11 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      *        SILENCE ON THE PIPES, not silence from the child: a child that
      *        exits while a descendant holds the inherited pipes open is still
      *        silence by this definition, which is why the expiry message says
-     *        pipes rather than blaming the command. That case is separately
-     *        bounded by {@see POST_EXIT_GRACE_SECONDS} even when this is 0.
+     *        pipes rather than blaming the command. Once the direct child has
+     *        exited this budget stops applying (ChildRun's contract), so that
+     *        case is bounded by {@see POST_EXIT_GRACE_SECONDS} whatever this is
+     *        set to, and it reads as the abandoned-pipes notice rather than an
+     *        expiry error, even when this is shorter than the grace.
      */
     public function __construct(
         private readonly string|array $command,
@@ -211,7 +215,8 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      * A cancelled token kills the child through ChildRun's kill ladder, reaps it,
      * and rejects with 'Request cancelled'. A token already cancelled spawns
      * nothing. A throwing $onToken also stops the child, and the promise rejects
-     * with that exception.
+     * with that exception. The cancel is SIGKILL at once, not the TERM grace: a
+     * user abort must not wait on a child that traps TERM.
      */
     public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
@@ -234,10 +239,18 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
         // (forwarded through its listener, detached at settle) and a failing
         // $onToken. ChildRun observes only one token, so the two are merged here.
         $stop = new CancellationSource();
-        $detach = $cancellation?->onCancel($stop->cancel(...));
+        $pid = null;
+        $detach = $cancellation?->onCancel(static function () use (&$pid, $stop): void {
+            // SIGKILL at once, not the TERM grace: a user abort must not wait on a
+            // child that traps TERM. ChildRun's ladder then finds the child gone and
+            // only reaps it.
+            if ($pid !== null) {
+                ProcessContainment::terminatePid($pid, 9);
+            }
+            $stop->cancel();
+        });
         $sink = new StreamingTokenSink($onToken, $stop->cancel(...));
 
-        $pid = null;
         $child = $this->child($payload, $sink, $stop->token(), function (int $started) use (&$pid): void {
             $pid = $started;
             $this->registerActivePid($started);
