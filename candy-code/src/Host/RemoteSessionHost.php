@@ -1088,10 +1088,13 @@ final class RemoteSessionHost
      * marked dead first, so its close event is silenced and it cannot count as a
      * second verdict. The pause that follows carries the failure as its reason,
      * as dropped() does; a close that already ended the attachment keeps its own.
+     * Calls issued while the hello was in flight went out on this socket and
+     * will never be answered, so the failure settles them, as dropped() does.
      */
     private function abandon(DuplexStreamInterface $stream, \Throwable $failure): void
     {
-        if ($stream === $this->stream) {
+        $current = $stream === $this->stream;
+        if ($current) {
             if ($this->open) {
                 $this->closeReason = $failure->getMessage() !== '' ? $failure->getMessage() : $this->dropReason;
             }
@@ -1099,6 +1102,9 @@ final class RemoteSessionHost
             $this->open = false;
         }
         $stream->close();
+        if ($current) {
+            $this->rejectPending($failure->getMessage() !== '' ? $failure->getMessage() : $this->dropReason);
+        }
     }
 
     /** Requests the current socket cannot answer any more, with why. */

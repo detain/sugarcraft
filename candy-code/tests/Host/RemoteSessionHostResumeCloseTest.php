@@ -177,4 +177,79 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertFalse($opened[0]->isReadable(), 'the refused socket is closed');
         self::assertTrue($opened[1]->isReadable(), 'the resumed socket stays attached');
     }
+
+    /**
+     * A call issued while the resume's server.hello is in flight goes out on
+     * that socket, and the server never answers it. When the hello is refused,
+     * the attempt's failure must settle that call: it used to stay pending
+     * through the redial and the resumed session that followed.
+     */
+    public function testACallIssuedDuringARefusedHelloIsRejectedWithTheAttemptsFailure(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $host = null;
+        $dialed = 0;
+        $issued = false;
+        $settled = null;
+        $reopen = static function () use (&$dialed, &$host, &$issued, &$settled): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            $out->on('data', static function (string $bytes) use ($in, $answered, &$host, &$issued, &$settled): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                if ($request['method'] !== 'server.hello') {
+                    // The server never answers a call that reaches it on a socket it is refusing.
+                    return;
+                }
+                if ($answered === 1) {
+                    // Queued ahead of the refusal, so it runs while the hello is still unanswered.
+                    Loop::futureTick(static function () use (&$host, &$issued, &$settled): void {
+                        $issued = true;
+                        $host->call('session.cancel', [])->then(null, static function (\Throwable $failure) use (&$settled): void {
+                            $settled = $failure;
+                        });
+                    });
+                }
+                $reply = $answered === 1
+                    ? ['jsonrpc' => '2.0', 'id' => $request['id'], 'error' => ['code' => -32000, 'message' => 'server refused']]
+                    : ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                Loop::futureTick(static function () use ($in, $reply, $answered): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    if ($answered > 1) {
+                        Loop::stop();
+                    }
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $host->onClose(static function (string $reason): void {
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertTrue($host->isOpen(), 'the second attempt resumes, so the host is attached again');
+        self::assertTrue($issued, 'the call was issued while the hello was in flight');
+        self::assertInstanceOf(\Throwable::class, $settled, 'the call issued during the refused hello settles');
+        self::assertSame('server refused', $settled->getMessage(), 'the call is rejected with the attempt\'s failure');
+    }
 }
