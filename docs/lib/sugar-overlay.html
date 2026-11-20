@@ -238,16 +238,16 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
     <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
     <table class="api-table">
     <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
-    <tr><td><code>withBackdrop()</code></td><td><code>int</code>, 0 to 100</td><td><code>0</code></td><td>Dimming of the background. Values are clamped to the range. <code>0</code> leaves the background untouched.</td></tr>
-    <tr><td><code>withAnimation()</code></td><td><code>?AnimationKind</code> or a configured <code>Fade</code>, <code>Scale</code> or <code>Slide</code></td><td><code>null</code></td><td>Transition used by <code>animate()</code>. A preset applies that kind's default easing curve.</td></tr>
-    <tr><td><code>withZIndex()</code></td><td><code>int</code></td><td><code>0</code></td><td>Stacking order inside a <code>VeilStack</code>. Ascending order paints later veils on top.</td></tr>
-    <tr><td><code>withPosition()</code></td><td><code>?Position</code> per axis, plus <code>x</code> and <code>y</code> offsets</td><td>centered by the caller's arguments</td><td>Anchor and cell offsets for the veil itself. Used by <code>VeilStack::compositeAll()</code>.</td></tr>
-    <tr><td><code>withBorder()</code></td><td><code>?Border</code></td><td><code>null</code></td><td>Border chrome around the content. It applies to every composited frame.</td></tr>
-    <tr><td><code>withClickOutsideDismiss()</code></td><td>flag</td><td>off</td><td>Enables <code>isClickOutside()</code>. It throws if <code>scan()</code> has not run.</td></tr>
-    <tr><td><code>withReducedMotion()</code></td><td><code>bool</code></td><td><code>false</code></td><td>When true, <code>animate()</code> paints the settled frame at any progress.</td></tr>
-    <tr><td><code>withoutZoneMarkers()</code></td><td>flag</td><td>markers on</td><td>Opts out of the hit-test arena, so the frame carries no zone envelopes.</td></tr>
-    <tr><td><code>withUntrustedContent()</code></td><td><code>string</code></td><td><code>''</code></td><td>Sets content after sweeping it. Use it for any payload that did not come from the program itself.</td></tr>
-    <tr><td><code>withAutoSize()</code></td><td>flag</td><td>n/a</td><td>Deprecated no-op kept for source compatibility. Border chrome applies unconditionally.</td></tr>
+    <tr><td><code>Veil::withBackdrop()</code></td><td><code>int</code>, 0 to 100</td><td><code>0</code></td><td>Dimming of the background. Values are clamped to the range. <code>0</code> leaves the background untouched.</td></tr>
+    <tr><td><code>Veil::withAnimation()</code></td><td><code>?AnimationKind</code> or a configured <code>Fade</code>, <code>Scale</code> or <code>Slide</code></td><td><code>null</code></td><td>Transition used by <code>animate()</code>. A preset applies that kind's default easing curve.</td></tr>
+    <tr><td><code>Veil::withZIndex()</code></td><td><code>int</code></td><td><code>0</code></td><td>Stacking order inside a <code>VeilStack</code>. Ascending order paints later veils on top.</td></tr>
+    <tr><td><code>Veil::withPosition()</code></td><td><code>?Position</code> per axis, plus <code>x</code> and <code>y</code> offsets</td><td>centered by the caller's arguments</td><td>Anchor and cell offsets for the veil itself. Used by <code>VeilStack::compositeAll()</code>.</td></tr>
+    <tr><td><code>Veil::withBorder()</code></td><td><code>?Border</code></td><td><code>null</code></td><td>Border chrome around the content. It applies to every composited frame.</td></tr>
+    <tr><td><code>Veil::withClickOutsideDismiss()</code></td><td>flag</td><td>off</td><td>Enables <code>isClickOutside()</code>. It throws if <code>scan()</code> has not run.</td></tr>
+    <tr><td><code>Veil::withReducedMotion()</code></td><td><code>bool</code></td><td><code>false</code></td><td>When true, <code>animate()</code> paints the settled frame at any progress.</td></tr>
+    <tr><td><code>Veil::withoutZoneMarkers()</code></td><td>flag</td><td>markers on</td><td>Opts out of the hit-test arena, so the frame carries no zone envelopes.</td></tr>
+    <tr><td><code>Veil::withUntrustedContent()</code></td><td><code>string</code></td><td><code>''</code></td><td>Sets content after sweeping it. Use it for any payload that did not come from the program itself.</td></tr>
+    <tr><td><code>Veil::withAutoSize()</code></td><td>flag</td><td>n/a</td><td>Deprecated no-op kept for source compatibility. Border chrome applies unconditionally.</td></tr>
     </table>
     <h3 id="theme-backdrop-and-color" style="margin-top: 32px;">Theme, backdrop and color</h3>
     <p>The backdrop is the only color the compositor adds on its own. It dims each non-empty background line with a computed pen. The dimming does not compound across stacked veils, because the first dim to touch a cell governs. The pen assumes a light default foreground. On a terminal that renders dark text, the gray pen brightens that text instead, so set <code>withBackdrop(0)</code> there.</p>
