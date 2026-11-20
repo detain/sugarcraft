@@ -229,7 +229,13 @@ trait HandlesSessionSurface
         }
         if ($msg instanceof ShellSendSettledMsg) {
             // The answer to a `/shells send` that waited for its relay: one UI-only row,
-            // appended where the echo already sits (P4-12 CC-1).
+            // appended where the echo already sits (P4-12 CC-1). The wait can outlive
+            // the session it was typed in, so a row for a session no longer on screen
+            // is dropped, the same rule the side-question answer follows.
+            if ($msg->sessionId !== $this->currentSessionId) {
+                return [$this, null];
+            }
+
             return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
         }
         if ($msg instanceof BackgroundSessionStoppedMsg) {

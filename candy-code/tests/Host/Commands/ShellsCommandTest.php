@@ -408,6 +408,44 @@ final class ShellsCommandTest extends TestCase
         });
     }
 
+    public function testBuildingAQueuedSendClaimsNoQueueSlotAndRunsNoWork(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'build only', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $gate = new Deferred();
+        $held = ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' queued<Enter>');
+        self::assertNotNull($result->effect(CommandEffectKind::Async), 'a send behind a pending one is queued');
+        self::assertSame(
+            $held,
+            $this->sendTails($registry)[$id] ?? null,
+            'building the result must not replace the slot the earlier send holds',
+        );
+
+        $gate->resolve(true);
+        $this->drainLoop();
+        $settled = $this->settledBody($result);
+        self::assertNotSame('', $settled, 'running the effect performs the queued send and settles its row');
+    }
+
+    /**
+     * The send-queue slots of $registry, read through the private WeakMap so a
+     * test can see whether building a command claimed one.
+     *
+     * @return array<string, PromiseInterface<mixed>>
+     */
+    private function sendTails(BackgroundShellRegistry $registry): array
+    {
+        $tails = (new \ReflectionProperty(ShellsCommand::class, 'sendTails'))->getValue();
+
+        return $tails instanceof \WeakMap ? ($tails[$registry] ?? []) : [];
+    }
+
     /** Run the loop until the ticks queued by a settled send have fired. */
     private function drainLoop(): void
     {

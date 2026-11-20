@@ -222,22 +222,23 @@ final class ShellsCommand implements HostCommand
         // would put these bytes ahead of the ones the earlier send still holds.
         $row = $registry->status($id, $owner);
         $behindRelay = $row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayAttached($row);
+        // Building the result claims no queue slot and arms no timer: the
+        // sequenced() chain, the relay wait and the registry write all start
+        // inside the thunk, when the driver runs the effect (CommandEffect).
         if ($behindRelay || self::sendInFlight($registry, $id)) {
-            $answer = self::sequenced($registry, $id, static fn (): PromiseInterface => self::relayGate($row)->then(
-                static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
-                    $ready
-                        ? $registry->send($id, $decoded, 'human', $owner)
-                        : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
-                            'id' => $id,
-                            'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
-                        ])],
-                    $id,
-                    $decoded,
-                )),
-            ));
-
             return CommandResult::echo($text)->withEffect(CommandEffect::async(
-                static fn (): PromiseInterface => $answer,
+                static fn (): PromiseInterface => self::sequenced($registry, $id, static fn (): PromiseInterface => self::relayGate($row)->then(
+                    static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
+                        $ready
+                            ? $registry->send($id, $decoded, 'human', $owner)
+                            : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
+                                'id' => $id,
+                                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
+                            ])],
+                        $id,
+                        $decoded,
+                    ), $owner),
+                )),
                 static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null,
             ));
         }
