@@ -125,9 +125,17 @@ final class DoctorChannelsChecks
         $escaping = 0;
         $loose = [];
         $unarmed = 0;
+        $projectTier = [];
         foreach ($trusted as $name) {
             $bundle = $byName[$name] ?? null;
             if ($bundle === null) {
+                continue;
+            }
+            // Name trust is user-tier only (ruling 2026-11-20): a project-tier copy
+            // of a trusted name is refused by the loader, so it is reported as such
+            // and never counted as armed or first-sight.
+            if ($bundle->tier !== 'user') {
+                $projectTier[] = $name;
                 continue;
             }
             foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {
@@ -165,6 +173,12 @@ final class DoctorChannelsChecks
         }
         if ($unarmed > 0) {
             $problems[] = Lang::t($unarmed === 1 ? 'cli.doctor.bundles_first_sight_one' : 'cli.doctor.bundles_first_sight_other', ['count' => (string) $unarmed]);
+        }
+        if ($projectTier !== []) {
+            $problems[] = Lang::t('cli.doctor.bundles_project_tier', [
+                'count' => (string) count($projectTier),
+                'names' => implode(', ', $projectTier),
+            ]);
         }
         if ($problems !== []) {
             return ['status' => 'WARN', 'detail' => implode('; ', $problems)];

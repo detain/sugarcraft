@@ -122,7 +122,46 @@ final class BundleDiscovery
         /** @var list<Bundle> $bundles */
         $bundles = $this->scanner->bundles();
 
-        return $bundles;
+        return $this->dedupeByName($bundles);
+    }
+
+    /**
+     * One bundle per name: when a user-tier bundle and a project-tier bundle
+     * share a name, the user-tier copy is the one that loads and the project
+     * copy is skipped with a warning. Trust is by name, so two copies of one
+     * name would otherwise both answer to the same consent; the user tier is
+     * the only tier that may hold it (ruling 2026-11-20).
+     *
+     * @param list<Bundle> $bundles
+     *
+     * @return list<Bundle>
+     */
+    private function dedupeByName(array $bundles): array
+    {
+        $userNames = [];
+
+        foreach ($bundles as $bundle) {
+            if ($bundle->tier === 'user') {
+                $userNames[$bundle->name] = true;
+            }
+        }
+
+        $kept = [];
+
+        foreach ($bundles as $bundle) {
+            if ($bundle->tier !== 'user' && isset($userNames[$bundle->name])) {
+                $this->scanner->addWarning(Lang::t('bundles.shadowed_project', [
+                    'name' => $bundle->name,
+                    'dir' => $bundle->dir,
+                ]));
+
+                continue;
+            }
+
+            $kept[] = $bundle;
+        }
+
+        return $kept;
     }
 
     /**

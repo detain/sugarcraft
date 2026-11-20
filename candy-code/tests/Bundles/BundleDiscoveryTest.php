@@ -241,4 +241,43 @@ final class BundleDiscoveryTest extends TestCase
 
         self::assertSame([], $bundles);
     }
+
+    /**
+     * One bundle per name, and the user tier is the copy that survives: a
+     * project-tier duplicate is skipped with a warning naming it, never listed
+     * beside its user-tier twin (ruling 2026-11-20).
+     */
+    public function testAUserTierCopyWinsADuplicateNameAndTheProjectCopyIsSkipped(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project);
+        $bundles = $discovery->discover();
+
+        self::assertCount(1, $bundles, 'the duplicate name is listed once');
+        self::assertSame('user', $bundles[0]->tier, 'the user-tier copy is the one that loads');
+        self::assertSame(
+            realpath($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin'),
+            $bundles[0]->dir,
+        );
+        $shadowed = array_values(array_filter(
+            $discovery->warnings(),
+            static fn (string $warning): bool => str_contains($warning, 'twin') && str_contains($warning, (string) realpath($project)),
+        ));
+        self::assertCount(1, $shadowed, 'the skipped project copy is named by its directory');
+    }
+
+    /** A project-tier bundle with no user-tier twin is kept under its own tier. */
+    public function testAProjectTierBundleWithoutAUserTwinIsKept(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/solo', ['name' => 'solo']);
+
+        $bundles = (new BundleDiscovery($project))->discover();
+
+        self::assertCount(1, $bundles);
+        self::assertSame('project', $bundles[0]->tier);
+    }
 }

@@ -159,7 +159,7 @@ final class ChannelSubscriberFeedTest extends TestCase
             'entrypoints' => ['channel' => [['file' => $entryPath, 'class' => $class]]],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
-        return [Bundle::fromDir($dir, 'project'), $name, $entryPath];
+        return [Bundle::fromDir($dir, 'user'), $name, $entryPath];
     }
 
     private function sinkFile(): string

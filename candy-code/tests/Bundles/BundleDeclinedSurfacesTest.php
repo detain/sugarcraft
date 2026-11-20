@@ -97,6 +97,28 @@ final class BundleDeclinedSurfacesTest extends TestCase
         }
     }
 
+    /**
+     * Lay down a user-tier bundle under the sandboxed home's bundle tree. Name
+     * trust is a user-tier consent, so every fixture that trusts its name by
+     * name must sit in this tier to be trusted at all.
+     *
+     * @param array<string, string> $extraFiles path relative to bundle dir => contents
+     */
+    private function plantUserBundle(string $dirName, array $extraFiles): void
+    {
+        $dir = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/' . $dirName;
+        mkdir($dir . '/.claude-plugin', 0777, true);
+        file_put_contents($dir . '/.claude-plugin/plugin.json', json_encode(['name' => $dirName]));
+
+        foreach ($extraFiles as $relative => $contents) {
+            $target = $dir . '/' . $relative;
+            if (!is_dir(\dirname($target))) {
+                mkdir(\dirname($target), 0777, true);
+            }
+            file_put_contents($target, $contents);
+        }
+    }
+
     /** @return list<Bundle> the whole Bootstrap feed for $root */
     private function projectBundles(string $root): array
     {
@@ -327,7 +349,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         mkdir($root, 0777, true);
         $name = 'bright-hooks-' . getmypid();
         $this->trustBundleNamed($name);
-        $this->plantProjectBundle($root, $name, [
+        $this->plantUserBundle($name, [
             'hooks/hooks.json' => (string) json_encode([
                 'hooks' => ['PreToolUse' => [['name' => 'bundleBrightHook' . getmypid(), 'command' => 'true']]],
             ]),
@@ -348,12 +370,12 @@ final class BundleDeclinedSurfacesTest extends TestCase
         mkdir($root, 0777, true);
         $name = 'loose-hooks-' . getmypid();
         $this->trustBundleNamed($name);
-        $this->plantProjectBundle($root, $name, [
+        $this->plantUserBundle($name, [
             'hooks/hooks.json' => (string) json_encode([
                 'hooks' => ['PreToolUse' => [['name' => 'bundleLooseHook' . getmypid(), 'command' => 'true']]],
             ]),
         ]);
-        chmod($root . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/' . $name . '/hooks/hooks.json', 0o666);
+        chmod($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/' . $name . '/hooks/hooks.json', 0o666);
 
         $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
         self::assertStringNotContainsString(
@@ -374,7 +396,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         file_put_contents($stray, (string) json_encode([
             'hooks' => ['PreToolUse' => [['name' => 'bundleEscapeHook' . getmypid(), 'command' => 'true']]],
         ]));
-        $this->plantProjectBundle($root, $name, [
+        $this->plantUserBundle($name, [
             Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode(['name' => $name, 'hooks' => [$stray]]),
         ]);
 
@@ -414,7 +436,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         }
 
         foreach ([$alpha, $beta] as $name) {
-            $this->plantProjectBundle($root, $name, [
+            $this->plantUserBundle($name, [
                 Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode(['name' => $name, 'hooks' => $strays]),
             ]);
         }
@@ -437,6 +459,33 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertStringContainsString('stray-one-', $mine[0], 'the first declined file is named');
         self::assertStringContainsString('outside the bundle directory', $mine[0], 'the per-file Lang::t detail rides it unchanged');
         self::assertStringContainsString('(and 1 more)', $mine[0], 'three details are named, the rest is counted even at the clipped tail');
+    }
+
+    /**
+     * Name trust is a user-tier consent (ruling 2026-11-20): a project-tier
+     * bundle carrying a trusted name registers no hooks, and the operator is
+     * told by its own notice instead of the generic decline.
+     */
+    public function testAProjectTierBundleWithATrustedNameRegistersNoHooks(): void
+    {
+        $root = $this->tempDir . '/project-trusted-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'project-trusted-hooks-' . getmypid();
+        $this->trustBundleNamed($name);
+        $this->plantProjectBundle($root, $name, [
+            'hooks/hooks.json' => (string) json_encode([
+                'hooks' => ['PreToolUse' => [['name' => 'projectTierHook' . getmypid(), 'command' => 'true']]],
+            ]),
+        ]);
+
+        $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
+        self::assertStringNotContainsString(
+            'projectTierHook' . getmypid(),
+            $dumped,
+            'a project-tier copy of a trusted name inherits no trust, so its hook never registers',
+        );
+        self::assertNotSame([], $this->noticesCarrying(['carry a name you trusted', $name]), 'the project-tier refusal is announced under its own message');
+        self::assertSame([], $this->noticesCarrying(['not trusted them by name', $name]), 'the generic decline does not also fire for it');
     }
 
     /** The P1 trust list is a user-tier setting typed into the launch's own config. */

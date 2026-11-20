@@ -22,7 +22,9 @@ use SugarCraft\Code\Server\ErrorLog;
  *    Bootstrap::trustedBundleChannelNames() — the user-tier, non-layered,
  *    frozen-at-launch list (C-SEC-3.b). A checked-out project can never
  *    widen it; safe mode answers the empty list before anything reads this
- *    class, so `--safe-mode` loads zero plugin code by construction.
+ *    class, so `--safe-mode` loads zero plugin code by construction. The
+ *    name must also belong to a USER-tier bundle: a project-tier copy that
+ *    shares a trusted name is refused `project-tier` and never read.
  * 3. FIRST SIGHT IS QUARANTINE. Even a trusted entrypoint is only LISTED
  *    on the launch that first reveals it — the hooks law's
  *    quarantine-first-launch semantics, copied honestly: the operator sees
@@ -98,6 +100,14 @@ final class BundleChannelLoader
                     $seenPaths[$entry['path']] = true;
 
                     $where = ['bundle' => $bundle->name, 'path' => $entry['path'], 'class' => $entry['class'], 'kind' => $kind];
+
+                    // Name trust is a user-tier consent only (ruling 2026-11-20): a
+                    // project-tier copy of a trusted name inherits nothing, so its
+                    // bytes are refused before anything else reads them.
+                    if ($bundle->tier !== 'user') {
+                        $refusals[] = $where + ['reason' => 'project-tier'];
+                        continue;
+                    }
 
                     if (!\SugarCraft\Core\Util\PathJail::below($entry['path'], $bundle->dir)) {
                         // Belt over braces: the reader already refused this, but a

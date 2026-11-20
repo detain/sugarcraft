@@ -171,7 +171,13 @@ final class DoctorChannelsChecksTest extends TestCase
 
         self::assertDirectoryExists($bundleDir);
         self::assertStringNotContainsString('matches no discovered bundle', $row['detail']);
-        self::assertStringContainsString('not yet armed', $row['detail']);
+        // Name trust is user-tier only (ruling 2026-11-20): the live project copy is
+        // discovered, so it is not a ghost, but it never loads and is reported as a
+        // project-tier copy rather than as first sight.
+        self::assertSame('WARN', $row['status']);
+        self::assertStringContainsString('project-tier copy', $row['detail']);
+        self::assertStringContainsString('alpha', $row['detail']);
+        self::assertStringNotContainsString('not yet armed', $row['detail']);
     }
 
     public function testAFirstSightEntryPointWarnsQuarantine(): void
