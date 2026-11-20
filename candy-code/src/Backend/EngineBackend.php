@@ -6354,9 +6354,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // Accepted residual (AUD 12.1 A4, rows 47 and 49): this no-fork path
             // (pcntl_fork or the socket pair missing, e.g. Windows) has no child
             // and no channel. Subagents and ShellSend waits run on the TUI loop
-            // here and cannot see a parent stop until they end. The whole turn
-            // already blocks this loop, so moving only those waits would not
-            // change that.
+            // here and cannot see a parent stop until they end. The Retry-based
+            // ShellSend waits (ShellSend::relayReady and sendBounded, both
+            // Retry::bounded usleep loops) are named in the same exception. The
+            // whole turn already blocks this loop, so moving only those waits
+            // would not change that.
             $engine = $this;
             // ISS-072: this path has no child, so the ranking is primed here
             // — still never in the parent of a fork.
