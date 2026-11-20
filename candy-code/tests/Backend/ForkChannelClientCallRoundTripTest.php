@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Backend\Support\SettledPromise;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -170,7 +171,7 @@ final class ForkChannelClientCallRoundTripTest extends TestCase
             'default',
         );
 
-        $result = $channel->callClient('call_1', 'client__browse', ['url' => 'page'], 60);
+        $result = SettledPromise::callAnswer($channel->callClient('call_1', 'client__browse', ['url' => 'page'], 60), 'call_1');
 
         // EOF settles as an error, never as content.
         self::assertTrue($result->isError());
