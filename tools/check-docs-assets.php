@@ -1394,7 +1394,7 @@ final class CheckDocsAssets
             // one, so no `function` line declares them.
             $implied = strtolower($method);
             if (in_array($implied, ['cases', 'from', 'tryfrom'], true)
-                && preg_match('~\benum\s+' . preg_quote($short, '~') . '\b(\s*:)?~', $text, $enum) === 1
+                && preg_match('~\benum\s+' . preg_quote($short, '~') . '\b(\s*:)?~i', $text, $enum) === 1
             ) {
                 if ($implied === 'cases' || isset($enum[1])) {
                     return true;

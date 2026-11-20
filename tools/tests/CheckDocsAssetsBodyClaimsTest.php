@@ -118,6 +118,22 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         );
     }
 
+    public function testAnEnumClaimWrittenInAnotherCaseKeepsItsImpliedMethods(): void
+    {
+        $root = $this->makeFixture();
+
+        // PHP class names are case-insensitive, so MODE is the enum Mode: its implied
+        // from() and cases() must still be found when the qualified claim is not in
+        // the declaration's case. The non-implied method is still named.
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>\\SugarCraft\\Alpha\\MODE::from(\'a\'); \\SugarCraft\\Alpha\\MODE::tryFrom(\'a\'); \\SugarCraft\\Alpha\\PURE::cases();</code></pre>',
+        ));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\MODE::make(), but no declaration of SugarCraft\Alpha\MODE carries that method'],
+            $this->claimsFor($root, '<pre><code>\\SugarCraft\\Alpha\\MODE::make();</code></pre>'),
+        );
+    }
+
     public function testAThirdPartyOrBodyDeclaredNameIsIllustrativeNotAClaim(): void
     {
         $root = $this->makeFixture();
