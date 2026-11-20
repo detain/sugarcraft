@@ -67,7 +67,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Sparkline</td><td>new(data, width)</td><td>Create sparkline chart</td></tr>
@@ -88,13 +88,92 @@ Structural channels carry the same meaning without color: <code>withDataLabels()
 Braille output is a <em>dot-grid</em> density mode, not screen-reader braille: assistive technology should read the data (<code>cells()</code>, source arrays, CSV), not the picture. For low vision, <code>Theme::ansi()</code> keeps the 16-color tier and <code>withMonoRamp(true)</code> gives the heatmap a background-safe density ramp. For reduced motion, skip animation sweeps and render the final frame at progress <code>1.0</code>.
 Full guidance: <a href="https://github.com/sugarcraft/sugar-charts#accessibility-note">README — Accessibility note</a>.</p>
     <p style="margin-top: 16px;"><strong>Untrusted labels.</strong> Every string the library can echo is sanitized through <code>SugarCraft\Charts\Support\UntrustedText</code>: static labels are swept at their setters, and formatter closures (<code>withXLabelFormatter()</code>, <code>withYLabelFormatter()</code>, BarChart's <code>withDataLabelFormatter()</code>) are swept at the resolve and render sites, so hostile data cannot bypass the boundary. The Canvas and Graph layers that compose the frame are trusted internals and stay unguarded by design. Full story: <a href="https://github.com/sugarcraft/sugar-charts/blob/master/README.md#untrusted-labels">README — Untrusted labels</a>.</p>
+    <h3 style="margin-top: 40px;">Configuration and options</h3>
+    <p>Every chart is configured through fluent setters, and each setter returns a new chart. The common ones are listed below. The full set is in the README component tables.</p>
+<table class="api-table">
+<tr><th>Setter</th><th>Applies to</th><th>Effect</th></tr>
+<tr><td><code>withYRange()</code>, <code>withXRange()</code>, <code>withXYRange()</code></td><td>LineChart, Scatter</td><td>Fix the axis bounds. <code>autoAdjustRange()</code> returns to automatic scaling.</td></tr>
+<tr><td><code>withAxes(bool)</code>, <code>withXLabels()</code>, <code>withYLabels()</code></td><td>LineChart</td><td>Draw the axes and set their tick labels.</td></tr>
+<tr><td><code>withXLabelFormatter()</code>, <code>withYLabelFormatter()</code></td><td>LineChart</td><td>Format tick labels through a closure. The output is sanitized.</td></tr>
+<tr><td><code>withFill()</code>, <code>withMarkLines()</code></td><td>LineChart</td><td>Fill below the series, and draw reference lines.</td></tr>
+<tr><td><code>withFractionalHeights()</code></td><td>BarChart</td><td>Use eighth-block glyphs for the bar tops, so heights are not rounded to whole cells.</td></tr>
+<tr><td><code>withDataLabels()</code>, <code>withDataLabelFormatter()</code></td><td>BarChart</td><td>Print each bar's value as text.</td></tr>
+<tr><td><code>withLegend()</code>, <code>withDataset()</code></td><td>LineChart (<code>withLegend()</code> also on the other chart types)</td><td>Show the legend strip. Each dataset is a named series.</td></tr>
+<tr><td><code>withBraille(bool)</code></td><td>LineChart</td><td>Switch to 2x4 dots per cell.</td></tr>
+<tr><td><code>withCanvas(?CellGrid)</code></td><td>LineChart</td><td>Paint the render into a cell grid. <code>null</code> clears back to the internal canvas.</td></tr>
+<tr><td><code>withTheme(Theme)</code></td><td>LineChart</td><td>Take the series palette from a sugar-style theme.</td></tr>
+<tr><td><code>withMonoRamp(bool)</code></td><td>Heatmap</td><td>Use a density ramp that reads on any background.</td></tr>
+<tr><td><code>withProtocol()</code></td><td>Picture</td><td>Override the detected image protocol.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Keys and input</h3>
+    <p>The charts take no keystrokes, and LineChart has no mouse hit-testing yet. The one input that is read from the environment is <code>Picture::detect()</code>. It routes on <code>TERM</code> and <code>TERM_PROGRAM</code>, and it declines under tmux and Zellij unless <code>CHARTS_PICTURE_PASSTHROUGH=1</code> is set. It is a best-effort sniff of the environment, not a terminal query.</p>
+
+    <h3 style="margin-top: 40px;">Theming and styling</h3>
+    <p>A chart takes its palette from <code>withTheme()</code>, which reads a sugar-style <code>Theme</code>. <code>Theme::ansi()</code> keeps the 16-color tier, which suits low-vision setups. Per-point and per-bar colors come from resolver closures, <code>withSeriesColorFn()</code> and <code>withBarColor()</code>. A resolver that returns <code>null</code> keeps the default color. The environment ladder applies to every text renderer: <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> beat <code>NO_COLOR</code>, which beats <code>CLICOLOR=0</code>. Under <code>NO_COLOR</code>, the output comes back free of SGR. Image payloads are the exception, because the escapes are the image.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/sparkline.php</code> renders a compact one-row series.</li>
+      <li><code>examples/bar.php</code> draws vertical and horizontal bars side by side.</li>
+      <li><code>examples/line.php</code> draws a Streamline chart over a numeric series.</li>
+      <li><code>examples/animated_line.php</code> shows progressive rendering as the animation progresses.</li>
+      <li><code>examples/heatmap.php</code> draws a 2D heatmap with a multi-stop palette and a legend strip.</li>
+      <li><code>examples/scatter.php</code> plots two clusters of points and a quadratic curve.</li>
+      <li><code>examples/ohlc.php</code> draws a candlestick chart from a hand-rolled price series.</li>
+      <li><code>examples/timeseries.php</code> draws a line over <code>(timestamp, value)</code> pairs.</li>
+      <li><code>examples/braille.php</code> draws a line chart in the 2x4 braille dot grid.</li>
+      <li><code>examples/picture.php</code> encodes a small RGB grid as Sixel and prints the bytes as labeled hex.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/sparkline.php
+php examples/bar.php
+php examples/braille.php</code></pre>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite has one directory per renderer family, plus golden-file and structural tests. <code>GoldenRenderTest</code> pins full frames, and <code>NoColorParityTest</code> pins the <code>NO_COLOR</code> parity. <code>CanvasBridgeTest</code> covers <code>withCanvas()</code>, and <code>LangTest</code> checks that the locale catalogs match.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 style="margin-top: 24px;">Picture prints a plain-text placeholder instead of an image</h3>
+    <p>No protocol was detected. Under tmux or Zellij, <code>detect()</code> declines because those multiplexers swallow image escapes. Set <code>CHARTS_PICTURE_PASSTHROUGH=1</code> if the outer terminal really renders them, or pin the protocol with <code>withProtocol()</code>.</p>
+
+    <h3 style="margin-top: 24px;">Chart colors disappear</h3>
+    <p>Check <code>NO_COLOR</code> and <code>CLICOLOR=0</code>. Both drop the SGR from every text renderer. Set <code>CLICOLOR_FORCE=1</code> to keep color, since the force variables outrank both.</p>
+
+    <h3 style="margin-top: 24px;">A color resolver throws UnexpectedValueException</h3>
+    <p><code>withBarColor()</code> and <code>withSeriesColorFn()</code> must return a <code>Color</code> or <code>null</code>. Any other return value throws. Return <code>null</code> to keep the default color.</p>
+
+    <h3 style="margin-top: 24px;">The sparkline's first cell is blank</h3>
+    <p>That is the design. The series minimum maps to the blank leading cell, and the maximum maps to the tallest glyph, so the window is scaled to the data's range.</p>
+
+    <h3 style="margin-top: 24px;">Labels from user data look wrong</h3>
+    <p>Every label the library echoes is sanitized through <code>SugarCraft\Charts\Support\UntrustedText</code>. Formatter closures are swept at render time too, so hostile data cannot put control sequences into the frame. See the untrusted-labels section above.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The design antecedent is <a href="https://github.com/NimbleMarkets/ntcharts">NimbleMarkets/ntcharts</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code. The Graph primitives keep the ntcharts method names as compatibility aliases.</p>
+<table class="api-table">
+<tr><th scope="col">ntcharts concept</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
+<tr><td>Canvas and sub-cell grid</td><td><code>Canvas</code>, <code>BrailleGrid</code></td><td>A cell grid of runes and styles, and a 2x4 dot buffer.</td></tr>
+<tr><td>Line, bar, heatmap, scatter and OHLC charts</td><td><code>LineChart</code>, <code>BarChart</code>, <code>Heatmap</code>, <code>Scatter</code>, <code>OHLCChart</code></td><td>Each renders into the canvas.</td></tr>
+<tr><td>Streamline and waveline</td><td><code>Streamline</code>, <code>Waveline</code></td><td>Streamline is a sliding-window chart over a fixed-capacity ring buffer.</td></tr>
+<tr><td>Mouse zones</td><td>Not ported</td><td>LineChart has no hit-testing. The README lists it as a real gap.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p>Each renderer draws into a shared canvas, a fixed grid of runes and sugar-style cells. The Graph primitives and the BrailleGrid write into that grid, and the renderer's <code>view()</code> serializes it. Sparkline builds on sugar-cellbuffer. <code>Picture</code> is the exception: it emits raw protocol bytes instead of cells. Labels pass through <code>UntrustedText</code> at every setter and render site, and the canvas itself is trusted internal state.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0, so consume <code>dev-master</code>. The README's status table tracks what is shipped and what is pending. The known gaps are the LineChart mouse hit-testing, the OHLC volume pane, multi-bar grouped datasets in BarChart, and per-point rune sets for Scatter.</p>
+
   </div>
 </section>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">Ten renderers · nine runnable examples · eight CI-recorded GIFs — the two example scripts without a recorded tape are <code>animated_line.php</code> and <code>braille.php</code>. Regenerated by CI on pushes to <code>master</code> that touch the tapes, examples, or source, and on manual <code>workflow_dispatch</code>.</p>
+        <p class="lede">Ten renderers · ten runnable examples · eight CI-recorded GIFs — the two example scripts without a recorded tape are <code>animated_line.php</code> and <code>braille.php</code>. Regenerated by CI on pushes to <code>master</code> that touch the tapes, examples, or source, and on manual <code>workflow_dispatch</code>.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/sparkline.gif" alt="Sparkline">
