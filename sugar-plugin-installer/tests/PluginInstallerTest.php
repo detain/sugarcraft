@@ -681,6 +681,7 @@ final class PluginInstallerTest extends TestCase
         $refusal = $promise instanceof PromiseInterface ? self::rejectionOf($promise) : null;
         $this->assertNull($refusal, 'the tier-move update must not reject its record write');
         $this->assertFileExists($this->project . '/.candy-code/bundles/candy-discord/composer.json', 'the update did not move the tree into the project tier');
+        $this->assertDirectoryDoesNotExist($this->home . '/.candy-code/bundles/candy-discord', 'the tier move left a user-tier tree behind');
         $record = self::readSourceRecord($this->project . '/.candy-code/bundles/candy-discord');
         $this->assertNotNull($record, 'the tier move must leave a readable provenance record at the project tier');
         $this->assertSame('2.0.0', $record->version, 'the tier move must record the target version');
