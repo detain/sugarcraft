@@ -258,7 +258,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
-    <p><code>Style</code> is an immutable value object. Every setter returns a new <code>Style</code> and leaves the receiver unchanged, so one base style can be reused and specialised without side effects. <code>Border</code>, <code>Table</code>, <code>Tree</code> and <code>Canvas</code> follow the same pattern.</p>
+    <p><code>Style</code> is an immutable value object. Every setter returns a new <code>Style</code> and leaves the receiver unchanged, so one base style can be reused and specialized without side effects. <code>Border</code>, <code>Table</code>, <code>Tree</code> and <code>Canvas</code> follow the same pattern.</p>
     <p><code>render()</code> does not write escape codes blindly. It downsamples each color to the style's color profile, so a TrueColor value becomes a 256-color, 16-color or plain-text sequence depending on the tier. The same approach as the Writer in charmbracelet/colorprofile.</p>
 
     <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
