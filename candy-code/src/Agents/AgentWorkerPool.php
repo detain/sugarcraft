@@ -409,6 +409,21 @@ final class AgentWorkerPool
          * Null everywhere in `src/` today, so no shipped path changes shape.
          */
         private readonly ?ExecutorInterface $forkedExecutor = null,
+        /**
+         * Whether a suspended run may stamp {@see $loopTickNs} to say its
+         * event loop is turning, which lets a teardown arm its kill timers on
+         * that loop (see {@see armLoopProbe()}).
+         *
+         * True for the TUI's workflow run: the loop outlives the run, so a
+         * timer armed on it is always fired. False for a pool inside a forked
+         * turn child (the Workflow tool's per-call pool): that turn runs on
+         * its own loop (LoopDrivenTurn, P4-12 CC-1 e0), and the loop stops the
+         * moment the turn returns, so a kill armed on it could still be
+         * pending when the child exits, leaving the worker stopped and
+         * unreaped. Such a pool keeps the synchronous kill it had before the
+         * turn ran on the loop.
+         */
+        private readonly bool $probeLoop = true,
     ) {
         $this->executor = $executor;
         $this->customExecutor = $executor !== null;
@@ -1805,7 +1820,9 @@ final class AgentWorkerPool
         }
 
         if (\Fiber::getCurrent() !== null) {
-            $this->armLoopProbe();
+            if ($this->probeLoop) {
+                $this->armLoopProbe();
+            }
             \Fiber::suspend();
 
             return;

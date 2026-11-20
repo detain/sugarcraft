@@ -12,9 +12,12 @@ use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Backend\ChildChannel;
+use SugarCraft\Code\Backend\LoopDrivenTurn;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Tests\Backend\ForkChannelEofIsUnansweredTest;
 
 /**
  * Audit R3 residual: {@see AgentWorkerPool}'s cancel path ran
@@ -189,6 +192,74 @@ final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
         );
         self::assertTrue(self::goneWithin($command, 2.0), 'the command the overrunning agent started survived its deadline');
         $this->assertNothingLeftToReap($pool, $worker);
+    }
+
+    /**
+     * P4-12 CC-1 e0 continuation. A forked turn child runs its turn on its own
+     * loop ({@see LoopDrivenTurn}), and a turn that waits on a sub-agent
+     * suspends bare, so that loop turns while the pool's run is suspended. The
+     * Workflow tool's pool is built with `probeLoop: false`, which keeps its
+     * overrun teardown synchronous: the kill and the reap finish before the
+     * turn returns. An async kill armed on the turn's loop would be left
+     * pending when the turn returns and the child exits, with the worker
+     * stopped and never reaped.
+     *
+     * The child records the state AFTER the turn returns and BEFORE it exits,
+     * so the pool's destructor cannot make a leftover kill look finished.
+     */
+    public function testAForkedNonAskingTurnTearsDownAnOverrunningWorkerBeforeItExits(): void
+    {
+        $result = $this->dir . '/turn-result.json';
+        $pid = \pcntl_fork();
+        self::assertNotSame(-1, $pid, 'fixture: pcntl_fork() failed');
+
+        if ($pid === 0) {
+            $state = [];
+            try {
+                $pool = new AgentWorkerPool(
+                    forkedExecutor: $this->workerStartingACommand(trapsTerm: false),
+                    probeLoop: false,
+                );
+                $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+                $channel = ChildChannel::new(
+                    $pair[0],
+                    static function (array $frame): void {},
+                    ForkChannelEofIsUnansweredTest::drain(),
+                    'default',
+                    null,
+                );
+                $agents = [self::sleepingSubAgent('turn', 1)];
+                $request = self::request();
+                $results = LoopDrivenTurn::run(
+                    static fn (): array => \iterator_to_array($pool->executeAll($agents, $request), false),
+                    $channel,
+                );
+
+                [$worker, $command] = $this->recordedPids('turn');
+                $status = 0;
+                $state = [
+                    'timedOut' => ($results[0]->status ?? null) === AgentStatus::TimedOut,
+                    'killsInFlight' => \count(self::poolState($pool, 'killsInFlight')),
+                    'unreapedChildren' => \count(self::poolState($pool, 'unreapedChildren')),
+                    'workerReaped' => \pcntl_waitpid($worker, $status, \WNOHANG) === -1,
+                    'commandGone' => self::goneWithin($command, 2.0),
+                ];
+            } catch (\Throwable $e) {
+                $state = ['error' => $e->getMessage()];
+            }
+            \file_put_contents($result, \json_encode($state, JSON_THROW_ON_ERROR));
+            exit(0);
+        }
+
+        \pcntl_waitpid($pid, $status);
+        self::assertFileExists($result, 'the forked turn child wrote no result');
+        $state = \json_decode((string) \file_get_contents($result), true, 512, JSON_THROW_ON_ERROR);
+        self::assertArrayNotHasKey('error', $state, 'the forked turn failed: ' . ($state['error'] ?? ''));
+        self::assertTrue($state['timedOut'], 'the overrunning agent did not settle TimedOut');
+        self::assertSame(0, $state['killsInFlight'], 'a kill was still pending when the turn returned');
+        self::assertSame(0, $state['unreapedChildren'], 'a worker was still unreaped when the turn returned');
+        self::assertTrue($state['workerReaped'], 'the overrunning worker was not reaped before the turn returned');
+        self::assertTrue($state['commandGone'], 'the command the overrunning worker started survived the turn');
     }
 
     /**
