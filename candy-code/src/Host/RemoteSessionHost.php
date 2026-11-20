@@ -232,6 +232,11 @@ final class RemoteSessionHost
     {
         $epoch = ++$this->epoch;
         $this->malformedLogged = false;
+        if (isset($this->stream) && $this->stream !== $stream) {
+            // The socket this replaces is dead to the host and its epoch is stale,
+            // so its events are silenced; closing it keeps it from staying attached.
+            $this->stream->close();
+        }
         $this->stream = $stream;
         $this->buffer = new MessageBuffer(
             self::closeFrameChecker(),
@@ -1069,7 +1074,27 @@ final class RemoteSessionHost
             }
             $this->reconnecting = false;
             $this->attempt = 0;
+        })->then(null, function (\Throwable $failure) use ($stream): void {
+            // A refused hello, a call deadline, or a socket that died mid-hello:
+            // the attempt is over and its socket is the host's no longer.
+            $this->abandon($stream);
+
+            throw $failure;
         });
+    }
+
+    /**
+     * Close the socket a failed resume opened, before the ladder redials. It is
+     * marked dead first, so its close event is silenced and it cannot count as a
+     * second verdict.
+     */
+    private function abandon(DuplexStreamInterface $stream): void
+    {
+        if ($stream === $this->stream) {
+            $this->deadEpoch = $this->epoch;
+            $this->open = false;
+        }
+        $stream->close();
     }
 
     /** Requests the current socket cannot answer any more, with why. */

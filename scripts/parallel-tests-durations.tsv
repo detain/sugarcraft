@@ -2070,6 +2070,7 @@ candy-code/tests/Host/Commands/NoticesHostCommandTest.php	0.001	2
 candy-code/tests/Host/Commands/PrHostCommandTest.php	0.001	3
 candy-code/tests/Host/PermissionAskOriginEventTest.php	0.001	1
 candy-code/tests/Host/RemoteSessionHostCallLayerTest.php	0.001	4
+candy-code/tests/Host/RemoteSessionHostResumeCloseTest.php	0.732	2
 candy-code/tests/Host/SkillsSkipLinesTest.php	0.001	3
 candy-code/tests/Host/SubmitOptionsTest.php	0.001	3
 candy-code/tests/Host/TurnRunnerContextTest.php	0.001	6
