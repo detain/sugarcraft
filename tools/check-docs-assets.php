@@ -166,11 +166,12 @@ final class CheckDocsAssets
      * The list is every class and interface the Core, SPL, date, Reflection and
      * json extensions declare under PHP 8.3, the set a PHP 8.3 build always
      * carries. PDOException and PDOStatement are the exception: they come from
-     * the PDO extension, and stay listed because they were listed before. Matched
-     * case-insensitively, as PHP matches class names. A method claim
-     * (`Name::method()`) on a PDO name is checked against a fixed method list
-     * (fixedCoreMethods()), so it does not depend on the host either; other
-     * core names resolve through internalClass().
+     * the PDO extension, and stay listed because they were listed before. FFI is the
+     * other extension name listed: sugar-pty requires ext-ffi, and its docs body
+     * writes FFI::cdef(). Matched case-insensitively, as PHP matches class names. A
+     * method claim (`Name::method()`) on a PDO or FFI name is checked against a fixed
+     * method list (fixedCoreMethods()), so it does not depend on the host either;
+     * other core names resolve through internalClass().
      *
      * @var list<string>
      */
@@ -185,7 +186,7 @@ final class CheckDocsAssets
         'DateMalformedStringException', 'DateObjectError', 'DatePeriod', 'DateRangeError',
         'DateTime', 'DateTimeImmutable', 'DateTimeInterface', 'DateTimeZone',
         'Directory', 'DirectoryIterator', 'DivisionByZeroError', 'DomainException', 'EmptyIterator', 'Error',
-        'ErrorException', 'Exception', 'Fiber', 'FiberError', 'FilesystemIterator',
+        'ErrorException', 'Exception', 'FFI', 'Fiber', 'FiberError', 'FilesystemIterator',
         'FilterIterator', 'Generator', 'GlobIterator', 'InfiniteIterator', 'InternalIterator',
         'InvalidArgumentException', 'Iterator', 'IteratorAggregate', 'IteratorIterator',
         'JsonException', 'JsonSerializable', 'LengthException', 'LimitIterator',
@@ -226,6 +227,18 @@ final class CheckDocsAssets
         'debugdumpparams', 'errorcode', 'errorinfo', 'execute', 'fetch', 'fetchall',
         'fetchcolumn', 'fetchobject', 'getattribute', 'getcolumnmeta', 'getiterator',
         'nextrowset', 'rowcount', 'setattribute', 'setfetchmode',
+    ];
+
+    /**
+     * Methods a body may claim on the FFI class, lowercased, for the same reason as
+     * PDO_STATEMENT_METHODS: ext-ffi is not in every build, so the verdict must not
+     * follow the host. testTheFfiMethodListMatchesTheExtensionWhenLoaded pins it.
+     *
+     * @var list<string>
+     */
+    private const FFI_METHODS = [
+        'cdef', 'load', 'scope', 'new', 'free', 'cast', 'type', 'typeof', 'arraytype',
+        'addr', 'sizeof', 'alignof', 'memcpy', 'memcmp', 'memset', 'string', 'isnull',
     ];
 
     /**
@@ -1307,7 +1320,9 @@ final class CheckDocsAssets
                 : "names $short::$method(), which PHP's $short does not define";
         }
 
-        $internal = self::internalClass($short);
+        // Only a PHP core name is looked up in the host's reflection; any other name
+        // is an extension class that a host may or may not load, so it is named.
+        $internal = self::isCoreClassName($short) ? self::internalClass($short) : null;
         if ($internal === null) {
             return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
         }
@@ -1327,6 +1342,7 @@ final class CheckDocsAssets
     {
         return match ($lower) {
             'pdostatement' => self::PDO_STATEMENT_METHODS,
+            'ffi' => self::FFI_METHODS,
             // PDOException declares no methods of its own; it inherits Exception's, which every build carries.
             'pdoexception' => array_map('strtolower', get_class_methods(\Exception::class)),
             default => null,
@@ -1657,17 +1673,29 @@ final class CheckDocsAssets
     }
 
     /**
-     * True when $fqn names a PHP built-in class, interface or enum that carries
+     * True when $fqn names a PHP core class, interface or enum that carries
      * $method, so a SugarCraft class extending it inherits the method with no
-     * SugarCraft declaration to find it in.
+     * SugarCraft declaration to find it in. A parent outside CORE_CLASS_NAMES
+     * (an extension class such as Imagick) is never answered from the host's
+     * reflection: whether it is loaded must not change the verdict.
      */
     private static function builtInDeclaresMethod(string $fqn, string $method): bool
     {
-        if (!class_exists($fqn, false) && !interface_exists($fqn, false) && !enum_exists($fqn, false)) {
+        $written = ltrim($fqn, '\\');
+        if (str_contains($written, '\\') || !self::isCoreClassName($written)) {
             return false;
         }
 
-        return (new \ReflectionClass($fqn))->isInternal() && method_exists($fqn, $method);
+        $fixed = self::fixedCoreMethods(strtolower($written));
+        if ($fixed !== null) {
+            return in_array(strtolower($method), $fixed, true);
+        }
+
+        if (!class_exists($written, false) && !interface_exists($written, false) && !enum_exists($written, false)) {
+            return false;
+        }
+
+        return (new \ReflectionClass($written))->isInternal() && method_exists($written, $method);
     }
 
     /** The PHP built-in class, interface or enum called $short, or null when there is none. */

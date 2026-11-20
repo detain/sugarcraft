@@ -567,7 +567,72 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
 
         // The verdict must not depend on whether ext-pdo is loaded, so the bodies are
         // read in a child PHP with -n (no ini, no PDO) and the class is checked there.
-        $script = $this->tmpDir . '/claims-without-pdo.php';
+        $claims = $this->bodyClaimsWithoutIni($root);
+        if ($claims === null) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertSame([], $claims);
+    }
+
+    public function testAMethodClaimOnAnExtensionClassIsNamedWhetherOrNotTheHostLoadsIt(): void
+    {
+        $root = $this->makeFixture();
+        $expected = [
+            'claims: docs/_data/alpha.body.html names class Imagick, which no <slug>/src declares',
+            'claims: docs/_data/alpha.body.html names class Redis, which no <slug>/src declares',
+        ];
+
+        // Imagick and Redis are PECL extensions. This host loads both; the -n child does not.
+        // A method claim on either must get the same verdict on both, so it cannot pass on one.
+        $this->assertEqualsCanonicalizing($expected, $this->claimsFor($root,
+            '<pre><code>Imagick::readImage("x");</code></pre><pre><code>Redis::connect();</code></pre>',
+        ));
+        $claims = $this->bodyClaimsWithoutIni($root);
+        if ($claims === null) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertEqualsCanonicalizing($expected, $claims);
+    }
+
+    public function testAMethodInheritedFromAnExtensionParentIsNamedWhetherOrNotTheHostLoadsIt(): void
+    {
+        $root = $this->makeFixture();
+        // Pic extends the Imagick extension class. Whether Imagick is loaded on this host must
+        // not decide whether Pic is said to inherit readImage().
+        $this->put("$root/alpha/src/Pic.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Pic extends \Imagick
+            {
+            }
+
+            PHP);
+        $expected = [
+            'claims: docs/_data/alpha.body.html names Pic::readImage(), but no declaration of Pic carries that method',
+        ];
+
+        $this->assertSame($expected, $this->claimsFor($root, '<pre><code>Pic::readImage();</code></pre>'));
+        $claims = $this->bodyClaimsWithoutIni($root);
+        if ($claims === null) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertSame($expected, $claims);
+    }
+
+    /**
+     * The body claims a child PHP reports with -n (no ini), so ext-pdo, ext-imagick
+     * and ext-redis are absent unless the build compiles them in. Null when the child
+     * loads PDOStatement anyway, since the host-free arm then cannot run.
+     *
+     * @return ?list<string>
+     */
+    private function bodyClaimsWithoutIni(string $root): ?array
+    {
+        $script = $this->tmpDir . '/claims-without-ini.php';
         $this->put($script, <<<'PHP'
             <?php
 
@@ -592,10 +657,8 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         $this->assertSame(0, $code, "child PHP exited $code: $out$err");
 
         $result = \json_decode($out, true, 512, \JSON_THROW_ON_ERROR);
-        if ($result['loaded']) {
-            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
-        }
-        $this->assertSame([], $result['claims']);
+
+        return $result['loaded'] ? null : $result['claims'];
     }
 
     public function testAMethodClaimOnAPdoCoreNameGetsTheSameVerdictOnEveryHost(): void
@@ -630,6 +693,40 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         // not only the verdicts it produces.
         $listed = (new \ReflectionClassConstant(\CheckDocsAssets::class, 'PDO_STATEMENT_METHODS'))->getValue();
         $real = array_map('strtolower', get_class_methods('PDOStatement'));
+        sort($listed);
+        sort($real);
+        $this->assertSame($real, $listed);
+    }
+
+    public function testAMethodClaimOnTheFfiClassGetsTheSameVerdictOnEveryHost(): void
+    {
+        $root = $this->makeFixture();
+        // sugar-pty requires ext-ffi and its body writes FFI::cdef(), so the class is listed
+        // like the PDO names: a claim is checked against a fixed list, not the host's reflection.
+        $expected = [
+            'claims: docs/_data/alpha.body.html names FFI::nope(), which PHP\'s FFI does not define',
+        ];
+
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>FFI::cdef("int getpid(void);");</code></pre>',
+        ));
+        $this->assertSame($expected, $this->claimsFor($root, '<pre><code>FFI::nope();</code></pre>'));
+        $claims = $this->bodyClaimsWithoutIni($root);
+        if ($claims === null) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertSame($expected, $claims);
+    }
+
+    public function testTheFfiMethodListMatchesTheExtensionWhenLoaded(): void
+    {
+        if (!class_exists('FFI', false)) {
+            $this->markTestSkipped('ext-ffi is not loaded on this host, so the list has nothing to match.');
+        }
+
+        // Read the private list through reflection so the test pins the constant itself.
+        $listed = (new \ReflectionClassConstant(\CheckDocsAssets::class, 'FFI_METHODS'))->getValue();
+        $real = array_map('strtolower', get_class_methods('FFI'));
         sort($listed);
         sort($real);
         $this->assertSame($real, $listed);
