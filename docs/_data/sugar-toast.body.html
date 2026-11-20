@@ -175,17 +175,17 @@ $toast = Toast::new(50)
     <p>Every option is a fluent setter on <code>Toast</code>. The defaults below are the values a fresh <code>Toast::new()</code> carries.</p>
 <table class="api-table">
 <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>withDuration()</code></td><td><code>?float</code></td><td><code>null</code></td><td>Seconds an inheriting alert stays up. <code>null</code> arms no timer, so alerts persist until dismissed.</td></tr>
-<tr><td><code>withMaxWidth()</code></td><td><code>int</code></td><td><code>50</code></td><td>Maximum alert width in cells. Values of 0 or less throw.</td></tr>
-<tr><td><code>withMinWidth()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> gives fixed-width boxes at the cap. A positive value turns on fit-to-content between that floor and the cap.</td></tr>
-<tr><td><code>withPosition()</code></td><td><code>Position</code></td><td><code>Position::TopLeft</code></td><td>Where the stack anchors on the viewport.</td></tr>
-<tr><td><code>withSymbolSet()</code></td><td><code>SymbolSet</code></td><td><code>SymbolSet::Unicode</code></td><td>Icon and border set. <code>Ascii</code> also switches the borders to <code>+ - |</code> and the progress bar to <code>#</code> and <code>.</code>.</td></tr>
-<tr><td><code>withMaxConcurrent()</code></td><td><code>?int</code></td><td><code>null</code></td><td>Cap on live alerts. <code>null</code> is unlimited. Values below 1 throw.</td></tr>
-<tr><td><code>withOverflow()</code></td><td><code>Overflow</code></td><td><code>Overflow::DropOldest</code></td><td>What happens past the cap: evict the oldest (<code>DropOldest</code>), refuse the newest and file it into history (<code>DropNewest</code>), or let the queue exceed the cap (<code>Enqueue</code>).</td></tr>
-<tr><td><code>withHistoryLimit()</code></td><td><code>?int</code></td><td><code>100</code></td><td>Cap on recorded history, oldest evicted first. <code>null</code> is unbounded.</td></tr>
-<tr><td><code>withAllowEscToClose()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Preference flag the host reads on Escape. The renderer never acts on it.</td></tr>
-<tr><td><code>withAccessibleText()</code></td><td><code>bool</code></td><td><code>false</code></td><td>Writes the severity word into headers and percentages onto progress rows. Off keeps frames byte-identical to the color-and-glyph output.</td></tr>
-<tr><td><code>withHostZoneCarry()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Keeps the host's sugar-mouse zone markers paired through the composite. Off restores full chrome and drops the zone spans.</td></tr>
+<tr><td><code>Toast::withDuration()</code></td><td><code>?float</code></td><td><code>null</code></td><td>Seconds an inheriting alert stays up. <code>null</code> arms no timer, so alerts persist until dismissed.</td></tr>
+<tr><td><code>Toast::withMaxWidth()</code></td><td><code>int</code></td><td><code>50</code></td><td>Maximum alert width in cells. Values of 0 or less throw.</td></tr>
+<tr><td><code>Toast::withMinWidth()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> gives fixed-width boxes at the cap. A positive value turns on fit-to-content between that floor and the cap.</td></tr>
+<tr><td><code>Toast::withPosition()</code></td><td><code>Position</code></td><td><code>Position::TopLeft</code></td><td>Where the stack anchors on the viewport.</td></tr>
+<tr><td><code>Toast::withSymbolSet()</code></td><td><code>SymbolSet</code></td><td><code>SymbolSet::Unicode</code></td><td>Icon and border set. <code>Ascii</code> also switches the borders to <code>+ - |</code> and the progress bar to <code>#</code> and <code>.</code>.</td></tr>
+<tr><td><code>Toast::withMaxConcurrent()</code></td><td><code>?int</code></td><td><code>null</code></td><td>Cap on live alerts. <code>null</code> is unlimited. Values below 1 throw.</td></tr>
+<tr><td><code>Toast::withOverflow()</code></td><td><code>Overflow</code></td><td><code>Overflow::DropOldest</code></td><td>What happens past the cap: evict the oldest (<code>DropOldest</code>), refuse the newest and file it into history (<code>DropNewest</code>), or let the queue exceed the cap (<code>Enqueue</code>).</td></tr>
+<tr><td><code>Toast::withHistoryLimit()</code></td><td><code>?int</code></td><td><code>100</code></td><td>Cap on recorded history, oldest evicted first. <code>null</code> is unbounded.</td></tr>
+<tr><td><code>Toast::withAllowEscToClose()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Preference flag the host reads on Escape. The renderer never acts on it.</td></tr>
+<tr><td><code>Toast::withAccessibleText()</code></td><td><code>bool</code></td><td><code>false</code></td><td>Writes the severity word into headers and percentages onto progress rows. Off keeps frames byte-identical to the color-and-glyph output.</td></tr>
+<tr><td><code>Toast::withHostZoneCarry()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Keeps the host's sugar-mouse zone markers paired through the composite. Off restores full chrome and drops the zone spans.</td></tr>
 </table>
     <p style="margin-top: 12px;">Environment variables are read at render time and never probe a TTY. <code>REDUCE_MOTION</code> or <code>PREFERS_REDUCED_MOTION</code> drop blink. <code>NO_COLOR</code> or <code>CLICOLOR=0</code> drop every color byte. <code>CLICOLOR_FORCE</code> wins over both. A literal <code>NO_COLOR=0</code> counts as unset, and <code>CLICOLOR</code> must read exactly <code>0</code> to suppress color.</p>
 
@@ -233,11 +233,11 @@ vendor/bin/phpunit</code></pre>
     <h3 style="margin-top: 40px;">Upstream mapping</h3>
     <p>The port follows the alert model of <a href="https://github.com/DaltonSW/bubbleup">DaltonSW/bubbleup</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code.</p>
 <table class="api-table">
-<tr><th scope="col">Upstream (bubbleup)</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
-<tr><td>Alert definition (key, color, prefix)</td><td><code>AlertTypeDefinition</code></td><td>Validated at construction. Registered through a value, not a global.</td></tr>
-<tr><td>RegisterNewAlertType</td><td><code>AlertTypeRegistry::with()</code> and <code>Toast::withTypeRegistry()</code></td><td>Immutable. Custom keys resolve registry-first.</td></tr>
-<tr><td>Alert positions</td><td><code>Position</code> enum</td><td>Nine positions, with placement maths on the enum.</td></tr>
-<tr><td>Alert types</td><td><code>ToastType</code> enum</td><td>Error, Warning, Info and Success.</td></tr>
+<tr><th scope="col">Upstream (bubbleup)</th><th scope="col">SugarCraft</th></tr>
+<tr><td>Alert definition (key, color, prefix)</td><td><code>AlertTypeDefinition</code>, validated at construction and registered through a value, not a global.</td></tr>
+<tr><td>RegisterNewAlertType</td><td><code>AlertTypeRegistry::with()</code> and <code>Toast::withTypeRegistry()</code>, immutable, with custom keys resolved registry-first.</td></tr>
+<tr><td>Alert positions</td><td><code>Position</code> enum, nine positions with the placement maths on the enum.</td></tr>
+<tr><td>Alert types</td><td><code>ToastType</code> enum: Error, Warning, Info and Success.</td></tr>
 </table>
 
     <h3 style="margin-top: 40px;">Architecture</h3>
