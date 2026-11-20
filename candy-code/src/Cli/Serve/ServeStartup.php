@@ -603,6 +603,25 @@ trait ServeStartup
     }
 
     /**
+     * The refusals the `bundles.channels.refused` notice names. A `project-tier`
+     * row is left out: Bootstrap::bundles() already announces project-tier
+     * copies of trusted names through `bundles.project_tier_trust_refused`, and
+     * naming them here too would print a second notice whose reason list has no
+     * project-tier entry.
+     *
+     * @param list<array<array-key, mixed>> $refusals
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    public static function channelRefusalsForNotice(array $refusals): array
+    {
+        return \array_values(\array_filter(
+            $refusals,
+            static fn (array $row): bool => ($row['reason'] ?? '') !== 'project-tier',
+        ));
+    }
+
+    /**
      * code-chat P1 step 4: the launch notices rendering the channel buckets -
      * loaded/quarantined lists and refusals through the lang keys, plus one
      * line per named collision. Ruling 2c keeps the refusal localised: a
@@ -626,8 +645,8 @@ trait ServeStartup
                 'count' => \count($buckets['quarantined']),
             ]));
         }
-        $refusals = $buckets['refusals'];
-        foreach ($refusals as $refusal) {
+        $refusals = self::channelRefusalsForNotice($buckets['refusals']);
+        foreach ($buckets['refusals'] as $refusal) {
             if (($refusal['reason'] ?? '') === 'collision') {
                 self::stderr(Lang::t('bundles.channels.collision', [
                     'name' => (string) ($refusal['name'] ?? $refusal['class'] ?? '?'),

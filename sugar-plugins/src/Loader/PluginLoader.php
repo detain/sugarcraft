@@ -57,9 +57,9 @@ use SugarCraft\Plugins\Trust\TrustList;
  * for the file and the class, and the caller that owns the channel contract
  * (candy-code's ChannelRegistry) judges the type it is handed.
  *
- * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
- * world-writable, foreign-owner, require-failed, class-collision, class-missing,
- * class-not-declared.
+ * Refusal reason words: manifest-refused, tier-refused, uncontained,
+ * contract-unsupported, world-writable, foreign-owner, require-failed,
+ * class-collision, class-missing, class-not-declared.
  */
 final class PluginLoader
 {
@@ -146,6 +146,18 @@ final class PluginLoader
         foreach ($candidates as $candidate) {
             if (!$trust->contains($candidate->name)) {
                 continue; // trust is by exact name, never case-folded
+            }
+
+            // Refused before the manifest is read, as an untrusted name is. A
+            // trusted name inherits nothing from a tier the host marked
+            // non-trustable; the rows are owed only where a manifest exists.
+            if (!$candidate->trustable) {
+                if (PluginManifest::hasManifest($candidate->dir)) {
+                    foreach ($kinds as $kind) {
+                        $refusals[] = ['bundle' => $candidate->name, 'path' => $candidate->dir, 'class' => '', 'kind' => $kind, 'reason' => 'tier-refused'];
+                    }
+                }
+                continue;
             }
 
             $manifest = $candidate->manifest();
