@@ -46,45 +46,12 @@ final class ComposerIntegrationTest extends TestCase
     }
 
     /**
-     * The requirements each stand-in keeps and drops, against the real manifests.
-     * Kept: the stand-in declares it, so Composer resolves it from the scratch
-     * tree. Dropped: the offline run cannot fetch it (react/*, psr/http-message,
-     * sugar-pty, sugar-ansi-parser), or it is a host extension the test host may
-     * lack (ext-ffi is reached through sugar-pty, ext-intl through sugar-core).
-     *
-     * ComposerIntegrationTest::testStubsDropExactlyTheDocumentedRequirements
-     * holds this table to the real manifests, so a new requirement fails there.
-     */
-    private const STUBBED = [
-        'sugarcraft/sugar-core' => [
-            'kept' => [],
-            'dropped' => [
-                'ext-intl',
-                'ext-mbstring',
-                'react/event-loop',
-                'react/promise',
-                'sugarcraft/sugar-ansi-parser',
-                'sugarcraft/sugar-pty',
-            ],
-        ],
-        'sugarcraft/sugar-plugins' => [
-            'kept' => ['sugarcraft/sugar-core'],
-            'dropped' => [
-                'ext-tokenizer',
-                'psr/http-message',
-                'react/event-loop',
-                'react/promise',
-            ],
-        ],
-    ];
-
-    /**
      * The installer requires sugarcraft/sugar-plugins, whose own requirements
      * cannot be fetched with the network off. The scratch project therefore gets
      * two stand-ins, sugar-core and sugar-plugins, that expose the monorepo
-     * sources and declare only the kept requirements in STUBBED. The installer's
-     * SourceRecord code runs as shipped while the resolution stays offline. The
-     * closure that a real install pulls in (ext-intl and ext-ffi, through
+     * sources and declare only the kept requirements in StubClosureDriftTest::STUBBED.
+     * The installer's SourceRecord code runs as shipped while the resolution stays
+     * offline. The closure that a real install pulls in (ext-intl and ext-ffi, through
      * sugar-core and sugar-pty) is documented in README.md, not exercised here.
      */
     private function writeClosureStubs(): void
@@ -98,34 +65,6 @@ final class ComposerIntegrationTest extends TestCase
 
         $this->writeStub('sugar-core', 'SugarCraft\\Core\\', [], $monorepo . '/sugar-core/src');
         $this->writeStub('sugar-plugins', 'SugarCraft\\Plugins\\', ['sugarcraft/sugar-core' => '*'], $monorepo . '/sugar-plugins/src');
-    }
-
-    /**
-     * Fails when a real manifest gains or loses a requirement without STUBBED
-     * saying whether the stand-in keeps or drops it.
-     */
-    public function testStubsDropExactlyTheDocumentedRequirements(): void
-    {
-        $monorepo = dirname(__DIR__, 2);
-        foreach (['sugar-core', 'sugar-plugins'] as $lib) {
-            if (!is_file($monorepo . '/' . $lib . '/composer.json')) {
-                $this->markTestSkipped("$lib manifest is not beside the installer (a split-repo checkout)");
-            }
-        }
-
-        foreach (self::STUBBED as $package => $split) {
-            $lib = substr($package, strlen('sugarcraft/'));
-            $manifest = json_decode((string) file_get_contents($monorepo . '/' . $lib . '/composer.json'), true, 512, JSON_THROW_ON_ERROR);
-            $real = array_values(array_filter(
-                array_keys($manifest['require'] ?? []),
-                static fn (string $name): bool => $name !== 'php',
-            ));
-            $documented = array_merge($split['kept'], $split['dropped']);
-            sort($real);
-            sort($documented);
-
-            $this->assertSame($real, $documented, "$package gained or lost a requirement: decide whether its stand-in keeps or drops it, then update STUBBED and README.md");
-        }
     }
 
     /**

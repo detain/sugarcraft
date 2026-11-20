@@ -90,8 +90,8 @@ The installer requires `sugarcraft/sugar-plugins`, and that is deliberate. The
 provenance record below is written by `SugarCraft\Plugins\Provenance\SourceRecord`,
 the same class candy-code's marketplace install writes its own record through.
 A copy of the writer here would let the two record formats, and the atomic-write
-and lock rules behind them, drift apart. Plan section 4.9 keeps one writer for
-that reason.
+and lock rules behind them, drift apart, so the installer writes through the
+library's writer and keeps no copy of its own.
 
 Requiring `sugarcraft/sugar-plugins` also pulls in a closure, and a project that
 installs this package must be able to satisfy all of it:
@@ -198,10 +198,11 @@ the staged tree and that the trust list and ledger bytes do not change, across
 
 The offline run cannot fetch the closure above, so the test puts two stand-ins in
 the scratch project in place of `sugarcraft/sugar-core` and `sugarcraft/sugar-plugins`.
-`ComposerIntegrationTest::STUBBED` lists which requirements each stand-in keeps and
-which it drops. `testStubsDropExactlyTheDocumentedRequirements` checks that table
-against the real manifests, so a new requirement in the closure fails the suite until
-the table says how it is handled.
+`StubClosureDriftTest::STUBBED` lists which requirements each stand-in keeps and
+which it drops. `StubClosureDriftTest::testStubsDropExactlyTheDocumentedRequirements`
+checks that table against the real manifests, so a new requirement in the closure
+fails the suite until the table says how it is handled. It lives in its own class
+so it still runs where `composer` is not on `PATH`.
 
 ## Plan
 
