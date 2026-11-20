@@ -784,7 +784,9 @@ final class CommandSpec
         // The shell runs as an argv (`bash -c`), never through a parent shell,
         // so the command text reaches bash untouched. ChildRun owns the pipes,
         // the deadline and the kill ladder; the group kill reaches the tree the
-        // containment wrapper leads.
+        // containment wrapper leads. No exit grace: a backgrounded job that
+        // holds stdout after the shell exits is part of this command's budget,
+        // so the call runs to the deadline and the group kill reports it.
         /** @var list<string> $argv */
         $argv = array_values((array) ProcessContainment::spawnSpec(['bash', '-c', $command]));
         try {
@@ -793,6 +795,7 @@ final class CommandSpec
                 ->withEnv(ProcessContainment::scrubbedEnv())
                 ->withTimeout($timeoutSeconds)
                 ->withMaxBytes(self::MAX_SUBSTITUTION_BYTES)
+                ->withExitGrace(null)
                 ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : self::awaitGroupLeader(...))
                 ->run();
         } catch (\RuntimeException) {

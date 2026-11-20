@@ -1410,7 +1410,9 @@ final readonly class GitCommandHandlers
         // group with no controlling terminal: the timeout kill reaches that
         // group, and the missing tty makes credential/pinentry prompts refuse
         // on stderr instead of hanging. ChildRun measures the group while the
-        // child is alive, so no spawn-time id is threaded through here.
+        // child is alive, so no spawn-time id is threaded through here. No exit
+        // grace: a hook that backgrounds a child holding git's pipes is bounded by
+        // the timeout, and the group kill at that deadline reaches the child.
         /** @var list<string> $argv */
         $argv = array_values((array) ProcessContainment::spawnSpec($command));
         try {
@@ -1419,6 +1421,7 @@ final readonly class GitCommandHandlers
                 ->withEnv(self::childEnv())
                 ->withTimeout($this->timeoutSeconds)
                 ->withMaxBytes(self::OUTPUT_CAP_BYTES)
+                ->withExitGrace(null)
                 ->run();
         } catch (\RuntimeException) {
             return GitOperationResult::failure(

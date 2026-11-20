@@ -183,8 +183,11 @@ final class GitCommandHandlersProcessTest extends TestCase
 
     /**
      * A hook that exits on its own but leaves a backgrounded child holding git's
-     * pipes: the commit completes once the hook is gone, not at the 5 s bound.
-     * The test kills that child through its pid file so it does not outlive the run.
+     * pipes: git is gone well before the 5 s bound, yet the held pipe keeps the
+     * call open, so the call is bounded by its timeout. At that deadline the
+     * process group is killed, the backgrounded child dies with it, and the
+     * result reports the timeout. The commit itself may already exist, because
+     * git finished when the hook exited; the call still reports the timeout.
      */
     public function testABackgroundedHookChildDoesNotStallTheCommitToItsTimeout(): void
     {
@@ -196,13 +199,22 @@ final class GitCommandHandlersProcessTest extends TestCase
         $result = $handlers->gitCommit('background hook commit');
         $elapsed = microtime(true) - $started;
 
-        if (is_file($pidFile) && function_exists('posix_kill')) {
-            posix_kill((int) trim((string) file_get_contents($pidFile)), 9);
+        $this->assertTrue($result->isFailure(), 'the held pipe must keep the call to its timeout');
+        $this->assertStringContainsString('timed out after 5s', (string) $result->error);
+        $this->assertGreaterThanOrEqual(4.0, $elapsed, 'the call waits for the deadline while the pipe is held');
+        $this->assertLessThan(9.0, $elapsed, 'a five-second bound plus the TERM/KILL ladder must stay bounded');
+
+        if (ProcessContainment::detachedSpawnBinary() === '' || !function_exists('posix_kill')) {
+            $this->markTestIncomplete('no usable setsid(1)/posix here: git does not lead its own group to kill');
         }
 
-        $this->assertTrue($result->isSuccess(), 'commit failed: ' . substr((string) $result->error, -300));
-        $this->assertLessThan(4.0, $elapsed, 'a hook that has already exited must not hold the commit to its 5 s bound');
-        $this->assertSame('background hook commit', $this->headSubject());
+        $this->assertFileExists($pidFile, 'the hook never recorded its backgrounded child');
+        $grandchild = (int) trim((string) file_get_contents($pidFile));
+        $this->assertGreaterThan(0, $grandchild);
+        $this->assertTrue(
+            $this->awaitGone($grandchild, 3.0),
+            "the hook's backgrounded child (pid {$grandchild}) survived the timeout",
+        );
     }
 
     /**
