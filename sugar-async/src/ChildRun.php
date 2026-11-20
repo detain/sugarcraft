@@ -86,6 +86,9 @@ final class ChildRun
     /** Longest gap between idle checks in run(): the pump's own slice, so the check costs no extra wakeups. */
     private const IDLE_BEAT_SECONDS = 0.1;
 
+    /** How often an abandoned launch child is checked for exit before its handle is closed. */
+    private const ABANDON_POLL_SECONDS = 0.02;
+
     /** Why run() stopped the walk before the output closed. */
     private const STOP_IDLE = 'idle';
     private const STOP_CANCELLED = 'cancelled';
@@ -316,7 +319,9 @@ final class ChildRun
      * it, never by a blocking proc_close().
      *
      * The promise resolves (never rejects) once the child is done, including when
-     * it was cancelled, and rejects only when it cannot be started.
+     * it was cancelled. It rejects when the child cannot be started, or when onSpawn
+     * throws whatever the type: the child is killed first, and the throw is the
+     * rejection reason.
      *
      * @return PromiseInterface<ChildResult>
      */
@@ -327,8 +332,8 @@ final class ChildRun
         }
 
         try {
-            [$proc, $pipes, $staged] = $this->spawn();
-        } catch (\RuntimeException $e) {
+            [$proc, $pipes, $staged] = $this->spawn($loop);
+        } catch (\Throwable $e) {
             return reject($e);
         }
         $group = $this->groupFor($proc);
@@ -525,10 +530,11 @@ final class ChildRun
      * The spawn: the child's stdin is a pipe, or on the Windows runtime a staged
      * file when there is a payload. Returns the process, its pipes (no key 0 when
      * the stdin is a file) and the staged file to remove once the child is reaped.
+     * A launch passes its loop, so an abandoned child is reaped on a timer.
      *
      * @return array{0: resource, 1: array<int, resource>, 2: ?string}
      */
-    private function spawn(): array
+    private function spawn(?LoopInterface $loop = null): array
     {
         $staged = null;
         if ($this->stdin !== null && $this->stdin !== '' && WindowsPipes::runtimeNeedsIt()) {
@@ -563,7 +569,7 @@ final class ChildRun
             try {
                 ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
             } catch (\Throwable $e) {
-                self::abandonSpawn($proc, $pipes, $staged, $group);
+                self::abandonSpawn($proc, $pipes, $staged, $group, $loop);
 
                 throw $e;
             }
@@ -579,10 +585,13 @@ final class ChildRun
      * its process group down too: its descendants are not reachable through the
      * wrapper pid alone.
      *
+     * A launch passes its loop: the close is then a timer, never a blocking
+     * proc_close() on the loop. The run() path has no loop and closes at once.
+     *
      * @param resource $proc
      * @param array<int, resource> $pipes
      */
-    private static function abandonSpawn($proc, array $pipes, ?string $staged, ?int $group = null): void
+    private static function abandonSpawn($proc, array $pipes, ?string $staged, ?int $group = null, ?LoopInterface $loop = null): void
     {
         foreach ($pipes as $pipe) {
             if (is_resource($pipe)) {
@@ -596,10 +605,60 @@ final class ChildRun
             @\posix_kill(-$target, 9);
         }
         @proc_terminate($proc, 9);
+
+        if ($loop !== null) {
+            self::reapAbandonedOnLoop($loop, $proc, $staged);
+
+            return;
+        }
+
         proc_close($proc);
         if ($staged !== null) {
             StagedStdin::removeOrRetry($staged, true);
         }
+    }
+
+    /**
+     * Closes an abandoned child from a loop timer, never from proc_close() on the
+     * loop: a SIGKILLed child is normally gone within one poll. Once it is seen gone,
+     * the handle is closed and the payload removed. When the kill budget runs out
+     * with the child still alive, the handle goes to the non-blocking reap, which
+     * closes it the tick the kernel releases the child.
+     *
+     * @param resource $proc
+     */
+    private static function reapAbandonedOnLoop(LoopInterface $loop, $proc, ?string $staged): void
+    {
+        $deadline = Clock::monotonicSeconds() + BoundedShutdown::KILL_GRACE_SECONDS;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            self::ABANDON_POLL_SECONDS,
+            static function () use (&$timer, $loop, $proc, $staged, $deadline): void {
+                if (!is_resource($proc)) {
+                    $loop->cancelTimer($timer);
+
+                    return;
+                }
+
+                $gone = proc_get_status($proc)['running'] === false;
+                if (!$gone && Clock::monotonicSeconds() < $deadline) {
+                    return;
+                }
+
+                $loop->cancelTimer($timer);
+                if (!$gone) {
+                    $retry = $staged !== null && StagedStdin::removeOrRetry($staged, false);
+                    BoundedShutdown::reapWhenExited($loop, $proc, StagedStdin::reapHook($staged, $retry));
+
+                    return;
+                }
+
+                proc_close($proc);
+                if ($staged !== null) {
+                    StagedStdin::removeAfterExit($loop, $staged);
+                }
+            },
+        );
     }
 
     /**

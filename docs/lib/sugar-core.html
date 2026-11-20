@@ -138,7 +138,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 47 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-core.png" alt="" aria-hidden="true">
@@ -561,7 +561,7 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
         <tr><td><code>catchPanics</code></td><td>bool</td><td><code>true</code></td><td>Arm the terminal-release backstop for fatal errors and uncaught exceptions.</td></tr>
         <tr><td><code>openTty</code></td><td>bool</td><td><code>false</code></td><td>Open <code>/dev/tty</code> for input and output when neither <code>input</code> nor <code>output</code> is given.</td></tr>
         <tr><td><code>input</code>, <code>output</code></td><td>mixed</td><td><code>null</code></td><td>Streams to read keys from and write frames to. <code>null</code> means STDIN and STDOUT.</td></tr>
-        <tr><td><code>loop</code></td><td>?LoopInterface</td><td><code>null</code></td><td>The ReactPHP loop. <code>null</code> means <code>Loop::get()</code>.</td></tr>
+        <tr><td><code>loop</code></td><td>?LoopInterface</td><td><code>null</code></td><td>The ReactPHP loop. <code>null</code> means <code>\React\EventLoop\Loop::get()</code>.</td></tr>
         <tr><td><code>environment</code></td><td>?array</td><td><code>null</code></td><td>Environment snapshot for the startup <code>EnvMsg</code>. <code>null</code> reads the live environment.</td></tr>
         <tr><td><code>windowSize</code></td><td>?array</td><td><code>null</code></td><td>Forced initial size, <code>['cols' =&gt; N, 'rows' =&gt; N]</code>. Mostly for tests.</td></tr>
         <tr><td><code>colorProfile</code></td><td>?ColorProfile</td><td><code>null</code></td><td>Forces a color tier instead of detection.</td></tr>
