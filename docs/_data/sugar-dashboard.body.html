@@ -113,7 +113,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
     <p>The defaults below are the values the classes ship with.</p>
     <ul>
       <li><code>Options::$fitScreen</code>: bool, default <code>true</code>. Option of <code>Layout\Grid\Options</code>. Whether columns fit the screen width. Widths under 90 cells collapse to one full-width column before this option is read.</li>
-      <li><code>ItemOptions(column:, expandVertical:)</code>: int, bool, default per item. Places an item in a column and lets it take the spare height.</li>
+      <li><code>ItemOptions(column:, expandVertical:)</code>: int, bool, default <code>column</code> 0 and <code>expandVertical</code> <code>false</code>. Places an item in a column and lets it take the spare height.</li>
       <li>Narrow breakpoint: int, default 90 cells. Below this width <code>StackedGrid</code> stacks every item into one column. <code>Breakpoint::narrow($width, $threshold)</code> takes the threshold as its second argument.</li>
       <li><code>DualSampleGraph::new(..., $family)</code>: string, default <code>FAMILY_BRAILLE</code>. Symbol family: <code>braille</code>, <code>block</code>, <code>block2</code> or <code>tty</code>.</li>
       <li><code>DualSampleGraph::new(..., $invert, $noZero, $maxValue)</code>: bool, bool, int, default <code>false</code>, <code>false</code>, <code>0</code>. Flips the graph, hides zero samples, and sets the scale ceiling.</li>
