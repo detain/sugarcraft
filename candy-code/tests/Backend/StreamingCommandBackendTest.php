@@ -731,6 +731,101 @@ printf 'ok\n'
     }
 
     /**
+     * The idle budget on the PROMISE entry point. Every blocking deadline test
+     * above runs through complete(), which never reaches ChildRun::launch(), so
+     * the event-loop heartbeat that enforces the budget was unpinned: a silent
+     * child given a 1s budget must trip it here too, with the same notice, and
+     * the wait must end well before the 30s sleep.
+     */
+    public function testACompleteAsyncSilentChildTripsTheIdleBudget(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 30\necho 'never reached'");
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync([Message::user('hello')]),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(
+                "_[error: no output on the streaming backend's pipes for more than 1s]_",
+                $result->content,
+            );
+            $this->assertLessThan(
+                5.0,
+                $elapsed,
+                'the idle budget must end the wait on the launch path, not the 30s sleep',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * REGRESSION on the launch path. The stdin transfer counts as activity for
+     * the idle budget, and on completeAsync() that count comes from onWritable
+     * on the event loop, not from the blocking fwrite(). A healthy child that is
+     * still reading a 256 KB history in 64K bites must not be killed by a 1s
+     * budget, the same fixture as the blocking test above.
+     */
+    public function testACompleteAsyncChildStillSwallowingALargeHistoryIsNotKilledByTheIdleBudget(): void
+    {
+        $history = [Message::user(str_repeat('x', 256 * 1024))];
+        $script = $this->writeScript(
+            "#!/bin/bash\n"
+            . 'while IFS= read -r -n 65536 chunk; do sleep 0.4; done' . "\n"
+            . "printf 'ok\\n'\n",
+        );
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync($history),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame('ok', $result->content);
+            $this->assertGreaterThan(
+                1.5,
+                $elapsed,
+                'the stdin transfer has to outlive the 1s deadline by a clear margin or this proves nothing',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * The abandoned-pipe notice on the PROMISE entry point, under an idle budget
+     * shorter than the post-exit grace. The child exits 0 with a descendant still
+     * holding the pipes and no token streamed, so the result must be the notice
+     * (not an expiry error) and the drain must end on the grace.
+     */
+    public function testACompleteAsyncAbandonedPipeUnderAnIdleBudgetIsANoticeNotAnExpiryError(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\n( sleep 5 ) &\nexit 0\n");
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync([Message::user('hello')]),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertFalse($result->error, 'the command exited 0, so this is not an error');
+            $this->assertStringContainsString('pipes', $result->content);
+            $this->assertLessThan(
+                4.0,
+                $elapsed,
+                'the post-exit grace has to end the drain, or the loop waits out the grandchild',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
      * Finding 2. A TERM-trapping child must not hold the cancel rejection for the
      * TERM grace: the cancel is SIGKILL at once, as the replaced timer path was.
      * The 1.0s TERM grace is the line between the two behaviours, so the bound

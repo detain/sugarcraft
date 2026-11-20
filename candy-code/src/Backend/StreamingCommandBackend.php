@@ -212,8 +212,9 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      * blocking, so the caller's render/input loop keeps running for the whole
      * completion and every token reaches the screen as it lands.
      *
-     * A cancelled token kills the child through ChildRun's kill ladder, reaps it,
-     * and rejects with 'Request cancelled'. A token already cancelled spawns
+     * A cancelled token SIGKILLs the child at once, rather than through
+     * ChildRun's TERM-first kill ladder; ChildRun then only reaps it, and the
+     * promise rejects with 'Request cancelled'. A token already cancelled spawns
      * nothing. A throwing $onToken also stops the child, and the promise rejects
      * with that exception. Both the cancel and the throw are SIGKILL at once, not
      * the TERM grace: neither a user abort nor a failed turn may wait on a child
