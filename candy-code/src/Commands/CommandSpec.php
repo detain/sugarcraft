@@ -538,18 +538,6 @@ final class CommandSpec
     }
 
     /**
-     * Longest wait for a detached shell to become its own process-group leader
-     * before the timeout kill reads that group ({@see awaitGroupLeader()}). The
-     * wrapper leads within a millisecond or two on an idle host, but the exec
-     * of `setsid` before its setsid() call can take hundreds of milliseconds
-     * under load, and a cap that expires first leaves the spawn-time group
-     * unrecorded: a backgrounded job then survives its timeout kill. The wait
-     * ends at once on leadership, so this cap is paid by a wrapper that never
-     * leads, including one that exited before it did.
-     */
-    private const GROUP_LEADER_WAIT_SECONDS = 1.0;
-
-    /**
      * The prompt this file-based command sends, with its argument placeholders
      * filled in. Returns null for a built-in row, which has no template and
      * whose behaviour is PHP in {@see \SugarCraft\Code\Chat::dispatchCommand()}.
@@ -796,7 +784,7 @@ final class CommandSpec
                 ->withTimeout($timeoutSeconds)
                 ->withMaxBytes(self::MAX_SUBSTITUTION_BYTES)
                 ->withExitGrace(null)
-                ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : self::awaitGroupLeader(...))
+                ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : ProcessContainment::awaitGroupLeader(...))
                 ->run();
         } catch (\RuntimeException) {
             return sprintf('[!`%s` was not run: the shell could not be started]', self::abbreviateForm($command));
@@ -849,25 +837,6 @@ final class CommandSpec
         }
 
         return ltrim($text, "\n");
-    }
-
-    /**
-     * The detached wrapper makes the child its own process-group leader a moment
-     * after proc_open() returns, and the timeout's group kill needs that group
-     * id. Read it with a bounded wait so a fast spawn cannot be measured before
-     * the wrapper has run. Only leadership ends the wait early: a wrapper that
-     * exits before it leads stays a zombie until reaped, and posix_getpgid()
-     * still answers for it with its parent's group, so that case pays the cap.
-     */
-    private static function awaitGroupLeader(int $pid): void
-    {
-        if (!\function_exists('posix_getpgid')) {
-            return;
-        }
-        $deadline = microtime(true) + self::GROUP_LEADER_WAIT_SECONDS;
-        while (($group = @posix_getpgid($pid)) !== false && $group !== $pid && microtime(true) < $deadline) {
-            usleep(500);
-        }
     }
 
     /**

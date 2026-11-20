@@ -1409,10 +1409,11 @@ final readonly class GitCommandHandlers
         // the host has one, so git and every hook it runs share a NEW process
         // group with no controlling terminal: the timeout kill reaches that
         // group, and the missing tty makes credential/pinentry prompts refuse
-        // on stderr instead of hanging. ChildRun measures the group while the
-        // child is alive, so no spawn-time id is threaded through here. No exit
-        // grace: a hook that backgrounds a child holding git's pipes is bounded by
-        // the timeout, and the group kill at that deadline reaches the child.
+        // on stderr instead of hanging. The spawn seam waits for the wrapper to
+        // lead its group, so ChildRun measures the group at spawn: once git has
+        // exited, the wrapper is reaped and the group cannot be read at the
+        // deadline. No exit grace: a hook that backgrounds a child holding git's
+        // pipes is bounded by the timeout, and the group kill there reaches it.
         /** @var list<string> $argv */
         $argv = array_values((array) ProcessContainment::spawnSpec($command));
         try {
@@ -1422,6 +1423,7 @@ final readonly class GitCommandHandlers
                 ->withTimeout($this->timeoutSeconds)
                 ->withMaxBytes(self::OUTPUT_CAP_BYTES)
                 ->withExitGrace(null)
+                ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : ProcessContainment::awaitGroupLeader(...))
                 ->run();
         } catch (\RuntimeException) {
             return GitOperationResult::failure(

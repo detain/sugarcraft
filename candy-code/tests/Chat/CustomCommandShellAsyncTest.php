@@ -27,6 +27,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Role;
+use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\App\TurnHooksResolvedMsg;
 
@@ -330,7 +331,7 @@ final class CustomCommandShellAsyncTest extends TestCase
         $pid = (int) proc_get_status($proc)['pid'];
 
         try {
-            (new \ReflectionMethod(CommandSpec::class, 'awaitGroupLeader'))->invoke(null, $pid);
+            ProcessContainment::awaitGroupLeader($pid);
             self::assertSame($pid, posix_getpgid($pid), 'the wait returned before the wrapper led its own group');
         } finally {
             foreach ($pipes as $pipe) {
