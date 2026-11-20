@@ -424,8 +424,10 @@ terminal sends frames the decoder fails to model. An incomplete sequence whose
 buffered tail passes the 128-byte cap is refused and counted once in
 `droppedUnknownCount()`; its trailing bytes are swallowed up to the final byte, or
 up to a fresh ESC, which starts a new sequence and is decoded as normal. Those bytes
-are never counted again. A complete sequence longer than the cap that arrives in a
-single read is parsed whole and is not refused.
+are never counted again. An unterminated OSC/DCS string that exhausts its 64 KiB
+abandon budget is also counted once in `droppedUnknownCount()`, when the in-hand
+body past the boundary is folded into that single drop. A complete sequence longer
+than the cap that arrives in a single read is parsed whole and is not refused.
 `discardedPasteBytes()` is the paste-only counter and never moves for a
 sequence. `reset()` zeroes all counters along with the buffers.
 
