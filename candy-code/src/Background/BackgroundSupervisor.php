@@ -267,6 +267,17 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     private array $pendingSpawns = [];
 
     /**
+     * Launchers this supervisor is reaping without waiting on them: a failed
+     * spawn's launcher being terminated, or a settled spawn's launcher still
+     * alive for a moment. {@see advanceLauncherReaps()} polls each one from
+     * {@see advanceSpawns()} and escalates on its own bounded budget, so a
+     * reap never parks the loop that drives it.
+     *
+     * @var list<array{proc: mixed, stage: string, deadline: float}>
+     */
+    private array $launcherReaps = [];
+
+    /**
      * Stops in flight, keyed by session id. {@see advanceStops()} drives each one
      * through its rungs without sleeping.
      *
@@ -843,7 +854,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $errstr
         );
         if (!$serverSocket) {
-            ProcessReaper::terminateAndClose($proc);
+            $this->retireLauncher($proc, signal: true);
             $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
             throw new \RuntimeException("Failed to create IPC socket: {$errstr}");
         }
@@ -873,6 +884,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             'deadline' => microtime(true) + self::SPAWN_AUTH_TIMEOUT_SECS,
             'unknownMajor' => null,
             'deferred' => $deferred,
+            // Teardown runs only in the process that launched the spawn: a forked
+            // turn child inherits this array and must not fail its parent's launch.
+            'ownerPid' => getmypid(),
         ];
 
         return $deferred->promise();
@@ -899,6 +913,86 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             } elseif ($now >= $this->pendingSpawns[$sessionId]['deadline']) {
                 $this->failSpawn($sessionId);
             }
+        }
+        $this->advanceLauncherReaps();
+    }
+
+    /**
+     * Fail every spawn still waiting on its daemon's handshake, so nothing is left
+     * pending when this supervisor goes away. Each one is rejected, its launcher is
+     * retired and its IPC files are removed; the daemon, which never registers, exits
+     * on its own when its connect to the removed socket fails.
+     *
+     * Only spawns this process launched are touched (see `ownerPid`). Runs from
+     * {@see __destruct()}, so a TUI that quits inside the launch window does not
+     * strand the spawn's files or leave a promise that never settles.
+     */
+    public function teardown(): void
+    {
+        $pid = getmypid();
+        foreach (array_keys($this->pendingSpawns) as $sessionId) {
+            if (isset($this->pendingSpawns[$sessionId]) && $this->pendingSpawns[$sessionId]['ownerPid'] === $pid) {
+                $this->failSpawn($sessionId, 'the background session was abandoned before its daemon authenticated');
+            }
+        }
+    }
+
+    public function __destruct()
+    {
+        $this->teardown();
+    }
+
+    /**
+     * Stop waiting on a launcher and make sure it is gone, without blocking. A launcher
+     * that must be terminated gets SIGTERM here and SIGKILL from {@see advanceLauncherReaps()}
+     * if it outlives its grace. A launcher that has already exited is closed at once.
+     * A launcher that is only being collected (a successful spawn) is never signalled.
+     */
+    private function retireLauncher(mixed $proc, bool $signal): void
+    {
+        if (!is_resource($proc)) {
+            return;
+        }
+        if (proc_get_status($proc)['running'] !== true) {
+            proc_close($proc);
+
+            return;
+        }
+        if ($signal) {
+            @proc_terminate($proc, 15);
+        }
+        $this->launcherReaps[] = [
+            'proc' => $proc,
+            'stage' => $signal ? 'term' : 'wait',
+            'deadline' => microtime(true) + ProcessReaper::TERMINATE_GRACE_SECONDS,
+        ];
+    }
+
+    /**
+     * Poll every retired launcher once. An exited one is closed; one that outlives its
+     * grace is sent SIGKILL (terminated launchers only) and then dropped when its kill
+     * grace runs out. A dropped handle is left to PHP's resource destructor, which
+     * abandons a live child without waiting (see {@see ProcessReaper::reapIfExited()}).
+     */
+    private function advanceLauncherReaps(): void
+    {
+        $now = microtime(true);
+        foreach ($this->launcherReaps as $index => $reap) {
+            if (proc_get_status($reap['proc'])['running'] !== true) {
+                proc_close($reap['proc']);
+                unset($this->launcherReaps[$index]);
+                continue;
+            }
+            if ($now < $reap['deadline']) {
+                continue;
+            }
+            if ($reap['stage'] === 'term') {
+                @proc_terminate($reap['proc'], 9);
+                $this->launcherReaps[$index]['stage'] = 'kill';
+                $this->launcherReaps[$index]['deadline'] = $now + ProcessReaper::KILL_GRACE_SECONDS;
+                continue;
+            }
+            unset($this->launcherReaps[$index]);
         }
     }
 
@@ -1053,10 +1147,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // reaps an already-exited child instantly (state `Z` -> `GONE`) and a
         // held handle shows the launcher sitting in `Z` until it does. That
         // worked, and it worked for a reason no reader of this method could see.
-        // {@see \SugarCraft\Code\Support\ProcessReaper::reapIfExited()} says it
-        // out loud: wait briefly WITHOUT signalling, close if it exited, and
-        // otherwise leave the handle to the destructor.
-        ProcessReaper::reapIfExited($pending['proc']);
+        // Said out loud: close it if it has already exited, and otherwise collect it
+        // from the loop WITHOUT signalling, within a bounded budget. Waiting here
+        // would park the TUI on a launcher that is still in its double fork.
+        $this->retireLauncher($pending['proc'], signal: false);
 
         $session = $session->withStatus(BackgroundSessionStatus::Running);
 
@@ -1085,17 +1179,18 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
 
     /**
      * Give up on a spawn whose daemon never authenticated before its deadline. The
-     * launcher is reaped with the bounded ladder, because it is the one process in
-     * this path that is misbehaving by definition.
+     * launcher is terminated and collected by {@see advanceLauncherReaps()} on its own
+     * bounded budget, because it is the one process in this path that is misbehaving
+     * by definition. Nothing here waits on it.
      */
-    private function failSpawn(string $sessionId): void
+    private function failSpawn(string $sessionId, ?string $reason = null): void
     {
         $pending = $this->pendingSpawns[$sessionId];
         unset($this->pendingSpawns[$sessionId]);
         foreach ($pending['clients'] as $client) {
             fclose($client['sock']);
         }
-        ProcessReaper::terminateAndClose($pending['proc']);
+        $this->retireLauncher($pending['proc'], signal: true);
         fclose($pending['server']);
         $this->discardIpcFiles(
             $pending['socketPath'],
@@ -1104,7 +1199,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $pending['logPath'],
             ...($pending['answerPath'] === null ? [] : [$pending['answerPath']]),
         );
-        $pending['deferred']->reject(new \RuntimeException(self::spawnAuthFailureMessage($pending['unknownMajor'])));
+        $pending['deferred']->reject(new \RuntimeException(
+            $reason ?? self::spawnAuthFailureMessage($pending['unknownMajor']),
+        ));
     }
 
     /**

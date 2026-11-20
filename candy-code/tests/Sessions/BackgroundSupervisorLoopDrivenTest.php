@@ -139,10 +139,14 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
 
         // Advancing past the deadline settles the spawn whichever way the race went:
         // the daemon authenticated, or the deadline fails it. Nothing stays pending.
+        // The advance itself must not wait on the launcher it retires.
+        $advanceStarted = microtime(true);
         $supervisor->advanceSpawns(microtime(true) + 60.0);
+        $this->assertLessThan(self::MAX_ADVANCE_SECONDS, microtime(true) - $advanceStarted, 'a deadline failure blocked the loop on its launcher');
 
         $this->assertNotNull($session ?? $error, 'a pending spawn past its deadline must settle');
         $this->assertSame([], (new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor));
+        $this->drainLaunchers($supervisor);
         if ($error !== null) {
             $this->assertInstanceOf(\RuntimeException::class, $error);
             $this->assertFileDoesNotExist($socketPath, 'a failed spawn left its socket behind');
@@ -153,6 +157,67 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $this->fixtureDaemons[] = ['pid' => $ipc['pid'], 'startTime' => $ipc['startTime'] ?? null];
             $this->settle($supervisor);
         }
+    }
+
+    public function testATeardownFailsASpawnStillWaitingOnItsDaemonAndLeavesNoFiles(): void
+    {
+        putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; sleep 1; printf LOOPTEAR42');
+        $supervisor = new BackgroundSupervisor();
+
+        $error = null;
+        $session = null;
+        $supervisor->spawnSessionAsync(
+            name: 'teardown',
+            agent: $this->agent(),
+            task: 'abandoned inside the launch window',
+            workingDirectory: $this->fixtureHome,
+            timeoutSeconds: 30,
+        )->then(
+            static function (BackgroundSession $settled) use (&$session): void {
+                $session = $settled;
+            },
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+        [$socketPath, $bufferPath] = $this->pendingPaths($supervisor);
+
+        $supervisor->teardown();
+
+        $this->assertNull($session, 'a torn-down spawn must not register a session');
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'a torn-down spawn must reject its promise');
+        $this->assertSame([], (new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor));
+        $this->assertFileDoesNotExist($socketPath, 'a torn-down spawn left its socket behind');
+        $this->assertFileDoesNotExist($bufferPath, 'a torn-down spawn left its buffer behind');
+        $this->assertFalse($supervisor->hasActiveSessions(), 'a torn-down spawn must not stay active');
+        $this->drainLaunchers($supervisor);
+    }
+
+    public function testDroppingTheSupervisorFailsItsPendingSpawn(): void
+    {
+        putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; sleep 1; printf LOOPDROP42');
+        $supervisor = new BackgroundSupervisor();
+
+        $error = null;
+        $supervisor->spawnSessionAsync(
+            name: 'dropped',
+            agent: $this->agent(),
+            task: 'the TUI quits inside the launch window',
+            workingDirectory: $this->fixtureHome,
+            timeoutSeconds: 30,
+        )->then(
+            null,
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+        [$socketPath, $bufferPath] = $this->pendingPaths($supervisor);
+
+        unset($supervisor);
+
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'dropping the supervisor must reject its pending spawn');
+        $this->assertFileDoesNotExist($socketPath, 'a dropped spawn left its socket behind');
+        $this->assertFileDoesNotExist($bufferPath, 'a dropped spawn left its buffer behind');
     }
 
     public function testAStopIsPendingUntilTheLoopDrivesItThroughItsRungs(): void
@@ -220,6 +285,27 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         );
 
         $this->assertSame(BackgroundStopOutcome::UnknownSession, $outcome);
+    }
+
+    /** @return array{0: string, 1: string} the socket and buffer paths of the one pending spawn */
+    private function pendingPaths(BackgroundSupervisor $supervisor): array
+    {
+        $pending = array_values((new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor));
+        $this->assertCount(1, $pending, 'the launch is recorded as pending');
+
+        return [$pending[0]['socketPath'], $pending[0]['bufferPath']];
+    }
+
+    /** Advance the supervisor until every retired launcher is collected, bounded. */
+    private function drainLaunchers(BackgroundSupervisor $supervisor): void
+    {
+        $reaps = new \ReflectionProperty(BackgroundSupervisor::class, 'launcherReaps');
+        $deadline = microtime(true) + 10.0;
+        while ($reaps->getValue($supervisor) !== [] && microtime(true) < $deadline) {
+            $supervisor->advanceSpawns();
+            usleep(20_000);
+        }
+        $this->assertSame([], $reaps->getValue($supervisor), 'a retired launcher was never collected');
     }
 
     /** Tick until nothing this supervisor spawned is still active, bounded. */

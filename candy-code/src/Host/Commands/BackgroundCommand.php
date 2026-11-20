@@ -35,8 +35,9 @@ use SugarCraft\Code\Skills\SkillSource;
  * `/bg stop` answers usage plus the active ids.
  *
  * Both the spawn and the stop run OFF-TURN ({@see CommandEffect::async()}):
- * `spawnSession()` blocks on a socket accept for up to 5 s and `stopSession()`
- * may wait on its signal rungs, neither of which may freeze the loop. The
+ * `spawnSessionAsync()` returns at once and the supervisor's loop accepts the
+ * daemon's handshake; `stopSessionAsync()` runs its signal rungs from that same
+ * loop. Neither call waits on a daemon, so neither may freeze the TUI. The
  * answer — a session id, or why there is none — lands later as its own row.
  */
 final class BackgroundCommand implements HostCommand
@@ -220,7 +221,16 @@ final class BackgroundCommand implements HostCommand
                 return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, BackgroundStopOutcome::CouldNotStop, $name));
             }
 
-            return $supervisor->stopSessionAsync($sessionId)->then(
+            try {
+                // An already-finished daemon is settled here, synchronously, and its
+                // listener callbacks run inside this call: a throw from them is the
+                // same refusal as a throw from the stop itself, so it is answered too.
+                $pending = $supervisor->stopSessionAsync($sessionId);
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, BackgroundStopOutcome::CouldNotStop, $name, $e->getMessage()));
+            }
+
+            return $pending->then(
                 static fn (BackgroundStopOutcome $outcome): BackgroundSessionStoppedMsg => new BackgroundSessionStoppedMsg($sessionId, $outcome, $name),
                 static fn (\Throwable $e): BackgroundSessionStoppedMsg => new BackgroundSessionStoppedMsg(
                     $sessionId,
