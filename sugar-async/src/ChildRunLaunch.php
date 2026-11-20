@@ -15,9 +15,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * ChildRun; not a public entry point.
  *
  * Exit is observed by a short periodic check (proc_get_status), because the
- * child's exit is not a readable stream. Once the output is read to EOF and the
- * exit is seen, the result settles. At the deadline, on an idle timeout or on a
- * cancel, the child is signalled with SIGTERM, then SIGKILL after the sugar-core
+ * child's exit is not a readable stream. Once the exit is seen, the result settles
+ * when the output is read to EOF, or when the pipes have been silent for the exit
+ * grace (a descendant holding them open is then abandoned). At the deadline, on
+ * an idle timeout or on a cancel, the child is signalled with SIGTERM, then
+ * SIGKILL after the sugar-core
  * grace budgets, and the result settles as TIMED_OUT (deadline or idle) or
  * CANCELLED. Signals are integer literals, the sugar-core doctrine.
  *
