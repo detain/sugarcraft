@@ -91,10 +91,20 @@ final class FlushMetrics implements Middleware
     public function handle(Context $ctx, Session $session, callable $next): void
     {
         // finally: a session that throws is the one whose error sample must reach the textfile.
+        $completed = false;
         try {
             $next($ctx, $session);
+            $completed = true;
         } finally {
-            $this->registry->flush();
+            try {
+                $this->registry->flush();
+            } catch (\Throwable $flushError) {
+                // A flush failure must not replace the session's own exception;
+                // on a clean session there is none to protect, so it surfaces.
+                if ($completed) {
+                    throw $flushError;
+                }
+            }
         }
     }
 }
@@ -179,7 +189,7 @@ Server::new()
     </table>
 
     <h2 id="changelog" style="margin-top: 40px;">Changelog and versioning</h2>
-    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>. Breaking changes are recorded in the README under <em>Breaking changes</em>. For example, the <code>getErrors</code> accessor on the multi-backend exception was renamed to <code>errors</code> to follow the bare-accessor convention, so code that still calls the old <code>getErrors</code> method must switch.</p>
+    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>. Breaking changes are recorded in the README under <em>Breaking changes</em>. For example, the multi-backend exception's error accessor is now the bare <code>errors()</code> method, following the bare-accessor convention; code that still calls the earlier <code>get</code>-prefixed accessor must switch.</p>
 
     <p style="margin-top: 48px;"><a href="https://github.com/sugarcraft/sugar-metrics" class="btn btn-primary">Source on GitHub →</a></p>
   </div>
