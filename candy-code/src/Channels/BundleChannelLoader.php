@@ -30,15 +30,17 @@ use SugarCraft\Code\Server\ErrorLog;
  *    lives in {@see ChannelsStore} (0600, user-owned) and records the path
  *    alone, never the bytes. A manifest swap that adds a NEW path under a
  *    trusted name therefore cannot smuggle code in silently: every new path
- *    costs a launch of visible listing first. An in-place rewrite of an
- *    already-seen path, by any account that can write the file or its parent
- *    directory (the gate refuses only world write, so a group member admitted by
- *    group write on either, including a replace-by-rename in a group-writable
- *    directory, counts), is not quarantined again; that gap is open.
+ *    costs a launch of visible listing first. A rewrite of an already-seen
+ *    path is not quarantined again; that gap is open. Who can make one depends
+ *    on how it is written: an in-place write by another account needs group
+ *    write on the file itself, a replace-by-rename creates a file that account
+ *    owns and is refused as foreign-owner when posix_geteuid exists, and a
+ *    rewrite by this process's uid loads everywhere.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the
  *    entrypoint file AND its parent directory must be owned by this
- *    process's uid and not world-writable — the same refusal
- *    Bootstrap::requirePrivatePolicyFile() applies to the settings that
+ *    process's uid (checked when posix_geteuid exists) and not world-writable
+ *    — the same refusal Bootstrap::requirePrivatePolicyFile() applies to the
+ *    settings that
  *    grant trust, re-asserted here because a trusted name says who opted
  *    in, not that the file is intact.
  *

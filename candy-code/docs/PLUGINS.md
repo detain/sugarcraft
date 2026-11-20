@@ -128,12 +128,15 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    new code in silently. The seen-ledger lives in `~/.candy-code/channels.json`,
    mode 0600, and records paths only, never bytes. A rewrite of a file at a path
    already on the ledger is not listed again and loads without a quarantine
-   stop, whichever account made the rewrite: any account that can write the file
-   or its directory, so a group member counts when either is group-writable
-   (replace-by-rename included). That gap is open.
-2. **The bytes must be private.** The file and its directory must be owned by
-   your account and not world-writable, or the entry is refused. A trusted
-   name records who consented; it says nothing about the file being intact.
+   stop. Who can make one depends on how it is written. An in-place write by
+   another account needs group write on the file itself. A replace-by-rename by
+   another account is refused by the owner check (item 2) when the posix
+   extension is available, and loads only without it, from a group-writable
+   directory. A rewrite by your own account loads everywhere. That gap is open.
+2. **The bytes must be private.** The file and its directory must be
+   not world-writable and, when the posix extension is available, owned by
+   your account, or the entry is refused. A trusted name records who consented;
+   it says nothing about the file being intact.
 
 **Bundle hooks ride the same gate.** A bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
