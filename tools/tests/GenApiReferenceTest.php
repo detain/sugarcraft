@@ -364,6 +364,20 @@ final class GenApiReferenceTest extends TestCase
         self::assertSame(3, \substr_count($html, 'tick(): int'), 'the aliased trait feeds Clicker as well as Ticker');
     }
 
+    public function testATraitNamedWithDifferentLetterCaseInTheClassBodyStillContributesItsMethods(): void
+    {
+        // PHP resolves `use counts;` to Concerns\Counts without regard to case, so the trait's method
+        // must reach Tally. Here no import matches, so only the case-insensitive lookup can find it.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Concerns/Counts.php' => self::traitFixture()['sugar-core/src/Concerns/Counts.php'],
+            'sugar-core/src/Concerns/Tally.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\nfinal class Tally\n{\n    use counts;\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // The trait's own table carries tick(), and Tally's table carries it too; nothing else uses the trait here.
+        self::assertSame(2,\substr_count($html, '<tr><td><code>tick(): int</code></td><td>Counts one more.</td></tr>'), 'Counts and Tally both list tick()');
+    }
+
     public function testATraitThatIsNotDeclaredFailsTheRun(): void
     {
         $root = $this->fixtureRoot([
