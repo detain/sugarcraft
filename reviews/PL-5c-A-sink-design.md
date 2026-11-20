@@ -364,6 +364,7 @@ Each finding of the implementation review and where it is answered. No finding w
 - (LOW, server-scope fan-out) Section 3.5 (`useRoot`). Test `testServerScopeEventsReachOnlyTheSinksOfTheRootsTheyUsed`.
 - (LOW, compensation with a recorded subscriber) Section 4.1, the subscriber condition (b). Test `testALateSubscribeLeavesAnotherSinksSubscriptionInPlace`.
 - (LOW, Q11 gap) Section 5.2, the `sugar-plugins` bullet. Test `testARoutedAskNoEventPresentedStaysUnansweredWhenThePrimaryPollIsEmpty` in `sugar-plugins/tests/Bridge/ConversationRouterCoreTest.php`.
+- (finding 1, write the cursor back on every delivery) CLOSED, no code change. The review asked the sink to write the gateway cursor back on each delivery. Section 3.3's queue-time rule stays, because a write-back on delivery would weaken the duplicate guard in `Gateway::relay()` (`seq <= cursor`). The overflow path is unreachable as the finding describes it: `relay()` sets a seq only for durable events, `InProcessEventSink::deliver()` overflows only after `shedOldestLive()` has removed every live entry, and the cut is the session's first undelivered durable entry. `InProcessEventSink::pump()` is unchanged. The overflow window is pinned by `GatewayEventSinkTest::testTheOverflowWindowCursorEqualsTheLastDeliveredSeq`: after an overflow the cursor equals the last delivered seq.
 
 ## 13. Review-fix record (impl review, continuation)
 
