@@ -239,7 +239,7 @@ try {
     <h3 id="forward-psr-3-calls-and-run-hooks">Forward PSR-3 calls and run hooks</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
 use SugarCraft\Log\PsrBridge;
-use SugarCraft\Log\HookRegistry;
+use SugarCraft\Log\Hook\HookRegistry;
 use SugarCraft\Log\Level;
 
 $hooks = new HookRegistry();
@@ -279,8 +279,8 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>Styles</code></td><td><code>default()</code>, <code>snapshot()</code>, <code>copy()</code>, <code>keyStyle()</code>, <code>padLevelText()</code></td><td>Public style slots: <code>levels</code>, <code>keys</code>, <code>values</code>, <code>timestamp</code>, <code>prefix</code>, <code>caller</code>, <code>message</code>, <code>padLevelText</code>.</td></tr>
     <tr><td><code>PartsOrder</code></td><td><code>default()</code>, <code>syslog()</code>, <code>messageFirst()</code>, <code>has()</code></td><td>Which record parts appear and in what order. The <code>PART_*</code> constants name them.</td></tr>
     <tr><td><code>PsrBridge</code></td><td><code>__construct(Logger $logger, ?HookRegistry $hooks)</code></td><td>Implements <code>Psr\Log\LoggerInterface</code>. Its <code>log()</code> rejects an unknown level string with <code>InvalidArgumentException</code>.</td></tr>
-    <tr><td><code>HookRegistry</code></td><td><code>onLevel()</code>, <code>addHook()</code>, <code>remove()</code>, <code>fire()</code></td><td>Per-level callbacks, returning an id you can pass to <code>remove()</code>.</td></tr>
-    <tr><td><code>Hook</code></td><td><code>onLevel()</code></td><td>Interface for object hooks, registered with <code>addHook()</code>.</td></tr>
+    <tr><td><code>Hook\HookRegistry</code></td><td><code>onLevel()</code>, <code>addHook()</code>, <code>remove()</code>, <code>fire()</code></td><td>Per-level callbacks, returning an id you can pass to <code>remove()</code>.</td></tr>
+    <tr><td><code>Hook\Hook</code></td><td><code>onLevel()</code></td><td>Interface for object hooks, registered with <code>addHook()</code>.</td></tr>
     <tr><td><code>StandardLogAdapter</code></td><td><code>print()</code>, <code>printLn()</code>, <code>fatal()</code>, <code>panic()</code>, <code>printf()</code>, <code>errorf()</code>, <code>fatalf()</code>, <code>panicf()</code>, <code>logger()</code></td><td>Go-style call shape over a <code>Logger</code>. <code>fatal()</code> and <code>panic()</code> throw <code>FatalLoggedException</code>.</td></tr>
     <tr><td><code>PanicFormatter</code></td><td><code>pretty()</code>, <code>plain()</code>, <code>format()</code>, <code>withTitleStyle()</code>, <code>withExceptionStyle()</code>, <code>withBacktraceStyle()</code>, <code>withMutedStyle()</code></td><td>Renders a crash report for a <code>Throwable</code>.</td></tr>
     <tr><td><code>FatalLoggedException</code></td><td>(class)</td><td>Thrown after a Fatal record is written. It extends <code>RuntimeException</code>.</td></tr>
