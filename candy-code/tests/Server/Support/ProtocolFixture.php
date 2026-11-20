@@ -114,7 +114,11 @@ final class ProtocolFixture
     /** A client that has said hello. */
     public function client(string $id = 'c1'): WireClient
     {
-        $client = WireClient::open($this->dispatcher, $id);
+        // A deferred answer (a `bg.spawn` launch) waits on the background poll,
+        // which is what advances the supervisor's loop-driven handshake.
+        $client = WireClient::open($this->dispatcher, $id)->withTick(
+            fn () => $this->context->background()?->poll(),
+        );
         $client->hello();
 
         return $client;

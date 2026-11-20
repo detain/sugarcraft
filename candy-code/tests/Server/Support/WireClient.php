@@ -8,6 +8,7 @@ use Ratchet\RFC6455\Messaging\CloseFrameChecker;
 use Ratchet\RFC6455\Messaging\FrameInterface;
 use Ratchet\RFC6455\Messaging\MessageBuffer;
 use Ratchet\RFC6455\Messaging\MessageInterface;
+use React\EventLoop\Loop;
 use React\Stream\ThroughStream;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
@@ -34,6 +35,18 @@ final class WireClient
     private array $closes = [];
 
     private int $nextId = 0;
+
+    /**
+     * Runs between loop turns while {@see call()} waits for an answer that has not
+     * come yet: a launch that waits on its daemon is answered by the background
+     * poll, which the fixture wires in through {@see withTick()}.
+     *
+     * @var (\Closure(): void)|null
+     */
+    private ?\Closure $tick = null;
+
+    /** How long {@see call()} waits for a deferred answer before it gives up. */
+    private const ANSWER_WAIT_SECONDS = 20.0;
 
     private function __construct(
         private readonly MessageHandler $handler,
@@ -101,17 +114,28 @@ final class WireClient
     }
 
     /**
-     * Send a request and return its response (result or error object).
+     * Wire $tick into the waits {@see call()} makes for a deferred answer.
+     *
+     * @param \Closure(): void $tick
+     */
+    public function withTick(\Closure $tick): self
+    {
+        $this->tick = $tick;
+
+        return $this;
+    }
+
+    /**
+     * Send a request and return its response (result or error object). A
+     * deferred answer that has not come yet reads as `missing`; {@see call()}
+     * waits for it.
      *
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
     public function request(string $method, array $params = []): array
     {
-        $id = 'r' . ++$this->nextId;
-        $this->raw((string) \json_encode(['jsonrpc' => '2.0', 'id' => $id, 'method' => $method, 'params' => $params === [] ? new \stdClass() : $params]));
-
-        return $this->response($id) ?? ['missing' => true];
+        return $this->response($this->send($method, $params)) ?? ['missing' => true];
     }
 
     /**
@@ -122,7 +146,7 @@ final class WireClient
      */
     public function call(string $method, array $params = []): array
     {
-        $response = $this->request($method, $params);
+        $response = $this->awaitResponse($this->send($method, $params)) ?? ['missing' => true];
         if (!\array_key_exists('result', $response)) {
             throw new \LogicException($method . ' failed: ' . \json_encode($response));
         }
@@ -144,6 +168,36 @@ final class WireClient
             'client' => ['name' => 'test', 'version' => '0'],
             ...$params,
         ]);
+    }
+
+    /** Writes one request frame and returns its id. */
+    private function send(string $method, array $params): string
+    {
+        $id = 'r' . ++$this->nextId;
+        $this->raw((string) \json_encode(['jsonrpc' => '2.0', 'id' => $id, 'method' => $method, 'params' => $params === [] ? new \stdClass() : $params]));
+
+        return $id;
+    }
+
+    /**
+     * Runs the loop, and the tick, until the answer to $id arrives or the wait
+     * runs out. A synchronous answer is already here and costs no turn.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function awaitResponse(string $id): ?array
+    {
+        $deadline = \microtime(true) + self::ANSWER_WAIT_SECONDS;
+        while (($answer = $this->response($id)) === null && \microtime(true) < $deadline) {
+            if ($this->tick !== null) {
+                ($this->tick)();
+            }
+            $timer = Loop::addTimer(0.01, static fn () => Loop::stop());
+            Loop::run();
+            Loop::cancelTimer($timer);
+        }
+
+        return $answer;
     }
 
     /** @return array<string, mixed>|null */

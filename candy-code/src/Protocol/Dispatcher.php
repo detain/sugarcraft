@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol;
 
 use React\EventLoop\TimerInterface;
+use React\Promise\PromiseInterface;
 use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Lang;
@@ -58,7 +59,10 @@ use SugarCraft\ServeProtocol\Protocol;
  *  7. an `idempotencyKey` on a side-effecting method: a retry gets the
  *     original answer (5 min, 1,000 per principal — {@see IdempotencyCache});
  *  8. the method, whose {@see RpcError} becomes the error object and whose
- *     any other failure becomes `-32099 internal` without its message.
+ *     any other failure becomes `-32099 internal` without its message. A
+ *     method may answer with a promise (a launch that waits on its daemon):
+ *     the answer goes out when it settles, and a retry of an in-flight
+ *     idempotent call shares that promise rather than starting a second run.
  * A notification (no `id`) runs the same way and is never answered.
  *
  * EVENTS GO OUT THROUGH EACH CLIENT'S {@see Outbox}, never straight onto the
@@ -121,6 +125,14 @@ final class Dispatcher implements MessageHandler
 
     /** @var array<string, Client> */
     private array $clients = [];
+
+    /**
+     * Idempotent calls whose answer is still a pending promise, keyed as the
+     * cache keys them. A retry that lands before the first settles joins it.
+     *
+     * @var array<string, PromiseInterface<mixed>>
+     */
+    private array $inFlight = [];
 
     private ?TimerInterface $pumpTimer = null;
 
@@ -445,7 +457,8 @@ final class Dispatcher implements MessageHandler
      * runs for a request (the hello gate, the method and its scope, the published params
      * schema, the viewer session pin, the idempotency cache) and returns the handler's
      * answer as the wire carries it. The rate meters are not spent, because the caller is
-     * the host itself.
+     * the host itself. A handler that answers with a promise gets a promise back, settled
+     * with that same answer or with the refusal the wire would send.
      *
      * The answer's value is encoded and decoded again by {@see wireAnswer()}: invalid UTF-8
      * is substituted and a result past {@see MAX_SERVER_FRAME_BYTES} is refused `too_large`,
@@ -460,6 +473,7 @@ final class Dispatcher implements MessageHandler
      * hands the handler bytes the in-process door would have to substitute.
      *
      * @param array<string, mixed> $params
+     * @return mixed|PromiseInterface<mixed>
      * @throws RpcError
      */
     public function invoke(Client $client, string $method, array $params): mixed
@@ -472,7 +486,10 @@ final class Dispatcher implements MessageHandler
                 throw RpcError::of(ErrorCode::NotInitialized, 'send server.hello first');
             }
 
-            return self::wireAnswer($this->run($client, $request));
+            $result = $this->run($client, $request);
+            if (!$result instanceof PromiseInterface) {
+                return self::wireAnswer($result);
+            }
         } catch (RpcError $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -480,6 +497,19 @@ final class Dispatcher implements MessageHandler
 
             throw RpcError::of(ErrorCode::Internal, 'internal error');
         }
+
+        return $result->then(
+            static fn (mixed $answer): mixed => self::wireAnswer($answer),
+            function (mixed $e) use ($client, $request): never {
+                $e = $e instanceof \Throwable ? $e : new \RuntimeException('rejected');
+                if ($e instanceof RpcError) {
+                    throw $e;
+                }
+                $this->logFailure($client, $request, $e);
+
+                throw RpcError::of(ErrorCode::Internal, 'internal error');
+            },
+        );
     }
 
     /**
@@ -511,22 +541,58 @@ final class Dispatcher implements MessageHandler
     private function call(Client $client, Request $request): void
     {
         try {
-            $this->answer($client, $request, $this->run($client, $request));
-        } catch (RpcError $e) {
+            $result = $this->run($client, $request);
+        } catch (\Throwable $e) {
+            $this->refuse($client, $request, $e);
+
+            return;
+        }
+
+        if (!$result instanceof PromiseInterface) {
+            $this->answerOrRefuse($client, $request, $result);
+
+            return;
+        }
+
+        $result->then(
+            fn (mixed $answer) => $this->answerOrRefuse($client, $request, $answer),
+            fn (mixed $e) => $this->refuse($client, $request, $e instanceof \Throwable ? $e : new \RuntimeException('rejected')),
+        );
+    }
+
+    /** Answers a settled result; a result the wire cannot carry is refused like a handler failure. */
+    private function answerOrRefuse(Client $client, Request $request, mixed $answer): void
+    {
+        try {
+            $this->answer($client, $request, $answer);
+        } catch (\Throwable $e) {
+            $this->refuse($client, $request, $e);
+        }
+    }
+
+    /** The wire's answer to a failed call: an RpcError as itself, anything else as `internal`, logged. */
+    private function refuse(Client $client, Request $request, \Throwable $e): void
+    {
+        if ($e instanceof RpcError) {
             if ($request->hasId) {
                 $client->send(JsonRpc::error($request->id, $e));
             }
-        } catch (\Throwable $e) {
-            $this->logFailure($client, $request, $e);
-            if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
-            }
+
+            return;
+        }
+
+        $this->logFailure($client, $request, $e);
+        if ($request->hasId) {
+            $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
         }
     }
 
     /**
      * The gates and the handler, shared by the wire and the in-process door: returns the
-     * handler's result, or the remembered answer of an idempotent retry, or throws.
+     * handler's result (a promise when the handler answers later), the remembered answer of
+     * an idempotent retry, or the still-pending answer of one, or throws.
+     *
+     * @return mixed|PromiseInterface<mixed>
      */
     private function run(Client $client, Request $request): mixed
     {
@@ -565,19 +631,50 @@ final class Dispatcher implements MessageHandler
         $key = $spec->sideEffects ? $params->optionalString('idempotencyKey', IdempotencyCache::MAX_KEY_LENGTH) : null;
         $bucket = $this->idempotencyBucket($client);
 
-        if ($key !== null) {
-            $remembered = $this->idempotency->get($bucket, $spec->name, $key);
-            if ($remembered !== null) {
-                return $remembered['answer'];
-            }
+        if ($key === null) {
+            return ($spec->handler)($call, $params);
+        }
+
+        $remembered = $this->idempotency->get($bucket, $spec->name, $key);
+        if ($remembered !== null) {
+            return $remembered['answer'];
+        }
+
+        $slot = $bucket . "\0" . $spec->name . "\0" . $key;
+        if (isset($this->inFlight[$slot])) {
+            return $this->inFlight[$slot];
         }
 
         $result = ($spec->handler)($call, $params);
-        if ($key !== null) {
+        if (!$result instanceof PromiseInterface) {
             $this->idempotency->put($bucket, $spec->name, $key, $result);
+
+            return $result;
         }
 
-        return $result;
+        // Only a success is remembered, and only once it has settled: a refusal
+        // leaves the key free for the sender's retry, exactly as a sync refusal does.
+        $settled = false;
+        $shared = $result->then(
+            function (mixed $answer) use ($bucket, $spec, $key, $slot, &$settled): mixed {
+                $settled = true;
+                unset($this->inFlight[$slot]);
+                $this->idempotency->put($bucket, $spec->name, $key, $answer);
+
+                return $answer;
+            },
+            function (mixed $e) use ($slot, &$settled): never {
+                $settled = true;
+                unset($this->inFlight[$slot]);
+
+                throw $e instanceof \Throwable ? $e : new \RuntimeException('rejected');
+            },
+        );
+        if (!$settled) {
+            $this->inFlight[$slot] = $shared;
+        }
+
+        return $shared;
     }
 
     /**
