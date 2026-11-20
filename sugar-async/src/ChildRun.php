@@ -31,9 +31,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *
  * A child that exits while a backgrounded grandchild still holds its output
  * pipes ends the run once {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} has passed
- * since the exit, not at the deadline. Output the grandchild writes after that
- * cut-off is not captured, and nothing reports the drop; output written inside
- * the grace is kept.
+ * since the exit, not at the deadline, unless {@see withExitGrace()} removed that
+ * grace. Output the grandchild writes after that cut-off is not captured, and
+ * nothing reports the drop; output written inside the grace is kept.
  *
  * Stdin: {@see withStdin()} feeds a payload to the child. The POSIX arm does it
  * through a non-blocking pipe. On Windows a non-empty payload is refused (a
@@ -64,6 +64,7 @@ final class ChildRun
      * @param null|int $groupPid  Process group the child leads (a containment wrapper), or null
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk read, or null
      * @param null|\Closure(int): void $onSpawn  Told the child's pid right after it starts, or null
+     * @param null|float $exitGrace  run() only: seconds read on after the exit is seen, or null to read to EOF
      */
     private function __construct(
         private readonly array $argv,
@@ -75,6 +76,7 @@ final class ChildRun
         private readonly ?int $groupPid = null,
         private readonly ?\Closure $onChunk = null,
         private readonly ?\Closure $onSpawn = null,
+        private readonly ?float $exitGrace = WindowsPipes::EXIT_DRAIN_GRACE_SECONDS,
     ) {
     }
 
@@ -101,6 +103,24 @@ final class ChildRun
         }
 
         return $this->mutate(['timeout' => $seconds]);
+    }
+
+    /**
+     * How long run() reads on after the child's exit is seen, when a backgrounded
+     * grandchild still holds the output pipes. The default is the WindowsPipes
+     * grace. Null removes the grace: run() then reads until EOF or the deadline,
+     * so a held pipe keeps the call going to its deadline, where the group is
+     * killed and the result is TIMED_OUT. Callers that bound a whole command by
+     * its budget pass null. launch() ignores this: it has no exit grace on POSIX
+     * and always reads to EOF or the deadline.
+     */
+    public function withExitGrace(?float $seconds): self
+    {
+        if ($seconds !== null && ($seconds < 0 || !is_finite($seconds))) {
+            throw new \InvalidArgumentException('Exit grace must be null or a finite number of seconds >= 0');
+        }
+
+        return $this->mutate(['exitGrace' => $seconds]);
     }
 
     /** Bytes kept per stream (>= 0); output past it is read and counted, not kept. */
@@ -212,7 +232,7 @@ final class ChildRun
                 ->withClock($clock)
                 ->withOnChunk($this->onChunk)
                 ->withRunning($running)
-                ->withExitGrace(WindowsPipes::EXIT_DRAIN_GRACE_SECONDS);
+                ->withExitGrace($this->exitGrace);
             if ($this->stdin !== null && $this->stdin !== '') {
                 $pump = $pump->withStdin($pipes[0], $this->stdin);
             } else {

@@ -70,6 +70,42 @@ final class ChildRunTest extends TestCase
     }
 
     /**
+     * With the grace removed, a backgrounded child that holds the pipes holds the
+     * run to its deadline: the run reads until EOF or the deadline, the group is
+     * killed there, and the result is TIMED_OUT. This is the shape a caller that
+     * bounds a whole command by its budget needs.
+     */
+    public function testWithoutAnExitGraceAHeldPipeHoldsTheRunToItsDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(2.0)
+            ->withExitGrace(null)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertTrue($r->timedOut(), 'the held pipe must not end the run before the deadline');
+        $this->assertGreaterThanOrEqual(1.5, $elapsed, 'the run waits for the deadline while the pipe is held');
+        $this->assertLessThan(5.0, $elapsed, 'the deadline and the kill ladder bound the run');
+    }
+
+    /** Zero is a grace of no time at all: the exit ends the run at once, unlike null. */
+    public function testAZeroExitGraceEndsTheRunOnceTheExitIsSeen(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withExitGrace(0.0)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertLessThan(3.0, $elapsed, 'a zero grace must not wait out the deadline');
+    }
+
+    /**
      * Pins the exit grace's cut-off: a line a backgrounded grandchild writes inside
      * the grace after the parent exits is kept, and one written after it is not.
      * The grace length is a policy call, so this test fixes the shape, not the number.
@@ -232,6 +268,8 @@ final class ChildRunTest extends TestCase
         yield 'negative cap' => [static fn (ChildRun $r): ChildRun => $r->withMaxBytes(-1)];
         yield 'zero group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(0)];
         yield 'negative group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(-4)];
+        yield 'negative exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(-0.5)];
+        yield 'infinite exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(INF)];
     }
 
     #[DataProvider('badBuilders')]
