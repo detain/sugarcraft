@@ -48,8 +48,9 @@ final class BundleDiscovery
 
     /**
      * @param list<string> $configPaths  the user-tier pluginPaths entries
-     * @param list<string> $trustedNames the names listed in `trustedBundleChannels`; only these
-     *                                  are deduped by name (see {@see dedupeByName()})
+     * @param list<string> $trustedNames the names listed in `trustedBundleChannels`; a project
+     *                                  copy of one of these that dedupeByName() drops is kept for
+     *                                  the trust notice (see {@see shadowedTrustedCopies()})
      */
     public function __construct(
         private readonly string $projectRoot,
@@ -135,18 +136,21 @@ final class BundleDiscovery
     }
 
     /**
-     * A project-tier copy of a TRUSTED name is dropped when a user-tier bundle
-     * of that name exists: the user-tier copy is the one that loads, and the
-     * project copy is skipped with a warning. That drop is whole-bundle, so the
-     * skipped copy's commands, skills, agents and hooks do not load either.
-     * Trust never flows to a project copy (ruling 2026-11-20).
+     * A project-tier copy is dropped when a user-tier bundle of the same name
+     * exists: the user-tier copy is the one that loads, and the project copy is
+     * skipped with a warning naming its directory (ruling 2026-11-20). That drop
+     * is whole-bundle, so the skipped copy's commands, skills, agents and hooks
+     * do not load either. Trust never flows to a project copy.
      *
-     * Two user-tier copies of one trusted name are NOT collapsed here: both are
+     * Two user-tier copies of one name are NOT collapsed here: both are
      * user-tier consents to the same name, and each loads through its own
      * entrypoints. A channel name the first copy already registered is refused
-     * by the registry's collision check, not by this dedupe. An untrusted name keeps
-     * every copy it was found with, so a project-tier bundle that was never
-     * trusted is discovered as it always was.
+     * by the registry's collision check, not by this dedupe.
+     *
+     * A dropped copy of a TRUSTED name is also kept in {@see $shadowedTrusted}, because
+     * its channel and hook content is refused for trust and the launch notice must
+     * say so. A dropped copy of an untrusted name was never refused for trust, so
+     * nothing is recorded for it.
      *
      * @param list<Bundle> $bundles
      *
@@ -157,7 +161,7 @@ final class BundleDiscovery
         $userNames = [];
 
         foreach ($bundles as $bundle) {
-            if ($bundle->tier === 'user' && \in_array($bundle->name, $this->trustedNames, true)) {
+            if ($bundle->tier === 'user') {
                 $userNames[$bundle->name] = true;
             }
         }
@@ -170,7 +174,10 @@ final class BundleDiscovery
                     'name' => $bundle->name,
                     'dir' => $bundle->dir,
                 ]));
-                $this->shadowedTrusted[] = $bundle;
+
+                if (\in_array($bundle->name, $this->trustedNames, true)) {
+                    $this->shadowedTrusted[] = $bundle;
+                }
 
                 continue;
             }

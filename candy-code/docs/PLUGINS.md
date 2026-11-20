@@ -134,11 +134,11 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    that carries a trusted name has its channel and hook content refused, and
    the launch says so; its commands, skills and agents still load, as they do
    for any project bundle. When a user-tier and a project-tier bundle share a
-   trusted name, the user-tier copy is the one that loads and the project copy
-   is skipped with a warning. The skipped copy's commands, skills, agents and
-   hooks do not load either, so a user-tier copy that lacks one of them hides
-   it; to keep the project copy's content, move that copy under a different
-   name. An untrusted name keeps both copies, as it always did.
+   name, the user-tier copy is the one that loads and the project copy is
+   skipped with a warning, trusted or not. The skipped copy's commands, skills,
+   agents and hooks do not load either, so a user-tier copy that lacks one of
+   them hides it; to keep the project copy's content, move that copy under a
+   different name.
 
 **Bundle hooks ride the same gate.** A user-tier bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the

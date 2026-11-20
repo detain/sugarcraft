@@ -59,15 +59,14 @@ final class LspConnectionShutdownTest extends TestCase
     private const DESTRUCTOR_BOUND_SECONDS = 3.0;
 
     /**
-     * Sits between the 0.010s a pipe-closing teardown measures and the 1.0s
-     * grace a non-closing one pays in full. The regression path cannot finish
-     * before that grace (the reaper waits the whole TERM window before signal
-     * 9), so any bound under the grace still catches it whatever the load. The
-     * bound sits just under the grace: 0.5s was red on a loaded shard at 0.56s
-     * and 0.67s (load average 57 and 66) while the same test measures 0.010s on
-     * an idle box.
+     * Suffixes appended to the pid-file path. A fixture writes a marker there to
+     * record HOW it left, which is the load-independent evidence the shutdown rows
+     * assert on. Wall-clock bounds were the previous evidence and flaked: a
+     * pipe-closing exit measures 0.010s idle, but 1.55s on a shard at load ~40,
+     * which sits above any bound that still separates it from the 1.0s grace.
      */
-    private const EOF_EXIT_BOUND_SECONDS = 0.9;
+    private const EOF_MARKER_SUFFIX = '.eof';
+    private const EXIT_MARKER_SUFFIX = '.exit';
 
     /**
      * Under one pipe buffer (64 KiB on this host). The control volume: a server
@@ -122,8 +121,7 @@ final class LspConnectionShutdownTest extends TestCase
         // default of 2.0s that is ~3.1s against a 4.0s bound — under a second of
         // headroom, so a few stalled loop wakes reddened a CORRECT bounded
         // disconnect. Shrinking the input the ladder sums over (same technique
-        // as `EOF_EXIT_BOUND_SECONDS` above and `requestTimeout: 0.3` in the
-        // EOF row) drops the honest wall to ~1.5s under the very same 4.0s
+        // as `requestTimeout: 0.3` in the EOF row) drops the honest wall to ~1.5s under the very same 4.0s
         // bound: 2.5s of slack, and the pre-fix signature the message names
         // (the 7.77s proc_terminate+proc_close pair) is still caught twice over.
         $connection = $this->connectedOver(self::STUBBORN_SERVER, requestTimeout: 0.4);
@@ -145,27 +143,32 @@ final class LspConnectionShutdownTest extends TestCase
 
     /**
      * THE CONTROL that makes the bound above mean something: a server that
-     * HONOURS SIGTERM is not merely bounded, it is quick — so the assertion is
-     * not passing because the escalation budget happens to be short. Without
-     * this, shrinking both grace constants would read as an improvement.
+     * HONOURS SIGTERM is not merely bounded, it leaves through the protocol — so
+     * the assertion is not passing because the escalation budget happens to be
+     * short. Without this, shrinking both grace constants would read as an
+     * improvement.
+     *
+     * THE MARKER, NOT THE CLOCK. A 1.0s wall bound here measured 1.67s on a loaded
+     * shard (load average about 40) for the same honest path that takes ~0.01s
+     * idle. The fixture writes its marker only when the `exit` notification
+     * arrives, which proves both the `shutdown` answer and the `exit` were
+     * delivered, and that the server left of its own accord rather than under
+     * SIGTERM or signal 9. A load-independent check, so it cannot flake on a
+     * slow box.
      */
-    public function testDisconnectReturnsPromptlyWhenTheServerHonoursSigterm(): void
+    public function testDisconnectLeavesAServerThatHonoursSigtermThroughTheProtocol(): void
     {
         $connection = $this->connectedOver(self::WELL_BEHAVED_SERVER);
+        $pid = $this->selfReportedPid();
 
-        $start = microtime(true);
         $connection->disconnect();
-        $elapsed = microtime(true) - $start;
 
-        $this->assertLessThan(
-            1.0,
-            $elapsed,
-            sprintf(
-                'a server that answers `shutdown` and leaves on `exit` must pay neither the request '
-                . 'timeout nor the escalation budget; took %.2fs',
-                $elapsed,
-            ),
+        $this->assertFileExists(
+            $this->pidFile() . self::EXIT_MARKER_SUFFIX,
+            'a server that answers `shutdown` and leaves on `exit` must receive the `exit` notification; '
+            . 'the escalation path was taken instead',
         );
+        $this->assertFalse($this->isAlive($pid), "pid {$pid} survived disconnect()");
     }
 
     /**
@@ -487,21 +490,19 @@ final class LspConnectionShutdownTest extends TestCase
 
         $stop = new \ReflectionMethod($connection, 'stopProcess');
         $stop->setAccessible(true);
-
-        $started = microtime(true);
         $stop->invoke($connection);
-        $elapsed = microtime(true) - $started;
 
-        $this->assertLessThan(
-            self::EOF_EXIT_BOUND_SECONDS,
-            $elapsed,
-            sprintf(
-                'stopProcess() took %.2fs against a server that exits on stdin EOF — the pipes '
-                . 'are not being closed before the reap, so the server never saw the EOF and '
-                . 'paid the whole %.1fs SIGTERM grace before being killed with signal 9',
-                $elapsed,
-                \SugarCraft\Code\Support\ProcessReaper::TERMINATE_GRACE_SECONDS,
-            ),
+        // THE MARKER, NOT THE CLOCK. The fixture writes its EOF marker only when
+        // it reads stdin EOF and exits on its own. A regression leaves the pipes
+        // open, the server never sees EOF, and the reaper pays the whole SIGTERM
+        // grace before signal 9, so the marker is absent whatever the load. A
+        // wall-clock bound under the grace could not separate that from a loaded
+        // box: it measured 1.55s on a shard whose load average was about 40.
+        $this->assertFileExists(
+            $this->pidFile() . self::EOF_MARKER_SUFFIX,
+            'the server never saw stdin EOF, so the pipes were not closed before the reap and it was '
+            . 'killed after the whole ' . \SugarCraft\Code\Support\ProcessReaper::TERMINATE_GRACE_SECONDS
+            . 's SIGTERM grace instead of exiting on its own',
         );
         $this->assertFalse($this->isAlive($pid), 'the server is still running after stopProcess()');
     }
@@ -593,6 +594,7 @@ final class LspConnectionShutdownTest extends TestCase
         while (microtime(true) < $deadline) {
             $chunk = fread(STDIN, 8192);
             if ($chunk === false || ($chunk === '' && feof(STDIN))) {
+                file_put_contents($argv[1] . '.eof', 'eof');
                 exit(0);
             }
             usleep(5000);
@@ -725,6 +727,7 @@ final class LspConnectionShutdownTest extends TestCase
                 $buffer = substr($buffer, $sep + 4 + $length);
                 $message = json_decode($body, true);
                 if (($message['method'] ?? '') === 'exit') {
+                    file_put_contents($argv[1] . '.exit', 'exit');
                     exit(0);
                 }
                 if (isset($message['id'])) {

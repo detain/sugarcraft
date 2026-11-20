@@ -270,11 +270,13 @@ final class BundleDiscoveryTest extends TestCase
     }
 
     /**
-     * Dedupe is scoped to trusted names: an untrusted name keeps both copies it
-     * was found with, so a project-tier bundle that was never trusted is
-     * discovered exactly as it was before the trust ruling.
+     * The dedupe is not scoped to trusted names: the ruling says a user-tier and
+     * a project-tier copy that share a name leave the user-tier copy as the one
+     * that loads, trusted or not. The project copy is skipped with a warning,
+     * and it is NOT recorded for the trust notice, because an untrusted name was
+     * never refused for trust.
      */
-    public function testAnUntrustedDuplicateNameKeepsBothCopies(): void
+    public function testAnUntrustedDuplicateNameKeepsOnlyTheUserCopy(): void
     {
         $project = $this->tempDir . '/project';
         $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
@@ -283,15 +285,14 @@ final class BundleDiscoveryTest extends TestCase
         $discovery = new BundleDiscovery($project, [], ['some-other-bundle']);
         $bundles = $discovery->discover();
 
-        self::assertCount(2, $bundles, 'an untrusted duplicate name is not collapsed');
-        $tiers = array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles);
-        sort($tiers);
-        self::assertSame(['project', 'user'], $tiers, 'both copies are discovered under their own tiers');
+        self::assertCount(1, $bundles, 'an untrusted duplicate name is listed once');
+        self::assertSame('user', $bundles[0]->tier, 'the user-tier copy is the one that loads');
         $shadowed = array_filter(
             $discovery->warnings(),
             static fn (string $warning): bool => str_contains($warning, 'twin') && str_contains($warning, (string) realpath($project)),
         );
-        self::assertSame([], array_values($shadowed), 'no project copy is skipped as shadowed');
+        self::assertCount(1, $shadowed, 'the skipped project copy is named by its directory');
+        self::assertSame([], $discovery->shadowedTrustedCopies(), 'an untrusted name draws no trust notice');
     }
 
     /**
@@ -391,6 +392,6 @@ final class BundleDiscoveryTest extends TestCase
 
         $again = new BundleDiscovery($project, [], []);
         $again->discover();
-        self::assertSame([], $again->shadowedTrustedCopies(), 'an untrusted name is never shadowed, so nothing is recorded');
+        self::assertSame([], $again->shadowedTrustedCopies(), 'an untrusted name is shadowed without a trust notice, so nothing is recorded');
     }
 }
