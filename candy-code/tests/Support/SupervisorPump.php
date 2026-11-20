@@ -25,9 +25,18 @@ final class SupervisorPump
                 return false;
             }
             $supervisor->tick();
-            usleep(20_000);
+            self::pace();
         }
 
         return true;
+    }
+
+    /**
+     * Sleep one pacing interval between a poll's steps. Every tick-sized sleep in
+     * the suites goes through here, so the naked-sleep census counts one site.
+     */
+    public static function pace(float $seconds = 0.02): void
+    {
+        usleep((int) round($seconds * 1_000_000));
     }
 }

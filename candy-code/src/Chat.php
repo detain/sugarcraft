@@ -679,16 +679,6 @@ final class Chat implements Model
     private const BACKGROUND_POLL_SECONDS = 2.0;
 
     /**
-     * How often a rewake tick re-queues itself while a `/bg` stop waits on the
-     * daemon (seconds). The stop's rungs advance only from a tick, and the poll
-     * above is two seconds apart, so without this a stop from an idle TUI answers
-     * one rung per poll. A tenth of a second keeps each rung's answer prompt and
-     * the repaint rate close to the tool-event pump's; it runs only while a stop
-     * is in flight, so an idle chat pays nothing.
-     */
-    private const BACKGROUND_STOP_REWAKE_SECONDS = 0.1;
-
-    /**
      * Reconciliation id of the slow schedule-watch tick (C-AGT-7.a). Same
      * stable-across-rebuilds contract as
      * {@see BACKGROUND_POLL_SUBSCRIPTION}; a distinct id because a distinct
@@ -20195,25 +20185,6 @@ final class Chat implements Model
         } catch (\Throwable) {
             return [];
         }
-    }
-
-    /**
-     * Queue the next rewake tick while a stop this process started still waits on
-     * the daemon. Only a rewake tick re-queues: the subscription's own ticks never
-     * start a chain, so each stop keeps one chain and no more.
-     */
-    private function rewakeWhileStopWaits(BackgroundTickMsg $tick, ?\Closure $cmd): ?\Closure
-    {
-        if (!$tick->rewake || $this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasStopInFlight()) {
-            return $cmd;
-        }
-
-        $again = Cmd::tick(
-            self::BACKGROUND_STOP_REWAKE_SECONDS,
-            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(rewake: true),
-        );
-
-        return $cmd === null ? $again : Cmd::batch($cmd, $again);
     }
 
     /**

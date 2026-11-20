@@ -92,7 +92,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $advanceStarted = microtime(true);
             $supervisor->advanceSpawns();
             $slowest = max($slowest, microtime(true) - $advanceStarted);
-            usleep(20_000);
+            SupervisorPump::pace();
         }
 
         $this->assertInstanceOf(BackgroundSession::class, $session, 'the loop never accepted the daemon');
@@ -337,7 +337,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $advanceStarted = microtime(true);
             $supervisor->advanceStops();
             $slowest = max($slowest, microtime(true) - $advanceStarted);
-            usleep(20_000);
+            SupervisorPump::pace();
         }
 
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $outcome, 'the acknowledged STOP was not driven to its outcome');
@@ -423,7 +423,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
 
         $ticks = 0;
         while ($this->pollArmed($chat) && $ticks < self::MAX_POLL_TICKS) {
-            usleep((int) (self::POLL_CADENCE_SECONDS * 1_000_000));
+            SupervisorPump::pace(self::POLL_CADENCE_SECONDS);
             [$chat] = $chat->update(new BackgroundTickMsg());
             $ticks++;
         }

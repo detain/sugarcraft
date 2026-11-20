@@ -156,6 +156,17 @@ use SugarCraft\Code\Lang;
 trait HandlesSessionSurface
 {
     /**
+     * How often a rewake tick re-queues itself while a `/bg` stop waits on the
+     * daemon (seconds). The stop's rungs advance only from a tick, and the poll
+     * ({@see \SugarCraft\Code\Chat::BACKGROUND_POLL_SECONDS}) is two seconds apart,
+     * so without this a stop from an idle TUI answers one rung per poll. A tenth of
+     * a second keeps each rung's answer prompt and the repaint rate close to the
+     * tool-event pump's; it runs only while a stop is in flight, so an idle chat
+     * pays nothing.
+     */
+    private const BACKGROUND_STOP_REWAKE_SECONDS = 0.1;
+
+    /**
      * Route family handler: owns the class-disjoint Msg arms listed below;
      * returns null when none match so route()'s chain can try the next
      * family (W7-S4 decomposition, behaviour-identical to the old inline
@@ -408,5 +419,24 @@ trait HandlesSessionSurface
         }
 
         return null;
+    }
+
+    /**
+     * Queue the next rewake tick while a stop this process started still waits on
+     * the daemon. Only a rewake tick re-queues: the subscription's own ticks never
+     * start a chain, so each stop keeps one chain and no more.
+     */
+    private function rewakeWhileStopWaits(BackgroundTickMsg $tick, ?\Closure $cmd): ?\Closure
+    {
+        if (!$tick->rewake || $this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasStopInFlight()) {
+            return $cmd;
+        }
+
+        $again = Cmd::tick(
+            self::BACKGROUND_STOP_REWAKE_SECONDS,
+            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(rewake: true),
+        );
+
+        return $cmd === null ? $again : Cmd::batch($cmd, $again);
     }
 }

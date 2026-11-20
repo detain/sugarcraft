@@ -120,7 +120,7 @@ final class BackgroundStopPollWakeTest extends TestCase
             $this->assertTrue($tick->rewake);
 
             // The host waits the hop interval between ticks; the daemon answers in real time.
-            usleep(100_000);
+            SupervisorPump::pace(0.1);
             [$woken, $cmd] = $woken->update($tick);
             $hops++;
         }
