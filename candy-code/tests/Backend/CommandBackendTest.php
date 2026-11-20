@@ -8,6 +8,7 @@ use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Support\ProcessContainment;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
@@ -656,6 +657,39 @@ final class CommandBackendTest extends TestCase
     {
         $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], false));
         $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], true));
+    }
+
+    /**
+     * childRun() declares its child a setsid wrapper exactly when spawnSpec() put a
+     * containment prefix in front of the plain spec. The launch path's cancel fallback
+     * reads that flag, and only a shell that exits before the first status poll would
+     * otherwise reach it, so this pins the wiring without spawning anything: no prefix
+     * gives false, and a prefix gives true. On Windows detachedSpawnPrefix() is always
+     * empty, so the same equality pins false there.
+     */
+    public function testChildRunDeclaresTheSetsidWrapperExactlyWhenAContainmentPrefixApplies(): void
+    {
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([]);
+        foreach (['printf hi', ['printf', 'a;b']] as $command) {
+            $this->assertFalse(
+                $this->childRunProperty(CommandBackend::childRun($command, ''), 'setsidWrapped'),
+                'with no containment prefix the child is not a setsid wrapper',
+            );
+        }
+
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([[\PHP_BINARY, '-r', ProcessContainment::PHP_SETSID_STUB, '--']]);
+        try {
+            $expected = ProcessContainment::detachedSpawnPrefix() !== [];
+            foreach (['printf hi', ['printf', 'a;b']] as $command) {
+                $this->assertSame(
+                    $expected,
+                    $this->childRunProperty(CommandBackend::childRun($command, ''), 'setsidWrapped'),
+                    'childRun() must declare the wrapper exactly when spawnSpec() prefixed the command',
+                );
+            }
+        } finally {
+            ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
+        }
     }
 
     private function writeScript(string $body): string
