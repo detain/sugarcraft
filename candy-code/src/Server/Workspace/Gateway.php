@@ -901,7 +901,11 @@ final class Gateway implements MessageHandler
                 'dropped' => 0,
                 'action' => 'resubscribe',
             ])->notification());
+            // The wire text carries no root here (unchanged); an in-process target's copy names it, as a relayed event does.
             $message = \json_decode($text, true, JsonRpc::MAX_DEPTH);
+            if (\is_array($message) && \is_array($message['params'] ?? null)) {
+                $message['params']['root'] = $root;
+            }
             foreach ($this->subscribers[$sessionId] as $target) {
                 if ($target->isOpen()) {
                     $target->deliver(\is_array($message) ? $message : null, $text, null, false, null, (string) $sessionId);

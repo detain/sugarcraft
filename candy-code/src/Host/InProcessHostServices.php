@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host;
 
 use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Protocol\Client;
 use SugarCraft\Code\Protocol\Dispatcher;
@@ -13,7 +14,9 @@ use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
+use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Plugins\Host\HostServices;
+use SugarCraft\Plugins\Host\RootedHostServices;
 use function React\Promise\reject;
 use function React\Promise\resolve;
 
@@ -38,9 +41,10 @@ use function React\Promise\resolve;
  * Every method is asynchronous, as the {@see HostServices} contract is (owner decision
  * 2026-11-19, option a): it returns a promise that resolves to the value the call answers
  * with, or to null for the void calls, and rejects with the {@see RpcError} the wire would
- * answer with. The promise is settled before the method returns, so a caller that waits on
- * it gets the answer in the same tick. Refusals are the wire's own {@see RpcError}s: the
- * same code, kind and data.
+ * answer with. A call on the primary root settles before the method returns, so a caller that
+ * waits on it gets the answer in the same tick. A call routed to another root settles on a later
+ * tick, when its workspace host answers, so a caller must not read a routed promise synchronously.
+ * Refusals are the wire's own {@see RpcError}s: the same code, kind and data.
  *
  * Five deliberate differences from the wire, recorded for the Phase 5d bundles:
  * - Each answer's value is encoded under the wire's flags and decoded back, with no
@@ -77,23 +81,31 @@ use function React\Promise\resolve;
  *   `ServerConfig::MAX_CLIENT_MESSAGE_BYTES` is `invalid_params`. Invalid UTF-8 is
  *   `parse_error` on both doors.
  *
- * Routing limit (PL-5c-B, owner decision 2026-11-19: the in-process door serves the primary
- * root only). Session calls go to the primary host's dispatcher alone. This door never sends
- * `root`, and the wire's workspace routing (`root`, and sessionId-only requests through
- * {@see \SugarCraft\Code\Server\Workspace\Gateway::routeOf()}) is not applied. A session the
- * gateway bound to a non-primary root is therefore refused here by each method's own refusal
- * for an id the primary dispatcher does not hold: `session_not_found` for session.send,
- * session.subscribe, session.get, session.cancel and command.exec, and `ask_not_found` for
- * permission.respond, which finds no hosted session and no relayed question to answer. A bundle
- * that follows such a session gets the `session_not_found` refusal from {@see subscribeSession()}.
- * No socket, loopback WebSocket or
- * JSON-RPC frame carries these calls. The later step (A) of Phase 5 lifts this limit by routing
- * through the gateway and the child-process socket hop, and it waits for the event sink design.
+ * Routing (PL-5c-A; the design is reviews/PL-5c-A-sink-design.md). A call names its root by
+ * `root` (the two root forms, {@see createSessionIn()} and {@see pendingPermissionsIn()}) or by a
+ * `sessionId` the gateway bound to one. The door asks {@see Gateway::rootFor()}, the rule the wire
+ * uses: a call with no root goes to the primary dispatcher, as before. A call routed to another
+ * root goes through {@see Gateway::callRoot()} to that root's workspace host, over the gateway's
+ * child socket. That hop is inside the host, not a loopback dial: the door still builds no socket
+ * and no JSON-RPC frame. A routed answer takes the wire's encode gate ({@see Dispatcher::wireAnswer()})
+ * before it reaches a bundle, so it is refused on the same limits as a primary answer.
+ *
+ * Each routed call has its own timer ({@see CALL_TIMEOUT_SECONDS}): on expiry the caller gets a
+ * `timeout` refusal, and a late answer is dropped after the gateway's bookkeeping. A subscription
+ * or session answered after the door gave up, or after the client left, is compensated with a
+ * session.unsubscribe or a session.delete, so the host keeps no state no caller holds (design 4.1).
+ * Events of a routed session reach the {@see subscribeEvents()} listeners through this client's
+ * {@see InProcessEventSink}, with the `root` the gateway adds.
  */
-final class InProcessHostServices implements HostServices
+final class InProcessHostServices implements HostServices, RootedHostServices
 {
     /** The window a `session.subscribe` without an `afterSeq` pages its reset snapshot to: the bundles' own rule. */
     public const SNAPSHOT_LIMIT = 200;
+
+    /** How long a routed call may take to answer before the caller is refused `timeout` (the bundles' own per-call timeout). */
+    public const CALL_TIMEOUT_SECONDS = 20.0;
+
+    private static int $sinkSeq = 0;
 
     private ?Client $client = null;
 
@@ -109,29 +121,36 @@ final class InProcessHostServices implements HostServices
     /** Whether a drain is running right now: a drain entered from inside a listener returns at once. */
     private bool $delivering = false;
 
+    /** The routed-event sink of this client, made when it first follows a session of another root. */
+    private ?InProcessEventSink $sink = null;
+
     private function __construct(
         private readonly Dispatcher $dispatcher,
         private readonly LoopInterface $loop,
+        private readonly ?Gateway $gateway,
     ) {
         $this->pending = new \SplQueue();
     }
 
-    /** An in-process host over $dispatcher, whose events are drained on $loop. */
-    public static function new(Dispatcher $dispatcher, LoopInterface $loop): self
+    /**
+     * An in-process host over $dispatcher, whose events are drained on $loop. With $gateway,
+     * calls and events of sessions on other roots route through it (PL-5c-A); without one, the
+     * door serves the primary root only.
+     */
+    public static function new(Dispatcher $dispatcher, LoopInterface $loop, ?Gateway $gateway = null): self
     {
-        return new self($dispatcher, $loop);
+        return new self($dispatcher, $loop, $gateway);
     }
 
     /**
      * The factory the serve hands each channel bundle (PL-5d): one in-process client per bundle,
-     * all over the primary root's dispatcher. The bundle name does not select a root, because
-     * this door serves the primary root only (routing limit above).
+     * all over the primary root's dispatcher, routed through $gateway when one is given.
      *
      * @return \Closure(string): HostServices
      */
-    public static function bundleFactory(Dispatcher $dispatcher, LoopInterface $loop): \Closure
+    public static function bundleFactory(Dispatcher $dispatcher, LoopInterface $loop, ?Gateway $gateway = null): \Closure
     {
-        return static fn (string $bundle): HostServices => self::new($dispatcher, $loop);
+        return static fn (string $bundle): HostServices => self::new($dispatcher, $loop, $gateway);
     }
 
     /**
@@ -153,11 +172,11 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Close the in-process client. Events it was already owed are delivered first,
-     * then the client leaves the host, which drops its feed subscriptions. Called
-     * from a listener, the owed events are delivered by the drain already running
-     * (in order, to every listener) and the client still closes here. A later
-     * connect() starts with no follows (see the class docblock).
+     * Close the in-process client. Events it was already owed are delivered first (the primary
+     * feed's and the routed sink's), then the client leaves the host, which drops its feed
+     * subscriptions and its routed subscriptions. Called from a listener, the owed events are
+     * delivered by the drain already running (in order, to every listener) and the client still
+     * closes here. A later connect() starts with no follows (see the class docblock).
      */
     public function disconnect(): PromiseInterface
     {
@@ -167,6 +186,17 @@ final class InProcessHostServices implements HostServices
                 return null;
             }
             $this->drain();
+            $sink = $this->sink;
+            if ($sink !== null) {
+                $sink->flush();
+                $sink->close();
+                $this->gateway?->detachTarget($sink);
+                $this->sink = null;
+            }
+            // A listener that disconnected from inside the flush has already left.
+            if ($this->client !== $client) {
+                return null;
+            }
             $this->client = null;
             $this->dispatcher->context()->removeClient($client);
 
@@ -217,7 +247,7 @@ final class InProcessHostServices implements HostServices
      */
     public function subscribeSession(string $sessionId, ?int $afterSeq, ?\Closure $cursor): PromiseInterface
     {
-        return $this->answer(function () use ($sessionId, $afterSeq, $cursor): array {
+        return $this->answer(function () use ($sessionId, $afterSeq, $cursor): PromiseInterface|array {
             if ($cursor !== null) {
                 $resume = $cursor();
                 $afterSeq = $resume === null || $resume === 0 ? null : $resume;
@@ -230,7 +260,13 @@ final class InProcessHostServices implements HostServices
                 $params['snapshotLimit'] = self::SNAPSHOT_LIMIT;
             }
 
-            return $this->dispatcher->invoke($this->connected(), 'session.subscribe', $params);
+            $client = $this->connected();
+            $root = $this->routeOf(['sessionId' => $sessionId]);
+            if ($root === null) {
+                return $this->dispatcher->invoke($client, 'session.subscribe', $params);
+            }
+
+            return $this->subscribeRouted($root, $sessionId, $afterSeq, $params);
         });
     }
 
@@ -245,7 +281,16 @@ final class InProcessHostServices implements HostServices
             if (!$this->openNow()) {
                 return null;
             }
-            $this->dispatcher->invoke($this->connected(), 'session.unsubscribe', ['sessionId' => $sessionId]);
+            $client = $this->connected();
+            if ($this->routeOf(['sessionId' => $sessionId]) !== null) {
+                if ($this->sink !== null) {
+                    $this->gateway?->detachSubscriber($sessionId, $this->sink);
+                    $this->sink->unfollow($sessionId);
+                }
+
+                return null;
+            }
+            $this->dispatcher->invoke($client, 'session.unsubscribe', ['sessionId' => $sessionId]);
 
             return null;
         });
@@ -260,7 +305,7 @@ final class InProcessHostServices implements HostServices
         array $images,
         array $documents,
     ): PromiseInterface {
-        return $this->answer(function () use ($sessionId, $text, $delivery, $idempotencyKey, $images, $documents): array {
+        return $this->answer(function () use ($sessionId, $text, $delivery, $idempotencyKey, $images, $documents): PromiseInterface|array {
             $params = ['sessionId' => $sessionId, 'text' => $text, 'delivery' => $delivery];
             if ($idempotencyKey !== null) {
                 $params['idempotencyKey'] = $idempotencyKey;
@@ -272,45 +317,63 @@ final class InProcessHostServices implements HostServices
                 $params['documents'] = $documents;
             }
 
-            return $this->dispatcher->invoke($this->connected(), 'session.send', $params);
+            return $this->bySession('session.send', $sessionId, $params);
         });
     }
 
-    /** Mirrors session.create (row 5). */
+    /** Mirrors session.create (row 5). The primary root only: a bundle asks for another root with {@see createSessionIn()}. */
     public function createSession(?string $name, ?string $permissionMode): PromiseInterface
     {
-        return $this->answer(function () use ($name, $permissionMode): array {
-            $params = [];
-            if ($name !== null) {
-                $params['name'] = $name;
-            }
-            if ($permissionMode !== null) {
-                $params['permissionMode'] = $permissionMode;
+        return $this->answer(fn (): array => $this->dispatcher->invoke(
+            $this->connected(),
+            'session.create',
+            $this->createParams($name, $permissionMode),
+        ));
+    }
+
+    /**
+     * The root form of {@see createSession()} (PL-5c-A, section 2.6): the session is created in
+     * $root, through its workspace host when $root is not the primary root. The id is bound to
+     * that root, so later calls find it by `sessionId` alone.
+     */
+    public function createSessionIn(string $root, ?string $name, ?string $permissionMode): PromiseInterface
+    {
+        return $this->answer(function () use ($root, $name, $permissionMode): PromiseInterface|array {
+            $client = $this->connected();
+            $params = $this->createParams($name, $permissionMode);
+            $routed = $this->routeOf(['root' => $root]);
+            if ($routed === null) {
+                return $this->dispatcher->invoke($client, 'session.create', $params);
             }
 
-            return $this->dispatcher->invoke($this->connected(), 'session.create', $params);
+            return $this->routedCall($routed, 'session.create', $params, '', self::wire(...), function (mixed $answer) use ($routed): void {
+                // A late answer names a session the bundle never received: delete it, so a retry creates one.
+                if ($answer instanceof \stdClass && \is_string($answer->id ?? null)) {
+                    $this->gateway?->callQuietly($routed, 'session.delete', (object) ['sessionId' => $answer->id]);
+                }
+            });
         });
     }
 
     /** Mirrors permission.respond (row 6). */
     public function respondPermission(string $sessionId, string $askId, string $reply, ?string $note): PromiseInterface
     {
-        return $this->answer(function () use ($sessionId, $askId, $reply, $note): array {
+        return $this->answer(function () use ($sessionId, $askId, $reply, $note): PromiseInterface|array {
             $params = ['sessionId' => $sessionId, 'askId' => $askId, 'reply' => $reply];
             if ($note !== null) {
                 $params['note'] = $note;
             }
 
-            return $this->dispatcher->invoke($this->connected(), 'permission.respond', $params);
+            return $this->bySession('permission.respond', $sessionId, $params);
         });
     }
 
     /** Mirrors session.cancel (row 7). */
     public function cancelSession(string $sessionId, string $mode): PromiseInterface
     {
-        return $this->answer(fn (): array => $this->dispatcher->invoke(
-            $this->connected(),
+        return $this->answer(fn (): PromiseInterface|array => $this->bySession(
             'session.cancel',
+            $sessionId,
             ['sessionId' => $sessionId, 'mode' => $mode],
         ));
     }
@@ -318,9 +381,9 @@ final class InProcessHostServices implements HostServices
     /** Mirrors session.get (row 8). */
     public function sessionSnapshot(string $sessionId, int $limit): PromiseInterface
     {
-        return $this->answer(fn (): array => $this->dispatcher->invoke(
-            $this->connected(),
+        return $this->answer(fn (): PromiseInterface|array => $this->bySession(
             'session.get',
+            $sessionId,
             ['sessionId' => $sessionId, 'limit' => $limit],
         ));
     }
@@ -328,27 +391,45 @@ final class InProcessHostServices implements HostServices
     /** Mirrors command.exec (row 9). */
     public function execCommand(string $sessionId, string $name, string $args): PromiseInterface
     {
-        return $this->answer(function () use ($sessionId, $name, $args): array {
+        return $this->answer(function () use ($sessionId, $name, $args): PromiseInterface|array {
             // The wire refuses `args: ""` as invalid params; an empty argument list is an absent key.
             $params = ['sessionId' => $sessionId, 'name' => $name];
             if ($args !== '') {
                 $params['args'] = $args;
             }
 
-            return $this->dispatcher->invoke($this->connected(), 'command.exec', $params);
+            return $this->bySession('command.exec', $sessionId, $params);
         });
     }
 
-    /** Mirrors permission.pending (row 10). */
+    /** Mirrors permission.pending (row 10) on the primary root. */
     public function pendingPermissions(): PromiseInterface
     {
         return $this->answer(fn (): array => $this->dispatcher->invoke($this->connected(), 'permission.pending', []));
     }
 
     /**
+     * The root form of {@see pendingPermissions()} (PL-5c-A, section 2.6): the pending asks of
+     * $root's workspace host, with the top-level `root` set. Items carry no `root` of their own.
+     */
+    public function pendingPermissionsIn(string $root): PromiseInterface
+    {
+        return $this->answer(function () use ($root): PromiseInterface|array {
+            $client = $this->connected();
+            $routed = $this->routeOf(['root' => $root]);
+            if ($routed === null) {
+                return $this->dispatcher->invoke($client, 'permission.pending', []);
+            }
+
+            return $this->routedCall($routed, 'permission.pending', [], '', self::wire(...), static function (): void {
+            });
+        });
+    }
+
+    /**
      * Row 11: each event the followed sessions emit reaches the listener as its envelope
      * array, {@see EventEnvelope::toArray()}: the params of the wire's `event` notification
-     * (PL-5d, decision c).
+     * (PL-5d, decision c). A routed session's events carry `root` as well.
      */
     public function subscribeEvents(\Closure $listener): PromiseInterface
     {
@@ -358,10 +439,9 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Row 12: accepted so a bundle registers at construction, and never fired. The wire
-     * fires follow results only on a reconnect re-follow, which this door has no path to
-     * (see the class docblock). The first follow's answer is {@see subscribeSession()}'s
-     * return value.
+     * Row 12: accepted so a bundle registers at construction, and never fired. The wire fires follow results only on a
+     * reconnect re-follow, which this door has no path to (see the class docblock). The first follow's answer is
+     * {@see subscribeSession()}'s return value.
      */
     public function subscribeFollowResults(\Closure $listener): PromiseInterface
     {
@@ -369,22 +449,233 @@ final class InProcessHostServices implements HostServices
     }
 
     /**
-     * Row 15: the session ids this client follows, in the order the host lists them.
+     * Row 15: the session ids this client follows, the primary feeds' first, then the routed
+     * sessions in the order this client subscribed to them.
      *
      * @return list<string>
      */
     public function followedSessions(): PromiseInterface
     {
         return $this->answer(function (): array {
-            if ($this->client === null) {
-                return [];
+            $ids = [];
+            if ($this->client !== null) {
+                $ids = \array_values(\array_map(
+                    static fn ($feed): string => $feed->sessionId(),
+                    $this->dispatcher->context()->followedBy($this->client),
+                ));
+            }
+            foreach ($this->sink?->followedSessions() ?? [] as $sessionId) {
+                if (!\in_array($sessionId, $ids, true)) {
+                    $ids[] = $sessionId;
+                }
             }
 
-            return \array_values(\array_map(
-                static fn ($feed): string => $feed->sessionId(),
-                $this->dispatcher->context()->followedBy($this->client),
-            ));
+            return $ids;
         });
+    }
+
+    /**
+     * The root $key names (`root` or `sessionId`) when the gateway routes it to another root,
+     * or null for the primary dispatcher. Throws the gateway's refusal (root_not_found, invalid_params).
+     *
+     * @param array<string, mixed> $key
+     */
+    private function routeOf(array $key): ?string
+    {
+        return $this->gateway?->rootFor((object) $key);
+    }
+
+    /**
+     * A call keyed by its session: the primary dispatcher when the gateway binds no other root to
+     * the session, the routed call otherwise.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function bySession(string $method, string $sessionId, array $params): PromiseInterface|array
+    {
+        $client = $this->connected();
+        $root = $this->routeOf(['sessionId' => $sessionId]);
+        if ($root === null) {
+            return $this->dispatcher->invoke($client, $method, $params);
+        }
+
+        return $this->routedCall($root, $method, $params, $sessionId, self::wire(...), static function (): void {
+        });
+    }
+
+    /**
+     * session.subscribe on a routed session: the call answers, then this client's sink follows the
+     * session from the cursor the answer names. A subscription answered after the door gave up, or
+     * after the client left, is compensated instead (design 4.1).
+     *
+     * @param array<string, mixed> $params
+     */
+    private function subscribeRouted(string $root, string $sessionId, ?int $afterSeq, array $params): PromiseInterface
+    {
+        $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
+        $sink = $this->sinkFor();
+        $gateway->useRoot($root, $sink);
+
+        return $this->routedCall(
+            $root,
+            'session.subscribe',
+            $params,
+            $sessionId,
+            function (mixed $answer, int $generation) use ($root, $sessionId, $afterSeq, $sink, $gateway): mixed {
+                try {
+                    $wire = Dispatcher::wireAnswer($answer);
+                } catch (\Throwable $e) {
+                    $this->compensateSubscribe($root, $sessionId, $generation);
+
+                    throw $e;
+                }
+                if ($this->sink !== $sink || !$sink->isOpen()) {
+                    $this->compensateSubscribe($root, $sessionId, $generation);
+
+                    return $wire;
+                }
+                $throughSeq = $answer instanceof \stdClass ? (int) ($answer->throughSeq ?? 0) : 0;
+                $gateway->attachSubscriber($sessionId, $sink);
+                $sink->follow($sessionId, $afterSeq ?? $throughSeq);
+
+                return $wire;
+            },
+            function (mixed $answer, int $generation) use ($root, $sessionId): void {
+                $this->compensateSubscribe($root, $sessionId, $generation);
+            },
+        );
+    }
+
+    /**
+     * Sends the session.unsubscribe a late subscribe needs, when no later subscribe is in flight
+     * for the session and no subscriber records it (design 4.1). Otherwise the host subscription
+     * belongs to a later call, and nothing is sent.
+     */
+    private function compensateSubscribe(string $root, string $sessionId, int $generation): void
+    {
+        if ($this->gateway === null
+            || $this->gateway->subscribeGeneration($sessionId) !== $generation
+            || $this->gateway->hasSubscribers($sessionId)) {
+            return;
+        }
+        $this->gateway->callQuietly($root, 'session.unsubscribe', (object) ['sessionId' => $sessionId]);
+    }
+
+    /**
+     * One call to $root's workspace host through the gateway, settled by exactly one of: the answer,
+     * the gateway's refusal, or the door's own {@see CALL_TIMEOUT_SECONDS} timer. $onAnswer converts the
+     * answer for the bundle (or throws its refusal); $onLate runs when the answer lands after the
+     * timer already refused the caller.
+     *
+     * @param array<string, mixed> $params
+     * @param \Closure(mixed, int): mixed $onAnswer
+     * @param \Closure(mixed, int): void $onLate
+     */
+    private function routedCall(string $root, string $method, array $params, string $sessionId, \Closure $onAnswer, \Closure $onLate): PromiseInterface
+    {
+        $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
+        $deferred = new Deferred();
+        $settled = false;
+        $timer = null;
+        $settle = function () use (&$settled, &$timer): bool {
+            if ($settled) {
+                return false;
+            }
+            $settled = true;
+            if ($timer !== null) {
+                $this->loop->cancelTimer($timer);
+            }
+
+            return true;
+        };
+        $timer = $this->loop->addTimer(self::CALL_TIMEOUT_SECONDS, function () use ($settle, $deferred, $method): void {
+            if ($settle()) {
+                $deferred->reject(RpcError::of(
+                    ErrorCode::Busy,
+                    \sprintf('%s got no answer in %ds', $method, (int) self::CALL_TIMEOUT_SECONDS),
+                    'timeout',
+                ));
+            }
+        });
+
+        $promise = $gateway->callRoot($root, $method, (object) $params);
+        $generation = $gateway->subscribeGeneration($sessionId);
+        $promise->then(
+            function (mixed $answer) use ($settle, $deferred, $onAnswer, $onLate, $generation): void {
+                if (!$settle()) {
+                    $onLate($answer, $generation);
+
+                    return;
+                }
+                try {
+                    $deferred->resolve($onAnswer($answer, $generation));
+                } catch (\Throwable $e) {
+                    $deferred->reject($e);
+                }
+            },
+            function (\Throwable $e) use ($settle, $deferred): void {
+                if ($settle()) {
+                    $deferred->reject($e);
+                }
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /** The routed-answer conversion of a call that needs nothing else from its answer. */
+    private static function wire(mixed $answer): mixed
+    {
+        return Dispatcher::wireAnswer($answer);
+    }
+
+    /** @return array<string, mixed> */
+    private function createParams(?string $name, ?string $permissionMode): array
+    {
+        $params = [];
+        if ($name !== null) {
+            $params['name'] = $name;
+        }
+        if ($permissionMode !== null) {
+            $params['permissionMode'] = $permissionMode;
+        }
+
+        return $params;
+    }
+
+    /** The routed sink of this client, made on first use. */
+    private function sinkFor(): InProcessEventSink
+    {
+        $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
+
+        return $this->sink ??= new InProcessEventSink(
+            'inproc:' . ++self::$sinkSeq,
+            $gateway,
+            $this->loop,
+            function (array $envelope): void {
+                $this->fanOutToListeners($envelope);
+            },
+        );
+    }
+
+    /**
+     * Hands one envelope to every listener. A listener that closes the client stops the rest of
+     * this envelope's loop, so no routed event reaches a listener after the client is gone.
+     *
+     * @param array<string, mixed> $envelope
+     */
+    private function fanOutToListeners(array $envelope): void
+    {
+        foreach ($this->listeners as $listener) {
+            if ($this->sink === null || !$this->sink->isOpen()) {
+                return;
+            }
+            try {
+                $listener($envelope);
+            } catch (\Throwable $e) {
+                $this->dispatcher->context()->logError($e, 'in-process event listener failed');
+            }
+        }
     }
 
     /**
@@ -419,6 +710,7 @@ final class InProcessHostServices implements HostServices
     /**
      * Runs one call and settles its promise: the answer resolves, and any throwable (a refusal
      * or a failure the host raised) rejects with the same instance the synchronous call threw.
+     * The call may return a promise of a routed answer, which the result adopts.
      *
      * @param \Closure(): mixed $call
      */
@@ -438,24 +730,42 @@ final class InProcessHostServices implements HostServices
             return;
         }
         $this->draining = true;
-        $this->loop->futureTick(fn () => $this->drain());
+        $this->loop->futureTick(fn () => $this->tick());
     }
 
     /**
-     * Hand every queued event to every listener, in emit order; a throwing listener is logged and the rest still hear it.
+     * One loop tick of the primary feed's delivery: at most DELIVERY_BUDGET envelopes, then re-armed
+     * as a zero-delay timer while owed (a future tick would drain the whole backlog in this iteration).
+     */
+    private function tick(bool $again = false): void
+    {
+        $this->drain(InProcessEventSink::DELIVERY_BUDGET);
+        if ($this->pending->isEmpty()) {
+            $this->draining = false;
+
+            return;
+        }
+        $this->loop->addTimer(0.0, fn () => $this->tick(true));
+    }
+
+    /**
+     * Hand the queued events to every listener, in emit order, up to $budget of them (all when
+     * null); a throwing listener is logged and the rest still hear it.
      *
      * Not re-entrant: a listener that disconnects reaches here while the outer loop is
      * still delivering, and returning at once keeps the queue in one order for every
      * listener. The outer loop picks up what the listener's call queued.
      */
-    private function drain(): void
+    private function drain(?int $budget = null): void
     {
         if ($this->delivering) {
             return;
         }
         $this->delivering = true;
         try {
-            while (!$this->pending->isEmpty()) {
+            $delivered = 0;
+            while (!$this->pending->isEmpty() && ($budget === null || $delivered < $budget)) {
+                $delivered++;
                 $envelope = $this->pending->dequeue();
                 // The wire encodes empty data as an object; in process it is an empty array, which the
                 // router reads the same way (PL-5d, decision c).
@@ -473,7 +783,6 @@ final class InProcessHostServices implements HostServices
             }
         } finally {
             $this->delivering = false;
-            $this->draining = false;
         }
     }
 }
