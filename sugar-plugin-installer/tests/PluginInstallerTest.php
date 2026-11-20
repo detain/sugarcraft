@@ -345,6 +345,27 @@ final class PluginInstallerTest extends TestCase
         $installer->install(new InstalledArrayRepository(), self::samplePackage('acme/candy-x'));
     }
 
+    public function testProjectInstallRefusesANameAUserTierBundleAlreadyHolds(): void
+    {
+        // A user-tier candy-discord carries its trust by name. A third-party
+        // package of the same name staged to the project tier would inherit that
+        // trust, so the install is refused before anything is staged.
+        $this->stageTree($this->home . '/.candy-code/bundles/candy-discord', 'sugarcraft/candy-discord');
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']]);
+
+        $refusal = null;
+        try {
+            $installer->install(new InstalledArrayRepository(), self::samplePackage('acme/candy-discord'));
+        } catch (\RuntimeException $caught) {
+            $refusal = $caught;
+        }
+
+        $this->assertNotNull($refusal, 'a project install must not reuse a user-tier bundle name');
+        $this->assertStringContainsString('user-tier bundle named candy-discord already exists', $refusal->getMessage());
+        $this->assertStringContainsString('never inherits a user-tier name or its trust', $refusal->getMessage());
+        $this->assertDirectoryDoesNotExist($this->project . '/.candy-code/bundles/candy-discord');
+    }
+
     public function testRootOverrideMovesTheProjectBundleTree(): void
     {
         $shared = Scratch::dir('shared');

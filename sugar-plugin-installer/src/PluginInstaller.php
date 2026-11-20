@@ -373,6 +373,8 @@ final class PluginInstaller extends LibraryInstaller
         $path = $this->configuredPath($package);
         $bundleRoot = dirname($path);
 
+        $this->refuseUserTierNameClash($package);
+
         foreach ($this->composer->getRepositoryManager()->getLocalRepository()->getPackages() as $installed) {
             if ($installed->getType() !== self::PACKAGE_TYPE || $installed->getName() === $package->getName()) {
                 continue;
@@ -400,6 +402,45 @@ final class PluginInstaller extends LibraryInstaller
         }
 
         return $this->stage(fn () => parent::install($repo, $package));
+    }
+
+    /**
+     * A project-tier bundle never inherits trust (plan_plugin.md 5.2, ruling
+     * 2026-11-20). Trust is name-exact and lives in the user tier, so a project
+     * tree that reuses a user-tier bundle name would load under that name's trust.
+     * The refusal is by name: any directory the user tier holds under the name
+     * blocks the install, whichever package it came from.
+     *
+     * Project scope never needs a home directory, so a missing home means there
+     * is no user tier to clash with and the check passes.
+     *
+     * @throws \InvalidArgumentException when the root's installer section is malformed
+     * @throws \RuntimeException when a user-tier bundle already holds the package's name
+     */
+    private function refuseUserTierNameClash(PackageInterface $package): void
+    {
+        $config = InstallerConfig::fromExtra($this->composer->getPackage()->getExtra());
+        if ($config->scope !== Scope::Project) {
+            return;
+        }
+
+        try {
+            $userPath = StagingPath::forPackage(
+                StagingPath::userBundleRoot(StagingPath::userHome()),
+                $package->getPrettyName(),
+            );
+        } catch (\InvalidArgumentException | \RuntimeException) {
+            return;
+        }
+
+        if (is_dir($userPath)) {
+            throw new \RuntimeException(sprintf(
+                'sugar-plugin-installer: %s is a project-tier install, but a user-tier bundle named %s already exists at %s. A project bundle never inherits a user-tier name or its trust, so the install is refused. Remove the user-tier bundle, or rename the package.',
+                $package->getPrettyName(),
+                basename($userPath),
+                $userPath,
+            ));
+        }
     }
 
     /**

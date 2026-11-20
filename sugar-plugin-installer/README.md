@@ -63,6 +63,10 @@ Refused with an exception, before anything is written:
   Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share
   one directory. This check sees the packages installed in this project. It does
   not see a tree another project staged under user scope.
+- a `project` scope install whose package name matches a bundle already in the user
+  tier (`~/.candy-code/bundles/<name>`). A project bundle never inherits a user-tier
+  name or its trust, so the install is refused by name, whichever package the user
+  tree came from. Project scope with no home directory has no user tier to clash with.
 - a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
   Project scope never reads the home directory.
 
