@@ -135,6 +135,32 @@ final class ChildRunControlTest extends TestCase
         $this->assertLessThan(3.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
     }
 
+    public function testRunCancelAfterTheIdleStopStillReportsCancelled(): void
+    {
+        // The first chunk's consumer sleeps past the 1 s idle budget, so the next
+        // heartbeat sets the idle stop. The child's second chunk is then read and
+        // cancels: CANCELLED must beat TIMED_OUT, as ChildRunLaunch::outcome() does.
+        $source = CancellationSource::new();
+        $slept = false;
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "a"); fflush(STDOUT); usleep(300000); fwrite(STDOUT, "b"); fflush(STDOUT); sleep(30);'))
+            ->withTimeout(20.0)
+            ->withIdleTimeout(1.0)
+            ->withCancellation($source->token())
+            ->withOnChunk(static function (int|string $slot, string $chunk) use ($source, &$slept): void {
+                if (!$slept) {
+                    $slept = true;
+                    usleep(1_500_000);
+                }
+                if (str_contains($chunk, 'b')) {
+                    $source->cancel();
+                }
+            })
+            ->run();
+
+        $this->assertSame(ChildResult::CANCELLED, $r->status);
+        $this->assertTrue($r->cancelled());
+    }
+
     public function testRunClosedOutputChildThatExitsInsideTheIdleBudgetIsExited(): void
     {
         // Output closes at once and the child exits 0.3 s later, inside the 0.5 s

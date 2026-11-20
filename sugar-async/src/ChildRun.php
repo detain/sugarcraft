@@ -60,9 +60,8 @@ use function React\Promise\resolve;
  *
  * Consumers: sugar-dashboard's BoundedCommand has moved, running every child
  * through run() and launch() and mapping the ChildResult onto its outcome. The
- * process runners in candy-git-server (BoundedCommand), candy-top (AsyncCommand)
- * and candy-code (CommandBackend) are the same pattern and still pending their
- * move to this class in the P1-5c lanes; their copies stay live until then.
+ * candy-code CommandBackend runner is the same pattern and is still pending its
+ * move to this class in the P1-5c-cc1 lane; its copy stays live until then.
  */
 final class ChildRun
 {
@@ -358,10 +357,10 @@ final class ChildRun
             };
         }
 
+        // Unconditional: a cancel that lands after the idle heartbeat set its stop
+        // must still win, as it does in ChildRunLaunch::outcome().
         $cancelSubscription = $this->cancellation?->onCancel(static function () use (&$stop): void {
-            if ($stop === null) {
-                $stop = self::STOP_CANCELLED;
-            }
+            $stop = self::STOP_CANCELLED;
         });
 
         try {
