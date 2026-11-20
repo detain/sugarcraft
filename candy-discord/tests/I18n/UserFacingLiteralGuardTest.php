@@ -21,7 +21,8 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * one flow where a bare English string reaches a user without a slot name, so
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
  * written into `$notes` (by any assignment, `.=`, `+=`, `array_push`,
- * `array_unshift` or `array_splice`), used as the
+ * `array_unshift` or `array_splice`, or as the eighth `$notes` argument of a
+ * `finishMedia(...)` call), used as the
  * attachment `$name` fallback or the `$caption` placeholder, or anywhere inside the arguments of a send call
  * or of the `$say` / `$reply` closures (including inside nested calls and
  * arrays) must go through `Lang::t` instead. A `Lang::t` placeholder value is
@@ -34,6 +35,8 @@ final class UserFacingLiteralGuardTest extends TestCase
     private const SRC = __DIR__ . '/../../src';
     private const LANG = __DIR__ . '/../../lang';
     private const BUNDLE_LANG = 'CandyCode\\Bundles\\Discord\\Lang';
+    /** Zero-based position of `$notes` in DiscordAccount::finishMedia(). */
+    private const FINISH_MEDIA_NOTES_ARG = 7;
 
     /** @return list<string> */
     private static function sources(): array
@@ -117,6 +120,9 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'bare literal inside a call nested in $say' => ["<?php\n\$say(\$this->format('Only the approver'));\n", 2];
         yield 'bare English as a Lang::t placeholder value in $notes' => ["<?php\n\$notes[] = Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name . ' (unsupported type)']);\n", 2];
         yield 'bare English as a Lang::t placeholder value in a send argument' => ["<?php\n\$this->rest->send(\$channelId, Lang::t('channels.discord.attachments.skipped', ['notes' => 'Attachment dropped']), []);\n", 2];
+        yield 'bare English as the notes argument of finishMedia' => ["<?php\n\$this->finishMedia(\$key, \$ref, \$text, \$isMention, \$inboundId, [], [], ['Attachment dropped']);\n", 2];
+        yield 'multi-line finishMedia call with a bare English note' => ["<?php\n\$this->finishMedia(\n    \$key,\n    \$ref,\n    \$text,\n    \$isMention,\n    \$inboundId,\n    [],\n    [],\n    ['Attachment dropped'],\n);\n", 10];
+        yield 'bare English nested in a finishMedia notes argument' => ["<?php\n\$this->finishMedia(\$key, \$ref, \$text, \$isMention, \$inboundId, [], [], [\$this->format('Attachment dropped')]);\n", 2];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -137,12 +143,18 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'Lang::t through array_unshift into $notes' => ["<?php\narray_unshift(\$notes, Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]));\n"];
         yield 'Lang::t through array-union assign into $notes' => ["<?php\n\$notes += [Lang::t('channels.discord.attachments.skipped', [])];\n"];
         yield 'Lang::t caption placeholder in a ternary' => ["<?php\n\$caption = \$text !== '' ? \$text : Lang::t('channels.discord.attachments.no_caption');\n"];
+        yield 'Lang::t as the notes argument of finishMedia' => ["<?php\n\$this->finishMedia(\$key, \$ref, \$text, \$isMention, \$inboundId, [], [], [Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name])]);\n"];
     }
 
     #[DataProvider('qualifiedLangCallFixtureProvider')]
     public function testQualifiedLangCallIsNotFlagged(string $fixture): void
     {
         self::assertSame([], self::bareEnglishInNotesOrSend($fixture));
+    }
+
+    public function testFinishMediaShortOfTheNotesArgumentIsNotFlagged(): void
+    {
+        self::assertSame([], self::bareEnglishInNotesOrSend("<?php\n\$this->finishMedia(\$key, 'Attachment dropped');\n"));
     }
 
     public function testFixtureRoutedThroughLangOrAValueTestIsNotFlagged(): void
@@ -166,7 +178,7 @@ final class UserFacingLiteralGuardTest extends TestCase
 
     /**
      * Each hit is "line: literal" for a letter-bearing string that reaches
-     * `$notes` (any write form), the attachment `$name`, or anywhere inside the
+     * `$notes` (any write form, or the `$notes` argument of `finishMedia`), the attachment `$name`, or anywhere inside the
      * arguments of a send call or of the `$say` / `$reply` closures (nested calls
      * and arrays included) without going through `Lang::t`. A `Lang::t` call is
      * a hit for its key and for any bare literal among its placeholder values:
@@ -202,6 +214,11 @@ final class UserFacingLiteralGuardTest extends TestCase
                 \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1)));
             } elseif ((self::is($toks, $i, T_OBJECT_OPERATOR) || self::is($toks, $i, T_NULLSAFE_OBJECT_OPERATOR)) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2)));
+            } elseif (self::is($toks, $i, T_STRING, 'finishMedia') && self::is($toks, $i + 1, '(')) {
+                $notes = self::argStart($toks, $i + 1, self::FINISH_MEDIA_NOTES_ARG);
+                if ($notes !== null) {
+                    \array_push($hits, ...self::bareLiterals($toks, $notes, self::closeIndex($toks, $i + 1)));
+                }
             } elseif ((self::is($toks, $i, T_VARIABLE, '$say') || self::is($toks, $i, T_VARIABLE, '$reply')) && self::is($toks, $i + 1, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::closeIndex($toks, $i + 1)));
             }
@@ -397,6 +414,31 @@ final class UserFacingLiteralGuardTest extends TestCase
         }
 
         return $n;
+    }
+
+    /**
+     * Index of the first token of the zero-based `$position`-th top-level
+     * argument of the call whose `(` sits at `$open`; null when the call has
+     * fewer arguments. Nested commas (inside arrays or nested calls) are skipped.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function argStart(array $toks, int $open, int $position): ?int
+    {
+        $end = self::closeIndex($toks, $open);
+        $depth = 0;
+        $commas = 0;
+        for ($i = $open + 1; $i < $end; ++$i) {
+            if (self::opens($toks[$i])) {
+                ++$depth;
+            } elseif (self::closes($toks[$i])) {
+                --$depth;
+            } elseif ($toks[$i]['id'] === ',' && $depth === 0 && ++$commas === $position) {
+                return $i + 1;
+            }
+        }
+
+        return null;
     }
 
     /**
