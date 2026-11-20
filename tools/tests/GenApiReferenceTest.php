@@ -246,6 +246,37 @@ final class GenApiReferenceTest extends TestCase
         }
     }
 
+    /**
+     * Every lib with a docs/_data page is either built (a fragment and one marker) or named as a
+     * skeleton with no public type (a body note and no marker). A new lib cannot slip past both.
+     */
+    public function testEveryDocsPageIsEnabledOrNamedAsASkeleton(): void
+    {
+        $root = self::root();
+        $pages = [];
+        foreach (\glob($root . '/docs/_data/*.json') ?: [] as $json) {
+            $pages[] = \basename($json, '.json');
+        }
+        \sort($pages);
+
+        foreach ($pages as $slug) {
+            $enabled = \in_array($slug, \ApiReference::ENABLED, true);
+            $skeleton = \in_array($slug, \ApiReference::NO_PUBLIC_CLASSES, true);
+            self::assertTrue($enabled xor $skeleton, "$slug must be in exactly one of ApiReference::ENABLED and NO_PUBLIC_CLASSES");
+
+            $body = (string) \file_get_contents($root . '/docs/_data/' . $slug . '.body.html');
+            $public = \ApiReference::declaredPublic($root, $slug);
+            if ($enabled) {
+                self::assertNotSame([], $public, "$slug is in ENABLED but declares no public type; move it to NO_PUBLIC_CLASSES");
+                self::assertFileExists(\ApiReference::fragmentPath($root, $slug), "$slug is in ENABLED but has no fragment");
+            } else {
+                self::assertSame([], $public, "$slug declares public types; move it to ENABLED");
+                self::assertFileDoesNotExist(\ApiReference::fragmentPath($root, $slug), "$slug has no public types and must have no fragment");
+                self::assertStringNotContainsString(\ApiReference::MARKER, $body, "$slug has no fragment, so its body must not carry the marker");
+                self::assertStringContainsString('class="api-none"', $body, "$slug must say in its body that it has no public classes");
+            }
+        }
+    }
     #[DataProvider('enabledSlugs')]
     public function testTopTenCoverageMeetsTheTarget(string $slug): void
     {
@@ -256,7 +287,8 @@ final class GenApiReferenceTest extends TestCase
         $page = \str_replace(\ApiReference::MARKER, $fragment, $body);
         $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, $slug), $page);
 
-        self::assertCount(10, $result['top'], "$slug has fewer than ten public types, so the coverage figure would not mean the same thing");
+        // A lib with fewer than ten public types is measured over all of them: min(10, N) is the figure's population.
+        self::assertSame(\min(10, \count(\ApiReference::declaredPublic($root, $slug))), \count($result['top']), "$slug top-10 population");
         self::assertGreaterThanOrEqual(
             \ApiReference::TOP_COVERAGE_TARGET,
             $result['percent'],
@@ -378,15 +410,91 @@ final class GenApiReferenceTest extends TestCase
         self::assertSame(2,\substr_count($html, '<tr><td><code>tick(): int</code></td><td>Counts one more.</td></tr>'), 'Counts and Tally both list tick()');
     }
 
-    public function testATraitThatIsNotDeclaredFailsTheRun(): void
+    public function testATraitDeclaredOutsideTheTreeContributesNoRowsAsAnOutOfTreeParentDoes(): void
+    {
+        // A trait with no declaration under src/ (a sibling lib's, or a vendor package's) has no source
+        // here. The header's rule for parents applies: it adds no rows and does not fail the run.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Lost.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Lost\n{\n    use Nowhere;\n\n    /** Own. */\n    public function mine(): void\n    {\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('mine(): void', $html);
+        self::assertStringNotContainsString('Nowhere', $html, 'the undeclared trait is not named as a source');
+    }
+
+    public function testATraitNameThatIsAClassFailsTheRun(): void
     {
         $root = $this->fixtureRoot([
-            'sugar-core/src/Lost.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Lost\n{\n    use Nowhere;\n}\n",
+            'sugar-core/src/Pair.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Pair\n{\n}\n",
+            'sugar-core/src/Wrong.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Wrong\n{\n    use Pair;\n}\n",
         ]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('is not a trait declared under sugar-core/src');
+        $this->expectExceptionMessage('is not a trait');
         \ApiReference::generate($root, 'sugar-core');
+    }
+
+    public function testAGroupImportExpandsUnderItsPrefixSoATraitInTheGroupIsUsed(): void
+    {
+        $root = $this->fixtureRoot(self::traitFixture() + [
+            'sugar-core/src/Grouped.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Demo\\Fixture\\Concerns\\{Counts};\n\nfinal class Grouped\n{\n    use Counts;\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // The trait's own table, Ticker's and Grouped's, which reach it through the group import.
+        self::assertSame(3, \substr_count($html, 'tick(): int'), 'a group import resolves its names under the prefix');
+    }
+
+    public function testATraitAdaptationAliasesOneMethodAndInsteadofDropsTheOther(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Concerns/A.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait A\n{\n    /** From A. */\n    public function hello(): string\n    {\n        return 'a';\n    }\n}\n",
+            'sugar-core/src/Concerns/B.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait B\n{\n    /** From B. */\n    public function hello(): string\n    {\n        return 'b';\n    }\n}\n",
+            'sugar-core/src/Adapted.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Demo\\Fixture\\Concerns\\A;\nuse Demo\\Fixture\\Concerns\\B;\n\nfinal class Adapted\n{\n    use A, B {\n        B::hello insteadof A;\n        A::hello as greet;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // hello() is listed by A's own table and B's, and by Adapted once, from B; greet() is Adapted's alias of A's.
+        self::assertSame(3, \substr_count($html, 'hello(): string'), 'insteadof keeps B::hello and drops A::hello from Adapted');
+        self::assertSame(1, \substr_count($html, 'greet(): string'), 'the alias adds exactly one row');
+        self::assertStringContainsString('From A.', $html);
+    }
+
+    public function testAPrivateAdaptationHidesTheMethodFromTheClassThatUsesIt(): void
+    {
+        $root = $this->fixtureRoot(self::traitFixture() + [
+            'sugar-core/src/Hushed.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Demo\\Fixture\\Concerns\\Counts;\n\nfinal class Hushed\n{\n    use Counts {\n        tick as private;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // Counts and Ticker list tick(); Hushed has it made private, so it does not.
+        self::assertSame(2, \substr_count($html, 'tick(): int'));
+    }
+
+    public function testAMethodNamedUseIsListedAndDoesNotOpenATraitUse(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Fluent.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Fluent\n{\n    /** Applies a middleware. */\n    public function use(string \$m): self\n    {\n        return \$this;\n    }\n\n    /** Runs it. */\n    public function run(): void\n    {\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('use(string $m): self', $html);
+        self::assertStringContainsString('run(): void', $html);
+    }
+
+    public function testASkeletonWithNoPublicClassesHasNoFragmentAndGenerateRefuses(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-jwt/src/.gitkeep' => '',
+        ]);
+        // Only the list decides: sugar-jwt is in NO_PUBLIC_CLASSES, so the refusal is about its fragment.
+        self::assertContains('sugar-jwt', \ApiReference::NO_PUBLIC_CLASSES);
+        self::assertSame([], \ApiReference::declaredPublic($root, 'sugar-jwt'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('has no public classes');
+        \ApiReference::generate($root, 'sugar-jwt');
     }
 
     public function testAnEnumCaseNamedWithAReservedWordIsListed(): void
@@ -1150,11 +1258,11 @@ final class GenApiReferenceTest extends TestCase
         \ApiReference::generate($root, 'sugar-core');
     }
 
-    public function testSlugOutsideThePilotIsRefused(): void
+    public function testSlugOutsideTheKnownLibsIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('not enabled');
-        \ApiReference::generate(self::root(), 'sugar-style');
+        $this->expectExceptionMessage('not a known lib');
+        \ApiReference::generate(self::root(), 'sugar-nope');
     }
 
     /**
@@ -1292,7 +1400,7 @@ final class GenApiReferenceTest extends TestCase
 
         $outside = $this->runCli($root, ['candy-nope']);
         self::assertSame(2, $outside['exit']);
-        self::assertStringContainsString('not enabled', $outside['stderr']);
+        self::assertStringContainsString('not a known lib', $outside['stderr']);
     }
 
     public function testCliHelpPrintsTheUsageAndExitsZero(): void

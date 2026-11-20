@@ -90,7 +90,11 @@ echo $check->cachedNotice() ?? '';</code></pre>
     <h3 style="margin-top: 40px;">Output and styling</h3>
     <p>The engine paints no color and no layout. Report lines go to STDERR, or to the stream set with <code>withErrorStream()</code>. Messages come from the <code>selfupdate.*</code> keys in <code>lang/en.php</code>. Pass <code>withTranslator()</code> to map those keys onto the host's own catalog; the placeholders <code>{app}</code> and <code>{package}</code> are filled in before the translator sees the text.</p>
 
-    <h3 style="margin-top: 40px;">Examples</h3>
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum under <code>src/</code>, grouped by namespace, with its method table. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- api-reference:generated -->
+
+<h3 style="margin-top: 40px;">Examples</h3>
     <p>Each example runs offline. None of them touches the network or the phar.</p>
 <ul>
   <li><code>examples/select-release.php</code> feeds a decoded GitHub release list to <code>ReleaseSelector</code>. It shows the stable pick, which skips drafts, prereleases and entries without a sidecar, and the latest-channel decision for a dev build.</li>

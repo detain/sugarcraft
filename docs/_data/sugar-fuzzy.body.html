@@ -102,7 +102,11 @@ $custom  = new SmithWatermanMatcher(ScoringProfile::canonical()->withAdjacentBon
 </table>
     <p style="margin-top: 12px;">Over-cap input is truncated, never handed to a different algorithm, so the reported indices stay valid in the original candidate. The Smith-Waterman traceback costs about 1 KB per query row at the 1000-character candidate cap, which comes to about 128 KB at the default caps.</p>
 
-    <h3 style="margin-top: 40px;">Styling and highlighting</h3>
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum under <code>src/</code>, grouped by namespace, with its method table. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- api-reference:generated -->
+
+<h3 style="margin-top: 40px;">Styling and highlighting</h3>
     <p><code>Highlighter</code> takes a styler callable. It wraps each matched run in whatever the caller returns, and it returns unmatched text unchanged. The highlighter emits no color of its own. Pair any color with a bold or underline cue, so that color-blind users still see the match. Expose <code>matchedIndices</code> and the deterministic <code>matchAll()</code> order to non-visual channels, such as a screen reader.</p>
     <p>Sanitizing is the caller's job. The highlighter forwards unmatched text verbatim, and the styler receives raw matched substrings. Strip <code>\x1b</code> and other control bytes before display. Case folding maps malformed UTF-8 bytes to <code>?</code>, so a literal <code>?</code> in the query can match untrusted text. Validate UTF-8 on both sides when the input is hostile.</p>
 

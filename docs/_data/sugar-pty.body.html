@@ -115,6 +115,8 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td>PosixProcess</td><td>spawn() / wait() / kill() / stdoutBytes() / stderrBytes()</td><td>Plain proc_open child with pipe capture (no PTY)</td></tr>
 </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Configuration</h2>
     <p>The library reads a small set of environment variables. <code>tests/EnvRosterTest.php</code> scans <code>src/</code>, <code>bin/</code> and <code>tests/</code>, and fails when a variable is read without a row in the README environment table, or a row names a variable nothing reads.</p>
     <table class="api-table">
