@@ -286,6 +286,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     private array $pendingStops = [];
 
     /**
+     * Id of the rewake chain that keeps the TUI's stop rungs advancing, or null when
+     * none runs. {@see advanceRewakeChain()} owns it.
+     */
+    private ?int $rewakeChain = null;
+
+    /** Last chain id {@see advanceRewakeChain()} handed out. */
+    private int $rewakeChainSeq = 0;
+
+    /**
      * Whether an entry of {@see $pendingSpawns}, {@see $pendingStops} or
      * {@see $launcherReaps} was made by this process. A forked turn child inherits
      * all three, and must not advance or settle them: its handshake, signal and
@@ -323,6 +332,31 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     public function hasStopInFlight(): bool
     {
         return $this->hasOwnedStop();
+    }
+
+    /**
+     * Decide whether a rewake tick keeps the process's one rewake chain alive. The
+     * chain advances every in-flight stop, so a second stop or a spawn tick arriving
+     * while it runs is a duplicate and ends there instead of starting a parallel
+     * chain. Returns the chain id a re-queued tick must carry, or null when the tick
+     * ends the chain or is a duplicate.
+     *
+     * @param int|null $tickChain the chain the tick carries; null for a tick a stop or spawn queued
+     */
+    public function advanceRewakeChain(?int $tickChain): ?int
+    {
+        if (!$this->hasStopInFlight()) {
+            $this->rewakeChain = null;
+
+            return null;
+        }
+        if ($this->rewakeChain === null) {
+            $this->rewakeChain = ++$this->rewakeChainSeq;
+
+            return $this->rewakeChain;
+        }
+
+        return $tickChain === $this->rewakeChain ? $tickChain : null;
     }
 
     /** True when this process has a stop in flight. */

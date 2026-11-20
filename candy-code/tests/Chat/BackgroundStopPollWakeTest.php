@@ -130,6 +130,113 @@ final class BackgroundStopPollWakeTest extends TestCase
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $stopped->outcome);
     }
 
+    /**
+     * Two stops in flight at once share one rewake chain: each hop re-queues exactly
+     * one tick, and the second stop's own wake is a duplicate that queues nothing.
+     */
+    public function testOverlappingStopsShareOneRewakeChain(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $firstId = $this->spawnSleepingDaemon($supervisor)['session']->id;
+        $secondId = $this->spawnSleepingDaemon($supervisor)['session']->id;
+
+        [$chat, $firstCmd] = $this->submit($supervisor, '/bg stop ' . $firstId);
+        [, $secondCmd] = $this->submit($supervisor, '/bg stop ' . $secondId);
+        $this->assertInstanceOf(\Closure::class, $firstCmd);
+        $this->assertInstanceOf(\Closure::class, $secondCmd);
+
+        $stopped = [];
+        $wakes = [];
+        foreach ([$firstCmd, $secondCmd] as $cmd) {
+            $batch = $cmd();
+            $this->assertInstanceOf(BatchMsg::class, $batch);
+            $launched = ($batch->cmds[0])();
+            $this->assertInstanceOf(AsyncCmd::class, $launched);
+            $launched->promise->then(static function ($msg) use (&$stopped): void {
+                $stopped[] = $msg;
+            });
+            $wakes[] = ($batch->cmds[1])();
+        }
+        $this->assertCount(2, $wakes);
+        foreach ($wakes as $wake) {
+            $this->assertInstanceOf(BackgroundTickMsg::class, $wake);
+            $this->assertTrue($wake->rewake);
+        }
+
+        [$chat, $cmd] = $chat->update($wakes[0]);
+        $this->assertCount(1, $this->rewakeTicksOf($cmd), 'the first wake starts the chain');
+
+        // Both stops must still be waiting when the second stop's wake arrives. The
+        // check runs on the supervisor because a Chat update pumps the stops first,
+        // and the daemons answer fast enough that a pump can settle them both.
+        $this->assertTrue($supervisor->hasStopInFlight(), 'both stops must still wait on their daemons');
+        $this->assertNull(
+            $supervisor->advanceRewakeChain(null),
+            'the second stop\'s wake is a duplicate while the chain runs, so it must not start a parallel chain',
+        );
+
+        $hops = 0;
+        $deadline = microtime(true) + 20.0;
+        while ($supervisor->hasStopInFlight()) {
+            $this->assertTrue(microtime(true) < $deadline, 'the shared chain did not settle both stops in time');
+            $ticks = $this->rewakeTicksOf($cmd);
+            $this->assertCount(1, $ticks, 'each hop re-queues exactly one tick');
+
+            SupervisorPump::pace(0.1);
+            [$chat, $cmd] = $chat->update($ticks[0]);
+            $hops++;
+        }
+
+        $this->assertGreaterThan(0, $hops, 'the stops must have waited on the daemon, so the chain was exercised');
+        $this->assertCount(2, $stopped);
+        foreach ($stopped as $msg) {
+            $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $msg);
+            $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $msg->outcome);
+        }
+
+        [, $late] = $chat->update($wakes[1]);
+        $this->assertSame([], $this->rewakeTicksOf($late), 'a wake after both stops settled queues nothing');
+    }
+
+    /** A rewake tick with no stop in flight starts no chain, so an idle TUI queues nothing. */
+    public function testARewakeTickWithNoStopInFlightQueuesNothing(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [, $cmd] = $chat->update(new BackgroundTickMsg(rewake: true));
+
+        $this->assertSame([], $this->rewakeTicksOf($cmd));
+    }
+
+    /**
+     * The rewake ticks a Cmd would queue. Only tick requests are produced; the
+     * stop's own promises are not invoked again.
+     *
+     * @return list<BackgroundTickMsg>
+     */
+    private function rewakeTicksOf(?\Closure $cmd): array
+    {
+        if ($cmd === null) {
+            return [];
+        }
+        $queued = $cmd();
+        $members = $queued instanceof BatchMsg ? $queued->cmds : [static fn () => $queued];
+
+        $ticks = [];
+        foreach ($members as $member) {
+            $request = $member();
+            if ($request instanceof TickRequest) {
+                $tick = ($request->produce)();
+                if ($tick instanceof BackgroundTickMsg && $tick->rewake) {
+                    $ticks[] = $tick;
+                }
+            }
+        }
+
+        return $ticks;
+    }
+
     /** Whether the chat's subscriptions include the background poll tick. */
     private function pollArmed(Chat $chat): bool
     {

@@ -424,17 +424,24 @@ trait HandlesSessionSurface
     /**
      * Queue the next rewake tick while a stop this process started still waits on
      * the daemon. Only a rewake tick re-queues: the subscription's own ticks never
-     * start a chain, so each stop keeps one chain and no more.
+     * start a chain. One chain serves every in-flight stop, so a tick that arrives
+     * while the chain runs is a duplicate and queues nothing
+     * ({@see \SugarCraft\Code\Background\BackgroundSupervisor::advanceRewakeChain()}).
      */
     private function rewakeWhileStopWaits(BackgroundTickMsg $tick, ?\Closure $cmd): ?\Closure
     {
-        if (!$tick->rewake || $this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasStopInFlight()) {
+        if (!$tick->rewake || $this->backgroundSupervisor === null) {
+            return $cmd;
+        }
+
+        $chain = $this->backgroundSupervisor->advanceRewakeChain($tick->chain);
+        if ($chain === null) {
             return $cmd;
         }
 
         $again = Cmd::tick(
             self::BACKGROUND_STOP_REWAKE_SECONDS,
-            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(rewake: true),
+            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(rewake: true, chain: $chain),
         );
 
         return $cmd === null ? $again : Cmd::batch($cmd, $again);

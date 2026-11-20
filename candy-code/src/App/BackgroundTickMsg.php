@@ -23,15 +23,18 @@ use SugarCraft\Code\Chat;
  * The one flag is {@see $rewake}: a run that registers background work queues
  * a tick carrying it, and that tick re-queues itself while a stop waits on the
  * daemon, so each rung is answered on a short interval instead of one two-second
- * poll per rung.
+ * poll per rung. {@see $chain} names the rewake chain the tick belongs to, so
+ * overlapping stops share one chain instead of each tick starting its own.
  */
 final class BackgroundTickMsg implements Msg
 {
     /**
-     * @param bool $rewake true when this tick keeps itself alive while a stop is in
-     *                     flight; the subscription's ticks carry false
+     * @param bool     $rewake true when this tick keeps itself alive while a stop is in
+     *                         flight; the subscription's ticks carry false
+     * @param int|null $chain  the rewake chain a re-queued tick continues; null on a
+     *                         tick a stop or spawn queues
      */
-    public function __construct(public readonly bool $rewake = false)
+    public function __construct(public readonly bool $rewake = false, public readonly ?int $chain = null)
     {
     }
 }
