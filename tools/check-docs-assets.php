@@ -47,6 +47,16 @@ declare(strict_types=1);
  *     `docs/_data/` and the documented non-advertised roster — and demands
  *     exact two-way equality with the `<loc>` rows, printing both directions
  *     of the diff on failure.
+ *  i) body class and method claims: every `Name::method(` and `new Name(` a
+ *     `docs/_data/<slug>.body.html` names must resolve to a class declared
+ *     under a `<slug>/src/` tree (or a PHP built-in), and `Name::method(` must
+ *     name a method some declaration of that class carries, directly or through
+ *     the traits and parents it pulls in.
+ *  j) body example claims: every `examples/<file>` path a body names must exist
+ *     under the package it belongs to.
+ *  k) body vhs claims: every `.vhs/<file>.tape|gif` a body names must exist.
+ *     Legs (i)-(k) resolve a bare path against the body's own slug; a `<slug>/`
+ *     prefix or a GitHub `…/<slug>/blob/master/` URL names another package.
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -198,6 +208,7 @@ final class CheckDocsAssets
             self::navBlockIdentity($root),
             self::sitemapCoverage($root),
             self::htmlResidue($root),
+            self::bodyClaims($root),
         );
 
         // RT-20: a findings-only answer is vacuously green on a tree the legs
@@ -660,6 +671,262 @@ final class CheckDocsAssets
         }
 
         return [];
+    }
+
+    /**
+     * (i)-(k) the mechanically checkable claims in the hand-written bodies
+     * (`docs/_data/<slug>.body.html`), which reach the published site verbatim.
+     * Every finding names the body and the claim, so a wrong claim is fixed in
+     * the body, never by loosening the guard.
+     *
+     * @return list<string>
+     */
+    public static function bodyClaims(string $root): array
+    {
+        $bodies = glob("$root/docs/_data/*.body.html") ?: [];
+        if ($bodies === []) {
+            return [];
+        }
+        $index = self::classIndex($root);
+
+        $findings = [];
+        foreach ($bodies as $file) {
+            $rel = self::relative($root, $file);
+            $slug = (string) preg_replace('~\.body\.html$~', '', basename($file));
+            $html = self::readCached($file);
+
+            // (i) `Name::method(` and `new Name(` — the static-call and
+            // constructor shapes a body uses to name its API.
+            // A body's own example classes (declared in its code) and classes
+            // imported from outside SugarCraft are illustrative or third-party,
+            // not claims about the monorepo, and a fully qualified name outside
+            // SugarCraft\ is the same kind of claim; they are skipped by rule.
+            [$declared, $external] = self::bodyNames($html);
+            $claims = [];
+            preg_match_all('~(\\\\?[A-Z][A-Za-z0-9_\\\\]*)::([A-Za-z_]\w*)\s*\(~', $html, $calls, PREG_SET_ORDER);
+            foreach ($calls as $hit) {
+                $claims[] = [$hit[1], $hit[2]];
+            }
+            preg_match_all('~\bnew\s+(\\\\?[A-Z][A-Za-z0-9_\\\\]*)\s*\(~', $html, $news, PREG_SET_ORDER);
+            foreach ($news as $hit) {
+                $claims[] = [$hit[1], null];
+            }
+            foreach (array_unique(array_map('serialize', $claims)) as $key) {
+                [$name, $method] = unserialize($key);
+                if (self::isIllustrativeName($name, $declared, $external)) {
+                    continue;
+                }
+                $problem = self::undeclaredClaim($index, self::shortName($name), $method);
+                if ($problem !== null) {
+                    $findings[] = "claims: $rel $problem";
+                }
+            }
+
+            // (j) `examples/<file>` — a file path, so the extension is required
+            // and a bare directory mention ("examples/") is not a claim.
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER);
+            foreach ($examples as $hit) {
+                $path = self::claimOwner($hit[1], $slug) . '/examples/' . $hit[2];
+                if (!is_file("$root/$path")) {
+                    $findings[] = "claims: $rel names $path, which does not exist";
+                }
+            }
+
+            // (k) `.vhs/<file>` — tapes and rendered GIFs both live beside the
+            // package they demo; the GIF half is also re-checked on the lib pages.
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)\.vhs/([A-Za-z0-9_.-]+\.(?:tape|gif))~', $html, $vhs, PREG_SET_ORDER);
+            foreach ($vhs as $hit) {
+                $path = self::claimOwner($hit[1], $slug) . '/.vhs/' . $hit[2];
+                if (!is_file("$root/$path")) {
+                    $findings[] = "vhs: $rel names $path, which does not exist";
+                }
+            }
+        }
+
+        return array_values(array_unique($findings));
+    }
+
+    /**
+     * The class names a body declares in its code blocks, and the short names
+     * it imports from a namespace outside SugarCraft (`use App\Tracker;`).
+     * Only `<pre>` blocks count, so prose that happens to say "class Foo" never
+     * exempts a claim.
+     *
+     * @return array{0: array<string,true>, 1: array<string,true>}
+     */
+    private static function bodyNames(string $html): array
+    {
+        $declared = [];
+        $external = [];
+        preg_match_all('~<pre\b[^>]*>(.*?)</pre>~s', $html, $blocks);
+        foreach ($blocks[1] as $code) {
+            preg_match_all('~(?:^|[\n>])\s*(?:(?:final|abstract|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~', $code, $decl);
+            foreach ($decl[1] as $name) {
+                $declared[$name] = true;
+            }
+            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)\s*;~', $code, $imports, PREG_SET_ORDER);
+            foreach ($imports as $hit) {
+                if ($hit[1] !== '' && !str_starts_with($hit[1], 'SugarCraft\\')) {
+                    $external[$hit[2]] = true;
+                }
+            }
+        }
+
+        return [$declared, $external];
+    }
+
+    /**
+     * True when a claimed class name is outside the monorepo's claims: a fully
+     * qualified name outside SugarCraft\, a bare name the body imports from
+     * outside SugarCraft, or a class the body declares for its own example.
+     *
+     * @param array<string,true> $declared
+     * @param array<string,true> $external
+     */
+    private static function isIllustrativeName(string $name, array $declared, array $external): bool
+    {
+        $trimmed = ltrim($name, '\\');
+        if (str_contains($trimmed, '\\') && !str_starts_with($trimmed, 'SugarCraft\\')) {
+            return true;
+        }
+        $short = self::shortName($trimmed);
+
+        return isset($declared[$short]) || isset($external[$short]);
+    }
+
+    /**
+     * Class declarations under every `<slug>/src/` tree, keyed by short name.
+     * The scan is top-level only (`*\/src`), so a lib's vendor/ copies of
+     * sibling packages never count as declarations of this monorepo.
+     *
+     * @return array{classes: array<string, list<string>>}
+     */
+    private static function classIndex(string $root): array
+    {
+        $classes = [];
+        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($walk as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
+                $path = $file->getPathname();
+                preg_match_all(
+                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    self::readCached($path),
+                    $decl,
+                );
+                foreach (array_unique($decl[1]) as $name) {
+                    $classes[$name][] = $path;
+                }
+            }
+        }
+
+        return ['classes' => $classes];
+    }
+
+    /**
+     * @param array{classes: array<string, list<string>>} $index
+     * @return ?string the finding's claim text, or null when the claim holds
+     */
+    private static function undeclaredClaim(array $index, string $short, ?string $method): ?string
+    {
+        if (isset($index['classes'][$short])) {
+            if ($method === null) {
+                return null;
+            }
+            $visited = [];
+
+            return self::declaresMethod($index, $short, $method, $visited)
+                ? null
+                : "names $short::$method(), but no declaration of $short carries that method";
+        }
+
+        $internal = self::internalClass($short);
+        if ($internal === null) {
+            return "names class $short, which no <slug>/src declares";
+        }
+        if ($method === null || method_exists($internal, $method)) {
+            return null;
+        }
+
+        return "names $short::$method(), which PHP's $short does not define";
+    }
+
+    /**
+     * True when some declaration of $short carries $method, directly or
+     * through a trait or parent it names. $visited breaks cycles.
+     *
+     * @param array{classes: array<string, list<string>>} $index
+     * @param array<string,true> $visited
+     */
+    private static function declaresMethod(array $index, string $short, string $method, array &$visited): bool
+    {
+        foreach ($index['classes'][$short] ?? [] as $file) {
+            if (isset($visited[$file])) {
+                continue;
+            }
+            $visited[$file] = true;
+            $text = self::readCached($file);
+            if (preg_match('~\bfunction\s+&?' . preg_quote($method, '~') . '\s*\(~', $text) === 1) {
+                return true;
+            }
+            // PHP supplies cases() on every enum and from()/tryFrom() on a backed
+            // one, so no `function` line declares them.
+            if (in_array($method, ['cases', 'from', 'tryFrom'], true)
+                && preg_match('~\benum\s+' . preg_quote($short, '~') . '\b(\s*:)?~', $text, $enum) === 1
+            ) {
+                if ($method === 'cases' || isset($enum[1])) {
+                    return true;
+                }
+            }
+            preg_match_all('~\b(?:extends|use|implements)\s+\\\\?([A-Za-z_][\w\\\\]*)~', $text, $refs);
+            foreach (array_unique($refs[1]) as $ref) {
+                if (self::declaresMethod($index, self::shortName($ref), $method, $visited)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** The PHP built-in class, interface or enum called $short, or null when there is none. */
+    private static function internalClass(string $short): ?string
+    {
+        if (!class_exists($short, false) && !interface_exists($short, false) && !enum_exists($short, false)) {
+            return null;
+        }
+
+        return (new \ReflectionClass($short))->isInternal() ? $short : null;
+    }
+
+    /**
+     * The package a body's example or vhs path belongs to: the last path
+     * segment that is not a URL scaffold (`github.com/sugarcraft/<slug>/blob/
+     * master/`, `detain/sugarcraft/master/<slug>/`), else the body's own slug.
+     */
+    private static function claimOwner(string $prefix, string $bodySlug): string
+    {
+        $scaffold = ['.', 'github.com', 'sugarcraft', 'detain', 'blob', 'tree', 'master', 'main', 'raw.githubusercontent.com'];
+        $parts = array_values(array_filter(explode('/', $prefix), static fn (string $p): bool => $p !== ''));
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            if (!in_array($parts[$i], $scaffold, true)) {
+                return $parts[$i];
+            }
+        }
+
+        return $bodySlug;
+    }
+
+    private static function shortName(string $name): string
+    {
+        $parts = explode('\\', $name);
+
+        return (string) end($parts);
     }
 
     /**

@@ -43,7 +43,7 @@ by language:
 
     <h3 style="margin-top: 24px;">Wire a save hook</h3>
     <pre class="code"><code class="language-shell"># vim: one heartbeat per save, using the worked example script
-autocmd BufWritePost * silent! !sh /path/to/examples/plugin-heartbeat.example.sh "$EXPANDEF"
+autocmd BufWritePost * silent! !sh /path/to/candy-codetime/examples/plugin-heartbeat.example.sh "$EXPANDEF"
 
 # or feed a batch of JSON lines through the stdin door, which applies ignore rules, clamps and the lock
 printf '%s\n' '{"time": 1795100000, "project": "myproj", "language": "php", "file": "src/Main.php", "duration": 300, "tags": []}' | candy-codetime push --</code></pre>

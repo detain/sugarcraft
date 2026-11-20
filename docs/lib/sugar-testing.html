@@ -393,7 +393,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
     <p>Run the lib's own suite from its root:</p>
     <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
     <p>The suite tests the harness through the same Model contract it simulates. Its fixtures, such as <code>CounterModel</code> and <code>ControlRecorderModel</code>, are small TEA models. <code>tests/bootstrap.php</code> calls <code>LoopPin::pinStableClock()</code> before anything else. Under ext-uv, deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle would already be overdue.</p>
-    <p>In your own suite, call <code>LoopPin::pinStableClock()</code> from your bootstrap when your tests bound waits with timers on <code>Loop::get()</code>. Use <code>ProgramSimulator</code> for the model and <code>Assertions::assertGoldenAnsi()</code> for the output, and commit the goldens under <code>fixtures/</code>.</p>
+    <p>In your own suite, call <code>LoopPin::pinStableClock()</code> from your bootstrap when your tests bound waits with timers on <code>\React\EventLoop\Loop::get()</code>. Use <code>ProgramSimulator</code> for the model and <code>Assertions::assertGoldenAnsi()</code> for the output, and commit the goldens under <code>fixtures/</code>.</p>
 
     <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
     <ul>
