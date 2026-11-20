@@ -105,6 +105,94 @@ final class BgAsyncAnswerTest extends TestCase
         self::assertSame('bg_not_found', $answer['error']['data']['kind'] ?? null, (string) \json_encode($answer));
     }
 
+    /**
+     * The serve answers a stop from its 50 ms pump, not the 2 s background poll:
+     * no client tick and no poll run here, so only the pump can settle it inside the
+     * second it is given. A graceful stop also stays graceful (StoppedViaIpc).
+     */
+    public function testAGracefulStopIsAnsweredByThePumpNotTheBackgroundPoll(): void
+    {
+        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
+        $fixture = $this->serve($supervisor);
+        $bgId = (string) $fixture->client()->call('bg.spawn', ['task' => 'hold still', 'idempotencyKey' => 'spawn-pump'])['bgId'];
+        $this->fixtureDaemons[] = $this->daemonOf($supervisor, $bgId);
+
+        $client = WireClient::open($fixture->dispatcher, 'c-pump');
+        $client->hello();
+        $client->raw('{"jsonrpc":"2.0","id":"stop-pump","method":"bg.stop","params":{"bgId":"' . $bgId . '"}}');
+
+        $started = \microtime(true);
+        while ($client->response('stop-pump') === null && \microtime(true) - $started < 1.0) {
+            $fixture->context->pump();
+            $fixture->run(0.01);
+        }
+        $answer = $client->response('stop-pump');
+
+        self::assertArrayHasKey('result', $answer ?? [], 'the stop is answered within a second, without the 2 s poll');
+        self::assertSame(BackgroundStopOutcome::StoppedViaIpc->value, $answer['result']['outcome'] ?? null, 'the graceful stop is not escalated to SIGTERM');
+    }
+
+    /**
+     * An asynchronous launch refusal (its handshake window lapsing) answers
+     * `bg_spawn_failed` and owes the cause to the server log, exactly as the
+     * synchronous refusal does. The window is closed by advancing the supervisor's
+     * clock rather than waiting out its five seconds.
+     */
+    public function testAnAsynchronousSpawnRefusalAnswersBgSpawnFailedAndLogsTheCause(): void
+    {
+        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $lines = [];
+        $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
+        $fixture = $this->fixture = ProtocolFixture::new(supervisor: $supervisor, log: static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+        $client = WireClient::open($fixture->dispatcher, 'c-refused');
+        $client->hello();
+
+        $client->raw('{"jsonrpc":"2.0","id":"spawn-refused","method":"bg.spawn","params":{"task":"never authenticates","idempotencyKey":"spawn-refused"}}');
+        $supervisor->advanceSpawns(\microtime(true) + 60.0);
+        $fixture->run(0.01);
+        $answer = $client->response('spawn-refused');
+
+        self::assertSame('bg_spawn_failed', $answer['error']['data']['kind'] ?? null, (string) \json_encode($answer));
+        self::assertSame('the background session could not be started', $answer['error']['message'] ?? null, 'the wire carries no cause');
+        self::assertCount(1, $lines, 'one log line per refused launch');
+        self::assertStringStartsWith('bg.spawn failed: RuntimeException: ', $lines[0]);
+    }
+
+    /**
+     * A stop naming a launch still waiting on its daemon is refused as not found,
+     * and the refusal leaves the launch alone: it still answers live afterwards.
+     */
+    public function testAStopNamingALaunchStillPendingIsNotFoundAndTheLaunchStillAnswersLive(): void
+    {
+        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
+        $fixture = $this->serve($supervisor);
+        $client = $fixture->client();
+
+        $client->raw('{"jsonrpc":"2.0","id":"spawn-pending","method":"bg.spawn","params":{"task":"still starting","idempotencyKey":"spawn-pending"}}');
+        $pending = (new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor);
+        self::assertCount(1, $pending, 'the launch is pending on its daemon');
+        $pendingId = (string) \array_key_first($pending);
+
+        $refused = $client->request('bg.stop', ['bgId' => $pendingId]);
+        self::assertSame('bg_not_found', $refused['error']['data']['kind'] ?? null, (string) \json_encode($refused));
+
+        $deadline = \microtime(true) + 20.0;
+        while ($client->response('spawn-pending') === null && \microtime(true) < $deadline) {
+            $fixture->context->background()?->poll();
+            \usleep(20_000);
+            $fixture->run(0.01);
+        }
+        $answer = $client->response('spawn-pending');
+        self::assertArrayHasKey('result', $answer ?? [], 'the launch still answers once its daemon authenticates');
+        self::assertSame($pendingId, (string) $answer['result']['bgId']);
+        $this->fixtureDaemons[] = $this->daemonOf($supervisor, $pendingId);
+        self::assertSame(\SugarCraft\Code\Background\BackgroundSessionStatus::Running, $supervisor->session($pendingId)?->status, 'the refused stop did not touch the launch');
+    }
+
     private function serve(BackgroundSupervisor $supervisor): ProtocolFixture
     {
         return $this->fixture = ProtocolFixture::new(supervisor: $supervisor);

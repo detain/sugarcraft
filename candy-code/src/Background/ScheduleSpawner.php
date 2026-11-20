@@ -15,11 +15,12 @@ use SugarCraft\Code\Host\Commands\BackgroundCommand;
  * Both hosts — the TUI's Chat pump and the serve-side
  * {@see \SugarCraft\Code\Host\BackgroundEvents} — build their fire closure
  * here, so a schedule cannot run differently depending on which process's
- * clock caught it. The spawn rides {@see BackgroundSupervisor::spawnSession()}
+ * clock caught it. The spawn rides {@see BackgroundSupervisor::spawnSessionAsync()}
  * exactly like `/bg` does: the SAME accounted fork site (the child-lifetime
- * census needs no new roster row because no NEW proc_open appears), and the
- * resulting session is a normal `bg.*` citizen — listable, stoppable, and
- * reported by every host's status diff.
+ * census needs no new roster row because no NEW proc_open appears). The fire
+ * returns at once and never waits for the daemon's handshake, so a due row
+ * cannot block the loop that fires it. The resulting session is a normal
+ * `bg.*` citizen — listable, stoppable, and reported by every host's status diff.
  *
  * The agent is the roster's default, then the first native, then the stand-in
  * ({@see BackgroundCommand::rosterAgent()} — the ISS-087 chain, shared rather
@@ -29,7 +30,7 @@ use SugarCraft\Code\Host\Commands\BackgroundCommand;
  * session's (the dontAsk floor from {@see Schedule}; bypass-class spellings
  * never reach this line — {@see Schedule::fromArray()} refuses them at load,
  * C-AGT-7.a P3). The row's optional `timeoutSeconds` rides too (P4): absent,
- * the run takes spawnSession's own 3600s session default; present, it raises
+ * the run takes the supervisor's own 3600s session default; present, it raises
  * that ONE row's ceiling. Both are daemon-run bounds and mode grants — neither
  * puts a timeout on a model request (E646).
  *
@@ -86,7 +87,7 @@ final class ScheduleSpawner
                 'permissionMode' => $row->permissionMode,
             ];
             // C-AGT-7.a P4: null adds NO key, so the default keeps living
-            // exactly where it always has — spawnSession's own signature —
+            // exactly where it always has — the supervisor's own signature —
             // and a row that names a bound raises only its own runs. Omitting
             // the key rather than passing null is deliberate: the parameter is
             // `int`, and re-spelling 3600 here would mint a second source of
