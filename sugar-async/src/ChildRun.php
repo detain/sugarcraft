@@ -168,9 +168,14 @@ final class ChildRun
      * has neither written to stdout or stderr nor accepted a stdin write for this
      * many seconds, and reported as TIMED_OUT. Any chunk read resets the budget,
      * dropped bytes included, and so does each stdin write the child takes: a child
-     * still consuming its input is working, not idle. Null (the default) disables
-     * it, so a quiet child runs until its deadline. Once the child has exited the
-     * budget no longer applies: the exit grace governs its held pipes instead.
+     * still consuming its input is working, not idle. That stdin count needs a pipe.
+     * On the Windows runtime a non-empty {@see withStdin()} payload is staged to a
+     * file with no pipe behind it, so the child's reads of that file are not counted:
+     * a child that reads a staged payload slowly and writes nothing is killed once
+     * the budget elapses, while it is still accepting its input. Null (the default)
+     * disables it, so a quiet child runs until its deadline. Once the child has
+     * exited the budget no longer applies: the exit grace governs its held pipes
+     * instead.
      */
     public function withIdleTimeout(?float $seconds): self
     {

@@ -470,6 +470,43 @@ final class ChildPumpBuilderTest extends TestCase
         $this->assertTrue($r->abandonedAfterExit, 'a pipe cut by the grace while still open was abandoned');
     }
 
+    /**
+     * A stall longer than the grace between two reads (the process descheduled after
+     * the exit was seen) used to end the walk with the child's unread tail still in
+     * the pipe, and report the pipe abandoned. The cut must take those bytes first,
+     * and a pipe that yields them is draining, not held.
+     */
+    public function testExitGraceCutReadsTheBufferedTailBeforeAbandoningThePipe(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+        // Larger than one read, so the first pass leaves the tail in the kernel.
+        $payload = str_repeat('ab', 10000) . 'END';
+        fwrite($writer, $payload);
+
+        // The first two reads happen at t=0 (the exit is seen, one chunk is read);
+        // every read after that finds the process stalled far past the grace.
+        $calls = 0;
+        $clock = static function () use (&$calls): float {
+            return $calls++ < 2 ? 0.0 : 10.0;
+        };
+
+        $r = ChildPump::new([1 => $reader])
+            ->withClock($clock)
+            ->withDeadline(100.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame($payload, $r->buffer(1), 'the bytes buffered behind the stall must reach the capture');
+        $this->assertFalse($r->abandonedAfterExit, 'a pipe that yielded its tail was draining, not held');
+    }
+
     /** A pipe that reaches EOF after the exit is read to the end, not abandoned. */
     public function testAPipeReadToEofAfterTheExitIsNotAbandoned(): void
     {

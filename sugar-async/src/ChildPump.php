@@ -478,8 +478,10 @@ final class ChildPump
                 $quietUntil = ($lastRead === null ? $exitedAt : max($exitedAt, $lastRead)) + (float) $this->exitGrace;
                 if ($now >= $quietUntil) {
                     // Silent for the whole grace: a pipe still open here is held by a descendant.
+                    // A stall longer than the grace can leave the child's last bytes unread in the
+                    // kernel, so take them first; only a pipe that still yields nothing is abandoned.
                     $reason = DrainResult::CLOSED;
-                    $abandoned = $open !== [];
+                    $abandoned = $this->sweepOpenPipes($open, $capture);
                     break;
                 }
             }
@@ -549,6 +551,25 @@ final class ChildPump
     }
 
     /**
+     * The sweep over every pipe still open at a grace cut. Returns true when any
+     * of them yielded nothing, which is the only shape that counts as abandoned:
+     * a pipe that gave bytes was draining, not held.
+     *
+     * @param array<int|string, resource> $open
+     */
+    private function sweepOpenPipes(array $open, ChildCapture $capture): bool
+    {
+        $silent = false;
+        foreach ($open as $slot => $pipe) {
+            if (!$this->sweepPipe($slot, $pipe, $capture)) {
+                $silent = true;
+            }
+        }
+
+        return $silent;
+    }
+
+    /**
      * The expiry sweep for one pipe: takes what the kernel already holds, up to
      * {@see SWEEP_BYTES}, then stops. It never walks to EOF: a child still writing
      * past its deadline refills the pipe as fast as it is read, so such a walk
@@ -557,16 +578,19 @@ final class ChildPump
      * truncation instead of being lost without a trace.
      *
      * @param resource $pipe
+     * @return bool true when the sweep took any bytes from the pipe
      */
-    private function sweepPipe(int|string $slot, $pipe, ChildCapture $capture): void
+    private function sweepPipe(int|string $slot, $pipe, ChildCapture $capture): bool
     {
+        $took = false;
         $budget = self::SWEEP_BYTES;
         while ($budget > 0) {
             $chunk = fread($pipe, min(self::READ_BYTES, $budget));
             if ($chunk === false || $chunk === '') {
-                return;
+                return $took;
             }
             $capture->offer($slot, $chunk);
+            $took = true;
             $budget -= strlen($chunk);
         }
 
@@ -575,7 +599,10 @@ final class ChildPump
         if ($peek !== false && $peek !== '') {
             $capture->offer($slot, $peek);
             $capture->unread($slot);
+            $took = true;
         }
+
+        return $took;
     }
 
     /**
