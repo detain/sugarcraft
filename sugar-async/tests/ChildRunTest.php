@@ -6,6 +6,7 @@ namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ChildPump;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
@@ -694,5 +695,70 @@ final class ChildRunTest extends TestCase
         } finally {
             @unlink((string) $pidFile);
         }
+    }
+
+    /**
+     * Regression: a cancel that lands after the probe has reaped a setsid-wrapped shell.
+     * The shell exits at once and leaves a subshell and a sleep holding stdout, both in
+     * its group. The subshell's line arrives a second later and cancels the run, so the
+     * running probe has already reaped the shell and the live group read can no longer
+     * name it. The kill must still reach the background job through the wrapper's pid.
+     */
+    public function testACancelAfterTheWrappedShellWasReapedStillKillsItsJob(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || !\is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, /usr/bin/setsid and a POSIX host');
+        }
+
+        $source = CancellationSource::new();
+        $grandchild = null;
+        $run = ChildRun::new(['/usr/bin/setsid', 'sh', '-c', 'sleep 31 & echo $!; (sleep 1; echo tick) & exit 0'])
+            ->withTimeout(10.0)
+            ->withExitGrace(3.0)
+            ->withSetsidWrapped(true)
+            ->withCancellation($source->token())
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$grandchild, $source): void {
+                if ((string) $slot !== '1') {
+                    return;
+                }
+                if ($grandchild === null) {
+                    $grandchild = (int) trim($chunk);
+                    return;
+                }
+                if (trim($chunk) === 'tick') {
+                    $source->cancel();
+                }
+            });
+
+        $result = $run->run();
+
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $until = microtime(true) + 3.0;
+        while (!self::grandchildGone($grandchild) && microtime(true) < $until) {
+            usleep(20_000);
+        }
+        $this->assertTrue(self::grandchildGone($grandchild), 'the cancel must reach the job of the reaped shell');
+    }
+
+    /**
+     * Gone means signal-refused or a zombie: a PID 1 that does not reap leaves a killed
+     * grandchild a zombie, which a bare posix_kill($pid, 0) would count as alive.
+     */
+    private static function grandchildGone(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return true;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat === false) {
+            return false;
+        }
+        $after = strrpos($stat, ')');
+        $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+        return $state === 'Z' || $state === 'X';
     }
 }

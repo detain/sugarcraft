@@ -225,10 +225,12 @@ final class CommandBackend implements Backend, TracksActiveChildren
      */
     public static function childRun(string|array $command, string $payload): ChildRun
     {
-        return self::childRunForSpec(
-            ProcessContainment::spawnSpec(self::shellSpec($command, PHP_OS_FAMILY === 'Windows')),
-            $payload,
-        );
+        $plain = self::shellSpec($command, PHP_OS_FAMILY === 'Windows');
+        $spec = ProcessContainment::spawnSpec($plain);
+
+        // A containment prefix makes the child a setsid wrapper: the launch path needs to
+        // know, so a shell that exits before its group is read still has its job reached.
+        return self::childRunForSpec($spec, $payload)->withSetsidWrapped($spec !== $plain);
     }
 
     /**

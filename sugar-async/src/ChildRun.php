@@ -107,6 +107,8 @@ final class ChildRun
      * @param null|float $heartbeatSeconds  Interval between heartbeats, or null for none
      * @param null|\Closure(): void $onHeartbeat  The heartbeat hook, or null
      * @param bool $groupLeader  True when a containment wrapper made the child lead its own group, so its pid is the group
+     * @param bool $setsidWrapped  True when the child was started behind a containment wrapper that makes it a
+     *                             group leader ({@see withSetsidWrapped()})
      */
     private function __construct(
         private readonly array $argv,
@@ -125,6 +127,7 @@ final class ChildRun
         private readonly ?float $heartbeatSeconds = null,
         private readonly ?\Closure $onHeartbeat = null,
         private readonly bool $groupLeader = false,
+        private readonly bool $setsidWrapped = false,
     ) {
     }
 
@@ -269,6 +272,20 @@ final class ChildRun
     }
 
     /**
+     * Declares that the child was started behind a containment wrapper (a setsid
+     * prefix the caller adds to the argv), so the child leads its own process group
+     * once it has run. The launch path
+     * then falls back to the child's pid as the group id when the group was never
+     * read while the child lived, which is the case for a shell that backgrounds a
+     * job and exits before the first status poll. An unwrapped child leads no group
+     * of its own, so leave this false for it.
+     */
+    public function withSetsidWrapped(bool $wrapped): self
+    {
+        return $this->mutate(['setsidWrapped' => $wrapped]);
+    }
+
+    /**
      * Live feed: called with (slot, chunk) for every chunk read from stdout (1)
      * or stderr (2), as it arrives, before the result is assembled. The buffered
      * result is unchanged; the callback only observes. Null removes it.
@@ -380,7 +397,29 @@ final class ChildRun
         }
 
         $deferred = new Deferred();
-        (new ChildRunLaunch(
+        $this->buildLaunch($loop, $proc, $pipes, $staged, $group, $deferred)->start();
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The launch state machine for one spawned child, with every option this builder
+     * carries forwarded. Split out of launch() so the setsid flag's forwarding can be
+     * pinned without a process run: the flag only matters on the reap path, which races
+     * the wrapper's own setsid, so no timing-free test can observe it through launch().
+     *
+     * @param resource $proc
+     * @param array<int, resource> $pipes
+     */
+    private function buildLaunch(
+        LoopInterface $loop,
+        $proc,
+        array $pipes,
+        ?string $staged,
+        ?int $group,
+        Deferred $deferred,
+    ): ChildRunLaunch {
+        return new ChildRunLaunch(
             $loop,
             $proc,
             $pipes,
@@ -396,9 +435,8 @@ final class ChildRun
             $this->exitGrace,
             $this->heartbeatSeconds,
             $this->onHeartbeat,
-        ))->start();
-
-        return $deferred->promise();
+            $this->setsidWrapped,
+        );
     }
 
     /**
@@ -414,8 +452,10 @@ final class ChildRun
 
         // The probe keeps the status it reads: a proc_get_status() after the
         // child has been reaped reports -1, so the exit code is taken here.
+        // The pid is kept with it: a reaped setsid wrapper names the group its job stayed in.
         $exitCode = null;
-        $running = static function () use ($proc, &$exitCode): bool {
+        $spawnPid = 0;
+        $running = static function () use ($proc, &$exitCode, &$spawnPid): bool {
             if ($exitCode !== null) {
                 return false;
             }
@@ -423,6 +463,7 @@ final class ChildRun
             if (!\is_array($status)) {
                 return false;
             }
+            $spawnPid = (int) $status['pid'];
             if ($status['running'] === true) {
                 return true;
             }
@@ -504,7 +545,8 @@ final class ChildRun
                 $r = $pump->pump();
             } catch (\Throwable $e) {
                 self::closeAll($pipes);
-                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
                 throw $e;
             }
 
@@ -525,13 +567,15 @@ final class ChildRun
                 }
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
-                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
                 $status = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
 
                 return self::result($r, $code, $status);
             }
 
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+            $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
             $status = match (true) {
                 $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
                 $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
@@ -742,16 +786,29 @@ final class ChildRun
 
     /**
      * The group a kill rung signals: the one measured at spawn when there was one,
-     * else the group the child leads right now. The spawn-time read can miss a
-     * wrapper that has not yet made itself a group leader, and a live child still
-     * answers the live read; a child that already exited answers neither, so the
-     * spawn-time value is the one that reaches its job.
+     * else the group the child leads right now, else the wrapper's own pid once the
+     * probe has reaped it. The spawn-time read can miss a wrapper that has not yet
+     * made itself a group leader, and a live child still answers the live read; a
+     * reaped child answers neither, so the spawn-time value or the wrapper pid is the
+     * one that reaches its job.
      *
      * @param resource $proc
      */
-    private static function killGroup($proc, ?int $measured): ?int
+    private static function killGroup($proc, ?int $measured, ?int $reapedWrapper = null): ?int
     {
-        return $measured ?? Containment::groupId($proc);
+        return $measured ?? Containment::groupId($proc) ?? $reapedWrapper;
+    }
+
+    /**
+     * The wrapper's own pid as a group id, once the probe has reaped a setsid-wrapped
+     * child. The wrapper leads the group its backgrounded job stayed in under that pid,
+     * and the live read cannot name it after the reap. The blocking path needs this for
+     * the same reason ChildRunLaunch does: a cancel can land after the shell is reaped.
+     * An unwrapped child never leads a group, so its pid is never offered.
+     */
+    private function reapedWrapperGroup(?int $exitCode, int $spawnPid): ?int
+    {
+        return $this->setsidWrapped && $exitCode !== null && $spawnPid > 0 ? $spawnPid : null;
     }
 
     /**
