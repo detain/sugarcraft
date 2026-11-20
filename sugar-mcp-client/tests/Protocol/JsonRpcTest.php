@@ -93,15 +93,30 @@ final class JsonRpcTest extends TestCase
     {
         self::assertSame(511, JsonRpc::MAX_DEPTH_VALUE);
         // 511 nested arrays: the innermost empty array is the 511th level.
-        $atBudget = [];
-        for ($level = 1; $level < 511; $level++) {
-            $atBudget = [$atBudget];
-        }
-        self::assertSame(1022, \strlen(JsonRpc::encodeValue($atBudget)));
+        self::assertSame(1022, \strlen(JsonRpc::encodeValue(self::nested(511))));
 
+        // One level past the default budget, with no explicit depth passed.
         $this->expectException(\JsonException::class);
         $this->expectExceptionMessage('cannot encode a wire value');
-        JsonRpc::encodeValue($atBudget, 510);
+        JsonRpc::encodeValue(self::nested(512));
+    }
+
+    public function testAnExplicitDepthTightensTheValueBudget(): void
+    {
+        $this->expectException(\JsonException::class);
+        $this->expectExceptionMessage('cannot encode a wire value');
+        JsonRpc::encodeValue(self::nested(511), 510);
+    }
+
+    /** @return array<int, mixed> */
+    private static function nested(int $levels): array
+    {
+        $value = [];
+        for ($level = 1; $level < $levels; $level++) {
+            $value = [$value];
+        }
+
+        return $value;
     }
 
     public function testAValueThatCannotBeEncodedRefusesWithTheValueWording(): void

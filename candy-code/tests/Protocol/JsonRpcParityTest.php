@@ -139,6 +139,22 @@ final class JsonRpcParityTest extends TestCase
         self::assertStringStartsWith('cannot encode a wire value', $lib);
     }
 
+    /**
+     * The default budget itself, not an explicit depth: one level past it must be
+     * refused by both copies, so a default changed on either side goes red here.
+     */
+    public function testEncodeValueRefusesOneLevelPastTheDefaultBudgetAlike(): void
+    {
+        $value = self::nested(CandyJsonRpc::MAX_DEPTH_VALUE + 1);
+
+        self::assertSame(CandyJsonRpc::MAX_DEPTH_VALUE, LibJsonRpc::MAX_DEPTH_VALUE);
+        $candy = self::refusal(static fn () => CandyJsonRpc::encodeValue($value));
+        $lib = self::refusal(static fn () => LibJsonRpc::encodeValue($value));
+
+        self::assertSame($candy, $lib);
+        self::assertStringStartsWith('cannot encode a wire value', $lib);
+    }
+
     public function testEncodeRefusesTheSameUnencodableMessage(): void
     {
         $handle = \fopen('php://memory', 'r');
