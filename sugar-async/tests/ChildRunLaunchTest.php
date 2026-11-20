@@ -816,4 +816,73 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertFalse($r->abandonedPipes(), 'a deadline kill is not an abandonment');
         $this->assertGreaterThanOrEqual(1.5, $elapsed, 'launch waits for the deadline while the pipe is held');
     }
+
+    /**
+     * The child exits with 60 000 bytes still unread, and the loop stalls past the
+     * exit grace before the exit is checked again. The post-exit read takes a chunk,
+     * and the chunk's onChunk cancels the launch. The ladder then closes the pipes,
+     * and the read must stop there: reading a closed pipe is a TypeError out of the
+     * check timer. The launch settles CANCELLED.
+     */
+    public function testACancelFromOnChunkDuringTheExitGraceSettlesCancelledWithoutATypeError(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            $this->php('fwrite(STDOUT, str_repeat("x", 60000));'),
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use ($source): void {
+                $source->cancel();
+            },
+            null,
+            $source->token(),
+            null,
+            0.2,
+        );
+        $result = null;
+        $error = null;
+        $deferred->promise()->then(
+            static function (ChildResult $r) use (&$result): void {
+                $result = $r;
+            },
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+
+        $launch->start();
+        $probeGone = $this->reflect(ChildRunLaunch::class, 'probeGone');
+        $checkExit = $this->reflect(ChildRunLaunch::class, 'checkExit');
+
+        // The loop is not running, so nothing reads the pipe while the child exits.
+        $until = microtime(true) + 5.0;
+        while (!$probeGone->invoke($launch) && microtime(true) < $until) {
+            usleep(1000);
+        }
+        $this->assertTrue($probeGone->invoke($launch), 'the child exits with its output unread');
+
+        // Stall the loop past the 0.2 s grace, then the exit check reads the held bytes.
+        usleep(300_000);
+        $checkExit->invoke($launch);
+
+        $this->assertNull($error, 'a cancel from a chunk callback must not reject the launch');
+        $this->assertInstanceOf(ChildResult::class, $result, 'the cancel settles the launch');
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertSame(0, $this->armedTimers($loop), 'no timer stays armed once the launch has settled');
+    }
 }
