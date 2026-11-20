@@ -410,9 +410,9 @@ $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
-`droppedUnknownCount()` means bytes were consumed but produced no event. That
-includes genuinely unrecognized sequences — private CSIs whose lead parameter
-byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
+`droppedUnknownCount()` means complete sequences were consumed but produced no
+event. That includes genuinely unrecognized sequences — private CSIs whose lead
+parameter byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
 finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
 unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
 It **also** covers recognized-but-filtered frames — a Kitty event frame when the
@@ -420,8 +420,11 @@ progressive protocol is disabled, a disabled family's mouse report, or a stray
 `CSI 201~` paste-end marker with no paste open. What never lands in this counter
 is a complete `?`- or `>`-prefixed private report: those drain as
 `TerminalReplyEvent`s. So a non-zero count does not necessarily mean this
-terminal sends frames the decoder fails to model. `reset()` zeroes all
-counters along with the buffers.
+terminal sends frames the decoder fails to model. A sequence longer than the
+128-byte cap is refused and counted once in `droppedUnknownCount()`; its
+trailing bytes are swallowed up to the final byte and never counted again.
+`discardedPasteBytes()` is the paste-only counter and never moves for a
+sequence. `reset()` zeroes all counters along with the buffers.
 
 ### Deferred trailing escape (opt-in)
 
