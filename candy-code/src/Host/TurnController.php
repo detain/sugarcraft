@@ -911,8 +911,8 @@ final class TurnController
     }
 
     /**
-     * Whether this submission's turn-hook chain has to leave the host's thread
-     *: a hook on one of $events runs out of process AND this
+     * Whether this submission's turn-hook chain has to leave the host's thread:
+     * a hook on one of $events runs out of process AND this
      * build can fork. Without pcntl the chain runs synchronously as it always
      * did.
      *
