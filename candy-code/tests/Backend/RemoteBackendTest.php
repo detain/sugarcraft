@@ -370,6 +370,25 @@ final class RemoteBackendTest extends TestCase
         self::assertSame('candy-code: ' . $badUrl . "\n" . $usage . "\n", $child['stderr']);
     }
 
+    /**
+     * A live server whose discovery record names an address the library refuses. The
+     * record branch used to cast that null to '' and dial `tcp://:80`, so the connect
+     * error named neither the record nor the bad host. It now says what the record
+     * names, and does not dial.
+     */
+    public function testADiscoveryRecordNamingAnUnusableAddressSaysSoAndDoesNotDial(): void
+    {
+        $state = StateDir::open($this->fixture->dir . '/state');
+        DiscoveryFile::forThisProcess('test', 'http://[abc]:7420', '127.0.0.1', 7420, $this->fixture->root, false, null)->write($state);
+
+        $child = $this->runBinary(['attach'], ['CANDY_CODE_SERVER_DIR' => $state->path]);
+        self::assertSame(NonInteractive::EXIT_FAILURE, $child['code']);
+        self::assertSame('', $child['stdout']);
+        $reason = Lang::inLocale('en', static fn (): string => Lang::t('cli.attach.bad_record_url', ['url' => 'http://[abc]:7420']));
+        self::assertSame('candy-code attach: ' . $reason . "\n", $child['stderr']);
+        self::assertStringNotContainsString('tcp://', $child['stderr'], 'the verb must not dial an empty target');
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private function wsUrl(): string
@@ -428,12 +447,13 @@ final class RemoteBackendTest extends TestCase
      * as HOME, so nothing it touches is the developer's real home.
      *
      * @param list<string> $argv
+     * @param array<string, string> $extraEnv
      * @return array{code: int, stdout: string, stderr: string}
      */
-    private function runBinary(array $argv): array
+    private function runBinary(array $argv, array $extraEnv = []): array
     {
         $bin = \dirname(__DIR__, 2) . '/bin/candy-code';
-        $env = ['LC_ALL' => 'C.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => $this->fixture->dir];
+        $env = ['LC_ALL' => 'C.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => $this->fixture->dir, ...$extraEnv];
         $process = \proc_open([\PHP_BINARY, $bin, ...$argv], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
         self::assertIsResource($process);
         $stdout = (string) \stream_get_contents($pipes[1]);

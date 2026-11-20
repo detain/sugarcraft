@@ -109,7 +109,10 @@ final class Attach
                     ? Lang::t('cli.attach.no_server_from', ['dir' => $state->path])
                     : Lang::t('cli.attach.no_server'));
             }
-            $url = (string) self::websocketUrl($record->url);
+            $url = self::websocketUrl($record->url);
+            if ($url === null) {
+                return self::fail(Lang::t('cli.attach.bad_record_url', ['url' => $record->url]));
+            }
         }
 
         $token = self::token($env, $state);
