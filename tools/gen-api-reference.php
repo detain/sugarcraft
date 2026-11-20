@@ -13,8 +13,10 @@ declare(strict_types=1);
  * code and its output is a pure function of the committed tree. A type or
  * method whose PHPDoc carries `@internal` is not public API and is left out.
  * The public methods a type inherits are listed under it, as PHP exposes them:
- * those of each trait it `use`s, and those of its parent class or extended
- * interfaces when that parent is declared under the same src tree. A parent
+ * those of each trait it `use`s, and those of its parent class, its extended
+ * interfaces and its implemented interfaces when they are declared under the
+ * same src tree. A method whose PHPDoc says `{@inheritdoc}` takes the summary of
+ * the nearest documented one of those. A parent
  * outside the tree has no source here, so its methods are not listed.
  *
  * WHAT IT WRITES. Namespace headings, then one entry per type with its first
@@ -65,6 +67,12 @@ final class ApiReference
 
     /** Modifiers printed before a method name. Visibility is never printed: every row is public. */
     private const SHOWN_MODIFIERS = ['static', 'abstract', 'final'];
+
+    /**
+     * What a published summary must not contain: audit and tracker IDs, and the
+     * ansicode.txt citation, a file this repo does not carry. See refuseInternalReferences().
+     */
+    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\bansicode\.txt\b~';
 
     public static function enabled(string $slug): bool
     {
@@ -263,6 +271,8 @@ final class ApiReference
             if ($type['internal']) {
                 continue;
             }
+            $methods = self::withInheritedMethods($index, $type['fqn'], $slug);
+            self::refuseInternalReferences($type['fqn'], $type['summary'], $methods);
             $types[] = [
                 'fqn' => $type['fqn'],
                 'short' => $type['short'],
@@ -272,7 +282,7 @@ final class ApiReference
                 'summary' => $type['summary'],
                 'cases' => $type['cases'],
                 'backed' => $type['backed'],
-                'methods' => self::withInheritedMethods($index, $type['fqn'], $slug),
+                'methods' => $methods,
             ];
         }
         usort($types, static fn (array $a, array $b): int => strcmp($a['fqn'], $b['fqn']));
@@ -645,7 +655,8 @@ final class ApiReference
      * interfaces. A method earlier in that order wins over a later one of the
      * same name, which is how PHP resolves an override. A parent declared outside
      * src/ has no source in this tree, so only the members of in-tree parents are
-     * known and listed.
+     * known and listed. An implemented interface is a parent here too: PHP exposes
+     * its methods on the class, and a `{@inheritdoc}` on the class reads from it.
      *
      * @param array<string, array<string, mixed>> $index every parsed type, keyed by FQN
      * @param list<string> $trail the types already on the path, a guard against an inheritance cycle
@@ -659,13 +670,28 @@ final class ApiReference
             }
         }
 
-        $methods = $index[$fqn]['methods'];
-        $names = array_column($methods, 'name');
+        // Each in-tree source is resolved before the merge, so an own method's {@inheritdoc}
+        // can read the summary its nearest documented ancestor already resolved.
+        $sources = [];
         foreach ([...$index[$fqn]['traits'], ...$index[$fqn]['parents']] as $sourceFqn) {
             if (!isset($index[$sourceFqn]) || in_array($sourceFqn, $trail, true)) {
                 continue;
             }
-            foreach (self::withInheritedMethods($index, $sourceFqn, $slug, [...$trail, $fqn]) as $method) {
+            $sources[] = self::withInheritedMethods($index, $sourceFqn, $slug, [...$trail, $fqn]);
+        }
+
+        $methods = [];
+        $names = [];
+        foreach ($index[$fqn]['methods'] as $own) {
+            $methods[] = [
+                'name' => $own['name'],
+                'signature' => $own['signature'],
+                'summary' => $own['inherits'] ? self::inheritedSummary($own['name'], $own['summary'], $sources) : $own['summary'],
+            ];
+            $names[] = $own['name'];
+        }
+        foreach ($sources as $source) {
+            foreach ($source as $method) {
                 if (!in_array($method['name'], $names, true)) {
                     $methods[] = $method;
                     $names[] = $method['name'];
@@ -674,6 +700,30 @@ final class ApiReference
         }
 
         return $methods;
+    }
+
+    /**
+     * The summary of a method whose PHPDoc carries {@inheritdoc}: the nearest documented
+     * ancestor's summary, then any prose the method adds after the tag. An ancestor that
+     * documents the method only by a bare tag resolves to '' and is passed over, so the
+     * lookup reaches the first real summary. With none, the row keeps the method's own
+     * prose and no tag or stray dash is printed.
+     *
+     * @param list<list<array{name: string, signature: string, summary: string}>> $sources each in-tree ancestor's resolved methods, nearest first
+     */
+    private static function inheritedSummary(string $name, string $own, array $sources): string
+    {
+        $parent = '';
+        foreach ($sources as $source) {
+            foreach ($source as $method) {
+                if ($method['summary'] !== '' && strcasecmp($method['name'], $name) === 0) {
+                    $parent = $method['summary'];
+                    break 2;
+                }
+            }
+        }
+
+        return trim($parent === '' ? $own : ($own === '' ? $parent : $parent . ' ' . $own));
     }
 
     /**
@@ -718,6 +768,7 @@ final class ApiReference
             'signature' => implode(' ', $prefix) . ($prefix === [] ? '' : ' ')
                 . ($byRef ? '&' : '') . $tokens[$name][1] . $sig,
             'summary' => self::summary($doc),
+            'inherits' => self::inheritsDoc($doc),
         ];
     }
 
@@ -765,7 +816,7 @@ final class ApiReference
 
     /**
      * @param array<string, mixed> $type
-     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, parents: list<string>, methods: list<array{name: string, signature: string, summary: string}>}
+     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, parents: list<string>, methods: list<array{name: string, signature: string, summary: string, inherits: bool}>}
      */
     private static function finish(array $type, int $size): array
     {
@@ -795,10 +846,11 @@ final class ApiReference
     }
 
     /**
-     * The names a type header extends: one parent for a class, a list for an
-     * interface. Each name resolves while the file's imports are known, as a
-     * trait name does, so a parent imported under an alias still reaches its
-     * declaration.
+     * The names a type header extends or implements: one parent for a class, a list for
+     * an interface, and the interfaces a class or enum implements. Each name resolves
+     * while the file's imports are known, as a trait name does, so a parent imported
+     * under an alias still reaches its declaration. Only the names after an `extends` or
+     * `implements` keyword count, so the `string` in `enum Name: string` does not.
      *
      * @param list<mixed> $tokens
      * @param array<string, string> $imports
@@ -807,17 +859,15 @@ final class ApiReference
     private static function parentsOf(array $tokens, int $from, array $imports, string $namespace): array
     {
         $parents = [];
-        $extending = false;
+        $inHeritage = false;
         for ($k = $from + 1, $n = count($tokens); $k < $n && $tokens[$k] !== '{'; $k++) {
             $t = $tokens[$k];
             if (!is_array($t)) {
                 continue;
             }
-            if ($t[0] === T_EXTENDS) {
-                $extending = true;
-            } elseif ($t[0] === T_IMPLEMENTS) {
-                $extending = false;
-            } elseif ($extending && in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
+            if ($t[0] === T_EXTENDS || $t[0] === T_IMPLEMENTS) {
+                $inHeritage = true;
+            } elseif ($inHeritage && in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
                 $parents[] = self::resolveName($t[1], $imports, $namespace);
             }
         }
@@ -829,6 +879,34 @@ final class ApiReference
     {
         // The leading run covers `/**` so the one-line form `/** @internal */` counts too.
         return $doc !== null && preg_match('~^[\s/*]*@internal\b~m', $doc) === 1;
+    }
+
+    private static function inheritsDoc(?string $doc): bool
+    {
+        return $doc !== null && preg_match('/\{@inheritdoc\}/i', $doc) === 1;
+    }
+
+    /**
+     * Refuses a published summary that carries an internal reference: a tracker or audit ID
+     * (sc-23, DX-05, sugar-core-024) or a file outside the repo (ansicode.txt). Those IDs
+     * resolve for no reader, so the PHPDoc gets rewritten instead of published.
+     *
+     * @param list<array{name: string, signature: string, summary: string}> $methods
+     */
+    private static function refuseInternalReferences(string $fqn, string $summary, array $methods): void
+    {
+        $texts = [$summary];
+        foreach ($methods as $method) {
+            $texts[] = $method['summary'];
+        }
+        foreach ($texts as $text) {
+            if (preg_match(self::INTERNAL_REFERENCE, $text, $hit) === 1) {
+                throw new \RuntimeException(
+                    "gen-api-reference: the published PHPDoc of $fqn carries the internal reference '{$hit[0]}'; "
+                    . 'rewrite that docblock so the page does not print it'
+                );
+            }
+        }
     }
 
     /**

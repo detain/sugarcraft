@@ -623,6 +623,153 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('<tr><td><code>read(): string</code></td><td>Reads one line.</td></tr>', $html);
     }
 
+    public function testAnInheritdocSummaryTakesTheSummaryOfTheInterfaceItImplements(): void
+    {
+        // The class documents the method only with the tag, so its row reads the interface's
+        // summary. The tag itself must not reach the page.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Gauge.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                interface Gauge
+                {
+                    /** Reports whether the bit is set. */
+                    public function has(int $bit): bool;
+                }
+
+                PHP,
+            'sugar-core/src/Dial.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                final class Dial implements Gauge
+                {
+                    /**
+                     * {@inheritdoc}
+                     */
+                    public function has(int $bit): bool
+                    {
+                        return $bit > 0;
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(2, \substr_count($html, 'Reports whether the bit is set.'), 'Gauge and Dial both show the summary');
+        self::assertStringContainsString('<tr><td><code>has(int $bit): bool</code></td><td>Reports whether the bit is set.</td></tr>', $html);
+        self::assertStringNotContainsString('inheritdoc', $html);
+    }
+
+    public function testAnInheritdocKeepsTheProseTheMethodAddsAfterTheParentSummary(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Base.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Base. */
+                class Base
+                {
+                    /** Names the base. */
+                    public function name(): string
+                    {
+                        return 'base';
+                    }
+                }
+
+                PHP,
+            'sugar-core/src/Child.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Child. */
+                final class Child extends Base
+                {
+                    /** {@inheritdoc} Trims the result. */
+                    public function name(): string
+                    {
+                        return 'child';
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(1, \substr_count($html, '<td>Names the base.</td>'), 'Base keeps its own summary');
+        self::assertSame(1, \substr_count($html, '<td>Names the base. Trims the result.</td>'), 'Child reads the parent summary, then its own prose');
+        self::assertStringNotContainsString('inheritdoc', $html);
+    }
+
+    public function testAnInheritdocWithNoDocumentedAncestorLeavesNoTagInThePage(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Lonely.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Stands alone. */
+                final class Lonely
+                {
+                    /** {@inheritdoc} */
+                    public function own(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('<tr><td><code>own(): void</code></td><td></td></tr>', $html);
+        self::assertStringNotContainsString('inheritdoc', $html);
+    }
+
+    /** @return iterable<string, array{string, string}> a file whose published PHPDoc carries an internal reference, and the token the run must name */
+    public static function internalReferences(): iterable
+    {
+        yield 'an audit ID in a method summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Reads the bit (sc-23). */\n    public function own(): void\n    {\n    }\n}\n",
+            'sc-23',
+        ];
+        yield 'a finding ID in a type summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Holds a value (sugar-core-073). */\nfinal class Leaky\n{\n}\n",
+            'sugar-core-073',
+        ];
+        yield 'a citation of a file outside the repo' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Draws the line (ansicode.txt:223). */\n    public function own(): void\n    {\n    }\n}\n",
+            'ansicode.txt',
+        ];
+    }
+
+    #[DataProvider('internalReferences')]
+    public function testAnInternalReferenceInAPublishedSummaryFailsTheRun(string $source, string $token): void
+    {
+        $root = $this->fixtureRoot(['sugar-core/src/Leaky.php' => $source]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage($token);
+        \ApiReference::generate($root, 'sugar-core');
+    }
+
     public function testAParentOutsideTheTreeDoesNotFailTheRun(): void
     {
         // A built-in parent has no source under src/, so its members are not listed. The child

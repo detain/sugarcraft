@@ -8,7 +8,7 @@ namespace SugarCraft\Core\Util;
  * Shared value clamping utilities for the SugarCraft monorepo.
  * Original: clamping is a banal idiom repeated across the upstream; no
  * single mirrorable symbol exists, so the citation is deliberately
- * absent rather than invented (sugar-core-073).
+ * absent rather than invented.
  *
  * sc-38 role line: Clamp COERCES — an out-of-range input is totalled into
  * the nearest legal value and nothing is signalled. Where an out-of-range

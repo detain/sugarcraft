@@ -19,13 +19,13 @@
 <tr><td><code>static interrupt(): \Closure</code></td><td>Quit cleanly with SIGINT-style &quot;interrupt&quot; semantics — same teardown path as Ctrl-C but distinguishable from a graceful <code>quit()</code> for downstream tooling. Mirrors <code>tea.Interrupt</code>.</td></tr>
 <tr><td><code>static batch(?\Closure ...$cmds): \Closure</code></td><td>Combine several Cmds into one. The runtime executes them concurrently; each returned Msg is dispatched independently. <code>null</code> entries are silently dropped so callers can write <code>Cmd::batch($maybeCmd, $other)</code>.</td></tr>
 <tr><td><code>static sequence(?\Closure ...$cmds): \Closure</code></td><td>Run Cmds strictly in order, one per loop tick: each returned Msg is dispatched (and processed by the model&#039;s <code>update()</code>) before the next Cmd starts, but the sequence does NOT complete inside this call — later steps land on later ticks. Use this when ordering matters — a <code>setForegroundColor()</code> should land before the colour-dependent render that follows it.</td></tr>
-<tr><td><code>static every(float $seconds, \Closure $produce): \Closure</code></td><td>Wall-clock-aligned periodic tick — shared per interval. Every <code>every($d, ...)</code> consumer with the same period rides ONE periodic timer chain aligned to wall-clock multiples of <code>$d</code> seconds, fanned out to each registered producer; re-registering the same produce closure keeps its existing seat (no stacking). A producer that returns <code>null</code> steps down — its deliveries stop and the timer tears itself down when the last consumer leaves. This synchronised cadence is the shipped contract (audit sugar-core-004).</td></tr>
+<tr><td><code>static every(float $seconds, \Closure $produce): \Closure</code></td><td>Wall-clock-aligned periodic tick — shared per interval. Every <code>every($d, ...)</code> consumer with the same period rides ONE periodic timer chain aligned to wall-clock multiples of <code>$d</code> seconds, fanned out to each registered producer; re-registering the same produce closure keeps its existing seat (no stacking). A producer that returns <code>null</code> steps down — its deliveries stop and the timer tears itself down when the last consumer leaves. This synchronised cadence is the shipped contract.</td></tr>
 <tr><td><code>static send(Msg $msg): \Closure</code></td><td>Wrap a raw Msg in a Cmd so it can be returned from update() chains that need to inject a synchronous follow-up event.</td></tr>
 <tr><td><code>static tick(float $seconds, \Closure $produce): \Closure</code></td><td>Schedule $produce to run after $seconds elapses on the loop. Whatever Msg it returns is dispatched into update(); return null to skip the dispatch.</td></tr>
 <tr><td><code>static cancellableTick(float $seconds, \Closure $produce): TickHandle</code></td><td>Like tick(), but returns a TickHandle the model keeps so it can cancel the tick before it fires. Issue the Cmd with <code>$handle-&gt;cmd()</code>; call <code>$handle-&gt;cancel()</code> to drop the pending dispatch (including one not yet armed on the loop).</td></tr>
 <tr><td><code>static windowSize(): \Closure</code></td><td>Ask the Program for the current terminal size. The Program resolves it when the Cmd runs and dispatches a \SugarCraft\Core\Msg\WindowSizeMsg built from the live size, honouring ProgramOptions::$windowSize when set. Use it to re-sync a model after it was built without a size.</td></tr>
 <tr><td><code>static promise(\Closure $factory, ?float $timeoutSeconds = null): \Closure</code></td><td>Wrap an async operation in a Cmd. The $factory should return a React\Promise\PromiseInterface&lt;?Msg&gt;. The promise&#039;s resolved Msg (if any) will be dispatched to update(). Rejected promises dispatch ExceptionMsg.</td></tr>
-<tr><td><code>static raw(string $bytes): \Closure</code></td><td>Write raw escape-sequence bytes to the Program&#039;s output stream. The renderer&#039;s diff state is *not* invalidated, so callers should use this for cursor-area-neutral effects (window title, OSC inline images, etc.) and call Program::forceRepaint() themselves if they intentionally clobber the painted region. (Pre-sc-35 this instruction named Renderer::reset(), which no public path reaches — forceRepaint() is the reachable seam, DX-05.)</td></tr>
+<tr><td><code>static raw(string $bytes): \Closure</code></td><td>Write raw escape-sequence bytes to the Program&#039;s output stream. The renderer&#039;s diff state is *not* invalidated, so callers should use this for cursor-area-neutral effects (window title, OSC inline images, etc.) and call Program::forceRepaint() themselves if they intentionally clobber the painted region. (An earlier version named Renderer::reset(), which no public path reaches; forceRepaint() is the reachable seam.)</td></tr>
 <tr><td><code>static println(string $text): \Closure</code></td><td>Print a line above the Program&#039;s region. Convenient for non- alt-screen &quot;inline&quot; programs that want to log progress without disturbing their rendered view. Mirrors <code>tea.Println</code>.</td></tr>
 <tr><td><code>static printf(string $fmt, mixed ...$args): \Closure</code></td><td><code>printf</code>-style companion to println() — formats <code>$fmt</code> with <code>$args</code> and prints the result above the program region. Mirrors <code>tea.Printf</code>.</td></tr>
 <tr><td><code>static exec(string|array $command, bool $captureOutput = false, ?\Closure $onComplete = null): \Closure</code></td><td>Run an external command with the TTY released, then resume the program. The runtime tears down raw mode + alt screen + cursor hide before launching the child, and restores them once it exits. The result is dispatched to the model as \SugarCraft\Core\Msg\ExecMsg.</td></tr>
@@ -299,7 +299,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-rawmsg"><code>RawMsg</code> <small>final class</small></h4>
-<p>Sentinel returned by Cmd::raw(). The Program intercepts it and writes the bytes verbatim to its output stream without disturbing the renderer&#039;s diff state. Useful as an escape hatch for terminal features the framework doesn&#039;t wrap (e.g. iTerm2 inline images, OSC 7 cwd reporting). The sentinel never reaches the model: the dispatch arm writes the bytes and returns, so a consumer that branches on RawMsg inside <code>update()</code> sees nothing — that claim was the stale intercept text (sugar-core-038).</p>
+<p>Sentinel returned by Cmd::raw(). The Program intercepts it and writes the bytes verbatim to its output stream without disturbing the renderer&#039;s diff state. Useful as an escape hatch for terminal features the framework doesn&#039;t wrap (e.g. iTerm2 inline images, OSC 7 cwd reporting). The sentinel never reaches the model: the dispatch arm writes the bytes and returns, so a consumer that branches on RawMsg inside <code>update()</code> sees nothing.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -443,7 +443,7 @@
 <tbody>
 <tr><td><code>__construct(private readonly array $subscriptions = [])</code></td><td></td></tr>
 <tr><td><code>withTick(string $id, float $seconds, \Closure $produce): self</code></td><td>Add a tick subscription — fires <code>produce</code> every <code>$seconds</code>.</td></tr>
-<tr><td><code>withKey(string $id, \Closure $produce, float $intervalSeconds = 0.1): self</code></td><td>Add a key subscription — <code>produce</code> runs on a fixed-interval POLL (every <code>$intervalSeconds</code>, default 100 ms), not on keyboard events (sugar-core-013). The poll is the shipped mechanism: an event-driven key subscription would need the input reader to fan out to subscribers, a redesign the owner gates. Produce closures should be cheap; the interval is the tuning seam.</td></tr>
+<tr><td><code>withKey(string $id, \Closure $produce, float $intervalSeconds = 0.1): self</code></td><td>Add a key subscription — <code>produce</code> runs on a fixed-interval POLL (every <code>$intervalSeconds</code>, default 100 ms), not on keyboard events. The poll is the shipped mechanism: an event-driven key subscription would need the input reader to fan out to subscribers, a redesign the owner gates. Produce closures should be cheap; the interval is the tuning seam.</td></tr>
 <tr><td><code>withSignal(string $id, int $signo, \Closure $produce): self</code></td><td>Add a signal subscription — fires <code>produce</code> when the given signal fires.</td></tr>
 <tr><td><code>withCustom(string $id, array $params, \Closure $produce): self</code></td><td>Add a custom subscription.</td></tr>
 <tr><td><code>all(): array</code></td><td></td></tr>
@@ -743,11 +743,11 @@
 <tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
 <tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
 <tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-keypressmsg"><code>KeyPressMsg</code> <small>final class</small></h4>
-<p>Key-press event under the Kitty progressive-keyboard protocol (event type 1 — the default when a <code>CSI ... u</code> sequence carries no event field). Legacy CSI/SS3/printable keys do NOT arrive as this class: the parser hands them over as plain KeyMsg. That is the verified home for the legacy path (finding sugar-core-041; the only construction site is InputReader&#039;s kitty decoder) — the old docblock claimed emission for every key and misdirected handlers into instanceof branches that never matched.</p>
+<p>Key-press event under the Kitty progressive-keyboard protocol (event type 1 — the default when a <code>CSI ... u</code> sequence carries no event field). Legacy CSI/SS3/printable keys do NOT arrive as this class: the parser hands them over as plain KeyMsg. That is the verified home for the legacy path (its only construction site is InputReader&#039;s kitty decoder). An earlier docblock claimed emission for every key, which sent handlers into instanceof branches that never matched.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -756,7 +756,7 @@
 <tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
 <tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
 <tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-keyreleasemsg"><code>KeyReleaseMsg</code> <small>final class</small></h4>
@@ -769,7 +769,7 @@
 <tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
 <tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
 <tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-keyrepeatmsg"><code>KeyRepeatMsg</code> <small>final class</small></h4>
@@ -782,7 +782,7 @@
 <tr><td><code>text(): string</code></td><td>v2-style alias for $rune: the literal text the user typed (empty for named keys).</td></tr>
 <tr><td><code>code(): KeyType</code></td><td>v2-style alias for $type: the logical key code.</td></tr>
 <tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier flags into a single Modifiers value.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td>— shared idiom with the mouse family (sc-23): <code>if ($msg-&gt;has(Modifiers::CTRL))</code> reads the same on a key press and a click, whatever shape the carrier stores underneath.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-keyboardenhancementsmsg"><code>KeyboardEnhancementsMsg</code> <small>final class</small></h4>
@@ -817,8 +817,8 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
-<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. Key and mouse events answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-mousemotionmsg"><code>MouseMotionMsg</code> <small>final class</small></h4>
@@ -827,8 +827,8 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
-<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. Key and mouse events answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-mousemsg"><code>MouseMsg</code> <small>class</small></h4>
@@ -837,8 +837,8 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
-<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. Key and mouse events answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-mousereleasemsg"><code>MouseReleaseMsg</code> <small>final class</small></h4>
@@ -847,8 +847,8 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
-<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. Key and mouse events answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-mousewheelmsg"><code>MouseWheelMsg</code> <small>final class</small></h4>
@@ -857,8 +857,8 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $x, public readonly int $y, public readonly MouseButton $button, public readonly MouseAction $action, public readonly bool $shift = false, public readonly bool $alt = false, public readonly bool $ctrl = false)</code></td><td></td></tr>
-<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. sc-23 (finding sugar-core-024): key and mouse events now answer the same Modifiable questions; the public booleans stay.</td></tr>
-<tr><td><code>has(int $modifier): bool</code></td><td></td></tr>
+<tr><td><code>modifiers(): Modifiers</code></td><td>Bundle the modifier booleans into the shared value shape — the exact parity table: <code>$shift</code> ↔ Modifiers::SHIFT, <code>$alt</code> ↔ Modifiers::ALT, <code>$ctrl</code> ↔ Modifiers::CTRL. Key and mouse events answer the same Modifiable questions; the public booleans stay.</td></tr>
+<tr><td><code>has(int $modifier): bool</code></td><td>True when the given modifier bit (Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL) is set on this event. Unknown bits throw rather than reading as &quot;not held&quot;.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-msg-pasteendmsg"><code>PasteEndMsg</code> <small>final class</small></h4>
@@ -1095,7 +1095,7 @@
 <tr><td><code>static scsG1(string $designator): string</code></td><td>Designate into G1 — <code>ESC ) F</code>; invoke with shiftOut().</td></tr>
 <tr><td><code>static scsG2(string $designator): string</code></td><td>Designate into G2 — <code>ESC * F</code>; a VT220+ slot, invoked by SS2/LS2.</td></tr>
 <tr><td><code>static scsG3(string $designator): string</code></td><td>Designate into G3 — <code>ESC + F</code>; a VT220+ slot, invoked by SS3/LS3.</td></tr>
-<tr><td><code>static decSpecialGraphics(): string</code></td><td>The classic VT100 line-drawing idiom: DEC Special Graphics into G0 (<code>ESC ( 0</code>), after which <code>lqqqqk</code> paints <code>┌────┐</code> (ansicode.txt:223).</td></tr>
+<tr><td><code>static decSpecialGraphics(): string</code></td><td>The classic VT100 line-drawing idiom: DEC Special Graphics into G0 (<code>ESC ( 0</code>), after which <code>lqqqqk</code> paints <code>┌────┐</code>.</td></tr>
 <tr><td><code>static asciiCharset(): string</code></td><td>US ASCII into G0 (<code>ESC ( B</code>) — restores plain text after line drawing.</td></tr>
 <tr><td><code>static shiftOut(): string</code></td><td>LS1 — Shift Out (<code>SO</code>, 0x0E): swap the G1 designation into GL.</td></tr>
 <tr><td><code>static shiftIn(): string</code></td><td>LS0 — Shift In (<code>SI</code>, 0x0F): swap the G0 designation back into GL.</td></tr>
@@ -1185,7 +1185,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-util-clamp"><code>Clamp</code> <small>final class</small></h4>
-<p>Shared value clamping utilities for the SugarCraft monorepo. Original: clamping is a banal idiom repeated across the upstream; no single mirrorable symbol exists, so the citation is deliberately absent rather than invented (sugar-core-073).</p>
+<p>Shared value clamping utilities for the SugarCraft monorepo. Original: clamping is a banal idiom repeated across the upstream; no single mirrorable symbol exists, so the citation is deliberately absent rather than invented.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -1369,7 +1369,7 @@
 <tr><td><code>static file(string $path): bool</code></td><td>Open the file at <code>$path</code> in the OS&#039;s default app for its type. Returns <code>false</code> if the path can&#039;t be resolved via <code>realpath()</code>.</td></tr>
 <tr><td><code>static commandFor(string $arg, ?string $platform = null, ?bool $hasWslview = null): array</code></td><td>Resolve the [command, args] tuple for opening <code>$arg</code> on the given platform. Exposed for tests; production callers should use url() / file().</td></tr>
 <tr><td><code>static setRunner(?\Closure $runner): ?\Closure</code></td><td>Inject a custom runner. The runner receives the resolved command and argv list and returns whether the launch succeeded. Pass <code>null</code> to restore the default <code>proc_open</code>-backed runner. Returns the previously installed runner so tests can restore it.</td></tr>
-<tr><td><code>static cmdStartArgument(string $arg): ?string</code></td><td>Harden one argument for cmd.exe&#039;s <code>start</code> re-parse (sugar-core-061).</td></tr>
+<tr><td><code>static cmdStartArgument(string $arg): ?string</code></td><td>Harden one argument for cmd.exe&#039;s <code>start</code> re-parse.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-util-palettes"><code>Palettes</code> <small>final class</small></h4>

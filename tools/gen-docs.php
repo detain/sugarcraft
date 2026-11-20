@@ -56,6 +56,10 @@ declare(strict_types=1);
  *             prefixOverride for pages whose chrome legitimately diverges (sugar-core).
  *   BODY      (docs/_data/<slug>.body.html) — the hand-authored content fragment (lede →
  *             the Demos section close), stored verbatim so no content is ever lost.
+ *   API       (docs/_data/<slug>.api.html) — the generated API reference, present only for the
+ *             libs in ApiReference::ENABLED. Built from the source PHPDoc by
+ *             `php tools/gen-api-reference.php <slug>`, not by this file, and spliced in place of
+ *             the body's marker. A PHPDoc change needs that command AND this one.
  *
  * The generator applies these normalizations uniformly (they are the ONLY intended diffs
  * versus the previous hand-maintained pages):
