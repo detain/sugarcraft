@@ -80,6 +80,57 @@ final class JsonRpcTest extends TestCase
         self::assertSame('{"jsonrpc":"2.0","method":"event","params":{"type":"t","data":{"path":"a/b"}}}', JsonRpc::encode($event));
     }
 
+    public function testAValueIsEncodedUnderTheWireFlagsWithNoEnvelope(): void
+    {
+        // The in-process door takes bare values through this: the wire's UTF-8
+        // substitution, and no jsonrpc/id/result frame around the value.
+        self::assertSame('{"text":"ok'."\u{FFFD}".'"}', JsonRpc::encodeValue(['text' => "ok\xFF"]));
+        self::assertSame('[]', JsonRpc::encodeValue([]));
+        self::assertSame('1.0', JsonRpc::encodeValue(1.0));
+    }
+
+    public function testAValueNestedDeeperThanTheValueBudgetIsRefused(): void
+    {
+        self::assertSame(511, JsonRpc::MAX_DEPTH_VALUE);
+        // 511 nested arrays: the innermost empty array is the 511th level.
+        self::assertSame(1022, \strlen(JsonRpc::encodeValue(self::nested(511))));
+
+        // One level past the default budget, with no explicit depth passed.
+        $this->expectException(\JsonException::class);
+        $this->expectExceptionMessage('cannot encode a wire value');
+        JsonRpc::encodeValue(self::nested(512));
+    }
+
+    public function testAnExplicitDepthTightensTheValueBudget(): void
+    {
+        $this->expectException(\JsonException::class);
+        $this->expectExceptionMessage('cannot encode a wire value');
+        JsonRpc::encodeValue(self::nested(511), 510);
+    }
+
+    /** @return array<int, mixed> */
+    private static function nested(int $levels): array
+    {
+        $value = [];
+        for ($level = 1; $level < $levels; $level++) {
+            $value = [$value];
+        }
+
+        return $value;
+    }
+
+    public function testAValueThatCannotBeEncodedRefusesWithTheValueWording(): void
+    {
+        $handle = \fopen('php://memory', 'r');
+        $this->expectException(\JsonException::class);
+        $this->expectExceptionMessage('cannot encode a wire value');
+        try {
+            JsonRpc::encodeValue(['handle' => $handle]);
+        } finally {
+            \fclose($handle);
+        }
+    }
+
     public function testAMessageThatCannotBeEncodedRefusesInsteadOfEmpties(): void
     {
         // CWPD-12: the old `(string) json_encode(...)` swallowed failure into
