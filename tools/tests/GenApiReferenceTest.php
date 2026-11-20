@@ -841,6 +841,33 @@ final class GenApiReferenceTest extends TestCase
             "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Draws the line (ansicode.txt:223). */\n    public function own(): void\n    {\n    }\n}\n",
             'ansicode.txt',
         ];
+        yield 'a review-tracker ID in a method summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Fleet-convention factory (lib-reviews-1102 M37). */\n    public function own(): void\n    {\n    }\n}\n",
+            'lib-reviews-1102',
+        ];
+        yield 'an audit ID of the NNb-NN form in a type summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Strips bidi overrides (audit 15b-28). */\nfinal class Leaky\n{\n}\n",
+            '15b-28',
+        ];
+    }
+
+    /** @return iterable<string, array{string}> a summary whose only words look like an ID but are not one */
+    public static function ordinarySummaries(): iterable
+    {
+        yield 'a 32-bit width in prose' => ["Reads a 32-bit word."];
+        yield 'a plain bare number after a dash' => ["Splits on 15-28 pairs."];
+        yield 'a lib name with no ID' => ["Renders the sugar-core frame."];
+    }
+
+    #[DataProvider('ordinarySummaries')]
+    public function testAnOrdinarySummaryWithADigitAndADashPassesTheGuard(string $summary): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Plain.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** $summary */\nfinal class Plain\n{\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString($summary, $html);
     }
 
     #[DataProvider('internalReferences')]

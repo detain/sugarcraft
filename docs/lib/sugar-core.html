@@ -913,7 +913,7 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <tbody>
 <tr><td><code>__construct(public ScreenStack $screens = new ScreenStack(), public ?Model $currentModel = null)</code></td><td></td></tr>
 <tr><td><code>screens(): ScreenStack</code></td><td></td></tr>
-<tr><td><code>withScreens(ScreenStack $screens): self</code></td><td>Immutable write channel honoured by Program when persisting an active screen&#039;s next model (lib-reviews-1102 C6).</td></tr>
+<tr><td><code>withScreens(ScreenStack $screens): self</code></td><td>Immutable write channel honoured by Program when persisting an active screen&#039;s next model.</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td>Program calls init() on the active model only. With no screen pushed that is this root, so the base layer&#039;s startup Cmd is returned here; with a screen on top the screen&#039;s own init() is the one Program runs.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string|View</code></td><td></td></tr>
@@ -940,7 +940,7 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <tr><td><code>current(): Screen</code></td><td>Return the active screen, or throw if the stack is empty.</td></tr>
 <tr><td><code>breadcrumb(): array</code></td><td>Return all screen titles in stack order (oldest first).</td></tr>
 <tr><td><code>isEmpty(): bool</code></td><td>Return true if the stack has no screens.</td></tr>
-<tr><td><code>replaceCurrentModel(Model $model): self</code></td><td>Return a copy of the stack with the CURRENT (topmost) screen&#039;s model replaced — title and hooks preserved (audit lib-reviews-1102 C6).</td></tr>
+<tr><td><code>replaceCurrentModel(Model $model): self</code></td><td>Return a copy of the stack with the CURRENT (topmost) screen&#039;s model replaced — title and hooks preserved.</td></tr>
 <tr><td><code>count(): int</code></td><td>Return the number of screens in the stack.</td></tr>
 </tbody>
 </table>
@@ -1577,7 +1577,7 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public UndoActionType $type, public array $payload, public string $label)</code></td><td></td></tr>
-<tr><td><code>static new(UndoActionType $type, array $payload, string $label): self</code></td><td>Fleet-convention factory (lib-reviews-1102 M37): docs and siblings teach <code>UndoAction::new(...)</code>; the constructor-only shape violated the ::new() law every other SugarCraft value object follows.</td></tr>
+<tr><td><code>static new(UndoActionType $type, array $payload, string $label): self</code></td><td>Fleet-convention factory: docs and siblings teach <code>UndoAction::new(...)</code>; the constructor-only shape violated the ::new() law every other SugarCraft value object follows.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-core-undo-undoactiontype"><code>UndoActionType</code> <small>enum</small></h4>
@@ -1982,9 +1982,9 @@ echo var_export($cmd !== null, true), "\n";</code></pre>
 <tr><td><code>static controlChars(string $s): string</code></td><td>Strip C0 control characters from caller-supplied text so they cannot inject newlines or corrupt the TUI render. NOT an escape-sequence stripper, and NOT SGR-preserving — read the contract below before &quot;fixing&quot; the code to match a memory of these docs.</td></tr>
 <tr><td><code>static cellValue(string $value, bool $preserveNewlines = false): string</code></td><td>Turn an arbitrary already-stringified cell value into something safe for a cell-grid renderer: repair invalid UTF-8, collapse (or preserve) newlines, and replace every remaining control byte with a visible dot.</td></tr>
 <tr><td><code>static untrusted(string $s): string</code></td><td>Strip all C0 control bytes (\x00–\x1f) and C1 (\x80–\x9f) except \t (\x09), \n (\x0a) and \r (\x0d), and remove every escape sequence — CSI/OSC/SGR introduced by \x1b, the 8-bit C1 forms (\x9b CSI, \x90 DCS, \x9d OSC, \x9f APC …), and string-sequence payloads (DCS/SOS/PM/APC, sixel and Kitty included).</td></tr>
-<tr><td><code>static untrustedForDisplay(string $s): string</code></td><td>untrusted() plus carriage-return mapping: every <code>\r\n</code> becomes <code>\n</code>, and every remaining lone <code>\r</code> becomes <code>\n</code> too. The policy for untrusted text painted into a frame that is laid out one logical line per terminal row. Invisible bidi overrides and zero-width characters are rendered as <code>&lt;U+XXXX&gt;</code> markers on top (audit 15b-28) — see markInvisibleFormatting() for which, and when.</td></tr>
-<tr><td><code>static markInvisibleFormatting(string $s): string</code></td><td>Render the invisible bidi and zero-width format characters as visible <code>&lt;U+XXXX&gt;</code> markers — the display half of audit 15b-28, applied by untrustedForDisplay() (and, unconditionally, by visibleControls()).</td></tr>
-<tr><td><code>static stripInvisibleFormatting(string $s, ?int &amp;$removed = null): string</code></td><td>Remove the invisible bidi and zero-width format characters that markInvisibleFormatting() marks — the strip twin of audit 15b-28, for text that must simply be free of them (a submitted prompt, a stored name) rather than shown with markers.</td></tr>
+<tr><td><code>static untrustedForDisplay(string $s): string</code></td><td>untrusted() plus carriage-return mapping: every <code>\r\n</code> becomes <code>\n</code>, and every remaining lone <code>\r</code> becomes <code>\n</code> too. The policy for untrusted text painted into a frame that is laid out one logical line per terminal row. Invisible bidi overrides and zero-width characters are rendered as <code>&lt;U+XXXX&gt;</code> markers on top — see markInvisibleFormatting() for which, and when.</td></tr>
+<tr><td><code>static markInvisibleFormatting(string $s): string</code></td><td>Render the invisible bidi and zero-width format characters as visible <code>&lt;U+XXXX&gt;</code> markers — the display half of the invisible-formatting policy, applied by untrustedForDisplay() (and, unconditionally, by visibleControls()).</td></tr>
+<tr><td><code>static stripInvisibleFormatting(string $s, ?int &amp;$removed = null): string</code></td><td>Remove the invisible bidi and zero-width format characters that markInvisibleFormatting() marks, for text that must simply be free of them (a submitted prompt, a stored name) rather than shown with markers.</td></tr>
 <tr><td><code>static visibleControls(string $s, bool $preserveLayout = true): string</code></td><td>Render every control character in <code>$s</code> as inert, visible text instead of removing it — the <code>cat -v</code> convention — so the result shows the user every byte the input carried and the terminal interprets none of them.</td></tr>
 <tr><td><code>static stripZoneSentinels(string $s): string</code></td><td>Remove the zone sentinel pair (U+E000 / U+E001) from text, leaving every other codepoint — including the rest of the Private Use Area — alone.</td></tr>
 <tr><td><code>static stripPrivateUse(string $s): string</code></td><td>Remove every Basic Multilingual Plane Private Use codepoint (U+E000–U+F8FF) — the whole arena SugarCraft allocates markup from.</td></tr>

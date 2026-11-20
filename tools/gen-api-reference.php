@@ -72,10 +72,11 @@ final class ApiReference
     private const SHOWN_MODIFIERS = ['static', 'abstract', 'final'];
 
     /**
-     * What a published summary must not contain: audit and tracker IDs, and the
-     * ansicode.txt citation, a file this repo does not carry. See refuseInternalReferences().
+     * What a published summary must not contain: audit and tracker IDs (sc-23, DX-05,
+     * sugar-core-024, lib-reviews-1102, the audit 15b-28 form), and the ansicode.txt
+     * citation, a file this repo does not carry. See refuseInternalReferences().
      */
-    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\bansicode\.txt\b~';
+    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b~';
 
     public static function enabled(string $slug): bool
     {
