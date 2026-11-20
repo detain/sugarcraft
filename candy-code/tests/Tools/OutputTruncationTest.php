@@ -158,7 +158,7 @@ final class OutputTruncationTest extends TestCase
         $this->assertStringNotContainsString('set -x trace line', $result->content());
     }
 
-    /** The same command with the cap off is the control: identical content. */
+    /** The same command with a zero bound is the control: identical content. */
     public function testTheChattyStderrCaseMatchesTheUncappedResultExactly(): void
     {
         $command = 'for i in $(seq 1 3000); do echo "+ set -x trace line $i" >&2; done; echo "BUILD OK"';
@@ -254,7 +254,11 @@ final class OutputTruncationTest extends TestCase
         yield 'production default' => [65536];
     }
 
-    public function testAZeroCapDisablesBashTruncation(): void
+    /**
+     * A zero bound no longer means unbounded: output under the 8 MiB capture
+     * ceiling is returned whole, with no marker, because nothing was dropped.
+     */
+    public function testAZeroCapLeavesOutputUnderTheCaptureCeilingUntouched(): void
     {
         $result = (new Bash(maxOutputBytes: 0))->execute([
             'command' => 'for i in $(seq 1 5000); do echo "line-$i"; done',
@@ -263,6 +267,32 @@ final class OutputTruncationTest extends TestCase
 
         $this->assertStringNotContainsString('truncated:', $result->content());
         $this->assertGreaterThan(30000, strlen($result->content()));
+    }
+
+    /**
+     * Past the 8 MiB capture ceiling a zero bound must still announce the loss:
+     * the model is told the answer is partial, and how much was refused.
+     */
+    public function testAZeroCapAnnouncesTheCaptureCeilingWhenOutputOverrunsIt(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The pipeline below needs a POSIX yes(1) and head(1).');
+        }
+
+        // 9 MiB of text on stdout: 8 MiB retained, 1 MiB dropped by the capture.
+        // yes's broken-pipe complaint is silenced so stderr stays empty and the
+        // marker's total is exactly the stdout byte count.
+        $result = (new Bash(maxOutputBytes: 0))->execute([
+            'command' => 'yes 0123456789abcdef 2>/dev/null | head -c ' . (9 * 1024 * 1024),
+            'id' => 'call_6_ceiling',
+        ]);
+
+        $this->assertFalse($result->isError());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        $this->assertMatchesRegularExpression(
+            '/\.\.\. \[truncated: 1048576 of 9437184 bytes omitted\./',
+            $result->content(),
+        );
     }
 
     // =========================================================================

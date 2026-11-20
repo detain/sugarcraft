@@ -253,8 +253,17 @@ trait TruncatesOutput
         $separator = ($head !== '' && $tail !== '') ? "\n" : '';
         $joined = $head . $separator . $tail;
 
+        // A non-positive bound has nothing to clip to, so the joined text
+        // stands. A capture that still dropped bytes (the 8 MiB retention
+        // ceiling) must say so, or the partial stream reads as the whole answer.
         if ($maxBytes <= 0) {
-            return $joined;
+            if ($merged['dropped'] === 0) {
+                return $joined;
+            }
+
+            $marker = $this->truncationMarker($merged['dropped'], strlen($joined) + $merged['dropped']);
+
+            return $joined === '' ? $marker : $joined . "\n" . $marker;
         }
 
         // Nothing was lost anywhere and it all fits: hand it back untouched.
