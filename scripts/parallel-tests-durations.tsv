@@ -2143,3 +2143,4 @@ candy-code/tests/Host/InProcessRoutedTest.php	6.945	6
 candy-code/tests/Host/InProcessEventSinkTest.php	2.516	8
 candy-code/tests/Server/GatewayInProcessRoutingTest.php	1.152	5
 candy-code/tests/Server/GatewayEventSinkTest.php	1.309	6
+candy-code/tests/Backend/LoopDrivenTurnTest.php	0.300	4
