@@ -228,7 +228,7 @@ $rects = GreedySolver::new()-&gt;solve(Region::fromSize(100, 20), Direction::Hor
     Constraint::max(5),
 ]);
 // widths: 95, 5</code></pre>
-    <p>Four carve-outs keep the sum law from holding. Under-constrained fixed-only sets keep their gap, so <code>[percentage(30)]</code> at 100 yields one 30-cell region. Compat mode and <code>withoutOverflowTruncation()</code> run off-grid on overflow. A zero-weight Fill set keeps its slack. Extreme-magnitude inputs past int64 ride float arithmetic. The README names all four, and the tests pin the first two.</p>
+    <p>Five carve-outs keep the sum law from holding. Under-constrained fixed-only sets keep their gap, so <code>[percentage(30)]</code> at 100 yields one 30-cell region. Compat mode and <code>withoutOverflowTruncation()</code> run off-grid on overflow. A zero-weight Fill set keeps its slack. A Max-only set keeps the shortfall of its caps, so <code>[max(40), max(40)]</code> at 100 yields 40 and 40; adding any Length, Percentage, Ratio, Fill or Min absorbs it. Extreme-magnitude inputs past int64 ride float arithmetic. The README names all five, and the tests pin the first two.</p>
 
     <h3 id="choosing-a-layout-strategy" style="margin-top: 32px;">Choosing a layout strategy</h3>
     <ul>
@@ -343,7 +343,7 @@ vendor/bin/phpunit</code></pre>
     <ul>
       <li><strong><code>solve()</code> throws "Constraints must be a list".</strong> The array is keyed or sparse. Pass a sequential list, for example by calling <code>array_values()</code> on it.</li>
       <li><strong>A static call through the interface name is a fatal error.</strong> <code>LayoutSolver</code> declares only the instance method <code>solve()</code>, so a static factory such as <code>greedy()</code> called on the interface name fails with <code>Error: Call to undefined method</code>, followed by the interface and method name. Call a concrete class such as <code>GreedySolver::greedy()</code> or <code>GreedySolver::new()</code>.</li>
-      <li><strong>Sizes sum to less than the span.</strong> One of the carve-outs applies. For example, <code>[percentage(30)]</code> at 100 yields 30. Add a <code>fill(1)</code> to absorb the rest, or check the set with <code>demandOf()</code>.</li>
+      <li><strong>Sizes sum to less than the span.</strong> One of the carve-outs applies. For example, <code>[percentage(30)]</code> at 100 yields 30, and <code>[max(40), max(40)]</code> at 100 yields 40 and 40. Add a <code>fill(1)</code> to absorb the rest, or check the set with <code>demandOf()</code>.</li>
       <li><strong>Sizes sum to more than the span.</strong> The set was solved with compat mode or <code>withoutOverflowTruncation()</code>. <code>[length(60), length(60)]</code> at 100 yields 60 and 60 under those settings, and 50 and 50 under the default policy.</li>
       <li><strong><code>E_USER_DEPRECATED</code> on every solve.</strong> The call uses <code>CassowarySolver</code>, which delegates to <code>GreedySolver</code>. Switch to <code>GreedySolver::new()</code>.</li>
       <li><strong>A dock side disappears on a small frame.</strong> The frame is below the floors, so <code>resolve()</code> drops that side. Resize the frame, or lower the floors with <code>withMinimums()</code>.</li>

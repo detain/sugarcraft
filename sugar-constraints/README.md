@@ -207,10 +207,10 @@ its Ratio path returned 0). The simplex was deleted rather than rewritten:
 the shim keeps the class name alive for straggling callers and warns them on
 every `solve()`.
 
-## Tiling guarantee — and its four carve-outs
+## Tiling guarantee — and its five carve-outs
 
 `solve()` tiles the region exactly for every well-constrained set: the widths
-(or heights) sum to the region's total. Four deliberate exceptions:
+(or heights) sum to the region's total. Five deliberate exceptions:
 
 1. **Under-constrained fixed-only sets keep their gap.** `[percentage(30)]@100`
    yields one 30-wide region and 70 untiled columns — the constraints never
@@ -229,9 +229,13 @@ every `solve()`.
    `PHP_INT_MAX`-wide frame reported `width=-9223372036854775808`). Terminal
    frames never approach that scale; the behaviour is documented, not
    guarded.
+5. **A Max-only set keeps the shortfall of its caps.** Max is a ceiling, and
+   when every member is a Max, nothing grows past its cap to take the slack:
+   `[max(40), max(40)]@100` yields 40 and 40, leaving 20 columns untiled. Adding
+   any Length, Percentage, Ratio, Fill or Min member absorbs the slack.
 
-The first two are pinned in `tests/`; the latter two are probe-measured, and
-all four are called out on the
+The first two are pinned in `tests/`; the last three are probe-measured, and
+all five are called out on the
 `LayoutSolver` interface docblock — check them before painting a pane
 edge-to-edge off the sum law.
 
