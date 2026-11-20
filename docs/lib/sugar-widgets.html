@@ -341,7 +341,7 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
       <li><code>Table::new(headers, rows, $width, $height)</code>: int, default <code>$width = 0</code>, <code>$height = 10</code>. Initial size of the table. <code>withSize()</code> changes it.</li>
       <li><code>Table::withStyles(?Styles)</code>: <code>?Styles</code>, default no override. Replaces the table's style set. <code>null</code> is accepted.</li>
       <li><code>Paginator::withType(Type)</code>: <code>Type</code>, default set on <code>Paginator::new()</code>. Chooses how the page position is drawn.</li>
-      <li><code>Paginator::withDots(string $active, string $inactive)</code>: string, default set by the caller. The glyphs for the active and inactive dots when the dot style is used.</li>
+      <li><code>Paginator::withDots(string $active, string $inactive)</code>: string, default <code>●</code> active and <code>○</code> inactive, set by <code>Paginator::new()</code>. The glyphs for the active and inactive dots when the dot style is used.</li>
     </ul>
 
     <h3 id="keys" style="margin-top: 32px;">Keys</h3>

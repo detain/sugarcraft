@@ -102,7 +102,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
       <li><code>Style::setDefaultProfile(?ColorProfile)</code>: process-wide, default unset, so TrueColor. Sets the color tier that styles created by <code>Style::new()</code> render to. <code>null</code> restores TrueColor.</li>
       <li><code>Style::colorProfile(ColorProfile)</code>: per style, default no profile set, so the process-wide default applies. Forces the tier this style's <code>render()</code> downsamples to, overriding the process-wide default.</li>
       <li><code>Theme::adaptive(bool $fallbackDark)</code>: bool, default <code>true</code>. Palette used when <code>COLORFGBG</code> cannot decide light or dark.</li>
-      <li><code>Border::withEmbeddedTitle(text, ?TitleAnchor, ?open, ?close)</code>: anchor, junction runes. The anchor defaults to <code>TitleAnchor::TopLeft</code>; the junction runes default to the border's own corners. Cuts a title into the border edge.</li>
+      <li><code>Border::withEmbeddedTitle(text, ?TitleAnchor, ?open, ?close)</code>: anchor, junction runes. The anchor defaults to <code>TitleAnchor::TopLeft</code>; the junction runes default to the square form of the border's corners (<code>┐</code>/<code>┌</code> top, <code>┘</code>/<code>└</code> bottom), so a rounded border gets square junctions too. Cuts a title into the border edge.</li>
       <li><code>Table::wrap(?Closure)</code>: closure or null, default no callback set. When set, every line it returns renders, so a wrapped row spans several physical lines. Each line is fitted to the column width and cut when it is wider.</li>
     </ul>
 
