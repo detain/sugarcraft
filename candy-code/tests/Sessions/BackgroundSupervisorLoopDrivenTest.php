@@ -409,11 +409,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertTrue($supervisor->hasActiveSessions(), 'a retired launcher must keep the background poll armed');
 
         // Drive the poll the way the host does: tick while it stays armed, within a bound.
-        $deadline = microtime(true) + 15.0;
-        while ($supervisor->hasActiveSessions() && microtime(true) < $deadline) {
-            $supervisor->tick();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => !$supervisor->hasActiveSessions(), 15.0);
 
         $this->assertFalse($supervisor->hasActiveSessions(), 'the poll must disarm once the launcher is collected');
         $this->assertSame([], $reaps->getValue($supervisor), 'the poll never collected the retired launcher');
@@ -494,10 +490,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertIsResource($stubborn, 'the stubborn launcher could not start');
         $pid = (int) proc_get_status($stubborn)['pid'];
         $this->stubbornLauncherPids[] = $pid;
-        $readyDeadline = microtime(true) + 10.0;
-        while (!is_file($ready) && microtime(true) < $readyDeadline) {
-            usleep(10_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => is_file($ready), 10.0);
         $this->assertFileExists($ready, 'the stubborn launcher never installed its SIGTERM trap');
         $pending[$sessionId]['proc'] = $stubborn;
         $pendingProp->setValue($supervisor, $pending);
