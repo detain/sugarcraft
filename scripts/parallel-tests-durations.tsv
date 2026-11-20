@@ -100,6 +100,7 @@ candy-code/tests/Server/ConformanceTest.php	6.735	26
 candy-code/tests/Cli/InstallScriptTest.php	6.732	16
 candy-code/tests/Session/CheckpointStorageTest.php	6.730	23
 candy-code/tests/Sessions/BackgroundSupervisorStopTest.php	6.634	8
+candy-code/tests/Sessions/BackgroundSupervisorLoopDrivenTest.php	15.000	6
 candy-code/tests/Server/HandoffRemotePushTest.php	6.619	21
 candy-code/tests/Support/ForkedChildReaperAdoptionTest.php	6.592	6
 candy-code/tests/Backend/ReasoningProgressTest.php	6.387	16
@@ -188,7 +189,7 @@ candy-code/tests/Host/SessionHostIdleAutoTest.php	3.700	17
 candy-code/tests/Integration/BinCandyCodeAutoloadGuardTest.php	3.679	38
 candy-code/tests/Tools/TaskNestingDepthCapTest.php	3.629	6
 candy-code/tests/Chat/ReviewCommandTest.php	3.616	21
-candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.612	13
+candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.612	14
 candy-code/tests/Sessions/BackgroundSupervisorReapTest.php	3.591	10
 candy-code/tests/Session/SessionQueryTest.php	3.582	15
 candy-code/tests/TtyStreamArgumentCensusTest.php	3.582	46

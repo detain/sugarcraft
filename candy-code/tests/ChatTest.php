@@ -4234,6 +4234,27 @@ final class ChatTest extends TestCase
     }
 
     /** Drive a Cmd built by Cmd::promise() and return the Msg it resolves to. */
+    /**
+     * resolveAsyncCmd(), for an off-loop effect whose promise settles only as the
+     * supervisor's loop advances (the daemon's handshake is accepted from tick()).
+     */
+    private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
+    {
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        $deadline = microtime(true) + 20.0;
+        while ($resolved === null && microtime(true) < $deadline) {
+            $supervisor->tick();
+            usleep(20_000);
+        }
+
+        return $resolved;
+    }
+
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $asyncCmd = $cmd();
@@ -5529,10 +5550,10 @@ final class ChatTest extends TestCase
             ]),
         );
 
-        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat, $supervisor): array {
             [$next, $cmd] = $this->submitLine($chat, '/bg port the renderer');
 
-            return [$next, $this->resolveAsyncCmd($cmd)];
+            return [$next, $this->resolveAsyncCmdPumping($cmd, $supervisor)];
         });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);

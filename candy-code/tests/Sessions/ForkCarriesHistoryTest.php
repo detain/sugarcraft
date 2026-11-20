@@ -212,7 +212,7 @@ final class ForkCarriesHistoryTest extends TestCase
 
             [$chat, $cmd] = $this->submitLine($chat, '/fork now write the tests');
             $this->assertInstanceOf(\Closure::class, $cmd);
-            $spawned = $this->resolveAsyncCmd($cmd);
+            $spawned = $this->resolveAsyncCmdPumping($cmd, $supervisor);
             $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
             $this->assertNull($spawned->error, (string) $spawned->error);
 
@@ -332,6 +332,25 @@ final class ForkCarriesHistoryTest extends TestCase
         }
 
         return $chat->update(new KeyMsg(KeyType::Enter, ''));
+    }
+
+    /**
+     * resolveAsyncCmd() for a spawn whose handshake the supervisor's loop accepts:
+     * the promise settles only as tick() advances it.
+     */
+    private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
+    {
+        $resolved = null;
+        $cmd()->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        $deadline = microtime(true) + 20.0;
+        while ($resolved === null && microtime(true) < $deadline) {
+            $supervisor->tick();
+            usleep(20_000);
+        }
+
+        return $resolved;
     }
 
     private function resolveAsyncCmd(\Closure $cmd): mixed

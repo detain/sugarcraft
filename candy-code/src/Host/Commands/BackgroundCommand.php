@@ -13,6 +13,7 @@ use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Background\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillSource;
 
@@ -142,14 +143,16 @@ final class BackgroundCommand implements HostCommand
         return static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags, $forkedSessionId): PromiseInterface {
             $worktrees = null;
             $worktreeId = null;
+            $worktree = null;
             try {
-                $worktree = null;
                 if ($agent->isolation === \SugarCraft\Code\Agents\Isolation::Worktree) {
                     $worktrees = \SugarCraft\Code\Agents\WorktreeManager::new($workingDirectory);
                     $worktreeId = 'bg-' . bin2hex(random_bytes(6));
                     $worktree = $worktrees->createWorktree($worktreeId);
                 }
-                $session = $supervisor->spawnSession(
+                // The launch returns at once; the handshake is awaited by the supervisor's
+                // loop (tick), so the TUI thread never blocks on the daemon's accept.
+                $spawned = $supervisor->spawnSessionAsync(
                     name: $name,
                     agent: $agent,
                     task: $task,
@@ -157,31 +160,55 @@ final class BackgroundCommand implements HostCommand
                     tags: $tags,
                     forkedSessionId: $forkedSessionId,
                 );
-                // Named only once the session exists: a spawn that failed
-                // leaves an unnamed, unused tree, released below.
-                if ($worktree !== null) {
-                    $worktrees?->markWorktreeNamed((string) $worktreeId);
-                }
-
-                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id, worktree: $worktree));
             } catch (\Throwable $e) {
-                if ($worktrees !== null && $worktreeId !== null) {
-                    try {
-                        $worktrees->releaseIfUnused($worktreeId);
-                    } catch (\Throwable) {
-                        // Already reported on the notice seam by the manager.
-                    }
-                }
+                self::releaseWorktree($worktrees, $worktreeId);
 
                 return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage()));
             }
+
+            return $spawned->then(
+                static function (BackgroundSession $session) use ($worktrees, $worktreeId, $worktree, $command, $name): BackgroundSessionSpawnedMsg {
+                    // Named only once the session exists: a spawn that failed
+                    // leaves an unnamed, unused tree, released below.
+                    if ($worktree !== null) {
+                        try {
+                            $worktrees?->markWorktreeNamed((string) $worktreeId);
+                        } catch (\Throwable $e) {
+                            return new BackgroundSessionSpawnedMsg($command, $name, $session->id, $e->getMessage(), worktree: $worktree);
+                        }
+                    }
+
+                    return new BackgroundSessionSpawnedMsg($command, $name, $session->id, worktree: $worktree);
+                },
+                static function (\Throwable $e) use ($worktrees, $worktreeId, $command, $name): BackgroundSessionSpawnedMsg {
+                    self::releaseWorktree($worktrees, $worktreeId);
+
+                    return new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage());
+                },
+            );
         };
+    }
+
+    /**
+     * Release a worktree a failed spawn created, if nothing uses it. Reported on the
+     * manager's notice seam, so a release failure is not raised here.
+     */
+    private static function releaseWorktree(?\SugarCraft\Code\Agents\WorktreeManager $worktrees, ?string $worktreeId): void
+    {
+        if ($worktrees === null || $worktreeId === null) {
+            return;
+        }
+        try {
+            $worktrees->releaseIfUnused($worktreeId);
+        } catch (\Throwable) {
+            // Already reported on the notice seam by the manager.
+        }
     }
 
     /**
      * The thunk that stops $sessionId and resolves with its
      * {@see BackgroundSessionStoppedMsg} — never rejects, for the reason
-     * {@see spawnThunk()} gives.
+     * {@see spawnThunk()} gives. The stop is driven by the supervisor's loop.
      *
      * @return \Closure(): PromiseInterface<BackgroundSessionStoppedMsg>
      */
@@ -189,20 +216,19 @@ final class BackgroundCommand implements HostCommand
     {
         return static function () use ($supervisor, $sessionId): PromiseInterface {
             $name = $supervisor?->session($sessionId)?->name;
-            try {
-                $outcome = $supervisor === null
-                    ? BackgroundStopOutcome::CouldNotStop
-                    : $supervisor->stopSession($sessionId);
+            if ($supervisor === null) {
+                return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, BackgroundStopOutcome::CouldNotStop, $name));
+            }
 
-                return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, $outcome, $name));
-            } catch (\Throwable $e) {
-                return \React\Promise\resolve(new BackgroundSessionStoppedMsg(
+            return $supervisor->stopSessionAsync($sessionId)->then(
+                static fn (BackgroundStopOutcome $outcome): BackgroundSessionStoppedMsg => new BackgroundSessionStoppedMsg($sessionId, $outcome, $name),
+                static fn (\Throwable $e): BackgroundSessionStoppedMsg => new BackgroundSessionStoppedMsg(
                     $sessionId,
                     BackgroundStopOutcome::CouldNotStop,
                     $name,
                     $e->getMessage(),
-                ));
-            }
+                ),
+            );
         };
     }
 
