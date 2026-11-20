@@ -10,8 +10,10 @@ namespace SugarCraft\Plugins\Trust;
  *
  * Name trust says who opted in, not that the bytes are intact. Another account
  * that can rewrite the file or its directory could swap the code under a
- * trusted name, so both are checked before every require. Only world write is
- * refused, matching candy-code's refuseLooseBytes; group write is accepted.
+ * trusted name, so both are checked before every require. A world-writable
+ * file or directory is refused, and so is one owned by another uid. Group write
+ * is accepted, matching candy-code's refuseLooseBytes. The owner check needs a
+ * uid to compare against, so it is skipped when ext-posix is absent.
  */
 final class PrivateBytes
 {
