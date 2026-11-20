@@ -373,7 +373,9 @@ final class ChildRunLaunch
         // and one that survives the kill budget settles whether or not SIGKILL
         // landed, so the loop never waits on the child. A containment group keeps
         // the ladder running past a leader that exited, while descendants live.
-        BoundedShutdown::escalateAsync(
+        // The poll's handle joins $timers so finish() cancels it when the child is
+        // seen gone by checkExit() before the ladder's own poll gets to it.
+        $this->timers[] = BoundedShutdown::escalateAsync(
             $this->loop,
             $this->signal(...),
             fn (): bool => $this->probeGone() && $this->groupGone(),

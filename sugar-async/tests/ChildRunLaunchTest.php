@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Async\ChildRunLaunch;
@@ -239,6 +240,66 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertSame(ChildResult::TIMED_OUT, $result->status);
         $this->assertGreaterThanOrEqual(BoundedShutdown::TERMINATE_GRACE_SECONDS, $elapsed, 'the TERM rung must be given its grace before KILL');
         $this->assertLessThan(5.0, $elapsed, 'the kill budget bounds the run');
+    }
+
+    /** Timers armed on a private StreamSelectLoop, read the way SharedLoopResidue reads the shared one. */
+    private function armedTimers(StreamSelectLoop $loop): int
+    {
+        $queue = (new \ReflectionProperty(StreamSelectLoop::class, 'timers'))->getValue($loop);
+        $store = (new \ReflectionProperty($queue, 'timers'))->getValue($queue);
+
+        return \count($store);
+    }
+
+    /**
+     * The ladder poll must not outlive a launch that settles first. The poll is
+     * armed by the cancel while the child ignores TERM; the child then dies and the
+     * exit is seen by checkExit() before the poll's next tick, so finish() settles
+     * the launch with the poll still in the loop unless it is cancelled there.
+     */
+    public function testACancelledLaunchLeavesNoLadderTimerArmedWhenItSettlesOnTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(['sh', '-c', 'trap "" TERM; exec sleep 30'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            null,
+            null,
+            $source->token(),
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result): void {
+            $result = $r;
+        });
+
+        $launch->start();
+        $source->cancel();
+        $this->assertGreaterThan(0, $this->armedTimers($loop), 'the cancel arms the kill ladder');
+
+        proc_terminate($proc, 9);
+        $probeGone = $this->reflect(ChildRunLaunch::class, 'probeGone');
+        $checkExit = $this->reflect(ChildRunLaunch::class, 'checkExit');
+        $until = microtime(true) + 5.0;
+        while (!$probeGone->invoke($launch) && microtime(true) < $until) {
+            usleep(1000);
+        }
+        $checkExit->invoke($launch);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the exit settles the launch');
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertSame(0, $this->armedTimers($loop), 'no ladder poll stays armed on the loop once the launch has settled');
     }
 
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void
