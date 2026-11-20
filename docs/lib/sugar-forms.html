@@ -164,6 +164,14 @@
             <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#values-has-no-entry-for-a-field">values() has no entry for a field</a></li>
+            <li class="toc-h3"><a href="#a-boolean-predicate-goes-to-withvalidator">A boolean predicate goes to withValidator()</a></li>
+            <li class="toc-h3"><a href="#pasted-text-is-cut-short-or-newlines-disappear">Pasted text is cut short, or newlines disappear</a></li>
+            <li class="toc-h3"><a href="#suggestions-never-arrive-or-a-fetch-fails-after-a-timeout">Suggestions never arrive, or a fetch fails after a timeout</a></li>
+            <li class="toc-h3"><a href="#no-color-or-term-dumb-still-gets-colored-output">NO_COLOR or TERM=dumb still gets colored output</a></li>
+            <li class="toc-h3"><a href="#values-read-as-empty-after-the-program-ends">Values read as empty after the program ends</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#form">Form</a></li>
             <li class="toc-h3"><a href="#input">Input</a></li>
@@ -291,7 +299,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Field\Select</td><td>withFuzzySuggestions(list)</td><td>Filter options by fuzzy match score</td></tr>
 <tr><td>Field\Select</td><td>withAsyncSuggestions(callable, int = 150, ?WorkerPool = null, ?float = null)</td><td>Async suggestions with debounce</td></tr>
 <tr><td>Field\Select</td><td>withEnum(BackedEnum::class)</td><td>Coerce selected value to enum type</td></tr>
-<tr><td>Field\MultiSelect</td><td>new(name)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
+<tr><td>Field\MultiSelect</td><td>new(key, ...options)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
 <tr><td>Field\Note</td><td>new(key)</td><td>Create note field — text set via withTitle/withDescription; plain notes never appear in values() (a withNext(true) note contributes a null entry)</td></tr>
 <tr><td>Validator\Required</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is empty</td></tr>
 <tr><td>Validator\Email</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is not a valid email</td></tr>
@@ -301,6 +309,29 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use sugar-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="values-has-no-entry-for-a-field" style="margin-top: 24px;"><code>values()</code> has no entry for a field</h3>
+    <p>A field is left out of <code>values()</code> when it, or the group it sits in, is hidden through <code>withHideFunc()</code>, and when it is a plain <code>Note</code>, which never contributes a value. A <code>Note</code> built with <code>withNext(true)</code> adds a <code>null</code> entry instead. <code>get()</code> returns its fallback for an absent key, so a default there can hide the omission. Check the field's visibility before reading the key.</p>
+
+    <h3 id="a-boolean-predicate-goes-to-withvalidator" style="margin-top: 24px;">A boolean predicate goes to <code>withValidator()</code></h3>
+    <p><code>withValidator()</code> takes a closure that returns <code>null</code> to pass or an error string to block. Its return value is stored as the field's error verdict as it is, so a <code>true</code> or <code>false</code> is not read as pass or fail. For a true/false predicate use <code>withValidation()</code> on <code>Input</code> or <code>Text</code>, which passes on <code>true</code>.</p>
+
+    <h3 id="pasted-text-is-cut-short-or-newlines-disappear" style="margin-top: 24px;">Pasted text is cut short, or newlines disappear</h3>
+    <p><code>TextInput</code> clips a paste or insert to the remaining <code>charLimit</code> budget, which defaults to 4096 characters. It also strips CR and LF at insert, because a single-line field cannot hold them. Raise the limit with <code>charLimit()</code>, or pass <code>0</code> to turn the bound off. For multi-line input use <code>Text</code>, which is built on <code>TextArea</code> and counts newlines against the same budget.</p>
+
+    <h3 id="suggestions-never-arrive-or-a-fetch-fails-after-a-timeout" style="margin-top: 24px;">Suggestions never arrive, or a fetch fails after a timeout</h3>
+    <p>A fetch that breaches <code>$fetchTimeoutSeconds</code> surfaces as the fetcher failing. Results that arrive after a newer keystroke or after the field loses focus are discarded by design (the generation check from SF-52), so a slow fetch can look like no fetch at all. A zero, negative or non-finite timeout throws <code>\InvalidArgumentException</code> when the field is built, and so does a negative debounce. Leave <code>$workerPool</code> null: it is stored but never consulted.</p>
+
+    <h3 id="no-color-or-term-dumb-still-gets-colored-output" style="margin-top: 24px;"><code>NO_COLOR</code> or <code>TERM=dumb</code> still gets colored output</h3>
+    <p>The form does not read the environment itself. Turn accessible mode on from your own check, for example <code>withAccessible(getenv('NO_COLOR') !== false || getenv('TERM') === 'dumb')</code>. Accessible mode is a single-line plain-text view of the focused field, so the group titles and error summary disappear with the colors.</p>
+
+    <h3 id="values-read-as-empty-after-the-program-ends" style="margin-top: 24px;">Values read as empty after the program ends</h3>
+    <p><code>Form</code> is immutable, and <code>Program::run()</code> drives a copy and returns the final model. The <code>$form</code> you built before the run never holds the submitted values. Capture the return value and read it, and check <code>isSubmitted()</code> first, because an aborted form returns too.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of <code>sugar-forms/</code> in the monorepo, which the <a href="https://github.com/sugarcraft/sugar-forms/commits/master">split mirror on GitHub</a> records. Deprecations are marked in the API table above and retire in 2.0.0: the <code>getString()</code> family on <code>Form</code>, and the <code>Fuzzy\FuzzyMatcher</code> shim, which delegates to sugar-fuzzy.</p>
     </div>
   </div>
 </section>
