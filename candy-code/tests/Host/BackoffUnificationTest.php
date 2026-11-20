@@ -32,6 +32,8 @@ final class BackoffUnificationTest extends TestCase
 
     public function testRedialDelaysDoubleFromQuarterSecondAndCapAtFour(): void
     {
+        // The curve the app shipped: a 0.25 s first wait, then the redial
+        // ladder's rungs 0.5, 1, 2, 4 and 4 again, one rung per failed attempt.
         $delays = [];
         $host = RemoteSessionHost::overStream(
             new ThroughStream(),
@@ -40,13 +42,21 @@ final class BackoffUnificationTest extends TestCase
                 $delays[] = $seconds;
             },
         );
-        $method = new \ReflectionMethod($host, 'scheduleAttempt');
-        $attempt = new \ReflectionProperty($host, 'attempt');
-        foreach (range(0, 6) as $n) {
-            $attempt->setValue($host, $n);
-            $method->invoke($host);
+        (new \ReflectionMethod($host, 'scheduleLadder'))->invoke($host);
+
+        $ladder = (new \ReflectionMethod(RemoteSessionHost::class, 'redialLadder'))->invoke(null);
+        self::assertInstanceOf(Backoff::class, $ladder);
+        foreach (range(1, 6) as $failed) {
+            $delays[] = $ladder->secondsForAttempt($failed);
         }
 
         self::assertSame([0.25, 0.5, 1.0, 2.0, 4.0, 4.0, 4.0], $delays);
+    }
+
+    public function testTheRedialLadderSpendsTheReconnectAttemptBudget(): void
+    {
+        $ladder = (new \ReflectionMethod(RemoteSessionHost::class, 'redialLadder'))->invoke(null);
+        self::assertTrue($ladder->allows(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS - 1), 'a retry may follow the last allowed failure');
+        self::assertFalse($ladder->allows(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS), 'the budget-th failure is final');
     }
 }

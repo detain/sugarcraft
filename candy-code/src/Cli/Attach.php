@@ -16,6 +16,7 @@ use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
 use SugarCraft\Async\Await;
+use SugarCraft\Async\Backoff;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
@@ -148,12 +149,13 @@ final class Attach
      * as the session is followed (turns can run for many minutes), and while
      * it is not, the resume ladder keeps trying for its bound.
      *
-     * $after overrides the ladder's delay scheduler (ISS-114 tests); it
-     * defaults to the event loop.
+     * $after overrides the scheduler of the ladder's first wait and
+     * $redialBackoff its redial delays (ISS-114 tests); both default to the
+     * event loop and the production ladder.
      *
      * @return PromiseInterface<RemoteSessionHost>
      */
-    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null): PromiseInterface
+    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null, ?Backoff $redialBackoff = null): PromiseInterface
     {
         return self::stream($url, $token, $loop)->then(
             static fn (array $socket): RemoteSessionHost => RemoteSessionHost::overStream(
@@ -162,6 +164,7 @@ final class Attach
                 $socket[1],
                 static fn (): PromiseInterface => self::stream($url, $token, $loop),
                 $after,
+                $redialBackoff,
             ),
         );
     }
