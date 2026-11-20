@@ -232,7 +232,9 @@ trait HandlesSessionSurface
             ]), null];
         }
         if ($msg instanceof BackgroundTickMsg) {
-            return $this->pumpBackgroundSessions();
+            [$next, $cmd] = $this->pumpBackgroundSessions();
+
+            return [$next, $this->rewakeWhileStopWaits($msg, $cmd)];
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on

@@ -20,8 +20,18 @@ use SugarCraft\Code\Chat;
  * {@see Chat::update()} turns it into the supervisor call plus a
  * status-change diff.
  *
- * Carries no payload: the supervisor is the state, this is only the clock.
+ * The one flag is {@see $rewake}: a run that registers background work queues
+ * a tick carrying it, and that tick re-queues itself while a stop waits on the
+ * daemon, so each rung is answered on a short interval instead of one two-second
+ * poll per rung.
  */
 final class BackgroundTickMsg implements Msg
 {
+    /**
+     * @param bool $rewake true when this tick keeps itself alive while a stop is in
+     *                     flight; the subscription's ticks carry false
+     */
+    public function __construct(public readonly bool $rewake = false)
+    {
+    }
 }

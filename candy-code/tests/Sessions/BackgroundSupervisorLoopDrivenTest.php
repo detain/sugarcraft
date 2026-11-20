@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\BackgroundTickMsg;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Code\Tests\Support\SupervisorPump;
@@ -30,6 +32,12 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
 
     /** One advance call may never sit on a daemon for this long. */
     private const MAX_ADVANCE_SECONDS = 0.5;
+
+    /** The chat's background poll cadence (Chat::BACKGROUND_POLL_SECONDS). */
+    private const POLL_CADENCE_SECONDS = 2.0;
+
+    /** Ticks allowed before a reap the poll never collects fails the test (about 20 s of poll). */
+    private const MAX_POLL_TICKS = 10;
 
     /** @var list<int> launchers the SIGTERM-ignoring tests started, killed in tearDown if left alive */
     private array $stubbornLauncherPids = [];
@@ -408,10 +416,20 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         // With no other session, only the retired launcher can keep the poll armed.
         $this->assertTrue($supervisor->hasActiveSessions(), 'a retired launcher must keep the background poll armed');
 
-        // Drive the poll the way the host does: tick while it stays armed, within a bound.
-        SupervisorPump::until($supervisor, static fn (): bool => !$supervisor->hasActiveSessions(), 15.0);
+        // Drive the poll the way the TUI does: the chat's subscription must stay armed
+        // while the reap is pending, and each poll tick arrives through Chat::update().
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+        $this->assertTrue($this->pollArmed($chat), 'the chat must keep the background poll armed while a reap is pending');
 
-        $this->assertFalse($supervisor->hasActiveSessions(), 'the poll must disarm once the launcher is collected');
+        $ticks = 0;
+        while ($this->pollArmed($chat) && $ticks < self::MAX_POLL_TICKS) {
+            usleep((int) (self::POLL_CADENCE_SECONDS * 1_000_000));
+            [$chat] = $chat->update(new BackgroundTickMsg());
+            $ticks++;
+        }
+
+        $this->assertFalse($this->pollArmed($chat), 'the poll must disarm once the launcher is collected');
+        $this->assertFalse($supervisor->hasActiveSessions(), 'the supervisor must agree the poll may disarm');
         $this->assertSame([], $reaps->getValue($supervisor), 'the poll never collected the retired launcher');
         $this->assertGreaterThanOrEqual(
             ProcessReaper::TERMINATE_GRACE_SECONDS,
@@ -419,6 +437,14 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             'SIGTERM is ignored, so only the SIGKILL stage after its grace can have ended the launcher',
         );
         $this->assertFalse(posix_kill($pid, 0), 'a launcher ignoring SIGTERM was left alive');
+    }
+
+    /** Whether the chat's subscriptions include the background poll tick. */
+    private function pollArmed(Chat $chat): bool
+    {
+        $subscriptions = $chat->subscriptions();
+
+        return $subscriptions !== null && $subscriptions->has('code.background-poll');
     }
 
     public function testTeardownCollectsAFailedSpawnsLauncherThatIgnoresSigterm(): void

@@ -155,6 +155,8 @@ final class CommandEffect
      * and the Msg carrying its promise does not reconcile subscriptions, so nothing
      * else arms the poll until the next key. The Program runs a batch's members in
      * order, so the tick lands after the spawn is registered and arms the poll.
+     * The tick is a rewake tick: a stop it registers waits on rungs the poll
+     * advances, and the tick keeps re-queuing itself while one is still due.
      *
      * @return list<\Closure>
      */
@@ -162,7 +164,7 @@ final class CommandEffect
     {
         $launch = Cmd::promise($this->run());
 
-        return $this->armsBackgroundPoll() ? [$launch, Cmd::send(new BackgroundTickMsg())] : [$launch];
+        return $this->armsBackgroundPoll() ? [$launch, Cmd::send(new BackgroundTickMsg(rewake: true))] : [$launch];
     }
 
     /**

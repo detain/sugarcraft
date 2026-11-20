@@ -315,6 +315,16 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         return $this->hasOwnedStop() || $this->hasOwnedReap();
     }
 
+    /**
+     * True when a stop this process started has not settled. The host keeps its
+     * tick re-queuing while this holds, so each rung is advanced without waiting on
+     * the two-second poll.
+     */
+    public function hasStopInFlight(): bool
+    {
+        return $this->hasOwnedStop();
+    }
+
     /** True when this process has a stop in flight. */
     private function hasOwnedStop(): bool
     {

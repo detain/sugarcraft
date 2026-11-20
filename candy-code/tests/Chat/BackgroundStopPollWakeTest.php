@@ -16,6 +16,7 @@ use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\TickRequest;
 
 /**
  * `/bg stop <id>` from an idle TUI must queue the background poll's wake-up, the
@@ -76,6 +77,55 @@ final class BackgroundStopPollWakeTest extends TestCase
             $stopped = $msg;
         });
         SupervisorPump::until($supervisor, static fn (): bool => $stopped !== null);
+        $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $stopped);
+        $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $stopped->outcome);
+    }
+
+    /**
+     * A stop waiting on its daemon re-queues its own tick, so each rung is answered
+     * within one hop instead of one two-second poll. The chain is driven here with
+     * no subscription tick at all, and it stops queuing once the stop has settled.
+     */
+    public function testAnInFlightStopKeepsRewakingTheTuiUntilItSettles(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $spawned = $this->spawnSleepingDaemon($supervisor);
+        $id = $spawned['session']->id;
+
+        [$next, $cmd] = $this->submit($supervisor, '/bg stop ' . $id);
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+
+        $launched = ($batch->cmds[0])();
+        $wake = ($batch->cmds[1])();
+        $this->assertInstanceOf(BackgroundTickMsg::class, $wake);
+        $this->assertTrue($wake->rewake, 'the stop\'s wake must keep itself alive while the stop waits');
+
+        $stopped = null;
+        $launched->promise->then(static function ($msg) use (&$stopped): void {
+            $stopped = $msg;
+        });
+
+        [$woken, $cmd] = $next->update($wake);
+        $hops = 0;
+        $deadline = microtime(true) + 20.0;
+        while ($supervisor->hasStopInFlight()) {
+            $this->assertTrue(microtime(true) < $deadline, 'the rewake chain did not settle the stop in time');
+            $this->assertInstanceOf(\Closure::class, $cmd, 'a stop still in flight must keep a tick queued');
+
+            $request = $cmd();
+            $this->assertInstanceOf(TickRequest::class, $request);
+            $tick = ($request->produce)();
+            $this->assertInstanceOf(BackgroundTickMsg::class, $tick);
+            $this->assertTrue($tick->rewake);
+
+            // The host waits the hop interval between ticks; the daemon answers in real time.
+            usleep(100_000);
+            [$woken, $cmd] = $woken->update($tick);
+            $hops++;
+        }
+
+        $this->assertGreaterThan(0, $hops, 'the stop must have waited on the daemon, so the chain was exercised');
         $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $stopped);
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $stopped->outcome);
     }
