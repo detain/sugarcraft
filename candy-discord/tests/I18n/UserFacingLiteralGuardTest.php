@@ -94,6 +94,9 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'array_push into $notes' => ["<?php\narray_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'fully qualified array_push into $notes' => ["<?php\n\\array_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
+        yield 'bare English coalesce-assigned to $name' => ["<?php\n\$name ??= 'attachment';\n", 2];
+        yield 'bare literal passed to a nullsafe send call' => ["<?php\n\$this->rest?->send(\$channelId, 'Attachments were skipped', []);\n", 2];
+        yield 'coalesce-assign into an indexed $notes' => ["<?php\n\$notes[\$idx] ??= 'Attachment dropped';\n", 2];
         yield 'bare English under a qualified non-Lang class' => ["<?php\n\$notes[] = \\Other\\Formatter::t('Attachment dropped');\n", 2];
         yield 'bare English under a foreign Lang facade' => ["<?php\n\$notes[] = \\Acme\\Lang::t('Attachment dropped');\n", 2];
         yield 'bare English under a bare Lang imported from elsewhere' => ["<?php\nuse Acme\\Lang;\n\$notes[] = Lang::t('Attachment dropped');\n", 3];
@@ -182,11 +185,11 @@ final class UserFacingLiteralGuardTest extends TestCase
         for ($i = 0; $i < $n; ++$i) {
             if (self::is($toks, $i, T_VARIABLE, '$notes') && ($op = self::noteWriteOperator($toks, $i + 1)) !== null) {
                 \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1)));
-            } elseif (self::is($toks, $i, T_VARIABLE, '$name') && self::is($toks, $i + 1, '=')) {
+            } elseif (self::is($toks, $i, T_VARIABLE, '$name') && (self::is($toks, $i + 1, '=') || self::is($toks, $i + 1, T_COALESCE_EQUAL))) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2)));
             } elseif (self::isCall($toks, $i, 'array_push') && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1)));
-            } elseif (self::is($toks, $i, T_OBJECT_OPERATOR) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
+            } elseif ((self::is($toks, $i, T_OBJECT_OPERATOR) || self::is($toks, $i, T_NULLSAFE_OBJECT_OPERATOR)) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2)));
             } elseif ((self::is($toks, $i, T_VARIABLE, '$say') || self::is($toks, $i, T_VARIABLE, '$reply')) && self::is($toks, $i + 1, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::closeIndex($toks, $i + 1)));
@@ -209,7 +212,7 @@ final class UserFacingLiteralGuardTest extends TestCase
             $op = self::closeIndex($toks, $op) + 1;
         }
 
-        return self::is($toks, $op, '=') || self::is($toks, $op, T_CONCAT_EQUAL) ? $op : null;
+        return self::is($toks, $op, '=') || self::is($toks, $op, T_CONCAT_EQUAL) || self::is($toks, $op, T_COALESCE_EQUAL) ? $op : null;
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
