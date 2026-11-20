@@ -157,6 +157,42 @@ final class GatewayEventSinkTest extends TestCase
         );
     }
 
+    /**
+     * Regression for PL-5c-A design section 12 (impl review, finding 1): the cursor moves at queue
+     * time, so inside the overflow window it runs ahead of delivery. An overflow must rewind it to
+     * the last seq the listener received, never to a queued seq the listener has not seen.
+     */
+    public function testTheOverflowWindowCursorEqualsTheLastDeliveredSeq(): void
+    {
+        $root = $this->root('window');
+        $sink = $this->sink();
+        $this->follow($sink, $root, 'sw');
+
+        $this->relayDurable($root, 'sw', 1);
+        $sink->flush();
+        self::assertSame([1], $this->seqsOf($sink, 'sw'));
+
+        // Seqs 2 .. QUEUE_BOUND + 1 fill the queue undelivered, so the cursor is ahead of the listener.
+        $last = 1 + InProcessEventSink::QUEUE_BOUND;
+        for ($seq = 2; $seq <= $last; $seq++) {
+            $this->relayDurable($root, 'sw', $seq);
+        }
+        self::assertSame($last, $this->cursorFor($sink->id(), 'sw'), 'the queue-time cursor runs ahead of delivery');
+
+        $this->relayDurable($root, 'sw', $last + 1);
+
+        self::assertFalse($sink->accepts('sw'), 'the overflowed session is stopped until it resubscribes');
+        self::assertSame(1, $this->cursorFor($sink->id(), 'sw'), 'the overflow window rewinds to the last delivered seq, not the last queued');
+
+        $sink->flush();
+        self::assertSame([1], $this->seqsOf($sink, 'sw'), 'no undelivered queued seq reaches the listener after the overflow');
+        self::assertSame(
+            [['sessionId' => 'sw', 'dropped' => InProcessEventSink::QUEUE_BOUND, 'action' => 'resubscribe', 'root' => $root]],
+            \array_slice($this->overflowsOf($sink), -1),
+            'the undelivered window is replaced by one notice counting every removed envelope',
+        );
+    }
+
     public function testThePrimaryFeedDeliversAtMostTheBudgetPerTick(): void
     {
         $door = InProcessHostServices::new($this->fixture->dispatcher, Loop::get(), $this->gateway);
