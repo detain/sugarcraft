@@ -148,6 +148,11 @@ final class ChildRun
      * the call then reads until EOF or the deadline, so a held pipe keeps it going
      * to its deadline, where the group is killed and the result is TIMED_OUT.
      * Callers that bound a whole command by its budget pass null.
+     *
+     * The grace is a POSIX control. On the Windows runtime the post-exit drain ends
+     * at {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} after the exit (or at the first
+     * pass that reads nothing), whatever this is set to, and no pipe is reported
+     * abandoned. A null here does not hold a Windows run to its deadline either.
      */
     public function withExitGrace(?float $seconds): self
     {

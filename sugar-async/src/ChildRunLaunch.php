@@ -66,8 +66,19 @@ final class ChildRunLaunch
 
     private bool $cancelled = false;
 
-    /** Last time a chunk was read from either stream: the idle budget counts from here. */
+    /**
+     * Last sign of life: a chunk read from either stream, or a stdin write the child
+     * accepted. The idle budget counts from here, as ChildRun::run() counts it.
+     */
     private float $lastActivityAt = 0.0;
+
+    /**
+     * Last chunk read from either stream. The exit grace counts from here and not
+     * from lastActivityAt: run()'s pump does not count a stdin write as output, so
+     * launch() must not either, or a descendant that drains stdin silently holds the
+     * pipes past the grace on one entry point and not the other.
+     */
+    private float $lastReadAt = 0.0;
 
     private ?Subscription $cancelSubscription = null;
 
@@ -157,8 +168,16 @@ final class ChildRunLaunch
             return;
         }
 
-        $this->lastActivityAt = Clock::monotonicSeconds();
+        $this->noteRead();
         $this->capture->offer($slot, $chunk);
+    }
+
+    /** A chunk was read: it resets both the idle budget and the exit grace. */
+    private function noteRead(): void
+    {
+        $now = Clock::monotonicSeconds();
+        $this->lastActivityAt = $now;
+        $this->lastReadAt = $now;
     }
 
     private function onWritable(): void
@@ -194,7 +213,7 @@ final class ChildRunLaunch
         foreach ($this->open as $slot => $pipe) {
             $chunk = WindowsPipes::readAvailable($pipe, ChildPump::READ_BYTES);
             if ($chunk !== '') {
-                $this->lastActivityAt = Clock::monotonicSeconds();
+                $this->noteRead();
                 $this->capture->offer($slot, $chunk);
                 $got = true;
             }
@@ -230,8 +249,13 @@ final class ChildRunLaunch
     /**
      * The post-exit grace: once the child is gone, its pipes are read until they
      * have been silent for the grace, counted from the later of the exit and the
-     * last chunk. A pipe still open at that cut is held by a descendant, so it is
-     * abandoned and the result reports it. Not run once the kill ladder has started.
+     * last chunk read (a stdin write does not count, as in run()). A pipe still open
+     * at that cut is held by a descendant, so it is abandoned and the result reports
+     * it. Not run once the kill ladder has started.
+     *
+     * Not run on the Windows runtime: there the post-exit drain is the poll arm's
+     * (pollWindows()), which never reports an abandonment. This check reads through
+     * readBuffered(), a blocking fread() on a Windows pipe, which would wedge the loop.
      *
      * Before a pipe is cut, the bytes it already holds are read. A loop that stalled
      * past the grace between the last read and this check left them unread, and
@@ -239,11 +263,11 @@ final class ChildRunLaunch
      */
     private function abandonSilentPipesAfterExit(): void
     {
-        if (!$this->exited || $this->killing || $this->exitGrace === null || $this->open === []) {
+        if (!$this->exited || $this->killing || $this->exitGrace === null || $this->open === [] || $this->windows) {
             return;
         }
 
-        $quietFrom = max($this->exitedAt, $this->lastActivityAt);
+        $quietFrom = max($this->exitedAt, $this->lastReadAt);
         if (Clock::monotonicSeconds() - $quietFrom < $this->exitGrace) {
             return;
         }
@@ -282,7 +306,7 @@ final class ChildRunLaunch
 
             $yielded = true;
             $budget -= strlen($chunk);
-            $this->lastActivityAt = Clock::monotonicSeconds();
+            $this->noteRead();
             $this->capture->offer($slot, $chunk);
         }
 

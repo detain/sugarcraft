@@ -599,6 +599,41 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertLessThan(3.0, $elapsed, 'launch settles after the exit grace, not at the idle budget or deadline');
     }
 
+    /**
+     * Regression: launch() counted a stdin write as output for the exit grace, so a
+     * descendant that drained its stdin slowly and wrote nothing to stdout held the
+     * pipes to the deadline (TIMED_OUT), while run() cut them one grace after the exit
+     * and reported EXITED with the pipe abandoned. The grandchild reads 8 KiB every
+     * 0.2 s, so each stdin write lands inside the 0.6 s grace; only stdout reads count.
+     * Both entry points must give the same result.
+     */
+    public function testLaunchAndRunCutAHeldPipeAtTheSameGraceWhileADescendantDrainsStdin(): void
+    {
+        $this->requirePosixPipes();
+        $reader = 'while (($c = fread(STDIN, 8192)) !== "" && $c !== false) { usleep(200000); }';
+        // A background job in sh gets /dev/null as stdin unless it is redirected from
+        // an fd that still holds the pipe, so the pipe is duplicated first.
+        $argv = ['/bin/sh', '-c', 'exec 3<&0; "$0" -r "$1" <&3 & exit 0', PHP_BINARY, $reader];
+        $configured = static fn (): ChildRun => ChildRun::new($argv)
+            ->withTimeout(4.0)
+            ->withExitGrace(0.6)
+            ->withStdin(str_repeat('x', 262144));
+
+        $sync = $configured()->run();
+
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+        $async = $this->settle($loop, $configured()->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $sync->status, 'run() cuts the held pipe after the grace');
+        $this->assertTrue($sync->abandonedPipes());
+        $this->assertSame(ChildResult::EXITED, $async->status, 'launch() must cut the held pipe at the same grace, not hold it to the deadline');
+        $this->assertTrue($async->abandonedPipes(), 'the held pipe is reported abandoned on the loop path too');
+        $this->assertSame($sync->exitCode, $async->exitCode);
+        $this->assertLessThan(3.0, $elapsed, 'launch settles one grace after the exit, not at the 4 s deadline');
+    }
+
     /** The control for the launch grace: with it removed, a held pipe holds launch to its deadline. */
     public function testLaunchWithoutAnExitGraceHoldsAHeldPipeToTheDeadline(): void
     {
