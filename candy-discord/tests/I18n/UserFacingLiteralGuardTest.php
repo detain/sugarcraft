@@ -22,12 +22,15 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
  * written into `$notes` (by any assignment or `array_push`), used as the
  * attachment `$name` fallback, or passed as a top-level argument to a send call
- * must go through `Lang::t` instead.
+ * or to the `$say` / `$reply` closures must go through `Lang::t` instead. The
+ * `Lang::t` key itself must be a `channels.discord.*` literal, since a key is
+ * the text a user reads when the catalog misses it.
  */
 final class UserFacingLiteralGuardTest extends TestCase
 {
     private const SRC = __DIR__ . '/../../src';
     private const LANG = __DIR__ . '/../../lang';
+    private const BUNDLE_LANG = 'CandyCode\\Bundles\\Discord\\Lang';
 
     /** @return list<string> */
     private static function sources(): array
@@ -90,6 +93,13 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'fully qualified array_push into $notes' => ["<?php\n\\array_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
         yield 'bare English under a qualified non-Lang class' => ["<?php\n\$notes[] = \\Other\\Formatter::t('Attachment dropped');\n", 2];
+        yield 'bare English under a foreign Lang facade' => ["<?php\n\$notes[] = \\Acme\\Lang::t('Attachment dropped');\n", 2];
+        yield 'bare English under a bare Lang imported from elsewhere' => ["<?php\nuse Acme\\Lang;\n\$notes[] = Lang::t('Attachment dropped');\n", 3];
+        yield 'bare English as a Lang::t key in $notes' => ["<?php\n\$notes[] = Lang::t('past the batch budget', ['name' => \$name]);\n", 2];
+        yield 'bare English as a Lang::t key in a send argument' => ["<?php\n\$this->rest->send(\$channelId, Lang::t('Attachments were skipped'), []);\n", 2];
+        yield 'bare English as a Lang::t key in a qualified call' => ["<?php\n\$notes[] = \\CandyCode\\Bundles\\Discord\\Lang::t('Attachment dropped');\n", 2];
+        yield 'bare English passed to $say' => ["<?php\n\$say('Only the approver can use this');\n", 2];
+        yield 'bare English passed to $reply' => ["<?php\n\$reply('Attachment dropped');\n", 2];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -125,6 +135,9 @@ final class UserFacingLiteralGuardTest extends TestCase
             : Lang::t('channels.discord.attachments.reason.past_document_limit', ['name' => $name, 'limit' => (string) $cap]);
         $name = (string) ($attachment['filename'] ?? Lang::t('channels.discord.attachments.unnamed'));
         $this->rest->send($channelId, $this->safety->outbound($notice), ['allowed_mentions' => ['parse' => []]]);
+        $say(Lang::t('channels.discord.pair.only_approver'));
+        $say($action === 'approve' ? Lang::t('channels.discord.pair.deprecated_approve') . "\n" . $answer : $answer);
+        $reply($text);
         PHP;
 
         self::assertSame([], self::bareEnglishInNotesOrSend($fixture));
@@ -133,7 +146,10 @@ final class UserFacingLiteralGuardTest extends TestCase
     /**
      * Each hit is "line: literal" for a letter-bearing string that reaches
      * `$notes` (any write form), the attachment `$name`, or a top-level argument
-     * of a send call without going through `Lang::t`. Works on tokens, so a multi-line call or an interpolated
+     * of a send call or of the `$say` / `$reply` closures without going through
+     * `Lang::t`. A `Lang::t` call is never a hit for its arguments, but its key
+     * is: a key outside `channels.discord.*` is the English a user reads when the
+     * catalog misses it. Works on tokens, so a multi-line call or an interpolated
      * string is read the same way. A literal that is only compared with
      * `===` or `!==` is a value test, not text a user reads.
      *
@@ -162,6 +178,8 @@ final class UserFacingLiteralGuardTest extends TestCase
                 \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1), false));
             } elseif (self::is($toks, $i, T_OBJECT_OPERATOR) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2), true));
+            } elseif ((self::is($toks, $i, T_VARIABLE, '$say') || self::is($toks, $i, T_VARIABLE, '$reply')) && self::is($toks, $i + 1, '(')) {
+                \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::closeIndex($toks, $i + 1), true));
             }
         }
 
@@ -205,8 +223,11 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
-     * `Lang` written bare, or qualified (`\CandyCode\Bundles\Discord\Lang`): the
-     * lexer emits a name token rather than T_STRING for the qualified forms.
+     * The bundle's own `Lang`: written bare (when no `use` imports a different
+     * `Lang` into the file), or qualified. A fully qualified name must be the
+     * bundle's exact FQN; the namespace-relative `Bundles\Discord\Lang` is taken
+     * from the CandyCode root the bundle's files sit under. Any other class that
+     * happens to be called `Lang` is not the catalog facade.
      *
      * @param list<array{id: int|string, text: string, line: int}> $toks
      */
@@ -216,11 +237,64 @@ final class UserFacingLiteralGuardTest extends TestCase
             return false;
         }
         if ($toks[$i]['id'] === T_STRING) {
-            return $toks[$i]['text'] === 'Lang';
+            return $toks[$i]['text'] === 'Lang' && !self::importsForeignLang($toks);
+        }
+        if ($toks[$i]['id'] === T_NAME_FULLY_QUALIFIED) {
+            return $toks[$i]['text'] === '\\' . self::BUNDLE_LANG;
+        }
+        if ($toks[$i]['id'] === T_NAME_QUALIFIED) {
+            return $toks[$i]['text'] === self::BUNDLE_LANG || $toks[$i]['text'] === 'Bundles\\Discord\\Lang';
         }
 
-        return \in_array($toks[$i]['id'], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
-            && \preg_match('/(^|\\\\)Lang$/', $toks[$i]['text']) === 1;
+        return false;
+    }
+
+    /**
+     * True when a `use` statement brings a class named `Lang` into the file
+     * from anywhere other than the bundle, so a bare `Lang::t` names that class.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function importsForeignLang(array $toks): bool
+    {
+        foreach ($toks as $i => $tok) {
+            if ($tok['id'] !== T_USE || !isset($toks[$i + 1])) {
+                continue;
+            }
+            $name = $toks[$i + 1];
+            if (!\in_array($name['id'], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+            $fqn = \ltrim($name['text'], '\\');
+            if (($fqn === 'Lang' || \str_ends_with($fqn, '\\Lang')) && $fqn !== self::BUNDLE_LANG) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The key of a `Lang::t` call is text a user reads when the catalog misses
+     * it, so a literal key outside `channels.discord.*` is a hit. A variable or
+     * call as the key is not a literal and is left alone.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function langKeyHit(array $toks, int $k): ?string
+    {
+        $j = $k;
+        while (isset($toks[$j]) && $toks[$j]['id'] === '"') {
+            ++$j;
+        }
+        if (!isset($toks[$j]) || !\in_array($toks[$j]['id'], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+            return null;
+        }
+        if (\str_starts_with(\ltrim($toks[$j]['text'], '\'"'), 'channels.discord.')) {
+            return null;
+        }
+
+        return $toks[$j]['line'] . ': ' . $toks[$j]['text'];
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
@@ -287,6 +361,10 @@ final class UserFacingLiteralGuardTest extends TestCase
         $depth = 0;
         for ($i = $from; $i < $to; ++$i) {
             if (self::isLangClass($toks, $i) && self::is($toks, $i + 1, T_DOUBLE_COLON) && self::is($toks, $i + 2, T_STRING, 't') && self::is($toks, $i + 3, '(')) {
+                $key = self::langKeyHit($toks, $i + 4);
+                if ($key !== null) {
+                    $hits[] = $key;
+                }
                 $i = self::closeIndex($toks, $i + 3);
 
                 continue;
@@ -302,7 +380,7 @@ final class UserFacingLiteralGuardTest extends TestCase
                 continue;
             }
             $literal = $toks[$i]['id'] === T_CONSTANT_ENCAPSED_STRING || $toks[$i]['id'] === T_ENCAPSED_AND_WHITESPACE;
-            if (!$literal || \preg_match('/[A-Za-z]/', $toks[$i]['text']) !== 1 || self::isSubscriptKey($toks, $i)) {
+            if (!$literal || !self::hasWords($toks[$i]['text']) || self::isSubscriptKey($toks, $i)) {
                 continue;
             }
             if ($topLevelOnly && $depth !== 0) {
@@ -315,6 +393,15 @@ final class UserFacingLiteralGuardTest extends TestCase
         }
 
         return $hits;
+    }
+
+    /**
+     * A letter in the text the string spells, so an escape such as `"\n"` (a
+     * separator, not words) does not count as English.
+     */
+    private static function hasWords(string $literal): bool
+    {
+        return \preg_match('/[A-Za-z]/', (string) \preg_replace('/\\\\[nrtvf0e\\\\$"\']/', '', $literal)) === 1;
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
