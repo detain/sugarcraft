@@ -24,7 +24,8 @@
     },
     "require": {
         "php": "^8.3",
-        "composer-plugin-api": "^2.0"
+        "composer-plugin-api": "^2.0",
+        "sugarcraft/sugar-plugins": "@dev"
     },
     "require-dev": {
         "composer/composer": "^2.7",

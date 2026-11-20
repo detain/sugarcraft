@@ -82,10 +82,33 @@ project tier, then the user tier, then the directory Composer recorded for the
 package. `composer remove` therefore still deletes a
 plugin staged under a section that has since been broken.
 
+## Provenance record
+
+Each successful install and update writes `.sugar-plugin-source.json` into the staged
+directory, beside the package's files. It is read back through `SugarCraft\Plugins\Provenance\SourceRecord`
+and carries:
+
+| Field | Value |
+|---|---|
+| `marketplace` | `composer` |
+| `name` | the staged directory name (`candy-discord` for `sugarcraft/candy-discord`) |
+| `sourceType` | `composer` |
+| `repo` | the Composer package name |
+| `url`, `sha` | empty |
+| `version` | the resolved package version; an update rewrites it |
+| `installedAt` | the Unix time of the install or update |
+
+The file name is not `.candy-code-source.json`, so a marketplace record already in a
+bundle directory is never overwritten. The record is a description of what the
+installer staged, not a trust decision: a project-tier bundle still loads under no
+user-tier name, and candy-code's trust list is untouched. A record that cannot be
+written rejects the install.
+
 ## What the installer does, and does not do
 
-- It stages files only. Composer's downloader fills the directory. `composer remove`
-  deletes it, and `composer update` writes the new version to the same place.
+- It stages files, and the provenance record above. Composer's downloader fills
+  the directory. `composer remove` deletes it, and `composer update` writes the new
+  version to the same place.
 - One exception outside the staged tree: a package's declared `bin` entries are
   linked into the project's `vendor/bin` on install and update, and the links are
   removed on remove, as Composer does for any package. The links point into the

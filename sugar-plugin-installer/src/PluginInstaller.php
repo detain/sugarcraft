@@ -10,6 +10,7 @@ use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
 use Composer\Util\Filesystem;
 use React\Promise\PromiseInterface;
+use SugarCraft\Plugins\Provenance\SourceRecord;
 
 /**
  * Stages `sugar-plugin` packages to the scope the root project selects.
@@ -24,6 +25,17 @@ use React\Promise\PromiseInterface;
 final class PluginInstaller extends LibraryInstaller
 {
     public const PACKAGE_TYPE = 'sugar-plugin';
+
+    /**
+     * The provenance record each install leaves inside its bundle directory. The
+     * name is a dotfile of its own: candy-code's marketplace record is
+     * `.candy-code-source.json`, and a Composer install must never overwrite it.
+     */
+    public const SOURCE_RECORD_FILE = '.sugar-plugin-source.json';
+
+    private const SOURCE_MARKETPLACE = 'composer';
+
+    private const SOURCE_TYPE = 'composer';
 
     /**
      * True while a staging call (download, install, update) runs. Composer reads
@@ -351,9 +363,9 @@ final class PluginInstaller extends LibraryInstaller
      */
     public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
     {
-        $this->configuredPath($target);
+        $path = $this->configuredPath($target);
 
-        return $this->stage(fn () => parent::update($repo, $initial, $target));
+        return $this->recordSource($this->stage(fn () => parent::update($repo, $initial, $target)), $target, $path);
     }
 
     /**
@@ -401,7 +413,57 @@ final class PluginInstaller extends LibraryInstaller
             ));
         }
 
-        return $this->stage(fn () => parent::install($repo, $package));
+        return $this->recordSource($this->stage(fn () => parent::install($repo, $package)), $package, $path);
+    }
+
+    /**
+     * Writes the provenance record once the staged tree is on disk. Composer's
+     * install and update return a promise that settles after the download, so
+     * the record is written in its success branch: a failed download leaves no
+     * record behind. A record that cannot be written rejects the install, since
+     * a tree without its record is a tree nothing can attribute.
+     *
+     * @param mixed $staged the value parent::install() or parent::update() returned
+     */
+    private function recordSource(mixed $staged, PackageInterface $package, string $path): mixed
+    {
+        if (!$staged instanceof PromiseInterface) {
+            $this->writeSourceRecord($package, $path);
+
+            return $staged;
+        }
+
+        return $staged->then(function (mixed $value) use ($package, $path): mixed {
+            $this->writeSourceRecord($package, $path);
+
+            return $value;
+        });
+    }
+
+    /**
+     * The record names the bundle by its directory and the package by its
+     * Composer name, and carries the resolved version, so an update rewrites it
+     * and the record never keeps the version it was first installed at.
+     *
+     * @throws \RuntimeException when the record cannot be written into the staged tree
+     */
+    private function writeSourceRecord(PackageInterface $package, string $path): void
+    {
+        $record = SourceRecord::fromTrustedRecord(
+            self::SOURCE_MARKETPLACE,
+            basename($path),
+            self::SOURCE_TYPE,
+            $package->getPrettyName(),
+            '',
+            '',
+            time(),
+            $package->getPrettyVersion(),
+        );
+
+        $failure = $record->write($path, self::SOURCE_RECORD_FILE);
+        if ($failure !== null) {
+            throw new \RuntimeException('sugar-plugin-installer: ' . $failure . '.');
+        }
     }
 
     /**
