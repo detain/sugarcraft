@@ -229,11 +229,11 @@ final readonly class ScriptHook implements BoundedHookInterface
      * re-checked.
      *
      * The wait used to be NULL, i.e. zero wakeups for the whole of a hook that
-     * is thinking, and this trades that for five wakeups a second — the same
-     * trade {@see \SugarCraft\Code\Commands\CommandSpec::runShellSubstitution()}
-     * makes at the same 200ms, and for the same reason: a hook that produces no
-     * output at all has to expire ON TIME rather than on its first byte, and
-     * nothing wakes the select when the only thing that changed is the clock.
+     * is thinking, and this trades that for five wakeups a second. The same
+     * slice is shared with {@see \SugarCraft\Code\Commands\StatusLineCommand},
+     * for the same reason: a hook that produces no output at all has to expire
+     * ON TIME rather than on its first byte, and nothing wakes the select when
+     * the only thing that changed is the clock.
      */
     private const DRAIN_SLICE_SECONDS = 0.2;
 

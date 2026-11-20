@@ -182,6 +182,30 @@ final class GitCommandHandlersProcessTest extends TestCase
     }
 
     /**
+     * A hook that exits on its own but leaves a backgrounded child holding git's
+     * pipes: the commit completes once the hook is gone, not at the 5 s bound.
+     * The test kills that child through its pid file so it does not outlive the run.
+     */
+    public function testABackgroundedHookChildDoesNotStallTheCommitToItsTimeout(): void
+    {
+        $pidFile = $this->tempDir . '/background.pid';
+        $this->installPreCommitHook("sleep 20 &\necho \$! > " . escapeshellarg($pidFile) . "\nexit 0");
+        $handlers = new GitCommandHandlers($this->repoPath, timeoutSeconds: 5.0);
+
+        $started = microtime(true);
+        $result = $handlers->gitCommit('background hook commit');
+        $elapsed = microtime(true) - $started;
+
+        if (is_file($pidFile) && function_exists('posix_kill')) {
+            posix_kill((int) trim((string) file_get_contents($pidFile)), 9);
+        }
+
+        $this->assertTrue($result->isSuccess(), 'commit failed: ' . substr((string) $result->error, -300));
+        $this->assertLessThan(4.0, $elapsed, 'a hook that has already exited must not hold the commit to its 5 s bound');
+        $this->assertSame('background hook commit', $this->headSubject());
+    }
+
+    /**
      * Audit R18: the bound is configurable from `.mcp.json`. A `git` entry's
      * `timeout` reaches the handlers McpClient builds, so a hook that sleeps
      * well past it is killed at the configured second — before the fix the
