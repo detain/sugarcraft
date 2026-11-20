@@ -253,22 +253,29 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * AGAINST DIFFERENT REPORTS. That map is checked against the narrow report,
      * and a wide-only pair is not in it, so a row there would be stale on
      * arrival. This map is checked against the wide report and the narrow one
-     * is never consulted for its rows. Keyed by helper name, as the other maps
-     * are; the reverse check in that test fails a row whose name no longer has
+     * is never consulted for its rows. Keyed by helper name, then by the relative
+     * path of the ONE COPY the reason is about. A row argues that copy's
+     * divergence, so a wide-only, non-receiver pair is accepted only when one of
+     * its two files is that copy; a divergence between two other copies of the
+     * same name is never silenced by a row that argues a different copy.
+     *
+     * The reverse check in that test fails a row whose copy no longer appears in
      * a wide-only, non-receiver pair.
      *
-     * @var array<string,string>
+     * @var array<string,array<string,string>>
      */
     private const ACCEPTED_WIDE_DIVERGENCE = [
-        'remove' =>
-            'THE ONE COPY WHOSE TREE CAN HOLD A NAMED PIPE. SessionHostCommandsTest::remove() '
-            . 'unlinks anything that is not a directory, because the shell\'s `.in` input is a '
-            . 'FIFO, which is_file() does not match: the earlier `is_link() || is_file()` leaf '
-            . 'test fell through to scandir() on a non-directory and PHPUnit reported a warning '
-            . 'per test (shard 16, under failOnWarning). The other copies of remove() only ever '
-            . 'see regular files and symlinks, so their `is_file()` leaf test is correct for them '
-            . 'and they are deliberately unchanged. A FIFO appearing in one of their trees would '
-            . 'be a new fact about that copy, to be argued here again.',
+        'remove' => [
+            'Host/SessionHostCommandsTest.php' =>
+                'THE ONE COPY WHOSE TREE CAN HOLD A NAMED PIPE. SessionHostCommandsTest::remove() '
+                . 'unlinks anything that is not a directory, because the shell\'s `.in` input is a '
+                . 'FIFO, which is_file() does not match: the earlier `is_link() || is_file()` leaf '
+                . 'test fell through to scandir() on a non-directory and PHPUnit reported a warning '
+                . 'per test (shard 16, under failOnWarning). The other copies of remove() only ever '
+                . 'see regular files and symlinks, so their `is_file()` leaf test is correct for them '
+                . 'and they are deliberately unchanged. A FIFO appearing in one of their trees would '
+                . 'be a new fact about that copy, to be argued here again.',
+        ],
     ];
 
     /**
@@ -1371,23 +1378,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         [$narrow] = self::driftReport($sources);
         [$wide, , , $wideCores] = self::driftReport($sources, [\T_PRIVATE], self::DRIFT_BOUND + 1);
 
-        $unargued = [];
-        $wideOnly = [];
-        foreach ($wideCores as $name => $pairs) {
-            if (isset($narrow[$name])) {
-                continue;
-            }
-            foreach ($pairs as [$left, $right]) {
-                if (self::isReceiverSpelling($left) && self::isReceiverSpelling($right)) {
-                    continue;
-                }
-                $wideOnly[$name] = true;
-                if (isset(self::ACCEPTED_WIDE_DIVERGENCE[$name])) {
-                    continue;
-                }
-                $unargued[] = $name . ': [' . implode(' ', $left) . '] vs [' . implode(' ', $right) . ']';
-            }
-        }
+        [$unargued, $wideOnly] = self::unarguedWideDivergences(
+            $narrow,
+            $wide,
+            $wideCores,
+            self::ACCEPTED_WIDE_DIVERGENCE,
+        );
 
         self::assertSame(
             [],
@@ -1407,8 +1403,8 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         // pair has been fixed or consolidated describes nothing and must go.
         self::assertSame(
             [],
-            array_values(array_diff(array_keys(self::ACCEPTED_WIDE_DIVERGENCE), array_keys($wideOnly))),
-            'an ACCEPTED_WIDE_DIVERGENCE row whose helper no longer has a wide-only, non-receiver '
+            self::staleWideDivergenceRows(self::ACCEPTED_WIDE_DIVERGENCE, $wideOnly),
+            'an ACCEPTED_WIDE_DIVERGENCE row whose copy no longer has a wide-only, non-receiver '
                 . 'pair in the tree. The copies have been consolidated or brought back into '
                 . 'line, so the row is history and must be deleted rather than kept.',
         );
@@ -1425,6 +1421,135 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'bound parameter has stopped being honoured — in which case the assertion '
                 . 'above is measuring nothing — or every pair in this suite is now exactly one '
                 . 'token apart, which would be a fact worth writing down rather than a green',
+        );
+    }
+
+    /**
+     * The wide-only, non-receiver pairs that no ACCEPTED_WIDE_DIVERGENCE row
+     * argues, and every copy that appears in a wide-only pair.
+     *
+     * A pair is argued only by a row for its own helper name that names one of
+     * the pair's two files. Matching on the name alone is what this used to do,
+     * and it let one row silence every copy of `remove()`: a divergence in
+     * ApplyPatchTest::remove() would be filed under SessionHostCommandsTest's
+     * reason without anybody having argued it.
+     *
+     * @param array<string,mixed>                                       $narrow
+     * @param array<string,list<string>>                                $wide       name => pair descriptions, parallel to $wideCores
+     * @param array<string,list<array{list<string>,list<string>}>>      $wideCores
+     * @param array<string,array<string,string>>                        $accepted
+     *
+     * @return array{list<string>,array<string,array<string,true>>}
+     *         unargued pair descriptions, and name => file => true for every
+     *         file that sits in a wide-only, non-receiver pair
+     */
+    private static function unarguedWideDivergences(array $narrow, array $wide, array $wideCores, array $accepted): array
+    {
+        $unargued = [];
+        $wideOnly = [];
+
+        foreach ($wideCores as $name => $pairs) {
+            if (isset($narrow[$name])) {
+                continue;
+            }
+            foreach ($pairs as $index => [$left, $right]) {
+                if (self::isReceiverSpelling($left) && self::isReceiverSpelling($right)) {
+                    continue;
+                }
+
+                // The description names both files, which is what a reader of a
+                // red needs to find the copy that has drifted.
+                $description = $name . ': ' . ($wide[$name][$index] ?? 'no description');
+                $files = self::filesOf($wide[$name][$index] ?? '');
+                if ($files === null) {
+                    // Fail closed: a pair whose files cannot be read cannot be argued.
+                    $unargued[] = $description;
+
+                    continue;
+                }
+                foreach ($files as $file) {
+                    $wideOnly[$name][$file] = true;
+                }
+
+                if (isset($accepted[$name][$files[0]]) || isset($accepted[$name][$files[1]])) {
+                    continue;
+                }
+                $unargued[] = $description;
+            }
+        }
+
+        return [$unargued, $wideOnly];
+    }
+
+    /**
+     * Rows of ACCEPTED_WIDE_DIVERGENCE whose copy is in no wide-only pair.
+     *
+     * @param array<string,array<string,string>> $accepted
+     * @param array<string,array<string,true>>   $wideOnly
+     *
+     * @return list<string>
+     */
+    private static function staleWideDivergenceRows(array $accepted, array $wideOnly): array
+    {
+        $stale = [];
+        foreach ($accepted as $name => $rows) {
+            foreach (array_keys($rows) as $file) {
+                if (!isset($wideOnly[$name][$file])) {
+                    $stale[] = $name . ' @ ' . $file;
+                }
+            }
+        }
+
+        return $stale;
+    }
+
+    /**
+     * A ROW ARGUES ONE COPY, NOT A WHOLE HELPER NAME. Two copies of `remove()`
+     * here diverge from the third by the same two non-receiver tokens. Only the
+     * copy that the row names may be silenced; the other pair must come back
+     * unargued, because a row keyed by name alone would have accepted it.
+     */
+    public function testAWideRowArguesOnlyTheCopyItNames(): void
+    {
+        $base = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function remove(string $path): void
+                {
+                    $slack = -1;
+                    unlink($path);
+                }
+            }
+            PHP;
+        $drifted = str_replace('= -1;', '= +2;', $base);
+
+        $sources = [
+            'Host/SessionHostCommandsTest.php' => $drifted,
+            'Tools/ApplyPatchTest.php' => $base,
+            'Chat/OtherTest.php' => $drifted,
+        ];
+
+        [$narrow] = self::driftReport($sources);
+        [$wide, , , $wideCores] = self::driftReport($sources, [\T_PRIVATE], self::DRIFT_BOUND + 1);
+
+        $accepted = ['remove' => ['Host/SessionHostCommandsTest.php' => 'the argued copy']];
+        [$unargued, $wideOnly] = self::unarguedWideDivergences($narrow, $wide, $wideCores, $accepted);
+
+        self::assertCount(
+            1,
+            $unargued,
+            'the pair that names the argued copy was not accepted, or the pair that names neither '
+                . 'file was silenced by a row for the same helper name',
+        );
+        self::assertStringContainsString('Tools/ApplyPatchTest.php', $unargued[0]);
+        self::assertStringContainsString('Chat/OtherTest.php', $unargued[0]);
+        self::assertSame([], self::staleWideDivergenceRows($accepted, $wideOnly));
+
+        // The reverse check names a row whose copy sits in no wide-only pair.
+        self::assertSame(
+            ['remove @ Chat/GoneTest.php'],
+            self::staleWideDivergenceRows(['remove' => ['Chat/GoneTest.php' => 'gone']], $wideOnly),
         );
     }
 
