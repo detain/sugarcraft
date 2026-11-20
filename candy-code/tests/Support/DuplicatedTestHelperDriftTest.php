@@ -243,6 +243,35 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     ];
 
     /**
+     * Same-named private helpers whose copies differ in a way that only the
+     * bound-two report sees and that is not a receiver spelling, each with the
+     * reason. The rows are the argued answer that
+     * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}
+     * asks for when it reds.
+     *
+     * A SEPARATE MAP FROM {@see ACCEPTED_DIVERGENCE} BECAUSE THE TWO ARE CHECKED
+     * AGAINST DIFFERENT REPORTS. That map is checked against the narrow report,
+     * and a wide-only pair is not in it, so a row there would be stale on
+     * arrival. This map is checked against the wide report and the narrow one
+     * is never consulted for its rows. Keyed by helper name, as the other maps
+     * are; the reverse check in that test fails a row whose name no longer has
+     * a wide-only, non-receiver pair.
+     *
+     * @var array<string,string>
+     */
+    private const ACCEPTED_WIDE_DIVERGENCE = [
+        'remove' =>
+            'THE ONE COPY WHOSE TREE CAN HOLD A NAMED PIPE. SessionHostCommandsTest::remove() '
+            . 'unlinks anything that is not a directory, because the shell\'s `.in` input is a '
+            . 'FIFO, which is_file() does not match: the earlier `is_link() || is_file()` leaf '
+            . 'test fell through to scandir() on a non-directory and PHPUnit reported a warning '
+            . 'per test (shard 16, under failOnWarning). The other copies of remove() only ever '
+            . 'see regular files and symlinks, so their `is_file()` leaf test is correct for them '
+            . 'and they are deliberately unchanged. A FIFO appearing in one of their trees would '
+            . 'be a new fact about that copy, to be argued here again.',
+    ];
+
+    /**
      * Same-named private helpers whose BODIES are byte-identical and whose
      * PARAMETER LISTS are not, each with the reason.
      *
@@ -1343,12 +1372,17 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         [$wide, , , $wideCores] = self::driftReport($sources, [\T_PRIVATE], self::DRIFT_BOUND + 1);
 
         $unargued = [];
+        $wideOnly = [];
         foreach ($wideCores as $name => $pairs) {
             if (isset($narrow[$name])) {
                 continue;
             }
             foreach ($pairs as [$left, $right]) {
                 if (self::isReceiverSpelling($left) && self::isReceiverSpelling($right)) {
+                    continue;
+                }
+                $wideOnly[$name] = true;
+                if (isset(self::ACCEPTED_WIDE_DIVERGENCE[$name])) {
                     continue;
                 }
                 $unargued[] = $name . ': [' . implode(' ', $left) . '] vs [' . implode(' ', $right) . ']';
@@ -1362,10 +1396,21 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'two files spell their receiver. That is a copied helper two edits apart, '
                 . 'which is this file\'s own subject sitting just outside its bound and '
                 . 'invisible to every check above. Read the pair: if it is a real drift, fix it '
-                . 'or record it, and if the shape recurs, raise DRIFT_BOUND and argue the rows '
-                . 'the wide run brings with it. Do NOT add the name to ACCEPTED_DIVERGENCE — '
-                . 'that map is checked against the NARROW report and a bound-two pair is not in '
-                . 'it, so the row would be stale on arrival.',
+                . 'or record it in ACCEPTED_WIDE_DIVERGENCE with the reason, and if the shape '
+                . 'recurs, raise DRIFT_BOUND and argue the rows the wide run brings with it. Do '
+                . 'NOT add the name to ACCEPTED_DIVERGENCE — that map is checked against the '
+                . 'NARROW report and a bound-two pair is not in it, so the row would be stale on '
+                . 'arrival.',
+        );
+
+        // The reverse direction, as with every map in this file: a row whose
+        // pair has been fixed or consolidated describes nothing and must go.
+        self::assertSame(
+            [],
+            array_values(array_diff(array_keys(self::ACCEPTED_WIDE_DIVERGENCE), array_keys($wideOnly))),
+            'an ACCEPTED_WIDE_DIVERGENCE row whose helper no longer has a wide-only, non-receiver '
+                . 'pair in the tree. The copies have been consolidated or brought back into '
+                . 'line, so the row is history and must be deleted rather than kept.',
         );
 
         // RULE 15, ONE LEVEL DOWN (E228): the assertion above is an absence, and
