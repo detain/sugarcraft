@@ -686,6 +686,84 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression: a wrapped shell that exits before the deadline with no spawn-time
+     * group left its background job alive. The group was read only while the shell
+     * lived, and a shell that exited after several polls was never read, so the
+     * deadline kill found no group and signalled nothing.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsAfterAPoll(): void
+    {
+        $this->assertGrandchildKilledWhenShellExits('sleep 31 & echo $!; sleep 0.2; exit 0', 1.0);
+    }
+
+    /**
+     * Regression: the shell exits before the first status poll, so no live read can
+     * latch the group. The setsid wrapper leads a group whose id is its own pid, and
+     * the handle still reports that pid, so the deadline kill reaches the job.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsBeforeAnyPoll(): void
+    {
+        $this->assertGrandchildKilledWhenShellExits('sleep 31 & echo $!; exit 0', 0.5);
+    }
+
+    /**
+     * Runs a setsid-wrapped shell with no spawn-time group, past its deadline, and
+     * asserts the background job it printed is gone once the launch settles.
+     */
+    private function assertGrandchildKilledWhenShellExits(string $script, float $timeout): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', $script],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            $timeout,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
+            'the kill must reach the background job the exited shell left in its group',
+        );
+    }
+
+    /**
      * Gone means signal-refused or a zombie. The grandchild is reparented to PID 1 on
      * kill, and a PID 1 that does not reap leaves it a zombie, which
      * BoundedShutdown::pidExited() would count as alive. Mirrors the candy-code

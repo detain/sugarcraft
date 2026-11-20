@@ -83,6 +83,9 @@ final class ChildRunLaunch
      */
     private ?int $liveGroup = null;
 
+    /** The child's own pid, read from the live handle at start(); a setsid wrapper's group id. */
+    private int $spawnPid = 0;
+
     /**
      * Last sign of life: a chunk read from either stream, or a stdin write the child
      * accepted. The idle budget counts from here, as ChildRun::run() counts it.
@@ -136,6 +139,8 @@ final class ChildRunLaunch
 
     public function start(): void
     {
+        $this->spawnPid = (int) proc_get_status($this->proc)['pid'];
+        $this->latchLiveGroup();
         $this->lastActivityAt = Clock::monotonicSeconds();
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
         $this->timers[] = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, fn () => $this->checkExit());
@@ -356,6 +361,8 @@ final class ChildRunLaunch
             return true;
         }
 
+        // Before the status read: the group is only readable while the leader lives.
+        $this->latchLiveGroup();
         $status = proc_get_status($this->proc);
         if ($status['running'] !== false) {
             return false;
@@ -432,10 +439,11 @@ final class ChildRunLaunch
     }
 
     /**
-     * The group the kill rungs signal: the spawn-time one, else the group a live
-     * child leads now. ChildRun::launch() reads the group before the setsid wrapper
-     * has become a leader, so the snapshot can be null for a containment-wrapped
-     * child. ChildRun::killGroup() takes the same live fallback on the blocking path.
+     * The group the kill rungs signal: the spawn-time one, else the group the live
+     * child led when it was last seen alive. ChildRun::launch() reads the group before
+     * the setsid wrapper has become a leader, so the snapshot can be null for a
+     * containment-wrapped child. ChildRun::killGroup() takes the same live fallback
+     * on the blocking path.
      */
     private function killGroup(): ?int
     {
@@ -443,11 +451,28 @@ final class ChildRunLaunch
             return $this->groupPid;
         }
 
-        if (!$this->exited) {
-            $this->liveGroup = Containment::groupId($this->proc) ?? $this->liveGroup;
+        $this->latchLiveGroup();
+        if ($this->liveGroup !== null) {
+            return $this->liveGroup;
         }
 
-        return $this->liveGroup;
+        // A shell that exits before any live read leaves no group to read, yet a
+        // setsid wrapper leads a group whose id is its own pid, which the handle keeps.
+        return $this->exited && $this->spawnPid > 0 ? $this->spawnPid : null;
+    }
+
+    /**
+     * Latches the group a live child leads. Run from start() and from every status
+     * poll before the exit is recorded: a shell that backgrounds a job and exits
+     * leaves no live group to read at the deadline, so the group must be taken while
+     * the leader still leads it. A reaped leader reads as no group, and a null read
+     * keeps the earlier latch.
+     */
+    private function latchLiveGroup(): void
+    {
+        if ($this->groupPid === null && $this->liveGroup === null && !$this->exited) {
+            $this->liveGroup = Containment::groupId($this->proc);
+        }
     }
 
     /**
