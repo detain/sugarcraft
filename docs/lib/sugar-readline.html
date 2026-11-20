@@ -161,6 +161,7 @@
             <li class="toc-h3"><a href="#tasks-and-recipes">Tasks and recipes</a></li>
             <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#theming-and-styles">Theming and styles</a></li>
             <li class="toc-h3"><a href="#keys-and-keybindings">Keys and keybindings</a></li>
             <li class="toc-h3"><a href="#terminal-mode">Terminal mode</a></li>
             <li class="toc-h3"><a href="#how-it-works">How it works</a></li>
@@ -292,6 +293,11 @@ $prompt = TextPrompt::new('> ')-&gt;withMode(new ViMode());</code></pre>
     <tr><td><code>Readline</code> output argument</td><td>stream, null or omitted</td><td>STDOUT when omitted</td><td>Where <code>run()</code> paints. An explicit <code>null</code> paints nothing and only advances state.</td></tr>
     <tr><td><code>NO_COLOR</code> environment variable</td><td>string</td><td>unset</td><td>Any non-empty value removes all color and style decoration. Prompts print as plain text.</td></tr>
     </table>
+
+    <h3 id="theming-and-styles" style="margin-top: 40px;">Theming and styles</h3>
+    <p>Every prompt paints with one shared SGR palette, the constants on <code>Styles</code>: <code>LABEL</code> (bold cyan), <code>CURSOR</code> (reverse video), <code>ERROR</code> (red), <code>COMPLETION</code> (bright black) and <code>SELECTED</code> (bold green). Each slot has a matching setter that accepts either a raw SGR code string or a sugar-style <code>Style</code>: <code>withLabelStyle()</code>, <code>withCursorStyle()</code>, <code>withErrorStyle()</code> and <code>withCompletionStyle()</code> on the text prompt, and <code>withSelectedStyle()</code> on the confirmation prompt.</p>
+    <p>A <code>Style</code> passed to a slot is collapsed to its code string by <code>Styles::code()</code>. Only color and text decoration (bold, reverse and similar) have a code-string form. A style that sets padding, margin, border, width, height, a transform or a hyperlink throws an <code>InvalidArgumentException</code>, because it cannot live inside one inline slot. Set <code>NO_COLOR</code> to strip all decoration at once.</p>
+    <p>Chrome text such as the filter bar, the page footer, Yes/No, the search indicator and the default validation message comes from the <code>lang/</code> catalog under the <code>readline</code> namespace. Your labels, choices and validator messages are passed through as written.</p>
 
     <h3 id="keys-and-keybindings" style="margin-top: 40px;">Keys and keybindings</h3>
     <p>Bindings fire from both raw control bytes and the symbolic names, so <code>Key::CtrlA</code>, <code>'ctrl_a'</code> and byte <code>0x01</code> all mean the same thing. <code>Key</code> lists the primary bindings; it is not an exhaustive list of every sequence a terminal can send.</p>
