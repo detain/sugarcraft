@@ -19,25 +19,22 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * returned after **7.77s** — it did NOT orphan the child, it blocked for the
  * child's whole remaining lifetime. Two places in this package had already
  * grown the escalation independently
- * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
- * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()},
- * each with its own private `waitForExit()` and its own copy of the three
+ * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
+ * escalation, each with its own private `waitForExit()` and its own copy of the three
  * constants), and E366's sweep found three more call sites needing it. Five
  * hand-rolled copies of a signal-escalation ladder is how one of them ends up
  * with the poll interval or the grace budget subtly different, so the ladder
  * lives here once.
  *
  * THE TWO EXISTING COPIES ARE MIGRATED — E407 folded both
- * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
- * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()}
- * onto the ladder here (their private `waitForExit()`s and grace constants are
+ * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
+ * escalation onto the ladder here (their private `waitForExit()`s and grace constants are
  * gone; the budgets they documented are THIS class's constants now), alongside
  * E366's newer consumers. The stdio transport took {@see terminateAndClose()}
  * until phase-2a moved it into `sugarcraft/sugar-mcp-client`, where the teardown now
  * goes through sugar-core's BoundedShutdown — the {@see \SugarCraft\Code\MCP\StdioMcpServer}
- * adapter contributes no ladder of its own. StreamingCommandBackend takes
- * {@see terminateAndAwaitExit()}, because its caller reaps the handle itself
- * to read the child's exit status.
+ * adapter contributes no ladder of its own. The streaming backend now runs its child
+ * through sugar-async's ChildRun, so its kill ladder is the shared one there.
  *
  * E676 FOLDED THE LAST THREE PRIVATE LADDERS. ScriptHook,
      * StatusLineCommand and BackgroundSessionRunner now escalate through
@@ -105,9 +102,8 @@ final class ProcessReaper
      * SIGTERM, poll, signal 9, poll — and STOP THERE: never `proc_close()`.
      *
      * THE VARIANT FOR THE CALLER THAT REAPS ITSELF.
-     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::finish()} closes
-     * the handle on BOTH the expired and the completed path and reads the exit
-     * status out of `proc_close()`'s return; giving it {@see terminateAndClose()}
+     * A caller that closes its own handle and reads the exit status out of
+     * `proc_close()`'s return needs this shape: giving it {@see terminateAndClose()}
      * would double-close (a TypeError on the consumed resource) and hide the
      * status. So the escalation lives here and the reap stays there.
      *

@@ -477,11 +477,12 @@ final class ChildRunLaunch
         $staged = $this->stagedStdin;
         if ($this->exited) {
             // Seen gone by the status poll, so proc_close() cannot wait. The child is
-            // reaped, so a failed removal of the staged payload has nothing to retry.
+            // reaped and no longer holds the staged payload, but a handle the OS has
+            // not released yet can still refuse the unlink: that is retried on the loop.
             $reaped = proc_close($this->proc);
             $code ??= $reaped;
             if ($staged !== null) {
-                StagedStdin::removeOrRetry($staged, true);
+                StagedStdin::removeAfterExit($this->loop, $staged);
             }
         } else {
             // Survived the kill budget: a child that still holds the staged payload

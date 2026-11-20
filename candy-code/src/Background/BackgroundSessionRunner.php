@@ -1451,7 +1451,7 @@ final class BackgroundSessionRunner
      * the constant here would make the shape wrong to copy. Same literal, and
      * the same reason, as
      * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
-     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()}.
+     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndAwaitExit()}.
      *
      * `\SIGTERM` IS NAMED PLAINLY, and that is the one story this file tells
      * about ext-pcntl rather than two. It was written `\defined('SIGTERM') ?
