@@ -906,6 +906,20 @@
                 "dead": []
             }
         },
+        "sugar-plugins": {
+            "readme": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts, the plugin launch context, the prompt-fence escape, and the generic loader, quarantine ledger, registry and manifest reader. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts"
+                ],
+                "dead": []
+            }
+        },
         "sugar-serve-protocol": {
             "readme": {
                 "needles": [

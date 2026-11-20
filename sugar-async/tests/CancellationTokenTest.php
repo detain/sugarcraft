@@ -565,4 +565,28 @@ final class CancellationTokenTest extends TestCase
         $this->assertCount(1, $notices);
         $this->assertStringStartsWith('sugar-async: cancellation callback failed: late hook exploded', $notices[0]);
     }
+
+    /**
+     * The callback registered first unsubscribes the second during the same fire. The
+     * fire must honor that: the second callback is dropped, not run from a snapshot.
+     */
+    public function testAnEarlierCallbackUnsubscribingALaterOneStopsItInTheSameFire(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $laterRan = false;
+        $later = null;
+        $token->onCancel(static function () use (&$later): void {
+            $later?->unsubscribe();
+        });
+        $later = $token->onCancel(static function () use (&$laterRan): void {
+            $laterRan = true;
+        });
+
+        $source->cancel();
+
+        $this->assertFalse($laterRan, 'a callback unsubscribed by an earlier callback of the same fire must not run');
+        $this->assertFalse($later->isActive());
+    }
 }

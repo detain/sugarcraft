@@ -259,7 +259,6 @@ final class CmdMediaLangCatalogueTest extends TestCase
         'media.progress' => 'src/Observability/OtlpEncoder.php: an OTLP attribute name',
         'media.eta_seconds' => 'src/Observability/OtlpEncoder.php: an OTLP attribute name',
         'media.fetch' => 'src/Protocol/Schema/MethodSchemas.php: a protocol method name',
-        'cmd.exe' => 'src/Backend/CommandBackend.php: the Windows shell fallback program name, not a catalogue key',
     ];
 
     public function testEveryCatalogueShapedLiteralWithALiveFamilyHasAnEnglishEntry(): void
