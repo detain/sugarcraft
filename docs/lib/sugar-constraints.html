@@ -179,7 +179,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
+<p class="lede" style="margin-top: 28px;">A <a href="https://github.com/ratatui/ratatui">ratatui</a>-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-constraints</code></pre>
@@ -344,7 +344,7 @@ vendor/bin/phpunit</code></pre>
     </ul>
 
     <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
-    <p>The layout model follows ratatui's constraint system. Badros, Van den Broucke and Borning's Cassowary paper is the historical source of the deprecated shim, but this port implements neither the simplex nor the strength and priority vocabulary.</p>
+    <p>The layout model follows ratatui's constraint system. Badros, Van den Broucke and Borning's Cassowary paper is the historical source of the deprecated shim, but this port implements neither the simplex nor the strength and priority vocabulary. The port mapping is in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>, where the SugarConstraints row carries its port status.</p>
 <table class="api-table">
 <tr><th>ratatui</th><th>SugarConstraints</th></tr>
 <tr><td><code>Constraint::Length</code></td><td><code>Constraint::length()</code>, class <code>Length</code></td></tr>
