@@ -199,7 +199,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
     }
 
     /**
-     * The spawn both shell-out tiers share: the command's argv behind the
+     * The spawn both shell-out tiers share: the command's argv (a string on Windows is its raw line) behind the
      * containment wrapper, the history on stdin, no byte cap and the no-deadline
      * stand-in. Each caller picks its own exit grace, idle budget and hooks, so
      * {@see StreamingCommandBackend} starts its child exactly as this class does.
@@ -208,11 +208,12 @@ final class CommandBackend implements Backend, TracksActiveChildren
      */
     public static function childRun(string|array $command, string $payload): ChildRun
     {
-        $argv = self::shellArgv($command, PHP_OS_FAMILY === 'Windows');
-        /** @var list<string> $argv */
-        $argv = array_values((array) ProcessContainment::spawnSpec($argv));
+        $spec = ProcessContainment::spawnSpec(self::shellSpec($command, PHP_OS_FAMILY === 'Windows'));
+        $run = is_string($spec)
+            ? ChildRun::commandLine($spec)
+            : ChildRun::new(array_values((array) $spec));
 
-        return ChildRun::new($argv)
+        return $run
             ->withEnv(ProcessContainment::env())
             ->withStdin($payload)
             ->withMaxBytes(PHP_INT_MAX)
@@ -220,21 +221,23 @@ final class CommandBackend implements Backend, TracksActiveChildren
     }
 
     /**
-     * The argv ChildRun execs for $command. A string runs through the shell
-     * `proc_open()` used for one before: `/bin/sh -c` on POSIX, and on Windows the
-     * COMSPEC shell (cmd.exe) that proc_open() invoked with `/c`. ChildRun takes
-     * only an argv, so the shell is spelled out here; a string argv would fail to
-     * spawn on Windows, where there is no /bin/sh.
+     * What ChildRun is started with for $command. On POSIX a string is `/bin/sh -c`
+     * over an argv, and a list is exec'd as given. On Windows a string stays the
+     * raw line: PHP escapes an argv element by element there, and cmd.exe does not
+     * read that escaping, so a string command goes to proc_open() as one string,
+     * the form it had before this backend ran on ChildRun. ChildRun::commandLine()
+     * carries that string.
      *
-     * @return list<string>
+     * @return string|list<string>
+     * @internal public only so the spawn-spec test reads it on every platform
      */
-    private static function shellArgv(string|array $command, bool $windows): array
+    public static function shellSpec(string|array $command, bool $windows): string|array
     {
         if (is_array($command)) {
             return $command;
         }
         if ($windows) {
-            return [getenv('COMSPEC') ?: 'cmd.exe', '/d', '/s', '/c', $command];
+            return $command;
         }
 
         return ['/bin/sh', '-c', $command];
