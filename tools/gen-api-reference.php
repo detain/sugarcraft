@@ -546,8 +546,10 @@ final class ApiReference
 
                 case T_CASE:
                     if ($current !== null && $current['open'] && $depth === 1 && $current['kind'] === 'enum') {
+                        // PHP keywords are legal case names (`case Default`), and they tokenize as T_DEFAULT
+                        // etc., so the name is judged by its text, as addMethod() does, not by its token type.
                         $name = self::nextSignificant($tokens, $i + 1);
-                        if ($name !== null && is_array($tokens[$name]) && $tokens[$name][0] === T_STRING) {
+                        if ($name !== null && is_array($tokens[$name]) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $tokens[$name][1]) === 1) {
                             $current['cases'][] = $tokens[$name][1];
                         }
                     }

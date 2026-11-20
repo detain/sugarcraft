@@ -389,6 +389,17 @@ final class GenApiReferenceTest extends TestCase
         \ApiReference::generate($root, 'sugar-core');
     }
 
+    public function testAnEnumCaseNamedWithAReservedWordIsListed(): void
+    {
+        $root = $this->fixtureRoot(self::sugarCoreFixture() + [
+            'sugar-core/src/Choice.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nenum Choice: string\n{\n    case Default = 'default';\n    case Up = 'up';\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // `Default` tokenizes as T_DEFAULT, not T_STRING; it must not be dropped from the Cases line
+        self::assertStringContainsString('<p>Cases: <code>Default</code> · <code>Up</code></p>', $html);
+    }
+
     public function testBackedAndPureEnumsSayWhatPhpProvides(): void
     {
         $root = $this->fixtureRoot(self::sugarCoreFixture() + [
