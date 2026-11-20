@@ -94,7 +94,7 @@ while (!$driver->isEof()) {
     <h3 style="margin-top: 32px;">Theme and styling</h3>
     <p>Not applicable. This lib decodes input and draws nothing, so it has no theme, color or style surface. Rendering belongs to the host or to the output libraries, and the decoded events are plain PHP values.</p>
     <h3 style="margin-top: 32px;">Examples</h3>
-    <p><code>examples/decode.php</code> is an <code>EscapeDecoder</code> micro-demo. It feeds labeled byte frames through the decoder and prints each event: literal keys, legacy arrows, Kitty arrows and releases, forged paste frames, and drained replies. Every frame is written with explicit hex escapes, so the file survives editor and terminal mangling of control bytes. Run it with <code>php examples/decode.php</code>.</p>
+    <p><code>examples/decode.php</code> is an <code>EscapeDecoder</code> micro-demo. It feeds labeled byte frames through the decoder and prints each event: literal keys, legacy arrows, Kitty arrows and releases, modifyOtherKeys, SGR mouse, drained replies, focus, and a bracketed paste. The forged mouse frame is refused, so it prints a label and no event line. Every frame is written with explicit hex escapes, so the file survives editor and terminal mangling of control bytes. Run it with <code>php examples/decode.php</code>.</p>
     <h3 style="margin-top: 32px;">Testing</h3>
     <p>Run the suite from the lib root:</p>
     <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
