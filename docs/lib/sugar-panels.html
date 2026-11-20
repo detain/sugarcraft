@@ -156,10 +156,21 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#where-it-fits">Where it fits</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#border-styles">Border styles</a></li>
             <li class="toc-h3"><a href="#basic-compose">Basic compose</a></li>
@@ -197,7 +208,19 @@ echo $panels-&gt;render($layout, 60, 7);</code></pre>
 Bottom bar</code></pre>
     <p>The horizontal row carries <code>withGrow()</code>, so it flexes to six of the seven rows while <code>Bottom bar</code> — the fixed child — claims its measured natural single row at the bottom. Every row the renderer emits is padded to the viewport width, <code>Bottom bar</code>'s included.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
+        <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A layout is a tree of <code>Node</code> values. A leaf holds text. A horizontal or vertical node splits its region among its children, and <code>noBorder()</code> wraps a subtree to drop every frame and divider inside it. <code>SugarPanels::render()</code> paints the tree into a viewport of a given width and height and returns one ANSI string.</p>
+    <p>Nodes are immutable. Every <code>with*()</code> call returns a new node, so a chain whose result is discarded has no effect. Sizing comes from hints. <code>withMinWidth()</code>, <code>withMaxWidth()</code> and their height twins bound a node's footprint, and <code>withFlex()</code> or <code>withGrow()</code> lets a child fill the space its fixed siblings leave over. Flex sizing is delegated to the greedy solver in sugar-constraints, running in its parity mode.</p>
+    <p>Every node draws a border by default. That is right for leaf panels and wrong for scaffolding, which is why the Quickstart turns container frames off. The renderer keeps the previous frame's cell grid, so a second <code>render()</code> at the same size emits only the cells that changed.</p>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Fixed header and status bar around a growing body.</strong> Give the header and bar no flex weight, so they claim their natural size, and give the body <code>withGrow()</code>. Put the three in a <code>vertical()</code> node.</li>
+      <li><strong>Remove frames from a container.</strong> Call <code>withBorder(false)</code> on the container, or wrap the subtree in <code>noBorder()</code> to suppress every frame and divider below it. Adjacent panels then render touching.</li>
+      <li><strong>Title a panel.</strong> Call <code>withTitle()</code> on the leaf or container. The title is sanitized with <code>Sanitize::paintedTitle()</code>, so line feeds are flattened and it paints on one row.</li>
+      <li><strong>Redraw efficiently.</strong> Keep one <code>SugarPanels</code> instance and call <code>render()</code> each frame at the same size. Call <code>resetPreviousFrame()</code> after anything else has written to the terminal, so the next render repaints in full without erasing.</li>
+      <li><strong>Show untrusted text.</strong> Sanitize it before it reaches <code>leaf()</code> or <code>withTitle()</code>. Trusted text can carry escape sequences into the grid, as the Trust boundary section of the README explains.</li>
+    </ul>
+<h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>H/V panels</strong><span>Row and column composition with weighted sizing.</span></div>
             <div class="feature"><strong>Borders</strong><span>Preset or custom border styles per panel.</span></div>
@@ -214,7 +237,64 @@ Bottom bar</code></pre>
     <h3 id="where-it-fits" style="margin-top: 32px;">Where it fits</h3>
     <p>There are no in-repo consumers yet — sugar-panels ships as the ecosystem's pane composer for <em>your</em> application. When a sibling does a similar-looking job: the raw <strong>CSS flexbox computation</strong> (solve, don't paint) is <code>sugar-flexbox</code>; <strong>modal foregrounds</strong> over existing content with dimming and zone hit-testing are <code>sugar-overlay</code>; <strong>tabular data grids</strong> with a row cursor are <code>sugar-table</code>. Nested horizontal/vertical panes with borders, titles and flex weights, painted as plain ANSI strings — that is sugar-panels.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+        <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>Node::withMinWidth()</code> / <code>withMinHeight()</code></td><td><code>int</code></td><td><code>0</code></td><td>Floor for the natural size. Negative values clamp to <code>0</code>. Nothing throws.</td></tr>
+    <tr><td><code>Node::withMaxWidth()</code> / <code>withMaxHeight()</code></td><td><code>int</code></td><td><code>0</code></td><td>Cap on the painted footprint, including frame, padding and content. <code>0</code> means no cap. Margin sits outside the cap.</td></tr>
+    <tr><td><code>Node::withPadding()</code></td><td><code>int</code></td><td><code>0</code></td><td>Inner padding in cells.</td></tr>
+    <tr><td><code>Node::withSpacing()</code></td><td><code>int</code></td><td><code>0</code></td><td>Gap between children in cells.</td></tr>
+    <tr><td><code>Node::withMargin()</code></td><td><code>int</code> top, right, bottom, left</td><td><code>0</code></td><td>Outer margin in cells.</td></tr>
+    <tr><td><code>Node::withFlex()</code> / <code>withGrow()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> is a fixed child at its natural size. <code>withGrow()</code> is <code>withFlex(1)</code>, and larger weights take a bigger share of leftover space.</td></tr>
+    <tr><td><code>Node::withBorder()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Shows or hides the box border.</td></tr>
+    <tr><td><code>Node::withBorderStyle()</code></td><td><code>?Border</code></td><td>sugar-style default</td><td>Border character set from sugar-style. <code>Border::catalog()</code> lists the presets.</td></tr>
+    <tr><td><code>Node::withStyle()</code></td><td><code>?Style</code></td><td>none</td><td>Color and attributes from sugar-style.</td></tr>
+    <tr><td><code>Node::withTitle()</code></td><td><code>string</code></td><td><code>''</code></td><td>Box title, painted on one row.</td></tr>
+    <tr><td><code>Node::withAlignH()</code> / <code>withAlignV()</code></td><td><code>?Align</code>, <code>?VAlign</code></td><td>none</td><td>Text alignment. <code>null</code> clears it.</td></tr>
+    <tr><td><code>SugarPanels::MAX_VIEWPORT_DIMENSION</code></td><td><code>int</code></td><td><code>4096</code></td><td>Largest viewport side that <code>render()</code> accepts. Larger values throw <code>InvalidArgumentException</code> before anything is allocated.</td></tr>
+    <tr><td><code>SugarPanels::MAX_VIEWPORT_CELLS</code></td><td><code>int</code></td><td><code>1000000</code></td><td>Largest viewport area that <code>render()</code> accepts.</td></tr>
+    </table>
+    <h3 id="keys-and-input" style="margin-top: 32px;">Keys and input</h3>
+    <p>sugar-panels reads no input and binds no keys. It is an output composer: the host decides what the viewport shows and calls <code>render()</code> when it changes. The inputs that matter are the viewport numbers. Negative sizes, sides above <code>MAX_VIEWPORT_DIMENSION</code> and areas above <code>MAX_VIEWPORT_CELLS</code> throw. A zero width or height is valid, paints nothing and leaves no diff state behind, so a collapsed pane cannot poison the next size.</p>
+    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
+    <p>Styling goes through sugar-style. <code>withStyle()</code> applies color and attributes to a node's content, and <code>withBorderStyle()</code> picks a border character set. The <code>examples/borders.php</code> demo reads <code>Border::catalog()</code> at runtime, so every preset sugar-style ships appears in it. Styled text stays trusted input, so escape sequences in content pass through unchanged, and a clipped or unbalanced span is reset so its color stays inside its box.</p>
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <table class="api-table">
+    <tr><th>File</th><th>Shows</th></tr>
+    <tr><td><code>examples/basic.php</code></td><td>Two single-level splits, a three-column row and a two-pane stack, sized by <code>min*</code> hints.</td></tr>
+    <tr><td><code>examples/borders.php</code></td><td>Every border preset sugar-style ships, side by side with its name.</td></tr>
+    <tr><td><code>examples/nested.php</code></td><td>A three-level vertical, horizontal, vertical nest. Every box is bordered.</td></tr>
+    <tr><td><code>examples/flex.php</code></td><td>A fixed sidebar sized by its content, next to a growing pane.</td></tr>
+    <tr><td><code>examples/diff.php</code></td><td>The stateful loop: a full frame, a delta frame that changes one digit, and a frame after a resize.</td></tr>
+    </table>
+    <p>Run any of them from the lib root with <code>php examples/basic.php</code>. Every example is executed by the suite through <code>tests/ReadmeSnippetsTest.php</code>.</p>
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the suite from the lib root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suites cover framing and separators, flex layout, the solver delegation, the frame protocol, ANSI placement, the sanitize boundary, max-width and margin rules, and the edge cases of tiny viewports. Test your own layouts by rendering to a fixed width and height and comparing against the expected string.</p>
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Every level of a nested layout draws its own frame.</strong> Every node is bordered by default. Use <code>withBorder(false)</code> on containers, or wrap the subtree in <code>noBorder()</code>.</li>
+      <li><strong><code>render()</code> throws <code>InvalidArgumentException</code>.</strong> The viewport is outside the documented ranges: a negative side, a side above 4096, or an area above 1000000 cells. Clamp the host's winsize before calling render.</li>
+      <li><strong>Old text stays on screen after a resize.</strong> A full frame that follows a resize erases the screen first. <code>resetPreviousFrame()</code> forces a full repaint without an erase, so call it only when the screen is already clear.</li>
+      <li><strong>A <code>with*()</code> call seems to do nothing.</strong> Nodes are immutable, so the result must be kept. Write <code>$node = $node-&gt;withGrow();</code>.</li>
+      <li><strong>Content is cut off or wrapped unexpectedly.</strong> Lines wider than the interior word-wrap at cell boundaries. Height overflow is dropped without a trace, because continuations consume the row budget and lines past the interior height are not painted. Give the node more rows, or let it flex.</li>
+      <li><strong>A grown child is smaller than its min hint.</strong> A grown child gets only its weighted share, so its min is not applied, and <code>totalWidth()</code> over-claims for grown children. Fixed children honor the min through their base size.</li>
+    </ul>
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The lib is inspired by <a href="https://github.com/treilik/bubbleboxer">treilik/bubbleboxer</a> (Go), a library of nested boxes with weighted sizes and borders. The mapping is by concept. It is not a class-for-class port.</p>
+    <table class="api-table">
+    <tr><th>Concept (bubbleboxer)</th><th>SugarPanels</th></tr>
+    <tr><td>Nested horizontal and vertical boxes</td><td><code>SugarPanels::horizontal()</code>, <code>SugarPanels::vertical()</code></td></tr>
+    <tr><td>Weighted sizing of leftover space</td><td><code>Node::withFlex()</code>, <code>Node::withGrow()</code></td></tr>
+    <tr><td>Bordered boxes</td><td><code>Node::withBorder()</code>, <code>Node::withBorderStyle()</code></td></tr>
+    <tr><td>Titled boxes</td><td><code>Node::withTitle()</code></td></tr>
+    </table>
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>Three classes do the work. <code>SugarPanels</code> is the renderer. It walks the tree, asks the constraint solver for each split, paints cells into a buffer, and diffs the buffer against the previous frame. <code>Node</code> is the immutable tree value, and its <code>with*()</code> setters return new nodes. <code>Sanitize</code> normalizes text before it reaches the grid: <code>painted()</code> repairs UTF-8, collapses carriage returns and tabs, and removes unpaintable control characters, and <code>paintedTitle()</code> also flattens line feeds. Both are idempotent, so a host can pre-sanitize and round-trip content unchanged. Cell storage and the delta encoder come from sugar-cellbuffer. Borders and styles come from sugar-style.</p>
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-panels/</code> in the monorepo is the record of changes. Pin a version in your own manifest. The monorepo publishes all libraries together.</p>
+<h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-panels">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-panels/blob/master/README.md">Full README</a></li>
@@ -224,7 +304,7 @@ Bottom bar</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>SugarPanels</td><td>new()</td><td>Create a panels instance</td></tr>
