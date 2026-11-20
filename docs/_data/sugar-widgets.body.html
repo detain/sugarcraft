@@ -70,7 +70,7 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
@@ -132,6 +132,66 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>
+
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>Each component is an immutable value. Every <code>with*()</code> setter returns a changed copy and leaves the receiver as it was. The interactive components, such as <code>Table</code>, <code>Tabs</code>, <code>Paginator</code> and <code>Timer</code>, take input through <code>update()</code> and return the new state with any command, so they plug into a <code>Program</code> model the same way as a hand-written one.</p>
+
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <p>Constructor defaults and the setters that change them. Values are the ones the classes ship with.</p>
+    <ul>
+      <li><code>Timer::new(float $duration, float $interval)</code>: seconds, default <code>$interval = 1.0</code>. Sets the countdown length and the tick interval. <code>withInterval()</code> changes the tick interval later.</li>
+      <li><code>Table::new(headers, rows, $width, $height)</code>: int, default <code>$width = 0</code>, <code>$height = 10</code>. Initial size of the table. <code>withSize()</code> changes it.</li>
+      <li><code>Table::withStyles(?Styles)</code>: <code>?Styles</code>, default no override. Replaces the table's style set. <code>null</code> is accepted.</li>
+      <li><code>Paginator::withType(Type)</code>: <code>Type</code>, default set on <code>Paginator::new()</code>. Chooses how the page position is drawn.</li>
+      <li><code>Paginator::withDots(string $active, string $inactive)</code>: string, default set by the caller. The glyphs for the active and inactive dots when the dot style is used.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Keys</h3>
+    <p><code>Tabs</code> binds <code>Tab</code> to the next tab and <code>Shift+Tab</code> to the previous one. Each binding is a <code>Key\Binding</code> with its keys and a <code>Key\Help</code> entry, so the bar can show the key hints. <code>Key\Binding::any()</code> tests a key message against a set of bindings, and <code>withEnabled()</code> turns a binding off without removing it.</p>
+
+    <h3 style="margin-top: 32px;">Theming</h3>
+    <p>Components are styled through <code>sugar-style</code> values. <code>Help\Styles::uniform(Style $s)</code> gives every part of the help line the same style. <code>Table::withStyles()</code> takes a <code>Table\Styles</code> set, and <code>Table::withUnfocusedSelection(?Style)</code> sets the muted style drawn on the cursor row while the table is blurred. <code>null</code> restores the default dim.</p>
+
+    <h3 style="margin-top: 32px;">Examples</h3>
+    <p><code>examples/</code> holds 17 files, one per component, plus a timer that runs on a real event loop. Each runs with <code>php examples/&lt;name&gt;.php</code>.</p>
+    <ul>
+      <li><code>spinner.php</code>: Runs every spinner style for a short time each.</li>
+      <li><code>text-input.php</code>: Every TextInput state side by side: empty with a placeholder, and the others.</li>
+      <li><code>text-input-enhanced.php</code>: The enhanced TextInput features, including custom placeholder styling.</li>
+      <li><code>text-area.php</code>: A static snapshot of the multi-line text area.</li>
+      <li><code>item-list.php</code>: A scrollable list with a title and a selection.</li>
+      <li><code>table.php</code>: A styled table with headers, rows and custom styling.</li>
+      <li><code>tree.php</code>: The tree component.</li>
+      <li><code>viewport.php</code>: A scrollable region rendered at three Y offsets.</li>
+      <li><code>file-picker.php</code>: The file picker over a known directory.</li>
+      <li><code>progress.php</code>: An animated bar from 0% to 100%, then a static showcase.</li>
+      <li><code>cursor.php</code>: The cursor in each of its three modes.</li>
+      <li><code>help.php</code>: The short and full help views built from a sample set of bindings.</li>
+      <li><code>paginator.php</code>: Dot-style and Arabic-style pagination at three positions.</li>
+      <li><code>stopwatch.php</code>: Starts the stopwatch, lets it tick, then shows the elapsed time.</li>
+      <li><code>timer.php</code>: Countdown formatting at four checkpoints, then a live countdown.</li>
+      <li><code>tabs.php</code>: An interactive tabbed panel that switches with <code>Tab</code> and <code>Shift+Tab</code>.</li>
+      <li><code>timer-loop.php</code>: The timer on a real event loop, from <code>TimerTick</code> through <code>update()</code>.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-widgets
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite is PHPUnit 10 and uses <code>sugar-testing</code> from <code>require-dev</code>. <code>tests/GoldenRenderTest.php</code> compares rendered output against golden files with its helpers.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>Most component classes cite the bubbles component they mirror, written as <code>Mirrors charmbracelet/bubbles</code> in the docblock.</p>
+    <ul>
+      <li><code>Table\Table</code>, <code>Table\Column</code>, <code>Table\Styles</code>: bubbles <code>table</code> and its <code>Column</code> struct</li>
+      <li><code>Paginator\Paginator</code>: bubbles <code>paginator</code></li>
+      <li><code>Help\Help</code>, <code>Help\Styles</code>: bubbles <code>help</code> and <code>help.Styles</code></li>
+      <li><code>Key\Binding</code>: bubbles <code>key.NewBinding</code></li>
+      <li><code>Progress\Progress</code>, <code>Progress\AnimatedProgress</code>: bubbles <code>progress</code></li>
+      <li><code>Tabs\Tabs</code>: bubbles tabs</li>
+      <li><code>Stopwatch\Stopwatch</code>: bubbles <code>stopwatch</code></li>
+      <li><code>Timer\Timer</code>: bubbles <code>timer</code></li>
+    </ul>
 
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
