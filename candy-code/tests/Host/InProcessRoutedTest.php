@@ -44,6 +44,9 @@ final class InProcessRoutedTest extends TestCase
     /** @var list<array<string, mixed>> the envelopes the door's listener heard */
     private array $heard = [];
 
+    /** @var list<string> the server log lines, in order */
+    private array $logs = [];
+
     /** The loop the timed door arms its call deadlines on; the tests that need a timeout fire them. */
     private CallDeadlineLoop $deadlines;
 
@@ -65,7 +68,9 @@ final class InProcessRoutedTest extends TestCase
         if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
             self::markTestSkipped('workspace hosts run forked turns: needs ext-pcntl and ext-posix');
         }
-        $this->fixture = ProtocolFixture::new();
+        $this->fixture = ProtocolFixture::new(log: function (string $line): void {
+            $this->logs[] = $line;
+        });
         $this->other = $this->fixture->dir . '/other';
         $home = $this->fixture->dir . '/home';
         \mkdir($this->other, 0o700, true);
@@ -638,6 +643,35 @@ final class InProcessRoutedTest extends TestCase
         self::assertCount($total, $this->seqsOf($sessionId), 'nothing reaches the client after it left');
     }
 
+    public function testDisconnectFromAPrimaryListenerDeliversTheRoutedBacklogItOwes(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $sink = $this->scriptedSubscribe($sessionId);
+        $total = 2000;
+        for ($seq = 1; $seq <= $total; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+        // The primary listener leaves from a primary delivery, where the sink drain is idle, so the
+        // owed routed backlog must still be delivered in full by that disconnect().
+        $left = false;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$left): void {
+            if (!$left && !\array_key_exists('root', $envelope)) {
+                $left = true;
+                $this->door->disconnect();
+            }
+        }));
+        (new \ReflectionMethod(InProcessHostServices::class, 'enqueue'))->invoke($this->door, EventEnvelope::server(EventType::SERVER_TICK));
+
+        // An arrow function would copy $left now and never see the listener set it, so the wait closes over it by reference.
+        self::assertTrue($this->runUntil(static function () use (&$left): bool {
+            return $left;
+        }, 5.0), 'the primary listener left from its delivery');
+        self::assertSame(\range(1, $total), $this->seqsOf($sessionId), 'every owed routed event is delivered, in order, before the leave returns');
+        self::assertFalse($sink->isOpen(), 'the sink is closed');
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+    }
+
     public function testAListenerThatThrowsDoesNotStopTheOthersHearingARoutedEvent(): void
     {
         $root = $this->scriptedRoot();
@@ -662,6 +696,7 @@ final class InProcessRoutedTest extends TestCase
             }
         }
         self::assertSame([1], $laterSeqs, 'the listener after the failing one still hears the event');
+        self::assertStringContainsString('in-process event listener failed', \implode("\n", $this->logs), 'the listener failure is logged');
         self::assertTrue($sink->isOpen(), 'a listener that throws does not close the sink');
     }
 
