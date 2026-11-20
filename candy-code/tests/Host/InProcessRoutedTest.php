@@ -517,6 +517,39 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame([], $laterHeard, 'the listeners after the disconnecting one never hear the envelope it was delivering');
     }
 
+    public function testADisconnectFromARoutedSinkListenerDropsTheRoutedBacklogItOwes(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        // Subscribed before the backlog is relayed, so no delivery can run before they are in place.
+        $routedHeard = 0;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$routedHeard, $root): void {
+            if (($envelope['root'] ?? null) === $root) {
+                $routedHeard++;
+            }
+        }));
+        $disconnected = false;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$disconnected, $root): void {
+            if (!$disconnected && ($envelope['root'] ?? null) === $root) {
+                $disconnected = true;
+                $this->door->disconnect();
+            }
+        }));
+        for ($seq = 1; $seq <= 2000; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+
+        // Only the counting listener, registered before the disconnecting one, hears the envelope that disconnects.
+        self::assertTrue($this->runUntil(function () use (&$disconnected): bool {
+            return $disconnected;
+        }, 30.0), 'the sink never delivered a routed event to the listener that disconnects');
+        $this->fixture->run(0.05);
+        self::assertSame(1, $routedHeard, 'the owed routed backlog is dropped, not delivered: only the disconnecting envelope was heard');
+        self::assertFalse($this->call($this->door->isConnected()));
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+    }
+
     /** A door whose 20 s call deadlines are fired by the test, connected on first use. */
     public function testARoutedAnswerPastTheFrameCeilingIsRefusedTooLarge(): void
     {
@@ -801,8 +834,9 @@ final class InProcessRoutedTest extends TestCase
 
     public function testARoutedAndAPrimaryListenerGetEmptyDataAsAnArray(): void
     {
-        // The wire encodes empty data as an object, so the routed envelope carries stdClass here. Both
-        // listeners must still get [], as drain() gives the primary feed (PL-5d, decision c).
+        // The primary envelope carries stdClass for empty data, and drain() turns that into []. The routed
+        // copy is re-decoded as an array by Gateway::relay, so it is [] before drain() sees it. Both
+        // listeners must get [] (PL-5d, decision c); only the primary half exercises the conversion.
         $root = $this->scriptedRoot();
         $sessionId = $this->scriptedSession($root);
         $this->scriptedSubscribe($sessionId);
