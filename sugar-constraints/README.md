@@ -163,9 +163,11 @@ Maxes gave up, which is how a "fixed" `length(10)` becomes 95 in
 **Rounding and overflow.** Sizes are whole cells, so `floor()` loses
 fractions; the solver hands those cells back so the regions still tile the
 span: slack residue rides the first Fill (or the first Max when no Fill is
-present), Min-only slack rides the first Min, and a Percentage/Ratio
-shortfall of at most N−1 cells (N = their count — the most N floored shares
-can lose) is reclaimed earliest-first. A larger gap is slack the constraints
+present), Min-only slack rides the first Min, and with neither Fill nor Max
+in the set a Percentage/Ratio shortfall of at most N−1 cells (N = their
+count — the most N floored shares can lose) is reclaimed earliest-first.
+With a Fill or Max, that shortfall rides the first Fill or Max along with the
+rest of the slack. A larger gap is slack the constraints
 never asked for and stays open. When fixed demand exceeds the span, regions
 shrink proportionally and the floor loss is returned one cell per shrunk
 region — silently, because a terminal resized below its fixed panes is a
