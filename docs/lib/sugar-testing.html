@@ -158,26 +158,39 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#programsimulator">ProgramSimulator</a></li>
             <li class="toc-h3"><a href="#scriptedinput">ScriptedInput</a></li>
-            <li class="toc-h3"><a href="#assertions">Assertions</a></li>
+            <li class="toc-h3"><a href="#assertions-and-goldenfile">Assertions and GoldenFile</a></li>
             <li class="toc-h3"><a href="#graphics-stream-assertions">Graphics stream assertions</a></li>
             <li class="toc-h3"><a href="#taperecorder">TapeRecorder</a></li>
-            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#full-signature-table">Full signature table</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theme-and-color-profile">Theme and color profile</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for composing VHS demo scripts.</p>
+<p class="lede" style="margin-top: 28px;">The test harness for SugarCraft programs. <code>ProgramSimulator</code> drives a TEA <code>Model</code> with scripted messages and records what it rendered, <code>Assertions</code> and <code>GoldenFile</code> pin the output as byte-exact snapshots, <code>Graphics</code> decodes inline-image streams back to pixels, and <code>TapeRecorder</code> writes VHS <code>.tape</code> scripts for demos. It is an original SugarCraft design, inspired by the Go teatest and golden-file prior art cited under Upstream mapping.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require --dev sugarcraft/sugar-testing:@dev</code></pre>
-    <p>This is a PHPUnit test harness: it belongs in <code>require-dev</code> and must not enter runtime dependencies.</p>
+    <p>This is a PHPUnit test harness. It belongs in <code>require-dev</code> and must not enter runtime dependencies. It needs PHP 8.3 or newer, <code>sugarcraft/sugar-core</code>, <code>sugarcraft/sugar-cellbuffer</code> and <code>react/event-loop</code>. <code>ext-gd</code> is optional and only needed to materialize pixels in the graphics assertions.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <p>This block runs exactly as copy-pasted — the lib's own test suite executes it as a test.</p>
+    <p>This block is self-contained. The inline counter stands in for a real app's Model, which a real suite would hand to the simulator instead.</p>
+
     <pre class="code"><code class="language-php">use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Testing\Input\ScriptedInput;
@@ -230,70 +243,69 @@ if (GoldenFile::load($golden) === null) {
 
 Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
-    <h3 id="programsimulator" style="margin-top: 32px;">ProgramSimulator</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
-      <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
-      <div class="feature"><strong>withFakeCmdRunner()</strong><span>Decide the message injected for each Cmd; the real closure still runs unless you also call withRealCmdRunner(false).</span></div>
-      <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output. Subscription output is delivered right after the message that triggered it; messages still queued when a QuitMsg/InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. run() can be called again.</span></div>
-      <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>/<code>EnvMsg</code>/<code>ColorProfileMsg</code> exactly as a real Program dispatches them — before <code>init()</code>. Each returns a clone.</span></div>
-    </div>
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A SugarCraft program is a <code>Model</code> with <code>init()</code>, <code>update(Msg): [Model, ?Cmd]</code> and <code>view()</code>. <code>ProgramSimulator</code> runs that loop without a terminal: it queues the messages you send, feeds each one through <code>update()</code>, renders <code>view()</code> after every step, and returns a <code>TestResult</code>. Commands are either executed (the default) or captured with <code>withRealCmdRunner(false)</code> so a test can assert that a command was produced without running it.</p>
+    <p>Input is modeled as messages, not bytes. <code>ScriptedInput</code> builds the same <code>KeyMsg</code>, <code>MouseMsg</code>, <code>ResizeMsg</code> and paste messages a live session produces. When a test needs the real byte path, <code>ScriptedInput::bytes()</code> runs raw terminal input through sugar-core's <code>InputReader</code>.</p>
+    <p>Snapshots are create-only. A golden file is written once, from a deliberate seeding run, and a later mismatch fails loudly without rewriting the file. To re-baseline, delete the golden and rerun with the update variable set. The same rule applies to the TapeRecorder output: it is generated, never hand-edited.</p>
 
-    <h3 id="scriptedinput" style="margin-top: 32px;">ScriptedInput</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces; <code>build()</code> returns the list.</span></div>
-      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
-      <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg, PasteMsg sequence as at runtime (longer pastes arrive in several PasteMsg chunks).</span></div>
-      <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime; pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
-    </div>
-
-    <h3 id="assertions" style="margin-top: 32px;">Assertions</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test — set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> (legacy alias: <code>UPDATE_GOLDENS=1</code>) to create a missing golden; creation is one-way and a mismatch never rewrites, so to re-baseline, delete the file and rerun with it set.</span></div>
-      <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
-      <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with readable ESC diff.</span></div>
-      <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check — a second <code>view()</code> must return identical bytes; catches models that mutate state while rendering. The model-unchanged leg uses a shallow clone: nested mutation by reference is out of its reach — output idempotence is the guarantee, not deep-state purity.</span></div>
-    </div>
-
-    <h3 id="graphics-stream-assertions" style="margin-top: 32px;">Graphics stream assertions</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid, <code>assertInlineImageDimensions()</code> checks placement and size, <code>assertProtocolRoundTrip()</code> re-encodes what it decoded, <code>renderGrid()</code> exposes the grid directly.</span></div>
-      <div class="feature"><strong>Mode::detect()</strong><span>Sniff whether a stream speaks Sixel, Kitty, or iTerm2 inline images.</span></div>
-      <div class="feature"><strong>KittyStream / SixelStream / Iterm2Stream</strong><span>Per-protocol decoders returning value objects — <code>KittyImage</code> (PNG payload, placements, z-index), sixel raster (width, height, palette, grid), iTerm2 file keys.</span></div>
-      <div class="feature"><strong>PixelGrid</strong><span>The RGBA grid behind every comparison: <code>fromRgbGrid()</code>/<code>transparent()</code> constructors, <code>uniformColor()</code> and <code>toGdImage()</code> escape hatches (ext-gd).</span></div>
-      <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams — raster cells, number digits, decompressed bytes, image pixels — enforced with <code>MalformedGraphicsException</code>.</span></div>
-    </div>
-
-    <h3 id="taperecorder" style="margin-top: 32px;">TapeRecorder</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to the given path.</span></div>
-      <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
-      <div class="feature"><strong>type() / enter() / sleep()</strong><span>Append the demo's choreography — Type/Enter/Sleep directive lines; nothing is captured from a running program and there is no playback API.</span></div>
-      <div class="feature"><strong>save()</strong><span>Write the completed .tape file.</span></div>
-      <div class="feature"><strong>keyMsgToVhs(KeyMsg)</strong><span>Static: map a decoded key message back to VHS <code>Type</code> syntax (null when unsupported), so scripted sessions turn into directives.</span></div>
-    </div>
-
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
     <ul>
-      <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
-      <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
-      <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
-      <li><strong>Inline-image protocol tests</strong> — the <code>Graphics</code> namespace decodes real kitty/sixel/iTerm2 streams to pixel grids with no terminal attached.</li>
-      <li><strong>Demo script building</strong> — TapeRecorder emits VHS-compatible .tape files; CI renders them into GIFs.</li>
-      <li><strong>Test-infra hub for 22 sibling packages</strong> — incl. sugar-forms and sugar-widgets, which build their test support on it (census: sibling composer.json require/require-dev at commit time).</li>
+      <li><strong>Pin a rendered screen.</strong> Drive the model with <code>ScriptedInput</code>, then call <code>Assertions::assertGoldenAnsi($golden, $result-&gt;view)</code> against a committed golden under <code>fixtures/</code>.</li>
+      <li><strong>Check that a key produced a command.</strong> Build the simulator with <code>withRealCmdRunner(false)</code>, send the key, then call <code>$result-&gt;assertCmdCount(1)</code> or <code>assertCmdContains()</code> on the captured list.</li>
+      <li><strong>Catch render-time mutation.</strong> Call <code>Assertions::assertViewIdempotent($model)</code>. A second <code>view()</code> must return identical bytes.</li>
+      <li><strong>Test a paste exactly as the runtime sees it.</strong> Use <code>ScriptedInput::new()-&gt;paste($text)</code>. Pasted payloads are sanitized by default, and <code>withSanitizePaste(false)</code> delivers them verbatim.</li>
+      <li><strong>Assert an inline image.</strong> Feed a captured Kitty, Sixel or iTerm2 stream to <code>GraphicsAssertions::assertRendersTo()</code> with the expected <code>PixelGrid</code>, or to <code>assertProtocolRoundTrip()</code> to check that decode and re-encode agree.</li>
+      <li><strong>Script a demo.</strong> Open a <code>TapeRecorder::to($path)</code>, add <code>header()</code>, <code>type()</code>, <code>enter()</code> and <code>sleep()</code> directives, then call <code>save()</code>. CI renders the resulting tape.</li>
     </ul>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-testing">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-testing/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-testing/tree/master/tests">Test suite</a></li>
-      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
-    </ul>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
+    <p>The classes below are the public surface. Each block lists the methods a test typically calls. The full signature table follows the blocks.</p>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
+    <h3 id="programsimulator" style="margin-top: 24px;">ProgramSimulator</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>ProgramSimulator::for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
+      <div class="feature"><strong>send(Msg ...$msgs)</strong><span>Fluent message enqueue. Chain as many sends as the scenario needs.</span></div>
+      <div class="feature"><strong>withRealCmdRunner(bool) / withFakeCmdRunner(Closure)</strong><span>Pass <code>false</code> to capture Cmds without executing them. The fake runner decides the message injected for each Cmd, and execution is otherwise unchanged.</span></div>
+      <div class="feature"><strong>run()</strong><span>Drain the queue and return a <code>TestResult</code> with the model, last view, captured cmds, output and frames. Subscription output is delivered right after the message that triggered it. Messages still queued when a QuitMsg or InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. <code>run()</code> can be called again.</span></div>
+      <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>, <code>EnvMsg</code> and <code>ColorProfileMsg</code> exactly as a real Program dispatches them, before <code>init()</code>. Each returns a clone.</span></div>
+    </div>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="scriptedinput" style="margin-top: 24px;">ScriptedInput</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces. <code>build()</code> returns the list, ready to splat into <code>send()</code>.</span></div>
+      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read. Reads are split into 4096-byte chunks like the runtime. Afterwards the runtime's idle recovery applies: a lone ESC becomes an Escape key, and an unterminated paste is closed.</span></div>
+      <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg and PasteMsg sequence as at runtime. Longer pastes arrive in several PasteMsg chunks.</span></div>
+      <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime. Pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
+    </div>
+
+    <h3 id="assertions-and-goldenfile" style="margin-top: 24px;">Assertions and GoldenFile</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test against a committed golden file. Set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> to create a missing golden. Creation is one-way, and a mismatch never rewrites the file.</span></div>
+      <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers, using the cell-grid schema that the parser validates at the boundary.</span></div>
+      <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with a readable ESC diff.</span></div>
+      <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check. A second <code>view()</code> must return identical bytes. The model-unchanged leg uses a shallow clone, so nested mutation by reference is out of its reach. Output idempotence is the guarantee.</span></div>
+      <div class="feature"><strong>GoldenFile</strong><span><code>load()</code> returns null only for a missing file, and unreadable or symlinked goldens throw. <code>create()</code> refuses an existing golden, <code>update()</code> is the deliberate re-baseline, and <code>resolve()</code> keeps fixture paths inside <code>fixtures/</code>.</span></div>
+    </div>
+
+    <h3 id="graphics-stream-assertions" style="margin-top: 24px;">Graphics stream assertions</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid. <code>assertInlineImageDimensions()</code> checks placement and size. <code>assertProtocolRoundTrip()</code> re-encodes what it decoded. <code>renderGrid()</code> exposes the grid directly.</span></div>
+      <div class="feature"><strong>Mode::detect()</strong><span>Sniffs whether a stream speaks Sixel, Kitty or iTerm2 inline images.</span></div>
+      <div class="feature"><strong>KittyStream / SixelStream / Iterm2Stream</strong><span>Per-protocol decoders that return value objects: <code>KittyImage</code> (PNG payload, placements, z-index), a sixel raster (width, height, palette, grid), and iTerm2 file keys.</span></div>
+      <div class="feature"><strong>PixelGrid</strong><span>The RGBA grid behind every comparison. Constructors are <code>fromRgbGrid()</code> and <code>transparent()</code>. <code>uniformColor()</code> and <code>toGdImage()</code> are the escape hatches, and the latter needs ext-gd.</span></div>
+      <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams: raster cells, number digits, decompressed bytes and image pixels. Breaches raise <code>MalformedGraphicsException</code>.</span></div>
+    </div>
+
+    <h3 id="taperecorder" style="margin-top: 24px;">TapeRecorder</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>TapeRecorder::to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to that path.</span></div>
+      <div class="feature"><strong>header() / type() / enter() / sleep()</strong><span>Emit the VHS <code>Set</code> directives and the choreography lines. Typed text is escaped, so it can never forge a standalone directive line.</span></div>
+      <div class="feature"><strong>resize() / comment() / line()</strong><span>Resize and <code>#</code> comment directives. <code>line()</code> appends one raw directive verbatim.</span></div>
+      <div class="feature"><strong>save()</strong><span>Write the completed <code>.tape</code> file. Nothing is captured from a running program, and there is no playback API.</span></div>
+      <div class="feature"><strong>TapeRecorder::keyMsgToVhs(KeyMsg)</strong><span>Static: maps a decoded key message back to VHS <code>Type</code> syntax, or returns null when unsupported, so scripted sessions turn into directives.</span></div>
+    </div>
+
+    <h3 id="full-signature-table" style="margin-top: 24px;">Full signature table</h3>
 <table class="api-table">
 <caption>sugar-testing public API — every class, method, and constant named above, verified against the shipped source.</caption>
 <thead>
@@ -349,6 +361,80 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 <tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / getTempDirSuffix()</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
 </tbody>
 </table>
+
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>SUGAR_TESTING_UPDATE_GOLDENS</code></td><td>env, <code>1</code> to arm</td><td>unset</td><td>Creates a missing golden on the next <code>assertGoldenAnsi()</code> run. It never rewrites an existing golden.</td></tr>
+    <tr><td><code>UPDATE_GOLDENS</code></td><td>env, <code>1</code> to arm</td><td>unset</td><td>Deprecated legacy alias of the variable above. It is read until the alias is dropped.</td></tr>
+    <tr><td><code>ProgramSimulator::withWindowSize()</code></td><td><code>int</code>, <code>int</code></td><td>none</td><td>Arms the startup <code>WindowSizeMsg</code>, dispatched before <code>init()</code>.</td></tr>
+    <tr><td><code>ProgramSimulator::withEnvironment()</code></td><td><code>array</code></td><td>none</td><td>Arms the startup <code>EnvMsg</code> with the given variables.</td></tr>
+    <tr><td><code>ProgramSimulator::withColorProfile()</code></td><td><code>ColorProfile</code></td><td>none</td><td>Arms the startup <code>ColorProfileMsg</code>, the message that color vetoes read.</td></tr>
+    <tr><td><code>ProgramSimulator::withRealCmdRunner()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Pass <code>false</code> to capture Cmds without executing them.</td></tr>
+    <tr><td><code>ScriptedInput::withSanitizePaste()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Sanitizes paste payloads as at runtime. Set before <code>bytes()</code>.</td></tr>
+    <tr><td><code>TestResult::droppedAfterStop</code></td><td><code>int</code></td><td>computed</td><td>Count of messages skipped after a QuitMsg or InterruptMsg ended the drain.</td></tr>
+    </table>
+
+    <h3 id="keys-and-input" style="margin-top: 32px;">Keys and input</h3>
+    <p>The harness has no keymap of its own. A key is a <code>KeyMsg</code> built by <code>ScriptedInput</code>, so the keys a test sends are exactly the keys the model's <code>update()</code> matches. Use <code>key('a', ctrl: true)</code> for modifiers, <code>namedKey()</code> or <code>arrow()</code> for special keys, <code>escape()</code>, <code>backspace()</code>, <code>tab()</code> and <code>quit()</code> as shortcuts, and <code>mouse()</code> and <code>wheel()</code> for pointer input. <code>TestResult::assertCmdCount()</code> and <code>assertNoCmds()</code> check what a key produced.</p>
+
+    <h3 id="theme-and-color-profile" style="margin-top: 32px;">Theme and color profile</h3>
+    <p>The harness does not style output or define a theme. Themes belong to the model under test. What the harness controls is the color profile the model sees. <code>withColorProfile()</code> arms the startup <code>ColorProfileMsg</code>, so a golden captured under one profile can be reproduced exactly. Pin the profile in every snapshot test that renders color, because the same model emits different SGR bytes under a different profile.</p>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>Both examples run without a terminal and need only <code>composer install</code> in the lib root.</p>
+    <ul>
+      <li><code>examples/program-simulator.php</code>: drives an inline counter with <code>ScriptedInput</code>, prints the final view, the frame count and the captured command count. Run it with <code>php examples/program-simulator.php</code>.</li>
+      <li><code>examples/tape-recorder.php</code>: builds a VHS tape, prints it, and removes the temporary file it wrote. Run it with <code>php examples/tape-recorder.php</code>. The output includes an escaped <code>Type</code> line, which shows how typed control bytes are handled.</li>
+    </ul>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the lib's own suite from its root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite tests the harness through the same Model contract it simulates. Its fixtures, such as <code>CounterModel</code> and <code>ControlRecorderModel</code>, are small TEA models. <code>tests/bootstrap.php</code> calls <code>LoopPin::pinStableClock()</code> before anything else. Under ext-uv, deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle would already be overdue.</p>
+    <p>In your own suite, call <code>LoopPin::pinStableClock()</code> from your bootstrap when your tests bound waits with timers on <code>Loop::get()</code>. Use <code>ProgramSimulator</code> for the model and <code>Assertions::assertGoldenAnsi()</code> for the output, and commit the goldens under <code>fixtures/</code>.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The golden is missing and the test fails with "No golden file found".</strong> Seed it once with <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> and commit the new file. Creation is one-way, so a golden that already exists is never rewritten by this variable.</li>
+      <li><strong>The output changed, the test fails with "Golden file mismatch", and you want the new output.</strong> Delete the golden, rerun with the variable set, and review the diff in version control. Do not edit the golden by hand.</li>
+      <li><strong>A timer-based wait times out or fires early on a developer machine.</strong> The loop clock is stale. Call <code>LoopPin::pinStableClock()</code> first in the bootstrap. <code>LoopPin::hasStaleClockRisk()</code> reports whether the current loop is at risk.</li>
+      <li><strong><code>toGdImage()</code> throws in a graphics test.</strong> Pixel materialization needs ext-gd. Install the extension, or stay on the stream-level checks such as <code>assertProtocolRoundTrip()</code>, which work without it.</li>
+      <li><strong><code>assertViewIdempotent()</code> passes but a nested object still changed.</strong> The model-unchanged leg uses a shallow clone. The check guarantees identical output on a second render, not deep state purity. Keep render methods free of nested mutation by convention.</li>
+      <li><strong>A message queued after <code>QuitMsg</code> never reached <code>update()</code>.</strong> That is intended. The drain stops at the quit, and the skipped count is in <code>TestResult::droppedAfterStop</code>.</li>
+    </ul>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>There is no one-to-one port. The table maps the Go prior art named in the lib's README credits to the SugarCraft classes that take their place.</p>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>SugarCraft class</th><th>Notes</th></tr>
+    <tr><td><code>charmbracelet/teatest</code></td><td><code>ProgramSimulator</code>, <code>ScriptedInput</code>, <code>TestResult</code></td><td>Drives a model with scripted messages and captures the final output. The dispatch table mirrors <code>Program::dispatch()</code>, and divergences are named in the README.</td></tr>
+    <tr><td><code>charmbracelet/x/exp/golden</code></td><td><code>Assertions::assertGoldenAnsi()</code>, <code>GoldenFile</code></td><td>Golden-file snapshots. SugarCraft makes the lifecycle explicit with create-only seeding and a separate re-baseline path.</td></tr>
+    <tr><td>VHS demo scripts</td><td><code>TapeRecorder</code></td><td>Builds <code>.tape</code> files. CI renders them into GIFs, and the render step lives in candy-vcr rather than upstream VHS.</td></tr>
+    </table>
+
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>Five parts sit side by side. <code>ProgramSimulator</code> and <code>ScriptedInput</code> form the TEA runner. <code>Assertions</code> and <code>GoldenFile</code> form the snapshot layer, which rejects malformed expectation shapes before comparing. The <code>Graphics</code> namespace decodes Kitty, Sixel and iTerm2 streams into a <code>PixelGrid</code>, with <code>DecodeLimits</code> capping hostile input at every allocation. <code>TapeRecorder</code> is a standalone builder for demo scripts. <code>LoopPin</code> replaces the shared ReactPHP loop with <code>StreamSelectLoop</code> so that timer deadlines are computed at arm time. The simulator's dispatch table is an explicit mirror of <code>Program::dispatch()</code>, and the README's "Simulation subset" section is the contract for that mirror.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-testing/</code> in the monorepo is the record of changes. The install line above pins the development branch with <code>@dev</code>, so pin a tagged release in your own manifest once one is published.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li>sugar-core: the <code>Model</code>, <code>Msg</code> and <code>Program</code> contract the simulator drives.</li>
+      <li>sugar-cellbuffer: the <code>Buffer</code> that cell-grid assertions compare.</li>
+      <li>sugar-image: consumes the <code>Graphics</code> assertions in its renderer tests.</li>
+      <li>The <code>sugarcraft/sugar-testing</code> package is required in <code>require-dev</code> by 25 sibling packages, so changes here reach most suites.</li>
+    </ul>
+
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-testing">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-testing/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-testing/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
     </div>
   </div>
 </section>
