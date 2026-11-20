@@ -21,6 +21,7 @@
 </table>
 <h4 id="api-sugarcraft-minesweeper-cell"><code>Cell</code> <small>final class</small></h4>
 <p>One cell on the minefield. Immutable value object — every transition (reveal, flag, etc.) routes the house Mutable with-pattern to return a fresh Cell rather than mutating in place, so Board can rebuild itself with normal array spread without aliasing issues.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -46,6 +47,7 @@
 </table>
 <h4 id="api-sugarcraft-minesweeper-game"><code>Game</code> <small>final class</small></h4>
 <p>Minesweeper as a SugarCraft Model. Keys: - arrows / hjkl → move cursor - space / enter → reveal - f → toggle flag - c → chord - S → save the live game (single slot, 0600, under $XDG_CONFIG_HOME/candy-minesweeper/ when that env is set, else $HOME/.config/candy-minesweeper/) - L → load that save — works even after game over, so the player can step a lost board back to the saved one - r → restart - n → new-game picker: 1-4 start a preset, c opens the custom-board digit form, q/Esc walk back - q / esc / Ctrl+C → quit (q/Esc ask twice on a live unsaved board) Mouse: left-click reveals, right-click flags, middle-click chords.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -85,6 +87,7 @@
 </table>
 <h4 id="api-sugarcraft-minesweeper-stats"><code>Stats</code> <small>final class</small></h4>
 <p>Immutable stats tracker for minesweeper games.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -101,6 +104,7 @@
 <h3>SugarCraft\Minesweeper\Stats</h3>
 <h4 id="api-sugarcraft-minesweeper-stats-difficultystats"><code>DifficultyStats</code> <small>final class</small></h4>
 <p>Atomic persistence wrapper for minesweeper difficulty statistics.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>

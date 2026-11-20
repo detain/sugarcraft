@@ -3,6 +3,7 @@
 <h3>SugarCraft\Forms</h3>
 <h4 id="api-sugarcraft-forms-actionspinner"><code>ActionSpinner</code> <small>final class</small></h4>
 <p>Blocking &quot;loading&quot; prompt with a spinner. Mirrors charmbracelet/huh.<code>huh.NewSpinner().Title(...).Action(fn).Run()</code> — schedules a worker callable, animates a \SugarCraft\Forms\Spinner\Style frame sequence while it runs, and returns once the action completes.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -1290,6 +1291,7 @@
 <h3>SugarCraft\Forms\TextArea</h3>
 <h4 id="api-sugarcraft-forms-textarea-textarea"><code>TextArea</code> <small>final class</small></h4>
 <p>Multi-line text input. Holds a list of lines and a (row, col) cursor. Enter splits the current line; Backspace at the start of a line merges with the previous one. All edits are multibyte-safe (<code>mb_substr</code> / <code>mb_strlen</code>), so wide characters (<code>日本</code>) navigate as single graphemes.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -1535,6 +1537,7 @@
 <h3>SugarCraft\Forms\Viewport</h3>
 <h4 id="api-sugarcraft-forms-viewport-viewport"><code>Viewport</code> <small>final class</small></h4>
 <p>Scrollable text area. Holds a fixed-size window over arbitrarily long content; navigation methods (lineUp/lineDown/pageUp/…) advance the window, clamped so the viewport never goes past the start or end.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\SubscriptionCapable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>

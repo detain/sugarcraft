@@ -410,17 +410,37 @@ final class GenApiReferenceTest extends TestCase
         self::assertSame(2,\substr_count($html, '<tr><td><code>tick(): int</code></td><td>Counts one more.</td></tr>'), 'Counts and Tally both list tick()');
     }
 
-    public function testATraitDeclaredOutsideTheTreeContributesNoRowsAsAnOutOfTreeParentDoes(): void
+    public function testATraitDeclaredOutsideTheTreeContributesNoRowsButIsNamedUnderItsType(): void
     {
-        // A trait with no declaration under src/ (a sibling lib's, or a vendor package's) has no source
-        // here. The header's rule for parents applies: it adds no rows and does not fail the run.
+        // A trait with no declaration under src/ (a vendor package's, such as Evenement\EventEmitterTrait)
+        // has no source here, so it adds no rows and does not fail the run. Its methods are API the table
+        // cannot show, so the type says they are not listed and names the trait.
         $root = $this->fixtureRoot([
-            'sugar-core/src/Lost.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Lost\n{\n    use Nowhere;\n\n    /** Own. */\n    public function mine(): void\n    {\n    }\n}\n",
+            'sugar-core/src/Driver.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Vendor\\Emit\\EventEmitterTrait;\n\nfinal class Driver\n{\n    use EventEmitterTrait;\n\n    /** Own. */\n    public function mine(): void\n    {\n    }\n}\n",
         ]);
         $html = \ApiReference::generate($root, 'sugar-core');
 
         self::assertStringContainsString('mine(): void', $html);
-        self::assertStringNotContainsString('Nowhere', $html, 'the undeclared trait is not named as a source');
+        self::assertStringContainsString(
+            '<p>Not listed: the methods of <code>Vendor\Emit\EventEmitterTrait</code>, a trait declared outside src/.</p>',
+            $html,
+            'the type names the out-of-tree trait it uses'
+        );
+    }
+
+    public function testAnOutOfTreeTraitReachedThroughAnInTreeParentIsNamedUnderTheChildToo(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Base.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Vendor\\Emit\\EventEmitterTrait;\n\nclass Base\n{\n    use EventEmitterTrait;\n}\n",
+            'sugar-core/src/Child.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Child extends Base\n{\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(
+            2,
+            \substr_count($html, '<p>Not listed: the methods of <code>Vendor\Emit\EventEmitterTrait</code>, a trait declared outside src/.</p>'),
+            'Base uses the trait and Child inherits its methods, so both types name it'
+        );
     }
 
     public function testATraitNameThatIsAClassFailsTheRun(): void

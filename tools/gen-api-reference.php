@@ -352,7 +352,7 @@ final class ApiReference
     }
 
     /**
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}>
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}>
      */
     public static function collect(string $root, string $slug): array
     {
@@ -375,6 +375,7 @@ final class ApiReference
                 'summary' => $type['summary'],
                 'cases' => $type['cases'],
                 'backed' => $type['backed'],
+                'undeclaredTraits' => self::undeclaredTraits($index, $type['fqn']),
                 'methods' => $methods,
             ];
         }
@@ -903,6 +904,36 @@ final class ApiReference
     }
 
     /**
+     * The traits a type uses, directly or through an in-tree parent or trait, that have no
+     * declaration under src/. Their methods are not listed, and a method table alone would
+     * read as the type's whole API, so each type names them.
+     *
+     * @param array<string, array<string, mixed>> $index every parsed type, keyed by FQN
+     * @param list<string> $trail the types already on the path, a guard against an inheritance cycle
+     * @return list<string>
+     */
+    private static function undeclaredTraits(array $index, string $fqn, array $trail = []): array
+    {
+        $found = [];
+        foreach ($index[$fqn]['traits'] as $traitName) {
+            $traitFqn = self::declaredFqn($index, $traitName);
+            if ($traitFqn === null) {
+                $found[] = $traitName;
+            } elseif (!in_array($traitFqn, $trail, true)) {
+                $found = [...$found, ...self::undeclaredTraits($index, $traitFqn, [...$trail, $fqn])];
+            }
+        }
+        foreach ($index[$fqn]['parents'] as $parentName) {
+            $parentFqn = self::declaredFqn($index, $parentName);
+            if ($parentFqn !== null && !in_array($parentFqn, $trail, true)) {
+                $found = [...$found, ...self::undeclaredTraits($index, $parentFqn, [...$trail, $fqn])];
+            }
+        }
+
+        return array_values(array_unique($found));
+    }
+
+    /**
      * The public methods of one type, as PHP exposes them: its own, then those
      * of each trait it uses, then those of its parent class or extended
      * interfaces. A method earlier in that order wins over a later one of the
@@ -1349,7 +1380,7 @@ final class ApiReference
     }
 
     /**
-     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}> $types
+     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}> $types
      */
     private static function render(string $slug, array $types): string
     {
@@ -1389,7 +1420,7 @@ final class ApiReference
     }
 
     /**
-     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>} $type
+     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>} $type
      */
     private static function renderType(array $type): string
     {
@@ -1413,6 +1444,15 @@ final class ApiReference
                 $provided .= ', <code>from()</code> and <code>tryFrom()</code>';
             }
             $parts[] = '<p>PHP also provides ' . $provided . '.</p>';
+        }
+        if ($type['undeclaredTraits'] !== []) {
+            // The methods a trait adds are real API, so a missing table row must not read as a missing method.
+            $names = array_map(
+                static fn (string $t): string => '<code>' . htmlspecialchars($t, ENT_QUOTES, 'UTF-8') . '</code>',
+                $type['undeclaredTraits']
+            );
+            $parts[] = '<p>Not listed: the methods of ' . implode(', ', $names)
+                . (count($names) === 1 ? ', a trait' : ', traits') . ' declared outside src/.</p>';
         }
         if ($type['methods'] !== []) {
             $rows = [];
