@@ -942,17 +942,51 @@ final class GenDocsTest extends TestCase
 
     private const API_MARKER = '<!-- api-reference:generated -->';
 
+    /**
+     * A fixture root whose MATCHUPS lists sugar-core, the one slug ApiReference::ENABLED
+     * allows a fragment for. The splice only runs for enabled slugs, so the positive
+     * splice case cannot use a fixture slug.
+     */
+    private function makeEnabledCoreRoot(): string
+    {
+        $root = $this->makeFixtureRoot([]);
+        $md = (string) \file_get_contents("$root/docs/MATCHUPS.md");
+        \file_put_contents(
+            "$root/docs/MATCHUPS.md",
+            \str_replace("| alpha | `fixture-alpha/` |\n", "| alpha | `fixture-alpha/` |\n| core | `sugar-core/` |\n", $md)
+        );
+        $this->writeData($root, 'sugar-core');
+
+        return $root;
+    }
+
     public function testASplicePutsTheFragmentWhereTheMarkerWas(): void
     {
-        $root = $this->makeFixtureRoot(['fixture-alpha']);
-        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>before</p>' . self::API_MARKER . '<p>after</p>');
-        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+        $root = $this->makeEnabledCoreRoot();
+        \file_put_contents("$root/docs/_data/sugar-core.body.html", '<p>before</p>' . self::API_MARKER . '<p>after</p>');
+        \file_put_contents("$root/docs/_data/sugar-core.api.html", "<h3>Demo</h3>\n");
 
         $r = $this->runScript($root);
         $this->assertSame(0, $r['exit'], $r['output']);
-        $page = $this->page($root, 'fixture-alpha');
+        $page = $this->page($root, 'sugar-core');
         $this->assertStringContainsString('<p>before</p><h3>Demo</h3><p>after</p>', $page);
         $this->assertStringNotContainsString(self::API_MARKER, $page);
+    }
+
+    /**
+     * A fragment for a lib outside ApiReference::ENABLED is spliced but never regenerated
+     * or compared, so its page would go stale under a green gate. It must fail closed.
+     */
+    public function testAFragmentForALibOutsideTheEnabledListFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>x</p>' . self::API_MARKER);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Hand written</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('not in ApiReference::ENABLED', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
     }
 
     /**

@@ -832,4 +832,151 @@ final class GenApiReferenceTest extends TestCase
         $this->expectExceptionMessage('not enabled');
         \ApiReference::generate(self::root(), 'sugar-style');
     }
+
+    /**
+     * A page built from the fragment must say which inherited methods it leaves out. Without
+     * that line a reader checking for getMessage() on ProgramException finds nothing and
+     * concludes the method does not exist.
+     */
+    public function testThePageSaysOutOfTreeParentMethodsAreNotListed(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Oops.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Wraps a failure. */\nfinal class Oops extends \\RuntimeException\n{\n    /** Own method. */\n    public function own(): void\n    {\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('Only methods declared in <code>sugar-core/src</code>', $html);
+        self::assertStringContainsString('<code>\RuntimeException</code>', $html);
+        self::assertStringContainsString('does not show the methods of that class', $html);
+    }
+
+    /** A committed-fragment copy of the CLI, so its mode tests run against a throwaway tree. */
+    private function cliRoot(array $files): string
+    {
+        $root = $this->fixtureRoot($files);
+        \mkdir($root . '/tools', 0777, true);
+        \mkdir($root . '/docs/_data', 0777, true);
+        \copy(self::root() . '/tools/gen-api-reference.php', $root . '/tools/gen-api-reference.php');
+
+        return $root;
+    }
+
+    /**
+     * Runs the copied CLI in a child PHP process, so its exit codes and its stdout and
+     * stderr are the real ones. The script resolves its root from its own location, so
+     * the copy under $root reads and writes only the fixture tree.
+     *
+     * @param list<string> $args
+     * @return array{exit: int, stdout: string, stderr: string}
+     */
+    private function runCli(string $root, array $args): array
+    {
+        $proc = \proc_open(
+            [\PHP_BINARY, $root . '/tools/gen-api-reference.php', ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $root
+        );
+        self::assertIsResource($proc, 'could not start the gen-api-reference CLI');
+        \fclose($pipes[0]);
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return ['exit' => \proc_close($proc), 'stdout' => $stdout, 'stderr' => $stderr];
+    }
+
+    /** @return array<string, string> one documented public type, so top-10 coverage is 100 percent */
+    private static function documentedCoreFixture(): array
+    {
+        return [
+            'sugar-core/src/Holder.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Holds a value. */\nfinal class Holder\n{\n    /** Own method. */\n    public function own(): void\n    {\n    }\n}\n",
+        ];
+    }
+
+    public function testCliCheckExitsZeroOnAFreshFragment(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+        \file_put_contents(\ApiReference::fragmentPath($root, 'sugar-core'), \ApiReference::generate($root, 'sugar-core'));
+
+        $r = $this->runCli($root, ['sugar-core', '--check']);
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertStringContainsString('ok:', $r['stdout']);
+    }
+
+    public function testCliCheckExitsOneOnDriftAndNamesTheFix(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+        \file_put_contents(\ApiReference::fragmentPath($root, 'sugar-core'), "<!-- hand edited -->\n");
+
+        $r = $this->runCli($root, ['sugar-core', '--check']);
+        self::assertSame(1, $r['exit'], 'a stale fragment must fail the check, not pass it');
+        self::assertStringContainsString('drift:', $r['stderr']);
+        self::assertStringContainsString('php tools/gen-api-reference.php sugar-core', $r['stderr']);
+        self::assertSame("<!-- hand edited -->\n", \file_get_contents(\ApiReference::fragmentPath($root, 'sugar-core')), '--check must not write');
+    }
+
+    public function testCliCheckExitsOneWhenTheFragmentIsMissing(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+
+        $r = $this->runCli($root, ['sugar-core', '--check']);
+        self::assertSame(1, $r['exit']);
+        self::assertStringContainsString('drift:', $r['stderr']);
+    }
+
+    public function testCliWriteModeReplacesAStaleFragmentAndThePassingCheckFollows(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+        $target = \ApiReference::fragmentPath($root, 'sugar-core');
+        \file_put_contents($target, "<!-- stale -->\n");
+
+        $written = $this->runCli($root, ['sugar-core']);
+        self::assertSame(0, $written['exit'], $written['stderr']);
+        self::assertStringContainsString('wrote', $written['stdout']);
+        self::assertSame(\ApiReference::generate($root, 'sugar-core'), \file_get_contents($target));
+
+        $checked = $this->runCli($root, ['sugar-core', '--check']);
+        self::assertSame(0, $checked['exit'], $checked['stderr']);
+    }
+
+    public function testCliReportExitsZeroAtTheTargetAndOneBelowIt(): void
+    {
+        $documented = $this->cliRoot(self::documentedCoreFixture());
+        $ok = $this->runCli($documented, ['sugar-core', '--report']);
+        self::assertSame(0, $ok['exit'], $ok['stderr']);
+        self::assertStringContainsString('top-10 coverage 1/1 (100.0%)', $ok['stdout']);
+
+        $bare = $this->cliRoot([
+            'sugar-core/src/Bare.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Bare\n{\n    public function go(): void\n    {\n    }\n}\n",
+        ]);
+        $below = $this->runCli($bare, ['sugar-core', '--report']);
+        self::assertSame(1, $below['exit'], 'an undocumented API is below the target and must exit 1');
+        self::assertStringContainsString('(0.0%)', $below['stdout']);
+    }
+
+    public function testCliUsageErrorsExitTwo(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+
+        foreach ([[], ['bogus-slug'], ['sugar-core', '--bogus'], ['sugar-core', '--check', '--report']] as $args) {
+            $r = $this->runCli($root, $args);
+            self::assertSame(2, $r['exit'], 'args ' . \json_encode($args) . ' must be a usage error');
+            self::assertStringContainsString('usage:', $r['stderr']);
+        }
+
+        $outside = $this->runCli($root, ['candy-nope']);
+        self::assertSame(2, $outside['exit']);
+        self::assertStringContainsString('not enabled', $outside['stderr']);
+    }
+
+    public function testCliHelpPrintsTheUsageAndExitsZero(): void
+    {
+        $root = $this->cliRoot(self::documentedCoreFixture());
+
+        $r = $this->runCli($root, ['--help']);
+        self::assertSame(0, $r['exit']);
+        self::assertStringContainsString('usage: gen-api-reference.php', $r['stdout']);
+    }
 }
