@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => '此处尚未关联任何内容，请先发送一条消息。',
     'channels.discord.attachments.skipped' => '已跳过 {count} 个附件：{notes}',
     'channels.discord.attachments.unnamed' => '附件',
+    'channels.discord.attachments.no_caption' => '(无配文)',
     'channels.discord.attachments.reason.unsupported' => '{name}（不支持的文件类型）',
     'channels.discord.attachments.reason.past_image_limit' => '{name}（超出图片上限 {limit} 个）',
     'channels.discord.attachments.reason.past_document_limit' => '{name}（超出文档上限 {limit} 个）',

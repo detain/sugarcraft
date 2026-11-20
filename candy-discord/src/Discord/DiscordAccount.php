@@ -654,7 +654,7 @@ final class DiscordAccount implements PlatformFace
      */
     private function finishMedia(string $key, array $ref, string $text, bool $isMention, string $inboundId, array $images, array $documents, array $notes): void
     {
-        $caption = $text !== '' ? $text : '(no caption)';
+        $caption = $text !== '' ? $text : Lang::t('channels.discord.attachments.no_caption');
         $this->router->inbound('discord', $key, $ref, $caption, $isMention, $inboundId, $images, $documents);
         if ($notes === []) {
             return;

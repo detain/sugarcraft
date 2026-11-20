@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'Qui non c\'è ancora nulla di collegato — invia prima un messaggio.',
     'channels.discord.attachments.skipped' => 'Saltati {count} allegato/i: {notes}',
     'channels.discord.attachments.unnamed' => 'allegato',
+    'channels.discord.attachments.no_caption' => '(nessuna didascalia)',
     'channels.discord.attachments.reason.unsupported' => '{name} (tipo di file non supportato)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (oltre il limite di {limit} immagini)',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (oltre il limite di {limit} documenti)',

@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'Rien n\'est encore rattaché ici — envoyez d\'abord un message.',
     'channels.discord.attachments.skipped' => '{count} pièce(s) jointe(s) ignorée(s) : {notes}',
     'channels.discord.attachments.unnamed' => 'pièce jointe',
+    'channels.discord.attachments.no_caption' => '(sans légende)',
     'channels.discord.attachments.reason.unsupported' => '{name} (type non pris en charge)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (au-delà de la limite de {limit} images)',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (au-delà de la limite de {limit} documents)',

@@ -22,7 +22,7 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
  * written into `$notes` (by any assignment, `.=`, `+=`, `array_push`,
  * `array_unshift` or `array_splice`), used as the
- * attachment `$name` fallback, or anywhere inside the arguments of a send call
+ * attachment `$name` fallback or the `$caption` placeholder, or anywhere inside the arguments of a send call
  * or of the `$say` / `$reply` closures (including inside nested calls and
  * arrays) must go through `Lang::t` instead. A `Lang::t` placeholder value is
  * user text too, so a bare literal there is a hit. The `Lang::t` key itself
@@ -101,6 +101,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'array-union assign into $notes' => ["<?php\n\$notes += ['Attachment dropped'];\n", 2];
         yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
         yield 'bare English coalesce-assigned to $name' => ["<?php\n\$name ??= 'attachment';\n", 2];
+        yield 'bare English caption placeholder in a ternary' => ["<?php\n\$caption = \$text !== '' ? \$text : '(no caption)';\n", 2];
+        yield 'bare English caption placeholder assigned directly' => ["<?php\n\$caption = '(no caption)';\n", 2];
         yield 'bare literal passed to a nullsafe send call' => ["<?php\n\$this->rest?->send(\$channelId, 'Attachments were skipped', []);\n", 2];
         yield 'coalesce-assign into an indexed $notes' => ["<?php\n\$notes[\$idx] ??= 'Attachment dropped';\n", 2];
         yield 'bare English under a qualified non-Lang class' => ["<?php\n\$notes[] = \\Other\\Formatter::t('Attachment dropped');\n", 2];
@@ -134,6 +136,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'fully qualified Lang::t as a send argument' => ["<?php\n\$this->rest->send(\$channelId, \\CandyCode\\Bundles\\Discord\\Lang::t('channels.discord.attachments.skipped', []), []);\n"];
         yield 'Lang::t through array_unshift into $notes' => ["<?php\narray_unshift(\$notes, Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]));\n"];
         yield 'Lang::t through array-union assign into $notes' => ["<?php\n\$notes += [Lang::t('channels.discord.attachments.skipped', [])];\n"];
+        yield 'Lang::t caption placeholder in a ternary' => ["<?php\n\$caption = \$text !== '' ? \$text : Lang::t('channels.discord.attachments.no_caption');\n"];
     }
 
     #[DataProvider('qualifiedLangCallFixtureProvider')]
@@ -193,7 +196,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         for ($i = 0; $i < $n; ++$i) {
             if (self::is($toks, $i, T_VARIABLE, '$notes') && ($op = self::noteWriteOperator($toks, $i + 1)) !== null) {
                 \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1)));
-            } elseif (self::is($toks, $i, T_VARIABLE, '$name') && (self::is($toks, $i + 1, '=') || self::is($toks, $i + 1, T_COALESCE_EQUAL))) {
+            } elseif ((self::is($toks, $i, T_VARIABLE, '$name') || self::is($toks, $i, T_VARIABLE, '$caption')) && (self::is($toks, $i + 1, '=') || self::is($toks, $i + 1, T_COALESCE_EQUAL))) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2)));
             } elseif (self::isNotesMutator($toks, $i) && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1)));

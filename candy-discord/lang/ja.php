@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'ここにはまだ何も紐づいていません。先にメッセージを送ってください。',
     'channels.discord.attachments.skipped' => '添付ファイル {count} 件をスキップしました: {notes}',
     'channels.discord.attachments.unnamed' => '添付ファイル',
+    'channels.discord.attachments.no_caption' => '(キャプションなし)',
     'channels.discord.attachments.reason.unsupported' => '{name}（未対応のファイル形式）',
     'channels.discord.attachments.reason.past_image_limit' => '{name}（画像の上限 {limit} 件を超過）',
     'channels.discord.attachments.reason.past_document_limit' => '{name}（ドキュメントの上限 {limit} 件を超過）',

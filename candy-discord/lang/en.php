@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'Nothing is attached here yet — send a message first.',
     'channels.discord.attachments.skipped' => 'Skipped {count} attachment(s): {notes}',
     'channels.discord.attachments.unnamed' => 'attachment',
+    'channels.discord.attachments.no_caption' => '(no caption)',
     'channels.discord.attachments.reason.unsupported' => '{name} (unsupported type)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (past the image limit of {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (past the document limit of {limit})',

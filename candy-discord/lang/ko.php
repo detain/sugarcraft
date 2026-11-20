@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => '여기에는 아직 연결된 것이 없습니다. 먼저 메시지를 보내세요.',
     'channels.discord.attachments.skipped' => '첨부 파일 {count}개를 건너뛰었습니다: {notes}',
     'channels.discord.attachments.unnamed' => '첨부 파일',
+    'channels.discord.attachments.no_caption' => '(캡션 없음)',
     'channels.discord.attachments.reason.unsupported' => '{name} (지원하지 않는 파일 형식)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (이미지 한도 {limit}개 초과)',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (문서 한도 {limit}개 초과)',

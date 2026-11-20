@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'Здесь пока ничего не прикреплено — сначала отправьте сообщение.',
     'channels.discord.attachments.skipped' => 'Пропущено вложений: {count}: {notes}',
     'channels.discord.attachments.unnamed' => 'вложение',
+    'channels.discord.attachments.no_caption' => '(без подписи)',
     'channels.discord.attachments.reason.unsupported' => '{name} (неподдерживаемый тип файла)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (превышен лимит изображений: {limit})',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (превышен лимит документов: {limit})',

@@ -32,6 +32,7 @@ return [
     'channels.discord.attach.none' => 'Nada está anexado aqui ainda — envie uma mensagem primeiro.',
     'channels.discord.attachments.skipped' => '{count} anexo(s) ignorado(s): {notes}',
     'channels.discord.attachments.unnamed' => 'anexo',
+    'channels.discord.attachments.no_caption' => '(sem legenda)',
     'channels.discord.attachments.reason.unsupported' => '{name} (tipo não suportado)',
     'channels.discord.attachments.reason.past_image_limit' => '{name} (acima do limite de {limit} imagens)',
     'channels.discord.attachments.reason.past_document_limit' => '{name} (acima do limite de {limit} documentos)',
