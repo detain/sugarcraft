@@ -19,9 +19,12 @@ use React\Promise\PromiseInterface;
  * watches the turn socket, and the `ask_reply` or `client_result` frame
  * resumes it. Nothing blocks on the socket while the user decides.
  *
- * A turn that never asks never suspends: the fiber runs to its return inside
- * {@see \Fiber::start()}, the loop is not run, and the result is what the turn
- * returned, exactly as before.
+ * A turn that never suspends runs to its return inside {@see \Fiber::start()}:
+ * the loop is not run, and the result is what the turn returned, exactly as
+ * before. Not asking is not the same as not suspending, though. A turn that
+ * waits on a sub-agent suspends bare in {@see \SugarCraft\Code\Agents\AgentWorkerPool::idle()}
+ * with no question pending, and this driver resumes it on the loop like any
+ * other suspension.
  *
  * Only the turn's own fiber suspends. A suspension from a nested fiber (a
  * workflow's, say) is not this driver's, so such a caller keeps the blocking

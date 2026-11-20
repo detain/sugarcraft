@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Backend\LoopDrivenTurn;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Permissions\PermissionReply;
+use SugarCraft\Code\Tests\Backend\Support\ReadStreamCountingLoop;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
@@ -170,6 +171,58 @@ final class LoopDrivenTurnTest extends TestCase
         self::assertSame('yielded', $value);
         self::assertGreaterThanOrEqual(3, $ticks, 'the loop must turn between the bare suspensions');
         self::assertLessThanOrEqual(1000, $resumes);
+    }
+
+    /**
+     * P4-12 CC-1 e0 review: a parent that hangs up leaves the turn socket
+     * readable (EOF) for good. The ask settles unanswered, but the socket stayed
+     * on the loop, so while the turn went on to its bare suspensions the loop
+     * read the EOF again on every turn and never slept. The socket must leave
+     * the loop on the first EOF, so the EOF is read exactly once.
+     */
+    public function testAParentThatHangsUpTakesTheSocketOffTheLoopAtTheFirstEof(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new ReadStreamCountingLoop();
+        $channel = $this->channel($child);
+        $call = new ToolCall('call_5', 'Edit', []);
+
+        $loop->addTimer(0.01, function () use ($parent): void {
+            self::readFrame($parent);
+            \fclose($parent);
+        });
+
+        $ticks = 0;
+        $loop->addPeriodicTimer(0.001, function () use (&$ticks): void {
+            $ticks++;
+        });
+
+        $value = LoopDrivenTurn::run(
+            static function () use ($channel, $call, &$ticks): string {
+                $resolution = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+
+                // The turn keeps running after the EOF, with no question
+                // pending: bare suspensions until the loop has turned enough.
+                $resumes = 0;
+                while ($ticks < 20) {
+                    if (++$resumes > 1000) {
+                        throw new \RuntimeException('busy spin: the turn resumed 1000 times without the loop turning');
+                    }
+                    \Fiber::suspend();
+                }
+
+                return $resolution->cancelled ? 'unanswered' : 'answered';
+            },
+            $channel,
+            $loop,
+        );
+
+        self::assertSame('unanswered', $value, 'a parent that hangs up is never a grant');
+        self::assertSame(
+            1,
+            $loop->readDispatches,
+            'the socket stayed on the loop after the EOF, so the loop woke on it on every turn',
+        );
     }
 
     private function channel($child): ChildChannel

@@ -631,10 +631,7 @@ final class ChildChannel
     /** Undo {@see attachLoop()} and stop watching the socket. Idempotent. */
     public function detachLoop(): void
     {
-        if ($this->watched && $this->loop !== null) {
-            $this->loop->removeReadStream($this->socket);
-        }
-        $this->watched = false;
+        $this->unwatch();
         $this->loop = null;
         $this->turnFiber = null;
     }
@@ -736,12 +733,29 @@ final class ChildChannel
         $this->watched = true;
     }
 
-    /** The socket is readable on the loop: read once and settle what it answered. */
+    /** Stop watching the socket. Idempotent; the next suspension registers it again. */
+    private function unwatch(): void
+    {
+        if ($this->watched && $this->loop !== null) {
+            $this->loop->removeReadStream($this->socket);
+        }
+        $this->watched = false;
+    }
+
+    /**
+     * The socket is readable on the loop: read once and settle what it answered.
+     *
+     * WHY THE SOCKET LEAVES THE LOOP AT EOF. Once the parent hangs up the
+     * socket reads as EOF on every poll. A turn that is still running (a
+     * bare suspension, say) would then have the loop wake on it each turn
+     * and never sleep, so the watch is dropped on the first EOF.
+     */
     private function onReadable(): void
     {
         $reply = null;
         $result = null;
         if (!$this->readInbound(false, null, $reply, null, $result)) {
+            $this->unwatch();
             $this->failPending();
         }
         $this->settle();
