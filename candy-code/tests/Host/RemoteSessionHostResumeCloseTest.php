@@ -252,4 +252,70 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertInstanceOf(\Throwable::class, $settled, 'the call issued during the refused hello settles');
         self::assertSame('server refused', $settled->getMessage(), 'the call is rejected with the attempt\'s failure');
     }
+
+    /**
+     * A server that accepts the upgrade and then never answers server.hello
+     * used to park the resume forever: no deadline bounded the hello, so the
+     * attempt never failed, the ladder never advanced and no verdict came. The
+     * silent attempt must now time out, close its socket, and let the next
+     * redial resume the session.
+     */
+    public function testASilentServerHelloFailsTheAttemptAndTheLadderRedials(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $dialed = 0;
+        $silent = null;
+        $reopen = static function () use (&$dialed, &$silent): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            if ($answered === 1) {
+                // The first socket takes the hello and never answers it.
+                $silent = $stream;
+
+                return resolve([$stream, '']);
+            }
+            $out->on('data', static function (string $bytes) use ($in): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                Loop::futureTick(static function () use ($in, $reply): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    Loop::stop();
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+            resumeHelloSeconds: 0.05,
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $verdicts = [];
+        $host->onClose(static function (string $reason) use (&$verdicts): void {
+            $verdicts[] = $reason;
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertSame(2, $dialed, 'the silent hello timed out, and the ladder redialed once');
+        self::assertTrue($host->isOpen(), 'the second attempt resumes, so the host is attached again');
+        self::assertSame([], $verdicts, 'no verdict is delivered once the session resumes');
+        self::assertFalse($silent->isReadable(), 'the silent socket is closed when its attempt times out');
+    }
 }

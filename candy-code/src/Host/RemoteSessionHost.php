@@ -107,6 +107,14 @@ final class RemoteSessionHost
      */
     public const RECONNECT_MAX_ATTEMPTS = 12;
 
+    /**
+     * How long a resume's server.hello may go unanswered before its attempt
+     * fails, so the ladder redials. Without it a server that accepts the
+     * upgrade and then stays silent parks the attachment in its reconnecting
+     * state, with no verdict ever reached.
+     */
+    public const RESUME_HELLO_SECONDS = 10.0;
+
     private static ?self $launch = null;
 
     private MessageBuffer $buffer;
@@ -126,6 +134,9 @@ final class RemoteSessionHost
 
     /** Redial ladder seam: the production ladder unless a test bounds its delays. */
     private readonly ?Backoff $redialBackoff;
+
+    /** How long a resume's server.hello may stay unanswered ({@see RESUME_HELLO_SECONDS}). */
+    private readonly float $resumeHelloSeconds;
 
     /** Cancels the redial cycle in flight; close() fires it. */
     private ?CancellationSource $cancelLadder = null;
@@ -200,10 +211,12 @@ final class RemoteSessionHost
         ?\Closure $reopen = null,
         ?\Closure $after = null,
         ?Backoff $redialBackoff = null,
+        float $resumeHelloSeconds = self::RESUME_HELLO_SECONDS,
     ) {
         $this->reopen = $reopen;
         $this->after = $after;
         $this->redialBackoff = $redialBackoff;
+        $this->resumeHelloSeconds = $resumeHelloSeconds;
         $this->pending = new PendingCalls();
         $this->wire($stream, $initial);
     }
@@ -293,6 +306,7 @@ final class RemoteSessionHost
      * $after overrides the scheduler of the first wait (tests); it defaults to
      * the loop. $redialBackoff overrides the redial ladder (tests bound its
      * delays); it keeps the RECONNECT_MAX_ATTEMPTS budget when it is omitted.
+     * $resumeHelloSeconds bounds each resume's hello (tests shorten it).
      */
     public static function overStream(
         DuplexStreamInterface $stream,
@@ -301,8 +315,9 @@ final class RemoteSessionHost
         ?\Closure $reopen = null,
         ?\Closure $after = null,
         ?Backoff $redialBackoff = null,
+        float $resumeHelloSeconds = self::RESUME_HELLO_SECONDS,
     ): self {
-        return new self($stream, $clientName, $initial, $reopen, $after, $redialBackoff);
+        return new self($stream, $clientName, $initial, $reopen, $after, $redialBackoff, $resumeHelloSeconds);
     }
 
     // ── the launch's attachment ─────────────────────────────────────────
@@ -1037,7 +1052,7 @@ final class RemoteSessionHost
      * redial changes that verdict.
      *
      * @param array{0: DuplexStreamInterface, 1: string} $socket
-     * @return PromiseInterface<null> rejects with the hello's failure, which the ladder counts
+     * @return PromiseInterface<null> rejects with the hello's failure, or with a timeout when it goes unanswered, which the ladder counts
      */
     private function resume(array $socket): PromiseInterface
     {
@@ -1046,10 +1061,12 @@ final class RemoteSessionHost
         $this->closeReason = null;
         $this->wire($stream, $initial);
 
-        return $this->call('server.hello', $this->helloParams([
+        // A hello that never answers fails the attempt: the timeout's rejection
+        // runs the same abandon() below as a refused hello, freeing the socket.
+        return AsyncOps::withTimeout($this->call('server.hello', $this->helloParams([
             'resume' => [(string) $this->sessionId => $this->lastSeq],
             'snapshotLimit' => $this->snapshotPageRows,
-        ]))->then(function (array $result): void {
+        ])), $this->resumeHelloSeconds, null, 'server.hello')->then(function (array $result): void {
             if (!$this->open) {
                 // This socket died while its hello was being answered: the attempt fails with it.
                 throw new \RuntimeException($this->closeReason ?? 'the resumed socket closed');
