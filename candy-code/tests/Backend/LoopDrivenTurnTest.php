@@ -12,9 +12,11 @@ use SugarCraft\Code\Backend\ChildRequestCancelled;
 use SugarCraft\Code\Backend\LoopDrivenTurn;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Events\PermissionResolved;
+use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tests\Backend\Support\ReadStreamCountingLoop;
 use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * P4-12 CC-1 step e0: the forked turn child runs on the loop. An approver ask or
@@ -276,46 +278,106 @@ final class LoopDrivenTurnTest extends TestCase
     }
 
     /**
-     * A question the parent never answers (it hangs up while the turn waits on
-     * it) rejects with the request's id, and the approver's cancellation handler
-     * settles it unanswered, never granted.
+     * The client-call twin of the ask test above: on the turn's own fiber a
+     * client call returns a PENDING promise, and the loop resolves it when the
+     * `client_result` frame arrives. A blocking callClient would never let the
+     * parent timer run, and the pending check would read the call as settled.
      */
-    public function testACancelledAskRejectsWhenTheParentHangsUpWhileTheTurnWaits(): void
+    public function testAClientCallOnTheTurnsOwnFiberReturnsAPendingPromiseTheLoopResolves(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $channel = $this->channel($child);
+
+        $loop->addTimer(0.01, function () use ($parent): void {
+            $request = self::readFrame($parent);
+            self::send($parent, [
+                'kind' => ChildChannel::CLIENT_RESULT,
+                'callId' => $request['callId'] ?? '',
+                'content' => 'the client answered',
+                'isError' => false,
+            ]);
+        });
+
+        $pendingAtCall = null;
+        $result = LoopDrivenTurn::run(
+            static function () use ($channel, &$pendingAtCall): ToolResult {
+                $promise = $channel->callClient('tc_6', 'client__probe', ['q' => 'x'], 30);
+                $settled = false;
+                $promise->then(
+                    static function () use (&$settled): void {
+                        $settled = true;
+                    },
+                    static function () use (&$settled): void {
+                        $settled = true;
+                    },
+                );
+                $pendingAtCall = !$settled;
+
+                return SettledPromise::callAnswer($promise, 'tc_6');
+            },
+            $channel,
+            $loop,
+        );
+
+        self::assertTrue($pendingAtCall, 'the client call must return before the answer arrives, not block for it');
+        self::assertSame('the client answered', $result->content());
+        self::assertFalse($result->isError());
+    }
+
+    /**
+     * A question the parent never answers (it hangs up while the turn waits on
+     * it) reaches the turn through the production approver's cancellation
+     * mapping, and settles unanswered, never granted. The rejection's request id
+     * is asserted where the promise itself is tested (ChildChannelTest).
+     */
+    public function testACancelledAskSettlesUnansweredThroughTheApproverWhenTheParentHangsUp(): void
     {
         [$parent, $child] = $this->pair();
         $loop = new StreamSelectLoop();
         $channel = $this->channel($child);
         $call = new ToolCall('call_21', 'Edit', []);
-        $askId = PendingAsk::askId('call_21', 'Edit', []);
 
         $loop->addTimer(0.01, function () use ($parent): void {
             self::readFrame($parent);
             \fclose($parent);
         });
 
-        $outcome = LoopDrivenTurn::run(
-            static function () use ($channel, $call): array {
-                $promise = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
-                $rejection = null;
-                $promise->then(null, static function (\Throwable $error) use (&$rejection): void {
-                    $rejection = $error;
-                });
-                $resolution = ChildChannel::awaitTurn(
-                    $promise,
-                    static fn (ChildRequestCancelled $cancelled): PermissionResolved => PermissionResolved::cancelled($cancelled->requestId, $cancelled->getMessage()),
-                );
-
-                return [$rejection, $resolution];
-            },
+        $verdict = LoopDrivenTurn::run(
+            static fn (): ApprovalVerdict => $channel->approver()($call, ForkChannelEofIsUnansweredTest::gateAsk()),
             $channel,
             $loop,
         );
 
-        [$rejection, $resolution] = $outcome;
-        self::assertInstanceOf(ChildRequestCancelled::class, $rejection);
-        self::assertSame($askId, $rejection->requestId);
-        self::assertTrue($resolution->cancelled);
-        self::assertFalse($resolution->permits(), 'a hang-up is never a grant');
+        self::assertNull($verdict->reply, 'a hang-up is never a grant');
+        self::assertFalse($verdict->permits());
+        self::assertSame(ChildChannel::PARENT_GONE, $verdict->feedback);
+    }
+
+    /**
+     * The client-call twin of the cancelled ask above: a parent that hangs up
+     * while the turn waits on a client call reaches the turn through the
+     * production client caller's mapping, as the turn's error result.
+     */
+    public function testACancelledClientCallSettlesAsAnErrorResultThroughTheClientCallerWhenTheParentHangsUp(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $channel = $this->channel($child);
+
+        $loop->addTimer(0.01, function () use ($parent): void {
+            self::readFrame($parent);
+            \fclose($parent);
+        });
+
+        $result = LoopDrivenTurn::run(
+            static fn (): ToolResult => $channel->clientCaller()('tc_7', 'client__probe', ['q' => 'x'], 30),
+            $channel,
+            $loop,
+        );
+
+        self::assertTrue($result->isError(), 'a hang-up is never an answer');
+        self::assertSame('the turn ended before the client answered', $result->content());
     }
 
     /**
