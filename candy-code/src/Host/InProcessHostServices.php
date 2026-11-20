@@ -343,7 +343,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $params = $this->createParams($name, $permissionMode);
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->primaryAnswer($this->dispatcher->invoke($client, 'session.create', $params), $root);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'session.create', $params));
             }
 
             return $this->routedCall($routed, 'session.create', $params, '', self::wire(...), function (mixed $answer) use ($routed): void {
@@ -418,7 +418,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $client = $this->connected();
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->primaryAnswer($this->dispatcher->invoke($client, 'permission.pending', []), $root);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'permission.pending', []));
             }
 
             return $this->routedCall($routed, 'permission.pending', [], '', self::wire(...), static function (): void {
@@ -645,15 +645,20 @@ final class InProcessHostServices implements HostServices, RootedHostServices
 
     /**
      * The primary answer of a root form carries `root`, as a routed answer does (PL-5c-A design,
-     * section 2.6): the canonical primary root when the gateway is wired, else the root the caller named.
+     * section 2.6): the canonical primary root from the gateway. Without a gateway no canonical root
+     * is known, and the root the caller named was never checked against anything, so the answer
+     * names none rather than assert a root the session may not be on.
      *
      * @param array<string, mixed> $answer
      *
      * @return array<string, mixed>
      */
-    private function primaryAnswer(array $answer, string $root): array
+    private function primaryAnswer(array $answer): array
     {
-        $answer['root'] ??= $this->gateway?->primaryRoot() ?? $root;
+        $primary = $this->gateway?->primaryRoot();
+        if ($primary !== null) {
+            $answer['root'] ??= $primary;
+        }
 
         return $answer;
     }
