@@ -708,6 +708,46 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression: launch() built its ChildRunLaunch without forwarding withSetsidWrapped(),
+     * so the reap-path fallback never ran in production, while every direct-construction
+     * test stayed green. The timing tests above cannot catch that: the spawn-time group read
+     * may latch the group on its own. This pins the forwarding deterministically. It spawns
+     * a plain process, builds the launch through buildLaunch() without starting it, and reads
+     * the flag back from the constructed ChildRunLaunch, in both states.
+     */
+    public function testBuildLaunchForwardsTheSetsidWrappedFlagToTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+
+        foreach ([true, false] as $wrapped) {
+            $proc = proc_open(['sleep', '5'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+            $this->assertIsResource($proc);
+            try {
+                $run = ChildRun::new(['sleep', '5'])->withSetsidWrapped($wrapped);
+                $build = new \ReflectionMethod(ChildRun::class, 'buildLaunch');
+                $build->setAccessible(true);
+
+                /** @var ChildRunLaunch $launch */
+                $launch = $build->invoke($run, new StreamSelectLoop(), $proc, $pipes, null, null, new \React\Promise\Deferred());
+
+                $this->assertSame(
+                    $wrapped,
+                    $this->reflect(ChildRunLaunch::class, 'setsidWrapped')->getValue($launch),
+                    'launch() must forward withSetsidWrapped() to ChildRunLaunch; a dropped argument leaves the wrapper-pid fallback dead',
+                );
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+        }
+    }
+
+    /**
      * Runs a setsid-wrapped shell with no spawn-time group, past its deadline, and
      * asserts the background job it printed is gone once the launch settles.
      */

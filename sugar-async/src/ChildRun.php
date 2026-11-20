@@ -356,7 +356,29 @@ final class ChildRun
         $group = $this->groupFor($proc);
 
         $deferred = new Deferred();
-        (new ChildRunLaunch(
+        $this->buildLaunch($loop, $proc, $pipes, $staged, $group, $deferred)->start();
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The launch state machine for one spawned child, with every option this builder
+     * carries forwarded. Split out of launch() so the setsid flag's forwarding can be
+     * pinned without a process run: the flag only matters on the reap path, which races
+     * the wrapper's own setsid, so no timing-free test can observe it through launch().
+     *
+     * @param resource $proc
+     * @param array<int, resource> $pipes
+     */
+    private function buildLaunch(
+        LoopInterface $loop,
+        $proc,
+        array $pipes,
+        ?string $staged,
+        ?int $group,
+        Deferred $deferred,
+    ): ChildRunLaunch {
+        return new ChildRunLaunch(
             $loop,
             $proc,
             $pipes,
@@ -371,9 +393,7 @@ final class ChildRun
             $staged,
             $this->exitGrace,
             $this->setsidWrapped,
-        ))->start();
-
-        return $deferred->promise();
+        );
     }
 
     /**
