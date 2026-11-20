@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -65,7 +66,7 @@ final class BackgroundStopCommandTest extends TestCase
         $this->assertSame("/bg stop {$id}", $next->history[count($next->history) - 1]->content);
         $this->assertTrue($supervisor->getSession($id)->isActive(), 'update() itself must not block on the stop');
 
-        $stopped = $this->resolve($cmd);
+        $stopped = $this->resolve($cmd, $supervisor);
         $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $stopped);
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $stopped->outcome);
         $this->assertSame(BackgroundSessionStatus::Stopped, $supervisor->getSession($id)->status);
@@ -82,7 +83,7 @@ final class BackgroundStopCommandTest extends TestCase
         $supervisor->addSession($this->session('custom-id'));
 
         [, $cmd] = $this->submit($supervisor, '/background stop custom-id');
-        $stopped = $this->resolve($cmd);
+        $stopped = $this->resolve($cmd, $supervisor);
 
         $this->assertInstanceOf(BackgroundSessionStoppedMsg::class, $stopped);
         $this->assertSame(BackgroundStopOutcome::CouldNotStop, $stopped->outcome);
@@ -127,7 +128,7 @@ final class BackgroundStopCommandTest extends TestCase
 
         foreach (['/bg stop the dev server and rebuild', '/bg stop everything'] as $line) {
             [, $cmd] = $this->submit($supervisor, $line);
-            $spawned = $this->resolve($cmd);
+            $spawned = $this->resolve($cmd, $supervisor);
 
             $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned, "{$line} was not backgrounded");
             $this->assertNull($spawned->error);
@@ -159,15 +160,28 @@ final class BackgroundStopCommandTest extends TestCase
         return $chat->update(new KeyMsg(KeyType::Enter, ''));
     }
 
-    private function resolve(?\Closure $cmd): mixed
+    /**
+     * The Msg an off-turn command resolves to. With a supervisor, its loop is pumped
+     * until the spawn or stop settles, since both are driven from tick().
+     */
+    private function resolve(?\Closure $cmd, ?BackgroundSupervisor $supervisor = null): mixed
     {
         $this->assertInstanceOf(\Closure::class, $cmd);
         $async = $cmd();
+        if ($async instanceof \SugarCraft\Core\BatchMsg) {
+            // A background spawn batches its launch with the tick that arms the poll.
+            $async = ($async->cmds[0])();
+        }
         $this->assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
         $async->promise->then(static function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
+        if ($supervisor !== null) {
+            SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+                return $resolved !== null;
+            });
+        }
 
         return $resolved;
     }

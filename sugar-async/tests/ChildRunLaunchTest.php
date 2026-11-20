@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Async\ChildRunLaunch;
@@ -241,6 +242,170 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertLessThan(5.0, $elapsed, 'the kill budget bounds the run');
     }
 
+    /** Timers armed on a private StreamSelectLoop, read the way SharedLoopResidue reads the shared one. */
+    private function armedTimers(StreamSelectLoop $loop): int
+    {
+        $queue = (new \ReflectionProperty(StreamSelectLoop::class, 'timers'))->getValue($loop);
+        $store = (new \ReflectionProperty($queue, 'timers'))->getValue($queue);
+
+        return \count($store);
+    }
+
+    /**
+     * The ladder poll must not outlive a launch that settles first. The poll is
+     * armed by the cancel while the child ignores TERM; the child then dies and the
+     * exit is seen by checkExit() before the poll's next tick, so finish() settles
+     * the launch with the poll still in the loop unless it is cancelled there.
+     */
+    public function testACancelledLaunchLeavesNoLadderTimerArmedWhenItSettlesOnTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(['sh', '-c', 'trap "" TERM; exec sleep 30'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            null,
+            null,
+            $source->token(),
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result): void {
+            $result = $r;
+        });
+
+        $launch->start();
+        $source->cancel();
+        $this->assertGreaterThan(0, $this->armedTimers($loop), 'the cancel arms the kill ladder');
+
+        proc_terminate($proc, 9);
+        $probeGone = $this->reflect(ChildRunLaunch::class, 'probeGone');
+        $checkExit = $this->reflect(ChildRunLaunch::class, 'checkExit');
+        $until = microtime(true) + 5.0;
+        while (!$probeGone->invoke($launch) && microtime(true) < $until) {
+            usleep(1000);
+        }
+        $checkExit->invoke($launch);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the exit settles the launch');
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertSame(0, $this->armedTimers($loop), 'no ladder poll stays armed on the loop once the launch has settled');
+    }
+
+    /**
+     * A leader that dies on TERM settles the launch on its exit, but the group still
+     * holds a grandchild that ignores TERM. The ladder must outlive that settle and
+     * KILL the group, or the grandchild survives the launch.
+     */
+    public function testGroupPidLaunchKillsATermIgnoringGrandchildAfterTheLeaderSettlesTheRun(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // The subshell's ignored TERM survives exec, so only the group KILL reaches
+        // the sleep; the leader sh dies on TERM from the first rung.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', '(trap "" TERM; exec sleep 300) & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the leader exit must settle the run');
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+
+        try {
+            // Settling must not stop the ladder: the loop keeps running until the
+            // group KILL lands, bounded by the TERM and KILL graces plus slack.
+            $gone = false;
+            $poll = $loop->addPeriodicTimer(0.02, static function () use ($loop, $grandchild, &$gone): void {
+                if (BoundedShutdown::pidExited($grandchild)) {
+                    $gone = true;
+                    $loop->stop();
+                }
+            });
+            $bound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $loop->run();
+            $loop->cancelTimer($poll);
+            $loop->cancelTimer($bound);
+
+            $this->assertTrue($gone, 'the kill ladder must reach the TERM-ignoring grandchild after the run settled');
+
+            // The group-path exception is bounded: once the group is empty the ladder
+            // cancels itself on its next 5 ms tick. Run until only this probe and the
+            // bound remain on the loop, so a ladder that held on past the group's
+            // emptying fails here rather than outliving the test.
+            $drainBound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $drainProbe = $loop->addPeriodicTimer(0.01, function () use ($loop, &$drainProbe): void {
+                if ($this->armedTimers($loop) <= 2) {
+                    $loop->stop();
+                }
+            });
+            $loop->run();
+            $loop->cancelTimer($drainProbe);
+            $loop->cancelTimer($drainBound);
+            $this->assertSame(0, $this->armedTimers($loop), 'the ladder must leave the loop once the group is empty, not hold a timer past the settle');
+        } finally {
+            if (!BoundedShutdown::pidExited($grandchild)) {
+                @posix_kill($grandchild, 9);
+            }
+        }
+    }
+
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void
     {
         $this->requirePosixPipes();
@@ -357,5 +522,298 @@ final class ChildRunLaunchTest extends TestCase
         $loop->run();
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected);
+    }
+
+    public function testOnChunkFeedsLaunchAsItArrives(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            $this->php('fwrite(STDOUT, "tick"); fwrite(STDERR, "tock");'),
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $seen = ['1' => '', '2' => ''];
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            10.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$seen): void {
+                $seen[(string) $slot] .= $chunk;
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame('tick', $result->stdout);
+        $this->assertSame('tock', $result->stderr);
+        $this->assertSame('tick', $seen['1']);
+        $this->assertSame('tock', $seen['2']);
+    }
+
+    public function testGroupPidLaunchKillsGrandchildrenPastTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // setsid execs sh in place, so the status pid is the group leader and
+        // the group id; the background sleep is the grandchild the ladder must reach.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => BoundedShutdown::pidExited($grandchild), 3.0),
+            'the containment group kill must reach the grandchild',
+        );
+    }
+
+    public function testOnSpawnReportsThePidOnTheLoopPath(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $reported = [];
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, (string) getmypid());'))
+            ->withOnSpawn(static function (int $pid) use (&$reported): void {
+                $reported[] = $pid;
+            })
+            ->launch($loop));
+
+        $this->assertCount(1, $reported);
+        $this->assertGreaterThan(0, $reported[0]);
+        $this->assertSame((string) $reported[0], $r->stdout);
+    }
+
+    public function testAnOnSpawnThrowRejectsAndKillsTheStartedChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the rejection.');
+        }
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $pid = 0;
+
+        try {
+            $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->launch($loop));
+            self::fail('an onSpawn throw must reject launch()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
+
+    /**
+     * The launch counterpart of the run() abandonment: the parent exits at once and
+     * a backgrounded descendant keeps the pipes open and silent. Launch cuts them
+     * after the silence budget and settles, EXITED with the pipe reported abandoned,
+     * long before the 4 s deadline.
+     */
+    public function testLaunchAbandonsAPipeHeldByADescendantAfterTheExitGrace(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertTrue($r->succeeded());
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the silence budget');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the silence budget before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch must settle after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * Launch reads on while the pipes keep yielding after the exit: a descendant
+     * that writes every half second for two seconds is read to EOF, so all five
+     * lines are kept and nothing is abandoned.
+     */
+    public function testLaunchExitGraceCountsSilenceNotTimeFromTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', '(for i in 1 2 3 4 5; do echo $i; sleep 0.5; done) & exit 0'])
+            ->withTimeout(10.0)
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("1\n2\n3\n4\n5\n", $r->stdout);
+        $this->assertFalse($r->abandonedPipes());
+    }
+
+    /**
+     * The child writes 60 000 bytes and exits. The loop stalls for 1.5 s just after
+     * the second 8 KiB chunk, which is past the 1 s exit grace, so the exit is seen
+     * with bytes still unread in the pipe. Those bytes were written before the exit,
+     * so launch must read them before it cuts a silent pipe: all 60 000 are kept and
+     * nothing is abandoned.
+     */
+    public function testLaunchKeepsOutputBufferedBehindAStalledLoopAfterTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $chunks = 0;
+
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, str_repeat("x", 60000));'))
+            ->withTimeout(10.0)
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$chunks, $loop): void {
+                if ($slot === 1 && ++$chunks === 2) {
+                    $loop->futureTick(static function (): void {
+                        \usleep(1_500_000);
+                    });
+                }
+            })
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(60000, \strlen($r->stdout), 'output buffered behind the stalled loop is read, not cut');
+        $this->assertFalse($r->abandonedPipes(), 'nothing was held by a descendant, so nothing is abandoned');
+    }
+
+    /**
+     * An idle budget shorter than the exit grace must not cut a child that has
+     * already exited: the grace governs its held pipe, so launch settles EXITED with
+     * the pipe reported abandoned, not TIMED_OUT.
+     */
+    public function testLaunchExitGraceGovernsAHeldPipeWhenAnIdleBudgetIsSet(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withIdleTimeout(0.5)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'an exited child is not idle-killed');
+        $this->assertSame(0, $r->exitCode);
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the exit grace');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the exit grace before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch settles after the exit grace, not at the idle budget or deadline');
+    }
+
+    /**
+     * Regression: launch() counted a stdin write as output for the exit grace, so a
+     * descendant that drained its stdin slowly and wrote nothing to stdout held the
+     * pipes to the deadline (TIMED_OUT), while run() cut them one grace after the exit
+     * and reported EXITED with the pipe abandoned. The grandchild reads 8 KiB every
+     * 0.2 s, so each stdin write lands inside the 0.6 s grace; only stdout reads count.
+     * Both entry points must give the same result.
+     */
+    public function testLaunchAndRunCutAHeldPipeAtTheSameGraceWhileADescendantDrainsStdin(): void
+    {
+        $this->requirePosixPipes();
+        $reader = 'while (($c = fread(STDIN, 8192)) !== "" && $c !== false) { usleep(200000); }';
+        // A background job in sh gets /dev/null as stdin unless it is redirected from
+        // an fd that still holds the pipe, so the pipe is duplicated first.
+        $argv = ['/bin/sh', '-c', 'exec 3<&0; "$0" -r "$1" <&3 & exit 0', PHP_BINARY, $reader];
+        $configured = static fn (): ChildRun => ChildRun::new($argv)
+            ->withTimeout(4.0)
+            ->withExitGrace(0.6)
+            ->withStdin(str_repeat('x', 262144));
+
+        $sync = $configured()->run();
+
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+        $async = $this->settle($loop, $configured()->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $sync->status, 'run() cuts the held pipe after the grace');
+        $this->assertTrue($sync->abandonedPipes());
+        $this->assertSame(ChildResult::EXITED, $async->status, 'launch() must cut the held pipe at the same grace, not hold it to the deadline');
+        $this->assertTrue($async->abandonedPipes(), 'the held pipe is reported abandoned on the loop path too');
+        $this->assertSame($sync->exitCode, $async->exitCode);
+        $this->assertLessThan(3.0, $elapsed, 'launch settles one grace after the exit, not at the 4 s deadline');
+    }
+
+    /** The control for the launch grace: with it removed, a held pipe holds launch to its deadline. */
+    public function testLaunchWithoutAnExitGraceHoldsAHeldPipeToTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(2.0)
+            ->withExitGrace(null)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertFalse($r->abandonedPipes(), 'a deadline kill is not an abandonment');
+        $this->assertGreaterThanOrEqual(1.5, $elapsed, 'launch waits for the deadline while the pipe is held');
     }
 }

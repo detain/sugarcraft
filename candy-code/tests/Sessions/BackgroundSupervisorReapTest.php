@@ -312,7 +312,7 @@ final class BackgroundSupervisorReapTest extends TestCase
 
         $this->assertSame(
             'array',
-            self::procOpenCommandShape($source, 'spawnSession'),
+            self::procOpenCommandShape($source, 'spawnSessionAsync'),
             'BackgroundSupervisor::spawnSession() must hand proc_open() an argv array. A string is '
             . 'handed to /bin/sh -c, and on this host that interposes a dash the supervisor then '
             . 'mistakes for its own launcher.'

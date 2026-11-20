@@ -1474,6 +1474,8 @@ final class EnvRosterDriftTest extends TestCase
         'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
         'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'TERM', 'COLORFGBG',
         'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR', 'COLUMNS', 'NUMBER_OF_PROCESSORS',
+        // Windows only: the shell CommandBackend wraps a string command in (cmd.exe unless COMSPEC names another).
+        'COMSPEC',
         // C-TUI-7.b: emulator identity carriers that survive a multiplexer,
         // read by Support\MacAltNotice's kitty probe (docs row names all three).
         'KITTY_WINDOW_ID', 'GHOSTTY_RESOURCES_DIR', 'WEZTERM_PANE',
@@ -1922,6 +1924,14 @@ final class EnvRosterDriftTest extends TestCase
                 . 'function f() { return $this->names[self::NAME] ?? null; } }',
             ),
             'a constant is only a read when it is the key of getenv() or of $_ENV / $_SERVER',
+        );
+        // The positive arm the zero-fixture pairing rule asks for: the same instrument
+        // must still report the literal key when it IS a getenv() key, or the empty
+        // answers above could mean a dead scanner rather than a correct refusal.
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn('<?php class A { function f() { return getenv("HTTPS_PROXY"); } }'),
+            'the scanner still reads a literal getenv() key, so the empty answers below are real refusals',
         );
         $this->assertSame(
             [],

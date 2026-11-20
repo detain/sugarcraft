@@ -15,6 +15,8 @@ use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\Tui\StallDetector;
 use SugarCraft\Code\Tui\StallWarning;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 
 /**
  * Manages all background sessions as a supervisor process.
@@ -73,6 +75,12 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * going, so a hostile local connect cannot consume the budget by itself.
      */
     private const SPAWN_AUTH_TIMEOUT_SECS = 5.0;
+
+    /**
+     * Connections held open at once while one spawn's handshake is pending. A flood
+     * past this is simply left in the listen backlog until the spawn's deadline.
+     */
+    private const SPAWN_MAX_CLIENTS = 16;
 
     /**
      * How long {@see stopSession()} waits for the daemon to exit after an
@@ -248,6 +256,132 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * (PERMISSIONS.md) stays exactly where its rejection notice says it is.
      */
     private ?string $spawnPermissionMode = null;
+
+    /**
+     * Spawns whose daemon has been launched but has not authenticated yet, keyed by
+     * session id. {@see advanceSpawns()} owns them: the accept and the handshake are
+     * driven from the event loop, never waited on inside the TUI thread.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $pendingSpawns = [];
+
+    /**
+     * Launchers this supervisor is reaping without waiting on them: a failed
+     * spawn's launcher being terminated, or a settled spawn's launcher still
+     * alive for a moment. {@see advanceLauncherReaps()} polls each one from
+     * {@see advanceSpawns()} and escalates on its own bounded budget, so a
+     * reap never parks the loop that drives it.
+     *
+     * @var list<array{proc: mixed, stage: string, deadline: float, ownerPid: int}>
+     */
+    private array $launcherReaps = [];
+
+    /**
+     * Stops in flight, keyed by session id. {@see advanceStops()} drives each one
+     * through its rungs without sleeping.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $pendingStops = [];
+
+    /**
+     * Id of the rewake chain that keeps the TUI's stop rungs advancing, or null when
+     * none runs. {@see advanceRewakeChain()} owns it.
+     */
+    private ?int $rewakeChain = null;
+
+    /** Last chain id {@see advanceRewakeChain()} handed out. */
+    private int $rewakeChainSeq = 0;
+
+    /**
+     * Whether an entry of {@see $pendingSpawns}, {@see $pendingStops} or
+     * {@see $launcherReaps} was made by this process. A forked turn child inherits
+     * all three, and must not advance or settle them: its handshake, signal and
+     * file cleanup would act on its parent's daemon.
+     *
+     * @param array<string, mixed> $entry
+     */
+    private static function ownedHere(array $entry): bool
+    {
+        return ($entry['ownerPid'] ?? null) === getmypid();
+    }
+
+    /**
+     * True when this process has a spawn, a stop or a retired launcher in flight. A
+     * retired launcher counts: {@see advanceLauncherReaps()} runs only from the loop,
+     * so the background poll must stay armed until it is collected, or a failed
+     * spawn's launcher ignoring SIGTERM would never be SIGKILLed while the TUI is idle.
+     */
+    private function hasOwnedPending(): bool
+    {
+        foreach ($this->pendingSpawns as $pending) {
+            if (self::ownedHere($pending)) {
+                return true;
+            }
+        }
+
+        return $this->hasOwnedStop() || $this->hasOwnedReap();
+    }
+
+    /**
+     * True when a stop this process started has not settled. The host keeps its
+     * tick re-queuing while this holds, so each rung is advanced without waiting on
+     * the two-second poll.
+     */
+    public function hasStopInFlight(): bool
+    {
+        return $this->hasOwnedStop();
+    }
+
+    /**
+     * Decide whether a rewake tick keeps the process's one rewake chain alive. The
+     * chain advances every in-flight stop, so a second stop or a spawn tick arriving
+     * while it runs is a duplicate and ends there instead of starting a parallel
+     * chain. Returns the chain id a re-queued tick must carry, or null when the tick
+     * ends the chain or is a duplicate.
+     *
+     * @param int|null $tickChain the chain the tick carries; null for a tick a stop or spawn queued
+     */
+    public function advanceRewakeChain(?int $tickChain): ?int
+    {
+        if (!$this->hasStopInFlight()) {
+            $this->rewakeChain = null;
+
+            return null;
+        }
+        if ($this->rewakeChain === null) {
+            $this->rewakeChain = ++$this->rewakeChainSeq;
+
+            return $this->rewakeChain;
+        }
+
+        return $tickChain === $this->rewakeChain ? $tickChain : null;
+    }
+
+    /** True when this process has a stop in flight. */
+    private function hasOwnedStop(): bool
+    {
+        foreach ($this->pendingStops as $stop) {
+            if (self::ownedHere($stop)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** True when this process is still reaping a retired launcher. */
+    private function hasOwnedReap(): bool
+    {
+        foreach ($this->launcherReaps as $reap) {
+            if (self::ownedHere($reap)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public function __construct(
         ?SessionNotificationInterface $listener = null,
@@ -561,6 +695,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // process's behalf joins here — this is what the host's background
         // poll is armed by, so it is where such a session must first appear.
         $this->adoptHandedOff();
+        if ($this->hasOwnedPending()) {
+            return true;
+        }
 
         foreach ($this->sessions as $session) {
             // A timed-out session is still "active" to the dashboard, which
@@ -637,6 +774,64 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ?string $permissionMode = null,
         ?float $permissionAskTimeout = null,
     ): BackgroundSession {
+        $result = null;
+        $this->spawnSessionAsync(
+            name: $name,
+            agent: $agent,
+            task: $task,
+            workingDirectory: $workingDirectory,
+            timeoutSeconds: $timeoutSeconds,
+            tags: $tags,
+            forkedSessionId: $forkedSessionId,
+            delegation: $delegation,
+            permissionMode: $permissionMode,
+            permissionAskTimeout: $permissionAskTimeout,
+        )->then(
+            static function (BackgroundSession $session) use (&$result): void {
+                $result = ['session' => $session];
+            },
+            static function (\Throwable $e) use (&$result): void {
+                $result = ['error' => $e];
+            },
+        );
+        // Synchronous callers (a forked turn child, the serve protocol, tests) wait
+        // here by pumping the same state machine the TUI drives from tick(). The
+        // deadline is enforced inside advanceSpawns(), so this always returns.
+        while ($result === null) {
+            $this->advanceSpawns();
+            if ($result === null) {
+                usleep(5_000);
+            }
+        }
+        if (isset($result['error'])) {
+            throw $result['error'];
+        }
+
+        return $result['session'];
+    }
+
+    /**
+     * {@see spawnSession()} without the wait. The daemon is launched and its handshake is
+     * left to {@see advanceSpawns()}, which the event loop drives through {@see tick()}.
+     * The promise resolves with the session once the daemon authenticates, and rejects
+     * after SPAWN_AUTH_TIMEOUT_SECS with the message the synchronous spawn throws. Argument
+     * errors and a launch that cannot start still throw here, before any promise exists.
+     *
+     * @return PromiseInterface<BackgroundSession>
+     * @throws \InvalidArgumentException when $permissionMode names no real mode
+     */
+    public function spawnSessionAsync(
+        string $name,
+        Agent $agent,
+        string $task,
+        string $workingDirectory,
+        int $timeoutSeconds = 3600,
+        ?array $tags = null,
+        ?string $forkedSessionId = null,
+        ?array $delegation = null,
+        ?string $permissionMode = null,
+        ?float $permissionAskTimeout = null,
+    ): PromiseInterface {
         $permissionMode = $permissionMode ?? $this->spawnPermissionMode;
         if ($permissionMode !== null && \SugarCraft\Code\Permissions\PermissionMode::tryFrom($permissionMode) === null) {
             throw new \InvalidArgumentException("not a permission mode: {$permissionMode}");
@@ -757,97 +952,270 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $errstr
         );
         if (!$serverSocket) {
-            ProcessReaper::terminateAndClose($proc);
+            $this->retireLauncher($proc, signal: true);
             $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
             throw new \RuntimeException("Failed to create IPC socket: {$errstr}");
         }
 
-        // Wait for the child to connect AND prove it is the child: accept in a
-        // bounded loop, authenticate every handshake, refuse the ones that do
-        // not carry the token this spawn minted. The pre-M5 code trusted the
-        // FIRST connection's word for its own pid; arrival order is not an
-        // identity, and on a shared /tmp it was not even a race the honest
-        // daemon reliably won.
-        $childPid = 0;
-        // Set when a greeter offered a major this code cannot speak (A7):
-        // the eventual timeout message must say WHY nothing authenticated,
-        // not launder the skew into generic silence.
-        $unknownMajor = null;
-        $authDeadline = microtime(true) + self::SPAWN_AUTH_TIMEOUT_SECS;
-        while (true) {
-            $remaining = $authDeadline - microtime(true);
-            if ($remaining <= 0) {
+        // The launch is recorded and returned at once. The accept and the handshake are
+        // advanced by {@see advanceSpawns()} from the event loop (tick), never slept on
+        // here: a TUI thread that asked for a background session must not sit in
+        // stream_socket_accept() while the daemon starts. The deadline is the budget the
+        // blocking loop used to spend.
+        $deferred = new Deferred();
+        $this->pendingSpawns[$sessionId] = [
+            'name' => $name,
+            'agent' => $agent,
+            'task' => $task,
+            'workingDirectory' => $workingDirectory,
+            'timeoutSeconds' => $timeoutSeconds,
+            'tags' => $tags,
+            'proc' => $proc,
+            'server' => $serverSocket,
+            'token' => $token,
+            'socketPath' => $socketPath,
+            'bufferPath' => $bufferPath,
+            'tokenPath' => $tokenPath,
+            'logPath' => $logPath,
+            'answerPath' => $answerPath,
+            'clients' => [],
+            'deadline' => microtime(true) + self::SPAWN_AUTH_TIMEOUT_SECS,
+            'unknownMajor' => null,
+            'deferred' => $deferred,
+            // Teardown runs only in the process that launched the spawn: a forked
+            // turn child inherits this array and must not fail its parent's launch.
+            'ownerPid' => getmypid(),
+        ];
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Advance every spawn still waiting on its daemon's handshake. Never blocks: queued
+     * connections are accepted, readable bytes are read, and a spawn is finished, or
+     * failed once its deadline has passed. Driven by {@see tick()}, and by the
+     * synchronous {@see spawnSession()} while it waits.
+     *
+     * @param float|null $now microtime injection for tests; defaults to now
+     */
+    public function advanceSpawns(?float $now = null): void
+    {
+        $now ??= microtime(true);
+        foreach (array_keys($this->pendingSpawns) as $sessionId) {
+            if (!isset($this->pendingSpawns[$sessionId]) || !self::ownedHere($this->pendingSpawns[$sessionId])) {
+                continue;
+            }
+            $childPid = $this->pumpSpawn($sessionId);
+            if ($childPid !== null) {
+                $this->finishSpawn($sessionId, $childPid);
+            } elseif ($now >= $this->pendingSpawns[$sessionId]['deadline']) {
+                $this->failSpawn($sessionId);
+            }
+        }
+        $this->advanceLauncherReaps();
+    }
+
+    /**
+     * Fail every spawn still waiting on its daemon's handshake, so nothing is left
+     * pending when this supervisor goes away. Each one is rejected, its launcher is
+     * retired and its IPC files are removed; the daemon, which never registers, exits
+     * on its own when its connect to the removed socket fails.
+     *
+     * Only spawns and stops this process launched are touched (see `ownerPid`). Runs from
+     * {@see __destruct()}, so a TUI that quits inside the launch window does not
+     * strand the spawn's files or leave a promise that never settles.
+     */
+    public function teardown(): void
+    {
+        foreach (array_keys($this->pendingSpawns) as $sessionId) {
+            if (isset($this->pendingSpawns[$sessionId]) && self::ownedHere($this->pendingSpawns[$sessionId])) {
+                $this->failSpawn($sessionId, 'the background session was abandoned before its daemon authenticated');
+            }
+        }
+
+        // A stop this process owns is driven to its outcome here, rung by rung, as
+        // stopSession() drives it. Quitting mid-stop must not leave the daemon running
+        // while rung 2 or 3 was still due. A retired launcher is collected in the same
+        // pass, so a launcher that ignores SIGTERM is SIGKILLed before the TUI exits.
+        // Every rung and every reap has a deadline, so this returns.
+        while ($this->hasOwnedStop() || $this->hasOwnedReap()) {
+            $this->advanceStops();
+            $this->advanceLauncherReaps();
+            if ($this->hasOwnedStop() || $this->hasOwnedReap()) {
+                usleep(20_000);
+            }
+        }
+    }
+
+    public function __destruct()
+    {
+        $this->teardown();
+    }
+
+    /**
+     * Stop waiting on a launcher and make sure it is gone, without blocking. A launcher
+     * that must be terminated gets SIGTERM here and SIGKILL from {@see advanceLauncherReaps()}
+     * if it outlives its grace. A launcher that has already exited is closed at once.
+     * A launcher that is only being collected (a successful spawn) is never signalled.
+     */
+    private function retireLauncher(mixed $proc, bool $signal): void
+    {
+        if (!is_resource($proc)) {
+            return;
+        }
+        if (proc_get_status($proc)['running'] !== true) {
+            proc_close($proc);
+
+            return;
+        }
+        if ($signal) {
+            @proc_terminate($proc, 15);
+        }
+        $this->launcherReaps[] = [
+            'proc' => $proc,
+            'stage' => $signal ? 'term' : 'wait',
+            'deadline' => microtime(true) + ProcessReaper::TERMINATE_GRACE_SECONDS,
+            'ownerPid' => getmypid(),
+        ];
+    }
+
+    /**
+     * Poll every retired launcher once. An exited one is closed; one that outlives its
+     * grace is sent SIGKILL (terminated launchers only) and then dropped when its kill
+     * grace runs out. A dropped handle is left to PHP's resource destructor, which
+     * abandons a live child without waiting (see {@see ProcessReaper::reapIfExited()}).
+     */
+    private function advanceLauncherReaps(): void
+    {
+        $now = microtime(true);
+        foreach ($this->launcherReaps as $index => $reap) {
+            if (!self::ownedHere($reap)) {
+                continue;
+            }
+            if (proc_get_status($reap['proc'])['running'] !== true) {
+                proc_close($reap['proc']);
+                unset($this->launcherReaps[$index]);
+                continue;
+            }
+            if ($now < $reap['deadline']) {
+                continue;
+            }
+            if ($reap['stage'] === 'term') {
+                @proc_terminate($reap['proc'], 9);
+                $this->launcherReaps[$index]['stage'] = 'kill';
+                $this->launcherReaps[$index]['deadline'] = $now + ProcessReaper::KILL_GRACE_SECONDS;
+                continue;
+            }
+            unset($this->launcherReaps[$index]);
+        }
+    }
+
+    /**
+     * Accept and read whatever is ready for one pending spawn, without waiting.
+     *
+     * Each handshake is authenticated exactly as the blocking loop did: a major this
+     * code cannot speak is recorded and listening goes on, a token mismatch is logged
+     * and dropped, and only the token holder's line authenticates. Returns the daemon
+     * pid on success, or null while nothing has authenticated yet.
+     */
+    private function pumpSpawn(string $sessionId): ?int
+    {
+        $server = $this->pendingSpawns[$sessionId]['server'];
+        $clients = $this->pendingSpawns[$sessionId]['clients'];
+
+        $read = [$server];
+        $write = [];
+        $except = [];
+        while (count($clients) < self::SPAWN_MAX_CLIENTS && @stream_select($read, $write, $except, 0, 0) === 1) {
+            $accepted = @stream_socket_accept($server, 0);
+            if ($accepted === false) {
                 break;
             }
+            stream_set_blocking($accepted, false);
+            $clients[] = ['sock' => $accepted, 'buf' => ''];
+            $read = [$server];
+            $write = [];
+            $except = [];
+        }
 
-            $clientSocket = @stream_socket_accept($serverSocket, $remaining);
-            if ($clientSocket === false) {
-                // The accept itself timed out — no connection is coming.
-                break;
+        $pending = $this->pendingSpawns[$sessionId];
+        $childPid = null;
+        $open = [];
+        foreach ($clients as $index => $client) {
+            $chunk = @fread($client['sock'], 4096);
+            if (is_string($chunk) && $chunk !== '') {
+                $client['buf'] .= $chunk;
+            }
+            $newline = strpos($client['buf'], "\n");
+            if ($newline === false && !feof($client['sock']) && strlen($client['buf']) <= 4096) {
+                $open[] = $client;
+                continue;
+            }
+            fclose($client['sock']);
+            $line = $newline === false ? $client['buf'] : substr($client['buf'], 0, $newline + 1);
+            if (strlen($line) > 4096) {
+                $line = '';
             }
 
-            stream_set_timeout($clientSocket, 2);
-            $handshake = @fgets($clientSocket);
-            fclose($clientSocket);
-
-            // A handshake naming a major this code cannot speak is protocol
-            // skew, not noise (A7): record it under its own bounded shape
-            // and keep listening. Laundering it into the fixed refusal below
-            // would hide a daemon newer than the supervisor inside ordinary
-            // garbage — the M5 rationale refuses that conflation.
             try {
-                $parsed = self::parseHandshake(is_string($handshake) ? $handshake : '');
+                $parsed = self::parseHandshake($line);
             } catch (HandshakeMajorUnknown $skew) {
-                $unknownMajor = $skew->major;
-                @file_put_contents($logPath, self::spawnHandshakeRefusalRecord($skew->major), FILE_APPEND);
+                // A7: protocol skew is recorded under its own shape, and listening goes on.
+                $this->pendingSpawns[$sessionId]['unknownMajor'] = $skew->major;
+                @file_put_contents($pending['logPath'], self::spawnHandshakeRefusalRecord($skew->major), FILE_APPEND);
                 continue;
             }
 
             if ($parsed === null
                 || $parsed['sessionId'] !== $sessionId
-                || !hash_equals($token, $parsed['token'])
+                || !hash_equals($pending['token'], $parsed['token'])
             ) {
-                // Refused, and logged for the operator's forensics — with a
-                // fixed string, never the attacker's bytes, and into the
-                // 0600 sidecar rather than any emitter channel. Then keep
-                // listening: one poisoned connect must not evict the real
-                // daemon that is still starting up.
-                @file_put_contents($logPath, "[session:auth:refused] spawn-handshake\n", FILE_APPEND);
+                // Refused and logged with a fixed string, never the attacker's bytes.
+                @file_put_contents($pending['logPath'], "[session:auth:refused] spawn-handshake\n", FILE_APPEND);
                 continue;
             }
 
             $childPid = $parsed['pid'];
+            foreach (array_slice($clients, $index + 1) as $unread) {
+                fclose($unread['sock']);
+            }
+            foreach ($open as $held) {
+                fclose($held['sock']);
+            }
+            $open = [];
             break;
         }
 
-        if ($childPid === 0) {
-            // BOUNDED, because this is the path where the launcher is by
-            // definition misbehaving: it did not authenticate within five
-            // seconds, so assuming it is about to exit is assuming away the
-            // failure. A bare `proc_close()` here WAITS — MEASURED on this
-            // host, against a child that ignores SIGTERM, `proc_terminate()` +
-            // `proc_close()` returns only after the child's whole remaining
-            // lifetime (7.77s for an 8s child), and with no signal at all it
-            // waits indefinitely. A wedged launcher would therefore hang the
-            // TUI thread that asked for a background session.
-            ProcessReaper::terminateAndClose($proc);
-            fclose($serverSocket);
-            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
-            throw new \RuntimeException(self::spawnAuthFailureMessage($unknownMajor));
-        }
+        $this->pendingSpawns[$sessionId]['clients'] = $open;
 
-        // Close the server socket — we only needed it to accept the connection
-        fclose($serverSocket);
+        return $childPid;
+    }
+
+    /**
+     * Settle a spawn whose daemon authenticated: the session becomes Running, is
+     * recorded for re-adoption, and the promise resolves with it.
+     */
+    private function finishSpawn(string $sessionId, int $childPid): void
+    {
+        $pending = $this->pendingSpawns[$sessionId];
+        unset($this->pendingSpawns[$sessionId]);
+        fclose($pending['server']);
+
+        $agent = $pending['agent'];
+        $socketPath = $pending['socketPath'];
+        $bufferPath = $pending['bufferPath'];
+        $tokenPath = $pending['tokenPath'];
+        $answerPath = $pending['answerPath'];
 
         // Create and register the session
         $session = new BackgroundSession(
             id: $sessionId,
-            name: $name,
+            name: $pending['name'],
             agent: $agent,
-            task: $task,
-            workingDirectory: $workingDirectory,
-            timeoutSeconds: $timeoutSeconds,
-            tags: $tags,
+            task: $pending['task'],
+            workingDirectory: $pending['workingDirectory'],
+            timeoutSeconds: $pending['timeoutSeconds'],
+            tags: $pending['tags'],
         );
 
         // The authenticated handshake carries the DAEMON's pid.
@@ -893,10 +1261,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // reaps an already-exited child instantly (state `Z` -> `GONE`) and a
         // held handle shows the launcher sitting in `Z` until it does. That
         // worked, and it worked for a reason no reader of this method could see.
-        // {@see \SugarCraft\Code\Support\ProcessReaper::reapIfExited()} says it
-        // out loud: wait briefly WITHOUT signalling, close if it exited, and
-        // otherwise leave the handle to the destructor.
-        ProcessReaper::reapIfExited($proc);
+        // Said out loud: close it if it has already exited, and otherwise collect it
+        // from the loop WITHOUT signalling, within a bounded budget. Waiting here
+        // would park the TUI on a launcher that is still in its double fork.
+        $this->retireLauncher($pending['proc'], signal: false);
 
         $session = $session->withStatus(BackgroundSessionStatus::Running);
 
@@ -920,7 +1288,34 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // found again after a restart.
         $this->writeIndexRecord($sessionId, $session, $agent);
 
-        return $session;
+        $pending['deferred']->resolve($session);
+    }
+
+    /**
+     * Give up on a spawn whose daemon never authenticated before its deadline. The
+     * launcher is terminated and collected by {@see advanceLauncherReaps()} on its own
+     * bounded budget, because it is the one process in this path that is misbehaving
+     * by definition. Nothing here waits on it.
+     */
+    private function failSpawn(string $sessionId, ?string $reason = null): void
+    {
+        $pending = $this->pendingSpawns[$sessionId];
+        unset($this->pendingSpawns[$sessionId]);
+        foreach ($pending['clients'] as $client) {
+            fclose($client['sock']);
+        }
+        $this->retireLauncher($pending['proc'], signal: true);
+        fclose($pending['server']);
+        $this->discardIpcFiles(
+            $pending['socketPath'],
+            $pending['bufferPath'],
+            $pending['tokenPath'],
+            $pending['logPath'],
+            ...($pending['answerPath'] === null ? [] : [$pending['answerPath']]),
+        );
+        $pending['deferred']->reject(new \RuntimeException(
+            $reason ?? self::spawnAuthFailureMessage($pending['unknownMajor']),
+        ));
     }
 
     /**
@@ -1436,6 +1831,8 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
     public function tick(?int $now = null): void
     {
         $now = $now ?? time();
+        $this->advanceSpawns();
+        $this->advanceStops();
         $this->adoptHandedOff();
 
         foreach ($this->sessions as $id => $session) {
@@ -1443,6 +1840,12 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             // dashboard, but re-reaping it would read a buffer already
             // released and re-label it Failed.
             if (!$session->isActive() || $session->isSettled()) {
+                continue;
+            }
+            // A stop in flight owns this session's settlement: it reads the buffer once
+            // the daemon is gone, and a tick settling it first would release the files
+            // that stop still needs to report what the daemon did.
+            if (isset($this->pendingStops[$id])) {
                 continue;
             }
 
@@ -1723,19 +2126,49 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
      */
     public function stopSession(string $sessionId): BackgroundStopOutcome
     {
+        $result = null;
+        $this->stopSessionAsync($sessionId)->then(static function (BackgroundStopOutcome $outcome) use (&$result): void {
+            $result = $outcome;
+        });
+        // Synchronous callers pump the same state machine the TUI drives from tick().
+        // Every stage has a deadline, so this always returns.
+        while ($result === null) {
+            $this->advanceStops();
+            if ($result === null) {
+                usleep(20_000);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * The rungs of {@see stopSession()}, run as a loop-driven state machine. The
+     * promise resolves with the outcome once {@see advanceStops()} (driven by
+     * {@see tick()}) settles it; nothing here sleeps or waits on a socket. Answers
+     * that need no rung resolve at once.
+     *
+     * @return PromiseInterface<BackgroundStopOutcome>
+     */
+    public function stopSessionAsync(string $sessionId): PromiseInterface
+    {
+        if (isset($this->pendingStops[$sessionId]) && self::ownedHere($this->pendingStops[$sessionId])) {
+            return $this->pendingStops[$sessionId]['deferred']->promise();
+        }
+
         $session = $this->sessions[$sessionId] ?? null;
         if ($session === null) {
-            return BackgroundStopOutcome::UnknownSession;
+            return \React\Promise\resolve(BackgroundStopOutcome::UnknownSession);
         }
         if (!$session->isActive() || $session->isSettled()) {
-            return BackgroundStopOutcome::AlreadyFinished;
+            return \React\Promise\resolve(BackgroundStopOutcome::AlreadyFinished);
         }
 
         $ipc = $this->sessionIpc[$sessionId] ?? null;
         if ($ipc === null || $ipc['pid'] <= 0) {
             // Nothing this supervisor spawned or can address — an injected
             // session, or a spawn whose daemon pid was never learned.
-            return BackgroundStopOutcome::CouldNotStop;
+            return \React\Promise\resolve(BackgroundStopOutcome::CouldNotStop);
         }
 
         if ($this->daemonGone($ipc)) {
@@ -1743,22 +2176,184 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             // from its buffer like tick() would, and say so.
             $this->reapFinishedDaemon($sessionId, $session);
 
-            return BackgroundStopOutcome::AlreadyFinished;
+            return \React\Promise\resolve(BackgroundStopOutcome::AlreadyFinished);
         }
 
-        $via = BackgroundStopOutcome::StoppedViaIpc;
-        $gone = $this->requestStopOverIpc($ipc)
-            && $this->waitForDaemonExit($ipc, self::STOP_EXIT_WAIT_SECONDS);
+        $deferred = new Deferred();
+        $this->pendingStops[$sessionId] = [
+            'session' => $session,
+            'ipc' => $ipc,
+            'via' => BackgroundStopOutcome::StoppedViaIpc,
+            'stage' => 'ipc',
+            'deadline' => microtime(true) + self::STOP_IPC_TIMEOUT_SECONDS * 2,
+            'client' => null,
+            'payload' => '',
+            'buf' => '',
+            'deferred' => $deferred,
+            'ownerPid' => getmypid(),
+        ];
 
-        if (!$gone) {
-            $via = BackgroundStopOutcome::StoppedViaSignal;
-            $gone = $this->stopBySignal($ipc);
+        return $deferred->promise();
+    }
+
+    /** Drive every stop this process has in flight as far as it can go without waiting. */
+    public function advanceStops(?float $now = null): void
+    {
+        $now ??= microtime(true);
+        foreach (array_keys($this->pendingStops) as $sessionId) {
+            if (isset($this->pendingStops[$sessionId]) && self::ownedHere($this->pendingStops[$sessionId])) {
+                $this->pumpStop($sessionId, $now);
+            }
         }
+    }
 
-        if (!$gone) {
-            return BackgroundStopOutcome::CouldNotStop;
+    /**
+     * Run one stop until it has to wait on the daemon. Stages only move forward:
+     * ipc → send → ack (rung 1), exit, then signal → term → kill (rungs 2 and 3).
+     *
+     * NO SIGNAL IS SENT TO A PID WHOSE IDENTITY CANNOT BE PROVEN. The signal stages
+     * re-check the `/proc` start time captured at the handshake immediately before
+     * every signal; a mismatch or a missing fingerprint ends the stop as CouldNotStop.
+     */
+    private function pumpStop(string $sessionId, float $now): void
+    {
+        while (isset($this->pendingStops[$sessionId])) {
+            $stop = $this->pendingStops[$sessionId];
+            $ipc = $stop['ipc'];
+
+            switch ($stop['stage']) {
+                case 'ipc':
+                    // Rung 1, opened without blocking. A daemon with no token or no socket
+                    // goes straight to the signal rungs: it refuses unauthenticated
+                    // connections, so there is nothing to say over the socket.
+                    $token = self::readToken($ipc);
+                    $client = $token === '' || !file_exists($ipc['socketPath'])
+                        ? false
+                        : @stream_socket_client('unix://' . $ipc['socketPath'], $errno, $errstr, 0, STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT);
+                    if ($client === false) {
+                        $this->setStopStage($sessionId, 'signal', $now, BackgroundStopOutcome::StoppedViaSignal);
+                        continue 2;
+                    }
+                    stream_set_blocking($client, false);
+                    $this->pendingStops[$sessionId]['client'] = $client;
+                    $this->pendingStops[$sessionId]['payload'] = BackgroundSessionRunner::AUTH_PREFIX . $token . "\nSTOP\n";
+                    $this->setStopStage($sessionId, 'send', $stop['deadline']);
+                    continue 2;
+
+                case 'send':
+                    if ($now >= $stop['deadline']) {
+                        $this->closeStopClient($sessionId);
+                        $this->setStopStage($sessionId, 'signal', $now, BackgroundStopOutcome::StoppedViaSignal);
+                        continue 2;
+                    }
+                    $read = [];
+                    $write = [$stop['client']];
+                    $except = [];
+                    if (@stream_select($read, $write, $except, 0, 0) !== 1 || $write === []) {
+                        return;
+                    }
+                    $written = @fwrite($stop['client'], $stop['payload']);
+                    if ($written !== strlen($stop['payload'])) {
+                        $this->closeStopClient($sessionId);
+                        $this->setStopStage($sessionId, 'signal', $now, BackgroundStopOutcome::StoppedViaSignal);
+                        continue 2;
+                    }
+                    $this->setStopStage($sessionId, 'ack', $stop['deadline']);
+                    continue 2;
+
+                case 'ack':
+                    $chunk = @fread($stop['client'], 256);
+                    $buf = $stop['buf'] . (is_string($chunk) ? $chunk : '');
+                    $this->pendingStops[$sessionId]['buf'] = $buf;
+                    $acknowledged = in_array('OK:stopping', array_map('trim', explode("\n", $buf)), true);
+                    if (!$acknowledged && !feof($stop['client']) && $now < $stop['deadline']) {
+                        return;
+                    }
+                    $this->closeStopClient($sessionId);
+                    if ($acknowledged) {
+                        $this->setStopStage($sessionId, 'exit', $now + self::STOP_EXIT_WAIT_SECONDS);
+                    } else {
+                        $this->setStopStage($sessionId, 'signal', $now, BackgroundStopOutcome::StoppedViaSignal);
+                    }
+                    continue 2;
+
+                case 'exit':
+                    if ($this->daemonGone($ipc)) {
+                        $this->finishStop($sessionId);
+                        continue 2;
+                    }
+                    if ($now < $stop['deadline']) {
+                        return;
+                    }
+                    $this->setStopStage($sessionId, 'signal', $now, BackgroundStopOutcome::StoppedViaSignal);
+                    continue 2;
+
+                case 'signal':
+                    if (!function_exists('posix_kill')) {
+                        $this->failStop($sessionId);
+
+                        return;
+                    }
+                    if ($this->daemonGone($ipc)) {
+                        $this->finishStop($sessionId);
+                        continue 2;
+                    }
+                    if (!$this->daemonIdentityProven($ipc)) {
+                        $this->failStop($sessionId);
+
+                        return;
+                    }
+                    @posix_kill($ipc['pid'], 15);
+                    $this->setStopStage($sessionId, 'term', $now + self::STOP_EXIT_WAIT_SECONDS);
+                    continue 2;
+
+                case 'term':
+                    if ($this->daemonGone($ipc)) {
+                        $this->finishStop($sessionId);
+                        continue 2;
+                    }
+                    if ($now < $stop['deadline']) {
+                        return;
+                    }
+                    if (!$this->daemonIdentityProven($ipc)) {
+                        $this->failStop($sessionId);
+
+                        return;
+                    }
+                    // Rung 3: a daemon that ignored SIGTERM takes its worker down with it.
+                    ProcessContainment::killTree($ipc['pid']);
+                    $this->setStopStage($sessionId, 'kill', $now + self::STOP_KILL_WAIT_SECONDS);
+                    continue 2;
+
+                case 'kill':
+                    if ($this->daemonGone($ipc)) {
+                        $this->finishStop($sessionId);
+                        continue 2;
+                    }
+                    if ($now >= $stop['deadline']) {
+                        $this->failStop($sessionId);
+                    }
+
+                    return;
+
+                default:
+                    return;
+            }
         }
+    }
 
+    /**
+     * Settle a stop whose daemon is gone: record a forced stop in the buffer, reap
+     * the session, and resolve with the outcome of the rung that got it there.
+     */
+    private function finishStop(string $sessionId): void
+    {
+        $this->closeStopClient($sessionId);
+        $stop = $this->pendingStops[$sessionId];
+        unset($this->pendingStops[$sessionId]);
+
+        $ipc = $stop['ipc'];
+        $session = $stop['session'];
         $outcome = self::lastTaskOutcome(self::readBuffer($ipc));
         if ($outcome !== 'stopped' && !in_array($outcome, ['complete', 'completed'], true)) {
             // Killed before it could write its own record (rung 3). One whole
@@ -1768,83 +2363,38 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
 
         $this->reapFinishedDaemon($sessionId, $session);
 
-        return ($this->sessions[$sessionId] ?? $session)->status === BackgroundSessionStatus::Stopped
-            ? $via
-            : BackgroundStopOutcome::AlreadyFinished;
-    }
-
-    /**
-     * Rung 1: authenticated `STOP` over the daemon's socket; true only when
-     * the daemon acknowledged with `OK:stopping`.
-     *
-     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
-     */
-    private function requestStopOverIpc(array $ipc): bool
-    {
-        $token = self::readToken($ipc);
-        if ($token === '' || !file_exists($ipc['socketPath'])) {
-            // The daemon refuses every unauthenticated connection, so without
-            // the token there is nothing to say; go straight to the signal.
-            return false;
-        }
-
-        $client = @stream_socket_client(
-            'unix://' . $ipc['socketPath'],
-            $errno,
-            $errstr,
-            self::STOP_IPC_TIMEOUT_SECONDS,
+        $stop['deferred']->resolve(
+            ($this->sessions[$sessionId] ?? $session)->status === BackgroundSessionStatus::Stopped
+                ? $stop['via']
+                : BackgroundStopOutcome::AlreadyFinished,
         );
-        if ($client === false) {
-            return false;
-        }
-
-        stream_set_timeout($client, (int) ceil(self::STOP_IPC_TIMEOUT_SECONDS));
-        fwrite($client, BackgroundSessionRunner::AUTH_PREFIX . $token . "\nSTOP\n");
-        fflush($client);
-
-        $acknowledged = false;
-        $deadline = microtime(true) + self::STOP_IPC_TIMEOUT_SECONDS * 2;
-        while (!$acknowledged && microtime(true) < $deadline && !feof($client)) {
-            $line = @fgets($client);
-            if ($line === false) {
-                break;
-            }
-            $acknowledged = trim($line) === 'OK:stopping';
-        }
-        fclose($client);
-
-        return $acknowledged;
     }
 
-    /**
-     * Rungs 2 and 3: SIGTERM, then a tree kill — each only after re-proving
-     * the pid is still the daemon the handshake named.
-     *
-     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
-     */
-    private function stopBySignal(array $ipc): bool
+    /** Every rung failed: the daemon could not be stopped, and nothing was signalled unproven. */
+    private function failStop(string $sessionId): void
     {
-        if (!function_exists('posix_kill')) {
-            return false;
-        }
+        $this->closeStopClient($sessionId);
+        $stop = $this->pendingStops[$sessionId];
+        unset($this->pendingStops[$sessionId]);
+        $stop['deferred']->resolve(BackgroundStopOutcome::CouldNotStop);
+    }
 
-        if ($this->daemonGone($ipc)) {
-            return true;
+    private function setStopStage(string $sessionId, string $stage, float $deadline, ?BackgroundStopOutcome $via = null): void
+    {
+        $this->pendingStops[$sessionId]['stage'] = $stage;
+        $this->pendingStops[$sessionId]['deadline'] = $deadline;
+        if ($via !== null) {
+            $this->pendingStops[$sessionId]['via'] = $via;
         }
-        if (!$this->daemonIdentityProven($ipc)) {
-            return false;
-        }
-        @posix_kill($ipc['pid'], 15);
-        if ($this->waitForDaemonExit($ipc, self::STOP_EXIT_WAIT_SECONDS)) {
-            return true;
-        }
+    }
 
-        if (!$this->daemonIdentityProven($ipc)) {
-            return $this->daemonGone($ipc);
+    private function closeStopClient(string $sessionId): void
+    {
+        $client = $this->pendingStops[$sessionId]['client'] ?? null;
+        if (is_resource($client)) {
+            fclose($client);
         }
-        ProcessContainment::killTree($ipc['pid']);
-
-        return $this->waitForDaemonExit($ipc, self::STOP_KILL_WAIT_SECONDS);
+        $this->pendingStops[$sessionId]['client'] = null;
     }
 
     /**
@@ -1872,25 +2422,6 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
     private function daemonGone(array $ipc): bool
     {
         return !$this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null);
-    }
-
-    /**
-     * Poll {@see daemonGone()} for at most $seconds.
-     *
-     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
-     */
-    private function waitForDaemonExit(array $ipc, float $seconds): bool
-    {
-        $deadline = microtime(true) + $seconds;
-        while (true) {
-            if ($this->daemonGone($ipc)) {
-                return true;
-            }
-            if (microtime(true) >= $deadline) {
-                return false;
-            }
-            usleep(20_000);
-        }
     }
 
     /**
@@ -2568,7 +3099,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
         // A build without ext-posix has no signal-0 probe; procfs is then the
         // only witness, and the stat read above already answered it. With
         // neither, nothing on this host can show the pid alive, which is the
-        // same footing stopBySignal() stands on when it refuses to signal.
+        // same footing the signal rungs of stopSession() stand on when they refuse to signal.
         if (!\function_exists('posix_kill')) {
             return $stat !== null;
         }

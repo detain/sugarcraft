@@ -156,120 +156,282 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
-            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#filter-the-list-as-the-user-types">Filter the list as the user types</a></li>
+            <li class="toc-h3"><a href="#rank-candidates-by-fuzzy-score">Rank candidates by fuzzy score</a></li>
+            <li class="toc-h3"><a href="#move-the-cursor-from-host-key-events">Move the cursor from host key events</a></li>
+            <li class="toc-h3"><a href="#swap-the-gutters">Swap the gutters</a></li>
+            <li class="toc-h3"><a href="#render-plain-text-for-a-screen-reader-or-a-log">Render plain text for a screen reader or a log</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
             <li class="toc-h3"><a href="#cursor-navigation">Cursor navigation</a></li>
             <li class="toc-h3"><a href="#custom-styling">Custom styling</a></li>
+            <li class="toc-h3"><a href="#word-wrap">Word wrap</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#lines-throws-the-list-has-no-items-to-display">lines() throws &quot;The list has no items to display.&quot;</a></li>
+            <li class="toc-h3"><a href="#after-switching-models-a-row-keeps-stale-text">After switching models, a row keeps stale text</a></li>
+            <li class="toc-h3"><a href="#output-is-garbled-on-a-dumb-terminal-or-a-raw-pipe">Output is garbled on a dumb terminal or a raw pipe</a></li>
+            <li class="toc-h3"><a href="#the-cursor-index-does-not-match-the-visible-row">The cursor index does not match the visible row</a></li>
+            <li class="toc-h3"><a href="#itemat-and-find-return-a-different-item-after-filtering">itemAt() and find() return a different item after filtering</a></li>
+            <li class="toc-h3"><a href="#fuzzy-filtering-is-slow-on-a-long-list">Fuzzy filtering is slow on a long list</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering (host-driven). It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
+<p class="lede" style="margin-top: 28px;">SugarTreelist is a list view for terminal UIs: box-drawing or line-number gutters, cursor navigation, whitespace-faithful word wrap, and live filtering. It ports the cursor, filter and render surface of <a href="https://github.com/charmbracelet/bubbles/tree/main/list">charmbracelet/bubbles/list</a>, and takes its gutter vocabulary from <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a>. It is a renderer, not a TEA program: the component is a plain <code>final class Model</code> that your host program's <code>view()</code> calls into, and the host owns the keys, the input line and the chrome around the list.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist:@dev</code></pre>
+    <p style="margin-top: 12px;">The package has no tagged release yet, so it ships only <code>dev-master</code>, and the <code>@dev</code> constraint is required until the first version tag lands. The manifest requires PHP <code>^8.3</code>. It pulls in <code>sugarcraft/sugar-fuzzy</code> for fuzzy scoring and <code>psr/log</code> for the optional <code>LoggerInterface</code> on <code>view()</code>.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\TreeList\Model;
 
-// Fluent setters return NEW Models - rebind. Data is immutable; view()
-// mutates the delta-render memo in place, and withoutFilter() with no filter
-// active is an identity return ($this, no clone).
-// Model::tree() = new() + the Default prefixer/suffixer pair; plain new()
-// stays deliberately undecorated, and withPrefixer()/withSuffixer() attach
-// one half at a time (the set* spellings are deprecated aliases).
+// Model::tree() is new() plus the Default prefixer and suffixer pair: a
+// line-number gutter and a visible cursor marker.
+// Every with*() returns a NEW Model, so rebind the result.
 $model = Model::tree()
-    ->withWidth(80)
-    ->withHeight(24)
-    ->withItemsFromArray(['src/main.php', 'src/Model.php', 'tests/MainTest.php']);
+    ->withViewport(80, 25)
+    ->withItemsFromArray(['Apple', 'Banana', 'Cherry', 'Dragonfruit', 'Elderberry']);
 
 echo $model->view();
-// Renders the list with a ╭ ├ ╰ box-drawing gutter chosen by item position
-// (│ appears only as a wrap-continuation glyph), 1-based line numbers, and
-// the cursor line decorated with the &gt; … &lt; marker pair</code></pre>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Box-drawing prefixes</strong><span>Swap in your own prefixer; the shipped one picks its glyph by item position (first / middle / last), not by nesting depth.</span></div>
-            <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
-            <div class="feature"><strong>Word-wrap</strong><span>Long items wrap at the configured viewport width (setWidth) — the terminal is never auto-detected.</span></div>
-            <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
-            <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT).</span></div>
-            <div class="feature"><strong>Per-row delta repaint</strong><span><code>view()</code> emits a full frame, then only changed rows as CUP + EL fragments; assistive hosts want <code>lines()</code> instead, or <code>resetPreviousFrame()</code> before every paint.</span></div>
-            
-    </div>
+// Move the cursor down two items. Reset the delta memo so this paints a full
+// frame instead of a positional delta.
+$model = $model->withCursor(2);
+$model->resetPreviousFrame();
+echo $model->view();</code></pre>
+    <p style="margin-top: 12px;">Running this prints a five-row list with <code>&gt;</code> and <code>&lt;</code> around the cursor row. The full program is <code>examples/basic.php</code>.</p>
 
-    <h3 id="accessibility" style="margin-top: 40px;">Accessibility</h3>
-    <p>Guide the cursor with text, not color alone: keep a marker glyph (<code>$currentMarker</code>, or your suffixer's) so position survives monochrome terminals and screen readers — relying on <code>withCurrentStyle()</code>'s color by itself is a WCAG 1.4.1 (use of color) warning. <code>withLineStyle('')</code> + <code>withCurrentStyle('')</code> + <code>lines()</code> is the full plain-text mode: <code>lines()</code> never styles and never deltas, which makes it the right reader for assistive and scripted-output hosts.</p>
-    <p>The library emits no color of its own — every style is caller-supplied, so pass empty style strings to emit none; sugar-treelist neither reads nor acts on <code>NO_COLOR</code>. Item text all renders through the frame choke (<code>Model::sweepForFrame</code>), so content can forge neither a frame nor a click zone.</p>
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A <code>Model</code> holds three things: the item list, a viewport of <code>width</code> cells by <code>height</code> lines, and a cursor that addresses items by index. Items are <code>\Stringable</code> values, and plain strings are accepted directly. One item can occupy several rows once it wraps, so <code>cursorIndex()</code> counts items and never rows. The viewport scrolls only as far as needed to keep the cursor visible, with a <code>cursorOffset</code> gap kept above it.</p>
+    <p>Rendering runs through two prefixers and suffixers. A <code>Prefixer</code> produces the left gutter for each line, and a <code>Suffixer</code> produces the right-hand decoration. <code>DefaultPrefixer</code> draws the box-drawing gutter, and <code>DefaultSuffixer</code> draws the cursor marker. You can replace either with your own class that implements the interface. A filter is a live view over the items: <code>withFilterFn()</code> projects the list, and the original items stay in place until <code>withoutFilter()</code> restores them.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-treelist">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-treelist/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-treelist/tree/master/examples">Runnable examples</a></li>
-      <li>Primary design source <a href="https://github.com/charmbracelet/bubbles/tree/main/list">charmbracelet/bubbles/list</a> (Go) — the ported cursor/filter/render surface; naming and tree-gutter context from <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a>. SugarCraft is developed as a native PHP project.</li>
-    </ul>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <h3 id="filter-the-list-as-the-user-types" style="margin-top: 24px;">Filter the list as the user types</h3>
+    <p>Call <code>withFuzzyFilter()</code> with the current query on every keystroke. It always filters the whole original list, so widening the query brings items back. An empty query clears the filter. Use <code>withFilterFn()</code> when you need a predicate of your own.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\TreeList\Model;
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+$model = Model::tree()
+    ->withViewport(60, 12)
+    ->withItemsFromArray(['apple', 'banana', 'cherry', 'apricot', 'blueberry']);
+
+// Keep items whose characters contain the query in order.
+$filtered = $model->withFuzzyFilter('ap');   // apple, apricot
+$filtered = $filtered->withFuzzyFilter('');  // empty query clears the filter
+$filtered = $model->withFilterFn(fn(\Stringable $item) => str_starts_with((string) $item, 'b'));</code></pre>
+
+    <h3 id="rank-candidates-by-fuzzy-score" style="margin-top: 24px;">Rank candidates by fuzzy score</h3>
+    <p><code>FuzzyMatch</code> scores candidates with the Smith-Waterman matcher from sugar-fuzzy and returns <code>[item, score]</code> pairs, best first. Equal scores keep their input order. Pass a limit to keep only the best N.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\TreeList\FuzzyMatch;
+use SugarCraft\TreeList\StringItem;
+
+$matcher = new FuzzyMatch();
+$hits = $matcher->match('ap', [new StringItem('apricot'), new StringItem('banana')], 1, 5);
+// $hits is [[apricot, 11], [banana, 3]]: the best match first. Banana stays
+// because it still aligns with the 'a'; raise $minScore to drop weak hits.
+foreach ($hits as [$item, $score]) {
+    echo (string) $item, ' scored ', $score, "\n";
+}</code></pre>
+
+    <h3 id="move-the-cursor-from-host-key-events" style="margin-top: 24px;">Move the cursor from host key events</h3>
+    <p>The library binds no keys. Map your framework's key names onto the cursor methods in the host. Every movement saturates at the list ends, so a page or end jump never wraps and never overflows.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\TreeList\Model;
+
+function onKey(Model $list, string $key): Model
+{
+    return match ($key) {
+        'up'        => $list->withCursorUp(),
+        'down'      => $list->withCursorDown(),
+        'pageup'    => $list->withCursorPageUp(),
+        'pagedown'  => $list->withCursorPageDown(),
+        'home'      => $list->withCursorToStart(),
+        'end'       => $list->withCursorToEnd(),
+        default     => $list,
+    };
+}</code></pre>
+
+    <h3 id="swap-the-gutters" style="margin-top: 24px;">Swap the gutters</h3>
+    <p>Attach a configured <code>DefaultPrefixer</code> and <code>DefaultSuffixer</code>, or your own classes. The default glyph knobs refuse control bytes, so a glyph can never carry an escape sequence. <code>examples/custom-styling.php</code> shows a complete custom pair.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, Model};
+
+$model = Model::new()
+    ->withViewport(80, 25)
+    ->withPrefixer(DefaultPrefixer::new()->withNumber(false)->withCurrentMarker('*'))
+    ->withSuffixer(DefaultSuffixer::new()->withCurrentMarker('&lt;'));</code></pre>
+
+    <h3 id="render-plain-text-for-a-screen-reader-or-a-log" style="margin-top: 24px;">Render plain text for a screen reader or a log</h3>
+    <p><code>lines()</code> returns the laid-out rows with no delta bookkeeping and no styling, so it is the right door for assistive and scripted output. It throws on an empty list, so guard with <code>isEmpty()</code> first.</p>
+    <pre class="code"><code class="language-php">$model = $model->withLineStyle('')->withCurrentStyle('');
+
+if (!$model->isEmpty()) {
+    foreach ($model->lines() as $row) {
+        echo $row, "\r\n";
+    }
+}</code></pre>
+
+    <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>The classes below are the public surface. <code>Item</code> is internal and is not listed. Model methods come in two spellings: the <code>with*()</code> setters are canonical, and the older <code>set*()</code>, <code>add*()</code> and <code>cursor*()</code> names are <code>@deprecated</code> one-way aliases that return new instances and are removed in 2.0.0.</p>
 <table class="api-table">
 <caption>Public API surface of sugar-treelist</caption>
 <thead>
 <tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
 </thead>
-<tr><td>Model</td><td>new()</td><td>Create model with defaults</td></tr>
-<tr><td>Model</td><td>withFilterFn(\Closure)</td><td>Filter items; returns new Model; filterState → filtering</td></tr>
-<tr><td>Model</td><td>withoutFilter()</td><td>Clear filter; restore original items; filterState → unfiltered (identity return - $this, no clone - when no filter was active)</td></tr>
-<tr><td>Model</td><td>addItem(\Stringable)</td><td>Append a list item</td></tr>
-<tr><td>Model</td><td>setWidth(int)</td><td>Set viewport width in cells</td></tr>
-<tr><td>Model</td><td>setHeight(int)</td><td>Set viewport height in lines</td></tr>
-<tr><td>Model</td><td>setPrefixer(Prefixer)</td><td>Attach a prefixer instance</td></tr>
-<tr><td>Model</td><td>setSuffixer(Suffixer)</td><td>Attach a suffixer instance</td></tr>
-<tr><td>Model</td><td>lines()</td><td>Return visible lines as array</td></tr>
-<tr><td>Model</td><td>view()</td><td>Render the list as an ANSI string: a full frame after resetPreviousFrame() (or on first render), then only changed rows as CUP + row + EL delta fragments</td></tr>
-<tr><td>Model</td><td>resetPreviousFrame()</td><td>Drop the delta memo so the next view() repaints the full frame (void; mutates this instance)</td></tr>
-<tr><td>Model</td><td>filterState()</td><td>Current ?FilterState — null until the first withFilterFn()/withoutFilter() call, then unfiltered / filtering</td></tr>
-<tr><td>Model</td><td>setViewport(width, height)</td><td>Set both dimensions at once</td></tr>
-<tr><td>Model</td><td>setCursor(int) / cursorUp(int) / cursorDown(int)</td><td>Jump to, or step the cursor (default 1 row); clamped to the item range</td></tr>
-<tr><td>Model</td><td>cursorPageUp(int) / cursorPageDown(int)</td><td>Jump by whole viewport pages (default 1)</td></tr>
-<tr><td>Model</td><td>cursorToStart() / cursorToEnd()</td><td>Jump to the first / last item</td></tr>
-<tr><td>Model</td><td>cursorIndex() / cursorItem() / tryCursorItem()</td><td>Read the cursor: index; its \Stringable (throws on an empty list); the same, or null</td></tr>
-<tr><td>Model</td><td>setCursorOffset(int) / setWrap(int)</td><td>Pin the cursor's row within the viewport; cap an item to N wrapped lines (0 = no cap)</td></tr>
-<tr><td>FilterState</td><td>unfiltered</td><td>No filter active</td></tr>
-<tr><td>FilterState</td><td>filtering</td><td>Filter function set and applied</td></tr>
-<tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score via the sugar-fuzzy SSOT (int, higher = better)</td></tr>
-<tr><td>FuzzyMatch</td><td>match(query, list&lt;\Stringable&gt;)</td><td>Filter and rank items by score; returns list of [item, score] pairs</td></tr>
-<tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>@deprecated class_alias of SugarCraft\Fuzzy\ScoringProfile (sugar-fuzzy is the SSOT); FuzzyMatch keeps a ?ScoringProfile constructor parameter and withProfile() for migration only - new code depends on sugar-fuzzy directly</td></tr>
-<tr><td>Item</td><td>value</td><td>The underlying \Stringable</td></tr>
-<tr><td>StringItem</td><td>__construct(string)</td><td>Wrap a plain string as a list item</td></tr>
+<tr><td><code>Model</code></td><td><code>new()</code> / <code>tree()</code></td><td>Undecorated model, or the model with the Default prefixer and suffixer pair installed.</td></tr>
+<tr><td><code>Model</code></td><td><code>withWidth(int)</code> / <code>withHeight(int)</code> / <code>withViewport(int, int)</code></td><td>Set the viewport in cells and lines. Dimensions are bounded by <code>MAX_DIMENSION</code> and <code>MAX_TOTAL_CELLS</code>.</td></tr>
+<tr><td><code>Model</code></td><td><code>withItem(string|\Stringable)</code> / <code>withItems(...)</code> / <code>withItemsFromArray(array)</code></td><td>Append items. The array form is one clone and one filter re-apply for the whole batch.</td></tr>
+<tr><td><code>Model</code></td><td><code>removeItem(int)</code> / <code>clear()</code> / <code>sort()</code></td><td>Remove one item, empty the list, or sort it by the <code>withLessFunc()</code> comparator. With no comparator set, <code>sort()</code> returns <code>$this</code>.</td></tr>
+<tr><td><code>Model</code></td><td><code>withLessFunc(?\Closure)</code> / <code>withEqualsFunc(?\Closure)</code></td><td>Plug in the ordering and equality used by <code>sort()</code> and <code>find()</code>.</td></tr>
+<tr><td><code>Model</code></td><td><code>withPrefixer(Prefixer)</code> / <code>withSuffixer(Suffixer)</code></td><td>Attach the gutter classes that build each row's prefix and suffix.</td></tr>
+<tr><td><code>Model</code></td><td><code>withLineStyle(string)</code> / <code>withCurrentStyle(string)</code></td><td>Set the SGR parameters for ordinary and cursor rows. Non-SGR input is refused.</td></tr>
+<tr><td><code>Model</code></td><td><code>withCursor(int)</code> / <code>withCursorUp(int = 1)</code> / <code>withCursorDown(int = 1)</code></td><td>Move the cursor by item index. Each one clamps to the list ends.</td></tr>
+<tr><td><code>Model</code></td><td><code>withCursorPageUp(int = 1)</code> / <code>withCursorPageDown(int = 1)</code></td><td>Move by whole pages of <code>height</code> items, not displayed lines.</td></tr>
+<tr><td><code>Model</code></td><td><code>withCursorToStart()</code> / <code>withCursorToEnd()</code></td><td>Jump to the first or last item.</td></tr>
+<tr><td><code>Model</code></td><td><code>cursorIndex()</code> / <code>cursorItem()</code> / <code>tryCursorItem()</code></td><td>The cursor's item index, the item itself (throws on an empty list), or the item or <code>null</code>.</td></tr>
+<tr><td><code>Model</code></td><td><code>withFilterFn(\Closure)</code> / <code>withoutFilter()</code></td><td>Project the list through a predicate, and restore it. <code>withoutFilter()</code> returns <code>$this</code> when no filter is active.</td></tr>
+<tr><td><code>Model</code></td><td><code>withFuzzyFilter(string, ?ScoringProfile = null)</code> / <code>withoutFuzzyFilter()</code></td><td>Keep the items whose characters contain the query in order. An empty query clears the filter.</td></tr>
+<tr><td><code>Model</code></td><td><code>filterState()</code></td><td>The current <code>?FilterState</code>. It is <code>null</code> until the first <code>withFilterFn()</code> call. <code>withoutFilter()</code> sets it to <code>unfiltered</code> only when a filter was active, so a list that was never filtered stays <code>null</code>.</td></tr>
+<tr><td><code>Model</code></td><td><code>length()</code> / <code>isEmpty()</code> / <code>itemAt(int)</code> / <code>tryItemAt(int)</code></td><td>Read the visible projection. Indices follow the active filter. <code>itemAt()</code> throws on an out-of-range index.</td></tr>
+<tr><td><code>Model</code></td><td><code>find(string|\Stringable)</code> / <code>tryFind(string|\Stringable)</code> / <code>itemIds()</code></td><td>The visible index of an item (<code>-1</code> when absent, or <code>null</code> from <code>tryFind()</code>), and the stable ids of the visible items.</td></tr>
+<tr><td><code>Model</code></td><td><code>lines()</code> / <code>eachLine()</code></td><td>The laid-out rows, with no delta bookkeeping. <code>lines()</code> throws a localized <code>RuntimeException</code> on an empty list, a zero viewport, or gutters that use up every column.</td></tr>
+<tr><td><code>Model</code></td><td><code>view(?LoggerInterface $logger = null)</code></td><td>Render the frame. The first call, and any call after <code>resetPreviousFrame()</code>, emits a full frame. Later calls emit only changed rows. <code>view()</code> never throws; a failure becomes the swept message.</td></tr>
+<tr><td><code>Model</code></td><td><code>resetPreviousFrame()</code></td><td>Drop the delta memo so the next <code>view()</code> repaints the full frame. The one void member, and the only mutation besides <code>view()</code>.</td></tr>
+<tr><td><code>FuzzyMatch</code></td><td><code>new(?ScoringProfile, int $maxCandidateLength, bool $strictMode)</code></td><td>The fuzzy matcher. Its defaults match the sugar-fuzzy Smith-Waterman matcher.</td></tr>
+<tr><td><code>FuzzyMatch</code></td><td><code>score(string $query, string $candidate): int</code></td><td>The alignment score. A canonical example: <code>'april'</code> against <code>'apricot'</code> scores 27.</td></tr>
+<tr><td><code>FuzzyMatch</code></td><td><code>match(string $query, array $items, int $minScore = 1, ?int $limit = null): array</code></td><td><code>[item, score]</code> pairs, best first, equal scores in input order. A negative limit throws.</td></tr>
+<tr><td><code>FuzzyMatch</code></td><td><code>matchGenerator(...)</code></td><td>The same ranking as a generator.</td></tr>
+<tr><td><code>FilterState</code></td><td><code>unfiltered</code> / <code>filtering</code></td><td>No filter is active, or a filter function is set and applied.</td></tr>
+<tr><td><code>DefaultPrefixer</code></td><td><code>new()</code> plus <code>withNumber()</code>, <code>withNumberRelative()</code>, <code>withNumberZeroBased()</code>, <code>withFirstSep()</code>, <code>withSeparator()</code>, <code>withLastSep()</code>, <code>withSeparatorWrap()</code>, <code>withCurrentMarker()</code>, <code>withEmptyMarker()</code>, <code>withPrefixWrap()</code></td><td>The box-drawing gutter and its knobs. Each setter returns a new instance.</td></tr>
+<tr><td><code>DefaultSuffixer</code></td><td><code>new()</code> / <code>withCurrentMarker(string)</code></td><td>The cursor marker that follows the cursor row.</td></tr>
+<tr><td><code>Prefixer</code></td><td><code>initPrefixer(...)</code> / <code>prefix(int, int)</code></td><td>The interface a custom gutter implements. <code>initPrefixer()</code> returns the cell width the gutter reserves.</td></tr>
+<tr><td><code>Suffixer</code></td><td><code>initSuffixer(...)</code> / <code>suffix(int, int)</code></td><td>The interface a custom suffix implements, with the same width contract.</td></tr>
+<tr><td><code>StringItem</code></td><td><code>new(string)</code> / <code>__construct(string)</code></td><td>Wraps a plain string as a list item, for typed slots.</td></tr>
+<tr><td><code>ScoringProfile</code></td><td><code>canonical()</code> / <code>strict()</code> / <code>lenient()</code></td><td><code>@deprecated</code> <code>class_alias</code> of <code>SugarCraft\Fuzzy\ScoringProfile</code>, which is the source of truth. New code should use sugar-fuzzy directly.</td></tr>
+<tr><td><code>Lang</code></td><td><code>t(string $key, array $params = [])</code></td><td>Translates the library's refusal messages through <code>SugarCraft\Core\I18n\T</code>.</td></tr>
 </table>
-    </div>
-  </div>
-</section>
 
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>There is no configuration file or environment variable. Every option is a <code>with*()</code> setter on the model, and every setter returns a new instance.</p>
+<table class="api-table">
+<caption>Model options and their defaults</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Setter</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td>Width</td><td><code>withWidth(int)</code></td><td>80</td><td>Viewport width in cells. Long items wrap to fit it, and the terminal width is never detected.</td></tr>
+<tr><td>Height</td><td><code>withHeight(int)</code></td><td>24</td><td>Viewport height in lines. A page is this many items.</td></tr>
+<tr><td>Cursor offset</td><td><code>withCursorOffset(int)</code></td><td>5</td><td>Gap kept between the cursor and the viewport edge. Render clamps it so it never exceeds the viewport.</td></tr>
+<tr><td>Line offset</td><td><code>withLineOffset(int)</code></td><td>5</td><td>How many lines above the cursor the view shows.</td></tr>
+<tr><td>Wrap cap</td><td><code>withWrap(int)</code></td><td>0</td><td>Maximum lines per item. <code>0</code> means no cap.</td></tr>
+<tr><td>Line style</td><td><code>withLineStyle(string)</code></td><td><code>''</code></td><td>SGR parameters for ordinary rows. Empty emits no color.</td></tr>
+<tr><td>Current style</td><td><code>withCurrentStyle(string)</code></td><td><code>''</code></td><td>SGR parameters for the cursor row. Empty emits no color.</td></tr>
+<tr><td>Fuzzy candidate cap</td><td><code>FuzzyMatch::new($profile, $maxCandidateLength)</code></td><td>1000</td><td>Characters of each candidate that the matcher searches. Text past the cap is not scored, so one hostile item cannot stall the list.</td></tr>
+<tr><td>Strict mode</td><td><code>FuzzyMatch::new(strictMode: true)</code></td><td>off</td><td>Full-query coverage: every query character must land, in order. This is the sugar-fuzzy <code>requireFullQuery</code> door. <code>withStrictMode()</code> sets it on an existing matcher.</td></tr>
+</table>
 
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIFs regenerated automatically from the tapes under <code>.vhs/</code> on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="Cursor navigation" onerror="this.parentElement.style.display='none'">
-                <h3 id="cursor-navigation">Cursor navigation</h3>
-                <span class="demo-caption">Box-drawing gutter with cursor movement, repainted as a full frame after resetPreviousFrame().</span>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/custom-styling.gif" alt="Custom styling" onerror="this.parentElement.style.display='none'">
-                <h3 id="custom-styling">Custom styling</h3>
-                <span class="demo-caption">Hand-written ★ Prefixer and ◉ Suffixer plugged into the same list.</span>
-            </div>
+    <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
+    <p>The library binds no keys, by design. Up, Down, PageUp, PageDown, Home and End map to the cursor methods in your host, as the Tasks section shows. Filter text comes from a text box you own, which passes its contents to <code>withFuzzyFilter()</code> or <code>withFilterFn()</code>. A <code>v</code>-style chord from <code>bubbles/list</code> is left outside the port.</p>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p>Styles come from the caller. <code>withLineStyle()</code> and <code>withCurrentStyle()</code> take SGR parameters such as <code>1;3</code>, not full escape sequences. Each value passes through a sanitize-then-reject gate: a stray leading escape is trimmed, and anything that is not a parameter list is refused. The glyph knobs on <code>DefaultPrefixer</code> and <code>DefaultSuffixer</code> refuse control bytes when they are set.</p>
+    <p><code>src/Support/AssertGlyph.php</code> is the shared validator behind those glyph knobs, so both Default gutters refuse control bytes in one place.</p>
+    <p style="margin-top: 12px;">The library emits no color of its own, and it neither reads nor acts on <code>NO_COLOR</code>. Pass empty style strings to emit none. Item text passes through the frame choke, a private sanitizer that <code>Model</code> applies before it draws any row, so an item cannot forge a frame or a control sequence. Keep a marker glyph as well as a color, so the cursor position survives a monochrome terminal.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <p>Each example is a standalone script under <code>examples/</code> and runs on its built-in input. The matching demo GIF is re-rendered by CI from the tape under <code>.vhs/</code>.</p>
+<ul>
+  <li><code>examples/basic.php</code> renders five fruit names with the Default gutters, then moves the cursor and repaints.</li>
+  <li><code>examples/custom-styling.php</code> plugs a hand-written star prefixer and a cursor-marker suffixer into a plain <code>Model::new()</code>.</li>
+  <li><code>examples/long-items.php</code> renders four descriptions in a 60-column viewport. Only the second and third wrap across several rows; the first and fourth fit on one row.</li>
+</ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/custom-styling.php
+php examples/long-items.php</code></pre>
+
+    <div class="demo-grid" style="margin-top: 24px;">
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="Cursor navigation" onerror="this.parentElement.style.display='none'">
+            <h3 id="cursor-navigation">Cursor navigation</h3>
+            <span class="demo-caption">Box-drawing gutter with cursor movement, repainted as a full frame after resetPreviousFrame().</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/custom-styling.gif" alt="Custom styling" onerror="this.parentElement.style.display='none'">
+            <h3 id="custom-styling">Custom styling</h3>
+            <span class="demo-caption">Hand-written star prefixer and suffix marker plugged into the same list.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/long-items.gif" alt="Word wrap" onerror="this.parentElement.style.display='none'">
+            <h3 id="word-wrap">Word wrap</h3>
+            <span class="demo-caption">Long items wrap at the viewport width, with continuation rows under the gutter.</span>
         </div>
     </div>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite covers the model (<code>ModelTest</code>), the delta renderer (<code>RowDeltaTest</code>), the two default gutters, the fuzzy matcher, the filter state, and the deprecated aliases (<code>DeprecatedSurfaceTest</code>). <code>tests/IntegrationTest.php</code> covers the lifecycle from adding items through navigation, filtering and delta rendering. <code>tests/Support/RowDeltaAssertions.php</code> holds the structural pins that check which rows a delta repaints.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="lines-throws-the-list-has-no-items-to-display" style="margin-top: 24px;">lines() throws "The list has no items to display."</h3>
+    <p><code>lines()</code> is the throwing door, and an empty list is a normal filter-as-you-type state. Check <code>isEmpty()</code> first, or catch the <code>RuntimeException</code> and paint your own empty state. <code>view()</code> never throws, so it can render an empty list without a guard.</p>
+
+    <h3 id="after-switching-models-a-row-keeps-stale-text" style="margin-top: 24px;">After switching models, a row keeps stale text</h3>
+    <p>The delta memo is carried through clones. A fork that paints onto the same region as its sibling diffs against the sibling's last frame. Call <code>resetPreviousFrame()</code> on the model you are about to paint, and do the same after any write to the list's screen area from outside.</p>
+
+    <h3 id="output-is-garbled-on-a-dumb-terminal-or-a-raw-pipe" style="margin-top: 24px;">Output is garbled on a dumb terminal or a raw pipe</h3>
+    <p>Delta frames use absolute cursor moves and bare <code>\n</code> line endings, which assume a cooked, cursor-addressable terminal. On <code>TERM=dumb</code>, or on a raw stream with <code>onlcr</code> off, render with <code>lines()</code> and end each row with <code>\r\n</code> yourself.</p>
+
+    <h3 id="the-cursor-index-does-not-match-the-visible-row" style="margin-top: 24px;">The cursor index does not match the visible row</h3>
+    <p><code>cursorIndex()</code> counts items, not rows. A wrapped item takes several rows, so the cursor's row offset is larger than its index. Use <code>lines()</code> to map rows, and the item index for the cursor.</p>
+
+    <h3 id="itemat-and-find-return-a-different-item-after-filtering" style="margin-top: 24px;">itemAt() and find() return a different item after filtering</h3>
+    <p>Indices address the visible projection, so they change when the filter changes. Read the item through the same model you filtered, or keep the stable ids from <code>itemIds()</code> when you need a reference that survives a filter.</p>
+
+    <h3 id="fuzzy-filtering-is-slow-on-a-long-list" style="margin-top: 24px;">Fuzzy filtering is slow on a long list</h3>
+    <p>The fuzzy filter costs roughly 63 microseconds per item on the canonical profile. Over a few thousand items, pre-screen with <code>str_contains()</code>, then rank only the survivors with <code>FuzzyMatch::match()</code>.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The port follows <a href="https://github.com/charmbracelet/bubbles/tree/main/list">charmbracelet/bubbles/list</a> for the cursor, filter and render surface. The gutter vocabulary comes from <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code.</p>
+<table class="api-table">
+<tr><th scope="col">Upstream (bubbles/list or bubblelister)</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
+<tr><td>Cursor movement and paging</td><td><code>Model::withCursor*()</code>, <code>withCursorPageUp()</code>, <code>withCursorPageDown()</code></td><td>Movement saturates at the list ends. A page is <code>height</code> items.</td></tr>
+<tr><td>Filter input and filter function</td><td><code>Model::withFilterFn()</code>, <code>withFuzzyFilter()</code>, <code>FilterState</code></td><td>The host owns the text box. The library owns the projection.</td></tr>
+<tr><td>Gutter and item rendering</td><td><code>Prefixer</code>, <code>Suffixer</code>, <code>DefaultPrefixer</code>, <code>DefaultSuffixer</code></td><td>The box-drawing gutter comes from bubblelister.</td></tr>
+<tr><td>Fuzzy matching</td><td><code>FuzzyMatch</code> over sugar-fuzzy</td><td>The Smith-Waterman core lives in sugar-fuzzy, which is the source of truth.</td></tr>
+</table>
+    <p style="margin-top: 12px;">Not ported, on purpose: the Title, Description and StatusMessage blocks, the pagination indicator, the <code>SetFilterText</code> input line, <code>Reverse()</code>, and <code>InsertItem</code> and <code>CopyItem</code>. The host or the array you pass in covers each of these.</p>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>A <code>Model</code> is immutable item and configuration data. Each <code>with*()</code> call clones the model and returns the clone. Items are minted with a per-model counter, and the cursor and the filter key on those ids, so a cursor stays with its item across a re-filter. <code>view()</code> and <code>resetPreviousFrame()</code> are the only paths that mutate the model, and both touch only its render memo. <code>view()</code> builds the rows, then compares each row with the one from the last frame and writes only the rows that changed. The sanitize choke runs on every item and every failure message, so untrusted text cannot emit a control sequence.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0, so consume <code>dev-master</code>. The deprecated <code>set*()</code>, <code>add*()</code> and <code>cursor*()</code> aliases, and <code>linesStream()</code>, are removed in 2.0.0. The <code>DeprecatedSurfaceTest</code> pins each alias to its replacement until then.</p>
+
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-treelist">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-treelist/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-treelist/tree/master/examples">Runnable examples</a></li>
+    </ul>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><strong>sugar-fuzzy</strong> is the source of truth for the fuzzy scoring and the scoring profiles.</li>
+      <li><strong>sugar-core</strong> supplies the frame sanitizer, the width oracle and the i18n registry.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    </div>
+  </div>
 </section>
 </main>
 

@@ -62,7 +62,9 @@ final class SessionHostSurfaceCensusTest extends TestCase
      * reported), so the Serve golden carries it and counts 35. PL-5d added
      * `channelHostFactory` the same way (the serve's host factory for
      * ChannelRegistry::boot()), taking the Serve golden to 36 methods and 4
-     * public signatures.
+     * public signatures. PL-5c-A added `channelHostFactoryRouted` the same way
+     * (the gateway-routed factory the serve boots its channels with), taking it to
+     * 37 methods and 5 public signatures.
      *
      * A split that COPIES instead of MOVES cannot hide: PHP lets a class
      * method shadow a same-named trait method silently, so the body count
@@ -164,11 +166,12 @@ final class SessionHostSurfaceCensusTest extends TestCase
             "  public STOP_DRAIN_MARGIN_SECONDS = 5\n",
             "  public STOP_DRAIN_SECONDS = 30\n",
             "  public STOP_KILL_WAIT_SECONDS = 5\n",
-            "METHODS 36\n",
+            "METHODS 37\n",
             "  private __construct() hidden\n",
             "  private static announce(SugarCraft\\Code\\Cli\\ParsedArgs \$args, SugarCraft\\Code\\Server\\ServerConfig \$config, array \$report, SugarCraft\\Code\\Server\\Http\\StaticFiles \$static, bool \$detached): void hidden\n",
             "  private static answer(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$result, string \$text, int \$code): int hidden\n",
             "  public static channelHostFactory(SugarCraft\\Code\\Protocol\\Dispatcher \$protocol, React\\EventLoop\\LoopInterface \$loop): Closure public\n",
+            "  public static channelHostFactoryRouted(SugarCraft\\Code\\Protocol\\Dispatcher \$protocol, React\\EventLoop\\LoopInterface \$loop, SugarCraft\\Code\\Server\\Workspace\\Gateway \$gateway): Closure public\n",
             "  public static config(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$env, array \$userConfig): SugarCraft\\Code\\Server\\ServerConfig public\n",
             "  private static controlRequest(SugarCraft\\Code\\Server\\StateDir \$state, string \$line): ?array hidden\n",
             "  private static defaultStateDir(): string hidden\n",
@@ -201,8 +204,9 @@ final class SessionHostSurfaceCensusTest extends TestCase
             "  private static token(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$env): int hidden\n",
             "  private static url(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$env): int hidden\n",
             "  private static waitForExit(SugarCraft\\Code\\Server\\DiscoveryFile \$record, float \$seconds): bool hidden\n",
-            "PUBLIC_SIGNATURES 4\n",
+            "PUBLIC_SIGNATURES 5\n",
             "  channelHostFactory(SugarCraft\\Code\\Protocol\\Dispatcher \$protocol, React\\EventLoop\\LoopInterface \$loop): Closure\n",
+            "  channelHostFactoryRouted(SugarCraft\\Code\\Protocol\\Dispatcher \$protocol, React\\EventLoop\\LoopInterface \$loop, SugarCraft\\Code\\Server\\Workspace\\Gateway \$gateway): Closure\n",
             "  config(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$env, array \$userConfig): SugarCraft\\Code\\Server\\ServerConfig\n",
             "  parentPid(SugarCraft\\Code\\Cli\\ParsedArgs \$args, array \$env): ?int\n",
             "  run(SugarCraft\\Code\\Cli\\ParsedArgs \$args): int\n",

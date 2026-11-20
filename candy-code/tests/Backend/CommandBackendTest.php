@@ -360,6 +360,34 @@ final class CommandBackendTest extends TestCase
         }
     }
 
+    /**
+     * A string command reaches the shell proc_open() used for it before this
+     * backend wrapped it: /bin/sh on POSIX, and cmd.exe on Windows, where a bare
+     * `/bin/sh` does not exist and every string command failed to spawn.
+     */
+    public function testAStringCommandIsWrappedInTheShellOfTheHostPlatform(): void
+    {
+        $shellArgv = new \ReflectionMethod(CommandBackend::class, 'shellArgv');
+
+        $this->assertSame(
+            ['/bin/sh', '-c', 'printf hi'],
+            $shellArgv->invoke(null, 'printf hi', false),
+        );
+
+        $windows = $shellArgv->invoke(null, 'echo hi', true);
+        $this->assertSame(['/d', '/s', '/c', 'echo hi'], array_slice($windows, 1));
+        $this->assertNotSame('/bin/sh', $windows[0]);
+        $this->assertNotSame('', $windows[0]);
+    }
+
+    public function testAListCommandIsExecdDirectlyOnEveryPlatform(): void
+    {
+        $shellArgv = new \ReflectionMethod(CommandBackend::class, 'shellArgv');
+
+        $this->assertSame(['printf', 'a;b'], $shellArgv->invoke(null, ['printf', 'a;b'], false));
+        $this->assertSame(['printf', 'a;b'], $shellArgv->invoke(null, ['printf', 'a;b'], true));
+    }
+
     private function writeScript(string $body): string
     {
         $script = sys_get_temp_dir() . '/cmd_backend_' . uniqid('', true) . '.sh';

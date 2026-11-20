@@ -15,6 +15,7 @@ candy-code/tests/Tools/BuiltIn/GrepTimeoutTest.php	29.541	5
 candy-code/tests/Support/DuplicatedTestHelperDriftTest.php	27.900	14
 candy-code/tests/Tui/MenuReachabilityTest.php	27.486	14
 candy-code/tests/LSP/LspClientDispatchPumpTest.php	21.042	2
+candy-code/tests/Chat/BackgroundStopPollWakeTest.php	20.926	2
 candy-code/tests/Cli/StderrEmitterCensusTest.php	20.766	95
 candy-code/tests/LSP/LspConnectionFrameCapTest.php	20.723	7
 candy-code/tests/Cli/BootstrapLaunchNoticeRoutingTest.php	20.701	23
@@ -100,6 +101,7 @@ candy-code/tests/Server/ConformanceTest.php	6.735	26
 candy-code/tests/Cli/InstallScriptTest.php	6.732	16
 candy-code/tests/Session/CheckpointStorageTest.php	6.730	23
 candy-code/tests/Sessions/BackgroundSupervisorStopTest.php	6.634	8
+candy-code/tests/Sessions/BackgroundSupervisorLoopDrivenTest.php	15.000	6
 candy-code/tests/Server/HandoffRemotePushTest.php	6.619	21
 candy-code/tests/Support/ForkedChildReaperAdoptionTest.php	6.592	6
 candy-code/tests/Backend/ReasoningProgressTest.php	6.387	16
@@ -188,7 +190,7 @@ candy-code/tests/Host/SessionHostIdleAutoTest.php	3.700	17
 candy-code/tests/Integration/BinCandyCodeAutoloadGuardTest.php	3.679	38
 candy-code/tests/Tools/TaskNestingDepthCapTest.php	3.629	6
 candy-code/tests/Chat/ReviewCommandTest.php	3.616	21
-candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.612	13
+candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.612	14
 candy-code/tests/Sessions/BackgroundSupervisorReapTest.php	3.591	10
 candy-code/tests/Session/SessionQueryTest.php	3.582	15
 candy-code/tests/TtyStreamArgumentCensusTest.php	3.582	46
@@ -506,6 +508,7 @@ candy-code/tests/Chat/ExecuteAgentsEngineTest.php	1.183	3
 candy-code/tests/MCP/McpClientDispatchPumpTest.php	1.183	2
 candy-code/tests/Support/ToolIpcFilesTest.php	1.183	28
 candy-code/tests/Support/ProcessReaperEscalationOrderTest.php	1.173	5
+candy-code/tests/Backend/EngineBackendHeartbeatRateGateTest.php	1.150	4
 candy-code/tests/Support/ProcessReaperAsyncReapTest.php	1.000	3
 candy-code/tests/MCP/StdioMcpEnvScrubTest.php	1.170	6
 candy-code/tests/Server/SessionListBodySearchTest.php	1.162	5
@@ -638,6 +641,7 @@ candy-code/tests/Commands/KeyBindingRegistryTest.php	0.634	33
 candy-code/tests/Tools/BuiltIn/NonRegularFileRefusalTest.php	0.633	6
 candy-code/tests/Backend/EngineBackendHeartbeatThreadingTest.php	0.630	4
 candy-code/tests/Chat/BackgroundStopCommandTest.php	0.629	5
+candy-code/tests/Chat/BackgroundSpawnPollWakeTest.php	1.500	1
 candy-code/tests/Server/InternalErrorLoggingTest.php	0.627	22
 candy-code/tests/Cli/AppendSystemPromptTest.php	0.626	18
 candy-code/tests/Host/SessionHostAheadOfNeedTest.php	0.625	4
@@ -1594,6 +1598,7 @@ candy-code/tests/Server/ServerConfigHookModeInheritanceTest.php	0.009	24
 candy-code/tests/Share/JsonlTranscriptWriterTest.php	0.009	9
 candy-code/tests/Tui/ComposerVimTest.php	0.009	27
 candy-code/tests/Tui/SessionPickerWidgetTest.php	0.009	13
+candy-code/tests/Host/Commands/BackgroundStopThunkTest.php	0.008	1
 candy-code/tests/Agents/PathJailTest.php	0.008	18
 candy-code/tests/Chat/EscWordMotionTest.php	0.008	4
 candy-code/tests/Chat/InitCommandTest.php	0.008	6
@@ -2138,3 +2143,9 @@ candy-code/tests/Chat/HeadlessTickCancelTest.php	0.050	2
 candy-code/tests/Tools/ShellSendRelayReadyTest.php	2.100	3
 candy-code/tests/Support/ProcessIdentityParityTest.php	0.05	3
 candy-code/tests/Protocol/RpcErrorRefusalTest.php	0.005	4
+candy-code/tests/Host/InProcessRoutedTest.php	6.945	6
+candy-code/tests/Host/InProcessEventSinkTest.php	2.516	8
+candy-code/tests/Server/GatewayInProcessRoutingTest.php	1.152	5
+candy-code/tests/Server/GatewayEventSinkTest.php	1.309	6
+candy-code/tests/Backend/LoopDrivenTurnTest.php	0.064	6
+candy-code/tests/Backend/ForkedTurnOwnsItsLoopTest.php	0.422	1

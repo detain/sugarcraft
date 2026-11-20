@@ -15,6 +15,9 @@ use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Async\Await;
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\Backend\RemoteBackend;
@@ -146,12 +149,13 @@ final class Attach
      * as the session is followed (turns can run for many minutes), and while
      * it is not, the resume ladder keeps trying for its bound.
      *
-     * $after overrides the ladder's delay scheduler (ISS-114 tests); it
-     * defaults to the event loop.
+     * $after overrides the scheduler of the ladder's first wait and
+     * $redialBackoff its redial delays (ISS-114 tests); both default to the
+     * event loop and the production ladder.
      *
      * @return PromiseInterface<RemoteSessionHost>
      */
-    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null): PromiseInterface
+    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null, ?Backoff $redialBackoff = null): PromiseInterface
     {
         return self::stream($url, $token, $loop)->then(
             static fn (array $socket): RemoteSessionHost => RemoteSessionHost::overStream(
@@ -160,6 +164,7 @@ final class Attach
                 $socket[1],
                 static fn (): PromiseInterface => self::stream($url, $token, $loop),
                 $after,
+                $redialBackoff,
             ),
         );
     }
@@ -355,30 +360,23 @@ final class Attach
     /**
      * Run the loop until $promise settles or $seconds pass: its value, its
      * rejection, or null on the timeout.
+     *
+     * A rejection is handed back as a value (the caller tells it from a
+     * session by its type), so the only exception {@see Await::until()} can
+     * throw here is its own budget's {@see TimeoutException}, which is the one
+     * caught: a rejection that happens to be a TimeoutException stays a value.
      */
     private static function await(PromiseInterface $promise, float $seconds): mixed
     {
-        $done = false;
-        $result = null;
-        $promise->then(
-            static function (mixed $value) use (&$done, &$result): void {
-                $done = true;
-                $result = $value;
-                Loop::stop();
-            },
-            static function (\Throwable $e) use (&$done, &$result): void {
-                $done = true;
-                $result = $e;
-                Loop::stop();
-            },
+        $settled = $promise->then(
+            null,
+            static fn (\Throwable $e): \Throwable => $e,
         );
-        if (!$done) {
-            $timer = Loop::addTimer($seconds, static fn () => Loop::stop());
-            Loop::run();
-            Loop::cancelTimer($timer);
+        try {
+            return Await::until($settled, $seconds);
+        } catch (TimeoutException) {
+            return null;
         }
-
-        return $done ? $result : null;
     }
 
     /** The server's own words for a refused upgrade, when it sent JSON. */

@@ -56,4 +56,28 @@ final class CancellationTokenListenerTest extends TestCase
 
         self::assertSame(0, $calls);
     }
+
+    /**
+     * The token is a wrapper over sugar-async's CancellationSource, so a throwing
+     * listener is logged and never propagates out of cancel(); the others still run.
+     */
+    public function testAThrowingListenerDoesNotStopTheOthersOrEscapeCancel(): void
+    {
+        $token = new CancellationToken();
+        $ran = [];
+        $token->onCancel(static function () use (&$ran): void {
+            $ran[] = 'first';
+        });
+        $token->onCancel(static function (): void {
+            throw new \RuntimeException('listener failure');
+        });
+        $token->onCancel(static function () use (&$ran): void {
+            $ran[] = 'third';
+        });
+
+        $token->cancel();
+
+        $this->assertTrue($token->isCancelled());
+        $this->assertSame(['first', 'third'], $ran);
+    }
 }

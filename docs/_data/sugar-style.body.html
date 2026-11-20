@@ -91,6 +91,39 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
 <tr><td>Bar</td><td>StatusBar::new()-&gt;left()/center()/right(Segment|string ...)-&gt;width()/style()-&gt;render(); HelpBar::fromMap()</td><td>One-line chrome: positioned segment groups + key→label help rows</td></tr>
 </table>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;">Colors still print under <code>NO_COLOR</code>, or into a pipe</h3>
+    <p><code>Style::new()</code> renders TrueColor unless a process-wide default has been pinned, and <code>Style::new()</code> never reads the environment itself, although <code>Theme::adaptive()</code> and <code>Renderer::fromEnvironment()</code> do. Negotiate the terminal's tier once at startup and pin it with <code>Style::setDefaultProfile()</code>. Every Style created afterwards downsamples to that tier, and <code>NoTty</code> strips every escape. The detection reads <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>TERM=dumb</code> through sugar-colorprofile.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+Style::setDefaultProfile(ColorProfile::detect(null, STDOUT));</code></pre>
+
+    <h3 style="margin-top: 24px;"><code>Theme::adaptive()</code> picks the dark palette on a light terminal</h3>
+    <p><code>adaptive()</code> reads only the last field of <code>COLORFGBG</code>. A value in the form <code>fg;bg</code> with a background index from 0 to 255 decides light or dark by that colour's luminance. When the variable is unset, has no <code>;</code>, or holds a non-numeric or out-of-range background, the result is the fallback, which is dark by default. Many terminals never set <code>COLORFGBG</code>, so on those the fallback decides every time. Pass <code>adaptive(false)</code> to make the fallback light, or choose <code>Theme::light()</code> or <code>Theme::dark()</code> when the host knows its background.</p>
+
+    <h3 style="margin-top: 24px;">A wrapped table cell stays on one line, or <code>render()</code> throws a TypeError</h3>
+    <p>A <code>Table::wrap()</code> callback must return a list of physical lines, not a single string with embedded newlines. Each element of the returned array becomes one rendered line of the row. Split the wrapped text into an array before returning it, so the row grows to match. A callback that returns a plain string does not stay on one line. <code>render()</code> fails with <code>array_values(): Argument #1 ($array) must be of type array, string given</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Table\Table;
+
+$table = Table::new()
+    -&gt;headers('Note')
+    -&gt;row('A long note that should wrap across several lines')
+    -&gt;wrap(fn (string $cell, int $colWidth): array =&gt;
+        explode("\n", Width::wrapAnsi($cell, $colWidth)))
+    -&gt;render();</code></pre>
+
+    <h3 style="margin-top: 24px;">An overlay hides the layer beneath it instead of blending</h3>
+    <p><code>Canvas</code> composites layers in z-order, and an upper cell replaces the lower cell it covers. There is no alpha blending, so every cell inside an overlay's footprint shows the overlay's content. Cells outside that footprint still show the base layer. Size the overlay to the area it needs, and keep the base visible around it.</p>
+
+    <h3 style="margin-top: 24px;"><code>withEmbeddedTitle()</code> adds nothing to the border</h3>
+    <p>An empty string is treated as no title, so the edge stays identical to an untitled border. The layout also budgets exactly one cell per junction. A title that is too long for its edge shrinks to fit and ends in <code>…</code>, so it is cut rather than wrapped. Widen the Style with <code>width()</code> or shorten the title when the cut text matters.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-style/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-style">github.com/detain/sugarcraft/commits/master/sugar-style</a>. Two deprecated accessors on <code>Style</code>, <code>getDefaultProfile()</code> among them, have a docblock that reads <code>REMOVED-IN: 2.0.0</code>, so they go in 2.0.0. The deprecated <code>Border::getTitles()</code> alias carries no removal version yet, so do not plan its removal for 2.0.0.</p>
   </div>
 </section>
 

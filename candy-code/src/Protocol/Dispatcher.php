@@ -618,7 +618,7 @@ final class Dispatcher implements MessageHandler
      *
      * @throws RpcError
      */
-    private static function wireAnswer(mixed $result): mixed
+    public static function wireAnswer(mixed $result): mixed
     {
         $text = JsonRpc::encodeValue($result, JsonRpc::MAX_DEPTH_VALUE);
         if (\strlen($text) + self::FRAME_OVERHEAD_BYTES > self::MAX_SERVER_FRAME_BYTES) {

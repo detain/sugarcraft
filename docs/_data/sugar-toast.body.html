@@ -1,9 +1,11 @@
-<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support. Severity never rides color alone: each type carries a distinct symbol, <code>withAccessibleText()</code> adds the plain-text word, and the <code>REDUCE_MOTION</code>/<code>NO_COLOR</code> environment gates drop blink and color bytes while those text channels keep rendering.</p>
+<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support. Severity never rides color alone: each type carries a distinct symbol, <code>withAccessibleText()</code> adds the plain-text word, and the <code>REDUCE_MOTION</code>/<code>NO_COLOR</code> environment gates drop blink and color bytes while those text channels keep rendering. It is a port of the alert behavior of <a href="https://github.com/DaltonSW/bubbleup">DaltonSW/bubbleup</a>, and it is a renderer: the host owns the keys, the clock and the event loop.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-toast</code></pre>
+    <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so require it as <code>sugarcraft/sugar-toast:dev-master</code>; on a default-<code>stable</code> project a bare <code>sugarcraft/sugar-toast</code> request does not resolve.</p>
+    <p style="margin-top: 12px;">The manifest requires PHP <code>^8.3</code>. It pulls in <code>sugarcraft/sugar-core</code> for the sanitizer, the i18n registry and the timer commands, and <code>sugarcraft/sugar-cellbuffer</code> for the cell grid that composites the boxes over the background.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Toast\{Position, Toast, ToastType};
 
 $toast = Toast::new(50)  // max width 50
@@ -15,34 +17,85 @@ $toast = $toast-&gt;alert(ToastType::Error, 'Connection failed');
 
 $bg = str_repeat("background content\n", 20);
 echo $toast-&gt;view($bg);</code></pre>
+    <p style="margin-top: 12px;">The call returns the background with both boxes composited in the top-right corner of the default 80 by 24 viewport. Each alert inherits the 10 second duration from <code>withDuration()</code>, so both boxes leave the frame on their own. The full runnable program is <code>examples/basic.php</code>.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — severity carried by icon + color; add <code>withAccessibleText()</code> for a plain-text severity word (box shape and border glyphs are the same across types, so color is never the sole carrier).</span></div>
-            <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight.</span></div>
-            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withCancelledExpiry()</code>, deprecated alias <code>withoutExpiry()</code>, or <code>cancelAlert()</code>).</span></div>
-            <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii — Ascii is plain text end to end (+ - | borders, # . bar).</span></div>
-            <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
-            <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar beneath the message body — by default the bar speaks in glyph and color; the numeric percentage (0–100%) prints only under <code>withAccessibleText()</code>.</span></div>
-            <div class="feature"><strong>Accessible text mode</strong><span><code>withAccessibleText()</code> names the severity in words and prints progress percentages — a text channel beside the frame's color/glyph language (WCAG 1.4.1) — recommended for any host whose output may be read as plain text (screen readers, copy-paste, log extraction). Default off keeps every frame byte-identical.</span></div>
-            <div class="feature"><strong>Accessibility environment variables</strong><span><code>REDUCE_MOTION</code>/<code>PREFERS_REDUCED_MOTION</code> drop blink; <code>NO_COLOR</code>/<code>CLICOLOR=0</code> drop all color bytes (renderer palette, custom alert colors, inline message SGR); <code>CLICOLOR_FORCE</code> overrides. The gates are deliberately not spec-literal: a literal <code>NO_COLOR=0</code> counts as unset (suppression off) and <code>CLICOLOR</code> must read exactly <code>0</code> to drop color; the divergence law lives in the color-decision docblock. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself.</span></div>
-            <div class="feature"><strong>Action buttons</strong><span>[Label] buttons with closure callbacks; their frame cells are exported by <code>actionRects()</code>/<code>actionAt()</code> for host-side mouse and keyboard dispatch.</span></div>
-            <div class="feature"><strong>History log</strong><span>Cumulative immutable record of dismissed, overflow-evicted and refused (DropNewest) alerts via <code>history()</code>; <code>clear()</code> never resets it.</span></div>
-            <div class="feature"><strong>Styled alerts</strong><span>Per-alert background, foreground, and border color overrides via Color.</span></div>
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>A <code>Toast</code> is an immutable value that holds a queue of <code>Alert</code> objects, a position, a symbol set and a set of limits. Every <code>with*()</code> setter and every alert door returns a new <code>Toast</code>, so the host rebinds the result each time. Nothing is mutated behind the host's back, and a frame drawn from an older value stays valid.</p>
+    <p>Each alert carries an absolute expiry. A <code>null</code> expiry means <em>inherit</em>: the queueing doors arm the timer set by <code>withDuration()</code> when one is set, and no timer when it is not. Persistence is a separate, explicit sentinel (<code>withCancelledExpiry()</code> or <code>cancelAlert()</code>), so a persistent alert never auto-dismisses. Expired alerts leave the queue on the next write, or when the host calls <code>pruneExpired()</code>.</p>
+    <p><code>view()</code> stacks the live alerts at the chosen position and composites them over the background through the cell grid. The result is a frame string the host paints. Stacking, overflow and the fold row are described under the Architecture section.</p>
 
-    </div>
+    <h3 style="margin-top: 32px;">Tasks</h3>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-toast">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-toast/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-toast/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/DaltonSW/bubbleup">DaltonSW/bubbleup</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+    <h3 style="margin-top: 24px;">Auto-dismiss on a timer instead of polling</h3>
+    <p>Ask the toast when its next expiry is due, and schedule one timer for that moment. <code>secondsUntilNextExpiry()</code> returns <code>null</code> when nothing expires, so no timer is armed for an idle queue. Re-arm from inside <code>update()</code>, because the tick is one-shot.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Msg;
+use SugarCraft\Toast\Toast;
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+// Host-defined message: sugar-toast ships no message class of its own.
+final class RepaintMsg implements Msg {}
 
-    <h3 style="margin-top: 32px;">API</h3>
+function armPrune(Toast $toast): ?\Closure
+{
+    $delay = $toast-&gt;secondsUntilNextExpiry();
+    return $delay === null
+        ? null
+        : Cmd::tick($delay, static fn (): Msg =&gt; new RepaintMsg());
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">Keep an error on screen until the user acts</h3>
+    <p>With no <code>withDuration()</code> set, an <code>alert()</code> with no expiry never leaves the queue. Use that for errors the user must see, and clear them with <code>dismiss()</code> once the user has acted. <code>dismiss()</code> files every queued alert into the history log, and <code>clear()</code> drops them without a record.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Toast, ToastType};
+
+$toast = Toast::new(60)
+    -&gt;alert(ToastType::Error, 'Disk is full. Free space before the next save.');
+
+// Later, after the user has freed space:
+$toast = $toast-&gt;dismiss();</code></pre>
+
+    <h3 style="margin-top: 24px;">Show progress for a long operation</h3>
+    <p><code>progressToast()</code> draws a bar under the message. Re-calling it with the same <code>$id</code> advances the one box instead of appending another, so a loop can report progress without filling the stack. The progress value is clamped to 0.0 through 1.0.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Toast, ToastType};
+
+$toast = Toast::new(50);
+foreach ([0.25, 0.5, 0.75, 1.0] as $done) {
+    $toast = $toast-&gt;progressToast(ToastType::Info, 'Uploading backup', $done, id: 'upload');
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">Attach a button that runs a callback</h3>
+    <p>Pass <code>Action</code> objects to any alert door. The label renders as <code>[Label]</code>, and its frame cells are reported by <code>actionRects()</code>. Route a mouse click or a hotkey through <code>actionAt()</code> to find the action under a cell, then call its callback.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Action, Toast, ToastType};
+
+$retry = static function (): void {
+    // Re-send the failed request here.
+};
+
+$background = str_repeat("background content\n", 20);
+$toast = Toast::new(50)
+    -&gt;error('Save failed', actions: [new Action('Retry', $retry)]);
+
+// Paint the frame first: actionAt() reads the geometry of the last render.
+$toast-&gt;view($background, 80, 24);
+
+// On a click at a frame cell, $col and $row come from the host's mouse event.
+$hit = $toast-&gt;actionAt(col: 4, row: 2);
+if ($hit !== null) {
+    ($hit-&gt;callback)();
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">Register a custom alert type</h3>
+    <p>An <code>AlertTypeDefinition</code> gives a new key its own header prefix and icon color, and a base severity that the renderer falls back to. Register it on an <code>AlertTypeRegistry</code>, and pass that registry to <code>withTypeRegistry()</code>. String types resolve against the registry first and then against the built-ins.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{AlertTypeDefinition, AlertTypeRegistry, Toast, ToastType};
+
+$registry = AlertTypeRegistry::new()
+    -&gt;with(AlertTypeDefinition::new('deploy', '▲', base: ToastType::Success, label: 'Deploy'));
+
+$toast = Toast::new(50)
+    -&gt;withTypeRegistry($registry)
+    -&gt;alert('deploy', 'Release 2.4 is live');</code></pre>
+
+    <h3 style="margin-top: 32px;">API reference</h3>
+    <p>The classes below are the public surface. Every setter on <code>Toast</code> returns a new instance, and <code>Alert</code> and <code>Action</code> follow the same rule.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
@@ -90,7 +143,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Action</td><td>$callback: \Closure(): void</td><td>Invoked when action is triggered (readonly)</td></tr>
 <tr><td>Toast</td><td>withTypeRegistry(?AlertTypeRegistry): self</td><td>Register custom alert types; string types resolve registry-first, then the built-ins</td></tr>
 <tr><td>AlertTypeRegistry</td><td>new(): self / with(AlertTypeDefinition): self / resolve(string $key): ?AlertTypeDefinition / keys(): list&lt;string&gt;</td><td>Immutable registry of custom types (bubbleup RegisterNewAlertType, as a value)</td></tr>
-<tr><td>AlertTypeDefinition</td><td>new(string $key, string $prefix, ?Color $color = null, ToastType $base = Info, ?string $label = null, ?string $asciiPrefix = null): self</td><td>Custom type: key, header glyph/prefix, icon colour, base severity; validated at construction</td></tr>
+<tr><td>AlertTypeDefinition</td><td>new(string $key, string $prefix, ?Color $color = null, ToastType $base = Info, ?string $label = null, ?string $asciiPrefix = null): self</td><td>Custom type: key, header glyph/prefix, icon color, base severity; validated at construction</td></tr>
 <tr><td>HistoryLog</td><td>new(array $entries = []): self</td><td>Factory mirroring the sibling ::new()s; seeds a log from a list&lt;Alert&gt; (garbage throws, same fail-fast door)</td></tr>
 <tr><td>HistoryLog</td><td>push(Alert, ?int $limit = null): self</td><td>Append alert (evicting oldest past $limit), return new immutable log</td></tr>
 <tr><td>HistoryLog</td><td>all(): list&lt;Alert&gt;</td><td>Return all recorded alerts</td></tr>
@@ -117,23 +170,98 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'more', 'truncated', 'hidden', 'type.*'. The library itself renders the <code>type.*</code> labels (via <code>ToastType::label()</code>) and the <code>more</code>/<code>truncated</code> fold markers; <code>dismiss</code>/<code>count</code> are convenience strings for host UI and are never emitted by <code>view()</code>.</td></tr>
 </table>
     <p>Per-alert render size is bounded too: <code>Toast::MAX_MESSAGE_CELLS</code> truncates over-long messages with a visible marker and <code>Toast::MAX_ACTIONS_PER_ALERT</code> folds surplus buttons into an expandable &quot;[+N more]&quot; row (<code>expandAt()</code>) — the full text and action list still ride the Alert into history.</p>
-    <p><strong>Trust boundary.</strong> In a TUI the terminal is a sink: alert text is composited through the cell grid, so raw ESC/OSC/BEL payloads in a message never reach the output stream — only SGR the renderer itself builds does. Inline SGR in a message is honored as styling, so sanitize attacker-authored text (<code>Sanitize::untrusted()</code>) before enqueueing. sugar-mouse PUA zone markers (U+E000/U+E001) in toast text pass through as ordinary glyphs — hosts parsing marked frames must sweep with <code>Sanitize::untrustedForMarkedFrames()</code>; the host's own markers on a marked background frame, and its OSC-8 link runs on rows the toast does not cover, survive compositing. Full contract: <code>docs/TRUST-BOUNDARY.md</code> §1.</p>
 
-    <h3 style="margin-top: 32px;">Internationalization</h3>
-    <p>Every user-facing string the renderer emits (type labels, the +N more fold, the truncation marker) uses <code>SugarCraft\Toast\Lang::t()</code>. All keys live as bare entries in <code>lang/en.php</code>; the <code>toast</code> lookup namespace is baked into <code>src/Lang.php</code>, not a nesting level inside the arrays.</p>
-    <table class="api-table">
-<tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
-<tr><td>type.info / type.warning / type.error / type.success</td><td>Info / Warning / Error / Success</td><td>—</td></tr>
-<tr><td>dismiss</td><td>Press any key to dismiss</td><td>—</td></tr>
-<tr><td>count</td><td>{count} notification(s)</td><td>{count}</td></tr>
-<tr><td>more</td><td>+{count} more</td><td>{count}</td></tr>
-<tr><td>truncated</td><td>…[truncated]</td><td>—</td></tr>
-<tr><td>hidden</td><td>+{count} hidden</td><td>{count}</td></tr>
+    <h3 style="margin-top: 32px;">Configuration and options</h3>
+    <p>Every option is a fluent setter on <code>Toast</code>. The defaults below are the values a fresh <code>Toast::new()</code> carries.</p>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>Toast::withDuration()</code></td><td><code>?float</code></td><td><code>null</code></td><td>Seconds an inheriting alert stays up. <code>null</code> arms no timer, so alerts persist until dismissed.</td></tr>
+<tr><td><code>Toast::withMaxWidth()</code></td><td><code>int</code></td><td><code>50</code></td><td>Maximum alert width in cells. Values of 0 or less throw.</td></tr>
+<tr><td><code>Toast::withMinWidth()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> gives fixed-width boxes at the cap. A positive value turns on fit-to-content between that floor and the cap.</td></tr>
+<tr><td><code>Toast::withPosition()</code></td><td><code>Position</code></td><td><code>Position::TopLeft</code></td><td>Where the stack anchors on the viewport.</td></tr>
+<tr><td><code>Toast::withSymbolSet()</code></td><td><code>SymbolSet</code></td><td><code>SymbolSet::Unicode</code></td><td>Icon and border set. <code>Ascii</code> also switches the borders to <code>+ - |</code> and the progress bar to <code>#</code> and <code>.</code>.</td></tr>
+<tr><td><code>Toast::withMaxConcurrent()</code></td><td><code>?int</code></td><td><code>null</code></td><td>Cap on live alerts. <code>null</code> is unlimited. Values below 1 throw.</td></tr>
+<tr><td><code>Toast::withOverflow()</code></td><td><code>Overflow</code></td><td><code>Overflow::DropOldest</code></td><td>What happens past the cap: evict the oldest (<code>DropOldest</code>), refuse the newest and file it into history (<code>DropNewest</code>), or let the queue exceed the cap (<code>Enqueue</code>).</td></tr>
+<tr><td><code>Toast::withHistoryLimit()</code></td><td><code>?int</code></td><td><code>100</code></td><td>Cap on recorded history, oldest evicted first. <code>null</code> is unbounded.</td></tr>
+<tr><td><code>Toast::withAllowEscToClose()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Preference flag the host reads on Escape. The renderer never acts on it.</td></tr>
+<tr><td><code>Toast::withAccessibleText()</code></td><td><code>bool</code></td><td><code>false</code></td><td>Writes the severity word into headers and percentages onto progress rows. Off keeps frames byte-identical to the color-and-glyph output.</td></tr>
+<tr><td><code>Toast::withHostZoneCarry()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Keeps the host's sugar-mouse zone markers paired through the composite. Off restores full chrome and drops the zone spans.</td></tr>
 </table>
-    <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
+    <p style="margin-top: 12px;">Environment variables are read at render time and never probe a TTY. <code>REDUCE_MOTION</code> or <code>PREFERS_REDUCED_MOTION</code> drop blink. <code>NO_COLOR</code> or <code>CLICOLOR=0</code> drop every color byte. <code>CLICOLOR_FORCE</code> wins over both. A literal <code>NO_COLOR=0</code> counts as unset, and <code>CLICOLOR</code> must read exactly <code>0</code> to suppress color.</p>
+
+    <h3 style="margin-top: 40px;">Keys and input</h3>
+    <p>The renderer binds no keys. The host reads the keyboard and the mouse and calls the door that matches. <code>allowEscToClose()</code> reports the Escape preference, and the host calls <code>dismiss()</code> when Escape arrives and the flag is on. For buttons, <code>actionRects()</code> lists every painted <code>[Label]</code> cell, so a host can bind Alt plus a number or a focus ring to them. A click goes through <code>actionAt($col, $row)</code>, and <code>expandAt()</code> handles the <code>[+N more]</code> fold row.</p>
+
+    <h3 style="margin-top: 40px;">Theming and styling</h3>
+    <p>Three layers set the look. The <code>SymbolSet</code> chooses glyphs and borders. <code>ToastType::color()</code> gives the default icon color for each severity. Per-alert <code>withBackgroundColor()</code>, <code>withForegroundColor()</code> and <code>withBorderColor()</code> override the fill, the message text and the box glyphs. A <code>null</code> override is unstyled, not the type color, so the type color reaches only the icon. Custom types supply their own prefix and icon color through <code>AlertTypeDefinition</code>. The environment gates above can strip all color at render time without changing the glyphs.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/basic.php</code> stacks eight toasts on a 20-line background across three frames: five at TopLeft, two at TopRight with the ASCII symbol set, and one at BottomCenter. It shows a sanitized remote message beside the Unicode and ASCII symbol sets.</li>
+      <li><code>examples/types.php</code> renders every <code>ToastType</code> as its own frame, followed by the position and symbol-set sections.</li>
+      <li><code>examples/accessibility.php</code> renders the same alert with <code>withAccessibleText()</code> off and on, so the difference in the severity word is visible.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/types.php
+php examples/accessibility.php</code></pre>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite pins the rendered frames byte for byte in <code>GoldenRenderTest</code> against fixtures. <code>ToastTest</code> and the <code>Toast*Test</code> files cover the lifecycle, expiry, overflow, progress, actions and history. <code>ExamplesExecuteTest</code> runs each file in <code>examples/</code>, and <code>LangCoverageTest</code> checks that every key in the catalog is present.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 style="margin-top: 24px;">Alerts never disappear</h3>
+    <p>With no <code>withDuration()</code> set, the timer is never armed, so an inheriting alert stays until the host calls <code>dismiss()</code>, <code>clear()</code> or <code>removeAlert()</code>. Set a duration on the toast, or pass an explicit <code>$expiresAt</code> or <code>$ttlSeconds</code> to the door, when the alert should leave on its own.</p>
+
+    <h3 style="margin-top: 24px;">Escape does nothing</h3>
+    <p>The renderer reads no input. <code>allowEscToClose()</code> only reports a preference, and the host must read Escape and call <code>dismiss()</code> itself. Check that the flag is on for the frame, and that the key handler reaches the toast's <code>dismiss()</code> call.</p>
+
+    <h3 style="margin-top: 24px;">Colors are missing from the output</h3>
+    <p><code>NO_COLOR</code> or <code>CLICOLOR=0</code> in the environment drops every color byte, and <code>CLICOLOR_FORCE</code> overrides both. Unset those variables, or set <code>CLICOLOR_FORCE=1</code> for a pipe that should keep color. Severity stays visible through the glyph and the <code>[E]</code>, <code>[W]</code>, <code>[I]</code> and <code>[S]</code> prefixes.</p>
+
+    <h3 style="margin-top: 24px;">view() throws InvalidArgumentException</h3>
+    <p>Both viewport dimensions must lie between 1 and <code>Toast::MAX_VIEWPORT_DIMENSION</code> (4 096), and their product must fit <code>Toast::MAX_VIEWPORT_CELLS</code> (1 000 000). The check runs before any allocation, so a bad size fails fast. Pass the terminal's real size, or clamp it before calling <code>view()</code>.</p>
+
+    <h3 style="margin-top: 24px;">Boxes move when an older alert expires</h3>
+    <p>Expiry reflows the stack, so the boxes below an expired one move up. This is expected. To keep a box fixed, make it persistent with <code>cancelAlert()</code>, or cap the stack with <code>withMaxConcurrent()</code> so reflow stays small.</p>
+
+    <h3 style="margin-top: 24px;">A message from a remote service changes the colors of the box</h3>
+    <p>Raw ESC, OSC and BEL bytes never reach the output, because alert text is composited through the cell grid. Inline SGR is honored as styling, though, so a remote message can recolor its own box. Run attacker-authored text through <code>Sanitize::untrusted()</code> before it is queued. The trust-boundary section of the README sets out the full contract.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The port follows the alert model of <a href="https://github.com/DaltonSW/bubbleup">DaltonSW/bubbleup</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code.</p>
+<table class="api-table">
+<tr><th scope="col">Upstream (bubbleup)</th><th scope="col">SugarCraft</th></tr>
+<tr><td>Alert definition (key, color, prefix)</td><td><code>AlertTypeDefinition</code>, validated at construction and registered through a value, not a global.</td></tr>
+<tr><td>RegisterNewAlertType</td><td><code>AlertTypeRegistry::with()</code> and <code>Toast::withTypeRegistry()</code>, immutable, with custom keys resolved registry-first.</td></tr>
+<tr><td>Alert positions</td><td><code>Position</code> enum, nine positions with the placement maths on the enum.</td></tr>
+<tr><td>Alert types</td><td><code>ToastType</code> enum: Error, Warning, Info and Success.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p>A <code>Toast</code> is immutable. Its queue holds <code>Alert</code> values, and each door returns a new <code>Toast</code> with the change applied. <code>view()</code> stacks the live alerts at the chosen position, paints them into a cell grid over the background, and serializes the result. The frame and the hit rectangles are memoized on the last render, so <code>actionRects()</code> and <code>actionAt()</code> read the frame the host just painted. Calls that name a different frame throw instead of answering for the wrong one. Overflow applies when the queue would exceed <code>maxConcurrent</code>, and deep stacks fold into a <code>+N hidden</code> row rather than covering each other. The cell grid keeps raw control payloads out of the output, and inline SGR is styling the renderer honors, so untrusted text should be sanitized before it is queued.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0, so consume <code>dev-master</code>. The deprecated <code>withoutExpiry()</code> forwarder is kept working until 2.x, and the canonical door is <code>withCancelledExpiry()</code>. Behavior changes that alter a rendered frame are pinned by the golden fixtures.</p>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-toast">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-toast/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-toast/tree/master/examples">Runnable examples</a></li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><strong>sugar-core</strong> supplies the <code>Cmd::tick()</code> timer, the <code>Msg</code> contract and the <code>Sanitize</code> helpers.</li>
+      <li><strong>sugar-mouse</strong> produces the zone markers that <code>withHostZoneCarry()</code> keeps paired.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
-
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
@@ -148,7 +276,7 @@ echo $toast-&gt;view($bg);</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/basic.gif" alt="Basic toast">
                 <h3>Basic toast</h3>
-                <span class="demo-caption">Multiple queued toasts across three sections; no duration is set — nothing auto-dismisses, the host drives pruning.</span>
+                <span class="demo-caption">Multiple queued toasts across three sections. None sets <code>withDuration()</code>, so they stay until the host prunes them; the one "Retrying" alert sets a 3-second <code>ttlSeconds</code> and leaves on its own.</span>
             </div>
         </div>
     </div>

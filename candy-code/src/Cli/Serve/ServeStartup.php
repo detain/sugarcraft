@@ -416,7 +416,7 @@ trait ServeStartup
                         }
                     })(),
                     // PL-5d: each channel calls this serve in process, one client per bundle, with no loopback dial.
-                    self::channelHostFactory($protocol, $loop),
+                    self::channelHostFactoryRouted($protocol, $loop, $gateway),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.
@@ -588,6 +588,18 @@ trait ServeStartup
     public static function channelHostFactory(Dispatcher $protocol, LoopInterface $loop): \Closure
     {
         return \SugarCraft\Code\Host\InProcessHostServices::bundleFactory($protocol, $loop);
+    }
+
+    /**
+     * PL-5c-A: the host factory the serve hands ChannelRegistry::boot() when the gateway is up. Each
+     * bundle's in-process client routes calls and events of sessions on other roots through $gateway,
+     * the same rule the wire uses (the gateway is built before the channels boot, in serve()).
+     *
+     * @return \Closure(string): \SugarCraft\Plugins\Host\HostServices
+     */
+    public static function channelHostFactoryRouted(Dispatcher $protocol, LoopInterface $loop, Gateway $gateway): \Closure
+    {
+        return \SugarCraft\Code\Host\InProcessHostServices::bundleFactory($protocol, $loop, $gateway);
     }
 
     /**

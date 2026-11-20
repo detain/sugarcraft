@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Run: php examples/convert.php
  *
  * Exercises:
- * - Color construction (from RGB, from hex, from int)
+ * - Color construction (from int, from hex)
  * - Color::convert() to each profile level
  * - per-profile foreground escape generation (SGR 38;2 / 38;5 / 30-37)
  * - hex string output

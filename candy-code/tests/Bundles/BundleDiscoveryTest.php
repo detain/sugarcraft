@@ -127,6 +127,60 @@ final class BundleDiscoveryTest extends TestCase
         self::assertStringContainsString($outside, $refused[$link], 'the reason names where it really resolves');
     }
 
+    public function testAManifestLinkedOutsideItsBundleIsWarnedByNameNotDroppedSilently(): void
+    {
+        $root = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
+        $leak = $this->tempDir . '/dotfiles/plugin.json';
+        mkdir(dirname($leak), 0777, true);
+        file_put_contents($leak, json_encode(['name' => 'acme']));
+        mkdir($root . '/acme/.claude-plugin', 0777, true);
+        symlink($leak, $root . '/acme/.claude-plugin/plugin.json');
+        $this->writeBundleRoot($root . '/healthy', ['name' => 'healthy']);
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project');
+        $bundles = $discovery->discover();
+
+        self::assertSame(['healthy'], array_map(static fn (Bundle $b): string => $b->name, $bundles));
+        self::assertCount(1, $discovery->warnings(), 'a refused link must not vanish from launch notices');
+        self::assertStringContainsString('acme', $discovery->warnings()[0]);
+        self::assertStringContainsString('.claude-plugin/plugin.json', $discovery->warnings()[0], 'the warning names the refused link');
+        self::assertStringNotContainsString('could not be read or parsed', $discovery->warnings()[0], 'a refused link is not a parse failure');
+    }
+
+    public function testARefusedPluginPathBundleIsNotReadAsAContainerOfItsChildren(): void
+    {
+        $refused = $this->tempDir . '/dev/refused-plugin';
+        $leak = $this->tempDir . '/dotfiles/refused-plugin.json';
+        mkdir(dirname($leak), 0777, true);
+        file_put_contents($leak, json_encode(['name' => 'refused']));
+        mkdir($refused . '/.claude-plugin', 0777, true);
+        symlink($leak, $refused . '/.claude-plugin/plugin.json');
+        $this->writeBundleRoot($refused . '/sub', ['name' => 'nested']);
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project', [$refused]);
+        $bundles = $discovery->discover();
+
+        self::assertSame([], $bundles, 'a refused bundle root is skipped whole, so its child manifest is never read as a bundle');
+        self::assertCount(1, $discovery->warnings(), 'the refused root is named once, not once per child');
+        self::assertStringContainsString('.claude-plugin/plugin.json', $discovery->warnings()[0], 'the warning names the refused link');
+        self::assertStringNotContainsString('nested', $discovery->warnings()[0], 'the skipped child is never mentioned');
+    }
+
+    public function testAnInBundleSymlinkedManifestStillLoads(): void
+    {
+        $root = $this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/shared-manifest';
+        mkdir($root . '/shared', 0777, true);
+        file_put_contents($root . '/shared/plugin.json', json_encode(['name' => 'shared-manifest']));
+        mkdir($root . '/.claude-plugin', 0777, true);
+        symlink('../shared/plugin.json', $root . '/.claude-plugin/plugin.json');
+
+        $discovery = new BundleDiscovery($this->tempDir . '/project');
+        $bundles = $discovery->discover();
+
+        self::assertSame(['shared-manifest'], array_map(static fn (Bundle $b): string => $b->name, $bundles));
+        self::assertSame([], $discovery->warnings());
+    }
+
     public function testAUserBundleMayReachAnywhereInsideHome(): void
     {
         $target = $this->home . '/src/plugins/real-deal';

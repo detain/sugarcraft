@@ -152,11 +152,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
         ],
 
 
-        // E366 HIGH. Deliberately double-forks into a session daemon, and the
-        // only `proc_close()` is on the handshake-timeout branch - the happy
-        // path never reaps. The scanner reports `unclassified` for exactly
-        // that reason and is right to.
-        'Background/BackgroundSupervisor.php::spawnSession' => [
+        // E366 HIGH. Deliberately double-forks into a session daemon. The launch
+        // lives in spawnSessionAsync(); the only `proc_close()` is the
+        // handshake-timeout branch in failSpawn(), and the happy path reaps
+        // through reapIfExited() instead. The scanner reports `unclassified`
+        // for exactly that reason and is right to.
+        'Background/BackgroundSupervisor.php::spawnSessionAsync' => [
             'count' => 1,
             'reason' => 'double-forked session daemon whose happy path never reaps; E366 HIGH',
         ],
@@ -215,12 +216,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'the launch that created it',
         ],
 
-        // The handle is returned to a caller that drains it from a periodic
-        // timer on the event loop, so the child outlives `spawn()` by design.
-        'Backend/CommandBackend.php::spawn' => [
-            'count' => 1,
-            'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
-        ],
         // C-TUI-6.l: the take recorder. Handle stored in the class's live-take
         // registry (self::$live, keyed by WAV path) so stop() can SIGINT it;
         // the child carries its OWN cap (`-d`/`trim 0 <max>` from

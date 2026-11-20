@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -212,7 +213,7 @@ final class ForkCarriesHistoryTest extends TestCase
 
             [$chat, $cmd] = $this->submitLine($chat, '/fork now write the tests');
             $this->assertInstanceOf(\Closure::class, $cmd);
-            $spawned = $this->resolveAsyncCmd($cmd);
+            $spawned = $this->resolveAsyncCmdPumping($cmd, $supervisor);
             $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
             $this->assertNull($spawned->error, (string) $spawned->error);
 
@@ -334,14 +335,46 @@ final class ForkCarriesHistoryTest extends TestCase
         return $chat->update(new KeyMsg(KeyType::Enter, ''));
     }
 
+    /**
+     * resolveAsyncCmd() for a spawn whose handshake the supervisor's loop accepts:
+     * the promise settles only as tick() advances it.
+     */
+    private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
+    {
+        $resolved = null;
+        $this->launchedAsyncCmd($cmd)->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+            return $resolved !== null;
+        });
+
+        return $resolved;
+    }
+
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $resolved = null;
-        $cmd()->promise->then(function ($msg) use (&$resolved): void {
+        $this->launchedAsyncCmd($cmd)->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
 
         return $resolved;
+    }
+
+    /**
+     * The AsyncCmd a spawn Cmd launches. A background spawn batches the launch
+     * with the tick that arms the poll, and the launch is the first member.
+     */
+    private function launchedAsyncCmd(\Closure $cmd): \SugarCraft\Core\AsyncCmd
+    {
+        $result = $cmd();
+        if ($result instanceof \SugarCraft\Core\BatchMsg) {
+            $result = ($result->cmds[0])();
+        }
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $result);
+
+        return $result;
     }
 
     private function removeTree(string $path): void

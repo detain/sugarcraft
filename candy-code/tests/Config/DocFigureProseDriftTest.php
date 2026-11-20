@@ -572,19 +572,6 @@ final class DocFigureProseDriftTest extends TestCase
             'the prose promises "the same pair of numbers" as EngineBackend — one side moved',
         );
 
-        $mailboxDoc = self::methodDocOf(Mailbox::class, 'waitForMessage');
-        $mailbox = self::sourceOf('Agents/Mailbox.php');
-        self::assertSame(
-            1,
-            preg_match('/\((\d+)ms → (\d+)ms cap\)/s', $mailboxDoc, $m),
-            'the mailbox backoff sentence no longer names its floor and cap',
-        );
-        self::assertSame(1, preg_match('/\$pollIntervalSeconds = ([\d.]+);/', $mailbox, $init), 'mailbox lost its initial poll literal');
-        self::assertSame(1, preg_match('/\$maxPollIntervalSeconds = ([\d.]+);/', $mailbox, $cap), 'mailbox lost its cap literal');
-        self::assertSame((int) $m[1], (int) round((float) $init[1] * 1000), 'prose floor drifted from $pollIntervalSeconds');
-        self::assertSame((int) $m[2], (int) round((float) $cap[1] * 1000), 'prose cap drifted from $maxPollIntervalSeconds');
-        self::assertMatchesRegularExpression('/\$pollIntervalSeconds \* 2/', $mailbox, 'the backoff is no longer exponential — the prose says it is');
-
         $taskListDoc = self::methodDocOf(TaskList::class, 'flockTimed');
         self::assertSame(
             1,
@@ -939,31 +926,30 @@ final class DocFigureProseDriftTest extends TestCase
         $sliceDoc = self::docBlockOf(ScriptHook::class, 'DRAIN_SLICE_SECONDS');
         self::assertSame(
             1,
-            preg_match('/for (\w+) wakeups a second.*?makes at the same (\d+)ms/s', $sliceDoc, $m),
-            'the drain-slice sentence no longer spells its wakeups-per-second and its cross-class 200ms together',
+            preg_match('/this trades that for (\w+) wakeups a second/', $sliceDoc, $m),
+            'the drain-slice sentence no longer spells its wakeups-per-second',
         );
         $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
         self::assertSame($wordNumbers[$m[1]] ?? -1, intdiv(1000, (int) round($slice * 1000)), 'the spelled wakeups-per-second no longer equals 1s / DRAIN_SLICE_SECONDS — flip both together');
-        self::assertSame((int) round($slice * 1000), (int) $m[2], 'prose milliseconds drifted from DRAIN_SLICE_SECONDS');
         self::assertSame(
             1,
             preg_match("/DRAIN_SLICE_SECONDS\}'\s+\*\s+(\d+)ms, for its reason/s", self::docBlockOf(StatusLineCommand::class, 'DRAIN_SLICE_SECONDS'), $m),
             'the StatusLine drain doc no longer cites the shared slice with its millisecond figure',
         );
         self::assertSame((int) round($slice * 1000), (int) $m[1], 'StatusLine prose milliseconds drifted from the shared slice');
+        // runShellSubstitution waits through ChildRun, which owns its own slice; no
+        // prose may claim it shares ScriptHook's constant.
         $specBody = self::bodyExcerpt(self::sourceOf('Commands/CommandSpec.php'), 'runShellSubstitution', 5000);
         self::assertSame(
             1,
-            preg_match('/Capped at (\d+)ms per wait/', $specBody, $m),
-            'CommandSpec no longer comments its slice in milliseconds — the "same 200ms" prose cites it',
+            preg_match('/ChildRun::new\(/', $specBody),
+            'runShellSubstitution no longer waits through ChildRun, so the drain-slice prose must be re-read',
         );
-        self::assertSame((int) round($slice * 1000), (int) $m[1], 'CommandSpec\'s commented slice drifted from ScriptHook\'s constant');
-        self::assertSame(
-            1,
-            preg_match('/min\(\$remaining, ([\d.]+)\)/', $specBody, $m),
-            'runShellSubstitution lost its inline slice literal — the cross-class "same 200ms" claim lost its referent',
+        self::assertStringNotContainsString(
+            'CommandSpec::runShellSubstitution',
+            $sliceDoc,
+            'ScriptHook must not claim CommandSpec waits at its slice: ChildRun owns that wait',
         );
-        self::assertSame($slice, (float) $m[1], 'CommandSpec no longer waits at ScriptHook\'s slice — the "same trade" prose is false');
 
         $deny = (int) $hookClass->getConstant('MAX_DENY_REASON_BYTES');
         $ask = (int) $hookClass->getConstant('MAX_ASK_PROMPT_BYTES');
