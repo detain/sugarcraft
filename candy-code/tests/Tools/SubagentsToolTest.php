@@ -16,8 +16,6 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Skills\SkillRegistry;
-use SugarCraft\Code\Support\ToolCancelRequests;
-use SugarCraft\Code\Support\TurnInterrupts;
 use SugarCraft\Code\Tests\Support\RosterAgent;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\InterruptAgentTool;
@@ -185,58 +183,6 @@ final class SubagentsToolTest extends TestCase
             '0 to 3600 seconds (default 30)',
             SubagentsTool::new()->inputSchema()['properties']['timeout_seconds']['description'],
         );
-    }
-
-    /**
-     * A wait is a sleep inside its call, which holds the turn child's loop, so
-     * it asks for a parent stop or steer on every tick and ends at the first
-     * one, rather than sleeping out a 600 s budget with the frame unread.
-     */
-    public function testWaitEndsEarlyWhenTheParentSendsAStopOrASteer(): void
-    {
-        $this->card('busy_1');
-        $engine = $this->engine(new ScriptedProvider([]), []);
-        $now = 0.0;
-        $idle = SubagentsTool::new()->withEngine($engine)->withWaitClock(static function (float $s) use (&$now): void {
-            $now += $s;
-        }, static function () use (&$now): float {
-            return $now;
-        });
-
-        TurnInterrupts::listen(static function () use (&$now): bool {
-            return $now >= 1.0;
-        });
-        try {
-            $result = $idle->execute(['action' => 'wait', 'timeout_seconds' => 600]);
-        } finally {
-            TurnInterrupts::forget();
-        }
-
-        self::assertFalse($result->isError(), $result->content());
-        self::assertSame(1.0, $now, 'the wait stopped at the first tick that saw the interrupt');
-        self::assertStringStartsWith('The parent sent this turn a stop or a message', $result->content());
-    }
-
-    /** A cancel_tool naming the wait's own call stops that wait before it sleeps at all. */
-    public function testWaitSettlesCancelledWhenItsOwnCallIsStopped(): void
-    {
-        $this->card('busy_1');
-        $engine = $this->engine(new ScriptedProvider([]), []);
-        $sleeps = 0;
-        $idle = SubagentsTool::new()->withEngine($engine)->withWaitClock(static function () use (&$sleeps): void {
-            $sleeps++;
-        }, static fn (): float => 0.0);
-
-        ToolCancelRequests::listen(static fn (): array => ['wait_call']);
-        try {
-            $result = $idle->execute(['id' => 'wait_call', 'action' => 'wait', 'timeout_seconds' => 600]);
-        } finally {
-            ToolCancelRequests::forget();
-        }
-
-        self::assertTrue($result->isError());
-        self::assertSame(ToolCancelRequests::CANCELLED, $result->content());
-        self::assertSame(0, $sleeps, 'a stopped wait never sleeps');
     }
 
     public function testCancelStopsARunningSubAgentResumably(): void

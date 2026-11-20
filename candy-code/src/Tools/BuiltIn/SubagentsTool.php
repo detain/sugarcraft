@@ -9,8 +9,6 @@ use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Context\PromptFence;
-use SugarCraft\Code\Support\ToolCancelRequests;
-use SugarCraft\Code\Support\TurnInterrupts;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -213,14 +211,7 @@ final readonly class SubagentsTool implements Tool, BuildsFromCatalog, Delegates
         };
         $deadline = $clock() + $seconds;
         $messages = [];
-        // A sleep here holds the turn child's loop, so the parent's stop and
-        // steer frames are read only between ticks: each tick asks for them.
-        $interrupted = false;
         while (true) {
-            if (ToolCancelRequests::isRequested($callId)) {
-                return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
-            }
-            $interrupted = TurnInterrupts::pending();
             $messages = [...$messages, ...$this->drainReplies($scope)];
             $children = $this->children($scope);
             $settled = array_filter($watched, static function (array $card) use ($children): bool {
@@ -233,7 +224,7 @@ final readonly class SubagentsTool implements Tool, BuildsFromCatalog, Delegates
                 return true;
             });
             $live = \count($watched) - \count($settled);
-            if ($interrupted || $messages !== [] || $settled !== [] || $live === 0 || $clock() >= $deadline) {
+            if ($messages !== [] || $settled !== [] || $live === 0 || $clock() >= $deadline) {
                 break;
             }
             if ($this->heartbeat !== null) {
@@ -246,7 +237,6 @@ final readonly class SubagentsTool implements Tool, BuildsFromCatalog, Delegates
             $watched === [] => 'Nothing to wait for: none of your sub-agents is running.',
             $settled !== [] => sprintf('%d of the sub-agents you waited on finished.', \count($settled)),
             $messages !== [] => 'A sub-agent sent you a message.',
-            $interrupted => 'The parent sent this turn a stop or a message, so the wait ended early.',
             default => sprintf('Waited %d s; %d sub-agent%s still running.', $seconds, $live, $live === 1 ? ' is' : 's are'),
         };
 

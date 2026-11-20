@@ -594,37 +594,6 @@ final class ChildChannel
     }
 
     /**
-     * Whether the parent has sent this turn something a waiting tool should
-     * stop for: a soft cancel (buffered, or already latched) or a steer the
-     * step boundary has not taken. Polls without blocking and takes nothing,
-     * so the step boundary still reads every frame as it would have.
-     *
-     * WHY A TOOL ASKS THIS EVERY TICK. A tool that sleeps inside its call holds
-     * the turn child's loop, so the socket goes unread for the whole sleep. Its
-     * wait loop asks here instead ({@see \SugarCraft\Code\Support\TurnInterrupts}).
-     *
-     * Always false in a process that does not own the socket.
-     */
-    public function interruptPending(): bool
-    {
-        if ((int) getmypid() !== $this->ownerPid) {
-            return false;
-        }
-
-        $this->poll();
-        if ($this->softCancelled || $this->steers !== []) {
-            return true;
-        }
-        foreach ($this->controls as $control) {
-            if (($control['kind'] ?? null) === self::CANCEL_SOFT) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * True once the parent's end has been seen closed (or the stream stopped
      * parsing): every later ask settles unanswered without writing.
      */

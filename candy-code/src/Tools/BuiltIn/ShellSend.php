@@ -11,8 +11,6 @@ use SugarCraft\Async\Poll;
 use SugarCraft\Async\Retry;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
-use SugarCraft\Code\Support\ToolCancelRequests;
-use SugarCraft\Code\Support\TurnInterrupts;
 use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
@@ -109,9 +107,6 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
 
     /** Tick between relay-attach re-trials (ms). */
     private const RELAY_ATTACH_TICK_MS = 25;
-
-    /** Tick between looks for a stop while the screen settles (ms). */
-    private const SCREEN_TICK_MS = 50;
 
     private function __construct(
         private ?BackgroundShellRegistry $registry = null,
@@ -248,7 +243,7 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
         }
 
         if ($waitMs > 0) {
-            self::holdScreen($waitMs, (string) ($args['id'] ?? ''));
+            \usleep($waitMs * 1000);
         }
 
         // The cursor `send()` answered is stdout's pre-write offset; threaded
@@ -328,30 +323,6 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
         }
 
         return self::pidRecorded($pidPath);
-    }
-
-    /**
-     * Let the screen settle for up to $waitMs before it is read back, looking
-     * every {@see SCREEN_TICK_MS} for a stop: a soft cancel or steer from the
-     * parent, or this call's own cancel_tool. The keystrokes are already sent,
-     * so a stop ends the hold early and the read still runs.
-     *
-     * WHY NOT ONE usleep(). The sleep holds the turn child's loop, so the
-     * parent's frames sit unread for the whole budget (up to MAX_WAIT_MS).
-     */
-    public static function holdScreen(int $waitMs, string $callId = ''): void
-    {
-        $deadline = microtime(true) + $waitMs / 1000;
-        while (true) {
-            if (TurnInterrupts::pending() || ($callId !== '' && ToolCancelRequests::isRequested($callId))) {
-                return;
-            }
-            $left = $deadline - microtime(true);
-            if ($left <= 0) {
-                return;
-            }
-            usleep((int) (min($left, self::SCREEN_TICK_MS / 1000) * 1_000_000));
-        }
     }
 
     /**

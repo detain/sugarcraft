@@ -1847,7 +1847,7 @@ final class AgentWorkerPool
         // blocking turn (EngineBackend::completeAsyncBlocking) does reach this
         // sleep on the TUI loop when a workflow stage forks agent children: the
         // whole turn already blocks that loop, so the sleep adds no new freeze.
-        // Accepted residual, not a wait the loop can host.
+        // Accepted residual (AUD 12.1 A4, row 49), not a wait the loop can host.
         usleep(self::WAIT_POLL_INTERVAL_USEC);
     }
 
