@@ -258,8 +258,10 @@ final class Attach
     /**
      * `ws://host:port/ws` for an `http(s)://` or `ws(s)://` address — the URL
      * `serve` prints and `server.json` records — or null when $url is
-     * neither. A path other than the WebSocket's is replaced, so the
-     * address a browser opens works here as given.
+     * neither, or is a malformed address the library refuses (a bracketed
+     * host that is not an IPv6 literal, an unbracketed IPv6 host, a bad zone
+     * id). A path other than the WebSocket's is replaced, so the address a
+     * browser opens works here as given.
      */
     public static function websocketUrl(string $url): ?string
     {
