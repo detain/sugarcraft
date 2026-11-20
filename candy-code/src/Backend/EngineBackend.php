@@ -5624,7 +5624,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // batch is exactly what made a multi-tool turn look like a silent
             // "thinking" spinner (and what made the parent's single
             // wall-clock timer kill turns that were in fact making progress).
-            $message = $engine->runTurn(
+            // P4-12 CC-1 e0: the turn runs inside a fiber on the loop, so an
+            // approver or client answer suspends it rather than blocking the
+            // socket (see LoopDrivenTurn). A turn that never asks returns
+            // straight from the fiber's first run, as it did before.
+            $message = LoopDrivenTurn::run(static fn (): Message => $engine->runTurn(
                 $typed,
                 // Assistant text crosses the fork on the SAME channel and by
                 // the same rule as the tool events: a plain in-process
@@ -5692,7 +5696,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     $engine->mainMailbox(),
                     McpBackgroundInbox::forTurn(),
                 ),
-            )->withAttachmentNotice($attachmentNotice);
+            ), $channel)->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {
                 $transcriptRows[] = ['usage' => $row->usage?->toArray()] + $row->jsonSerialize();

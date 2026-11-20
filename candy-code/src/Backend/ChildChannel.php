@@ -10,6 +10,8 @@ use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
 
 /**
  * The turn child's half of the two-way frame channel (roadmap 1.C-1 =
@@ -181,6 +183,33 @@ final class ChildChannel
     private array $heldResults = [];
 
     /**
+     * The loop and the turn's fiber, set by {@see attachLoop()} for the turn
+     * {@see LoopDrivenTurn} runs. Both null means the turn is not loop-driven,
+     * and an ask or client call blocks on the socket as it always did.
+     */
+    private ?LoopInterface $loop = null;
+
+    private ?\Fiber $turnFiber = null;
+
+    /** True once the socket is registered on {@see $loop} (registered lazily, at the first suspension). */
+    private bool $watched = false;
+
+    /** @var array<string, Deferred> asks suspended on their `ask_reply`, by askId */
+    private array $pendingAsks = [];
+
+    /** @var array<string, Deferred> client calls suspended on their `client_result`, by callId */
+    private array $pendingCalls = [];
+
+    /**
+     * Settlements routed during a read pass, delivered once the pass has ended:
+     * a settled fiber can run and call back into this channel, so nothing
+     * resumes while the socket is still being read.
+     *
+     * @var list<array{0: Deferred, 1: array<string, mixed>|null}>
+     */
+    private array $settled = [];
+
+    /**
      * @param resource                                              $socket      the child's end
      * @param \Closure(array<string, mixed>): void                  $writeFrame  writes one frame (and ends the
      *                                                                           process on a dead stream, as
@@ -303,12 +332,9 @@ final class ChildChannel
 
         ($this->writeFrame)($frame);
 
-        $reply = $this->heldReplies[$askId] ?? null;
-        unset($this->heldReplies[$askId]);
-        while ($reply === null) {
-            if (!$this->readInbound(true, $askId, $reply)) {
-                return PermissionResolved::cancelled($askId, self::PARENT_GONE);
-            }
+        $reply = $this->awaitReply($askId);
+        if ($reply === null) {
+            return PermissionResolved::cancelled($askId, self::PARENT_GONE);
         }
 
         $parsed = PermissionReply::tryFrom(is_string($reply['reply'] ?? null) ? $reply['reply'] : '');
@@ -375,13 +401,9 @@ final class ChildChannel
 
         ($this->writeFrame)($frame);
 
-        $answer = $this->heldResults[$callId] ?? null;
-        unset($this->heldResults[$callId]);
-        $reply = null;
-        while ($answer === null) {
-            if (!$this->readInbound(true, null, $reply, $callId, $answer)) {
-                return self::clientCallGone($toolCallId);
-            }
+        $answer = $this->awaitResult($callId);
+        if ($answer === null) {
+            return self::clientCallGone($toolCallId);
         }
 
         $content = $answer['content'] ?? null;
@@ -587,6 +609,159 @@ final class ChildChannel
         }
         $reply = null;
         $this->readInbound(false, null, $reply);
+        $this->settle();
+    }
+
+    /**
+     * Hand this channel to the loop its turn runs on. Called by
+     * {@see LoopDrivenTurn} before the turn's fiber starts; the socket is only
+     * registered with the loop once an ask or client call first suspends.
+     */
+    public function attachLoop(LoopInterface $loop, \Fiber $turn): void
+    {
+        $this->loop = $loop;
+        $this->turnFiber = $turn;
+    }
+
+    /** Undo {@see attachLoop()} and stop watching the socket. Idempotent. */
+    public function detachLoop(): void
+    {
+        if ($this->watched && $this->loop !== null) {
+            $this->loop->removeReadStream($this->socket);
+        }
+        $this->watched = false;
+        $this->loop = null;
+        $this->turnFiber = null;
+    }
+
+    /**
+     * The reply to one ask, or null when the parent is gone. Blocks on the
+     * socket in a turn that is not loop-driven; in a loop-driven turn it
+     * suspends the turn's fiber on a pending promise, and the loop resumes it
+     * when the `ask_reply` arrives, so nothing blocks while the user decides.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function awaitReply(string $askId): ?array
+    {
+        $reply = $this->heldReplies[$askId] ?? null;
+        unset($this->heldReplies[$askId]);
+        if ($reply !== null) {
+            return $reply;
+        }
+
+        if ($this->suspendable()) {
+            $deferred = new Deferred();
+            $this->pendingAsks[$askId] = $deferred;
+            $this->watch();
+            $answer = \Fiber::suspend($deferred->promise());
+            unset($this->pendingAsks[$askId]);
+
+            return is_array($answer) ? $answer : null;
+        }
+
+        while (true) {
+            if (!$this->readInbound(true, $askId, $reply)) {
+                return null;
+            }
+            if ($reply !== null) {
+                return $reply;
+            }
+        }
+    }
+
+    /**
+     * The result of one client call, or null when the parent is gone. The
+     * same two shapes as {@see awaitReply()}.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function awaitResult(string $callId): ?array
+    {
+        $answer = $this->heldResults[$callId] ?? null;
+        unset($this->heldResults[$callId]);
+        if ($answer !== null) {
+            return $answer;
+        }
+
+        if ($this->suspendable()) {
+            $deferred = new Deferred();
+            $this->pendingCalls[$callId] = $deferred;
+            $this->watch();
+            $result = \Fiber::suspend($deferred->promise());
+            unset($this->pendingCalls[$callId]);
+
+            return is_array($result) ? $result : null;
+        }
+
+        $reply = null;
+        while (true) {
+            if (!$this->readInbound(true, null, $reply, $callId, $answer)) {
+                return null;
+            }
+            if ($answer !== null) {
+                return $answer;
+            }
+        }
+    }
+
+    /**
+     * Whether an ask or client call may suspend the current fiber: this turn
+     * is loop-driven, the caller runs in the turn's own fiber (not a nested
+     * one that would swallow the suspension), and the caller is the process
+     * that owns the socket.
+     */
+    private function suspendable(): bool
+    {
+        return $this->loop !== null
+            && $this->turnFiber !== null
+            && $this->turnFiber === \Fiber::getCurrent()
+            && !$this->closed
+            && (int) getmypid() === $this->ownerPid;
+    }
+
+    private function watch(): void
+    {
+        if ($this->watched || $this->loop === null) {
+            return;
+        }
+        $this->loop->addReadStream($this->socket, function (): void {
+            $this->onReadable();
+        });
+        $this->watched = true;
+    }
+
+    /** The socket is readable on the loop: read once and settle what it answered. */
+    private function onReadable(): void
+    {
+        $reply = null;
+        $result = null;
+        if (!$this->readInbound(false, null, $reply, null, $result)) {
+            $this->failPending();
+        }
+        $this->settle();
+    }
+
+    /** The parent is gone: every suspended ask and client call settles unanswered. */
+    private function failPending(): void
+    {
+        foreach ($this->pendingAsks as $deferred) {
+            $this->settled[] = [$deferred, null];
+        }
+        foreach ($this->pendingCalls as $deferred) {
+            $this->settled[] = [$deferred, null];
+        }
+        $this->pendingAsks = [];
+        $this->pendingCalls = [];
+    }
+
+    private function settle(): void
+    {
+        $settled = $this->settled;
+        $this->settled = [];
+        foreach ($settled as [$deferred, $frame]) {
+            $deferred->resolve($frame);
+        }
     }
 
     /**
@@ -668,6 +843,12 @@ final class ChildChannel
 
                 return;
             }
+            if (isset($this->pendingAsks[$askId])) {
+                $this->settled[] = [$this->pendingAsks[$askId], $frame];
+                unset($this->pendingAsks[$askId]);
+
+                return;
+            }
             // The parent settles each question once, so a reply for another
             // id is held for the ask that will want it rather than dropped.
             if (!isset($this->heldReplies[$askId]) && count($this->heldReplies) < self::MAX_HELD_REPLIES) {
@@ -684,6 +865,12 @@ final class ChildChannel
             }
             if ($awaitingCall !== null && $result === null && $callId === $awaitingCall) {
                 $result = $frame;
+
+                return;
+            }
+            if (isset($this->pendingCalls[$callId])) {
+                $this->settled[] = [$this->pendingCalls[$callId], $frame];
+                unset($this->pendingCalls[$callId]);
 
                 return;
             }
