@@ -190,6 +190,36 @@ final class InProcessEventSinkTest extends TestCase
         self::assertSame(InProcessEventSink::QUEUE_BOUND - 1 + 2, \count($this->heard), 'the notice, the 2047 kept deltas and the durable event');
     }
 
+    public function testALaterLiveShedAddsNoSecondNoticeAndCountsEveryShed(): void
+    {
+        $sink = $this->sink();
+        $sink->follow('s1', 0);
+        // Distinct texts, so no delta coalesces: the queue is full of deltas, and the next two shed the oldest.
+        for ($n = 1; $n <= InProcessEventSink::QUEUE_BOUND; $n++) {
+            $this->deliverLive($sink, 's1', 'd' . $n);
+        }
+        $this->deliverLive($sink, 's1', 'e1');
+        $this->deliverLive($sink, 's1', 'e2');
+        $sink->flush();
+
+        $notices = \array_values(\array_filter($this->heard, static fn (array $e): bool => ($e['type'] ?? null) === 'server.overflow'));
+        self::assertCount(1, $notices, 'one notice per session, however many live events were shed');
+        self::assertSame(['sessionId' => 's1', 'dropped' => 2, 'action' => 'resubscribe'], $notices[0]['data'], 'the first shed raised the notice and the second only counted');
+        self::assertSame($notices[0], $this->heard[0], 'the notice sits at the first shed position');
+
+        $expected = [];
+        for ($n = 3; $n <= InProcessEventSink::QUEUE_BOUND; $n++) {
+            $expected[] = 'd' . $n;
+        }
+        $expected[] = 'e1';
+        $expected[] = 'e2';
+        $texts = \array_map(
+            static fn (array $e): string => (string) $e['data']['text'],
+            \array_values(\array_filter($this->heard, static fn (array $e): bool => ($e['type'] ?? null) === 'assistant.delta')),
+        );
+        self::assertSame($expected, $texts, 'every surviving delta arrives, in order, with the two oldest shed');
+    }
+
     public function testUnfollowDropsTheOwedEventsAsTheDocumentedRoutedDivergence(): void
     {
         // Pins the divergence documented on InProcessEventSink::unfollow(): the routed purge drops
