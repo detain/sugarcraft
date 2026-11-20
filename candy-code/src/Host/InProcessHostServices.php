@@ -512,7 +512,6 @@ final class InProcessHostServices implements HostServices, RootedHostServices
      */
     private function subscribeRouted(string $root, string $sessionId, ?int $afterSeq, array $params): PromiseInterface
     {
-        $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
         $sink = $this->sinkFor();
 
         return $this->routedCall(
@@ -520,31 +519,39 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             'session.subscribe',
             $params,
             $sessionId,
-            function (mixed $answer, int $generation) use ($root, $sessionId, $afterSeq, $sink, $gateway): mixed {
-                try {
-                    $wire = Dispatcher::wireAnswer($answer);
-                } catch (\Throwable $e) {
-                    $this->compensateSubscribe($root, $sessionId, $generation);
-
-                    throw $e;
-                }
-                if ($this->sink !== $sink || !$sink->isOpen()) {
-                    $this->compensateSubscribe($root, $sessionId, $generation);
-
-                    return $wire;
-                }
-                $throughSeq = $answer instanceof \stdClass ? (int) ($answer->throughSeq ?? 0) : 0;
-                // The root's server-scope events reach the sink only once the subscribe is answered: a refused or timed-out one leaves no row.
-                $gateway->useRoot($root, $sink);
-                $gateway->attachSubscriber($sessionId, $sink);
-                $sink->follow($sessionId, $afterSeq ?? $throughSeq);
-
-                return $wire;
-            },
+            fn (mixed $answer, int $generation): mixed => $this->subscribeAnswer($root, $sessionId, $afterSeq, $sink, $answer, $generation),
             function (mixed $answer, int $generation) use ($root, $sessionId): void {
                 $this->compensateSubscribe($root, $sessionId, $generation);
             },
         );
+    }
+
+    /**
+     * The answer a routed subscribe settles with: converted for the bundle, then its sink follows the
+     * session. A conversion refusal, or a sink that has closed or been replaced, is compensated instead.
+     */
+    private function subscribeAnswer(string $root, string $sessionId, ?int $afterSeq, InProcessEventSink $sink, mixed $answer, int $generation): mixed
+    {
+        $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
+        try {
+            $wire = Dispatcher::wireAnswer($answer);
+        } catch (\Throwable $e) {
+            $this->compensateSubscribe($root, $sessionId, $generation);
+
+            throw $e;
+        }
+        if ($this->sink !== $sink || !$sink->isOpen()) {
+            $this->compensateSubscribe($root, $sessionId, $generation);
+
+            return $wire;
+        }
+        $throughSeq = $answer instanceof \stdClass ? (int) ($answer->throughSeq ?? 0) : 0;
+        // The root's server-scope events reach the sink only once the subscribe is answered: a refused or timed-out one leaves no row.
+        $gateway->useRoot($root, $sink);
+        $gateway->attachSubscriber($sessionId, $sink);
+        $sink->follow($sessionId, $afterSeq ?? $throughSeq);
+
+        return $wire;
     }
 
     /**

@@ -510,6 +510,48 @@ final class InProcessRoutedTest extends TestCase
         }
     }
 
+    public function testARoutedSubscribeAnswerPastTheFrameCeilingIsCompensatedAndRecordsNoSink(): void
+    {
+        $this->assertRoutedSubscribeRefused(['text' => \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES)], 'too_large');
+    }
+
+    public function testARoutedSubscribeAnswerNestedPastTheWireDecodeDepthIsCompensatedAndRecordsNoSink(): void
+    {
+        $nested = 'leaf';
+        for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
+            $nested = ['n' => $nested];
+        }
+
+        $this->assertRoutedSubscribeRefused($nested, 'too_deep');
+    }
+
+    /**
+     * The host holds a subscription the door never records, as a late answer leaves behind. The
+     * conversion refuses the answer, so the compensating unsubscribe must take that subscription back.
+     */
+    private function assertRoutedSubscribeRefused(mixed $answer, string $kind): void
+    {
+        $sessionId = $this->createOther();
+        $this->call($this->gateway->callRoot($this->other, 'session.subscribe', (object) ['sessionId' => $sessionId]));
+        $generation = $this->gateway->subscribeGeneration($sessionId);
+        $sink = $this->sinkOf($this->door);
+        self::assertNotNull($sink);
+
+        $subscribeAnswer = new \ReflectionMethod(InProcessHostServices::class, 'subscribeAnswer');
+        try {
+            $subscribeAnswer->invoke($this->door, $this->other, $sessionId, null, $sink, $answer, $generation);
+            self::fail('a routed subscribe answer the wire cannot carry must be refused');
+        } catch (RpcError $refusal) {
+            self::assertSame($kind, $refusal->refusalKind());
+        }
+
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'the compensating unsubscribe settled');
+        self::assertFalse($this->gateway->hasSubscribers($sessionId), 'a refused subscribe records no subscriber');
+        self::assertNotContains($sessionId, $this->call($this->door->followedSessions()), 'the sink follows nothing for the refused subscribe');
+        $after = (array) $this->call($this->gateway->callRoot($this->other, 'session.unsubscribe', (object) ['sessionId' => $sessionId]));
+        self::assertFalse($after['unsubscribed'] ?? true, 'the compensation took the host subscription back');
+    }
+
     public function testTheDoorIsNeverRefusedViewerSessionDeniedOrOwnerOnly(): void
     {
         // Design 2.5: the in-process door is an owner with no connection, so the gateway's scope
@@ -553,10 +595,20 @@ final class InProcessRoutedTest extends TestCase
         $sessionId = (string) $this->call($this->door->createSessionIn($this->other, null, null))['id'];
         $this->call($this->door->subscribeSession($sessionId, null, null));
         $reentered = null;
-        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$reentered, $sessionId): void {
-            if (($envelope['type'] ?? null) === 'turn.completed' && $reentered === null) {
-                // Re-entrant: a routed call made from a delivery returns a promise and never runs the drain again.
-                $reentered = $this->door->sendTurn($sessionId, 'second', 'queue', null, [], []);
+        $depth = 0;
+        $nested = false;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$reentered, &$depth, &$nested, $sessionId): void {
+            if ($depth > 0) {
+                $nested = true;
+            }
+            $depth++;
+            try {
+                if (($envelope['type'] ?? null) === 'turn.completed' && $reentered === null) {
+                    // Re-entrant: a routed call made from a delivery returns a promise and never runs the drain again.
+                    $reentered = $this->door->sendTurn($sessionId, 'second', 'queue', null, [], []);
+                }
+            } finally {
+                $depth--;
             }
         }));
 
@@ -565,9 +617,32 @@ final class InProcessRoutedTest extends TestCase
         self::assertTrue($this->runUntil(fn (): bool => \count($this->eventsOf('turn.completed')) >= 2, 40.0), 'the turn sent from inside the listener never completed');
 
         self::assertInstanceOf(PromiseInterface::class, $reentered, 'the listener made the re-entrant call');
-        self::assertIsArray($this->call($reentered));
+        $second = $this->call($reentered);
+        self::assertIsArray($second);
+        self::assertSame('started', $second['admitted']);
         $completed = $this->eventsOf('turn.completed');
         self::assertSame([$sessionId, $sessionId], \array_column($completed, 'sessionId'), 'both turns completed, in order, on the routed session');
+        self::assertSame([$first['turnId'], $second['turnId']], \array_column($completed, 'turnId'), 'the turns completed in the order they were sent');
+        self::assertFalse($nested, 'the listener was never re-entered: the event sent from inside it waits for the outer delivery');
+
+        // The re-entrant turn starts only after the turn whose delivery sent it has completed.
+        $firstCompleted = $this->positionOf('turn.completed', $first['turnId']);
+        $secondStarted = $this->positionOf('turn.started', $second['turnId']);
+        self::assertNotNull($firstCompleted);
+        self::assertNotNull($secondStarted, 'the second turn started on the routed session');
+        self::assertLessThan($secondStarted, $firstCompleted, 'the event sent from inside the listener arrives after the owed ones');
+
+        // Session events arrive in sequence order, so none of the owed events overtakes another.
+        $seqs = [];
+        foreach ($this->heard as $envelope) {
+            if (($envelope['sessionId'] ?? null) === $sessionId && isset($envelope['seq'])) {
+                $seqs[] = (int) $envelope['seq'];
+            }
+        }
+        self::assertNotEmpty($seqs);
+        for ($i = 1; $i < \count($seqs); $i++) {
+            self::assertGreaterThan($seqs[$i - 1], $seqs[$i], 'the session events arrive in strictly increasing sequence');
+        }
     }
 
     private function timedDoor(): InProcessHostServices
@@ -643,6 +718,18 @@ final class InProcessRoutedTest extends TestCase
     private function eventsOf(string $type): array
     {
         return \array_values(\array_filter($this->heard, static fn (array $e): bool => ($e['type'] ?? null) === $type));
+    }
+
+    /** The index in the envelopes the door's listener heard of the first $type event for $turnId, or null. */
+    private function positionOf(string $type, string $turnId): ?int
+    {
+        foreach ($this->heard as $index => $envelope) {
+            if (($envelope['type'] ?? null) === $type && ($envelope['turnId'] ?? null) === $turnId) {
+                return $index;
+            }
+        }
+
+        return null;
     }
 
     private function runUntil(\Closure $condition, float $timeout = 10.0): bool
