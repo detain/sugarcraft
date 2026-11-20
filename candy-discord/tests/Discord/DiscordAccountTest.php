@@ -418,6 +418,44 @@ final class DiscordAccountTest extends TestCase
         self::assertStringContainsString('big.bin', (string) $notice['body']['content']);
     }
 
+    public function testEachSkipReasonRendersItsCatalogTextWithTheLiveParameters(): void
+    {
+        // One batch that reaches every reason the down-select and settle paths
+        // can produce without dialling a CDN: the caps, the size cap, an unnamed
+        // unsupported row, and two accepted rows refused by the media gate (an
+        // http:// url is rejected before any socket opens) so they land as
+        // download_failed. Each reason must render its English text with the
+        // real parameter values, never a literal {limit} or {mb}.
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildFace(['media' => ['maxMb' => 1, 'maxTotalMb' => 50, 'images' => 1, 'documents' => 1]]);
+        $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
+        $gather->setAccessible(true);
+        $gather->invoke($this->face, [
+            ['id' => 'x1', 'filename' => 'big.png', 'content_type' => 'image/png', 'url' => 'http://media.discordapp.net/big.png', 'size' => 2097152],
+            ['id' => 'x2', 'filename' => 'img1.png', 'content_type' => 'image/png', 'url' => 'http://media.discordapp.net/img1.png', 'size' => 10],
+            ['id' => 'x3', 'filename' => 'img2.png', 'content_type' => 'image/png', 'url' => 'http://media.discordapp.net/img2.png', 'size' => 10],
+            ['id' => 'x4', 'filename' => 'doc1.pdf', 'content_type' => 'application/pdf', 'url' => 'http://media.discordapp.net/doc1.pdf', 'size' => 10],
+            ['id' => 'x5', 'filename' => 'doc2.pdf', 'content_type' => 'application/pdf', 'url' => 'http://media.discordapp.net/doc2.pdf', 'size' => 10],
+            ['id' => 'x6', 'content_type' => 'text/plain', 'url' => 'http://media.discordapp.net/notes.txt', 'size' => 10],
+        ], 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look', false, 'm1');
+        $isNotice = static fn (array $c): bool => \str_contains((string) ($c['body']['content'] ?? ''), 'Skipped 6 attachment(s)');
+        $this->settled(3000, fn(): bool => \count(\array_filter($this->api->calls, $isNotice)) > 0);
+        $notices = \array_values(\array_filter($this->api->calls, $isNotice));
+        self::assertCount(1, $notices, 'one disclosed notice must carry all six skip reasons');
+        $content = (string) $notices[0]['body']['content'];
+        foreach ([
+            'attachment (unsupported type)',
+            'big.png (over the 1 MB cap)',
+            'img2.png (past the image limit of 1)',
+            'doc2.pdf (past the document limit of 1)',
+            'img1.png (download failed)',
+            'doc1.pdf (download failed)',
+        ] as $expected) {
+            self::assertStringContainsString($expected, $content);
+        }
+        self::assertStringNotContainsString('{', $content, 'no catalog placeholder may ship unfilled');
+    }
+
     public function testTheBatchBudgetRefusesPastTheReservationAndTheSecondMessageStillStacksAfterRelease(): void
     {
         // §7.8 batch budget: two 900 KiB reservations fit the 2 MB total,
