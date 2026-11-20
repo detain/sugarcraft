@@ -350,7 +350,7 @@ php examples/adapter.php</code></pre>
     <h3 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h3>
     <table class="api-table">
 <tr><th>Symptom</th><th>Cause and fix</th></tr>
-<tr><td>A final CSI or ESC at the end of the stream never dispatches</td><td><code>flush()</code> and <code>parseComplete()</code> settle only string payloads. An in-flight CSI or ESC cannot be recovered, so it ends undispatched. Make sure the producer sends complete sequences.</td></tr>
+<tr><td>An incomplete CSI or ESC at the end of the stream never dispatches</td><td><code>flush()</code> and <code>parseComplete()</code> settle only string payloads. A CSI or ESC with no final byte cannot be recovered, so it ends undispatched. A complete sequence dispatches on its final byte, so a trailing SGR reset is not lost. Make sure the producer sends complete sequences.</td></tr>
 <tr><td>An OSC or DCS payload arrives truncated</td><td>Payloads cap at 64 KiB by default. Call <code>stringOverflowed()</code> inside the dispatch to detect the cut, or raise the cap with the third constructor argument.</td></tr>
 <tr><td>Invalid UTF-8 causes an error or a garbled rune</td><td>Pass <code>replaceMalformed: true</code> to turn malformed sequences into U+FFFD. The flag needs <code>ext-mbstring</code>, and the constructor fails loudly when the extension is missing.</td></tr>
 <tr><td>A fallback handler receives no events for the ESC family, DCS, SOS, PM or APC</td><td><code>HandlerAdapter</code> consumes the events it maps, and consumes the HT, LF, CR and BS executes. It forwards ESC, DCS, SOS, PM and APC events to <code>$fallback</code> unchanged, so pass a fallback to see them, or implement <code>Handler</code> directly.</td></tr>

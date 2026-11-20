@@ -2,7 +2,7 @@
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-flexbox</code></pre>
-    <p>Requires PHP 8.3 or newer. Composer pulls in <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-forms</code>. The layout classes have no runtime dependency beyond those.</p>
+    <p>Requires PHP 8.3 or newer. Composer pulls in <code>sugarcraft/sugar-core</code>, <code>sugarcraft/sugar-forms</code> and <code>sugarcraft/sugar-cellbuffer</code>. The layout classes need nothing beyond those. <code>TableRenderer</code> uses the cellbuffer for delta rendering.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem};
@@ -51,7 +51,8 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 
     <p><strong>Mark the cursor row without color.</strong> A cursor style is an SGR string, and a screen reader does not hear color. Add a glyph prefix as well, and read <code>cursor()</code> when focus moves:</p>
     <pre class="code"><code class="language-php">$table = $table
-    -&gt;withCursorStyle("\x1b[7m")   // reverse video
+    -&gt;withFilter('')                 // lift the filter from the Task above
+    -&gt;withCursorStyle('7')           // SGR parameter 7: reverse video
     -&gt;withCursorMarker('&gt; ')
     -&gt;withCursor(1);
 $index = $table-&gt;cursor();          // int|null: the settled row index</code></pre>
@@ -176,7 +177,7 @@ $vp = Viewport::fromContent($document, width: 80, height: 20)
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/examples/flexbox.php"><code>examples/flexbox.php</code></a>: a ratio row and a stacked column with a gap.</li>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/examples/table.php"><code>examples/table.php</code></a>: a sortable and filterable table with per-column widths and right-aligned numbers.</li>
-      <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/examples/sort-filter.php"><code>examples/sort-filter.php</code></a>: sort, filter and cursor movement, with a readout of <code>rawCurrentRow()</code>.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/examples/sort-filter.php"><code>examples/sort-filter.php</code></a>: sort and cursor movement, with a readout of <code>rawCurrentRow()</code>.</li>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/examples/viewport-keys.php"><code>examples/viewport-keys.php</code></a>: a 60-line log in a 6-row viewport, driven entirely by keys.</li>
     </ul>
     <pre class="code"><code class="language-shell">php examples/flexbox.php

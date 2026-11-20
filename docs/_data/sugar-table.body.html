@@ -51,9 +51,10 @@ echo $table-&gt;pageFooter(), PHP_EOL;     // the localized page label, for exam
     <pre class="code"><code class="language-php">$table = $table-&gt;withCheckMarks()-&gt;toggleChecked();   // check the row under the cursor
 $chosen = $table-&gt;checkedRows();                    // list of Row objects</code></pre>
 
-    <p><strong>Virtualize a long list.</strong> Render only the rows that fit the screen. Keep the scroll offset in your own state, and move it with <code>handleScrollKey()</code>:</p>
+    <p><strong>Virtualize a long list.</strong> Render only the rows that fit the screen. The window follows the cursor, so moving the cursor is how you page. <code>withSelectedIndex()</code> and <code>selectNext()</code> scroll the window just far enough to show the selected row:</p>
     <pre class="code"><code class="language-php">$table = $table-&gt;withViewportHeight(15)-&gt;withScrollY(0);
-$table = $table-&gt;handleScrollKey('pageDown');   // clamps to maxScrollY()</code></pre>
+$table = $table-&gt;withSelectedIndex(40);   // the window scrolls to end on row 40
+echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -101,17 +102,17 @@ $table = $table-&gt;handleScrollKey('pageDown');   // clamps to maxScrollY()</co
 </table>
 
     <h3 style="margin-top: 32px;">Keys and controls</h3>
-    <p><code>handleScrollKey()</code> accepts a key name or a <code>KeyEvent</code>. It maps the spellings below to scroll moves, and <code>handleKey()</code> is an older alias. The clamping keeps the scroll offset inside <code>maxScrollY()</code>. The table does not listen for keys itself. Your program reads the key, then passes it in.</p>
+    <p><code>handleScrollKey()</code> accepts a key name or a <code>KeyEvent</code>. It maps the spellings below to scroll moves, and <code>handleKey()</code> is an older alias. The window follows the cursor, so a scroll key never moves the window past the selected row. The offset is clamped to <code>maxScrollY()</code>, then pulled back toward the selected row. To travel the whole list, move the cursor instead. The table does not listen for keys itself. Your program reads the key, then passes it in.</p>
     <table class="api-table">
 <tr><th>Key name</th><th>Action</th></tr>
-<tr><td><code>arrowUp</code> or <code>ArrowUp</code></td><td>Scroll up one row.</td></tr>
-<tr><td><code>arrowDown</code> or <code>ArrowDown</code></td><td>Scroll down one row.</td></tr>
-<tr><td><code>pageUp</code> or <code>pageup</code></td><td>Scroll up one page of rows.</td></tr>
-<tr><td><code>pageDown</code> or <code>pagedown</code></td><td>Scroll down one page of rows.</td></tr>
-<tr><td><code>home</code></td><td>Jump to the first row.</td></tr>
-<tr><td><code>end</code></td><td>Jump to the last row.</td></tr>
+<tr><td><code>arrowUp</code> or <code>ArrowUp</code></td><td>Scroll up one row, as far as the selected row allows.</td></tr>
+<tr><td><code>arrowDown</code> or <code>ArrowDown</code></td><td>Scroll down one row, as far as the selected row allows.</td></tr>
+<tr><td><code>pageUp</code> or <code>pageup</code></td><td>Scroll up one page of rows, as far as the selected row allows.</td></tr>
+<tr><td><code>pageDown</code> or <code>pagedown</code></td><td>Scroll down one page of rows, as far as the selected row allows.</td></tr>
+<tr><td><code>home</code></td><td>Move the window toward the first row. It stops at the selected row.</td></tr>
+<tr><td><code>end</code></td><td>Move the window toward the last row. It stops at the selected row.</td></tr>
 </table>
-    <p>Use <code>selectNext()</code> and <code>selectPrevious()</code> to move the row cursor in code. The cursor follows the viewport. <code>scrollYForKey()</code> returns the offset a key would produce, without changing the table.</p>
+    <p>Use <code>selectNext()</code> and <code>selectPrevious()</code> to move the row cursor in code. The window follows the cursor. <code>scrollYForKey()</code> returns the offset a key would produce, without changing the table.</p>
 
     <h3 style="margin-top: 32px;">Theme and styling</h3>
     <p>Styles are SGR parameter strings. They are parsed into a structured attribute set and canonicalized to 24-bit color at render time. <code>withBaseStyle()</code> styles every cell. <code>withHeaderStyle()</code> and <code>withBorderStyle()</code> style the header and the border. <code>Column::withStyle()</code> and <code>Row::withStyle()</code> style one column or one row. A cell-level callback is set with <code>withStyleFunc()</code>. It receives the row, the column and the value, and returns a style or an SGR string. The callback output is not sanitized, so return only trusted styles. Zebra striping uses <code>withZebra()</code>, <code>withZebraStyleEven()</code> and <code>withZebraStyleOdd()</code>. Border families come from <code>withBorder()</code>, and the checkbox marks come from <code>withCheckMarks()</code>.</p>
@@ -177,7 +178,7 @@ vendor/bin/phpunit</code></pre>
 <tr><td>Table::selectPage()</td><td>selectPage(int $page): self</td><td>Move to a page, clamped to the valid range.</td></tr>
 <tr><td>Table::nextPage()</td><td>nextPage(): self</td><td>Move to the next page.</td></tr>
 <tr><td>Table::previousPage()</td><td>previousPage(): self</td><td>Move to the previous page.</td></tr>
-<tr><td>Table::selectNext()</td><td>selectNext(): self</td><td>Move the row cursor down. The cursor follows the viewport.</td></tr>
+<tr><td>Table::selectNext()</td><td>selectNext(): self</td><td>Move the row cursor down. The window follows the cursor.</td></tr>
 <tr><td>Table::selectPrevious()</td><td>selectPrevious(): self</td><td>Move the row cursor up.</td></tr>
 <tr><td>Table::withSelectedIndex()</td><td>withSelectedIndex(int $index): self</td><td>Set the row cursor directly.</td></tr>
 <tr><td>Table::selectedRow()</td><td>selectedRow(): ?Row</td><td>The row under the cursor, or <code>null</code>.</td></tr>
@@ -212,7 +213,7 @@ vendor/bin/phpunit</code></pre>
 <tr><td>Table::withStyleFunc()</td><td>withStyleFunc(?callable $fn): self</td><td>Per-cell style callback, which receives the row, column and value.</td></tr>
 <tr><td>Table::withMissingIndicator()</td><td>withMissingIndicator(string|StyledCell $s): self</td><td>Placeholder for a cell with no entry.</td></tr>
 <tr><td>Table::withStaticFooter()</td><td>withStaticFooter(string $text): self</td><td>A fixed footer text.</td></tr>
-<tr><td>Table::pageFooter()</td><td>pageFooter(): string</td><td>The page footer text, such as "Page 2/5".</td></tr>
+<tr><td>Table::pageFooter()</td><td>pageFooter(): string</td><td>The page footer text, such as "Page 2 of 5".</td></tr>
 <tr><td>Table::rowsFooter()</td><td>rowsFooter(): string</td><td>The row-count footer text.</td></tr>
 <tr><td>Table::computeColumnWidths()</td><td>computeColumnWidths(int $tableWidth): array</td><td>Compute the actual column widths for a table width.</td></tr>
 <tr><td>Table::view()</td><td>view(): string</td><td>Render the table. Every value passes through <code>Sanitize::value()</code>.</td></tr>
