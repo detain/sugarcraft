@@ -105,13 +105,16 @@ final class DoctorChannelsChecks
             return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.bundles_dark')];
         }
 
+        $shadowed = [];
         if ($bundles === null) {
             $paths = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
             // The launch and serve boot resolve the project tier through
             // ProjectRoot, so a subdirectory launch sees the repository's
             // bundles; doctor must read the same tree or it calls them stale.
             $projectRoot = ProjectRoot::lookup($root ?? (getcwd() ?: ''));
-            $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : [], $trusted))->discover();
+            $discovery = new BundleDiscovery($projectRoot, is_array($paths) ? $paths : [], $trusted);
+            $bundles = $discovery->discover();
+            $shadowed = $discovery->shadowedTrustedCopies();
         }
         $store ??= ChannelsStore::new();
 
@@ -156,6 +159,15 @@ final class DoctorChannelsChecks
                 }
             }
         }
+        // A project copy that a user-tier twin shadowed never reaches $bundles, yet
+        // the launch refuses its channel and hook content just the same
+        // (Bootstrap::bundles() reads the same shadowedTrustedCopies()).
+        foreach ($shadowed as $copy) {
+            if ($copy->hasTrustGatedContent()) {
+                $projectTier[] = $copy->name;
+            }
+        }
+        $projectTier = array_values(array_unique($projectTier));
 
         $problems = [];
         if ($stale !== []) {

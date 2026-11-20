@@ -131,13 +131,14 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    name records who consented; it says nothing about the file being intact.
 3. **Only a user-tier copy can use the name.** Trust is never inherited by a
    project-tier bundle (one under `<repo>/.candy-code/bundles`). A project copy
-   that carries a trusted name is refused and never loads, and the launch says
-   so. When a user-tier and a project-tier bundle share a trusted name, the
-   user-tier copy is the one that loads and the project copy is skipped with a
-   warning. The skipped copy's commands, skills, agents and hooks do not load
-   either, so a user-tier copy that lacks one of them hides it; to keep the
-   project copy's content, move that copy under a different name. An untrusted
-   name keeps both copies, as it always did.
+   that carries a trusted name has its channel and hook content refused, and
+   the launch says so; its commands, skills and agents still load, as they do
+   for any project bundle. When a user-tier and a project-tier bundle share a
+   trusted name, the user-tier copy is the one that loads and the project copy
+   is skipped with a warning. The skipped copy's commands, skills, agents and
+   hooks do not load either, so a user-tier copy that lacks one of them hides
+   it; to keep the project copy's content, move that copy under a different
+   name. An untrusted name keeps both copies, as it always did.
 
 **Bundle hooks ride the same gate.** A bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the

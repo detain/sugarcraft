@@ -180,6 +180,29 @@ final class DoctorChannelsChecksTest extends TestCase
         self::assertStringNotContainsString('not yet armed', $row['detail']);
     }
 
+    public function testAShadowedProjectTierCopyWithChannelContentIsReportedLikeTheLaunch(): void
+    {
+        // A user-tier twin shadows the project copy, so the copy never reaches the
+        // discovered list. The launch still refuses its channel content and says so
+        // (Bootstrap::bundles()); the preview must name it too.
+        $userRoot = $this->dir . '/home/' . Bundle::INSTALLED_RELATIVE_PATH;
+        \mkdir($userRoot, 0755, true);
+        $this->channelManifestBundle($userRoot, 'alpha');
+        $this->liveProjectBundle('alpha');
+        $cwd = \getcwd();
+        \chdir($this->dir);
+
+        try {
+            $row = DoctorChannelsChecks::channelBundlesRow(null, null, ['alpha'], $this->store());
+        } finally {
+            \chdir($cwd === false ? \sys_get_temp_dir() : $cwd);
+        }
+
+        self::assertSame('WARN', $row['status']);
+        self::assertStringContainsString('project-tier copy', $row['detail']);
+        self::assertSame(1, \substr_count($row['detail'], 'alpha'), 'a name shadowed once is named once');
+    }
+
     public function testAProjectTierCopyWithOnlySkillsOfATrustedNameIsNotReportedAsProjectTier(): void
     {
         // Skills load for every bundle, so a project copy with nothing trust-gated
@@ -366,7 +389,13 @@ final class DoctorChannelsChecksTest extends TestCase
     {
         $bundlesRoot = $this->dir . '/.candy-code/bundles';
         \mkdir($bundlesRoot, 0755, true);
-        $dir = DoctorChannelsProbeFixture::makeChannelProbeBundle($bundlesRoot, $name);
+
+        return $this->channelManifestBundle($bundlesRoot, $name);
+    }
+
+    private function channelManifestBundle(string $parent, string $name): string
+    {
+        $dir = DoctorChannelsProbeFixture::makeChannelProbeBundle($parent, $name);
         \mkdir($dir . '/.claude-plugin', 0755, true);
         \file_put_contents(
             $dir . '/.claude-plugin/plugin.json',
