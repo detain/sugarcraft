@@ -180,7 +180,7 @@ final class ScheduleRegistryTest extends TestCase
         $registry = ScheduleRegistry::atPath($this->path, $this->dir);
         $registry->add(new Schedule(name: 'beat', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
         $seen = null;
-        $results = $registry->fireDue(time(), function (Schedule $row) use (&$seen, $registry): ?string {
+        $results = self::fire($registry, time(), function (Schedule $row) use (&$seen, $registry): ?string {
             $seen = $row->name;
             // The clock had ALREADY moved and persisted when the spawn ran.
             $this->assertGreaterThan(time(), $registry->get('beat')->nextDue);
@@ -202,7 +202,7 @@ final class ScheduleRegistryTest extends TestCase
         $registry->noteFired('slow', 'sess_running');
 
         $spawned = 0;
-        $results = $registry->fireDue(time(), function () use (&$spawned): ?string {
+        $results = self::fire($registry, time(), function () use (&$spawned): ?string {
             ++$spawned;
 
             return null;
@@ -228,8 +228,8 @@ final class ScheduleRegistryTest extends TestCase
         $outcomes = [];
         // While the holder is INSIDE its spawn it holds the row lock; fire the
         // challenger from in there — the exact race two pumps hit at :00.
-        $holderResults = $holder->fireDue(time(), function () use ($challenger, $holder, &$outcomes): ?string {
-            $theirs = $challenger->fireDue(time(), static fn (): ?string => 'must-not-run');
+        $holderResults = self::fire($holder, time(), function () use ($challenger, $holder, &$outcomes): ?string {
+            $theirs = self::fire($challenger, time(), static fn (): ?string => 'must-not-run');
             $outcomes = [$theirs[0]['action'], count($theirs)];
 
             return 'sess_holder';
@@ -244,14 +244,14 @@ final class ScheduleRegistryTest extends TestCase
         $registry = ScheduleRegistry::atPath($this->path, $this->dir);
         $registry->add(new Schedule(name: 'broken', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
 
-        $results = $registry->fireDue(time(), static function (): ?string {
+        $results = self::fire($registry, time(), static function (): ?string {
             throw new \RuntimeException('handshake went nowhere');
         });
 
         $this->assertSame('error', $results[0]['action']);
         $this->assertStringContainsString('handshake', $results[0]['error']);
         $this->assertGreaterThan(time(), $registry->get('broken')->nextDue);
-        $this->assertSame([], $registry->fireDue(time(), static fn (): ?string => 'again'), 'no retry before the next slot');
+        $this->assertSame([], self::fire($registry, time(), static fn (): ?string => 'again'), 'no retry before the next slot');
     }
 
     public function testDisabledRowsAreNeverDue(): void
@@ -273,7 +273,7 @@ final class ScheduleRegistryTest extends TestCase
         $document = json_decode((string) file_get_contents($this->path), true);
         $this->assertSame([], $document['schedules'], 'a /loop row is nobody else\'s business: the file says none');
         $spawned = 0;
-        $registry->fireDue(time(), static function () use (&$spawned): ?string {
+        self::fire($registry, time(), static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'x';
@@ -381,7 +381,7 @@ final class ScheduleRegistryTest extends TestCase
         $this->assertStringContainsString('will not fire', $notes[0]);
 
         $spawned = 0;
-        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+        $results = self::fire($registry, $tick, static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'x';
@@ -406,7 +406,7 @@ final class ScheduleRegistryTest extends TestCase
         $this->assertSame([], $registry->loadErrors(), 'a row bound elsewhere is not a load problem HERE');
 
         $spawned = 0;
-        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+        $results = self::fire($registry, $tick, static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'x';
@@ -433,7 +433,7 @@ final class ScheduleRegistryTest extends TestCase
         $registry->load();
 
         $spawned = 0;
-        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+        $results = self::fire($registry, $tick, static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'x';
@@ -456,5 +456,23 @@ final class ScheduleRegistryTest extends TestCase
             return;
         }
         @unlink($path);
+    }
+
+    /**
+     * Runs fireDue and returns its verdicts. The spawns in these fixtures answer
+     * at once, so the promise is settled before fireDue returns; a launch that
+     * stays pending is covered by {@see ScheduleRegistryAsyncFireTest}.
+     *
+     * @return list<array{name: string, action: string, sessionId?: string, error?: string}>
+     */
+    private static function fire(ScheduleRegistry $registry, int $now, \Closure $spawn): array
+    {
+        $verdicts = null;
+        $registry->fireDue($now, $spawn)->then(static function (array $settled) use (&$verdicts): void {
+            $verdicts = $settled;
+        });
+        self::assertIsArray($verdicts, 'fireDue must answer at once when every launch settles at once');
+
+        return $verdicts;
     }
 }

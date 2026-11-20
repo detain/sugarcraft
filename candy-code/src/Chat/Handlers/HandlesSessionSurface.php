@@ -107,6 +107,8 @@ use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\ScheduleFiredMsg;
+use SugarCraft\Code\Chat\ScheduleVerdicts;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\ModelCatalogReadyMsg;
@@ -241,6 +243,13 @@ trait HandlesSessionSurface
                 )],
                 'backgroundStatuses' => $statuses,
             ]), null];
+        }
+        if ($msg instanceof ScheduleFiredMsg) {
+            // The launches that answered after the tick that started them: the same
+            // verdict lines that tick writes for the ones it could already decide.
+            $notices = ScheduleVerdicts::announce($msg->results, $this->dispatchOutboundWebhook(...));
+
+            return [$notices === [] ? $this : $this->mutate(['history' => [...$this->history, ...$notices]]), null];
         }
         if ($msg instanceof BackgroundTickMsg) {
             [$next, $cmd] = $this->pumpBackgroundSessions();
