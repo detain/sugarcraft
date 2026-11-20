@@ -52,10 +52,10 @@ declare(strict_types=1);
  *     under a `<slug>/src/` tree (or a PHP built-in), and `Name::method(` must
  *     name a public method of that class, directly or through the traits and
  *     parents it pulls in. A bare PascalCase name alone in an inline `<code>`
- *     span (`<code>ResizeMsg</code>`) is a class claim too. The bare-name rule,
- *     its exclusion list (test classes, env vars, key names, products, config
- *     directives) and the single-word scope limit are documented at
- *     BARE_CLASS_SHAPE and isNonClassName() below.
+ *     span (`<code>ResizeMsg</code>`, `<code>Renderer</code>`) is a class claim
+ *     too. The bare-name rule and its exclusion list (test classes, env vars,
+ *     key names, products, config directives, third-party names) are documented
+ *     at BARE_CLASS_SHAPE and isNonClassName() below.
  *  j) body example claims: every `examples/<file>` path a body names must exist
  *     under the package it belongs to.
  *  k) body vhs claims: every `.vhs/<file>.tape|gif` a body names must exist.
@@ -83,10 +83,11 @@ final class CheckDocsAssets
 
     /**
      * Leg (i), bare names: an inline `<code>` span whose whole text is a
-     * PascalCase identifier with at least two capital humps and one lowercase
-     * letter (`ResizeMsg`, `ITerm2`, `MySQL`) is a class claim. A single-word
-     * name (`Model`, `Enter`, `Ascii`) is not checked: too many of them are
-     * English, key names or option values to tell apart from a class.
+     * PascalCase identifier with at least one lowercase letter (`Renderer`,
+     * `ResizeMsg`, `ITerm2`, `MySQL`) is a class claim, as a `Name::method()`
+     * is. A single-word name is checked too, so an English word, key name or
+     * option value written alone in a code span must resolve to a class or be
+     * excluded by name below.
      *
      * Names that are not classes and are excluded from that check:
      *  - fixture and test classes (a `*Test` or `*Tests` suffix): they live
@@ -97,13 +98,14 @@ final class CheckDocsAssets
      *  - products, tools and protocols a body names as text (EXCLUDED_PRODUCT_NAMES);
      *  - configuration directives the body quotes from ssh/OS config files
      *    (EXCLUDED_CONFIG_NAMES);
-     *  - names for things outside the monorepo, upstream Go identifiers, PHP
-     *    package interfaces and a TypeScript component (EXCLUDED_THIRD_PARTY_NAMES);
+     *  - names for things outside the monorepo, upstream Go identifiers and modes,
+     *    a terminfo capability, PHP package interfaces and a TypeScript component
+     *    (EXCLUDED_THIRD_PARTY_NAMES);
      *  - registered tool names and enum cases, constants and methods the monorepo
      *    declares (nonClassSymbols()).
      * A name the body imports or declares itself is illustrative, as in leg (i).
      */
-    private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$~';
+    private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*$~';
 
     /**
      * @var list<string> keyboard key names a body writes in code spans; `ReleaseA`
@@ -127,13 +129,14 @@ final class CheckDocsAssets
      *      an upstream Go identifier (charmbracelet vhs modes, bubbletea options,
      *      bubbles list and glamour renderer names), a PHP package's interface or
      *      class (psr/log, react/event-loop), a candy-code-web TypeScript component,
-     *      or an output string a body quotes. None is declared under a `<slug>/src/`
-     *      tree, and the body names each one as the thing it is, not as a claim.
+     *      a terminfo capability (`Tc`, read by infocmp), or an output string a body
+     *      quotes. None is declared under a `<slug>/src/` tree, and the body names
+     *      each one as the thing it is, not as a claim.
      */
     private const EXCLUDED_THIRD_PARTY_NAMES = [
-        'RecordOnly', 'ReplayOnly', 'WithReporter', 'WithSignalHandler', 'SetFilterText',
-        'TermRenderer', 'LoggerInterface', 'ExtUvLoop', 'StreamSelectLoop', 'DiffView',
-        'HIcd',
+        'RecordOnly', 'ReplayOnly', 'Passthrough', 'WithReporter', 'WithSignalHandler',
+        'SetFilterText', 'TermRenderer', 'LoggerInterface', 'ExtUvLoop', 'StreamSelectLoop',
+        'DiffView', 'HIcd', 'Tc',
     ];
 
     /** @var list<string> ssh and OS config directives quoted in code spans */
@@ -811,9 +814,12 @@ final class CheckDocsAssets
             // names a class too (`<code>ResizeMsg</code>`), so it must resolve
             // like a `Name::method()` claim. Only inline spans count; a `<pre>`
             // block is code that the static-call and constructor shapes above
-            // already read.
+            // already read. A class the snippet declares does not exempt the
+            // prose span of that name: the span may be a SugarCraft claim, and
+            // only a resolvable class settles it. An explicit import from outside
+            // SugarCraft still does, since the `use` says which class is meant.
             foreach (self::bareCodeSpanNames($html) as $name) {
-                if (self::isIllustrativeName($name, $declared, $external, $imports) || self::isNonClassName($name, $nonClass)) {
+                if (self::isIllustrativeName($name, [], $external, $imports) || self::isNonClassName($name, $nonClass)) {
                     continue;
                 }
                 $census['claims']++;
@@ -883,17 +889,18 @@ final class CheckDocsAssets
     /**
      * The names the monorepo itself declares as something other than a class:
      * every method, enum case and constant under a `<slug>/src/` tree, every
-     * quoted word a source file uses as a string (tool, hook, option and theme
-     * names are registered that way), every class a `<slug>/tests/` tree
-     * declares (a test fixture, never a library class), and every package name
-     * (the Pascal form of a `<slug>/` directory, such as `SugarSpring`). Keys
-     * are lowercase.
+     * registered tool name a source file declares (see below), every class a
+     * `<slug>/tests/` tree declares (a test fixture, never a library class), and
+     * every package name (the Pascal form of a `<slug>/` directory, such as
+     * `SugarSpring`). Keys are lowercase.
      *
      * Only a registered tool name counts as a string: the value of a `const NAME`
-     * or a `name:` attribute argument (`#[BuiltInTool(name: 'AskUser')]`). Any
-     * other quoted word is left checked, so a body's phantom class that merely
-     * appears as a string in a source file is still named. Excluding every quoted
-     * word would also excuse exactly that class.
+     * or a `name:` attribute argument (`#[BuiltInTool(name: 'AskUser')]`), read in
+     * code only, so a docblock example does not register anything. A `name:`
+     * named argument to a constructor or call (`new Foo(name: 'X')`) is not an
+     * attribute and registers nothing. Any other quoted word is left checked, so a
+     * body's phantom class that merely appears as a string in a source file is
+     * still named. Excluding every quoted word would also excuse exactly that class.
      *
      * @return array<string,true>
      */
@@ -903,12 +910,17 @@ final class CheckDocsAssets
         foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
             foreach (self::phpFiles($src) as $path) {
                 $text = self::readCached($path);
+                $code = self::withoutComments($text);
                 preg_match_all('~\bfunction\s+&?([A-Za-z_]\w*)\s*\(~', $text, $m);
                 preg_match_all('~^\s*case\s+([A-Za-z_]\w*)\s*[=;]~m', $text, $c);
                 preg_match_all('~\bconst\s+(?:[A-Za-z_]\w*\s+)?([A-Za-z_]\w*)\s*=~', $text, $k);
-                preg_match_all('~\bconst\s+NAME\s*=\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $tool);
-                preg_match_all('~\bname:\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $text, $attr);
-                foreach ([$m[1], $c[1], $k[1], $tool[1], $attr[1]] as $names) {
+                preg_match_all('~\bconst\s+NAME\s*=\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $code, $tool);
+                $attr = [];
+                foreach (self::attributeBodies($code) as $body) {
+                    preg_match_all('~\bname:\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $body, $named);
+                    array_push($attr, ...$named[1]);
+                }
+                foreach ([$m[1], $c[1], $k[1], $tool[1], $attr] as $names) {
                     foreach ($names as $name) {
                         $symbols[strtolower($name)] = true;
                     }
@@ -935,6 +947,34 @@ final class CheckDocsAssets
         }
 
         return $symbols;
+    }
+
+    /**
+     * The argument text of every `#[...]` attribute in $code, which is code with
+     * its comments already removed (withoutComments()). Nested brackets in an
+     * argument (`#[Tags(['a'])]`) are kept whole.
+     *
+     * @return list<string>
+     */
+    private static function attributeBodies(string $code): array
+    {
+        preg_match_all('~#\[((?:[^\[\]]++|\[[^\[\]]*\])*)\]~', $code, $attrs);
+
+        return $attrs[1];
+    }
+
+    /** $code with every comment token removed, so a docblock example is never read as code. */
+    private static function withoutComments(string $code): string
+    {
+        $out = '';
+        foreach (token_get_all($code) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out .= is_array($token) ? $token[1] : $token;
+        }
+
+        return $out;
     }
 
     /**

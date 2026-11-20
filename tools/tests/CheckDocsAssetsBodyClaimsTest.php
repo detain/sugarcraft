@@ -816,6 +816,84 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
             . '<p>Run <code>php examples/demo.php</code> and see <code>.vhs/demo.tape</code>.</p>';
     }
 
+    public function testASingleWordPascalCaseCodeSpanIsChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // A one-hump name is a class claim too: an unknown one is named, and the
+        // upstream Go mode and terminfo capability the bodies write are excluded.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class Gizmo, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Pass a <code>Gizmo</code> to the loop.</p>'),
+        );
+        $this->assertSame([], $this->claimsFor($root,
+            '<p>The <code>Passthrough</code> mode and the <code>Tc</code> capability, '
+            . 'with <code>Countable</code>, <code>TAB</code> and <code>RGB</code> left alone.</p>',
+        ));
+    }
+
+    public function testABodyDeclaredClassDoesNotExemptItsProseSpan(): void
+    {
+        $root = $this->makeFixture();
+
+        // The snippet declares Gizmo as its own example, but the prose span Gizmo may
+        // be a SugarCraft claim, so only a resolvable class settles it.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class Gizmo, which no <slug>/src declares'],
+            $this->claimsFor($root,
+                '<pre><code>final class Gizmo {}</code></pre>'
+                . '<p>Build a <code>Gizmo</code> for the loop.</p>',
+            ),
+        );
+    }
+
+    public function testAnExplicitImportFromOutsideSugarcraftStillExemptsItsBareSpan(): void
+    {
+        $root = $this->makeFixture();
+
+        // The use statement says which Gizmo is meant: a dependency's, not a claim.
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>use Vendor\Gizmo;</code></pre>'
+            . '<p>Pass a <code>Gizmo</code> to the loop.</p>',
+        ));
+    }
+
+    public function testANameArgumentOutsideAnAttributeOrInACommentDoesNotRegisterAName(): void
+    {
+        $root = $this->makeFixture();
+        // A constructor's name: argument and a docblock's attribute example are not
+        // registered tool names; a real attribute in code still is.
+        $this->put("$root/alpha/src/Labels.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            #[BuiltInTool(name: 'RealTool')]
+            final class Labels
+            {
+                public function make(): object
+                {
+                    return new Gizmo(name: 'PhantomWidget');
+                }
+
+                /** Register it as #[BuiltInTool(name: 'DocOnlyWidget')] in code. */
+                public function doc(): void
+                {
+                }
+            }
+
+            PHP);
+
+        $this->assertSame([
+            'claims: docs/_data/alpha.body.html names class PhantomWidget, which no <slug>/src declares',
+            'claims: docs/_data/alpha.body.html names class DocOnlyWidget, which no <slug>/src declares',
+        ], $this->claimsFor($root,
+            '<p>Use <code>PhantomWidget</code>, <code>DocOnlyWidget</code> and <code>RealTool</code>.</p>',
+        ));
+    }
+
     /** A second package declaring its own Widget, with the method alpha's lacks. */
     private function putBetaWidget(string $root): void
     {
