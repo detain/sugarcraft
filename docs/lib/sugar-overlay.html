@@ -156,8 +156,19 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#theme-backdrop-and-color">Theme, backdrop and color</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
@@ -191,6 +202,17 @@ $stack = VeilStack::new()
         -&gt;withPosition(Position::TOP, Position::RIGHT));
 echo $stack-&gt;compositeAll($baseView);</code></pre>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A veil is an immutable overlay description. It holds the foreground content, the anchor and offset, the backdrop dimming, the z-index and the optional animation. <code>Veil::composite()</code> takes a foreground string, a background string and the anchor, and returns one frame string. Nothing is drawn to a terminal. The host writes the frame.</p>
+    <p>The compositor works on cells, not bytes. ANSI and zone-marker envelopes take zero columns, and wide glyphs count as two. <code>VeilStack</code> layers several veils by ascending z-index. The shared <code>RenderSession</code> remembers the last full frame, so a redraw emits only the cells that changed. Because the session belongs to the veil, a program should keep one veil in its model rather than building a new one on every paint.</p>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Center a modal over a dimmed background.</strong> Call <code>Veil::centered($modal, $base, 50)</code>, or build a veil with <code>withBackdrop(40)</code> and call <code>composite()</code> with <code>Position::CENTER</code> for both axes.</li>
+      <li><strong>Stack a tooltip above a modal.</strong> Add each veil to a <code>VeilStack</code> with <code>withZIndex()</code>, then call <code>compositeAll()</code>. Higher z-indexes paint on top.</li>
+      <li><strong>Animate an opening.</strong> Set <code>withAnimation(AnimationKind::SLIDE)</code> and call <code>animate($fg, $bg, ..., $progress)</code> on each tick, with progress from 0 to 1. Pass <code>withReducedMotion(true)</code> to jump straight to the settled frame.</li>
+      <li><strong>Dismiss on a click outside the overlay.</strong> Mark interactive text with <code>mark()</code>, composite the frame, pass the rendered frame to <code>scan()</code>, and call <code>isClickOutside($mouseMsg)</code> on the returned veil. The zones survive later <code>with*()</code> calls.</li>
+      <li><strong>Show text from users or the network.</strong> Pass it to <code>withUntrustedContent()</code>, which neutralizes control characters, forged zone sentinels and live OSC-8 links at set time. Raw <code>withContent()</code> and <code>composite()</code> payloads pass through verbatim.</li>
+    </ul>
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Positioning</strong><span>Nine anchors — Top, Right, Bottom, Left, Center and the four corners — plus X/Y offsets in cells (columns/rows).</span></div>
@@ -211,6 +233,59 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
       <li><strong>Reduced motion</strong> — <code>withReducedMotion()</code> makes <code>animate()</code> paint the settled frame in one shot (no dim sweep, no travel; the scrim ramps with the animation otherwise). The fleet-standard read is sugar-colorprofile's <code>Probe::reducedMotion()</code>, but it sees only environment variables — offer an in-app setting as well.</li>
     </ul>
 
+    <h3 id="keys-and-input" style="margin-top: 32px;">Keys and input</h3>
+    <p>sugar-overlay has no key handling, by design. The host binds Esc and Enter to its own dismiss action, and it uses <code>isClickOutside()</code> for pointer dismissal. Mouse input comes from sugar-mouse, and <code>scan()</code> builds the zones. For focus movement, use sugar-focus or sugar-navstack. <code>zoneRects()</code> and <code>lastZoneRect($id)</code> publish each zone's rectangle in the same 1-based cell space that <code>hit()</code> uses, so a focus ring and a click agree on one geometry.</p>
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>withBackdrop()</code></td><td><code>int</code>, 0 to 100</td><td><code>0</code></td><td>Dimming of the background. Values are clamped to the range. <code>0</code> leaves the background untouched.</td></tr>
+    <tr><td><code>withAnimation()</code></td><td><code>?AnimationKind</code> or a configured <code>Fade</code>, <code>Scale</code> or <code>Slide</code></td><td><code>null</code></td><td>Transition used by <code>animate()</code>. A preset applies that kind's default easing curve.</td></tr>
+    <tr><td><code>withZIndex()</code></td><td><code>int</code></td><td><code>0</code></td><td>Stacking order inside a <code>VeilStack</code>. Ascending order paints later veils on top.</td></tr>
+    <tr><td><code>withPosition()</code></td><td><code>?Position</code> per axis, plus <code>x</code> and <code>y</code> offsets</td><td>centered by the caller's arguments</td><td>Anchor and cell offsets for the veil itself. Used by <code>VeilStack::compositeAll()</code>.</td></tr>
+    <tr><td><code>withBorder()</code></td><td><code>?Border</code></td><td><code>null</code></td><td>Border chrome around the content. It applies to every composited frame.</td></tr>
+    <tr><td><code>withClickOutsideDismiss()</code></td><td>flag</td><td>off</td><td>Enables <code>isClickOutside()</code>. It throws if <code>scan()</code> has not run.</td></tr>
+    <tr><td><code>withReducedMotion()</code></td><td><code>bool</code></td><td><code>false</code></td><td>When true, <code>animate()</code> paints the settled frame at any progress.</td></tr>
+    <tr><td><code>withoutZoneMarkers()</code></td><td>flag</td><td>markers on</td><td>Opts out of the hit-test arena, so the frame carries no zone envelopes.</td></tr>
+    <tr><td><code>withUntrustedContent()</code></td><td><code>string</code></td><td><code>''</code></td><td>Sets content after sweeping it. Use it for any payload that did not come from the program itself.</td></tr>
+    <tr><td><code>withAutoSize()</code></td><td>flag</td><td>n/a</td><td>Deprecated no-op kept for source compatibility. Border chrome applies unconditionally.</td></tr>
+    </table>
+    <h3 id="theme-backdrop-and-color" style="margin-top: 32px;">Theme, backdrop and color</h3>
+    <p>The backdrop is the only color the compositor adds on its own. It dims each non-empty background line with a computed pen. The dimming does not compound across stacked veils, because the first dim to touch a cell governs. The pen assumes a light default foreground. On a terminal that renders dark text, the gray pen brightens that text instead, so set <code>withBackdrop(0)</code> there.</p>
+    <p>The renderer does not read <code>NO_COLOR</code>, because the dim pen is itself color. A host that honors <code>NO_COLOR</code> should pre-strip the backdrop, call <code>withBackdrop(0)</code> and skip animations. Borders and styles come from sugar-style, and <code>Border::hidden()</code> or <code>Border::ascii()</code> give a frame with no box glyphs.</p>
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <ul>
+      <li><code>examples/basic.php</code>: a modal box overlaid on a background frame. Run it with <code>php examples/basic.php</code>.</li>
+      <li><code>examples/multiple-overlays.php</code>: several overlays composited on one base view in z-order. Run it with <code>php examples/multiple-overlays.php</code>.</li>
+      <li><code>examples/interactive.php</code>: an animated reveal, followed by a scripted interaction. Run it with <code>php examples/interactive.php</code>.</li>
+      <li><code>examples/overflow.php</code>: a narrow-canvas demo that asks for the overlay's size before rendering a wide modal. Run it with <code>php examples/overflow.php</code>.</li>
+    </ul>
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the suite from the lib root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite covers compositing and the delta law, animation progress and the easing classes, the z-index stack, the sweep of untrusted content, the link degradation rules, and the README snippets. To check your own overlays, composite to a fixed width and height and compare the frame with an expected string, or use the golden helpers in sugar-testing.</p>
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The background looks too dark, or dark text got brighter.</strong> The dim pen assumes a light default foreground. On a dark-text terminal, use <code>withBackdrop(0)</code> or pre-dim the background yourself.</li>
+      <li><strong>A single-line overlay does not come back as raw text.</strong> It is placed at its anchor over the single-line background, unlike the upstream raw passthrough. The README's Divergences section records this on purpose.</li>
+      <li><strong>An empty foreground still dims the screen.</strong> The backdrop ramp applies to every row, so an empty overlay over <code>withBackdrop(n)</code> with <code>n</code> above zero yields a dimmed canvas. This matches the README's divergence note.</li>
+      <li><strong><code>isClickOutside()</code> throws.</strong> Dismissal is on, but <code>scan()</code> has not run on the frame that is on screen. Call <code>scan()</code> on the rendered frame first.</li>
+      <li><strong><code>scan()</code> throws on duplicate zone ids.</strong> Each <code>mark()</code> id must be unique within one frame. Rename one of the marks.</li>
+      <li><strong><code>VeilStack::add()</code> throws <code>OverflowException</code>.</strong> A stack holds at most 256 layers. Remove stale veils with <code>removeWhere()</code> or <code>clear()</code>.</li>
+      <li><strong>Redraws show ghost cells after a cursor desync.</strong> Call <code>resetPreviousFrame()</code> to force a full frame, or <code>withoutSession()</code> for a full frame from a new session.</li>
+    </ul>
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The surface mirrors the Go antecedent, <a href="https://github.com/rmhubbert/bubbletea-overlay">rmhubbert/bubbletea-overlay</a>. Two branches of its <code>Composite()</code> are deliberately not mirrored, and the README's Divergences section pins both with <code>CompositeDeltaLawTest</code>.</p>
+    <table class="api-table">
+    <tr><th>Upstream behavior (Go)</th><th>SugarOverlay</th></tr>
+    <tr><td>Single-line foreground returned raw, ignoring placement</td><td>Laid out like any other frame. <code>"HI"</code> over <code>"abcd"</code> yields <code>HIcd</code>.</td></tr>
+    <tr><td>Empty foreground passes the background through verbatim</td><td>The backdrop ramp still applies. Pass-through holds only at opacity 0.</td></tr>
+    <tr><td>Overlay composition over a background string</td><td><code>Veil::composite()</code> and <code>VeilStack::compositeAll()</code></td></tr>
+    </table>
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>The public classes are <code>Veil</code>, which is the immutable overlay description, and <code>VeilStack</code>, the ordered collection. <code>RenderSession</code> remembers the last frame and decides what to emit. It owns no terminal, and sugar-cellbuffer encodes the delta. <code>MarkedFrame</code> is the width algebra for one line, and it is the shared knife behind clipping and the security sweep. <code>SgrWalker</code> walks the SGR and OSC runs of a line, so their envelopes cost zero columns. <code>Lines</code> and <code>Cluster</code> split and step through text. <code>Position</code> carries the nine anchors, and the <code>Animation</code> namespace holds the <code>Fade</code>, <code>Scale</code> and <code>Slide</code> transitions.</p>
+    <p>The lib builds on the monorepo's cell model. sugar-cellbuffer provides the diff buffer, sugar-mouse provides the hit-testing scanner and marks, sugar-spring provides the cubic-bezier easing, sugar-style provides border and style chrome, and sugar-core provides the width measurement.</p>
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-overlay/</code> in the monorepo is the record of changes. <code>withAutoSize()</code> is a deprecated no-op that remains for source compatibility.</p>
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-overlay">Source on GitHub</a></li>
