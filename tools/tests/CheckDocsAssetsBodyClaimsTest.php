@@ -531,6 +531,34 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testABareHostOnlyExtensionClassNameIsNamedWhetherOrNotTheHostLoadsIt(): void
+    {
+        $root = $this->makeFixture();
+
+        // Imagick and Redis come from PECL extensions. A bare span must not pass or
+        // fail on whether the machine running the guard has them loaded, so the
+        // verdict is the same on every host: neither is an allowlisted core name.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class Imagick, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Load the <code>Imagick</code> image.</p>'),
+        );
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class Redis, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Cache with <code>Redis</code>.</p>'),
+        );
+    }
+
+    public function testABareAllowlistedPhpCoreClassNameIsAccepted(): void
+    {
+        $root = $this->makeFixture();
+
+        // PHP core and SPL names a body may write alone, with no SugarCraft declaration.
+        $this->assertSame([], $this->claimsFor($root,
+            '<p>Throws a <code>LogicException</code>, a <code>ValueError</code> or a '
+            . '<code>JsonException</code>; <code>DateTimeImmutable</code> and <code>Countable</code> too.</p>',
+        ));
+    }
+
     public function testAThirdPartyOrUpstreamNameInACodeSpanIsNotChecked(): void
     {
         $root = $this->makeFixture();

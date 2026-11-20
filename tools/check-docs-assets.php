@@ -157,6 +157,27 @@ final class CheckDocsAssets
     ];
 
     /**
+     * PHP core and SPL class, interface and enum names a body may write as a bare
+     * code span (`<code>Countable</code>`) without a SugarCraft declaration.
+     *
+     * A bare name is resolved against this fixed list rather than the host's
+     * loaded classes: `class_exists()` answers differently on a host that has or
+     * lacks an extension, so a span would pass on one machine and fail on another.
+     * The list is the names the docs bodies use, and it changes only when a body
+     * starts naming a new core class. Matched case-insensitively, as PHP matches
+     * class names. A method claim (`Name::method()`) still resolves on the host
+     * through internalClass(), which needs the class to be loaded to read it.
+     *
+     * @var list<string>
+     */
+    private const CORE_CLASS_NAMES = [
+        'ArgumentCountError', 'Countable', 'DateTimeImmutable', 'Error', 'IteratorAggregate',
+        'JsonException', 'JsonSerializable', 'LogicException', 'OutOfBoundsException',
+        'OutOfRangeException', 'OverflowException', 'PDOException', 'PDOStatement',
+        'Stringable', 'Throwable', 'TypeError', 'UnexpectedValueException', 'ValueError',
+    ];
+
+    /**
      * Chrome-bearing pages deliberately OUT of the advertised universe:
      * the key is the docs/-relative path, the value why it is not advertised.
      * A roster entry whose file exists but no longer carries nav chrome is
@@ -1190,7 +1211,9 @@ final class CheckDocsAssets
      * FQNs its imports spell), so a wrong namespace or a method carried only by a
      * same-named class elsewhere is named. A bare name the body does not import is
      * matched by short name across every declaration, as it always was: qualifying
-     * those snippets is a body-by-body edit the guard does not force.
+     * those snippets is a body-by-body edit the guard does not force. A bare name
+     * no declaration matches passes only when it is a PHP core name in
+     * CORE_CLASS_NAMES, never because the host happens to load it.
      *
      * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
      * @param array<string,list<string>> $imports lowercased short name → SugarCraft FQNs
@@ -1220,15 +1243,31 @@ final class CheckDocsAssets
             return self::methodProblem($index, $candidates, $short, $method);
         }
 
+        if ($method === null) {
+            return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
+        }
+
         $internal = self::internalClass($short);
         if ($internal === null) {
             return "names class $short, which no <slug>/src declares";
         }
-        if ($method === null || method_exists($internal, $method)) {
+        if (method_exists($internal, $method)) {
             return null;
         }
 
         return "names $short::$method(), which PHP's $short does not define";
+    }
+
+    /** True when $short is one of the PHP core names in CORE_CLASS_NAMES, in any case. */
+    private static function isCoreClassName(string $short): bool
+    {
+        foreach (self::CORE_CLASS_NAMES as $core) {
+            if (strcasecmp($core, $short) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
