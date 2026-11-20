@@ -127,6 +127,23 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame($this->other, $pending['root']);
     }
 
+    public function testThePrimaryRootAnswerCarriesRootInTheShapeOfTheRoutedOne(): void
+    {
+        $primary = (string) \realpath($this->fixture->root);
+
+        $routed = $this->call($this->door->createSessionIn($this->other, null, null));
+        $onPrimary = $this->call($this->door->createSessionIn($primary, null, null));
+        self::assertIsArray($onPrimary, 'a primary answer is an array, as a routed one is');
+        self::assertSame($primary, $onPrimary['root'], 'the primary answer names the primary root, as a routed one names its root');
+        self::assertSame($this->other, $routed['root']);
+        self::assertSame(\array_keys($routed), \array_keys($onPrimary), 'both answers have the same keys');
+        self::assertNull($this->gateway->rootFor((object) ['root' => $primary]), 'the primary root still routes to the dispatcher');
+
+        $pending = $this->call($this->door->pendingPermissionsIn($primary));
+        self::assertIsArray($pending);
+        self::assertSame($primary, $pending['root'], 'the primary pending answer carries the top-level root too');
+    }
+
     public function testARootRefusalRejectsTheCallAndNeverThrowsAtTheCaller(): void
     {
         foreach ([

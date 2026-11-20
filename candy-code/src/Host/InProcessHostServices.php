@@ -343,7 +343,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $params = $this->createParams($name, $permissionMode);
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->dispatcher->invoke($client, 'session.create', $params);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'session.create', $params), $root);
             }
 
             return $this->routedCall($routed, 'session.create', $params, '', self::wire(...), function (mixed $answer) use ($routed): void {
@@ -418,7 +418,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $client = $this->connected();
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->dispatcher->invoke($client, 'permission.pending', []);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'permission.pending', []), $root);
             }
 
             return $this->routedCall($routed, 'permission.pending', [], '', self::wire(...), static function (): void {
@@ -641,6 +641,21 @@ final class InProcessHostServices implements HostServices, RootedHostServices
     private static function wire(mixed $answer): mixed
     {
         return Dispatcher::wireAnswer($answer);
+    }
+
+    /**
+     * The primary answer of a root form carries `root`, as a routed answer does (PL-5c-A design,
+     * section 2.6): the canonical primary root when the gateway is wired, else the root the caller named.
+     *
+     * @param array<string, mixed> $answer
+     *
+     * @return array<string, mixed>
+     */
+    private function primaryAnswer(array $answer, string $root): array
+    {
+        $answer['root'] ??= $this->gateway?->primaryRoot() ?? $root;
+
+        return $answer;
     }
 
     /** @return array<string, mixed> */
