@@ -286,8 +286,12 @@ final class FlushMetrics implements Middleware
 
     public function handle(Context $ctx, Session $session, callable $next): void
     {
-        $next($ctx, $session);
-        $this->registry->flush();
+        // finally: a session that throws is the one whose error sample must reach the textfile.
+        try {
+            $next($ctx, $session);
+        } finally {
+            $this->registry->flush();
+        }
     }
 }
 

@@ -581,4 +581,21 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertSame(2, $seen, 'both inspection examples must still exist for this guard');
     }
 
+    public function testReadmeFlushMetricsRecipeFlushesEvenWhenASessionThrows(): void
+    {
+        // A session that throws is the one whose error sample must reach the
+        // textfile; a flush after $next() alone is skipped on that path.
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        $this->assertMatchesRegularExpression(
+            '/try \{\s*\$next\(\$ctx, \$session\);\s*\} finally \{\s*\$this->registry->flush\(\);\s*\}/',
+            $readme,
+            'README FlushMetrics recipe must flush in a finally block',
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\$next\(\$ctx, \$session\);\s*\$this->registry->flush\(\);/',
+            $readme,
+            'README FlushMetrics recipe must not flush only on the normal return path',
+        );
+    }
+
 }
