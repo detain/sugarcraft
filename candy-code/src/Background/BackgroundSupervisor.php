@@ -298,7 +298,12 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         return ($entry['ownerPid'] ?? null) === getmypid();
     }
 
-    /** True when this process has a spawn or a stop in flight. */
+    /**
+     * True when this process has a spawn, a stop or a retired launcher in flight. A
+     * retired launcher counts: {@see advanceLauncherReaps()} runs only from the loop,
+     * so the background poll must stay armed until it is collected, or a failed
+     * spawn's launcher ignoring SIGTERM would never be SIGKILLed while the TUI is idle.
+     */
     private function hasOwnedPending(): bool
     {
         foreach ($this->pendingSpawns as $pending) {
@@ -306,6 +311,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 return true;
             }
         }
+
+        return $this->hasOwnedStop() || $this->hasOwnedReap();
+    }
+
+    /** True when this process has a stop in flight. */
+    private function hasOwnedStop(): bool
+    {
         foreach ($this->pendingStops as $stop) {
             if (self::ownedHere($stop)) {
                 return true;
@@ -315,11 +327,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         return false;
     }
 
-    /** True when this process has a stop in flight. */
-    private function hasOwnedStop(): bool
+    /** True when this process is still reaping a retired launcher. */
+    private function hasOwnedReap(): bool
     {
-        foreach ($this->pendingStops as $stop) {
-            if (self::ownedHere($stop)) {
+        foreach ($this->launcherReaps as $reap) {
+            if (self::ownedHere($reap)) {
                 return true;
             }
         }
@@ -979,10 +991,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
 
         // A stop this process owns is driven to its outcome here, rung by rung, as
         // stopSession() drives it. Quitting mid-stop must not leave the daemon running
-        // while rung 2 or 3 was still due. Every rung has a deadline, so this returns.
-        while ($this->hasOwnedStop()) {
+        // while rung 2 or 3 was still due. A retired launcher is collected in the same
+        // pass, so a launcher that ignores SIGTERM is SIGKILLed before the TUI exits.
+        // Every rung and every reap has a deadline, so this returns.
+        while ($this->hasOwnedStop() || $this->hasOwnedReap()) {
             $this->advanceStops();
-            if ($this->hasOwnedStop()) {
+            $this->advanceLauncherReaps();
+            if ($this->hasOwnedStop() || $this->hasOwnedReap()) {
                 usleep(20_000);
             }
         }

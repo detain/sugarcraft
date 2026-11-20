@@ -13,6 +13,7 @@ use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Support\ProcessReaper;
 
 /**
  * The accept and the stop run from the supervisor's loop (AUD §7 #2, CC-1 row f):
@@ -30,6 +31,9 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
     /** One advance call may never sit on a daemon for this long. */
     private const MAX_ADVANCE_SECONDS = 0.5;
 
+    /** @var list<int> launchers the SIGTERM-ignoring tests started, killed in tearDown if left alive */
+    private array $stubbornLauncherPids = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -44,6 +48,11 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
     protected function tearDown(): void
     {
         $this->reapTrackedForkedChildren();
+        foreach ($this->stubbornLauncherPids as $pid) {
+            if (posix_kill($pid, 0)) {
+                @posix_kill($pid, 9);
+            }
+        }
         $this->tearDownDaemonFixture();
         parent::tearDown();
     }
@@ -383,6 +392,120 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $outcome, 'quitting mid-stop must still drive the stop to its outcome');
         $this->assertSame(BackgroundSessionStatus::Stopped, $supervisor->getSession($id)?->status);
         $this->assertFileDoesNotExist($spawned['ipc']['socketPath'], 'a stop settled by teardown left its socket behind');
+    }
+
+    public function testAFailedSpawnsLauncherThatIgnoresSigtermIsSigkilledAndCollectedByThePollAlone(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        ['pid' => $pid, 'error' => $error, 'started' => $started] = $this->failASpawnWhoseLauncherIgnoresSigterm($supervisor);
+
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'the spawn must fail at its deadline');
+        $this->assertSame([], (new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor));
+        $reaps = new \ReflectionProperty(BackgroundSupervisor::class, 'launcherReaps');
+        $this->assertCount(1, $reaps->getValue($supervisor), 'the failed launcher is retired for collection');
+        $this->assertTrue(posix_kill($pid, 0), 'nothing collects the launcher before the poll runs');
+
+        // With no other session, only the retired launcher can keep the poll armed.
+        $this->assertTrue($supervisor->hasActiveSessions(), 'a retired launcher must keep the background poll armed');
+
+        // Drive the poll the way the host does: tick while it stays armed, within a bound.
+        $deadline = microtime(true) + 15.0;
+        while ($supervisor->hasActiveSessions() && microtime(true) < $deadline) {
+            $supervisor->tick();
+            usleep(20_000);
+        }
+
+        $this->assertFalse($supervisor->hasActiveSessions(), 'the poll must disarm once the launcher is collected');
+        $this->assertSame([], $reaps->getValue($supervisor), 'the poll never collected the retired launcher');
+        $this->assertGreaterThanOrEqual(
+            ProcessReaper::TERMINATE_GRACE_SECONDS,
+            microtime(true) - $started,
+            'SIGTERM is ignored, so only the SIGKILL stage after its grace can have ended the launcher',
+        );
+        $this->assertFalse(posix_kill($pid, 0), 'a launcher ignoring SIGTERM was left alive');
+    }
+
+    public function testTeardownCollectsAFailedSpawnsLauncherThatIgnoresSigterm(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        ['pid' => $pid, 'error' => $error] = $this->failASpawnWhoseLauncherIgnoresSigterm($supervisor);
+
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'the spawn must fail at its deadline');
+        $reaps = new \ReflectionProperty(BackgroundSupervisor::class, 'launcherReaps');
+        $this->assertCount(1, $reaps->getValue($supervisor), 'the failed launcher is retired for collection');
+
+        $started = microtime(true);
+        $supervisor->teardown();
+
+        $this->assertLessThan(
+            ProcessReaper::TERMINATE_GRACE_SECONDS + ProcessReaper::KILL_GRACE_SECONDS + 5.0,
+            microtime(true) - $started,
+            'teardown must collect the launcher within the reap budget',
+        );
+        $this->assertSame([], $reaps->getValue($supervisor), 'teardown left a retired launcher uncollected');
+        $this->assertFalse(posix_kill($pid, 0), 'teardown left a launcher ignoring SIGTERM alive');
+        $this->assertFalse($supervisor->hasActiveSessions(), 'a torn-down supervisor must not stay active');
+    }
+
+    /**
+     * Start a spawn whose launcher ignores SIGTERM, then fail it at its deadline.
+     *
+     * The real launcher is a `php -r` bootstrap that never authenticates. Its handle
+     * is swapped for a shell that traps TERM and execs `sleep`, so the retired
+     * launcher can leave only through SIGKILL. Nothing here is driven by the poll.
+     *
+     * @return array{pid: int, error: ?\Throwable, started: float}
+     */
+    private function failASpawnWhoseLauncherIgnoresSigterm(BackgroundSupervisor $supervisor): array
+    {
+        if (!is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh unavailable');
+        }
+
+        $error = null;
+        $supervisor->spawnSessionAsync(
+            name: 'stubborn launcher',
+            agent: $this->agent(),
+            task: 'never authenticates and ignores SIGTERM',
+            workingDirectory: $this->fixtureHome,
+            timeoutSeconds: 30,
+        )->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $pendingProp = new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns');
+        $pending = $pendingProp->getValue($supervisor);
+        $this->assertCount(1, $pending, 'the launch is recorded as pending');
+        $sessionId = array_key_first($pending);
+
+        // The real launcher is closed here so the stubborn one is the only launcher in flight.
+        $real = $pending[$sessionId]['proc'];
+        @proc_terminate($real, 9);
+        proc_close($real);
+
+        // The ready marker is written only after the trap is installed: a SIGTERM that
+        // arrived first would hit the shell's default disposition and end it at once.
+        $ready = $this->fixtureHome . '/launcher-ready';
+        $stubborn = proc_open(
+            ['/bin/sh', '-c', 'trap "" TERM; : > ' . escapeshellarg($ready) . '; exec sleep 60'],
+            [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($stubborn, 'the stubborn launcher could not start');
+        $pid = (int) proc_get_status($stubborn)['pid'];
+        $this->stubbornLauncherPids[] = $pid;
+        $readyDeadline = microtime(true) + 10.0;
+        while (!is_file($ready) && microtime(true) < $readyDeadline) {
+            usleep(10_000);
+        }
+        $this->assertFileExists($ready, 'the stubborn launcher never installed its SIGTERM trap');
+        $pending[$sessionId]['proc'] = $stubborn;
+        $pendingProp->setValue($supervisor, $pending);
+
+        $started = microtime(true);
+        $supervisor->advanceSpawns(microtime(true) + 60.0);
+
+        return ['pid' => $pid, 'error' => $error, 'started' => $started];
     }
 
     /** @return array{0: string, 1: string} the socket and buffer paths of the one pending spawn */
