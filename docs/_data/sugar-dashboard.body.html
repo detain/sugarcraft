@@ -84,6 +84,10 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The library renders synchronously. Nothing animates on its own: the host calls <code>render()</code> for every frame, so a static frame is always available and motion is the host's choice.</p>
+    <p>Grids and components are immutable. <code>withItem()</code> and <code>setSize()</code> return a changed copy, and the receiver keeps its old state. Keep the returned value, as the Quickstart and Troubleshooting examples do.</p>
+
     <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
@@ -104,10 +108,6 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeIndex() / fadeColor() / metricPosition() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
 <tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / withColumns() / withPalette() / withProcColors() / withProcGradient() / withFamily() / row(ProcRow, row, selected, selectMax, ?graph, followed, ?profile)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colors and mini-graphs</td></tr>
 </table>
-
-    <h3 style="margin-top: 32px;">Concepts</h3>
-    <p>The library renders synchronously. Nothing animates on its own: the host calls <code>render()</code> for every frame, so a static frame is always available and motion is the host's choice.</p>
-    <p>Grids and components are immutable. <code>withItem()</code> and <code>setSize()</code> return a changed copy, and the receiver keeps its old state. Keep the returned value, as the Quickstart and Troubleshooting examples do.</p>
 
     <h3 style="margin-top: 32px;">Configuration</h3>
     <p>The defaults below are the values the classes ship with.</p>

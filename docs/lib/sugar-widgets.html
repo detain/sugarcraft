@@ -162,8 +162,8 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#textedit-optionrow">TextEdit + OptionRow</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#configuration">Configuration</a></li>
             <li class="toc-h3"><a href="#keys">Keys</a></li>
             <li class="toc-h3"><a href="#theming">Theming</a></li>
@@ -268,6 +268,9 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>Each component is an immutable value. Every <code>with*()</code> setter returns a changed copy and leaves the receiver as it was. The interactive components, such as <code>Table</code>, <code>Tabs</code>, <code>Paginator</code> and <code>Timer</code>, take input through <code>update()</code> and return the new state with any command, so they plug into a <code>Program</code> model the same way as a hand-written one.</p>
+
     <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
@@ -330,9 +333,6 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>
-
-    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
-    <p>Each component is an immutable value. Every <code>with*()</code> setter returns a changed copy and leaves the receiver as it was. The interactive components, such as <code>Table</code>, <code>Tabs</code>, <code>Paginator</code> and <code>Timer</code>, take input through <code>update()</code> and return the new state with any command, so they plug into a <code>Program</code> model the same way as a hand-written one.</p>
 
     <h3 id="configuration" style="margin-top: 32px;">Configuration</h3>
     <p>Constructor defaults and the setters that change them. Values are the ones the classes ship with.</p>
