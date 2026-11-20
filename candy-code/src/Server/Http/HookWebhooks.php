@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\Auth\RateLimiter;
@@ -93,8 +94,16 @@ final class HookWebhooks
     private array $delivered = [];
 
     /**
+     * Deliveries whose launch is still waiting on its daemon, by hook and id: a
+     * redelivery that lands meanwhile shares that answer instead of launching again.
+     *
+     * @var array<string, array<string, PromiseInterface<ResponseInterface>>>
+     */
+    private array $launching = [];
+
+    /**
      * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $hooks validated hook map ({@see \SugarCraft\Code\Server\ServerConfig::webhooksValue()})
-     * @param \Closure(string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}},string):array<string,mixed> $run admits the turn through the server context's bg.spawn door; throws when it cannot
+     * @param \Closure(string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}},string):(array<string,mixed>|PromiseInterface<array<string,mixed>>) $run admits the turn through the server context's bg.spawn door; throws when it cannot, and a promise rejects when the launch is refused
      * @param \Closure(): float $clock
      */
     public function __construct(
@@ -119,8 +128,13 @@ final class HookWebhooks
     /**
      * One delivery. $name is the path segment after `/api/hooks/`; $address is
      * the client address the ApiController resolved through `trustedProxies`.
+     *
+     * A launch that waits on its daemon answers when it settles, so the response
+     * comes back as a promise; every refusal before the launch answers at once.
+     *
+     * @return ResponseInterface|PromiseInterface<ResponseInterface>
      */
-    public function handle(ServerRequestInterface $request, string $name, string $address): ResponseInterface
+    public function handle(ServerRequestInterface $request, string $name, string $address): ResponseInterface|PromiseInterface
     {
         $hook = $this->hooks[$name] ?? null;
         if ($hook === null) {
@@ -169,6 +183,11 @@ final class HookWebhooks
 
                     return Responses::json(200, ['ok' => true, 'duplicate' => true]);
                 }
+                if ($deliveryId !== '' && isset($this->launching[$name][$deliveryId])) {
+                    // The same event again while its first launch is still waiting
+                    // on the daemon: the first's answer is this one's answer.
+                    return $this->launching[$name][$deliveryId];
+                }
             }
         } elseif (!\hash_equals($hook['secret'], $request->getHeaderLine(self::SECRET_HEADER))) {
             // Constant-time by law: this comparison's timing is the only signal a
@@ -204,7 +223,7 @@ final class HookWebhooks
             $prompt = \str_contains($hook['prompt'], self::PAYLOAD_PLACEHOLDER)
                 ? \str_replace(self::PAYLOAD_PLACEHOLDER, PromptFence::escape($body), $hook['prompt'])
                 : $hook['prompt'] . self::UNTRUSTED_LABEL . PromptFence::escape($body);
-            $summary = ($this->run)($name, $hook, $prompt);
+            $launch = ($this->run)($name, $hook, $prompt);
         } catch (\Throwable) {
             // A $run failure's cause reaches the server log inside $run
             // (ISS-057: whoever hides it from the client owes it to the sink —
@@ -212,17 +231,47 @@ final class HookWebhooks
             // PCRE's own message, which names nothing private, and this class
             // holds no sink. Either way the client learns only that delivery
             // was refused.
-            return Responses::error(503, 'hook_unavailable', 'the webhook could not start a session');
+            return self::refused();
         }
 
+        if (!$launch instanceof PromiseInterface) {
+            return $this->answered($name, $deliveryId, $launch);
+        }
+
+        $answer = $launch->then(
+            fn (array $summary): ResponseInterface => $this->answered($name, $deliveryId, $summary),
+            static fn (mixed $e): ResponseInterface => self::refused(),
+        );
         if ($deliveryId !== '') {
-            // Recorded only once the turn was admitted AND $run returned: a
-            // 503 delivery keeps its id unrecorded, so the sender's retry of
-            // the same event still runs instead of being answered duplicate.
+            $this->launching[$name][$deliveryId] = $answer;
+            $answer->then(function () use ($name, $deliveryId): void {
+                unset($this->launching[$name][$deliveryId]);
+            });
+        }
+
+        return $answer;
+    }
+
+    /**
+     * The answer to a delivery whose launch was admitted. Its id is recorded only
+     * now: a refused delivery keeps its id unrecorded, so the sender's retry of
+     * the same event still runs instead of being answered duplicate.
+     *
+     * @param array<string, mixed> $summary
+     */
+    private function answered(string $name, string $deliveryId, array $summary): ResponseInterface
+    {
+        if ($deliveryId !== '') {
             $this->recordDelivery($name, $deliveryId);
         }
 
         return Responses::json(200, ['ok' => true] + $summary);
+    }
+
+    /** The generic refusal a delivery the server could not start gets. */
+    private static function refused(): ResponseInterface
+    {
+        return Responses::error(503, 'hook_unavailable', 'the webhook could not start a session');
     }
 
     /**

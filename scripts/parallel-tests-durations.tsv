@@ -1078,6 +1078,7 @@ candy-code/tests/Skills/SlashSkillInvocationTest.php	0.080	14
 candy-code/tests/Config/CandyCodeBodyClaimDriftTest.php	0.080	10
 candy-code/tests/Host/InProcessPeerTest.php	0.057	2
 candy-code/tests/Chat/ScheduleVerdictsTest.php	0.050	3
+candy-code/tests/Server/HookWebhooksAsyncLaunchTest.php	0.050	3
 candy-code/tests/Config/CandyCodeBodyRosterDriftTest.php	0.010	5
 candy-code/tests/Server/DiscoveryReaderParityTest.php	0.080	6
 candy-code/tests/Bundles/BundleInstallTest.php	0.079	20
@@ -1581,6 +1582,7 @@ candy-code/tests/Support/WindowsPipesTest.php	0.010	6
 candy-code/tests/Tools/TaskToolSchemaDriftTest.php	0.010	8
 candy-code/tests/Tools/WebSearchToolTest.php	0.010	28
 candy-code/tests/Workflows/WorkflowTopLevelKeyRosterTest.php	0.010	9
+candy-code/tests/Server/RouterPromiseAnswerTest.php	0.010	1
 candy-code/tests/Agents/WorktreeManagerConfigOriginTest.php	0.009	4
 candy-code/tests/Chat/AwayRecapTest.php	0.009	16
 candy-code/tests/Chat/SummaryRejectedWhenNotSmallerTest.php	0.009	4
