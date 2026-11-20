@@ -447,10 +447,19 @@ final class PluginInstaller extends LibraryInstaller
      * Composer name, and carries the resolved version, so an update rewrites it
      * and the record never keeps the version it was first installed at.
      *
+     * A staged directory that is a symlink is a Composer path repository linked to
+     * a developer's checkout. A record written through the link would land in that
+     * checkout as an untracked file, so such a bundle carries no record. It reads
+     * as a bundle that arrived with its repository, which is what a link is.
+     *
      * @throws \RuntimeException when the record cannot be written into the staged tree
      */
     private function writeSourceRecord(PackageInterface $package, string $path): void
     {
+        if (is_link($path)) {
+            return;
+        }
+
         $record = SourceRecord::fromTrustedRecord(
             self::SOURCE_MARKETPLACE,
             basename($path),

@@ -17,6 +17,7 @@ use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Plugins\Provenance\SourceRecord;
 use SugarCraft\PluginInstaller\PluginInstaller;
+use SugarCraft\PluginInstaller\Tests\Support\LinkingDownloader;
 use SugarCraft\PluginInstaller\Tests\Support\RecordingDownloader;
 use SugarCraft\PluginInstaller\Tests\Support\Scratch;
 use SugarCraft\PluginInstaller\Tests\Support\StagingDownloader;
@@ -557,6 +558,21 @@ final class PluginInstallerTest extends TestCase
 
         $this->assertSame($marketplaceRecord, file_get_contents($bundle . '/.candy-code-source.json'));
         $this->assertSame('1.0.0', self::readSourceRecord($bundle)?->version);
+    }
+
+    public function testAPathRepositoryBundleLeavesNoRecordInsideItsCheckout(): void
+    {
+        // Under the symlink strategy the staged directory is a link to the checkout,
+        // so a record written through it would land in the developer's source tree.
+        $checkout = $this->project . '/checkout/sample-plugin';
+        $this->stageTree($checkout, 'acme/sample-plugin');
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new LinkingDownloader($checkout));
+
+        $installer->install(new InstalledArrayRepository(), self::removablePackage('acme/sample-plugin'));
+
+        $bundle = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->assertTrue(is_link($bundle), 'the path repository must stage as a link to the checkout');
+        $this->assertFileDoesNotExist($checkout . '/' . PluginInstaller::SOURCE_RECORD_FILE, 'the record must not be written into the checkout');
     }
 
     public function testAnUpdateRewritesTheRecordVersion(): void

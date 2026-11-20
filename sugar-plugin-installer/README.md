@@ -63,10 +63,12 @@ Refused with an exception, before anything is written:
   Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share
   one directory. This check sees the packages installed in this project. It does
   not see a tree another project staged under user scope.
-- a `project` scope install whose package name matches a bundle already in the user
-  tier (`~/.candy-code/bundles/<name>`). A project bundle never inherits a user-tier
-  name or its trust, so the install is refused by name, whichever package the user
-  tree came from. Project scope with no home directory has no user tier to clash with.
+- a `project` scope install or update whose package name matches a bundle already in
+  the user tier (`~/.candy-code/bundles/<name>`). A project bundle never inherits a
+  user-tier name or its trust, so the install is refused by name, whichever package the
+  user tree came from. An update is exempt only when that user-tier tree is the
+  package's own tree and no project tree holds it: the update then moves the tree into
+  the project tier. Project scope with no home directory has no user tier to clash with.
 - a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
   Project scope never reads the home directory.
 
@@ -97,6 +99,10 @@ and carries:
 | `url`, `sha` | empty |
 | `version` | the resolved package version; an update rewrites it |
 | `installedAt` | the Unix time of the install or update |
+
+A staged directory that is a symlink, which is what a Composer `path` repository makes
+under its default symlink strategy, gets no record. The link points at the developer's
+checkout, and a record written through it would be an untracked file in that checkout.
 
 The file name is not `.candy-code-source.json`, so a marketplace record already in a
 bundle directory is never overwritten. The record is a description of what the
