@@ -33,6 +33,13 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * proc_close(), which would block the loop. Its handle is reaped by a periodic
  * poll once the kernel releases it, so the loop is never blocked; a child that
  * never dies keeps that poll armed for as long as it lives.
+ *
+ * The kill ladder normally ends with the result: settling cancels every timer,
+ * the ladder's included. One exception is kept on purpose. A group-path launch
+ * (a containment group is named) keeps its ladder poll armed past settle, for at
+ * most the TERM and KILL grace, and only while a group member is still alive, so
+ * a descendant that ignores TERM is not orphaned once its leader has settled the
+ * run. The group-path ladder test in ChildRunLaunchTest pins this behavior.
  */
 final class ChildRunLaunch
 {
