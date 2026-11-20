@@ -679,14 +679,20 @@ final class CheckDocsAssets
      * Every finding names the body and the claim, so a wrong claim is fixed in
      * the body, never by loosening the guard.
      *
+     * $census receives what the legs looked at (`bodies`, `claims`), so a caller
+     * can pin a non-trivial corpus: no findings is vacuous on a tree the legs
+     * never scanned (RT-20).
+     *
+     * @param array{bodies?: int, claims?: int} $census
      * @return list<string>
      */
-    public static function bodyClaims(string $root): array
+    public static function bodyClaims(string $root, ?array &$census = null): array
     {
         // A direct caller may rewrite a body between calls, so this entry point
         // never trusts a memo an earlier call left behind (derive() resets it too).
         self::$readCache = [];
         $bodies = glob("$root/docs/_data/*.body.html") ?: [];
+        $census = ['bodies' => count($bodies), 'claims' => 0];
         if ($bodies === []) {
             return [];
         }
@@ -699,18 +705,19 @@ final class CheckDocsAssets
             $html = self::readCached($file);
 
             // (i) `Name::method(` and `new Name(` — the static-call and
-            // constructor shapes a body uses to name its API.
-            // A body's own example classes (declared in its code) and classes
-            // imported from outside SugarCraft are illustrative or third-party,
-            // not claims about the monorepo, and a fully qualified name outside
-            // SugarCraft\ is the same kind of claim; they are skipped by rule.
-            [$declared, $external] = self::bodyNames($html);
+            // constructor shapes a body uses to name its API. The namespace
+            // prefix is matched in any case, so a wrongly cased SugarCraft\
+            // claim is still checked rather than silently dropped.
+            // A body's own example classes and classes imported from outside
+            // SugarCraft are illustrative or third-party, not claims about the
+            // monorepo, and are skipped by rule.
+            [$declared, $external, $imports] = self::bodyNames($html);
             $claims = [];
-            preg_match_all('~(\\\\?[A-Z][A-Za-z0-9_\\\\]*)::([A-Za-z_]\w*)\s*\(~', $html, $calls, PREG_SET_ORDER);
+            preg_match_all('~(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)::([A-Za-z_]\w*)\s*\(~', $html, $calls, PREG_SET_ORDER);
             foreach ($calls as $hit) {
                 $claims[] = [$hit[1], $hit[2]];
             }
-            preg_match_all('~\bnew\s+(\\\\?[A-Z][A-Za-z0-9_\\\\]*)\s*\(~', $html, $news, PREG_SET_ORDER);
+            preg_match_all('~\bnew\s+(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)\s*\(~', $html, $news, PREG_SET_ORDER);
             foreach ($news as $hit) {
                 $claims[] = [$hit[1], null];
             }
@@ -719,7 +726,8 @@ final class CheckDocsAssets
                 if (self::isIllustrativeName($name, $declared, $external)) {
                     continue;
                 }
-                $problem = self::undeclaredClaim($index, self::shortName($name), $method);
+                $census['claims']++;
+                $problem = self::undeclaredClaim($index, $name, $method, $imports);
                 if ($problem !== null) {
                     $findings[] = "claims: $rel $problem";
                 }
@@ -727,19 +735,28 @@ final class CheckDocsAssets
 
             // (j) `examples/<file>` — a file path, so the extension is required
             // and a bare directory mention ("examples/") is not a claim.
-            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER);
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
             foreach ($examples as $hit) {
-                $path = self::claimOwner($hit[1], $slug) . '/examples/' . $hit[2];
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0])) {
+                    continue;
+                }
+                $census['claims']++;
+                $path = self::claimOwner($hit[1][0], $slug) . '/examples/' . $hit[2][0];
                 if (!is_file("$root/$path")) {
                     $findings[] = "claims: $rel names $path, which does not exist";
                 }
             }
 
-            // (k) `.vhs/<file>` — tapes and rendered GIFs both live beside the
-            // package they demo; the GIF half is also re-checked on the lib pages.
-            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)\.vhs/([A-Za-z0-9_.-]+\.(?:tape|gif))~', $html, $vhs, PREG_SET_ORDER);
+            // (k) `.vhs/<path>` — tapes and rendered GIFs both live beside the
+            // package they demo. Any depth and any extension is a claim: a
+            // subdirectory or a .png named here must exist as written.
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)\.vhs/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)~', $html, $vhs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
             foreach ($vhs as $hit) {
-                $path = self::claimOwner($hit[1], $slug) . '/.vhs/' . $hit[2];
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0])) {
+                    continue;
+                }
+                $census['claims']++;
+                $path = self::claimOwner($hit[1][0], $slug) . '/.vhs/' . $hit[2][0];
                 if (!is_file("$root/$path")) {
                     $findings[] = "vhs: $rel names $path, which does not exist";
                 }
@@ -750,38 +767,65 @@ final class CheckDocsAssets
     }
 
     /**
-     * The class names a body declares in its code blocks, and the short names
-     * it imports from a namespace outside SugarCraft (`use App\Tracker;`).
-     * Only `<pre>` blocks count, so prose that happens to say "class Foo" never
+     * A root-absolute filesystem path (`/path/to/examples/x.sh`) is a placeholder
+     * the reader fills in with their own checkout, not a claim about this tree.
+     * A URL is not one: its first segment is a host (`github.com/...`), which
+     * always carries a dot.
+     */
+    private static function isFilesystemPlaceholder(string $html, int $offset, string $prefix): bool
+    {
+        if ($offset === 0 || $html[$offset - 1] !== '/') {
+            return false;
+        }
+        $first = explode('/', $prefix, 2)[0];
+
+        return !str_contains($first, '.');
+    }
+
+    /**
+     * The class names a body declares in its code blocks, the short names it
+     * imports from SugarCraft (every FQN imported under that short name, keyed
+     * lowercase: one snippet's `Terminal` may be a different class from
+     * another's), and the short names it imports from outside SugarCraft. Only
+     * `<pre>` blocks count, so prose that happens to say "class Foo" never
      * exempts a claim.
      *
-     * @return array{0: array<string,true>, 1: array<string,true>}
+     * @return array{0: array<string,true>, 1: array<string,true>, 2: array<string,list<string>>}
      */
     private static function bodyNames(string $html): array
     {
         $declared = [];
         $external = [];
+        $imports = [];
         preg_match_all('~<pre\b[^>]*>(.*?)</pre>~s', $html, $blocks);
         foreach ($blocks[1] as $code) {
             preg_match_all('~(?:^|[\n>])\s*(?:(?:final|abstract|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~', $code, $decl);
             foreach ($decl[1] as $name) {
                 $declared[$name] = true;
             }
-            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)\s*;~', $code, $imports, PREG_SET_ORDER);
-            foreach ($imports as $hit) {
-                if ($hit[1] !== '' && !str_starts_with($hit[1], 'SugarCraft\\')) {
+            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)\s*;~', $code, $uses, PREG_SET_ORDER);
+            foreach ($uses as $hit) {
+                if ($hit[1] === '') {
+                    continue;
+                }
+                $fqn = $hit[1] . $hit[2];
+                if (self::isSugarcraftName($fqn)) {
+                    $imports[strtolower($hit[2])][$fqn] = $fqn;
+                } else {
                     $external[$hit[2]] = true;
                 }
             }
         }
 
-        return [$declared, $external];
+        return [$declared, $external, array_map('array_values', $imports)];
     }
 
     /**
      * True when a claimed class name is outside the monorepo's claims: a fully
      * qualified name outside SugarCraft\, a bare name the body imports from
-     * outside SugarCraft, or a class the body declares for its own example.
+     * outside SugarCraft, or a bare class the body declares for its own example.
+     * A SugarCraft\ name is never illustrative, even when the body declares a
+     * class with the same short name.
      *
      * @param array<string,true> $declared
      * @param array<string,true> $external
@@ -789,7 +833,10 @@ final class CheckDocsAssets
     private static function isIllustrativeName(string $name, array $declared, array $external): bool
     {
         $trimmed = ltrim($name, '\\');
-        if (str_contains($trimmed, '\\') && !str_starts_with($trimmed, 'SugarCraft\\')) {
+        if (self::isSugarcraftName($trimmed)) {
+            return false;
+        }
+        if (str_contains($trimmed, '\\')) {
             return true;
         }
         $short = self::shortName($trimmed);
@@ -798,54 +845,50 @@ final class CheckDocsAssets
     }
 
     /**
-     * Class declarations under every `<slug>/src/` tree, keyed by short name.
-     * The scan is top-level only (`*\/src`), so a lib's vendor/ copies of
-     * sibling packages never count as declarations of this monorepo.
-     *
-     * @return array{classes: array<string, list<string>>}
+     * True for a name inside the SugarCraft\ namespace. PHP namespaces are
+     * case-insensitive, so the prefix is compared folded.
      */
-    private static function classIndex(string $root): array
+    private static function isSugarcraftName(string $name): bool
     {
-        $classes = [];
-        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
-            $walk = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
-            );
-            foreach ($walk as $file) {
-                /** @var \SplFileInfo $file */
-                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                    continue;
-                }
-                $path = $file->getPathname();
-                preg_match_all(
-                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
-                    self::readCached($path),
-                    $decl,
-                );
-                foreach (array_unique($decl[1]) as $name) {
-                    $classes[$name][] = $path;
-                }
-            }
-        }
-
-        return ['classes' => $classes];
+        return str_starts_with(strtolower(ltrim($name, '\\')), 'sugarcraft\\');
     }
 
     /**
-     * @param array{classes: array<string, list<string>>} $index
+     * Resolves one claimed name against the index and reports why it fails, or
+     * returns null when the claim holds.
+     *
+     * A qualified name, or one the body imports, names the FQN it spells (or the
+     * FQNs its imports spell), so a wrong namespace or a method carried only by a
+     * same-named class elsewhere is named. A bare name the body does not import is
+     * matched by short name across every declaration, as it always was: qualifying
+     * those snippets is a body-by-body edit the guard does not force.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
+     * @param array<string,list<string>> $imports lowercased short name → SugarCraft FQNs
      * @return ?string the finding's claim text, or null when the claim holds
      */
-    private static function undeclaredClaim(array $index, string $short, ?string $method): ?string
+    private static function undeclaredClaim(array $index, string $name, ?string $method, array $imports): ?string
     {
-        if (isset($index['classes'][$short])) {
-            if ($method === null) {
-                return null;
-            }
-            $visited = [];
+        $written = ltrim($name, '\\');
+        $short = self::shortName($written);
+        $lower = strtolower($short);
 
-            return self::declaresMethod($index, $short, $method, $visited)
-                ? null
-                : "names $short::$method(), but no declaration of $short carries that method";
+        $options = str_contains($written, '\\') ? [$written] : ($imports[$lower] ?? []);
+        if ($options !== []) {
+            $known = array_values(array_filter(
+                $options,
+                static fn (string $fqn): bool => isset($index['fqn'][strtolower($fqn)]),
+            ));
+            if ($known === []) {
+                return 'names class ' . implode(' or ', $options) . ', which no <slug>/src declares';
+            }
+
+            return self::methodProblem($index, $known, count($options) === 1 ? $options[0] : $short, $method);
+        }
+
+        $candidates = $index['short'][$lower] ?? [];
+        if ($candidates !== []) {
+            return self::methodProblem($index, $candidates, $short, $method);
         }
 
         $internal = self::internalClass($short);
@@ -860,15 +903,118 @@ final class CheckDocsAssets
     }
 
     /**
-     * True when some declaration of $short carries $method, directly or
-     * through a trait or parent it names. $visited breaks cycles.
+     * Null when the claim holds: no method is claimed, or one of the declared
+     * classes $fqns carries it. Otherwise the finding text, naming $display.
      *
-     * @param array{classes: array<string, list<string>>} $index
+     * @param list<string> $fqns
+     */
+    private static function methodProblem(array $index, array $fqns, string $display, ?string $method): ?string
+    {
+        if ($method === null) {
+            return null;
+        }
+        foreach ($fqns as $fqn) {
+            $visited = [];
+            if (self::declaresMethod($index, $fqn, $method, $visited)) {
+                return null;
+            }
+        }
+
+        return "names $display::$method(), but no declaration of $display carries that method";
+    }
+
+    /**
+     * Class declarations under every `<slug>/src/` tree. `fqn` maps a lowercase
+     * fully qualified name to its declaring files; `short` maps a lowercase short
+     * name to every FQN that declares it. The scan is top-level only (`*\/src`),
+     * so a lib's vendor/ copies of sibling packages never count as declarations.
+     *
+     * @return array{fqn: array<string, list<string>>, short: array<string, list<string>>}
+     */
+    private static function classIndex(string $root): array
+    {
+        $fqn = [];
+        $short = [];
+        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($walk as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
+                $path = $file->getPathname();
+                $text = self::readCached($path);
+                $ns = self::fileScope($text)['ns'];
+                preg_match_all(
+                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    $text,
+                    $decl,
+                );
+                foreach (array_unique($decl[1]) as $name) {
+                    $full = $ns === '' ? $name : "$ns\\$name";
+                    $fqn[strtolower($full)][] = $path;
+                    $short[strtolower($name)][$full] = $full;
+                }
+            }
+        }
+
+        return ['fqn' => $fqn, 'short' => array_map('array_values', $short)];
+    }
+
+    /**
+     * The namespace and the `use` imports of one PHP file, so a name written in
+     * it resolves to the FQN it means rather than to any same-named class.
+     *
+     * @return array{ns: string, uses: array<string,string>} uses keyed lowercase
+     */
+    private static function fileScope(string $text): array
+    {
+        $ns = '';
+        if (preg_match('~^\s*namespace\s+([A-Za-z_][\w\\\\]*)\s*;~m', $text, $m) === 1) {
+            $ns = $m[1];
+        }
+        $uses = [];
+        preg_match_all('~^use\s+\\\\?([A-Za-z_][\w\\\\]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;~m', $text, $imports, PREG_SET_ORDER);
+        foreach ($imports as $hit) {
+            $alias = $hit[2] ?? self::shortName($hit[1]);
+            $uses[strtolower($alias)] = $hit[1];
+        }
+
+        return ['ns' => $ns, 'uses' => $uses];
+    }
+
+    /**
+     * Resolves a name as written in a file to the FQN it names there.
+     *
+     * @param array{ns: string, uses: array<string,string>} $scope
+     */
+    private static function resolveName(string $ref, array $scope): string
+    {
+        if (str_contains($ref, '\\')) {
+            return $ref;
+        }
+        $lower = strtolower($ref);
+        if (isset($scope['uses'][$lower])) {
+            return $scope['uses'][$lower];
+        }
+
+        return $scope['ns'] === '' ? $ref : $scope['ns'] . '\\' . $ref;
+    }
+
+    /**
+     * True when the declaration of $fqn carries $method, directly or through a
+     * trait or parent it names (each resolved in its own file's namespace and
+     * imports). $visited breaks cycles.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
      * @param array<string,true> $visited
      */
-    private static function declaresMethod(array $index, string $short, string $method, array &$visited): bool
+    private static function declaresMethod(array $index, string $fqn, string $method, array &$visited): bool
     {
-        foreach ($index['classes'][$short] ?? [] as $file) {
+        $short = self::shortName($fqn);
+        foreach ($index['fqn'][strtolower($fqn)] ?? [] as $file) {
             if (isset($visited[$file])) {
                 continue;
             }
@@ -886,9 +1032,10 @@ final class CheckDocsAssets
                     return true;
                 }
             }
+            $scope = self::fileScope($text);
             preg_match_all('~\b(?:extends|use|implements)\s+\\\\?([A-Za-z_][\w\\\\]*)~', $text, $refs);
             foreach (array_unique($refs[1]) as $ref) {
-                if (self::declaresMethod($index, self::shortName($ref), $method, $visited)) {
+                if (self::declaresMethod($index, self::resolveName($ref, $scope), $method, $visited)) {
                     return true;
                 }
             }

@@ -181,11 +181,135 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
-    public function testTheRepositoryBodiesPassEveryClaimLeg(): void
+    public function testANestedOrOtherExtensionVhsReferenceIsChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // A subdirectory and a non-tape, non-gif file are claims too: the leg
+        // does not stop at a flat tape-or-gif name.
+        $this->assertSame([
+            'vhs: docs/_data/alpha.body.html names alpha/.vhs/missing/x.gif, which does not exist',
+            'vhs: docs/_data/alpha.body.html names alpha/.vhs/nothere.png, which does not exist',
+        ], $this->claimsFor($root,
+            '<p><code>alpha/.vhs/missing/x.gif</code> and <code>.vhs/nothere.png</code>.</p>',
+        ));
+    }
+
+    public function testAQualifiedClaimIsCheckedAgainstItsOwnNamespace(): void
+    {
+        $root = $this->makeFixture();
+
+        // Widget exists, but only as SugarCraft\Alpha\Widget.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class SugarCraft\Beta\Widget, which no <slug>/src declares'],
+            $this->claimsFor($root, '<pre><code>\SugarCraft\Beta\Widget::make();</code></pre>'),
+        );
+    }
+
+    public function testAQualifiedClaimIsNotSatisfiedByASameNamedClassElsewhere(): void
+    {
+        $root = $this->makeFixture();
+        $this->putBetaWidget($root);
+
+        // beta's Widget carries vanish(); alpha's does not, and the claim names alpha's.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Widget::vanish(), but no declaration of SugarCraft\Alpha\Widget carries that method'],
+            $this->claimsFor($root, '<pre><code>\SugarCraft\Alpha\Widget::vanish();</code></pre>'),
+        );
+    }
+
+    public function testAnImportedNameResolvesToTheClassItImports(): void
+    {
+        $root = $this->makeFixture();
+        $this->putBetaWidget($root);
+
+        $this->assertSame([], $this->claimsFor($root, "<pre><code>use SugarCraft\\Beta\\Widget;\nWidget::vanish();</code></pre>"));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Widget::vanish(), but no declaration of SugarCraft\Alpha\Widget carries that method'],
+            $this->claimsFor($root, "<pre><code>use SugarCraft\\Alpha\\Widget;\nWidget::vanish();</code></pre>"),
+        );
+    }
+
+    public function testABodyImportingOneShortNameFromTwoClassesIsCheckedAgainstEither(): void
+    {
+        $root = $this->makeFixture();
+        // alpha's Gadget\Widget carries vanish(); the plain Widget does not. The
+        // body imports both under the short name Widget in two snippets.
+        $this->put("$root/alpha/src/Gadget/Widget.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha\Gadget;
+
+            final class Widget
+            {
+                public static function vanish(): void
+                {
+                }
+            }
+
+            PHP);
+
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>use SugarCraft\\Alpha\\Widget;</code></pre>'
+            . '<pre><code>use SugarCraft\\Alpha\\Gadget\\Widget;' . "\n" . 'Widget::vanish();</code></pre>',
+        ));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Widget::nope(), but no declaration of Widget carries that method'],
+            $this->claimsFor($root,
+                '<pre><code>use SugarCraft\\Alpha\\Widget;</code></pre>'
+                . '<pre><code>use SugarCraft\\Alpha\\Gadget\\Widget;' . "\n" . 'Widget::nope();</code></pre>',
+            ),
+        );
+    }
+
+    public function testAWronglyCasedSugarcraftNamespaceIsStillChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // PHP namespaces are case-insensitive, so this names alpha's Widget, which
+        // has no vanish(); it must be checked rather than exempted as third-party.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Sugarcraft\Alpha\Widget::vanish(), but no declaration of Sugarcraft\Alpha\Widget carries that method'],
+            $this->claimsFor($root, '<pre><code>\Sugarcraft\Alpha\Widget::vanish();</code></pre>'),
+        );
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>\sugarcraft\alpha\Widget::make();</code></pre>'));
+    }
+
+    public function testAFilesystemPlaceholderPathIsNotAClaim(): void
+    {
+        $root = $this->makeFixture();
+
+        // /path/to/... is the reader's own checkout, not a path in this tree.
+        $this->assertSame([], $this->claimsFor($root,
+            '<p><code>sh /path/to/examples/nothere.sh</code> and <code>/path/to/.vhs/ghost.tape</code>.</p>',
+        ));
+    }
+
+    public function testDeriveRunsTheBodyClaimsLeg(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/docs/_data/alpha.body.html", '<html><body><pre><code>Widget::vanish();</code></pre></body></html>');
+
+        // A leg that bodyClaims() carries but derive() never calls would stay
+        // green on every tree; the finding must come out of derive() itself.
+        $this->assertContains(
+            'claims: docs/_data/alpha.body.html names Widget::vanish(), but no declaration of Widget carries that method',
+            \CheckDocsAssets::derive($root),
+        );
+    }
+
+    public function testTheRepositoryBodiesPassEveryClaimLegAndTheLegsScannedThem(): void
     {
         // The drift pin: a body edit that names a class, method, example or tape
         // the tree does not carry reddens this file, not the published page.
-        $this->assertSame([], \CheckDocsAssets::bodyClaims(\dirname(__DIR__, 2)));
+        // The census floor keeps an empty findings list from passing on a tree the
+        // legs never read (RT-20): the real corpus has 69 bodies and ~1700 claims.
+        $census = [];
+        $this->assertSame([], \CheckDocsAssets::bodyClaims(\dirname(__DIR__, 2), $census));
+        $this->assertGreaterThanOrEqual(60, $census['bodies']);
+        $this->assertGreaterThanOrEqual(1500, $census['claims']);
     }
 
     /** @return list<string> the claim findings for one body written into the fixture */
@@ -300,6 +424,26 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
             . "\n" . '$all = Mode::cases();'
             . '</code></pre>'
             . '<p>Run <code>php examples/demo.php</code> and see <code>.vhs/demo.tape</code>.</p>';
+    }
+
+    /** A second package declaring its own Widget, with the method alpha's lacks. */
+    private function putBetaWidget(string $root): void
+    {
+        $this->put("$root/beta/src/Widget.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Beta;
+
+            final class Widget
+            {
+                public static function vanish(): void
+                {
+                }
+            }
+
+            PHP);
     }
 
     private function put(string $path, string $contents): void
