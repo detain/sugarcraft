@@ -85,7 +85,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
 
     /**
      * @param string|list<string> $command Command + args. A string runs through
-     *                                     `/bin/sh -c`; pass a list to avoid
+     *                                     `/bin/sh -c` (cmd.exe on Windows); pass a list to avoid
      *                                     shell escaping concerns.
      */
     public function __construct(private readonly string|array $command)
@@ -189,15 +189,11 @@ final class CommandBackend implements Backend, TracksActiveChildren
      * (the reply is kept whole, as before), the no-deadline stand-in, and no exit
      * grace, so a descendant holding the pipes is part of the command's budget.
      *
-     * A string command is wrapped in `/bin/sh -c`, the shell `proc_open()` used for
-     * a string before. A list is exec'd directly, with PHP's own argument escaping.
-     * The containment prefix, when the host offers one, wraps either shape.
-     *
      * @param \Closure(int): void $onSpawn Told the child's pid right after it starts
      */
     private function child(string $payload, \Closure $onSpawn): ChildRun
     {
-        $argv = is_string($this->command) ? ['/bin/sh', '-c', $this->command] : $this->command;
+        $argv = self::shellArgv($this->command, PHP_OS_FAMILY === 'Windows');
         /** @var list<string> $argv */
         $argv = array_values((array) ProcessContainment::spawnSpec($argv));
 
@@ -208,6 +204,27 @@ final class CommandBackend implements Backend, TracksActiveChildren
             ->withTimeout(self::NO_DEADLINE_SECONDS)
             ->withExitGrace(null)
             ->withOnSpawn($onSpawn);
+    }
+
+    /**
+     * The argv ChildRun execs for $command. A string runs through the shell
+     * `proc_open()` used for one before: `/bin/sh -c` on POSIX, and on Windows the
+     * COMSPEC shell (cmd.exe) that proc_open() invoked with `/c`. ChildRun takes
+     * only an argv, so the shell is spelled out here; a string argv would fail to
+     * spawn on Windows, where there is no /bin/sh.
+     *
+     * @return list<string>
+     */
+    private static function shellArgv(string|array $command, bool $windows): array
+    {
+        if (is_array($command)) {
+            return $command;
+        }
+        if ($windows) {
+            return [getenv('COMSPEC') ?: 'cmd.exe', '/d', '/s', '/c', $command];
+        }
+
+        return ['/bin/sh', '-c', $command];
     }
 
     /** The message for a command that could not be started. */

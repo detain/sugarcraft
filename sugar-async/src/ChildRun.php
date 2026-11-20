@@ -63,10 +63,9 @@ use function React\Promise\resolve;
  * Stdin: {@see withStdin()} feeds a payload to the child. On POSIX the payload
  * goes through a non-blocking pipe. On the Windows runtime, where a non-blocking
  * stdin pipe cannot be had, a non-empty payload is staged to a private temp file
- * and handed to the child as its stdin descriptor, the way candy-code's
- * CommandBackend stages its history; the child reads it to EOF and the file is
- * removed once the child is reaped. An empty payload gives the child an immediate
- * EOF on every runtime.
+ * and handed to the child as its stdin descriptor; the child reads it to EOF and
+ * the file is removed once the child is reaped. An empty payload gives the child
+ * an immediate EOF on every runtime.
  *
  * Consumers: sugar-dashboard's BoundedCommand runs every child through run() and
  * launch() and maps the ChildResult onto its outcome. candy-code's CommandBackend
