@@ -35,6 +35,7 @@ final class SourceRecord
         public readonly string $url,
         public readonly string $sha,
         public readonly int $installedAt,
+        public readonly string $version = '',
     ) {
     }
 
@@ -42,10 +43,14 @@ final class SourceRecord
      * The same fields {@see read()} returns, built from values this process
      * composed itself. Only the host's install flow may call it: a re-read of a
      * bundle directory must go through {@see read()}, never through this.
+     *
+     * $version is the resolved version the install landed at. It is optional so
+     * a host with no version to report (candy-code's marketplace installs) can
+     * leave it empty; a record written before the field existed reads back as ''.
      */
-    public static function fromTrustedRecord(string $marketplace, string $name, string $sourceType, string $repo, string $url, string $sha, int $installedAt): self
+    public static function fromTrustedRecord(string $marketplace, string $name, string $sourceType, string $repo, string $url, string $sha, int $installedAt, string $version = ''): self
     {
-        return new self($marketplace, $name, $sourceType, $repo, $url, $sha, $installedAt);
+        return new self($marketplace, $name, $sourceType, $repo, $url, $sha, $installedAt, $version);
     }
 
     /**
@@ -94,6 +99,7 @@ final class SourceRecord
             is_string($decoded['url'] ?? null) ? $decoded['url'] : '',
             is_string($decoded['sha'] ?? null) ? $decoded['sha'] : '',
             is_int($decoded['installedAt'] ?? null) ? $decoded['installedAt'] : 0,
+            is_string($decoded['version'] ?? null) ? $decoded['version'] : '',
         );
     }
 
@@ -120,6 +126,7 @@ final class SourceRecord
                     'url' => $this->url,
                     'sha' => $this->sha,
                     'installedAt' => $this->installedAt,
+                    'version' => $this->version,
                 ]);
         } catch (\Throwable $e) {
             return 'bundle source record could not be written: ' . $e->getMessage();

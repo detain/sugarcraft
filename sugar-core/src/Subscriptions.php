@@ -40,8 +40,8 @@ final class Subscriptions
 
     /**
      * Add a key subscription — `produce` runs on a fixed-interval POLL
-     * (every `$intervalSeconds`, default 100 ms), not on keyboard events
-     * (sugar-core-013). The poll is the shipped mechanism: an event-driven
+     * (every `$intervalSeconds`, default 100 ms), not on keyboard events.
+     * The poll is the shipped mechanism: an event-driven
      * key subscription would need the input reader to fan out to
      * subscribers, a redesign the owner gates. Produce closures should be
      * cheap; the interval is the tuning seam.

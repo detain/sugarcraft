@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
 use SugarCraft\Code\Server\Auth\Tickets;
@@ -54,7 +55,8 @@ final class ApiController
     ) {
     }
 
-    public function __invoke(ServerRequestInterface $request): ResponseInterface
+    /** @return ResponseInterface|PromiseInterface<ResponseInterface> a webhook launch answers when it settles */
+    public function __invoke(ServerRequestInterface $request): ResponseInterface|PromiseInterface
     {
         $path = $request->getUri()->getPath();
         $method = $request->getMethod();
