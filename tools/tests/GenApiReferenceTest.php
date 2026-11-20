@@ -234,6 +234,41 @@ final class GenApiReferenceTest extends TestCase
         );
     }
 
+    /**
+     * Page-weight budget for a published fragment. The fragment is most of a docs/lib page, and
+     * nothing else bounds it, so a method-heavy lib could grow its page without any gate noticing.
+     * A fragment over FRAGMENT_BUDGET_BYTES must be named in OVERSIZE_CEILINGS, and may not grow past
+     * its ceiling. The ceilings are a ratchet recorded at the rollout: raising one is an owner
+     * decision, not a test edit.
+     */
+    private const FRAGMENT_BUDGET_BYTES = 1048576;
+
+    /** @var array<string, int> candy-code's fragment is 2,427,565 bytes at the rollout */
+    private const OVERSIZE_CEILINGS = [
+        'candy-code' => 2600000,
+    ];
+
+    public function testFragmentsStayWithinTheirPageWeightBudget(): void
+    {
+        foreach (\array_keys(self::OVERSIZE_CEILINGS) as $slug) {
+            self::assertContains($slug, \ApiReference::ENABLED, "OVERSIZE_CEILINGS names $slug, which is not in ApiReference::ENABLED");
+        }
+
+        foreach (\ApiReference::ENABLED as $slug) {
+            $path = \ApiReference::fragmentPath(self::root(), $slug);
+            if (!\is_file($path)) {
+                continue; // testCommittedFragmentIsCurrent reports a missing fragment
+            }
+            $bytes = (int) \filesize($path);
+            $ceiling = self::OVERSIZE_CEILINGS[$slug] ?? self::FRAGMENT_BUDGET_BYTES;
+            self::assertLessThanOrEqual(
+                $ceiling,
+                $bytes,
+                "docs/_data/$slug.api.html is $bytes bytes, over its budget of $ceiling. Trim the public surface, or raise the ceiling only with an owner decision."
+            );
+        }
+    }
+
     public function testEveryEnabledLibHasOneMarkerInItsBody(): void
     {
         foreach (\ApiReference::ENABLED as $slug) {

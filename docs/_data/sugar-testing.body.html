@@ -77,8 +77,6 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
     <h3 style="margin-top: 32px;">API reference</h3>
     <p>The classes below are the public surface. Each block lists the methods a test typically calls. The full signature table follows the blocks.</p>
 
-        <!-- api-reference:generated -->
-
     <h3 style="margin-top: 24px;">ProgramSimulator</h3>
     <p>Configure first, then queue. Every <code>with*()</code> setter (<code>withRealCmdRunner()</code>, <code>withFakeCmdRunner()</code>, <code>withWindowSize()</code>, <code>withEnvironment()</code>, <code>withColorProfile()</code>) must be called before the first <code>addMsgs()</code>. A later <code>with*()</code> call throws <code>RuntimeException</code> instead of silently discarding the queued messages.</p>
     <div class="feature-grid">
@@ -180,6 +178,8 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 <tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / tempDirPrefix()</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
 </tbody>
 </table>
+
+        <!-- api-reference:generated -->
 
     <h3 style="margin-top: 32px;">Configuration and options</h3>
     <table class="api-table">
