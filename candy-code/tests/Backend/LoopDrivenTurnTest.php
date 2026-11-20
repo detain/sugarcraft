@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Backend\Support\SettledPromise;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Code\Backend\ChildChannel;
+use SugarCraft\Code\Backend\ChildRequestCancelled;
 use SugarCraft\Code\Backend\LoopDrivenTurn;
 use SugarCraft\Code\Backend\PendingAsk;
+use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tests\Backend\Support\ReadStreamCountingLoop;
 use SugarCraft\Code\Tools\ToolCall;
@@ -54,7 +57,7 @@ final class LoopDrivenTurnTest extends TestCase
         });
 
         $resolution = LoopDrivenTurn::run(
-            static fn () => $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk()),
+            static fn () => SettledPromise::askAnswer($channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk())),
             $channel,
             $loop,
         );
@@ -84,7 +87,7 @@ final class LoopDrivenTurnTest extends TestCase
         });
 
         $result = LoopDrivenTurn::run(
-            static fn () => $channel->callClient('tc_4', 'client__probe', ['q' => 'x'], 30),
+            static fn () => SettledPromise::callAnswer($channel->callClient('tc_4', 'client__probe', ['q' => 'x'], 30), 'tc_4'),
             $channel,
             $loop,
         );
@@ -126,7 +129,7 @@ final class LoopDrivenTurnTest extends TestCase
         });
 
         $resolution = LoopDrivenTurn::run(
-            static fn () => $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk()),
+            static fn () => SettledPromise::askAnswer($channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk())),
             $channel,
             $loop,
         );
@@ -199,7 +202,7 @@ final class LoopDrivenTurnTest extends TestCase
 
         $value = LoopDrivenTurn::run(
             static function () use ($channel, $call, &$ticks): string {
-                $resolution = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+                $resolution = SettledPromise::askAnswer($channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk()));
 
                 // The turn keeps running after the EOF, with no question
                 // pending: bare suspensions until the loop has turned enough.
@@ -223,6 +226,142 @@ final class LoopDrivenTurnTest extends TestCase
             $loop->readDispatches,
             'the socket stayed on the loop after the EOF, so the loop woke on it on every turn',
         );
+    }
+
+    /**
+     * On the turn's own fiber an ask returns a PENDING promise, and the loop
+     * resolves it when the `ask_reply` arrives: nothing blocks on the socket.
+     */
+    public function testAnAskOnTheTurnsOwnFiberReturnsAPendingPromiseTheLoopResolves(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $channel = $this->channel($child);
+        $call = new ToolCall('call_20', 'Edit', ['path' => 'p.txt']);
+        $askId = PendingAsk::askId('call_20', 'Edit', ['path' => 'p.txt']);
+
+        $loop->addTimer(0.01, function () use ($parent, $askId): void {
+            self::readFrame($parent);
+            self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => $askId, 'reply' => 'once']);
+        });
+
+        $pendingAtCall = null;
+        $value = LoopDrivenTurn::run(
+            static function () use ($channel, $call, &$pendingAtCall): string {
+                $promise = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+                $settled = false;
+                $promise->then(
+                    static function () use (&$settled): void {
+                        $settled = true;
+                    },
+                    static function () use (&$settled): void {
+                        $settled = true;
+                    },
+                );
+                $pendingAtCall = !$settled;
+
+                $resolution = ChildChannel::awaitTurn(
+                    $promise,
+                    static fn (ChildRequestCancelled $cancelled): PermissionResolved => PermissionResolved::cancelled($cancelled->requestId, $cancelled->getMessage()),
+                );
+
+                return $resolution->permits() ? 'answered' : 'unanswered';
+            },
+            $channel,
+            $loop,
+        );
+
+        self::assertTrue($pendingAtCall, 'the ask must return before the answer arrives, not block for it');
+        self::assertSame('answered', $value, 'the resolved answer reaches the caller');
+    }
+
+    /**
+     * A question the parent never answers (it hangs up while the turn waits on
+     * it) rejects with the request's id, and the approver's cancellation handler
+     * settles it unanswered, never granted.
+     */
+    public function testACancelledAskRejectsWhenTheParentHangsUpWhileTheTurnWaits(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $channel = $this->channel($child);
+        $call = new ToolCall('call_21', 'Edit', []);
+        $askId = PendingAsk::askId('call_21', 'Edit', []);
+
+        $loop->addTimer(0.01, function () use ($parent): void {
+            self::readFrame($parent);
+            \fclose($parent);
+        });
+
+        $outcome = LoopDrivenTurn::run(
+            static function () use ($channel, $call): array {
+                $promise = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+                $rejection = null;
+                $promise->then(null, static function (\Throwable $error) use (&$rejection): void {
+                    $rejection = $error;
+                });
+                $resolution = ChildChannel::awaitTurn(
+                    $promise,
+                    static fn (ChildRequestCancelled $cancelled): PermissionResolved => PermissionResolved::cancelled($cancelled->requestId, $cancelled->getMessage()),
+                );
+
+                return [$rejection, $resolution];
+            },
+            $channel,
+            $loop,
+        );
+
+        [$rejection, $resolution] = $outcome;
+        self::assertInstanceOf(ChildRequestCancelled::class, $rejection);
+        self::assertSame($askId, $rejection->requestId);
+        self::assertTrue($resolution->cancelled);
+        self::assertFalse($resolution->permits(), 'a hang-up is never a grant');
+    }
+
+    /**
+     * An ask raised inside a NESTED fiber of the turn keeps the blocking socket
+     * wait (the named exception in the ChildChannel docblock): its promise comes
+     * back already settled, and the answer still reaches the nested caller.
+     */
+    public function testANestedFiberAskKeepsTheBlockingWaitAndStillReturnsItsAnswer(): void
+    {
+        [$parent, $child] = $this->pair();
+        $loop = new StreamSelectLoop();
+        $channel = $this->channel($child);
+        $call = new ToolCall('call_22', 'Edit', []);
+        $askId = PendingAsk::askId('call_22', 'Edit', []);
+
+        // The answer is already in the socket: the blocking wait reads it.
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => $askId, 'reply' => 'once']);
+
+        $nestedOutcome = LoopDrivenTurn::run(
+            static function () use ($channel, $call): array {
+                $nested = new \Fiber(static function () use ($channel, $call): array {
+                    $promise = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+                    $settled = false;
+                    $promise->then(
+                        static function () use (&$settled): void {
+                            $settled = true;
+                        },
+                        static function () use (&$settled): void {
+                            $settled = true;
+                        },
+                    );
+
+                    return [$settled, SettledPromise::askAnswer($promise)];
+                });
+                $nested->start();
+
+                return $nested->getReturn();
+            },
+            $channel,
+            $loop,
+        );
+
+        [$settledAtReturn, $resolution] = $nestedOutcome;
+        self::assertTrue($settledAtReturn, 'a nested-fiber ask settles before it returns (the blocking wait)');
+        self::assertTrue($resolution->permits());
+        self::assertSame(PermissionReply::Once, $resolution->reply);
     }
 
     private function channel($child): ChildChannel

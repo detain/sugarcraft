@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Backend\Support\SettledPromise;
 use SugarCraft\Code\Backend\ChildChannel;
+use SugarCraft\Code\Backend\ChildRequestCancelled;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -43,7 +45,7 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written, 'accept-edits');
 
-        $resolution = $channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+        $resolution = SettledPromise::askAnswer($channel->ask($call, ForkChannelEofIsUnansweredTest::gateAsk()));
 
         self::assertTrue($resolution->permits());
         self::assertCount(1, $written);
@@ -90,7 +92,7 @@ final class ChildChannelTest extends TestCase
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('call_1', 'Edit', []), 'reply' => 'reject', 'note' => 'no']);
         $written = [];
 
-        $resolution = $this->channel($child, $written)->ask($call, ForkChannelEofIsUnansweredTest::gateAsk());
+        $resolution = SettledPromise::askAnswer($this->channel($child, $written)->ask($call, ForkChannelEofIsUnansweredTest::gateAsk()));
 
         self::assertSame(PermissionReply::Reject, $resolution->reply);
         self::assertSame('no', $resolution->note);
@@ -103,7 +105,7 @@ final class ChildChannelTest extends TestCase
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('call_1', 'Edit', []), 'reply' => 'yes please']);
         $written = [];
 
-        $resolution = $this->channel($child, $written)->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk());
+        $resolution = SettledPromise::askAnswer($this->channel($child, $written)->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk()));
 
         self::assertSame(PermissionReply::Reject, $resolution->reply);
         self::assertFalse($resolution->permits());
@@ -120,7 +122,7 @@ final class ChildChannelTest extends TestCase
         ]);
         $written = [];
 
-        $note = $this->channel($child, $written)->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk())->note;
+        $note = SettledPromise::askAnswer($this->channel($child, $written)->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk()))->note;
 
         self::assertLessThanOrEqual(ChildChannel::MAX_NOTE_BYTES, \strlen($note));
         self::assertTrue(\mb_check_encoding($note, 'UTF-8'), 'the clip split a character');
@@ -135,7 +137,7 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('call_1', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertSame([['steerId' => 's1', 'text' => 'use tabs']], $channel->takeSteers());
         self::assertSame([], $channel->takeSteers(), 'a steer was handed out twice');
         self::assertSame([['kind' => 'cancel_soft']], $channel->takeControls());
@@ -160,14 +162,14 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('call_1', 'Edit', ['p' => 1]), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        $again = $channel->ask(new ToolCall('call_2', 'Edit', ['p' => 1]), ForkChannelEofIsUnansweredTest::gateAsk());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('call_1', 'Edit', ['p' => 1]), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
+        $again = SettledPromise::askAnswer($channel->ask(new ToolCall('call_2', 'Edit', ['p' => 1]), ForkChannelEofIsUnansweredTest::gateAsk()));
         self::assertTrue($again->permits());
         self::assertCount(1, $written, 'the remembered call was asked again');
 
         // A different call is a different question.
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('call_3', 'Edit', ['p' => 2]), 'reply' => 'reject']);
-        self::assertFalse($channel->ask(new ToolCall('call_3', 'Edit', ['p' => 2]), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertFalse(SettledPromise::askAnswer($channel->ask(new ToolCall('call_3', 'Edit', ['p' => 2]), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertCount(2, $written);
     }
 
@@ -184,11 +186,11 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        $again = $channel->ask(
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
+        $again = SettledPromise::askAnswer($channel->ask(
             new ToolCall('c2', 'Bash', ['timeout' => 5000, 'description' => 'List sub again', 'command' => 'cd sub && ls']),
             ForkChannelEofIsUnansweredTest::gateAsk(),
-        );
+        ));
         self::assertTrue($again->permits());
         self::assertCount(1, $written, 'the identical command was asked again under its new caption');
     }
@@ -210,12 +212,12 @@ final class ChildChannelTest extends TestCase
         // Were `ls` put to the parent, this refusal would be its answer.
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c2', 'Bash', ['command' => 'ls', 'description' => 'List again']), 'reply' => 'reject']);
 
-        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'ls', 'description' => 'List again']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'ls', 'description' => 'List again']), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertCount(1, $written, '`ls` was asked again after `always` on `cd <root> && ls`');
 
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'cd / && ls']), 'reply' => 'once']);
-        self::assertTrue($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'cd / && ls']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'cd / && ls']), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertCount(2, $written, 'a cd out of the project is a different call');
     }
 
@@ -233,14 +235,14 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertSame('Bash(make *), Bash(sort *), Bash(uniq *)', $written[0]['alwaysScope']['pattern'] ?? null, 'the frame names the scope, one grant per part');
-        self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'make x g | sort -u | uniq -c']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        self::assertTrue($channel->ask(new ToolCall('c2b', 'Bash', ['command' => 'sort a && make -s g']), ForkChannelEofIsUnansweredTest::gateAsk())->permits(), 'another shape of the same parts');
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'make x g | sort -u | uniq -c']), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c2b', 'Bash', ['command' => 'sort a && make -s g']), ForkChannelEofIsUnansweredTest::gateAsk()))->permits(), 'another shape of the same parts');
         self::assertCount(1, $written, 'a call the grant covers was asked again');
 
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'make x | sh']), 'reply' => 'reject']);
-        self::assertFalse($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'make x | sh']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertFalse(SettledPromise::askAnswer($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'make x | sh']), ForkChannelEofIsUnansweredTest::gateAsk()))->permits());
         self::assertCount(2, $written);
     }
 
@@ -255,10 +257,10 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $call), $finding)->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c1', 'Bash', $call), $finding))->permits());
         self::assertSame(['once', 'reject'], $written[0]['suggestions']);
         self::assertSame('flagged as external-endpoint', $written[0]['alwaysAsks'] ?? null);
-        self::assertFalse($channel->ask(new ToolCall('c2', 'Bash', $call), $finding)->permits());
+        self::assertFalse(SettledPromise::askAnswer($channel->ask(new ToolCall('c2', 'Bash', $call), $finding))->permits());
         self::assertCount(2, $written);
     }
 
@@ -271,8 +273,8 @@ final class ChildChannelTest extends TestCase
         $written = [];
         $channel = $this->channel($child, $written);
 
-        self::assertTrue($channel->ask(new ToolCall('c1', 'Edit', []), $hookAsk)->permits());
-        self::assertFalse($channel->ask(new ToolCall('c2', 'Edit', []), $hookAsk)->permits());
+        self::assertTrue(SettledPromise::askAnswer($channel->ask(new ToolCall('c1', 'Edit', []), $hookAsk))->permits());
+        self::assertFalse(SettledPromise::askAnswer($channel->ask(new ToolCall('c2', 'Edit', []), $hookAsk))->permits());
         self::assertCount(2, $written);
     }
 
@@ -295,7 +297,7 @@ final class ChildChannelTest extends TestCase
             (int) \getmypid() + 1,
         );
 
-        $resolution = $channel->ask(new ToolCall('call_1', 'Task', ['agent' => 'coder']), ForkChannelEofIsUnansweredTest::gateAsk());
+        $resolution = SettledPromise::askAnswer($channel->ask(new ToolCall('call_1', 'Task', ['agent' => 'coder']), ForkChannelEofIsUnansweredTest::gateAsk()));
 
         self::assertSame(PermissionReply::Reject, $resolution->reply);
         self::assertSame(ChildChannel::GRANDCHILD_REFUSAL, $resolution->note);
@@ -322,6 +324,43 @@ final class ChildChannelTest extends TestCase
     /**
      * @param list<array<string, mixed>> $written
      */
+    /**
+     * Outside a loop-driven turn's fiber the blocking wait happens inside the
+     * call, so the promise it returns is already settled with the answer.
+     */
+    public function testAnAskOutsideALoopDrivenTurnReturnsASettledPromiseWithItsAnswer(): void
+    {
+        [$parent, $child] = $this->pair();
+        $askId = PendingAsk::askId('call_50', 'Edit', []);
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => $askId, 'reply' => 'once']);
+        $written = [];
+        $channel = $this->channel($child, $written);
+
+        $promise = $channel->ask(new ToolCall('call_50', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk());
+
+        self::assertNull(SettledPromise::rejection($promise), 'a settled promise that resolved');
+        self::assertTrue(SettledPromise::askAnswer($promise)->permits());
+    }
+
+    /**
+     * A question whose parent is already gone rejects with the request's id:
+     * a cancellation, never a grant.
+     */
+    public function testACancelledAskRejectsWithTheRequestIdWhenTheParentIsGone(): void
+    {
+        [$parent, $child] = $this->pair();
+        \fclose($parent);
+        $written = [];
+        $channel = $this->channel($child, $written);
+        $askId = PendingAsk::askId('call_51', 'Edit', []);
+
+        $rejection = SettledPromise::rejection($channel->ask(new ToolCall('call_51', 'Edit', []), ForkChannelEofIsUnansweredTest::gateAsk()));
+
+        self::assertInstanceOf(ChildRequestCancelled::class, $rejection);
+        self::assertSame($askId, $rejection->requestId);
+        self::assertSame(ChildChannel::PARENT_GONE, $rejection->getMessage());
+    }
+
     private function channel($child, array &$written, string $mode = 'default', ?string $root = null): ChildChannel
     {
         return ChildChannel::new(

@@ -16,9 +16,12 @@ use SugarCraft\Code\Agents\AgentWorkerPool;
  * the approver and the client caller. An approver or client answer that has
  * not arrived yet therefore has to suspend the call stack, not return. The
  * turn runs inside a {@see \Fiber}: {@see ChildChannel::ask()} and
- * {@see ChildChannel::callClient()} suspend it on a pending promise, the loop
- * watches the turn socket, and the `ask_reply` or `client_result` frame
- * resumes it. Nothing blocks on the socket while the user decides.
+ * {@see ChildChannel::callClient()} return promises, and the synchronous
+ * callers reach them through {@see ChildChannel::awaitTurn()}, which suspends
+ * the turn on a pending promise. The loop watches the turn socket, and the
+ * `ask_reply` or `client_result` frame resolves it. Nothing blocks on the
+ * socket while the user decides, except a nested fiber's named exception
+ * (see {@see ChildChannel}).
  *
  * A turn that never suspends runs to its return inside {@see \Fiber::start()}:
  * the loop is not run, and the result is what the turn returned, exactly as
