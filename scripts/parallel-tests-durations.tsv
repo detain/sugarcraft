@@ -2052,6 +2052,7 @@ candy-code/tests/Cli/HomeDirectoryPasswdNoticeTest.php	0.001	2
 candy-code/tests/Cli/NonInteractiveTextSanitizationTest.php	0.001	4
 candy-code/tests/Cli/PermissionRulesSourceTest.php	0.001	3
 candy-code/tests/Cli/ServeWebRootDegradesTest.php	0.001	2
+candy-code/tests/Cli/ServeChannelRefusalNoticeTest.php	0.003	3
 candy-code/tests/Commands/StatusContextAssumedTest.php	0.001	2
 candy-code/tests/Commands/TasksCommandTest.php	0.001	4
 candy-code/tests/Config/McpStartupOrderingDocDriftTest.php	0.001	4

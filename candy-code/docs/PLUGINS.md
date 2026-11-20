@@ -138,8 +138,18 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    not world-writable and, when the posix extension is available, owned by
    your account, or the entry is refused. A trusted name records who consented;
    it says nothing about the file being intact.
+3. **Only a user-tier copy can use the name.** Trust is never inherited by a
+   project-tier bundle (one under `<repo>/.candy-code/bundles`). A project copy
+   that carries a trusted name has its channel and hook content refused, and
+   the launch says so; its commands, skills and agents still load, as they do
+   for any project bundle. When a user-tier and a project-tier bundle share a
+   name, the user-tier copy is the one that loads and the project copy is
+   skipped with a warning, trusted or not. The skipped copy's commands, skills,
+   agents and hooks do not load either, so a user-tier copy that lacks one of
+   them hides it; to keep the project copy's content, move that copy under a
+   different name.
 
-**Bundle hooks ride the same gate.** A bundle named in
+**Bundle hooks ride the same gate.** A user-tier bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
 ordinary hook pipeline — same containment and private-bytes checks, and a
 broken hook file refuses *itself* with a notice while the launch continues.
@@ -249,8 +259,8 @@ system rows in the transcript:
   the manifest, nor an **inline `hooks` object** inside `plugin.json` (the
   declined-surface reader answers with the manifest path — `hooksPaths()`
   names where the hooks ride inside it — while the decline notice names the
-  affected bundles). A bundle named in `trustedBundleChannels` reverses this
-  for its `hooks/` files, through the gate described above; inline
+  affected bundles). A user-tier bundle named in `trustedBundleChannels` reverses
+  this for its `hooks/` files, through the gate described above; inline
   `plugin.json` hook manifests remain refused on every path, as their shape
   is not the accepted one yet. Lifecycle hooks execute arbitrary programs at
   every session event; the hooks that do run are declared in the project's
@@ -301,9 +311,9 @@ What matters from the plugin side:
   repository is never read, which is the same law that keeps a bundle's
   `.mcp.json` from auto-starting;
 - bundles run their commands, skills and agents always; their hooks and
-  channel/subscriber entrypoints only when the bundle is named in
-  `trustedBundleChannels`; and MCP servers only through a declaration you
-  imported deliberately.
+  channel/subscriber entrypoints only when a user-tier bundle is named in
+  `trustedBundleChannels` (a project-tier copy of that name is refused); and
+  MCP servers only through a declaration you imported deliberately.
 
 ## Installing and listing
 
