@@ -5864,21 +5864,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private static function drainFrames(string &$buffer, bool &$corrupt = false): array
     {
         $frames = [];
+        // An integer cursor walks the buffer in place. Re-slicing the tail
+        // after every frame copies what is left each time, which is quadratic
+        // when one read carries many frames (rank 8). The buffer is cut once,
+        // after the walk, and only when a whole frame was consumed.
+        $cursor = 0;
+        $size = strlen($buffer);
 
-        while (strlen($buffer) >= 4) {
-            $header = unpack('N', substr($buffer, 0, 4));
+        while ($size - $cursor >= 4) {
+            $header = unpack('N', $buffer, $cursor);
             $length = is_array($header) ? (int) ($header[1] ?? 0) : 0;
             if ($length <= 0 || $length > self::MAX_FRAME_BYTES) {
                 $buffer = '';
                 $corrupt = true;
-                break;
+
+                return $frames;
             }
-            if (strlen($buffer) < 4 + $length) {
+            if ($size - $cursor < 4 + $length) {
                 break;
             }
 
-            $body = substr($buffer, 4, $length);
-            $buffer = substr($buffer, 4 + $length);
+            $body = substr($buffer, $cursor + 4, $length);
+            $cursor += 4 + $length;
 
             // allowed_classes => false: a hostile/corrupt payload must never
             // be able to instantiate anything (see encodeEvent()).
@@ -5888,9 +5895,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // and the bytes disagree, so the offset is no longer trusted.
                 $buffer = '';
                 $corrupt = true;
-                break;
+
+                return $frames;
             }
             $frames[] = $decoded;
+        }
+
+        if ($cursor > 0) {
+            $buffer = (string) substr($buffer, $cursor);
         }
 
         return $frames;
