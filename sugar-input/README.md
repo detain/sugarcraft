@@ -140,7 +140,7 @@ $events = $decoder->flushDeferredEscape();
 
 // Observability counters (all zeroed by reset())
 $decoder->drainedReplyCount();    // replies surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount();  // complete sequences consumed with no event
+$decoder->droppedUnknownCount();  // sequences consumed or refused with no event
 $decoder->discardedPasteBytes();  // bytes dropped past the paste cap
 
 // Clear every buffer, flag and counter — the documented recovery lever
@@ -405,13 +405,13 @@ Three counters on `EscapeDecoder` tell the silent paths apart:
 
 ```php
 $decoder->drainedReplyCount();    // replies recognized and surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount();  // complete sequences consumed with no event (including overflowed CSI)
+$decoder->droppedUnknownCount();  // sequences consumed or refused with no event (including overflowed CSI)
 $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
-`droppedUnknownCount()` means complete sequences were consumed but produced no
-event. That includes genuinely unrecognized sequences — private CSIs whose lead
+`droppedUnknownCount()` means sequences were consumed or refused without producing
+an event. That includes genuinely unrecognized sequences — private CSIs whose lead
 parameter byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
 finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
 unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
@@ -422,7 +422,8 @@ is a complete `?`- or `>`-prefixed private report: those drain as
 `TerminalReplyEvent`s. So a non-zero count does not necessarily mean this
 terminal sends frames the decoder fails to model. A sequence longer than the
 128-byte cap is refused and counted once in `droppedUnknownCount()`; its
-trailing bytes are swallowed up to the final byte and never counted again.
+trailing bytes are swallowed up to the final byte, or up to a fresh ESC, which
+starts a new sequence and is decoded as normal. Those bytes are never counted again.
 `discardedPasteBytes()` is the paste-only counter and never moves for a
 sequence. `reset()` zeroes all counters along with the buffers.
 
