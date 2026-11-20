@@ -223,6 +223,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          # DepthScoreDriftTest regenerates docs/DEPTH-SCORES.md from the commit its
+          # header names, which can predate a depth-1 checkout. The full history
+          # keeps that commit resolvable instead of letting the guard fail on a shallow clone.
+          fetch-depth: 0
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:

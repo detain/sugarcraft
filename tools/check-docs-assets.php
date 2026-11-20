@@ -47,6 +47,20 @@ declare(strict_types=1);
  *     `docs/_data/` and the documented non-advertised roster — and demands
  *     exact two-way equality with the `<loc>` rows, printing both directions
  *     of the diff on failure.
+ *  i) body class and method claims: every `Name::method(` and `new Name(` a
+ *     `docs/_data/<slug>.body.html` names must resolve to a class declared
+ *     under a `<slug>/src/` tree (or a PHP built-in), and `Name::method(` must
+ *     name a public method of that class, directly or through the traits and
+ *     parents it pulls in. A bare PascalCase name alone in an inline `<code>`
+ *     span (`<code>ResizeMsg</code>`, `<code>Renderer</code>`) is a class claim
+ *     too. The bare-name rule and its exclusion list (test classes, env vars,
+ *     key names, products, config directives, third-party names) are documented
+ *     at BARE_CLASS_SHAPE and isNonClassName() below.
+ *  j) body example claims: every `examples/<file>` path a body names must exist
+ *     under the package it belongs to.
+ *  k) body vhs claims: every `.vhs/<file>.tape|gif` a body names must exist.
+ *     Legs (i)-(k) resolve a bare path against the body's own slug; a `<slug>/`
+ *     prefix or a GitHub `…/<slug>/blob/master/` URL names another package.
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -66,6 +80,191 @@ final class CheckDocsAssets
 
     /** The published site origin every sitemap `<loc>` row must sit under. */
     private const SITE_BASE = 'https://sugarcraft.github.io/';
+
+    /**
+     * Leg (i), bare names: an inline `<code>` span whose whole text is a
+     * PascalCase identifier with at least one lowercase letter (`Renderer`,
+     * `ResizeMsg`, `ITerm2`, `MySQL`) is a class claim, as a `Name::method()`
+     * is. A single-word name is checked too, so an English word, key name or
+     * option value written alone in a code span must resolve to a class or be
+     * excluded by name below.
+     *
+     * Names that are not classes and are excluded from that check:
+     *  - fixture and test classes (a `*Test` or `*Tests` suffix): they live
+     *    under `<slug>/tests/`, which the class index never reads;
+     *  - environment variables (all capitals with underscores, or a listed
+     *    Windows variable);
+     *  - keyboard key names (EXCLUDED_KEY_NAMES);
+     *  - products, tools and protocols a body names as text (EXCLUDED_PRODUCT_NAMES);
+     *  - configuration directives the body quotes from ssh/OS config files
+     *    (EXCLUDED_CONFIG_NAMES);
+     *  - names for things outside the monorepo, upstream Go identifiers and modes,
+     *    a terminfo capability, PHP package interfaces and a TypeScript component
+     *    (EXCLUDED_THIRD_PARTY_NAMES);
+     *  - registered tool names and enum cases, constants and methods the monorepo
+     *    declares (nonClassSymbols()).
+     * A name the body imports or declares itself is illustrative, as in leg (i).
+     */
+    private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*$~';
+
+    /**
+     * A fully qualified name inside the SugarCraft\ namespace written alone in a
+     * code span (`<code>SugarCraft\Vterm\Terminal</code>`), with an optional
+     * leading backslash. The namespace prefix is matched in any case, as
+     * isSugarcraftName() does. A relative qualified span (`Util\Width`) is not
+     * matched: it is relative to the body's own namespace, which this guard does
+     * not resolve, so it is left unchecked rather than checked wrongly.
+     */
+    private const BARE_SUGARCRAFT_SHAPE = '~^\\\\?(?i:sugarcraft)\\\\(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9]*$~';
+
+    /**
+     * Attribute groups that may stand before the keyword of a class, interface,
+     * trait or enum declaration on the same line (`#[\Attribute] enum Lamp: string`).
+     * One level of nested brackets in an argument is kept whole, as in
+     * attributeBodies(). Every declaration scan uses it, so an attributed
+     * declaration is indexed the same as a bare one.
+     */
+    private const DECLARATION_ATTRIBUTES = '(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*';
+
+    /**
+     * @var list<string> keyboard key names a body writes in code spans; `ReleaseA`
+     *      is the Kitty release-event form of a key, the name KeyEvent documents
+     */
+    private const EXCLUDED_KEY_NAMES = [
+        'PageUp', 'PageDown', 'PgUp', 'PgDn', 'ArrowUp', 'ArrowDown', 'ArrowLeft',
+        'ArrowRight', 'WheelUp', 'WheelDown', 'ReleaseA',
+    ];
+
+    /** @var list<string> environment variables that are not all capitals */
+    private const EXCLUDED_ENV_NAMES = ['ComSpec'];
+
+    /** @var list<string> products, tools and protocols written as plain text */
+    private const EXCLUDED_PRODUCT_NAMES = [
+        'MySQL', 'MariaDB', 'ITerm2', 'WindowsTerminal', 'JetBrainsMono',
+    ];
+
+    /**
+     * @var list<string> names a body writes for something outside the monorepo:
+     *      an upstream Go identifier (charmbracelet vhs modes, bubbletea options,
+     *      bubbles list and glamour renderer names), a PHP package's interface or
+     *      class (psr/log, react/event-loop), a candy-code-web TypeScript component,
+     *      a terminfo capability (`Tc`, read by infocmp), or an output string a body
+     *      quotes. None is declared under a `<slug>/src/` tree, and the body names
+     *      each one as the thing it is, not as a claim.
+     */
+    private const EXCLUDED_THIRD_PARTY_NAMES = [
+        'RecordOnly', 'ReplayOnly', 'Passthrough', 'WithReporter', 'WithSignalHandler',
+        'SetFilterText', 'TermRenderer', 'LoggerInterface', 'ExtUvLoop', 'StreamSelectLoop',
+        'DiffView', 'HIcd', 'Tc',
+    ];
+
+    /** @var list<string> ssh and OS config directives quoted in code spans */
+    private const EXCLUDED_CONFIG_NAMES = [
+        'HostName', 'ProxyCommand', 'ProxyJump', 'LocalCommand', 'StrictHostKeyChecking',
+        'UserKnownHostsFile', 'GlobalKnownHostsFile', 'IdentityAgent', 'IdentityFile',
+        'CertificateFile', 'ForceCommand', 'ClientAliveInterval', 'ExecReload',
+    ];
+
+    /**
+     * PHP class, interface and enum names a body may write as a bare code span
+     * (`<code>Countable</code>`) without a SugarCraft declaration.
+     *
+     * A bare name is resolved against this fixed list rather than the host's
+     * loaded classes: `class_exists()` answers differently on a host that has or
+     * lacks an extension, so a span would pass on one machine and fail on another.
+     * The list is every class and interface the Core, SPL, date, Reflection, json
+     * and standard extensions declare under PHP 8.3, the set a PHP 8.3 build
+     * always carries. standard contributes AssertionError, Directory,
+     * __PHP_Incomplete_Class and php_user_filter.
+     * testTheCoreClassListIsTheHostsCoreExtensionClasses pins it to the host. PDO, PDOException and PDOStatement are the exception: they come from
+     * the PDO extension, and stay listed because they were listed before. FFI is the
+     * other extension name listed: sugar-pty requires ext-ffi, and its docs body
+     * writes FFI::cdef(). Matched case-insensitively, as PHP matches class names. A
+     * method claim (`Name::method()`) on a PDO or FFI name is checked against a fixed
+     * method list (fixedCoreMethods()), so it does not depend on the host either;
+     * other core names resolve through internalClass().
+     *
+     * @var list<string>
+     */
+    private const CORE_CLASS_NAMES = [
+        'AllowDynamicProperties', 'AppendIterator', 'ArgumentCountError', 'ArithmeticError',
+        'ArrayAccess', 'ArrayIterator', 'ArrayObject', 'AssertionError', 'Attribute', 'BackedEnum',
+        'BadFunctionCallException', 'BadMethodCallException', 'CachingIterator',
+        'CallbackFilterIterator', 'ClosedGeneratorException', 'Closure', 'CompileError',
+        'Countable', 'DateError', 'DateException', 'DateInterval',
+        'DateInvalidOperationException', 'DateInvalidTimeZoneException',
+        'DateMalformedIntervalStringException', 'DateMalformedPeriodStringException',
+        'DateMalformedStringException', 'DateObjectError', 'DatePeriod', 'DateRangeError',
+        'DateTime', 'DateTimeImmutable', 'DateTimeInterface', 'DateTimeZone',
+        'Directory', 'DirectoryIterator', 'DivisionByZeroError', 'DomainException', 'EmptyIterator', 'Error',
+        'ErrorException', 'Exception', 'FFI', 'Fiber', 'FiberError', 'FilesystemIterator',
+        'FilterIterator', 'Generator', 'GlobIterator', 'InfiniteIterator', 'InternalIterator',
+        'InvalidArgumentException', 'Iterator', 'IteratorAggregate', 'IteratorIterator',
+        'JsonException', 'JsonSerializable', 'LengthException', 'LimitIterator',
+        'LogicException', 'MultipleIterator', 'NoRewindIterator', 'OuterIterator',
+        'OutOfBoundsException', 'OutOfRangeException', 'OverflowException', 'Override',
+        'ParentIterator', 'ParseError', 'PDO', 'PDOException', 'PDOStatement', 'RangeException',
+        'RecursiveArrayIterator',
+        'RecursiveCachingIterator', 'RecursiveCallbackFilterIterator',
+        'RecursiveDirectoryIterator', 'RecursiveFilterIterator', 'RecursiveIterator',
+        'RecursiveIteratorIterator', 'RecursiveRegexIterator', 'RecursiveTreeIterator',
+        'Reflection', 'ReflectionAttribute', 'ReflectionClass', 'ReflectionClassConstant',
+        'ReflectionEnum', 'ReflectionEnumBackedCase', 'ReflectionEnumUnitCase',
+        'ReflectionException', 'ReflectionExtension', 'ReflectionFiber', 'ReflectionFunction',
+        'ReflectionFunctionAbstract', 'ReflectionGenerator', 'ReflectionIntersectionType',
+        'ReflectionMethod', 'ReflectionNamedType', 'ReflectionObject', 'ReflectionParameter',
+        'ReflectionProperty', 'ReflectionReference', 'ReflectionType', 'ReflectionUnionType',
+        'ReflectionZendExtension', 'Reflector', 'RegexIterator', 'ReturnTypeWillChange',
+        'RuntimeException', 'SeekableIterator', 'SensitiveParameter', 'SensitiveParameterValue',
+        'Serializable', 'SplDoublyLinkedList', 'SplFileInfo', 'SplFileObject', 'SplFixedArray',
+        'SplHeap', 'SplMaxHeap', 'SplMinHeap', 'SplObjectStorage', 'SplObserver',
+        'SplPriorityQueue', 'SplQueue', 'SplStack', 'SplSubject', 'SplTempFileObject',
+        'stdClass', 'Stringable', 'Throwable', 'Traversable', 'TypeError', 'UnderflowException',
+        'UnexpectedValueException', 'UnhandledMatchError', 'UnitEnum', 'ValueError', 'WeakMap',
+        'WeakReference', '__PHP_Incomplete_Class', 'php_user_filter',
+    ];
+
+    /**
+     * Methods a body may claim on the PDO class, lowercased, for the same reason as
+     * PDO_STATEMENT_METHODS. Driver-specific methods (sqlite*, pgsql*, mysql*) are left
+     * out: they exist only when a driver is loaded, so a claim on one is named everywhere.
+     * testThePdoMethodListMatchesTheExtensionWhenLoaded pins it.
+     *
+     * @var list<string>
+     */
+    private const PDO_METHODS = [
+        '__construct', 'begintransaction', 'commit', 'errorcode', 'errorinfo', 'exec',
+        'getattribute', 'getavailabledrivers', 'intransaction', 'lastinsertid', 'prepare',
+        'query', 'quote', 'rollback', 'setattribute',
+    ];
+
+    /**
+     * Methods a body may claim on the PDO classes, lowercased. ext-pdo is not part of
+     * every PHP build, so a method claim is checked against this list rather than the
+     * host's reflection: a loaded extension must not flip the verdict.
+     * testThePdoStatementMethodListMatchesTheExtensionWhenLoaded pins it to the
+     * extension's own method set wherever ext-pdo is loaded.
+     *
+     * @var list<string>
+     */
+    private const PDO_STATEMENT_METHODS = [
+        'bindcolumn', 'bindparam', 'bindvalue', 'closecursor', 'columncount',
+        'debugdumpparams', 'errorcode', 'errorinfo', 'execute', 'fetch', 'fetchall',
+        'fetchcolumn', 'fetchobject', 'getattribute', 'getcolumnmeta', 'getiterator',
+        'nextrowset', 'rowcount', 'setattribute', 'setfetchmode',
+    ];
+
+    /**
+     * Methods a body may claim on the FFI class, lowercased, for the same reason as
+     * PDO_STATEMENT_METHODS: ext-ffi is not in every build, so the verdict must not
+     * follow the host. testTheFfiMethodListMatchesTheExtensionWhenLoaded pins it.
+     *
+     * @var list<string>
+     */
+    private const FFI_METHODS = [
+        'cdef', 'load', 'scope', 'new', 'free', 'cast', 'type', 'typeof', 'arraytype',
+        'addr', 'sizeof', 'alignof', 'memcpy', 'memcmp', 'memset', 'string', 'isnull',
+    ];
 
     /**
      * Chrome-bearing pages deliberately OUT of the advertised universe:
@@ -198,6 +397,7 @@ final class CheckDocsAssets
             self::navBlockIdentity($root),
             self::sitemapCoverage($root),
             self::htmlResidue($root),
+            self::bodyClaims($root),
         );
 
         // RT-20: a findings-only answer is vacuously green on a tree the legs
@@ -660,6 +860,903 @@ final class CheckDocsAssets
         }
 
         return [];
+    }
+
+    /**
+     * (i)-(k) the mechanically checkable claims in the hand-written bodies
+     * (`docs/_data/<slug>.body.html`), which reach the published site verbatim.
+     * Every finding names the body and the claim, so a wrong claim is fixed in
+     * the body, never by loosening the guard.
+     *
+     * Scope: leg (i) reads static calls (`Name::method(`) and constructors
+     * (`new Name(`, in code only). An instance call (`$var->method(`) is not
+     * read, so a method a body names on an object is not checked here.
+     *
+     * $census receives what the legs looked at (`bodies`, `claims`), so a caller
+     * can pin a non-trivial corpus: no findings is vacuous on a tree the legs
+     * never scanned (RT-20).
+     *
+     * @param array{bodies?: int, claims?: int} $census
+     * @return list<string>
+     */
+    public static function bodyClaims(string $root, ?array &$census = null): array
+    {
+        // A direct caller may rewrite a body between calls, so this entry point
+        // never trusts a memo an earlier call left behind (derive() resets it too).
+        self::$readCache = [];
+        $bodies = glob("$root/docs/_data/*.body.html") ?: [];
+        $census = ['bodies' => count($bodies), 'claims' => 0];
+        if ($bodies === []) {
+            return [];
+        }
+        $index = self::classIndex($root);
+        $nonClass = self::nonClassSymbols($root);
+
+        $findings = [];
+        foreach ($bodies as $file) {
+            $rel = self::relative($root, $file);
+            $slug = (string) preg_replace('~\.body\.html$~', '', basename($file));
+            $html = self::readCached($file);
+
+            // (i) `Name::method(` and `new Name(` — the static-call and
+            // constructor shapes a body uses to name its API. The namespace
+            // prefix is matched in any case, so a wrongly cased SugarCraft\
+            // claim is still checked rather than silently dropped.
+            // A body's own example classes and classes imported from outside
+            // SugarCraft are illustrative or third-party, not claims about the
+            // monorepo, and are skipped by rule.
+            [$declared, $external, $imports] = self::bodyNames($html);
+            $claims = [];
+            preg_match_all('~(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)::([A-Za-z_]\w*)\s*\(~', $html, $calls, PREG_SET_ORDER);
+            foreach ($calls as $hit) {
+                $claims[] = [$hit[1], $hit[2]];
+            }
+            // A constructor is a code claim only inside code: prose such as "a new
+            // Session (opened by the loop)" names no class the body uses.
+            preg_match_all('~<(pre|code)\b[^>]*>(.*?)</\1>~s', $html, $codeSpans, PREG_PATTERN_ORDER);
+            preg_match_all('~\bnew\s+(\\\\?(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9_]*)\s*\(~', implode("\n", $codeSpans[2]), $news, PREG_SET_ORDER);
+            foreach ($news as $hit) {
+                $claims[] = [$hit[1], null];
+            }
+            foreach (array_unique(array_map('serialize', $claims)) as $key) {
+                [$name, $method] = unserialize($key);
+                if (self::isIllustrativeName($name, $declared, $external, $imports)) {
+                    continue;
+                }
+                $census['claims']++;
+                $problem = self::undeclaredClaim($index, $name, $method, $imports);
+                if ($problem !== null) {
+                    $findings[] = "claims: $rel $problem";
+                }
+            }
+
+            // (i) bare names: a PascalCase name alone in an inline code span
+            // names a class too (`<code>ResizeMsg</code>`), so it must resolve
+            // like a `Name::method()` claim. Only inline spans count; a `<pre>`
+            // block is code that the static-call and constructor shapes above
+            // already read. A class the snippet declares does not exempt the
+            // prose span of that name: the span may be a SugarCraft claim, and
+            // only a resolvable class settles it. An explicit import from outside
+            // SugarCraft still does, since the `use` says which class is meant.
+            // That exemption is body-wide, not per snippet: a prose span has no
+            // snippet to belong to, so a same-named SugarCraft claim in the same
+            // body is exempt too. The trade-off is deliberate (pinned by
+            // testAnExplicitImportFromOutsideSugarcraftStillExemptsItsBareSpan).
+            foreach (self::bareCodeSpanNames($html) as $name) {
+                if (self::isIllustrativeName($name, [], $external, $imports) || self::isNonClassName($name, $nonClass)) {
+                    continue;
+                }
+                if (str_contains($name, '\\') && self::isNamespaceReference($name, $index)) {
+                    continue;
+                }
+                $census['claims']++;
+                $problem = self::undeclaredClaim($index, $name, null, $imports);
+                if ($problem !== null) {
+                    $findings[] = "claims: $rel $problem";
+                }
+            }
+
+            // (j) `examples/<file>` — a file path, so the extension is required
+            // and a bare directory mention ("examples/") is not a claim.
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+            foreach ($examples as $hit) {
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0]) || self::isForeignUrl($html, $hit[0][1], $hit[1][0])) {
+                    continue;
+                }
+                $census['claims']++;
+                $path = self::claimOwner($hit[1][0], $slug) . '/examples/' . $hit[2][0];
+                if (!is_file("$root/$path")) {
+                    $findings[] = "claims: $rel names $path, which does not exist";
+                }
+            }
+
+            // (k) `.vhs/<path>` — tapes and rendered GIFs both live beside the
+            // package they demo. Any depth and any extension is a claim: a
+            // subdirectory or a .png named here must exist as written.
+            preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)\.vhs/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)~', $html, $vhs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+            foreach ($vhs as $hit) {
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0]) || self::isForeignUrl($html, $hit[0][1], $hit[1][0])) {
+                    continue;
+                }
+                $census['claims']++;
+                $path = self::claimOwner($hit[1][0], $slug) . '/.vhs/' . $hit[2][0];
+                if (!is_file("$root/$path")) {
+                    $findings[] = "vhs: $rel names $path, which does not exist";
+                }
+            }
+        }
+
+        return array_values(array_unique($findings));
+    }
+
+    /**
+     * The bare class-shaped names a body writes alone in an inline code span
+     * (`<code>ResizeMsg</code>`), with `<pre>` blocks removed first. A span with
+     * anything else in it (`<code>Foo::bar()</code>`, `<code>php examples/x.php</code>`)
+     * is not a bare name and is read by the other legs.
+     *
+     * @return list<string>
+     */
+    private static function bareCodeSpanNames(string $html): array
+    {
+        $prose = (string) preg_replace('~<pre\b[^>]*>.*?</pre>~s', '', $html);
+        preg_match_all('~<code\b[^>]*>([^<]*)</code>~', $prose, $spans);
+
+        $names = [];
+        foreach ($spans[1] as $span) {
+            $name = trim($span);
+            $bare = preg_match(self::BARE_CLASS_SHAPE, $name) === 1 || preg_match(self::BARE_SUGARCRAFT_SHAPE, $name) === 1;
+            if ($bare && preg_match('~[a-z]~', $name) === 1) {
+                $names[] = $name;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * True when a qualified name a body writes alone is a namespace, not a class:
+     * some declared class sits under it (`SugarCraft\Pty\Contract` names the
+     * directory of contract types). A namespace span is prose about where a
+     * class lives, so it is never a class claim.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
+     */
+    private static function isNamespaceReference(string $name, array $index): bool
+    {
+        $prefix = strtolower(ltrim($name, '\\')) . '\\';
+        foreach (array_keys($index['fqn']) as $fqn) {
+            if (str_starts_with($fqn, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The names the monorepo itself declares as something other than a class:
+     * every method, enum case and constant under a `<slug>/src/` tree, every
+     * registered tool name a source file declares (see below), every class a
+     * `<slug>/tests/` tree declares (a test fixture, never a library class), and
+     * every package name (the Pascal form of a `<slug>/` directory, such as
+     * `SugarSpring`). Keys are lowercase.
+     *
+     * The exemption is by spelling alone, across every source tree, so a bare
+     * class claim whose short name matches a method, enum case or constant
+     * elsewhere in src is not checked. That collision is the accepted cost: a
+     * bare span carries no context that says which kind of name it means, and
+     * the monorepo's enum cases and tool names are the bare words a body writes.
+     *
+     * Only a registered tool name counts as a string: the value of a `const NAME`
+     * or a `name:` attribute argument (`#[BuiltInTool(name: 'AskUser')]`), read in
+     * code only, so a docblock example does not register anything. A `name:`
+     * named argument to a constructor or call (`new Foo(name: 'X')`) is not an
+     * attribute and registers nothing. Any other quoted word is left checked, so a
+     * body's phantom class that merely appears as a string in a source file is
+     * still named. Excluding every quoted word would also excuse exactly that class.
+     *
+     * @return array<string,true>
+     */
+    private static function nonClassSymbols(string $root): array
+    {
+        $symbols = [];
+        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
+            foreach (self::phpFiles($src) as $path) {
+                $text = self::readCached($path);
+                $code = self::withoutComments($text);
+                preg_match_all('~\bfunction\s+&?([A-Za-z_]\w*)\s*\(~', $text, $m);
+                preg_match_all('~^\s*case\s+([A-Za-z_]\w*)\s*[=;]~m', $text, $c);
+                preg_match_all('~\bconst\s+(?:[A-Za-z_]\w*\s+)?([A-Za-z_]\w*)\s*=~', $text, $k);
+                preg_match_all('~\bconst\s+NAME\s*=\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $code, $tool);
+                $attr = [];
+                foreach (self::attributeBodies($code) as $body) {
+                    preg_match_all('~\bname:\s*[\'"]([A-Za-z_][\w-]*)[\'"]~', $body, $named);
+                    array_push($attr, ...$named[1]);
+                }
+                foreach ([$m[1], $c[1], $k[1], $tool[1], $attr] as $names) {
+                    foreach ($names as $name) {
+                        $symbols[strtolower($name)] = true;
+                    }
+                }
+            }
+        }
+        // A package name is the library, not a class: `SugarSpring` names the
+        // sugar-spring package, so it is never a class claim.
+        foreach (glob("$root/*/composer.json") ?: [] as $manifest) {
+            $pascal = str_replace(' ', '', ucwords(str_replace('-', ' ', basename(dirname($manifest)))));
+            $symbols[strtolower($pascal)] = true;
+        }
+        foreach (glob("$root/*/tests", GLOB_ONLYDIR) ?: [] as $tests) {
+            foreach (self::phpFiles($tests) as $path) {
+                preg_match_all(
+                    '~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    self::readCached($path),
+                    $decl,
+                );
+                foreach ($decl[1] as $name) {
+                    $symbols[strtolower($name)] = true;
+                }
+            }
+        }
+
+        return $symbols;
+    }
+
+    /**
+     * The argument text of every `#[...]` attribute in $code, which is code with
+     * its comments already removed (withoutComments()). Nested brackets in an
+     * argument (`#[Tags(['a'])]`) are kept whole.
+     *
+     * @return list<string>
+     */
+    private static function attributeBodies(string $code): array
+    {
+        preg_match_all('~#\[((?:[^\[\]]++|\[[^\[\]]*\])*)\]~', $code, $attrs);
+
+        return $attrs[1];
+    }
+
+    /** $code with every comment token removed, so a docblock example is never read as code. */
+    private static function withoutComments(string $code): string
+    {
+        $out = '';
+        foreach (token_get_all($code) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out .= is_array($token) ? $token[1] : $token;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Every `.php` file under $dir, recursively.
+     *
+     * @return list<string>
+     */
+    private static function phpFiles(string $dir): array
+    {
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+        foreach ($walk as $file) {
+            /** @var \SplFileInfo $file */
+            if ($file->isFile() && str_ends_with($file->getFilename(), '.php')) {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * True for a bare code-span name that is not a class: a test or fixture
+     * class, an environment variable, a key name, a product or tool name, a
+     * configuration directive, or a name the monorepo declares as a method, enum
+     * case, constant or string (see nonClassSymbols()). The fixed lists are the
+     * constants above; every entry is one a body has written and the guard must
+     * not read as a class claim.
+     *
+     * @param array<string,true> $nonClass from nonClassSymbols()
+     */
+    private static function isNonClassName(string $name, array $nonClass): bool
+    {
+        $bare = ltrim($name, '\\');
+        if (str_ends_with($bare, 'Test') || str_ends_with($bare, 'Tests')) {
+            return true;
+        }
+        if (preg_match('~^[A-Z][A-Z0-9_]*$~', $bare) === 1 || isset($nonClass[strtolower($bare)])) {
+            return true;
+        }
+        foreach ([self::EXCLUDED_KEY_NAMES, self::EXCLUDED_ENV_NAMES, self::EXCLUDED_PRODUCT_NAMES, self::EXCLUDED_CONFIG_NAMES, self::EXCLUDED_THIRD_PARTY_NAMES] as $list) {
+            foreach ($list as $excluded) {
+                if (strcasecmp($excluded, $bare) === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A root-absolute filesystem path (`/path/to/examples/x.sh`) is a placeholder
+     * the reader fills in with their own checkout, not a claim about this tree.
+     * A URL is not one: its first segment is a host (`github.com/...`), which
+     * always carries a dot.
+     */
+    private static function isFilesystemPlaceholder(string $html, int $offset, string $prefix): bool
+    {
+        if ($offset === 0 || $html[$offset - 1] !== '/') {
+            return false;
+        }
+        $first = explode('/', $prefix, 2)[0];
+
+        return !str_contains($first, '.');
+    }
+
+    /**
+     * A path inside an absolute URL whose owner is not a SugarCraft account
+     * (`https://github.com/someone/else/blob/main/examples/x.py`) is a third-party
+     * link, not a claim about a package here, so the example and vhs legs skip it.
+     * The owner is the segment after the host: `sugarcraft` or `detain` (the repo
+     * owner in the raw.githubusercontent.com form) keep the claim checked.
+     */
+    private static function isForeignUrl(string $html, int $offset, string $prefix): bool
+    {
+        if ($offset < 2 || substr($html, $offset - 2, 2) !== '//') {
+            return false;
+        }
+        $segments = array_values(array_filter(explode('/', $prefix), static fn (string $p): bool => $p !== ''));
+
+        return !in_array(strtolower($segments[1] ?? ''), ['sugarcraft', 'detain'], true);
+    }
+
+    /**
+     * The class names a body declares in its code blocks, the short names it
+     * imports from SugarCraft (every FQN imported under that short name, keyed
+     * lowercase: one snippet's `Terminal` may be a different class from
+     * another's), and the short names it imports from outside SugarCraft. Only
+     * `<pre>` blocks count, so prose that happens to say "class Foo" never
+     * exempts a claim.
+     *
+     * @return array{0: array<string,true>, 1: array<string,true>, 2: array<string,list<string>>}
+     */
+    private static function bodyNames(string $html): array
+    {
+        $declared = [];
+        $external = [];
+        $imports = [];
+        preg_match_all('~<pre\b[^>]*>(.*?)</pre>~s', $html, $blocks);
+        foreach ($blocks[1] as $code) {
+            preg_match_all('~(?:^|[\n>])\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:final|abstract|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~', $code, $decl);
+            foreach ($decl[1] as $name) {
+                $declared[$name] = true;
+            }
+            preg_match_all('~(?:^|[\n>])\s*use\s+\\\\?((?:[A-Za-z_]\w*\\\\)*)([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;~', $code, $uses, PREG_SET_ORDER);
+            foreach ($uses as $hit) {
+                if ($hit[1] === '') {
+                    continue;
+                }
+                // `use X as Y` binds the name Y, so the claims in the snippet name X through Y.
+                $bound = $hit[3] ?? $hit[2];
+                $fqn = $hit[1] . $hit[2];
+                if (self::isSugarcraftName($fqn)) {
+                    $imports[strtolower($bound)][$fqn] = $fqn;
+                } else {
+                    $external[$bound] = true;
+                }
+            }
+        }
+
+        return [$declared, $external, array_map('array_values', $imports)];
+    }
+
+    /**
+     * True when a claimed class name is outside the monorepo's claims: a fully
+     * qualified name outside SugarCraft\, a bare name the body imports from
+     * outside SugarCraft, or a bare class the body declares for its own example.
+     * A SugarCraft\ name is never illustrative, even when the body declares a
+     * class with the same short name, and neither is a bare name the body
+     * imports from SugarCraft: that import says which class the name means, and
+     * a same-named declaration in another snippet does not change it.
+     *
+     * @param array<string,true> $declared
+     * @param array<string,true> $external
+     * @param array<string,list<string>> $imports
+     */
+    private static function isIllustrativeName(string $name, array $declared, array $external, array $imports): bool
+    {
+        $trimmed = ltrim($name, '\\');
+        if (self::isSugarcraftName($trimmed)) {
+            return false;
+        }
+        if (str_contains($trimmed, '\\')) {
+            return true;
+        }
+        $short = self::shortName($trimmed);
+        if (isset($imports[strtolower($short)])) {
+            return false;
+        }
+
+        return isset($declared[$short]) || isset($external[$short]);
+    }
+
+    /**
+     * True for a name inside the SugarCraft\ namespace. PHP namespaces are
+     * case-insensitive, so the prefix is compared folded.
+     */
+    private static function isSugarcraftName(string $name): bool
+    {
+        return str_starts_with(strtolower(ltrim($name, '\\')), 'sugarcraft\\');
+    }
+
+    /**
+     * Resolves one claimed name against the index and reports why it fails, or
+     * returns null when the claim holds.
+     *
+     * A qualified name, or one the body imports, names the FQN it spells (or the
+     * FQNs its imports spell), so a wrong namespace or a method carried only by a
+     * same-named class elsewhere is named. A bare name the body does not import is
+     * matched by short name across every declaration, as it always was: qualifying
+     * those snippets is a body-by-body edit the guard does not force. A bare name
+     * no declaration matches passes only when it is a PHP core name in
+     * CORE_CLASS_NAMES, never because the host happens to load it.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
+     * @param array<string,list<string>> $imports lowercased short name → SugarCraft FQNs
+     * @return ?string the finding's claim text, or null when the claim holds
+     */
+    private static function undeclaredClaim(array $index, string $name, ?string $method, array $imports): ?string
+    {
+        $written = ltrim($name, '\\');
+        $short = self::shortName($written);
+        $lower = strtolower($short);
+
+        $options = str_contains($written, '\\') ? [$written] : ($imports[$lower] ?? []);
+        if ($options !== []) {
+            $known = array_values(array_filter(
+                $options,
+                static fn (string $fqn): bool => isset($index['fqn'][strtolower($fqn)]),
+            ));
+            if ($known === []) {
+                return 'names class ' . implode(' or ', $options) . ', which no <slug>/src declares';
+            }
+
+            return self::methodProblem($index, $known, count($options) === 1 ? $options[0] : $short, $method);
+        }
+
+        $candidates = $index['short'][$lower] ?? [];
+        if ($candidates !== []) {
+            return self::methodProblem($index, $candidates, $short, $method);
+        }
+
+        if ($method === null) {
+            return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
+        }
+
+        // Checked against a fixed list, never the host's reflection: whether ext-pdo is
+        // loaded must not change the verdict for a misspelled method.
+        $fixed = self::fixedCoreMethods($lower);
+        if ($fixed !== null) {
+            return in_array(strtolower($method), $fixed, true)
+                ? null
+                : "names $short::$method(), which PHP's $short does not define";
+        }
+
+        // Only a PHP core name is looked up in the host's reflection; any other name
+        // is an extension class that a host may or may not load, so it is named.
+        $internal = self::isCoreClassName($short) ? self::internalClass($short) : null;
+        if ($internal === null) {
+            return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
+        }
+        if (method_exists($internal, $method)) {
+            return null;
+        }
+
+        return "names $short::$method(), which PHP's $short does not define";
+    }
+
+    /**
+     * The lowercased methods a PDO core name carries, or null for every other name.
+     *
+     * @return ?list<string>
+     */
+    private static function fixedCoreMethods(string $lower): ?array
+    {
+        return match ($lower) {
+            'pdo' => self::PDO_METHODS,
+            'pdostatement' => self::PDO_STATEMENT_METHODS,
+            'ffi' => self::FFI_METHODS,
+            // PDOException declares no methods of its own; it inherits Exception's, which every build carries.
+            'pdoexception' => array_map('strtolower', get_class_methods(\Exception::class)),
+            default => null,
+        };
+    }
+
+    /** True when $short is one of the PHP core names in CORE_CLASS_NAMES, in any case. */
+    private static function isCoreClassName(string $short): bool
+    {
+        foreach (self::CORE_CLASS_NAMES as $core) {
+            if (strcasecmp($core, $short) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Null when the claim holds: no method is claimed, or one of the declared
+     * classes $fqns carries it. Otherwise the finding text, naming $display.
+     *
+     * @param list<string> $fqns
+     */
+    private static function methodProblem(array $index, array $fqns, string $display, ?string $method): ?string
+    {
+        if ($method === null) {
+            return null;
+        }
+        foreach ($fqns as $fqn) {
+            $visited = [];
+            if (self::declaresMethod($index, $fqn, $method, $visited)) {
+                return null;
+            }
+        }
+
+        return "names $display::$method(), but no declaration of $display carries that method";
+    }
+
+    /**
+     * Class declarations under every `<slug>/src/` tree. `fqn` maps a lowercase
+     * fully qualified name to its declaring files; `short` maps a lowercase short
+     * name to every FQN that declares it. The scan is top-level only (`*\/src`),
+     * so a lib's vendor/ copies of sibling packages never count as declarations.
+     *
+     * @return array{fqn: array<string, list<string>>, short: array<string, list<string>>}
+     */
+    private static function classIndex(string $root): array
+    {
+        $fqn = [];
+        $short = [];
+        foreach (glob("$root/*/src", GLOB_ONLYDIR) ?: [] as $src) {
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($walk as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
+                $path = $file->getPathname();
+                $text = self::readCached($path);
+                $ns = self::fileScope($text)['ns'];
+                preg_match_all(
+                    '~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    $text,
+                    $decl,
+                );
+                foreach (array_unique($decl[1]) as $name) {
+                    $full = $ns === '' ? $name : "$ns\\$name";
+                    $fqn[strtolower($full)][] = $path;
+                    $short[strtolower($name)][$full] = $full;
+                }
+                // A façade binds its public name with class_alias(); the alias is a
+                // real class name in the tree, so it is declared here too.
+                foreach (self::classAliases($text, self::fileScope($text)) as $alias => $target) {
+                    $fqn[strtolower($alias)][] = $path;
+                    $short[strtolower(self::shortName($alias))][$alias] = $alias;
+                }
+            }
+        }
+
+        return ['fqn' => $fqn, 'short' => array_map('array_values', $short)];
+    }
+
+    /**
+     * The `class_alias(Target::class, 'Alias')` bindings a file makes, as alias
+     * FQN => target FQN, both resolved in the file's own namespace and imports.
+     *
+     * @param array{ns: string, uses: array<string,string>} $scope
+     * @return array<string,string>
+     */
+    private static function classAliases(string $text, array $scope): array
+    {
+        $aliases = [];
+        preg_match_all(
+            '~class_alias\(\s*(\\\\?[A-Za-z_][\w\\\\]*)::class\s*,\s*[\'"]\\\\?([A-Za-z_][\w\\\\]*)[\'"]~',
+            $text,
+            $hits,
+            PREG_SET_ORDER,
+        );
+        foreach ($hits as $hit) {
+            $aliases[ltrim($hit[2], '\\')] = self::resolveName($hit[1], $scope);
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * The namespace and the `use` imports of one PHP file, so a name written in
+     * it resolves to the FQN it means rather than to any same-named class.
+     *
+     * @return array{ns: string, uses: array<string,string>} uses keyed lowercase
+     */
+    private static function fileScope(string $text): array
+    {
+        $ns = '';
+        if (preg_match('~^\s*namespace\s+([A-Za-z_][\w\\\\]*)\s*;~m', $text, $m) === 1) {
+            $ns = $m[1];
+        }
+        $uses = [];
+        preg_match_all('~^use\s+\\\\?([A-Za-z_][\w\\\\]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*;~m', $text, $imports, PREG_SET_ORDER);
+        foreach ($imports as $hit) {
+            $alias = $hit[2] ?? self::shortName($hit[1]);
+            $uses[strtolower($alias)] = $hit[1];
+        }
+
+        return ['ns' => $ns, 'uses' => $uses];
+    }
+
+    /**
+     * Resolves a name as written in a file to the FQN it names there.
+     *
+     * @param array{ns: string, uses: array<string,string>} $scope
+     */
+    private static function resolveName(string $ref, array $scope): string
+    {
+        if (str_starts_with($ref, '\\')) {
+            return substr($ref, 1);
+        }
+        if (str_contains($ref, '\\')) {
+            return $ref;
+        }
+        $lower = strtolower($ref);
+        if (isset($scope['uses'][$lower])) {
+            return $scope['uses'][$lower];
+        }
+
+        return $scope['ns'] === '' ? $ref : $scope['ns'] . '\\' . $ref;
+    }
+
+    /**
+     * True when the declaration of $fqn carries $method, directly or through a
+     * trait or parent it names (each resolved in its own file's namespace and
+     * imports). $visited breaks cycles.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
+     * @param array<string,true> $visited
+     */
+    private static function declaresMethod(array $index, string $fqn, string $method, array &$visited): bool
+    {
+        $short = self::shortName($fqn);
+        $files = $index['fqn'][strtolower($fqn)] ?? [];
+        if ($files === []) {
+            // A parent the SugarCraft tree does not declare may be a PHP built-in
+            // (`extends \RuntimeException`), and the method can come from there.
+            return self::builtInDeclaresMethod($fqn, $method);
+        }
+        foreach ($files as $file) {
+            if (isset($visited[$file])) {
+                continue;
+            }
+            $visited[$file] = true;
+            $text = self::readCached($file);
+            if (self::declaresPublicMethod($text, $short, $method)) {
+                return true;
+            }
+            // PHP supplies cases() on every enum and from()/tryFrom() on a backed
+            // one, so no `function` line declares them.
+            $implied = strtolower($method);
+            if (in_array($implied, ['cases', 'from', 'tryfrom'], true)
+                && preg_match('~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*enum\s+' . preg_quote($short, '~') . '\b(\s*:)?~mi', $text, $enum) === 1
+            ) {
+                if ($implied === 'cases' || isset($enum[1])) {
+                    return true;
+                }
+            }
+            $scope = self::fileScope($text);
+            foreach (self::classAliases($text, $scope) as $alias => $target) {
+                if (strtolower($alias) === strtolower($fqn) && self::declaresMethod($index, $target, $method, $visited)) {
+                    return true;
+                }
+            }
+            foreach (array_unique(self::typeRefs($text)) as $ref) {
+                if (self::declaresMethod($index, self::resolveName($ref, $scope), $method, $visited)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when the type $short declared in $text carries $method with public
+     * visibility. A declaration with no modifier is public; a private or
+     * protected one cannot be called as `Name::method()` from a body (PHP
+     * fatals), so it does not satisfy a claim.
+     *
+     * Only the named type's own member level counts. The body is found by its
+     * header and brace depth, so a method inside an anonymous class (`new class
+     * { ... }`), a closure, or any other type the file declares never satisfies
+     * a claim about $short. Method names compare case-insensitively, as PHP's do.
+     */
+    private static function declaresPublicMethod(string $text, string $short, string $method): bool
+    {
+        $tokens = \PhpToken::tokenize($text);
+        $count = count($tokens);
+        $wantedType = strtolower($short);
+        $wantedMethod = strtolower($method);
+        $depth = 0;
+        $memberDepth = null;
+        $awaitBody = false;
+
+        for ($i = 0; $i < $count; $i++) {
+            $tok = $tokens[$i];
+            if ($tok->id === T_CURLY_OPEN || $tok->id === T_DOLLAR_OPEN_CURLY_BRACES || $tok->text === '{') {
+                if ($awaitBody) {
+                    $memberDepth = $depth + 1;
+                    $awaitBody = false;
+                }
+                $depth++;
+                continue;
+            }
+            if ($tok->text === '}') {
+                $depth--;
+                if ($memberDepth !== null && $depth < $memberDepth) {
+                    return false;
+                }
+                continue;
+            }
+            if ($memberDepth === null) {
+                if ($tok->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM])) {
+                    $name = self::nextSignificant($tokens, $i + 1);
+                    $awaitBody = $name !== null
+                        && $tokens[$name]->id === T_STRING
+                        && strtolower($tokens[$name]->text) === $wantedType;
+                }
+                continue;
+            }
+            if ($depth !== $memberDepth || $tok->id !== T_FUNCTION) {
+                continue;
+            }
+            // A method may be named with a reserved word (`new()`, `match()`,
+            // `list()`), which the tokenizer reads as a keyword, not T_STRING.
+            $name = self::nextSignificant($tokens, $i + 1, '&');
+            if ($name === null || preg_match('~^[A-Za-z_]\w*$~', $tokens[$name]->text) !== 1
+                || strtolower($tokens[$name]->text) !== $wantedMethod
+            ) {
+                continue;
+            }
+            // The modifiers sit in the run of keywords directly before `function`.
+            $modifiers = '';
+            for ($j = $i - 1; $j >= 0; $j--) {
+                if ($tokens[$j]->isIgnorable()) {
+                    continue;
+                }
+                if (!$tokens[$j]->is([T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT])) {
+                    break;
+                }
+                $modifiers .= ' ' . strtolower($tokens[$j]->text);
+            }
+            if (!str_contains($modifiers, 'private') && !str_contains($modifiers, 'protected')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The index of the first token at or after $from that is neither whitespace
+     * nor a comment, skipping any listed single-character tokens too; null at the
+     * end of the file.
+     *
+     * @param list<\PhpToken> $tokens
+     * @param string ...$skip single-character tokens to step over (`&` in `function &name`)
+     */
+    private static function nextSignificant(array $tokens, int $from, string ...$skip): ?int
+    {
+        for ($k = $from, $n = count($tokens); $k < $n; $k++) {
+            if ($tokens[$k]->isIgnorable() || in_array($tokens[$k]->text, $skip, true)) {
+                continue;
+            }
+
+            return $k;
+        }
+
+        return null;
+    }
+
+    /**
+     * The types a file's declarations pull in: every parent and interface named
+     * in a class, interface or enum header (a comma list after `implements`, or
+     * after `extends` on an interface), and every trait a class body uses. A
+     * top-level `use` is an import, not an inheritance edge, so it is not followed:
+     * a class that merely imports a sibling does not carry the sibling's methods.
+     *
+     * @return list<string> names as written, a leading backslash kept (it marks a fully qualified name)
+     */
+    private static function typeRefs(string $text): array
+    {
+        $list = '(\\\\?[A-Za-z_][\w\\\\]*(?:\s*,\s*\\\\?[A-Za-z_][\w\\\\]*)*)';
+        $refs = [];
+        preg_match_all('~^[ \t]*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)[ \t]+)*(?:class|interface|enum)[ \t]+[A-Za-z_]\w*([^{;]*)~m', $text, $headers);
+        foreach ($headers[1] as $header) {
+            preg_match_all('~\b(?:extends|implements)\s+' . $list . '~', $header, $clauses);
+            foreach ($clauses[1] as $names) {
+                array_push($refs, ...preg_split('~\s*,\s*~', $names));
+            }
+        }
+        preg_match_all('~^[ \t]+use[ \t]+' . $list . '[ \t]*[;{]~m', $text, $traits);
+        foreach ($traits[1] as $names) {
+            array_push($refs, ...preg_split('~\s*,\s*~', $names));
+        }
+
+        return $refs;
+    }
+
+    /**
+     * True when $fqn names a PHP core class, interface or enum that carries
+     * $method, so a SugarCraft class extending it inherits the method with no
+     * SugarCraft declaration to find it in. A parent outside CORE_CLASS_NAMES
+     * (an extension class such as Imagick) is never answered from the host's
+     * reflection: whether it is loaded must not change the verdict.
+     */
+    private static function builtInDeclaresMethod(string $fqn, string $method): bool
+    {
+        $written = ltrim($fqn, '\\');
+        if (str_contains($written, '\\') || !self::isCoreClassName($written)) {
+            return false;
+        }
+
+        $fixed = self::fixedCoreMethods(strtolower($written));
+        if ($fixed !== null) {
+            return in_array(strtolower($method), $fixed, true);
+        }
+
+        if (!class_exists($written, false) && !interface_exists($written, false) && !enum_exists($written, false)) {
+            return false;
+        }
+
+        return (new \ReflectionClass($written))->isInternal() && method_exists($written, $method);
+    }
+
+    /** The PHP built-in class, interface or enum called $short, or null when there is none. */
+    private static function internalClass(string $short): ?string
+    {
+        if (!class_exists($short, false) && !interface_exists($short, false) && !enum_exists($short, false)) {
+            return null;
+        }
+
+        return (new \ReflectionClass($short))->isInternal() ? $short : null;
+    }
+
+    /**
+     * The package a body's example or vhs path belongs to: the last path
+     * segment that is not a URL scaffold (`github.com/sugarcraft/<slug>/blob/
+     * master/`, `detain/sugarcraft/master/<slug>/`), else the body's own slug.
+     */
+    private static function claimOwner(string $prefix, string $bodySlug): string
+    {
+        $scaffold = ['.', 'github.com', 'sugarcraft', 'detain', 'blob', 'tree', 'master', 'main', 'raw.githubusercontent.com'];
+        $parts = array_values(array_filter(explode('/', $prefix), static fn (string $p): bool => $p !== ''));
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            if (!in_array($parts[$i], $scaffold, true)) {
+                return $parts[$i];
+            }
+        }
+
+        return $bodySlug;
+    }
+
+    private static function shortName(string $name): string
+    {
+        $parts = explode('\\', $name);
+
+        return (string) end($parts);
     }
 
     /**

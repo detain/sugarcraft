@@ -1,0 +1,417 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Host;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use Ratchet\RFC6455\Messaging\Frame;
+use React\EventLoop\Loop;
+use React\Promise\PromiseInterface;
+use React\Stream\CompositeStream;
+use React\Stream\ThroughStream;
+use SugarCraft\Async\Backoff;
+use SugarCraft\Code\Host\RemoteSessionHost;
+use function React\Promise\resolve;
+
+/**
+ * CC-1 (P4-12-cc1-g-fix): every socket a resume opens is closed by the time the
+ * attempt that opened it is over. A refused server.hello used to leave its
+ * socket attached while the ladder redialed, and gone() closed only the newest
+ * socket, so a server that refused every attempt kept them all.
+ */
+final class RemoteSessionHostResumeCloseTest extends TestCase
+{
+    /**
+     * A reopen seam whose server answers each `server.hello` on the socket it
+     * dials: the first $refuseCount hellos get a JSON-RPC error, later ones a
+     * successful resume. Every dialed socket is appended to $opened. Each dial
+     * first records into $dials how many earlier sockets were still readable or
+     * writable, and the host's close reason at that moment.
+     *
+     * @param list<CompositeStream> $opened
+     * @param list<array{attached: int, reason: ?string}> $dials
+     */
+    private function fakeServer(array &$opened, int $refuseCount, array &$dials, ?RemoteSessionHost &$host): \Closure
+    {
+        return static function () use (&$opened, $refuseCount, &$dials, &$host): PromiseInterface {
+            $attached = 0;
+            foreach ($opened as $earlier) {
+                $attached += $earlier->isReadable() || $earlier->isWritable() ? 1 : 0;
+            }
+            $dials[] = ['attached' => $attached, 'reason' => $host?->closeReason()];
+
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $opened[] = $stream;
+            $answered = \count($opened);
+            $out->on('data', static function (string $bytes) use ($in, $answered, $refuseCount): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                $reply = $answered <= $refuseCount
+                    ? ['jsonrpc' => '2.0', 'id' => $request['id'], 'error' => ['code' => -32000, 'message' => 'server refused']]
+                    : ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                Loop::futureTick(static function () use ($in, $reply, $answered, $refuseCount): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    if ($answered > $refuseCount) {
+                        Loop::stop();
+                    }
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+    }
+
+    /**
+     * Every redial found the earlier sockets already closed.
+     *
+     * @param list<array{attached: int, reason: ?string}> $dials
+     */
+    private function assertNothingAttachedAtDial(array $dials): void
+    {
+        foreach ($dials as $attempt => $dial) {
+            self::assertSame(0, $dial['attached'], 'attempt ' . ($attempt + 1) . ' dialed while an earlier socket was still attached');
+        }
+    }
+
+    /**
+     * Attach a host to a live session, then drop its link and run the loop
+     * until the ladder settles or the guard fires. A $malformed drop sends a
+     * frame the host cannot read while the link is still open, so the host
+     * drops it from inside a live socket rather than after a close.
+     *
+     * @param list<CompositeStream> $opened
+     * @param list<array{attached: int, reason: ?string}> $dials
+     * @param ?CompositeStream $initial receives the initial link, so a test can inspect the socket the drop left behind
+     * @return array{0: RemoteSessionHost, 1: list<string>} the host and the close verdicts it delivered
+     */
+    private function dropAndRedial(array &$opened, int $refuseCount, array &$dials, bool $malformed = false, ?CompositeStream &$initial = null): array
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $host = null;
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $this->fakeServer($opened, $refuseCount, $dials, $host),
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $verdicts = [];
+        $host->onClose(static function (string $reason) use (&$verdicts): void {
+            $verdicts[] = $reason;
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        if ($malformed) {
+            // An unmasked frame with a reserved opcode: the host drops the link while it is still open.
+            $link->emit('data', [(new Frame('', true, 0x3))->getContents()]);
+        } else {
+            $link->close();
+        }
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        return [$host, $verdicts];
+    }
+
+    public function testARefusedServerHelloClosesEverySocketItOpened(): void
+    {
+        $opened = [];
+        $dials = [];
+        [, $verdicts] = $this->dropAndRedial($opened, PHP_INT_MAX, $dials);
+
+        self::assertCount(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $opened, 'one socket per attempt');
+        $this->assertNothingAttachedAtDial($dials);
+        foreach (\array_slice($dials, 1) as $attempt => $dial) {
+            self::assertSame('server refused', $dial['reason'], 'attempt ' . ($attempt + 2) . ' redialed into a pause with no reason');
+        }
+        foreach ($opened as $attempt => $stream) {
+            self::assertFalse($stream->isReadable(), 'attempt ' . ($attempt + 1) . ' left its socket readable');
+            self::assertFalse($stream->isWritable(), 'attempt ' . ($attempt + 1) . ' left its socket writable');
+        }
+        self::assertCount(1, $verdicts, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $verdicts[0]);
+    }
+
+    public function testASuccessfulReconnectLeavesOnlyTheResumedSocketAttached(): void
+    {
+        $opened = [];
+        $dials = [];
+        [$host, $verdicts] = $this->dropAndRedial($opened, 2, $dials);
+
+        self::assertSame([], $verdicts, 'the third attempt resumes, so no verdict is delivered');
+        self::assertTrue($host->isOpen(), 'the host is attached to the resumed socket');
+        self::assertCount(3, $opened);
+        $this->assertNothingAttachedAtDial($dials);
+        self::assertFalse($opened[0]->isReadable(), 'the first refused socket is closed');
+        self::assertFalse($opened[1]->isReadable(), 'the second refused socket is closed');
+        self::assertTrue($opened[2]->isReadable(), 'the resumed socket stays attached');
+    }
+
+    /**
+     * The link the host was dropped from is still open when the ladder starts,
+     * so the resume that follows must close it, not just the sockets it dialed.
+     */
+    public function testAResumeClosesTheOpenLinkADroppedHostLeftBehind(): void
+    {
+        $opened = [];
+        $dials = [];
+        $initial = null;
+        [$host, $verdicts] = $this->dropAndRedial($opened, 1, $dials, true, $initial);
+
+        self::assertSame([], $verdicts, 'the second attempt resumes, so no verdict is delivered');
+        self::assertTrue($host->isOpen(), 'the host is attached to the resumed socket');
+        self::assertCount(2, $opened);
+        $this->assertNothingAttachedAtDial($dials);
+        self::assertFalse($initial->isReadable(), 'the dropped link is still readable: the resume did not close it');
+        self::assertFalse($initial->isWritable(), 'the dropped link is still writable: the resume did not close it');
+        self::assertFalse($opened[0]->isReadable(), 'the refused socket is closed');
+        self::assertTrue($opened[1]->isReadable(), 'the resumed socket stays attached');
+    }
+
+    /**
+     * A call issued while the resume's server.hello is in flight goes out on
+     * that socket, and the server never answers it. When the hello is refused,
+     * the attempt's failure must settle that call: it used to stay pending
+     * through the redial and the resumed session that followed.
+     */
+    public function testACallIssuedDuringARefusedHelloIsRejectedWithTheAttemptsFailure(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $host = null;
+        $dialed = 0;
+        $issued = false;
+        $settled = null;
+        $reopen = static function () use (&$dialed, &$host, &$issued, &$settled): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            $out->on('data', static function (string $bytes) use ($in, $answered, &$host, &$issued, &$settled): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                if ($request['method'] !== 'server.hello') {
+                    // The server never answers a call that reaches it on a socket it is refusing.
+                    return;
+                }
+                if ($answered === 1) {
+                    // Queued ahead of the refusal, so it runs while the hello is still unanswered.
+                    Loop::futureTick(static function () use (&$host, &$issued, &$settled): void {
+                        $issued = true;
+                        $host->call('session.cancel', [])->then(null, static function (\Throwable $failure) use (&$settled): void {
+                            $settled = $failure;
+                        });
+                    });
+                }
+                $reply = $answered === 1
+                    ? ['jsonrpc' => '2.0', 'id' => $request['id'], 'error' => ['code' => -32000, 'message' => 'server refused']]
+                    : ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                Loop::futureTick(static function () use ($in, $reply, $answered): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    if ($answered > 1) {
+                        Loop::stop();
+                    }
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $host->onClose(static function (string $reason): void {
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertTrue($host->isOpen(), 'the second attempt resumes, so the host is attached again');
+        self::assertTrue($issued, 'the call was issued while the hello was in flight');
+        self::assertInstanceOf(\Throwable::class, $settled, 'the call issued during the refused hello settles');
+        self::assertSame('server refused', $settled->getMessage(), 'the call is rejected with the attempt\'s failure');
+    }
+
+    /**
+     * A server that accepts the upgrade and then never answers server.hello
+     * used to park the resume forever: no deadline bounded the hello, so the
+     * attempt never failed, the ladder never advanced and no verdict came. The
+     * silent attempt must now time out, close its socket, and let the next
+     * redial resume the session.
+     */
+    public function testASilentServerHelloFailsTheAttemptAndTheLadderRedials(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $dialed = 0;
+        $silent = null;
+        $reopen = static function () use (&$dialed, &$silent): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            if ($answered === 1) {
+                // The first socket takes the hello and never answers it.
+                $silent = $stream;
+
+                return resolve([$stream, '']);
+            }
+            $out->on('data', static function (string $bytes) use ($in): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                Loop::futureTick(static function () use ($in, $reply): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    Loop::stop();
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+            resumeHelloSeconds: 0.05,
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $verdicts = [];
+        $host->onClose(static function (string $reason) use (&$verdicts): void {
+            $verdicts[] = $reason;
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertSame(2, $dialed, 'the silent hello timed out, and the ladder redialed once');
+        self::assertTrue($host->isOpen(), 'the second attempt resumes, so the host is attached again');
+        self::assertSame([], $verdicts, 'no verdict is delivered once the session resumes');
+        self::assertFalse($silent->isReadable(), 'the silent socket is closed when its attempt times out');
+    }
+
+    /**
+     * A healthy server that answers server.hello after the base deadline, but
+     * within the deadline of the next attempt, must still be resumed. A fixed
+     * deadline failed every attempt the same way, so the attachment gave up
+     * though the server was reachable; the deadline now grows per failed attempt.
+     */
+    public function testASlowButAnsweringServerHelloIsResumedOnALaterRedial(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $dialed = 0;
+        $reopen = static function () use (&$dialed): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            $out->on('data', static function (string $bytes) use ($in, $answered): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                // Each hello is answered 80 ms late: past the 50 ms base deadline, inside the 100 ms second one.
+                Loop::addTimer(0.08, static function () use ($in, $reply, $answered): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    if ($answered >= 2) {
+                        Loop::stop();
+                    }
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+            resumeHelloSeconds: 0.05,
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $verdicts = [];
+        $host->onClose(static function (string $reason) use (&$verdicts): void {
+            $verdicts[] = $reason;
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertSame(2, $dialed, 'the first hello outlived its base deadline, and the second redial was answered inside its longer one');
+        self::assertTrue($host->isOpen(), 'the slow server is resumed, so the host is attached again');
+        self::assertSame([], $verdicts, 'no verdict is delivered for a server that answers late');
+    }
+
+    /** @return iterable<string, array{float}> */
+    public static function invalidResumeHelloSeconds(): iterable
+    {
+        yield 'zero' => [0.0];
+        yield 'negative' => [-1.0];
+        yield 'infinite' => [INF];
+        yield 'NaN' => [NAN];
+        // Finite on its own, but the attempt-twelve deadline (12 times this) overflows to INF.
+        yield 'largest grown deadline overflows' => [1.0e308];
+    }
+
+    /**
+     * A resume's hello timeout is armed only after the hello is sent, so a bad
+     * value used to throw mid-redial with the socket wired and the hello pending.
+     * It is refused at construction instead, before the stream is touched. The
+     * grown deadline is what must stay finite, so a base that is finite alone but
+     * overflows once the ladder multiplies it is refused the same way.
+     */
+    #[DataProvider('invalidResumeHelloSeconds')]
+    public function testAnInvalidResumeHelloTimeoutIsRefusedBeforeTheStreamIsWired(float $seconds): void
+    {
+        $in = new ThroughStream();
+        $stream = new CompositeStream($in, new ThroughStream());
+        $listenersBefore = \count($in->listeners('data'));
+
+        try {
+            RemoteSessionHost::overStream($stream, resumeHelloSeconds: $seconds);
+            self::fail('an invalid resumeHelloSeconds must be refused');
+        } catch (\InvalidArgumentException $failure) {
+            self::assertStringContainsString('resumeHelloSeconds', $failure->getMessage());
+        }
+
+        self::assertCount($listenersBefore, $in->listeners('data'), 'the stream was never wired to the host');
+    }
+}

@@ -226,10 +226,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'take recorder handle stored for stop()/cancel(); self-capped child, bounded escalate ladder, shutdown-hook cancel',
         ],
-        'Backend/StreamingCommandBackend.php::begin' => [
-            'count' => 1,
-            'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
-        ],
 
         // Roadmap O-7. The workspace-host child of a multi-root `serve`, one
         // per project root, held by its WorkspaceHostClient for as long as

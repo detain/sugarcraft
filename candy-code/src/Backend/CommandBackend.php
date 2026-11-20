@@ -66,9 +66,11 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * {@see complete()} BLOCKS, by contract — it is what the `-p` one-shot path
  * ({@see \SugarCraft\Code\Cli\NonInteractive::run()}) wants. It runs the child
- * with {@see ChildRun::run()}, which parks in the kernel until the child's pipes
- * move, so a wrapper that echoes its whole history (`cat` included) cannot
- * deadlock against a full stdout pipe. {@see completeAsync()} does NOT block:
+ * with {@see ChildRun::run()}, which on POSIX parks in the kernel until a pipe
+ * moves and on Windows polls each pipe at {@see \SugarCraft\Async\WindowsPipes::POLL_MICROSECONDS},
+ * because a Windows pipe has no readable stream to park on. Either way a wrapper
+ * that echoes its whole history (`cat` included) cannot deadlock against a full
+ * stdout pipe. {@see completeAsync()} does NOT block:
  * it starts the same child with {@see ChildRun::launch()} on the event loop, so
  * the caller's render/input loop keeps running for the whole round-trip.
  */
@@ -103,6 +105,13 @@ final class CommandBackend implements Backend, TracksActiveChildren
             // UI-only (audit 15b-03), like every error string below: the
             // model never said it, so it must not be replayed as its words.
             return Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError();
+        }
+
+        // An empty command answers empty on both arms without a spawn. ChildRun
+        // cannot start an empty Windows command line, so this is the one place
+        // the two arms agree.
+        if ($this->command === '') {
+            return Message::assistant('');
         }
 
         // The pid is registered the moment the child starts and forgotten once
@@ -156,6 +165,12 @@ final class CommandBackend implements Backend, TracksActiveChildren
             return $deferred->promise();
         }
 
+        if ($this->command === '') {
+            $deferred->resolve(Message::assistant(''));
+
+            return $deferred->promise();
+        }
+
         $pid = null;
         $child = $this->child($payload, function (int $started) use (&$pid): void {
             $pid = $started;
@@ -193,35 +208,70 @@ final class CommandBackend implements Backend, TracksActiveChildren
      */
     private function child(string $payload, \Closure $onSpawn): ChildRun
     {
-        $argv = self::shellArgv($this->command, PHP_OS_FAMILY === 'Windows');
-        /** @var list<string> $argv */
-        $argv = array_values((array) ProcessContainment::spawnSpec($argv));
-
-        return ChildRun::new($argv)
-            ->withEnv(ProcessContainment::env())
-            ->withStdin($payload)
-            ->withMaxBytes(PHP_INT_MAX)
-            ->withTimeout(self::NO_DEADLINE_SECONDS)
+        return self::childRun($this->command, $payload)
             ->withExitGrace(null)
             ->withOnSpawn($onSpawn);
     }
 
     /**
-     * The argv ChildRun execs for $command. A string runs through the shell
-     * `proc_open()` used for one before: `/bin/sh -c` on POSIX, and on Windows the
-     * COMSPEC shell (cmd.exe) that proc_open() invoked with `/c`. ChildRun takes
-     * only an argv, so the shell is spelled out here; a string argv would fail to
-     * spawn on Windows, where there is no /bin/sh.
+     * The spawn both shell-out tiers share: the command's argv (a string on Windows is its raw line) behind the
+     * containment wrapper, the history on stdin, no byte cap and the no-deadline
+     * stand-in. Each caller picks its own exit grace, idle budget and hooks, so
+     * {@see StreamingCommandBackend} starts its child exactly as this class does.
      *
-     * @return list<string>
+     * @internal public only so StreamingCommandBackend shares it.
      */
-    private static function shellArgv(string|array $command, bool $windows): array
+    public static function childRun(string|array $command, string $payload): ChildRun
+    {
+        return self::childRunForSpec(
+            ProcessContainment::spawnSpec(self::shellSpec($command, PHP_OS_FAMILY === 'Windows')),
+            $payload,
+        );
+    }
+
+    /**
+     * The string-versus-argv choice {@see childRun()} makes, split out so a test
+     * can pin it on every platform: a string spec must stay the raw line
+     * (ChildRun::commandLine), and only a list may be exec'd as an argv.
+     *
+     * @param string|list<string> $spec
+     * @internal public only so the spec-to-ChildRun choice is testable on every platform
+     */
+    public static function childRunForSpec(string|array $spec, string $payload): ChildRun
+    {
+        $run = is_string($spec)
+            ? ChildRun::commandLine($spec)
+            : ChildRun::new(array_values((array) $spec));
+
+        return $run
+            ->withEnv(ProcessContainment::env())
+            ->withStdin($payload)
+            ->withMaxBytes(PHP_INT_MAX)
+            ->withTimeout(self::NO_DEADLINE_SECONDS);
+    }
+
+    /**
+     * What ChildRun is started with for $command. On POSIX a string is `/bin/sh -c`
+     * over an argv, and a list is exec'd as given. On Windows a string stays the
+     * raw line: PHP escapes an argv element by element there, and cmd.exe does not
+     * read that escaping, so a string command goes to proc_open() as one string.
+     * ChildRun::commandLine() carries that string.
+     *
+     * This is a deliberate Windows change for CommandBackend. Its master spawn ran
+     * `COMSPEC /d /s /c <line>` as an argv; this moves it to the raw line, the form
+     * StreamingCommandBackend already starts its child with. The Windows quoting of
+     * a string command therefore changed here, and only here.
+     *
+     * @return string|list<string>
+     * @internal public only so the spawn-spec test reads it on every platform
+     */
+    public static function shellSpec(string|array $command, bool $windows): string|array
     {
         if (is_array($command)) {
             return $command;
         }
         if ($windows) {
-            return [getenv('COMSPEC') ?: 'cmd.exe', '/d', '/s', '/c', $command];
+            return $command;
         }
 
         return ['/bin/sh', '-c', $command];

@@ -213,7 +213,8 @@ exit(Server::new()
     -&gt;serve());</code></pre>
 
     <h3 id="quickstart-host-sshd-legacy" style="margin-top: 32px;">Quickstart — host-sshd legacy</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\SshServer\Transport\HostSshdTransport;
+    <pre class="code"><code class="language-php">use App\MyApp;
+use SugarCraft\SshServer\Transport\HostSshdTransport;
 use SugarCraft\SshServer\Middleware\BubbleTea;
 
 exit(Server::new()
