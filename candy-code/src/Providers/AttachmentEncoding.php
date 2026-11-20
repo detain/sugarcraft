@@ -400,9 +400,8 @@ final class AttachmentEncoding
 
     /**
      * Say, once per distinct payload, that a tool-result attachment was over
-     * the provider's byte budget and so travels as its text caption only
-     *. The wire rebuilds the request every step, so without
-     * the memo a screenshot would repeat the notice on each replay; without the
+     * the provider's byte budget and so travels as its text caption only. The wire rebuilds the request every step,
+     * so without the memo a screenshot would repeat the notice on each replay; without the
      * notice the user sees a model that "cannot see" an image it was handed.
      *
      * @param 'image'|'document' $kind

@@ -99,8 +99,8 @@ final class TuiErrorLog
 
     /**
      * Redirect `error_log` away from the tty: into `<$home>/{@see RELATIVE_PATH}`,
-     * else the private temp-dir fallback, else the null device (
-     * see this class's doc-block for the chain).
+     * else the private temp-dir fallback, else the null device
+     * (see this class's doc-block for the chain).
      *
      * @param string|null $home    an owned home directory, or null when none
      *                             can be established (the chain then starts

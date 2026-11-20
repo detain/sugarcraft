@@ -426,7 +426,7 @@ final class Player implements Model
 
     /**
      * E-09: stop playback once the schedule position (total play time; time
-     * spent paused never accrues) reaches $seconds. SA-P6 makes
+     * spent paused never accrues) reaches $seconds. The bound makes
      * the "total" literal: every re-anchor — pause/resume, manual step, the
      * early-fire force-advance, a cadence swap — folds its played segment
      * into the elapsed carry the check compares (playSeconds()), so the
@@ -504,7 +504,7 @@ final class Player implements Model
      * {@see self::update()} re-derives the bound from the fresh bytes on
      * purpose, so a file whose loop extension changed mid-session gets its
      * new bound without the caller lifting a finger (pinned by
-     * PlayerWatchTest). SA-P6: the duration bound rides this
+     * PlayerWatchTest). The duration bound rides this
      * survive-list as a carried total too — the live segment folds into the
      * elapsed carry before the epoch drops, so swapping streams mid-run is
      * not a budget reset either.
@@ -537,8 +537,8 @@ final class Player implements Model
      * (null before the schedule is anchored, i.e. before the first tick) —
      * the raw epoch position the E-03 cadence pins observe. The maxSeconds
      * BOUND proper measures total play time across re-anchors — see
-     * {@see self::playSeconds()}; SA-P6 fixed that bound to
-     * carry, not this accessor.
+     * {@see self::playSeconds()}; the carry applies to that bound, not this
+     * accessor.
      */
     public function playedSeconds(): ?float
     {

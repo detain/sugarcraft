@@ -471,8 +471,7 @@ final class McpDecision
 
     /**
      * C-SEC-5.a: the servers the memo client's admission check refused —
-     * command, args or env drifted from what `mcp trust` fingerprinted
-     *.
+     * command, args or env drifted from what `mcp trust` fingerprinted.
      *
      * MEMO ONLY, for exactly the reason {@see mcpLivenessSnapshot()} gives:
      * the only way to ask a client that is not in the memo is to BUILD one,

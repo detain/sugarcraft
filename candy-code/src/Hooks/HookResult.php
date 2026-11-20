@@ -347,7 +347,7 @@ final readonly class HookResult
 
     /**
      * The text that replaces a tool's output when a `PostToolUse` chain does
-     * not permit it one sentence both tool paths —
+     * not permit it: one sentence both tool paths —
      * {@see \SugarCraft\Code\Runtime::settle()} and
      * {@see \SugarCraft\Code\Chat::applyPostToolUse()} — use, so a
      * transcript reads the same whichever pipeline ran the call.

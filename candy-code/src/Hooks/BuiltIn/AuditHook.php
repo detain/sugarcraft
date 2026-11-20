@@ -425,8 +425,8 @@ final class AuditHook implements HookInterface
     }
 
     /**
-     * Record that a `PostToolUse` hook withheld a call's output from the model
-     *, answering whether the line was written.
+     * Record that a `PostToolUse` hook withheld a call's output from the model,
+     * answering whether the line was written.
      *
      * The call RAN, and this is its ONLY record: the chain returned at the
      * refusing hook, before reaching this one (see the class note, audit R7),
