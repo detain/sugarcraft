@@ -25,6 +25,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\ToolCall;
 
 /**
@@ -365,16 +366,16 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         $this->assertFileExists($pidFile);
         $pid = (int) trim((string) file_get_contents($pidFile));
         $this->assertGreaterThan(0, $pid);
-        $gone = false;
-        $deadline = microtime(true) + 3.0;
-        do {
-            $stat = @file_get_contents('/proc/' . $pid . '/stat');
-            if (!@posix_kill($pid, 0) || (is_string($stat) && preg_match('/\) ([A-Za-z]) /', $stat, $m) === 1 && $m[1] === 'Z')) {
-                $gone = true;
-                break;
+        $gone = BoundedShutdown::waitBounded(static function () use ($pid): bool {
+            if (!@posix_kill($pid, 0)) {
+                return true;
             }
-            usleep(20_000);
-        } while (microtime(true) < $deadline);
+            // A zombie takes no signals but is not running; an orphan can stay one
+            // until its reaper (PID 1 in a container) collects it.
+            $stat = @file_get_contents('/proc/' . $pid . '/stat');
+
+            return is_string($stat) && preg_match('/\) ([A-Za-z]) /', $stat, $m) === 1 && $m[1] === 'Z';
+        }, 3.0);
         $this->assertTrue($gone, "the backgrounded job (pid {$pid}) outlived the budget");
     }
 
