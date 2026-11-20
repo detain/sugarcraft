@@ -534,7 +534,9 @@ final class InProcessRoutedTest extends TestCase
 
     public function testARoutedAnswerNestedPastTheWireDecodeDepthIsRefusedTooDeep(): void
     {
-        // Encodes under the value depth (511) but decodes past the wire client's depth (64): too_deep.
+        // Direct: the door's conversion alone. Encodes under the value depth (511) but decodes past the
+        // wire client's depth (64): too_deep. The child's frame decode drops such an answer before it gets
+        // here, so the end-to-end path is the timeout test below.
         $nested = 'leaf';
         for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
             $nested = ['n' => $nested];
@@ -548,6 +550,41 @@ final class InProcessRoutedTest extends TestCase
         }
     }
 
+    /**
+     * End to end, a routed answer nested past the wire decode depth is not refused too_deep. The
+     * child's RemoteSessionHost::receive decodes the frame at JsonRpc::MAX_DEPTH and drops it
+     * undecoded, so the door never converts it and the caller gets the call's deadline: a timeout,
+     * retryable Busy. Design 5.2 asks for too_deep; this pins what the door does today, so a change
+     * on either side is seen here.
+     */
+    public function testARoutedAnswerNestedPastTheWireDecodeDepthTimesOutEndToEnd(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->sessionSnapshot($sessionId, 10));
+
+        $nested = 'leaf';
+        for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
+            $nested = ['n' => $nested];
+        }
+        $sent = $this->scripted['sent'];
+        self::assertSame('session.get', $sent[\count($sent) - 1]['method'], 'the routed call sent session.get to the child');
+        $this->replyToLast($nested);
+
+        self::assertSame(1, $this->deadlines->fireDeadlines(), 'the routed call armed one 20 s deadline');
+        self::assertCount(1, $refusals, 'the caller is refused at the deadline, not with too_deep');
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertSame(ErrorCode::Busy, $refusals[0]->errorCode);
+
+        // The child never answers, so its gateway call and RPC deadline stay armed on the shared loop. The
+        // child's transport failing (what a dead host does) settles both, and no timer outlives the test.
+        $pending = (new \ReflectionProperty(RemoteSessionHost::class, 'pending'))->getValue($this->scripted['rpc']);
+        $pending->failAll(new \RuntimeException('the child closed its socket'));
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($root) === 0), 'the gateway settled the call once the child failed');
+        self::assertCount(1, $refusals, 'the caller is settled once, not again by the child failure');
+    }
+
     public function testARoutedSubscribeAnswerPastTheFrameCeilingIsCompensatedAndRecordsNoSink(): void
     {
         $this->assertRoutedSubscribeRefused(['text' => \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES)], 'too_large');
@@ -555,6 +592,8 @@ final class InProcessRoutedTest extends TestCase
 
     public function testARoutedSubscribeAnswerNestedPastTheWireDecodeDepthIsCompensatedAndRecordsNoSink(): void
     {
+        // Direct, through subscribeAnswer(): the child's frame decode drops such an answer, so this does not
+        // reach the door end to end. The end-to-end path is testARoutedAnswerNestedPastTheWireDecodeDepthTimesOutEndToEnd.
         $nested = 'leaf';
         for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
             $nested = ['n' => $nested];
