@@ -73,14 +73,15 @@ foreach (['alpha', 'beta', 'gamma'] as $i => $name) {
 echo $z->scan($rows);</code></pre>
 
     <h3 style="margin-top: 24px;">Isolate nested components</h3>
-    <p>Give each component its own prefixed manager, so identically named ids cannot shadow each other. Use <code>newPrefix()</code> for every sub-tree. Scan the full root frame once, not each sub-tree, because a nested zone's box depends on the outer layout. <code>examples/zones-nested-components.php</code> runs two panes side by side.</p>
+    <p>Give each component its own prefixed manager, so identically named ids cannot shadow each other. Use <code>newPrefix()</code> for every sub-tree. Pass the full root frame to every manager's <code>scan()</code>, not each sub-tree's own output, because a nested zone's box depends on the outer layout. <code>examples/zones-nested-components.php</code> runs two panes side by side.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Mouse\Zones\Manager;
 
 $left  = Manager::newPrefix('left.');
 $right = Manager::newPrefix('right.');
 
 $frame = $left->mark('ok', 'OK') . '  ' . $right->mark('ok', 'OK');
-echo $left->scan($frame);  // records only left.* zones; right.* stays with $right</code></pre>
+echo $left->scan($frame);   // records only left.* zones
+$right->scan($frame);       // records only right.* zones from the same frame</code></pre>
 
     <h3 style="margin-top: 24px;">Track hover, drag and double clicks</h3>
     <p>Each tracker takes the manager it hit-tests against, and each one's <code>update()</code> returns the messages it produced. Enable the matching mouse reporting modes first, as the Configuration section explains.</p>
@@ -130,7 +131,7 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td>MouseEvent</td><td><code>press(int $x, int $y, int $button = 0)</code> / <code>release(...)</code> / <code>drag(...)</code> / <code>scroll(...)</code></td><td>Build an event from its action. The button defaults to the left button.</td></tr>
 <tr><td>MouseAction</td><td><code>Press</code>, <code>Release</code>, <code>Drag</code>, <code>Scroll</code></td><td>The action enum. The button constants include <code>BUTTON_WHEEL_UP</code> and <code>BUTTON_WHEEL_DOWN</code>.</td></tr>
 <tr><td>ZoneClickTracker</td><td><code>ZoneClickTracker::new()</code> / <code>track(MouseEvent, ?Zone $hitZone = null)</code></td><td>Feed an event. A completed click returns a <code>ClickResult</code>, and anything else returns <code>null</code>.</td></tr>
-<tr><td>ZoneClickTracker</td><td><code>observeRelease(MouseEvent, ?Zone = null)</code> / <code>setPressZone(Zone, int $button)</code></td><td>Check a release without completing a click. <code>setPressZone()</code> is the two-call form of <code>track()</code>, kept for callers that cannot pass the zone with the press.</td></tr>
+<tr><td>ZoneClickTracker</td><td><code>observeRelease(MouseEvent, ?Zone = null)</code> / <code>setPressZone(Zone, int $button)</code></td><td>Check a release without completing a click. <code>setPressZone()</code> is deprecated. It is the two-call form of <code>track()</code>, kept for callers that cannot pass the zone with the press.</td></tr>
 <tr><td>ClickResult</td><td><code>ClickResult::new(Zone, int $button)</code> / <code>$zone</code> / <code>$button</code></td><td>A completed click.</td></tr>
 <tr><td>Selection</td><td><code>Selection::new(int $rowFrom, int $rowTo, int $colFrom, int $colTo)</code></td><td>A text-selection state machine bounded to a region.</td></tr>
 <tr><td>Selection</td><td><code>begin(int $row, int $col, bool $shiftExtend = false)</code> / <code>dragTo(int $row, int $col, bool $shiftExtend = false)</code></td><td>Press and drag, with rows first. Each returns whether the state changed.</td></tr>
@@ -273,10 +274,10 @@ vendor/bin/phpunit</code></pre>
     <p>The sentinel tags are the trust boundary. Ordinary ASCII UI text cannot carry them, so normal rendering cannot forge a zone boundary. Pasted text and other untrusted input can carry them, though, so sweep untrusted input before you compose it into a marked frame. <code>Mark::untrusted()</code> strips the sentinels, and <code>Sanitize::untrustedForMarkedFrames()</code> in sugar-core also strips ANSI. The two sweeps are different.</p>
     <p>The scanner bounds its work. <code>Mark</code> caps ids at 256 bytes and content at 1 MiB, so an oversized span is rejected before any substring is built. Parsing has no cap of its own, so feed it only frames you expect to be terminal-sized. A lone sentinel costs its own three bytes, and the text after it is kept and measured as visible text, so a stray tag cannot move the zones around it.</p>
     <p>A zone that spans several rows is stored as the smallest bounding box that holds every cell it painted. The box is a union rectangle, so a gap next to a short line still counts as inside. Hit-testing multi-line content is therefore approximate, by design.</p>
-    <p>Coordinates are <code>(col, row)</code> everywhere, except for the selection API, which is row first, as a text selection is addressed like a file. Every cell is one-based. A zero or negative coordinate is refused at construction. A lone carriage return returns to column one on the same row, the way a terminal does.</p>
+    <p>Coordinates are <code>(col, row)</code> everywhere, except for the selection API, which is row first, as a text selection is addressed like a file. Every cell is one-based. <code>SelectionRange::new()</code> refuses a zero or negative coordinate at construction. <code>Zone::new()</code> stores its box as given, and <code>Selection::new()</code> floors its region into the terminal grid, so validate untrusted coordinates before you pass them to either. A lone carriage return returns to column one on the same row, the way a terminal does.</p>
 
     <h3 style="margin-top: 40px;">Changelog and versioning</h3>
-    <p>The renamed and superseded names stay as deprecated aliases, which include <code>newGlobal()</code>, <code>setMotionTracking()</code>, <code>prefixed()</code> and <code>ClickCounter</code>. Their removal is a deliberate backward-compatibility decision, and each alias delegates byte for byte to its replacement.</p>
+    <p>The renamed and superseded names stay as deprecated aliases, which include <code>newGlobal()</code>, <code>setMotionTracking()</code>, <code>prefixed()</code>, <code>setPressZone()</code> and <code>ClickCounter</code>. Their removal is a deliberate backward-compatibility decision, and each alias delegates byte for byte to its replacement.</p>
 
     <h3 style="margin-top: 40px;">Source</h3>
     <ul>
