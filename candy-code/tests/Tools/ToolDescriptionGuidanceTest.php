@@ -156,6 +156,25 @@ final class ToolDescriptionGuidanceTest extends TestCase
     }
 
     /**
+     * Mainline's pin (eaa775ef8): a caller that disabled the cap must not
+     * advertise one. The branch now advertises the 8 MiB capture ceiling
+     * instead, so this assertion is held back, not dropped, until the owner
+     * rules on the zero-cap meaning. The branch's replacement test below pins
+     * the current wording.
+     */
+    public function testBashDescriptionAdvertisesNoCapWhenTheCapIsDisabled(): void
+    {
+        self::markTestSkipped(
+            'Pending owner ruling on the zero-cap meaning: mainline says "no size cap", the branch says the 8 MiB capture ceiling.',
+        );
+
+        $description = (new Bash(maxOutputBytes: 0))->description();
+
+        $this->assertStringContainsString('no size cap on this instance', $description);
+        $this->assertStringNotContainsString('clipped at', $description);
+    }
+
+    /**
      * A caller that disabled the cap must not advertise an unbounded result:
      * capture still stops each stream at the 8 MiB ceiling, and the model has
      * to be told that overflow makes the answer PARTIAL.

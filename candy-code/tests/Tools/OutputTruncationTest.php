@@ -255,6 +255,24 @@ final class OutputTruncationTest extends TestCase
     }
 
     /**
+     * Mainline's pin (eaa775ef8) for the zero-cap meaning. Its name says zero
+     * disables truncation; the branch now reads zero as the 8 MiB capture
+     * ceiling. Both sides' assertions are kept: this one holds under either
+     * reading because the output is far below the ceiling. Which name and
+     * wording stays is pending the owner's ruling on the zero-cap meaning.
+     */
+    public function testAZeroCapDisablesBashTruncation(): void
+    {
+        $result = (new Bash(maxOutputBytes: 0))->execute([
+            'command' => 'for i in $(seq 1 5000); do echo "line-$i"; done',
+            'id' => 'call_6',
+        ]);
+
+        $this->assertStringNotContainsString('truncated:', $result->content());
+        $this->assertGreaterThan(30000, strlen($result->content()));
+    }
+
+    /**
      * A zero bound no longer means unbounded: output under the 8 MiB capture
      * ceiling is returned whole, with no marker, because nothing was dropped.
      */
