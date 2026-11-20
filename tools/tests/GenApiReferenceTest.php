@@ -254,7 +254,7 @@ final class GenApiReferenceTest extends TestCase
         $fragment = \ApiReference::generate($root, $slug);
         $body = (string) \file_get_contents($root . '/docs/_data/' . $slug . '.body.html');
         $page = \str_replace(\ApiReference::MARKER, $fragment, $body);
-        $result = \ApiReference::coverage(\ApiReference::collect($root, $slug), $page);
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, $slug), $page);
 
         self::assertCount(10, $result['top'], "$slug has fewer than ten public types, so the coverage figure would not mean the same thing");
         self::assertGreaterThanOrEqual(
@@ -269,10 +269,36 @@ final class GenApiReferenceTest extends TestCase
         // The prose of a page names most public types, so a name match would read 100 percent
         // with no API reference at all.
         $root = $this->fixtureRoot(self::sugarCoreFixture());
-        $result = \ApiReference::coverage(\ApiReference::collect($root, 'sugar-core'), '<p>Holder Mode Contract Hidden</p>');
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'sugar-core'), '<p>Holder Mode Contract Hidden</p>');
 
         self::assertSame(0, $result['covered']);
         self::assertSame(0.0, $result['percent']);
+    }
+
+    public function testCoverageFallsWhenAPublicHeadingIsMissingFromThePage(): void
+    {
+        // The ranking is built from the source, not from what the page renders, so a heading
+        // the page drops must lower the figure. Ranking from the rendered types made this gate
+        // report 100 percent whatever the page held.
+        $root = $this->fixtureRoot(self::sugarCoreFixture());
+        $html = \ApiReference::generate($root, 'sugar-core');
+        $dropped = \str_replace('<h4 id="api-demo-fixture-holder">', '<h4>', $html);
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'sugar-core'), $dropped);
+
+        self::assertCount(3, $result['top']);
+        self::assertSame(2, $result['covered']);
+        self::assertSame(66.7, $result['percent']);
+    }
+
+    public function testTheRankingLeavesOutInternalTypesAndKeepsPublicOnes(): void
+    {
+        // Both sources read @internal from the docblock. A disagreement between them fails the run
+        // (see testADeclarationTheParserCannotSeeFailsTheRun), so the ranking cannot drift from collect().
+        $root = $this->fixtureRoot(self::sugarCoreFixture());
+        $ranked = \array_column(\ApiReference::declaredPublic($root, 'sugar-core'), 'fqn');
+
+        self::assertContains('Demo\Fixture\Holder', $ranked);
+        self::assertNotContains('Demo\Fixture\Hidden', $ranked);
     }
 
     public function testADeclarationTheParserCannotSeeFailsTheRun(): void
@@ -520,11 +546,86 @@ final class GenApiReferenceTest extends TestCase
     {
         $root = $this->fixtureRoot(self::sugarCoreFixture());
         $html = \ApiReference::generate($root, 'sugar-core');
-        $result = \ApiReference::coverage(\ApiReference::collect($root, 'sugar-core'), $html);
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'sugar-core'), $html);
 
         self::assertCount(3, $result['top'], 'three fixture types, so the top ten is all of them');
         self::assertSame(3, $result['covered'], 'every fixture type is named in the fragment');
         self::assertSame(100.0, $result['percent']);
+    }
+
+    public function testAnInlineRenameKeepAnnotationStaysOutOfTheSummary(): void
+    {
+        // The annotation is a note for the rename tooling. The prose after it is the summary, so
+        // it must read as one paragraph with no tag left in the published page.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Legacy.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /**
+                 * Imports the old names into the new ones. // @rename-keep
+                 * Never overwrites a value the user set.
+                 *
+                 * @see Other
+                 */
+                final class Legacy
+                {
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('<p>Imports the old names into the new ones. Never overwrites a value the user set.</p>', $html);
+        self::assertStringNotContainsString('rename-keep', $html);
+        self::assertStringNotContainsString('//', $html);
+    }
+
+    public function testSignaturesKeepStringLiteralDefaultsAndByReferenceSigils(): void
+    {
+        // The default values hold the text a whitespace pattern would rewrite: `' ,'` and `'( y'`.
+        // A by-reference method prints its `&` with the name, as PHP writes it.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Pads.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                final class Pads
+                {
+                    private array $items = [];
+
+                    public function pad(string $fill = ' ,', string $x = '( y',): string
+                    {
+                        return $fill . $x;
+                    }
+
+                    public function &ref(): array
+                    {
+                        return $this->items;
+                    }
+
+                    public function multi(
+                        int $a,
+                        ?string $b = null,
+                    ): ?int {
+                        return $a;
+                    }
+                }
+
+                PHP,
+        ]);
+        $types = \ApiReference::collect($root, 'sugar-core');
+
+        self::assertSame(
+            ["pad(string \$fill = ' ,', string \$x = '( y'): string", '&ref(): array', 'multi(int $a, ?string $b = null): ?int'],
+            \array_column($types[0]['methods'], 'signature')
+        );
     }
 
     public function testBracedNamespaceIsRefusedRatherThanSilentlyDropped(): void

@@ -26,8 +26,10 @@ declare(strict_types=1);
  *
  * TOP-10 COVERAGE. A companion to the class coverage in tools/depth-score.php,
  * not the same figure. This generator takes the ten largest public types by
- * their own declaration span and counts how many of them the fragment gives a
- * heading (its anchor id). depth-score ranks every first declaration, @internal
+ * declaration span and counts how many of them the fragment gives a heading
+ * (its anchor id). The public set comes from the line scan, not from the types
+ * the fragment renders, so a heading the page drops still counts against the
+ * target. depth-score ranks every first declaration, @internal
  * ones included, and counts names in the page body, so the two can grade
  * different sets. Target is at least 80 percent (plan section 5.3, item 6).
  *
@@ -92,12 +94,15 @@ final class ApiReference
      * already named in a lib's prose, so a name match would read 100 percent
      * whether or not the fragment carries the type at all.
      *
-     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}> $types
+     * The ranking comes from declaredPublic(), not from the types the fragment is
+     * rendered from. A set measured against its own render can never fail: a type
+     * the page dropped would also have dropped out of the ranking.
+     *
+     * @param list<array{fqn: string, size: int}> $ranked declaredPublic()'s output
      * @return array{top: list<string>, covered: int, percent: float}
      */
-    public static function coverage(array $types, string $html): array
+    public static function coverage(array $ranked, string $html): array
     {
-        $ranked = $types;
         usort($ranked, static function (array $a, array $b): int {
             $cmp = $b['size'] <=> $a['size'];
 
@@ -120,9 +125,61 @@ final class ApiReference
     }
 
     /**
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}>
+     * The public types the line scan finds, with the size of each span: the input
+     * top-10 coverage ranks. A type the parser drops still counts here, because
+     * scanTree() fails the run on any disagreement, and the page has to carry its
+     * heading.
+     *
+     * @return list<array{fqn: string, size: int}>
      */
-    public static function collect(string $root, string $slug): array
+    public static function declaredPublic(string $root, string $slug): array
+    {
+        $tree = self::scanTree($root, $slug);
+        $sizes = [];
+        foreach ($tree['parsed'] as $type) {
+            $sizes[$type['fqn']] = $type['size'];
+        }
+
+        $public = [];
+        foreach ($tree['declared'] as $decl) {
+            if (!$decl['internal']) {
+                $public[] = ['fqn' => $decl['fqn'], 'size' => $sizes[$decl['fqn']]];
+            }
+        }
+
+        return $public;
+    }
+
+    /**
+     * Both views of one lib's src tree, cross-checked: the line scan's declarations
+     * and the token parser's types. Sizes come from the parser, which measures a
+     * span by matching braces; a text scan would end a class at the first column-zero
+     * brace, and a heredoc can hold one.
+     *
+     * @return array{declared: list<array{fqn: string, internal: bool}>, parsed: list<array{fqn: string, size: int, internal: bool}>}
+     */
+    private static function scanTree(string $root, string $slug): array
+    {
+        $declared = [];
+        $parsed = [];
+        foreach (self::sourceFiles($root, $slug) as $path) {
+            $source = (string) file_get_contents($path);
+            foreach (self::declaredSpans($source) as $span) {
+                $declared[] = $span;
+            }
+            foreach (self::parse($source) as $type) {
+                $parsed[] = $type;
+            }
+        }
+        self::checkDeclarations($slug, $declared, $parsed);
+
+        return ['declared' => $declared, 'parsed' => $parsed];
+    }
+
+    /**
+     * @return list<string> the PHP files under <root>/<slug>/src, sorted
+     */
+    private static function sourceFiles(string $root, string $slug): array
     {
         if (!self::enabled($slug)) {
             throw new \InvalidArgumentException(
@@ -143,18 +200,15 @@ final class ApiReference
         }
         sort($files, SORT_STRING);
 
-        $declared = [];
-        $parsed = [];
-        foreach ($files as $path) {
-            $source = (string) file_get_contents($path);
-            foreach (self::declaredNames($source) as $name) {
-                $declared[] = $name;
-            }
-            foreach (self::parse($source) as $type) {
-                $parsed[] = $type;
-            }
-        }
-        self::checkDeclarations($slug, $declared, array_column($parsed, 'fqn'));
+        return $files;
+    }
+
+    /**
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}>
+     */
+    public static function collect(string $root, string $slug): array
+    {
+        $parsed = self::scanTree($root, $slug)['parsed'];
 
         $index = [];
         foreach ($parsed as $type) {
@@ -185,45 +239,88 @@ final class ApiReference
 
     /**
      * The line-anchored scan and the token parser must agree on every declared
-     * type, internal ones included. A mismatch names both sides of the gap.
+     * type, internal ones included, and on which of them are public. A mismatch
+     * names both sides of the gap.
      *
-     * @param list<string> $declared FQNs from the line scan
-     * @param list<string> $parsed FQNs from the token parser
+     * @param list<array{fqn: string, internal: bool}> $declared from declaredSpans()
+     * @param list<array{fqn: string, size: int, internal: bool}> $parsed from parse()
      */
     private static function checkDeclarations(string $slug, array $declared, array $parsed): void
     {
-        sort($declared, SORT_STRING);
-        sort($parsed, SORT_STRING);
-        if ($declared === $parsed) {
-            return;
+        $declaredNames = array_column($declared, 'fqn');
+        $parsedNames = array_column($parsed, 'fqn');
+        sort($declaredNames, SORT_STRING);
+        sort($parsedNames, SORT_STRING);
+        if ($declaredNames !== $parsedNames) {
+            throw new \RuntimeException(sprintf(
+                'gen-api-reference: %s/src declares %d type(s) but the parser found %d; declared but not parsed: [%s]; parsed but not declared: [%s]',
+                $slug,
+                count($declaredNames),
+                count($parsedNames),
+                implode(', ', array_values(array_diff($declaredNames, $parsedNames))),
+                implode(', ', array_values(array_diff($parsedNames, $declaredNames)))
+            ));
         }
 
-        throw new \RuntimeException(sprintf(
-            'gen-api-reference: %s/src declares %d type(s) but the parser found %d; declared but not parsed: [%s]; parsed but not declared: [%s]',
-            $slug,
-            count($declared),
-            count($parsed),
-            implode(', ', array_values(array_diff($declared, $parsed))),
-            implode(', ', array_values(array_diff($parsed, $declared)))
-        ));
+        $publicScan = self::publicNames($declared);
+        $publicParse = self::publicNames($parsed);
+        if ($publicScan !== $publicParse) {
+            throw new \RuntimeException(sprintf(
+                'gen-api-reference: %s/src marks different types @internal in the line scan and the parser; scan-only public: [%s]; parser-only public: [%s]',
+                $slug,
+                implode(', ', array_values(array_diff($publicScan, $publicParse))),
+                implode(', ', array_values(array_diff($publicParse, $publicScan)))
+            ));
+        }
     }
 
     /**
-     * The FQN of every top-level type declaration in one file, found by a
-     * line-anchored scan. PSR-12 puts a top-level declaration at column zero, so
-     * this does not need the token parser and is a second source for the same set.
-     *
-     * @return list<string>
+     * @param list<array{fqn: string, internal: bool}> $types
+     * @return list<string> the non-internal FQNs, sorted
      */
-    private static function declaredNames(string $source): array
+    private static function publicNames(array $types): array
+    {
+        $names = [];
+        foreach ($types as $type) {
+            if (!$type['internal']) {
+                $names[] = $type['fqn'];
+            }
+        }
+        sort($names, SORT_STRING);
+
+        return $names;
+    }
+
+    /**
+     * Every top-level type declaration in one file, from a line-anchored scan that
+     * shares no code with the token parser. PSR-12 puts a top-level declaration at
+     * column zero, so the name and the @internal flag come from the text alone.
+     *
+     * @return list<array{fqn: string, internal: bool}>
+     */
+    private static function declaredSpans(string $source): array
     {
         $namespace = preg_match('/^namespace\s+([A-Za-z_\\\\][A-Za-z0-9_\\\\]*)\s*;/m', $source, $m) === 1 ? $m[1] : '';
-        preg_match_all('/^(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/m', $source, $names);
-
-        return array_map(
-            static fn (string $short): string => ($namespace === '' ? '' : $namespace . '\\') . $short,
-            $names[1]
+        preg_match_all(
+            '/^(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/m',
+            $source,
+            $hits,
+            PREG_SET_ORDER | PREG_OFFSET_CAPTURE
         );
+
+        $spans = [];
+        foreach ($hits as $hit) {
+            // The docblock must be the last thing before the declaration, past any attributes.
+            $before = substr($source, 0, $hit[0][1]);
+            $internal = preg_match('~/\*\*((?:(?!\*/).)*)\*/\s*(?:#\[[^\]\n]*\]\s*)*$~s', $before, $doc) === 1
+                && preg_match('~@internal\b~', $doc[1]) === 1;
+            $spans[] = [
+                'fqn' => ($namespace === '' ? '' : $namespace . '\\') . $hit[1][0],
+                'internal' => $internal,
+            ];
+        }
+
+        return $spans;
     }
 
     /**
@@ -546,33 +643,19 @@ final class ApiReference
             }
         }
 
+        $byRef = false;
         $name = self::nextSignificant($tokens, $at + 1);
-        if ($name !== null && $tokens[$name] === '&') {
+        // PHP 8.1+ tokenizes `&` before a name as T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG, an array token.
+        if ($name !== null && (is_array($tokens[$name]) ? $tokens[$name][1] : $tokens[$name]) === '&') {
+            // PHP writes a by-reference method as `function &name`; the sigil belongs to the name.
+            $byRef = true;
             $name = self::nextSignificant($tokens, $name + 1);
         }
         if ($name === null || !is_array($tokens[$name]) || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $tokens[$name][1]) !== 1) {
             throw new \RuntimeException('gen-api-reference: a function declaration has no readable name');
         }
 
-        $sig = '';
-        $parens = 0;
-        for ($j = $name + 1, $n = count($tokens); $j < $n; $j++) {
-            $t = $tokens[$j];
-            $txt = is_array($t) ? $t[1] : $t;
-            if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-            if ($txt === '(') {
-                $parens++;
-            } elseif ($txt === ')') {
-                $parens--;
-            } elseif ($parens === 0 && ($txt === '{' || $txt === ';')) {
-                break;
-            }
-            $sig .= is_array($t) ? $t[1] : $t;
-        }
-        $sig = trim((string) preg_replace('/\s+/', ' ', $sig));
-        $sig = (string) preg_replace(['/\(\s+/', '/,?\s*\)/', '/\s+,/'], ['(', ')', ','], $sig);
+        $sig = self::signatureTail($tokens, $name + 1);
 
         $prefix = [];
         foreach (self::SHOWN_MODIFIERS as $shown) {
@@ -582,9 +665,52 @@ final class ApiReference
         }
         $type['methods'][] = [
             'name' => $tokens[$name][1],
-            'signature' => implode(' ', $prefix) . ($prefix === [] ? '' : ' ') . $tokens[$name][1] . $sig,
+            'signature' => implode(' ', $prefix) . ($prefix === [] ? '' : ' ')
+                . ($byRef ? '&' : '') . $tokens[$name][1] . $sig,
             'summary' => self::summary($doc),
         ];
+    }
+
+    /**
+     * The printed tail of a signature, from just after the name to the body or the
+     * semicolon: the parameter list and any return type. Spacing is rebuilt token by
+     * token. A pattern over the joined text would also rewrite a string literal in a
+     * default value, so `' ,'` would print as `','`.
+     *
+     * @param list<mixed> $tokens
+     */
+    private static function signatureTail(array $tokens, int $from): string
+    {
+        $pieces = [];
+        $gap = false;
+        $parens = 0;
+        for ($j = $from, $n = count($tokens); $j < $n; $j++) {
+            $t = $tokens[$j];
+            $txt = is_array($t) ? $t[1] : $t;
+            if (is_array($t) && in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                $gap = true;
+                continue;
+            }
+            if ($txt === '(') {
+                $parens++;
+            } elseif ($txt === ')') {
+                $parens--;
+            } elseif ($parens === 0 && ($txt === '{' || $txt === ';')) {
+                break;
+            }
+            // A trailing comma before the closing parenthesis is not printed.
+            if ($txt === ')' && end($pieces) === ',') {
+                array_pop($pieces);
+            }
+            // One space where the source had a gap, none inside the parentheses or before a comma.
+            if ($gap && $pieces !== [] && !in_array($txt, [')', ','], true) && end($pieces) !== '(') {
+                $pieces[] = ' ';
+            }
+            $pieces[] = $txt;
+            $gap = false;
+        }
+
+        return implode('', $pieces);
     }
 
     /**
@@ -643,7 +769,8 @@ final class ApiReference
                 continue;
             }
             $line = (string) preg_replace(['#^/\*\*\s*#', '#\s*\*/$#', '#^\*\s?#'], ['', '', ''], $line);
-            $line = trim($line);
+            // Source-side annotations such as `// @rename-keep` are for tooling, not readers.
+            $line = trim((string) preg_replace('~\s*//\s*@[A-Za-z][\w-]*~', '', $line));
             if ($line === '') {
                 if ($para !== []) {
                     break;
@@ -809,7 +936,7 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === realpath(__F
         try {
             $fragment = ApiReference::generate($root, $slug);
             if ($report) {
-                $result = ApiReference::coverage(ApiReference::collect($root, $slug), $fragment);
+                $result = ApiReference::coverage(ApiReference::declaredPublic($root, $slug), $fragment);
                 fwrite(STDOUT, sprintf(
                     "%s: top-10 coverage %d/%d (%.1f%%), target %.0f%%\n  top-10 by size: %s\n",
                     $slug,
