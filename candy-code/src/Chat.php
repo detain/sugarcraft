@@ -20422,9 +20422,11 @@ final class Chat implements Model
         $supervisor = $this->backgroundSupervisor;
         if ($supervisor !== null) {
             // A launch answers when its daemon authenticates, so the verdicts
-            // usually arrive on a later loop turn. Verdicts that are already
-            // decided (skips, refusals, a launch that settled at once) land in
-            // this tick's transcript; the rest ride a Cmd as ScheduleFiredMsg.
+            // usually arrive on a later loop turn. The batch is all-or-nothing:
+            // when every launch in it has already settled, its verdicts land in
+            // this tick's transcript; when any is still pending, the WHOLE batch
+            // (already-decided refusals included) rides a Cmd as ScheduleFiredMsg
+            // and lands together once the last launch settles.
             $fired = $registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
                 $supervisor,
                 $this->agentManager,
