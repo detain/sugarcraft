@@ -158,7 +158,7 @@ final class ConversationRouter extends ConversationRouterCore
                     try {
                         $sessionId = (string) ($created['id'] ?? '');
                         if ($sessionId === '') {
-                            throw new \RuntimeException('session.create returned no id');
+                            throw new NoSessionIdException('session.create returned no id');
                         }
                         $this->map->bind($key, $sessionId);
                         $this->map->rememberConversation($sessionId, $key, $ref);
@@ -447,6 +447,18 @@ final class ConversationRouter extends ConversationRouterCore
     public function teamsConversation(string $account, string $conversationId): ?array
     {
         return $this->teamsMap->teamsConversation($account, $conversationId);
+    }
+
+    /**
+     * The core shows this text in the chat, so a missing-id failure answers from the
+     * catalog; its English exception message stays in the log. Other failures keep the
+     * core's default until their own copy is routed.
+     */
+    protected function failureReason(\Throwable $e): string
+    {
+        return $e instanceof NoSessionIdException
+            ? Lang::t('channels.msteams.session.no_id')
+            : parent::failureReason($e);
     }
 
     /**

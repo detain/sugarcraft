@@ -6,6 +6,7 @@ namespace CandyCode\Bundles\MsTeams\Tests\Bridge;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
+use CandyCode\Bundles\MsTeams\Lang;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
@@ -174,6 +175,24 @@ final class ConversationRouterTest extends TestCase
         self::assertSame(2, $this->serve->createSeen, 'the next inbound mints a fresh attempt — a rejected promise is never memoized');
         self::assertSame(1, $this->serve->sendSeen);
         self::assertSame('retry', $this->serve->seenText);
+    }
+
+    /**
+     * A session.create answered without an id reaches the chat as the catalog's copy, never as
+     * the English exception message the router logs.
+     */
+    public function testANoIdSessionCreateAnswersFromTheCatalog(): void
+    {
+        $this->boot();
+        $this->serve->createWithoutId = true;
+        $this->inboundDm('poisoned', false, 'm-1');
+
+        $expected = Lang::t('channels.msteams.session.could_not_open', [
+            'error' => Lang::t('channels.msteams.session.no_id'),
+        ]);
+        $reply = \implode("\n", $this->face->delivered);
+        self::assertStringContainsString($expected, $reply);
+        self::assertStringNotContainsString('returned no id', $reply, 'the English exception message must never reach the chat');
     }
 
     /**

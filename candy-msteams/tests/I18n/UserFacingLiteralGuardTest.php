@@ -54,6 +54,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'multi-line notice' => ["\$text = \"This conversation is not enabled\\n\\n\" . \$id;"];
         yield 'refused prompt in deliver' => ["\$this->deliver(\$ch, \$ref, \"⛔ Your message never reached the agent.\");"];
         yield 'default tool name' => ["\$tool = (string) (\$ask['tool'] ?? 'a tool');"];
+        yield 'method name ending in Error is not diagnostic' => ["\$this->sendError('Approval expired, answer again.');"];
         yield 'single-word sentence' => ["\$text = 'Done.';"];
         yield 'bare word as a ternary fallback' => ["\$name = \$name === '' ? 'attachment' : \$name;"];
     }
@@ -77,6 +78,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'routed ternary fallback' => ["\$name = \$name === '' ? Lang::t('channels.msteams.media.unnamed_attachment') : \$name;"];
         yield 'bare word compared, not shown' => ["\$first = \$name === 'help';"];
         yield 'exception message is diagnostic' => ["throw new \\RuntimeException('msteams notify refused: the conversation is no longer served');"];
+        yield 'unqualified exception class is diagnostic' => ["throw new NoSessionIdException('session.create returned no id');"];
     }
 
     #[DataProvider('passingFixtureProvider')]
@@ -179,14 +181,17 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
-     * `->log->info(`, or an exception constructor such as `new \RuntimeException(`.
+     * `->log->info(`, or the constructor of a `new` expression on an exception class
+     * such as `new \RuntimeException(`. A method whose name merely ends in `Error` or
+     * `Exception` (`$this->sendError(`) is user-facing and is not exempt.
      *
      * @param list<array{id: int|string, text: string, line: int}> $toks
      */
     private static function isDiagnosticCall(array $toks, int $open): bool
     {
         $callee = $toks[$open - 1]['text'] ?? '';
-        $isException = \preg_match('/(Exception|Error)$/', $callee) === 1;
+        $isNew = ($toks[$open - 2]['id'] ?? null) === \T_NEW;
+        $isException = $isNew && \preg_match('/(Exception|Error)$/', $callee) === 1;
         $isLog = ($toks[$open - 1]['id'] ?? null) === \T_STRING
             && ($toks[$open - 2]['id'] ?? null) === \T_OBJECT_OPERATOR
             && ($toks[$open - 3]['id'] ?? null) === \T_STRING
