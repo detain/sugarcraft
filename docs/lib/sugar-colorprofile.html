@@ -308,7 +308,7 @@ $writer-&gt;write("\x1b[38;2;255;0;0mdisk low\x1b[0m\n");   // written with the 
 <tr><td><code>TERM_PROGRAM=iTerm.app</code></td><td>8</td><td>Gives TrueColor. Matching is case-sensitive.</td></tr>
 <tr><td><code>WT_SESSION</code></td><td>9</td><td>A non-empty value gives TrueColor (Windows Terminal).</td></tr>
 <tr><td><code>GOOGLE_CLOUD_SHELL</code></td><td>10</td><td>Exactly <code>true</code> gives TrueColor.</td></tr>
-<tr><td><code>TMUX</code> / <code>STY</code> with <code>tmux*</code></td><td>11</td><td>Caps the level at Ansi256, after <code>COLORTERM</code> is read.</td></tr>
+<tr><td><code>TMUX</code> / <code>STY</code> with <code>tmux*</code></td><td>11</td><td>Caps the level at Ansi256, but only when <code>COLORTERM</code> has not already answered. <code>truecolor</code> or <code>24bit</code> at step 7 still gives TrueColor under tmux.</td></tr>
 <tr><td><code>TERM</code></td><td>12–13</td><td><code>*-256color</code>, <code>xterm-kitty</code> and <code>xterm-ghostty</code> give Ansi256. <code>xterm*</code>, <code>screen*</code> and <code>tmux*</code> give Ansi.</td></tr>
 <tr><td><code>REDUCE_MOTION</code> / <code>PREFERS_REDUCED_MOTION</code></td><td>—</td><td>Not part of the color ladder. A non-empty value other than <code>0</code>, <code>false</code>, <code>no</code> or <code>off</code> sets <code>Probe::reducedMotion()</code>.</td></tr>
 </table>
@@ -323,7 +323,7 @@ $writer-&gt;write("\x1b[38;2;255;0;0mdisk low\x1b[0m\n");   // written with the 
     <h3 id="examples" style="margin-top: 40px;">Examples</h3>
     <ul>
       <li><code>examples/detect.php</code> detects the profile for STDOUT, and prints the plain-language description from <code>Palette::comment()</code>.</li>
-      <li><code>examples/convert.php</code> builds colors from RGB, hex and int, then converts each one to every profile level.</li>
+      <li><code>examples/convert.php</code> builds colors from an int and a hex string, then converts each one to every profile level.</li>
       <li><code>examples/degrade.php</code> wraps a stream with <code>ProfileWriter</code> and forces each of the Ansi256, Ansi and Ascii profiles in turn.</li>
       <li><code>examples/standard-colors.php</code> lists the 16 ANSI colors through the non-mutating read API.</li>
       <li><code>examples/probe-report.php</code> prints the phased capability report for a hermetic environment map.</li>
@@ -350,7 +350,7 @@ vendor/bin/phpunit</code></pre>
     <p><code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> outrank <code>NO_COLOR</code>. An exported force variable, from a shell alias or a CI image, can re-enable color for a user who set <code>NO_COLOR</code>. Unset the force variables, and check <code>Probe::isNoColor()</code> before you honor a force override.</p>
 
     <h3 id="a-truecolor-terminal-reports-ansi256" style="margin-top: 24px;">A truecolor terminal reports Ansi256</h3>
-    <p>Two legs cap the level. <code>COLORTERM=yes</code> is read as a 256-color promise, and a <code>tmux</code> or <code>screen</code> session caps the level at Ansi256. Set <code>COLORTERM=truecolor</code> where the terminal honors it, or let the phase-2 terminfo probe promote the rung when the entry advertises <code>Tc</code> or <code>RGB</code>.</p>
+    <p>Two legs cap the level. <code>COLORTERM=yes</code> is read as a 256-color promise, and a <code>screen</code> session caps the level at Ansi256. A <code>tmux</code> session does the same unless <code>COLORTERM</code> advertises truecolor. Set <code>COLORTERM=truecolor</code> where the terminal honors it, or let the phase-2 terminfo probe promote the rung when the entry advertises <code>Tc</code> or <code>RGB</code>.</p>
 
     <h3 id="an-environment-key-is-ignored" style="margin-top: 24px;">An environment key is ignored</h3>
     <p>Env keys are matched case-exactly, so <code>No_Color</code> does not count as <code>NO_COLOR</code>. Windows reports its environment case-insensitively at the OS layer, so the same spelling can look set in a shell and still miss detection here. Use the exact spelling from the table.</p>

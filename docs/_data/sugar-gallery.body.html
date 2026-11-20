@@ -17,7 +17,7 @@ $grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
     ]);
 
 echo $grid-&gt;render(focused: true);</code></pre>
-    <p style="margin-top: 12px;">The grid holds 40 items but only two cards. The other 38 indices draw as <code>░</code> skeleton cells, and the <code>▸</code> cursor sits on the first tile. The full program with poster art is <code>examples/poster-grid.php</code>.</p>
+    <p style="margin-top: 12px;">The grid holds 40 items but only two cards. The 60-column viewport fits one row of three cells, so only that window draws: index 2 appears as a <code>░</code> skeleton cell, and the other 37 indices stay unloaded and off-screen. The <code>▸</code> cursor sits on the first tile. The full program with poster art is <code>examples/poster-grid.php</code>.</p>
 
     <h3 style="margin-top: 32px;">Concepts</h3>
     <p>A <code>PosterGrid</code> is a sparse array of cards keyed by absolute index. <code>withReset(total:)</code> sets how many items exist, and <code>withItems()</code> splices in the cards the owner has fetched. Any index without a card is a skeleton. The grid never asks for data itself, so the owner decides what to fetch and when, by reading <code>visibleRange()</code> after each cursor move.</p>
@@ -191,7 +191,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <table class="api-table">
 <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
 <tr><td><code>PosterGrid::new()</code> card width</td><td><code>int|CardSize</code></td><td>required</td><td>Cell width in columns. A <code>CardSize</code> is clamped to a width of at least 4, a height of at least 1, and gutters of at least 0.</td></tr>
-<tr><td><code>PosterGrid::new()</code> poster height</td><td><code>?int</code></td><td><code>null</code></td><td>Poster rows in each cell. Each cell adds two rows for the title and the progress bar.</td></tr>
+<tr><td><code>PosterGrid::new()</code> poster height</td><td><code>?int</code></td><td>required with an int width</td><td>Poster rows in each cell. Each cell adds two rows for the title and the progress bar. Leaving it out with an int width throws <code>ArgumentCountError</code>; it is ignored when a <code>CardSize</code> is passed.</td></tr>
 <tr><td><code>hSpacing</code> / <code>vSpacing</code></td><td><code>int</code></td><td><code>2</code> / <code>1</code></td><td>Columns between cells and lines between rows.</td></tr>
 <tr><td><code>withViewport(cols, rows)</code></td><td><code>int</code>, <code>int</code></td><td>none</td><td>The area the grid may paint. Only the rows inside it are rendered.</td></tr>
 <tr><td><code>withReset(total:)</code></td><td><code>int</code></td><td>none</td><td>Starts a fresh result set. Drops the cached cards and returns the cursor to the top.</td></tr>
@@ -264,7 +264,7 @@ vendor/bin/phpunit</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-gallery/.vhs/poster-grid.gif" alt="PosterGrid browsing rows" onerror="this.parentElement.style.display='none'">
                 <h3>PosterGrid demo</h3>
-                <span class="demo-caption">The virtualized grid paged through a large library: cursor moves, skeleton cells resolving into posters as pages splice in, and the Rail strip following the focused row.</span>
+                <span class="demo-caption">One frame of the virtualized grid: the ▸ cursor on the focused tile, poster art and progress bars on fetched cards, and ░ skeleton cells where a page has not loaded yet.</span>
             </div>
         </div>
     </div>

@@ -31,7 +31,7 @@ candy-scriptui spin --title "Building..." -- make build
 git branch | candy-scriptui filter</code></pre>
 
     <h3 style="margin-top: 32px;">Concepts</h3>
-    <p>The binary is one entry point with one subcommand per job. Each subcommand reads its input from argv or stdin, prints its result to stdout, and reports the outcome through its exit code, so the parts compose in a shell pipeline. <code>style</code>, <code>format</code>, <code>table</code> and <code>join</code> print and exit. The interactive commands draw their frame on the terminal, and when stdout is redirected the frame goes to STDERR, so the selection on stdout stays clean. Keys always come from the terminal, never from a pipe. The exit codes are the contract: 0 on success, 1 when the user aborts with Esc (except in <code>pager</code>), 130 on Ctrl+C, 124 on a <code>--timeout</code> deadline, and 128 plus the signal number on an OS signal.</p>
+    <p>The binary is one entry point with one subcommand per job. Each subcommand reads its input from argv or stdin, prints its result to stdout, and reports the outcome through its exit code, so the parts compose in a shell pipeline. <code>style</code>, <code>format</code>, <code>table</code> and <code>join</code> print and exit. The interactive commands draw their frame on the terminal, and when stdout is redirected the frame goes to STDERR, so the selection on stdout stays clean. Keys always come from the terminal, never from a pipe. The exit codes are the contract: 0 on success, 1 when the user aborts with Esc (2 in <code>confirm</code>, so an abort stays apart from a no; <code>pager</code> finishes with 0 instead), 130 on Ctrl+C, 124 on a <code>--timeout</code> deadline, and 128 plus the signal number on an OS signal.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -56,7 +56,7 @@ git branch | candy-scriptui filter</code></pre>
     key map (arrows and Enter navigate; <code>j</code>/<code>k</code> and
     <code>g</code>/<code>G</code> move and jump in lists, the vim style applies
     except in <code>filter</code> where they are typed into the query; Esc aborts
-    with exit <code>1</code> except in <code>pager</code>, where it finishes like
+    with exit <code>1</code> (exit <code>2</code> in <code>confirm</code>, so an abort stays apart from a no) except in <code>pager</code>, where it finishes like
     <code>q</code>; Ctrl+C aborts with <code>130</code>). There is no mouse.
     Color follows one contract everywhere: <code>--no-ansi</code> is final,
     <code>--ansi</code> outranks every environment rule, and
