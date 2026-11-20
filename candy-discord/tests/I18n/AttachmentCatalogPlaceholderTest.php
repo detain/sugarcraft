@@ -22,7 +22,29 @@ final class AttachmentCatalogPlaceholderTest extends TestCase
     private const SRC = __DIR__ . '/../../src/Discord/DiscordAccount.php';
     private const EN = __DIR__ . '/../../lang/en.php';
     private const PREFIX = 'channels.discord.attachments.';
-    private const CALL = '/Lang::t\(\s*\'(channels\.discord\.attachments\.[a-z_.]+)\'\s*(?:,\s*\[(.*?)\]\s*)?\)/s';
+    /* Either quote style: a double-quoted call must not silently drop out of the guard. */
+    private const CALL = '/Lang::t\(\s*([\'"])(channels\.discord\.attachments\.[a-z_.]+)\1\s*(?:,\s*\[(.*?)\]\s*)?\)/s';
+
+    /**
+     * @return list<array{string, list<string>}> each attachment Lang::t call site in $source:
+     *         its key and the sorted parameter names it passes
+     */
+    private static function callSites(string $source): array
+    {
+        \preg_match_all(self::CALL, $source, $hits, \PREG_SET_ORDER);
+        $sites = [];
+        foreach ($hits as $hit) {
+            $params = [];
+            if (($hit[3] ?? '') !== '') {
+                \preg_match_all('/([\'"])([a-z_]+)\1\s*=>/', $hit[3], $names);
+                $params = $names[2];
+            }
+            \sort($params);
+            $sites[] = [$hit[2], $params];
+        }
+
+        return $sites;
+    }
 
     /**
      * @return iterable<string, array{string, list<string>}> each attachment Lang::t call site:
@@ -30,17 +52,10 @@ final class AttachmentCatalogPlaceholderTest extends TestCase
      */
     public static function callSiteProvider(): iterable
     {
-        $source = (string) \file_get_contents(self::SRC);
-        \preg_match_all(self::CALL, $source, $hits, \PREG_SET_ORDER);
+        $hits = self::callSites((string) \file_get_contents(self::SRC));
         self::assertNotSame([], $hits, 'the attachment Lang::t call sites must be found in DiscordAccount.php');
-        foreach ($hits as $i => $hit) {
-            $params = [];
-            if (($hit[2] ?? '') !== '') {
-                \preg_match_all('/\'([a-z_]+)\'\s*=>/', $hit[2], $names);
-                $params = $names[1];
-            }
-            \sort($params);
-            yield $i . ' ' . $hit[1] => [$hit[1], $params];
+        foreach ($hits as $i => [$key, $params]) {
+            yield $i . ' ' . $key => [$key, $params];
         }
     }
 
@@ -61,12 +76,49 @@ final class AttachmentCatalogPlaceholderTest extends TestCase
     {
         $en = require self::EN;
         $catalog = \array_values(\array_filter(\array_keys($en), static fn (string $k): bool => \str_starts_with($k, self::PREFIX)));
-        $source = (string) \file_get_contents(self::SRC);
-        \preg_match_all(self::CALL, $source, $hits);
-        $referenced = \array_values(\array_unique($hits[1]));
+        $referenced = \array_values(\array_unique(\array_column(self::callSites((string) \file_get_contents(self::SRC)), 0)));
         \sort($catalog);
         \sort($referenced);
 
         self::assertSame($catalog, $referenced, 'every attachment catalog entry must be reachable from DiscordAccount.php');
+    }
+
+    /**
+     * Regression: a double-quoted Lang::t call used to match nothing, so its placeholder list was
+     * never compared. The fixture is a double-quoted batch_budget call that omits {mb}.
+     */
+    public function testADoubleQuotedCallSiteIsExtractedWithItsParameters(): void
+    {
+        $source = '<?php $notes[] = Lang::t("channels.discord.attachments.reason.batch_budget", ["name" => $name]);';
+
+        self::assertSame(
+            [['channels.discord.attachments.reason.batch_budget', ['name']]],
+            self::callSites($source),
+            'a double-quoted attachment call must be found, not skipped'
+        );
+    }
+
+    public function testADoubleQuotedCallWithWrongPlaceholdersDiffersFromTheCatalog(): void
+    {
+        $en = require self::EN;
+        $key = 'channels.discord.attachments.reason.batch_budget';
+        \preg_match_all('/\{([a-z_]+)\}/', (string) $en[$key], $placeholders);
+        $expected = $placeholders[1];
+        \sort($expected);
+
+        $sites = self::callSites('<?php Lang::t("' . $key . '", ["name" => $name]);');
+
+        self::assertCount(1, $sites);
+        self::assertNotSame($expected, $sites[0][1], 'the omitted {mb} placeholder must be visible to the guard');
+    }
+
+    public function testSingleQuotedCallSitesAreStillExtracted(): void
+    {
+        $source = "<?php Lang::t('channels.discord.attachments.reason.batch_budget', ['name' => \$n, 'mb' => \$m]);";
+
+        self::assertSame(
+            [['channels.discord.attachments.reason.batch_budget', ['mb', 'name']]],
+            self::callSites($source)
+        );
     }
 }
