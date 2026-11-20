@@ -1202,7 +1202,12 @@ What runs where:
 A dropped socket is not the end of the attachment. The window redials
 with exponential backoff — first after 0.25 s, each wait doubling up to 4 s,
 twelve attempts in all — and re-says `server.hello` with
-`resume: {sessionId: cursor}`; the server re-subscribes it and replays whatever
+`resume: {sessionId: cursor}`. That hello gets 10 s to be answered on the
+first redial, and each failed attempt after it adds another 10 s (20 s, 30 s,
+and so on), so a slow but healthy server is reached on a later redial while a
+silent one fails each attempt and the ladder gives up after about 816 s (the
+hello waits total 780 s, and the first 0.25 s wait plus the 35.5 s of pauses
+between attempts make up the rest); the server re-subscribes it and replays whatever
 the dark missed, or resets it from a paged snapshot when the log can no longer
 serve the cursor. A turn running while nobody listens lands in the log and is
 replayed on resume, exactly as a live stream would have been. The verdict stays

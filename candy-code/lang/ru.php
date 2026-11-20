@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} ожидает значение, но список аргументов завершился',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} не принимает значение',
     'cli.argv.worktree.with_subcommand' => '--worktree указывает worktree для одной основной сессии; подкоманды выполняют свой поток и могут только игнорировать его',
+    'cli.attach.bad_record_url' => 'запись запущенного сервера указывает {url}, что не является пригодным адресом http(s):// или ws(s)://',
     'cli.attach.bad_url' => 'candy-code attach: --url {url} не является адресом http(s):// или ws(s)://',
     'cli.attach.closed_during_handshake' => 'сервер закрыл соединение во время рукопожатия',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag} не применим к attach',

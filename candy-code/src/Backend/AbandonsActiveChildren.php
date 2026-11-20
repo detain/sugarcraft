@@ -18,10 +18,10 @@ use SugarCraft\Code\Support\ProcessContainment;
  * and every process under it then outlive the session with nobody left to wait
  * for them. Each backend registers at its single spawn choke point and forgets
  * at every reap sink, so the interrupt arms and the exit funnel can abandon
- * exactly what is still alive. StreamingCommandBackend registers its proc handle
- * (registerActiveChild); CommandBackend runs through sugar-async's ChildRun and
- * registers the pid reported by its onSpawn hook (registerActivePid), with no
- * proc handle held.
+ * exactly what is still alive. Both backends run their child through sugar-async's
+ * ChildRun and register the pid reported by its onSpawn hook (registerActivePid),
+ * with no proc handle held: the handle stays inside ChildRun, and the pid is all
+ * abandon needs.
  *
  * The map is mutable shared state, the same shape as the CancellationToken
  * the backends already share across `mutate()` clones: a with*() copy carries
@@ -30,41 +30,15 @@ use SugarCraft\Code\Support\ProcessContainment;
 trait AbandonsActiveChildren
 {
     /**
-     * @var array<int, array{pid: int, proc: resource|null}> keyed by proc resource id, or by pid for a pid-only registration (proc null)
+     * @var array<int, int> live children keyed by pid, and the pid is the value: killTree() walks /proc from the wrapper's pid
      */
     private array $activeChildren = [];
 
     /**
-     * Record a freshly spawned child. The pid proc_open reports is the
-     * wrapper's; killTree() walks /proc from it and reaches the command and
-     * everything below. A non-positive pid is refused by ProcessContainment
-     * anyway, so an unnumbered child is simply not registered.
-     *
-     * @param resource $proc
-     */
-    protected function registerActiveChild($proc): void
-    {
-        $pid = proc_get_status($proc)['pid'];
-        if ($pid <= 0) {
-            return;
-        }
-
-        $this->activeChildren[(int) $proc] = ['pid' => $pid, 'proc' => $proc];
-    }
-
-    /**
-     * Remove a child the backend has just reaped itself.
-     *
-     * @param resource $proc
-     */
-    protected function forgetActiveChild($proc): void
-    {
-        unset($this->activeChildren[(int) $proc]);
-    }
-
-    /**
-     * The registry keyed by pid, for a child run through ChildRun: the handle
-     * stays inside ChildRun, and the pid it reports at spawn is all abandon needs.
+     * Record a freshly spawned child. The pid is the `setsid -w` wrapper's;
+     * killTree() walks /proc from it and reaches the command and everything
+     * below. A non-positive pid is refused by ProcessContainment anyway, so an
+     * unnumbered child is simply not registered.
      */
     protected function registerActivePid(int $pid): void
     {
@@ -72,7 +46,7 @@ trait AbandonsActiveChildren
             return;
         }
 
-        $this->activeChildren[$pid] = ['pid' => $pid, 'proc' => null];
+        $this->activeChildren[$pid] = $pid;
     }
 
     protected function forgetActivePid(int $pid): void
@@ -85,10 +59,7 @@ trait AbandonsActiveChildren
      */
     public function activeChildPids(): array
     {
-        return array_map(
-            static fn (array $child): int => $child['pid'],
-            array_values($this->activeChildren),
-        );
+        return array_values($this->activeChildren);
     }
 
     /**
@@ -106,11 +77,11 @@ trait AbandonsActiveChildren
         }
 
         $killed = 0;
-        foreach ($this->activeChildren as $child) {
+        foreach ($this->activeChildren as $pid) {
             if ($async) {
-                ProcessContainment::killTreeAsync($child['pid'], Loop::get());
+                ProcessContainment::killTreeAsync($pid, Loop::get());
             } else {
-                ProcessContainment::killTree($child['pid']);
+                ProcessContainment::killTree($pid);
             }
             ++$killed;
         }

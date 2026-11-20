@@ -1,0 +1,55 @@
+<p class="lede" style="margin-top: 28px;">The generic plugin core for SugarCraft hosts. It holds the contracts a plugin and a channel implement, the immutable context a plugin starts with, the escape that fences dynamic bytes out of a model prompt, and the mechanics a host would otherwise copy: a trust-gated loader, a quarantine ledger, a registry and a manifest reader. <strong>It has no host policy:</strong> discovery roots, trust settings and stores stay with the host, which requires this package and never the reverse. First-party: original work, with no upstream Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-plugins</code></pre>
+
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Plugins\Manifest\PluginManifest;
+use SugarCraft\Plugins\Support\PromptFence;
+
+$manifest = PluginManifest::fromDir('/home/me/.candy-code/plugins/weather');
+if ($manifest !== null) {
+    $contract = $manifest->contract(); // the integer host contract, or null
+    $entries = $manifest->entrypoints(); // realpaths contained by the plugin directory
+}
+
+$safe = PromptFence::escape($untrustedText); // escape before the bytes reach a model prompt</code></pre>
+
+    <h3 style="margin-top: 32px;">The laws</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Contracts, not policy</strong><span>The library holds the interfaces and the generic mechanics. A host keeps the discovery roots, the trust list contents and its own stores, so a second host reuses the same core without inheriting one host's rules.</span></div>
+      <div class="feature"><strong>Trust before load</strong><span>A plugin loads only when its name is on the trust list, and only from entrypoints its manifest names. An entrypoint path first seen on one launch is listed and loads on the next, so a new entrypoint under a trusted name cannot run silently. A rewrite of a path already seen is not listed, so it loads without a quarantine stop. An in-place rewrite by another account needs group write on the file itself. A replace-by-rename by another account is refused as a foreign owner when a uid is known (an explicit processUid, or ext-posix), and loads only when none is, from a directory another account can write (group-writable, or owned by that account). A rewrite by the file's own account loads everywhere. That gap is open.</span></div>
+      <div class="feature"><strong>One fence roster</strong><span>Every splice of dynamic text into a model prompt goes through <code>PromptFence::escape()</code>, which escapes against a single tag roster. A second local regex would open a forgery window.</span></div>
+      <div class="feature"><strong>Immutable context</strong><span>A plugin receives a read-only <code>PluginContext</code> with its name, the project root, the loop, a log closure, its frozen settings and its state directory. Nothing in it is writable by the plugin.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Writing a plugin</strong> — implement <code>Plugin</code>, or a channel that adds one of the capability interfaces, and read the translation base <code>Lang</code> for its own catalog.</li>
+      <li><strong>Building a host</strong> — load candidates through <code>PluginLoader</code>, keep trust and quarantine in <code>JsonFileQuarantineLedger</code>, and register them in <code>PluginRegistry</code>.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-plugins">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-plugins/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-plugins/blob/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>Plugin</td><td>name(), start(PluginContext), dispose()</td><td>The lifecycle contract every plugin implements</td></tr>
+<tr><td>PluginContext</td><td>static for(string $plugin, string $name, ?string $root, LoopInterface $loop, ...): self</td><td>The immutable launch context; the trailing <code>host</code> argument defaults to none</td></tr>
+<tr><td>PromptFence</td><td>static escape(string $payload): string</td><td>Fences dynamic bytes out of a model prompt against the single tag roster</td></tr>
+<tr><td>PluginManifest</td><td>static fromDir(string $dir): ?self</td><td>Reads a <code>plugin.json</code> manifest; null when there is no readable, acceptable one</td></tr>
+<tr><td>PluginLoader</td><td>static load(array $candidates, TrustList $trust, QuarantineLedger $ledger, ...): LoadResult</td><td>The trust-gated loader that runs only accepted declarations</td></tr>
+<tr><td>JsonFileQuarantineLedger</td><td>static new(string $path, string $key = 'seenEntrypoints'): self</td><td>The file-backed ledger of entrypoints a host has already seen</td></tr>
+<tr><td>PluginRegistry</td><td>static new(array $reservedBundles = []): self</td><td>The generic registry of loaded plugins, refusing reserved bundle names</td></tr>
+<tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>Translation for a plugin's own <code>lang/</code> catalog, over an exact, base, <code>en</code>, raw lookup</td></tr>
+</table>
+  </div>
+</section>

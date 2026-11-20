@@ -155,6 +155,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} expects a value, but the argument list ended',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} takes no value',
     'cli.argv.worktree.with_subcommand' => '--worktree names a worktree for one main session; subcommand verbs run their own flow and could only ignore it',
+    'cli.attach.bad_record_url' => 'the running server\'s record names {url}, which is not a usable http(s):// or ws(s):// address',
     'cli.attach.bad_url' => 'candy-code attach: --url {url} is not an http(s):// or ws(s):// address',
     'cli.attach.closed_during_handshake' => 'the server closed the connection during the handshake',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag} does not apply to attach',

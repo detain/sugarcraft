@@ -30,12 +30,12 @@ use SugarCraft\SshServer\Session;
 // production, so the doctrine (src/Util.php) is one delegate call away.
 
 /**
- * Terminal middleware of the chain: greet the user, flush the textfile
- * so the Prometheus node exporter sees this session's totals, then stop.
- * The signature mirrors {@see \SugarCraft\Metrics\Middleware\SessionMetrics}
- * — the {@see Middleware} contract is handle(Context, Session, callable).
+ * Flush the textfile after each session so the Prometheus node exporter sees
+ * this session's totals. Registered before SessionMetrics so the flush runs
+ * after SessionMetrics has recorded the session's duration and error samples,
+ * and in a finally so a session that throws still reaches the textfile.
  */
-final class HelloMetrics implements Middleware
+final class FlushMetrics implements Middleware
 {
     public function __construct(private readonly Registry $registry)
     {
@@ -43,12 +43,37 @@ final class HelloMetrics implements Middleware
 
     public function handle(Context $ctx, Session $session, callable $next): void
     {
+        $completed = false;
+        try {
+            $next($ctx, $session);
+            $completed = true;
+        } finally {
+            try {
+                // Long-lived servers must drive Registry::flush() themselves —
+                // the library arms no timers.
+                $this->registry->flush();
+            } catch (\Throwable $flushError) {
+                // A flush failure must not replace the session's own exception;
+                // on a clean session there is none to protect, so it surfaces.
+                if ($completed) {
+                    throw $flushError;
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Terminal middleware of the chain: greet the user, then stop. The signature
+ * mirrors {@see \SugarCraft\Metrics\Middleware\SessionMetrics} — the
+ * {@see Middleware} contract is handle(Context, Session, callable).
+ */
+final class HelloMetrics implements Middleware
+{
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
         echo 'Hello, ' . Util::displaySafe($session->user) . "!\n";
         $next($ctx, $session);
-        // Long-lived servers must drive Registry::flush() themselves —
-        // the library arms no timers. Flushing per session keeps the
-        // textfile current between scrapes.
-        $this->registry->flush();
     }
 }
 
@@ -64,8 +89,9 @@ $registry = Registry::new(MultiBackend::new(
 
 Server::new()
     ->use(new Logger())
+    ->use(new FlushMetrics($registry))
     ->use(SessionMetrics::new($registry))
-    ->use(new HelloMetrics($registry))
+    ->use(new HelloMetrics())
     ->serve();
 
 fwrite(STDERR, "\n--- session totals ---\n");

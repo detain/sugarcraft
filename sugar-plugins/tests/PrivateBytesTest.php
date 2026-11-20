@@ -50,8 +50,8 @@ final class PrivateBytesTest extends TestCase
 
     public function testAGroupWritableFileIsAcceptedBecauseOnlyWorldWriteIsRefused(): void
     {
-        // Matches candy-code's refuseLooseBytes: the world is the only open door
-        // the gate refuses, so a 0664 file in a 0755 directory is private.
+        // Matches candy-code's refuseLooseBytes, whose mode check also tests only
+        // the world-write bit, so a 0664 file in a 0755 directory is private.
         $file = Scratch::put($this->dir . '/Impl.php', '<?php');
         chmod($file, 0664);
 

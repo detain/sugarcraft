@@ -373,12 +373,16 @@ final class ReactInputDriverTest extends TestCase
     {
         // SI-06 (arm a): pause() defers EMISSION, not existence — a stream
         // that ends while paused must still deliver the parked events before
-        // 'end', never strand them.
+        // 'end', never strand them. One ordered log pins the sequence: 'b'
+        // must reach the host before 'END', not merely somewhere in the run.
+        $log = [];
         $events = [];
-        $seen = [];
         [$driver, $upstream] = $this->makeDriver($events);
-        $driver->on('end', function () use (&$seen): void {
-            $seen[] = 'END';
+        $driver->on('data', function (Event $event) use (&$log): void {
+            $log[] = $event instanceof KeyEvent ? $event->key : '?';
+        });
+        $driver->on('end', function () use (&$log): void {
+            $log[] = 'END';
         });
 
         $upstream->write('a');
@@ -386,14 +390,7 @@ final class ReactInputDriverTest extends TestCase
         $upstream->write('b');
         $upstream->emit('end');
 
-        $keys = array_map(
-            static fn(Event $e): string => $e instanceof KeyEvent ? $e->key : 'END',
-            $events,
-        );
-        // $events holds 'a' (pre-pause) and 'b' only if drained — 'END' rides
-        // the separate $seen marker above.
-        $this->assertSame(['a', 'b'], $keys, 'parked "b" must drain on end, not strand');
-        $this->assertSame(['END'], $seen);
+        $this->assertSame(['a', 'b', 'END'], $log, 'parked "b" must drain before end, not strand');
     }
 
     public function testDoubleEndEmitsOnceAndDrainsOnce(): void

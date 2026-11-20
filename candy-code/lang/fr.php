@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} attend une valeur, mais la liste d\'arguments est épuisée',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} n\'accepte pas de valeur',
     'cli.argv.worktree.with_subcommand' => '--worktree nomme un worktree pour une session principale ; les verbes de sous-commande exécutent leur propre flux et ne pourraient que l\'ignorer',
+    'cli.attach.bad_record_url' => 'l\'enregistrement du serveur en cours indique {url}, qui n\'est pas une adresse http(s):// ou ws(s):// utilisable',
     'cli.attach.bad_url' => 'candy-code attach : --url {url} n\'est pas une adresse http(s):// ou ws(s)://',
     'cli.attach.closed_during_handshake' => 'le serveur a fermé la connexion pendant la poignée de main',
     'cli.attach.flag_does_not_apply' => 'candy-code attach : {flag} ne s\'applique pas à attach',

@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag}은 값을 기대하지만, 인수 목록이 끝났습니다',
     'cli.argv.verb_flag.no_value' => '{verb} {flag}은 값을 받지 않습니다',
     'cli.argv.worktree.with_subcommand' => '--worktree는 하나의 메인 세션용 워크트리를 지정합니다. 하위 명령어는 자체 흐름을 실행하므로 이를 무시할 수밖에 없습니다',
+    'cli.attach.bad_record_url' => '실행 중인 서버의 레코드에 적힌 {url}은 사용할 수 있는 http(s):// 또는 ws(s):// 주소가 아닙니다',
     'cli.attach.bad_url' => 'candy-code attach: --url {url}은 http(s):// 또는 ws(s):// 주소가 아닙니다',
     'cli.attach.closed_during_handshake' => '핸드셰이크 중 서버가 연결을 종료했습니다',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag}은 attach에 적용되지 않습니다',
