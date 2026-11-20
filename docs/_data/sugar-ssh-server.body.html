@@ -3,8 +3,8 @@
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ssh-server</code></pre>
 
-    <h3 style="margin-top: 32px;">Two transports</h3>
-    <p>What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction:</p>
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The server runs a middleware pipeline inside the process that sshd spawns under <code>ForceCommand</code>. It opens no listener of its own. What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction, and there are two transports:</p>
     <ul>
       <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
       <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
@@ -64,7 +64,42 @@ exit(Server::new()
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <p>Each option is set on <code>Server</code> or on the middleware that owns it. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Server::withTransport(Transport)</code>: Transport, default <code>InProcessTransport</code>. Selects the transport the middleware stack runs under.</li>
+      <li><code>Server::withKeepalive(int $intervalSeconds)</code>: int, default <code>60</code>. Sends a NUL byte to the child's stdin when the pump loop has been idle for this many seconds. This is not an SSH-level keepalive.</li>
+      <li><code>Logger</code> sink: string, resource or null, default <code>$SSH_SERVER_LOG</code> when set, else stderr. Where the one-line JSON session records go. Files the logger creates are <code>0600</code>.</li>
+      <li><code>new RateLimit($statePath, $burst, $ratePerSec, ..., $failClosed)</code>: int, float, bool, default <code>5</code>, <code>0.5</code>, <code>false</code>. Per-IP token bucket. With <code>$failClosed</code> left false, a connection is let through when the state file cannot be read.</li>
+      <li><code>Auth::__construct(array $users, array $keyFingerprints, ...)</code>: list, default empty lists. The allowlists. With both empty, every session is admitted.</li>
+      <li><code>Server::EXIT_DENIED</code>: int, default <code>129</code>. The exit status a refused session returns to the SSH client.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>. Several need an sshd <code>ForceCommand</code> setup to log in through, and <code>showcase.php</code> runs without one.</p>
+    <ul>
+      <li><code>hello-server.php</code>: The smallest end-to-end server: a session banner, used as a deployment smoke test.</li>
+      <li><code>spawn-bash.php</code>: The default in-process supervisor. It spawns a login bash in a sugar-pty for each connecting user.</li>
+      <li><code>spawn-program.php</code>: A SugarCraft <code>Program</code> mounted inside a sugar-pty subprocess.</li>
+      <li><code>run-program.php</code>: The wrapper program that <code>spawn-program.php</code> runs as the PTY child.</li>
+      <li><code>showcase.php</code>: Drives the middleware pipeline against a synthesised session in one process, with Logger, RateLimit and a custom middleware.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-ssh-server
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test arms a timer on the shared event loop. <code>sugar-testing</code> is a <code>require-dev</code> dependency.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The server is inspired by charmbracelet/wish, which is also cited in the docblocks. Other classes mirror Go concepts directly.</p>
+    <ul>
+      <li><code>Context</code>: Go <code>context.Context</code>: <code>Done()</code> and <code>Deadline()</code> semantics</li>
+      <li>Promise handling in the transports: charmbracelet/wish <code>PromiseDispatch.awaitPromise</code></li>
+      <li><code>HostSshdTransport</code>: sugar-ssh-server's own pre-PTY-upgrade architecture, kept for existing deployments. It has no upstream counterpart.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Server</td><td>new()</td><td>Start an empty middleware pipeline — this library opens no listener: the pipeline runs inside the process sshd (or your supervisor) spawns under <code>ForceCommand</code></td></tr>
