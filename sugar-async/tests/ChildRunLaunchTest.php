@@ -697,9 +697,10 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
-     * Regression: the shell exits before the first status poll, so no live read can
-     * latch the group. The setsid wrapper leads a group whose id is its own pid, and
-     * the handle still reports that pid, so the deadline kill reaches the job.
+     * Regression: the shell has exited and been reaped before the launch is built, so
+     * neither the spawn-time read nor any live read can name the group, and only the
+     * wrapper-pid fallback can answer. The setsid wrapper leads a group whose id is its
+     * own pid, so the deadline kill reaches the job.
      */
     public function testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsBeforeAnyPoll(): void
     {
@@ -723,6 +724,7 @@ final class ChildRunLaunchTest extends TestCase
             $pipes,
         );
         $this->assertIsResource($proc);
+        self::awaitShellReaped($proc);
 
         $grandchild = null;
         $deferred = new \React\Promise\Deferred();
@@ -765,11 +767,14 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
-     * Regression through the production wiring: ChildRun::launch() of a containment-wrapped
-     * child, declared with withSetsidWrapped() as CommandBackend::childRun() does, and no
-     * spawn-time group. The shell backgrounds a job and exits before the first status poll,
-     * so no live read can latch the group; the deadline kill must still reach the job
-     * through the setsid-wrapper fallback. Without the flag reaching ChildRunLaunch, the
+     * End-to-end pin of the production wiring: ChildRun::launch() of a containment-wrapped
+     * child, declared with withSetsidWrapped() as CommandBackend::childRun() does. The
+     * shell backgrounds a job and exits, and the deadline kill must reach the job. Which
+     * read answers is timing-dependent here: launch() reads the spawn-time group right
+     * after proc_open, and the setsid exec may not have happened yet, so that read can
+     * latch the group or miss it. Either way the job must die, but this test does not pin
+     * the wrapper-pid fallback. testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsBeforeAnyPoll
+     * pins the fallback deterministically. Without the flag reaching ChildRunLaunch, the
      * kill rungs have no group and the job survives.
      */
     public function testChildRunLaunchKillsTheJobOfAContainedShellThatExitedBeforeAnyPoll(): void
@@ -975,6 +980,24 @@ final class ChildRunLaunchTest extends TestCase
         $after = strrpos($stat, ')');
 
         return $after !== false && substr(trim(substr($stat, $after + 1)), 0, 1) === 'Z';
+    }
+
+    /**
+     * Waits until the shell has exited and proc_get_status() has reaped it. The reap is
+     * what makes the group reads fail: getpgid() on a reaped pid finds no process, so the
+     * launch built afterwards sees no live group and must take the wrapper-pid fallback.
+     *
+     * @param resource $proc
+     */
+    private static function awaitShellReaped($proc): void
+    {
+        $until = microtime(true) + 5.0;
+        while (proc_get_status($proc)['running'] === true) {
+            if (microtime(true) >= $until) {
+                self::fail('the wrapped shell did not exit within 5 seconds');
+            }
+            usleep(5_000);
+        }
     }
 
     /**

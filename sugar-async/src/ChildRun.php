@@ -390,8 +390,10 @@ final class ChildRun
 
         // The probe keeps the status it reads: a proc_get_status() after the
         // child has been reaped reports -1, so the exit code is taken here.
+        // The pid is kept with it: a reaped setsid wrapper names the group its job stayed in.
         $exitCode = null;
-        $running = static function () use ($proc, &$exitCode): bool {
+        $spawnPid = 0;
+        $running = static function () use ($proc, &$exitCode, &$spawnPid): bool {
             if ($exitCode !== null) {
                 return false;
             }
@@ -399,6 +401,7 @@ final class ChildRun
             if (!\is_array($status)) {
                 return false;
             }
+            $spawnPid = (int) $status['pid'];
             if ($status['running'] === true) {
                 return true;
             }
@@ -470,7 +473,8 @@ final class ChildRun
                 $r = $pump->pump();
             } catch (\Throwable $e) {
                 self::closeAll($pipes);
-                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
                 throw $e;
             }
 
@@ -491,13 +495,15 @@ final class ChildRun
                 }
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
-                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
                 $status = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
 
                 return self::result($r, $code, $status);
             }
 
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+            $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
             $status = match (true) {
                 $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
                 $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
@@ -695,16 +701,29 @@ final class ChildRun
 
     /**
      * The group a kill rung signals: the one measured at spawn when there was one,
-     * else the group the child leads right now. The spawn-time read can miss a
-     * wrapper that has not yet made itself a group leader, and a live child still
-     * answers the live read; a child that already exited answers neither, so the
-     * spawn-time value is the one that reaches its job.
+     * else the group the child leads right now, else the wrapper's own pid once the
+     * probe has reaped it. The spawn-time read can miss a wrapper that has not yet
+     * made itself a group leader, and a live child still answers the live read; a
+     * reaped child answers neither, so the spawn-time value or the wrapper pid is the
+     * one that reaches its job.
      *
      * @param resource $proc
      */
-    private static function killGroup($proc, ?int $measured): ?int
+    private static function killGroup($proc, ?int $measured, ?int $reapedWrapper = null): ?int
     {
-        return $measured ?? Containment::groupId($proc);
+        return $measured ?? Containment::groupId($proc) ?? $reapedWrapper;
+    }
+
+    /**
+     * The wrapper's own pid as a group id, once the probe has reaped a setsid-wrapped
+     * child. The wrapper leads the group its backgrounded job stayed in under that pid,
+     * and the live read cannot name it after the reap. The blocking path needs this for
+     * the same reason ChildRunLaunch does: a cancel can land after the shell is reaped.
+     * An unwrapped child never leads a group, so its pid is never offered.
+     */
+    private function reapedWrapperGroup(?int $exitCode, int $spawnPid): ?int
+    {
+        return $this->setsidWrapped && $exitCode !== null && $spawnPid > 0 ? $spawnPid : null;
     }
 
     private function alreadyCancelled(): bool

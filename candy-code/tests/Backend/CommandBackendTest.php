@@ -329,7 +329,8 @@ final class CommandBackendTest extends TestCase
      * (ChildRunLaunch::killGroup()). Whether a cancel lands before the group is
      * latched depends on timing, so this test is an end-to-end regression guard for
      * the cancel reaching the grandchild, not a deterministic pin of the missed-group
-     * case. ChildRunLaunchTest pins that deterministically with no spawn-time group.
+     * case. ChildRunLaunchTest pins that deterministically: it reaps the shell before
+     * the launch is built, so only the wrapper-pid fallback can name the group.
      *
      * The cancel waits for the pid file rather than a fixed delay: a fixed delay
      * can fire before bash has started, and then no grandchild exists to check.
