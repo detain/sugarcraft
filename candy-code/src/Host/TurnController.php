@@ -1428,7 +1428,7 @@ final class TurnController
 
     /**
      * The checkpoint state a dispatch saves: THE STATE BEFORE THE PROMPT, NOT
-     * AFTER IT (audit SES-1). Every row the submission itself added — the
+     * AFTER IT. Every row the submission itself added — the
      * user's line, the hook notes, the 70% reminder — is out, because a resend
      * through the restored draft regenerates all three; the compaction the
      * submission triggered stays in with its reports, because a rewrite is a
@@ -1523,7 +1523,7 @@ final class TurnController
     /**
      * The row's turn count and last-prompt preview, which the session picker
      * shows instead of the system prompt every session shares (Appendix P
-     * §3.1, audit B3). Picker bookkeeping only; never blocks the prompt.
+     * §3.1). Picker bookkeeping only; never blocks the prompt.
      *
      * @param list<Message> $newTurnMessages
      */

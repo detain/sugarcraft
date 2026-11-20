@@ -33,9 +33,9 @@
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>static storedPermissionGrants(\SugarCraft\Code\Session\SessionStore|EnhancedSessionStore|null $store, ?string $sessionId): array</code></td><td>The grants $store remembers for $sessionId, as the grant map a Chat opened on that session starts from (<code>Cli\Bootstrap</code>&#039;s resume).</td></tr>
 <tr><td><code>flushTranscript(): void</code></td><td>Write any transcript change still waiting on its debounce tick, now.</td></tr>
-<tr><td><code>withSessionLocking(): self</code></td><td>Turn on the single-writer session lock (audit SES-3(b)) and take it for the session this Chat has open.</td></tr>
+<tr><td><code>withSessionLocking(): self</code></td><td>Turn on the single-writer session lock and take it for the session this Chat has open.</td></tr>
 <tr><td><code>isReadOnlySession(): bool</code></td><td>True while another TUI owns the open session — see withSessionLocking().</td></tr>
-<tr><td><code>withInitialPrompt(?string $prompt): self</code></td><td>Submit $prompt as this session&#039;s first prompt once init() runs — the leftover command-line words (audit CLI-2(b)). Null or blank clears it.</td></tr>
+<tr><td><code>withInitialPrompt(?string $prompt): self</code></td><td>Submit $prompt as this session&#039;s first prompt once init() runs — the leftover command-line words. Null or blank clears it.</td></tr>
 <tr><td><code>static reviveTranscriptMessage(array $row): Message</code></td><td>Rebuild one saved transcript row for a resume: every field Message::fromArray() can restore - tool calls and results, reasoning, usage - with one repair. A &quot;running&quot; placeholder in a saved transcript is a tool call whose process is gone, so it comes back as the same &quot;interrupted&quot; error row reviveCheckpointMessage() makes for <code>/rewind</code>; left as a placeholder it would spin forever for a result that cannot arrive.</td></tr>
 <tr><td><code>static loadTranscript(\SugarCraft\Code\Session\SessionStore|EnhancedSessionStore|null $store, string $sessionId): array</code></td><td>The saved transcript of $sessionId as Messages, or [] when the store has none (or cannot say) — \SugarCraft\Code\Host\TranscriptStore::load() over $store.</td></tr>
 <tr><td><code>isTabHosted(): bool</code></td><td>P-TABS.f: the appointment this Chat runs under — true when the App&#039;s session deck hosts it as the foreground tab, false standalone. Read by the four session-open routes and their mid-turn refusal gates; set only by withTabHosted() at the App&#039;s two chat-swap points.</td></tr>
@@ -405,9 +405,9 @@
 <tr><td><code>static hookInput(array $arguments): string</code></td><td>The JSON text a hook reads as <code>CRUSH_TOOL_INPUT</code> (and its <code>_FILE</code> twin).</td></tr>
 <tr><td><code>assembledSystemPrompt(App $app): string</code></td><td>The system prompt $app would send, as the assembled string itself — the raw half the <code>Backend\DumpsSystemPrompt</code> capability hands to <code>/context --raw</code> (GAP-PRM-15). One fold behind the very method a turn builds with, so the dumped bytes ARE the sent bytes, and they sum to the promptSectionSizes() rows exactly — the identity the dump test pins. The transcript never sees this string; it only ever reaches a file the user named (or the exports shelf), which is WHY this arm exists beside the panel rather than inside it.</td></tr>
 <tr><td><code>promptSectionSizes(App $app): array</code></td><td>The system prompt $app would send, measured per layer — what <code>/context</code> shows (roadmap 5.6). Built from the very section list run() assembles, through the one fold (assembleSections()), so the bytes counted are the bytes sent: every row&#039;s <code>bytes</code> includes the &quot;\n\n&quot; separator its block carries, and the rows sum to the assembled prompt&#039;s length exactly. Empty layers fold away here as they do there.</td></tr>
-<tr><td><code>static planInstructionDocuments(\SugarCraft\Code\Context\InstructionFileLoader $loader): array</code></td><td>Which instruction documents one prompt build inlines and which it defers to a pointer line — audit 15d-09 / C3&#039;s budget, as one definition.</td></tr>
+<tr><td><code>static planInstructionDocuments(\SugarCraft\Code\Context\InstructionFileLoader $loader): array</code></td><td>Which instruction documents one prompt build inlines and which it defers to a pointer line — C3&#039;s budget, as one definition.</td></tr>
 <tr><td><code>static planEnabledSkills(array $enabledSkills, \SugarCraft\Code\Context\CompactorConfig $budget): array</code></td><td>What each enabled skill contributes to one prompt build, in enabled order — its body, or, over budget, its heading and a pointer — and why a deferred one was deferred.</td></tr>
-<tr><td><code>skillDeferrals(): array</code></td><td>The enabled skills whose bodies the most recent prompt build deferred for budget, keyed by skill name, mapped to why (audit R1).</td></tr>
+<tr><td><code>skillDeferrals(): array</code></td><td>The enabled skills whose bodies the most recent prompt build deferred for budget, keyed by skill name, mapped to why.</td></tr>
 <tr><td><code>turnContext(App $app): Context\TurnContextBlock</code></td><td>The volatile per-step context (step 1.A-1): the git section of this Runtime&#039;s environment snapshot — so the write signal markWriteSinceLastRender() sets still decides whether the diffs render — plus the files this conversation&#039;s Edit/Write calls touched, and the files changed on disk since the turn&#039;s tools read them (step 3.I-2, from the Tools\ReadLedger those tools share).</td></tr>
 <tr><td><code>primeInstructionDiff(App $app): void</code></td><td>Fill the instruction-diff slot in the process that OUTLIVES the turn — the parent-side sibling of primeSessionPrompt(), called by EngineBackend right after that prime, before a turn&#039;s fork and before a summary&#039;s (C-CTX-1).</td></tr>
 <tr><td><code>withSessionPromptMemo(Context\SessionPromptMemo $memo): self</code></td><td>Share one Context\SessionPromptMemo with this Runtime, so its PerSession layers (static <code>&lt;env&gt;</code>, repo map, project memory, standing instruction slab) are read from — and filled into — a memo that outlives the turn. Without one the Runtime keeps a private memo, which is the pre-1.A-1 per-Runtime memoisation exactly.</td></tr>
@@ -484,7 +484,7 @@
 <tr><td><code>__construct(public readonly string $name, public readonly string $result, public readonly ?string $error = null, public readonly ?string $id = null, public readonly ?string $imageBytes = null, public readonly ?string $imagePath = null, public readonly ?string $imageProtocol = null, public readonly ?string $diff = null, public readonly ?int $durationMs = null, public readonly ?string $description = null, public readonly array $arguments = [], public readonly ?DenialKind $denial = null, public readonly ?int $exitCode = null)</code></td><td></td></tr>
 <tr><td><code>static ok(string $name, string $result, ?string $id = null): self</code></td><td>Create a successful result.</td></tr>
 <tr><td><code>static error(string $name, string $error, ?string $id = null): self</code></td><td>Create an error result.</td></tr>
-<tr><td><code>static denied(string $name, DenialKind $kind, string $detail, ?string $id = null): self</code></td><td>Create the result of a call that was STOPPED before it ran: an error whose text is $kind&#039;s rendered reason and which carries $kind structurally, so a reader never has to classify the text (audit F-P8).</td></tr>
+<tr><td><code>static denied(string $name, DenialKind $kind, string $detail, ?string $id = null): self</code></td><td>Create the result of a call that was STOPPED before it ran: an error whose text is $kind&#039;s rendered reason and which carries $kind structurally, so a reader never has to classify the text.</td></tr>
 <tr><td><code>static okWithImage(string $name, string $result, string $imageBytes, ?string $id = null): self</code></td><td>Create a successful result that also carries raw image bytes (e.g. a tool that captured a screenshot). Probes the terminal&#039;s image capability once via Mosaic::auto() -- never throws -- so a later renderer (see E3, not part of this step) knows which protocol to paint with without re-probing the TTY per tool call.</td></tr>
 <tr><td><code>withImage(string $imageBytes, ?string $imagePath = null): self</code></td><td>Fluent attach of image bytes onto an existing result, e.g. a tool that already produced text output also captured a screenshot. Returns a new instance -- $this is left untouched, per this repo&#039;s immutable+with*() convention (see AGENTS.md).</td></tr>
 <tr><td><code>withDescription(?string $description): self</code></td><td>Fluent attach of the human-readable one-liner describing the CALL this result answers -- see the constructor&#039;s <code>$description</code> docblock for why a display-only field is carried here rather than derived at render time.</td></tr>
@@ -512,7 +512,7 @@
 <tr><td><code>static new(int $totalTokens = 0, float $costUsd = 0.0, ?int $inputTokens = null, ?int $outputTokens = null, ?int $cacheReadTokens = null, ?int $cacheCreationTokens = null, ?int $reasoningTokens = null, ?string $unpricedModel = null, int $delegatedTokens = 0, int $webSearchRequests = 0): self</code></td><td></td></tr>
 <tr><td><code>static reported(int $totalTokens, float $costUsd, ?int $inputTokens = null, ?int $outputTokens = null, ?int $cacheReadTokens = null, ?int $cacheCreationTokens = null, ?int $reasoningTokens = null, ?string $unpricedModel = null, int $delegatedTokens = 0, int $webSearchRequests = 0): ?self</code></td><td>The usage a provider call actually reported, or null when it reported nothing measurable.</td></tr>
 <tr><td><code>plus(self $other): self</code></td><td>This usage plus $other&#039;s — the operation an agentic TURN needs, because one turn is N provider calls, not one.</td></tr>
-<tr><td><code>ownTokens(): int</code></td><td>$totalTokens without the share delegated runs billed into it — the tokens THIS conversation&#039;s own provider calls counted. What a reader that treats the total as a conversation size must use (audit B4-rem).</td></tr>
+<tr><td><code>ownTokens(): int</code></td><td>$totalTokens without the share delegated runs billed into it — the tokens THIS conversation&#039;s own provider calls counted. What a reader that treats the total as a conversation size must use.</td></tr>
 <tr><td><code>promptTokens(): ?int</code></td><td>The prompt-side total, the identity the cache-bucket split exists to make computable: <code>promptTokens = cacheRead + cacheCreation + input</code> (prompt_plan.md P4.S1, backlog E17; prompt_expand.md §9.14).</td></tr>
 <tr><td><code>withInputTokens(?int $tokens): self</code></td><td>The usage with a reported/unreported input bucket set. Passing null clears it back to unreported; the other buckets ride along untouched — that is what the paired <code>bool $xSet</code> sentinels on mutate() are for (repo convention; canonical <code>sugar-style/src/Style.php</code>).</td></tr>
 <tr><td><code>withOutputTokens(?int $tokens): self</code></td><td>As withInputTokens(), for the completion side.</td></tr>
@@ -775,7 +775,7 @@
 <tr><td><code>cancelAll(): void</code></td><td>Cancel all pending and running agents.</td></tr>
 <tr><td><code>withStopOnFirstFailure(bool $stop): self</code></td><td>Configure stopOnFirstFailure behavior for this pool instance.</td></tr>
 <tr><td><code>withTimeBudget(?float $seconds): self</code></td><td>A pool whose every executeAll() run (and executeOne()) is bounded by $seconds of wall-clock time in total; null removes the bound.</td></tr>
-<tr><td><code>withMaxRetries(int $retries): self</code></td><td>A pool that re-runs every failed or timed-out agent up to $retries times — or up to the agent&#039;s own SubAgent::$maxRetries, when that is higher (audit WF-1(b)). The pool-wide half of the retry rule: AgentPoolConfig::$maxRetries reaches a pool through here. 0 (the default) leaves each agent to its own count; a negative value is 0.</td></tr>
+<tr><td><code>withMaxRetries(int $retries): self</code></td><td>A pool that re-runs every failed or timed-out agent up to $retries times — or up to the agent&#039;s own SubAgent::$maxRetries, when that is higher. The pool-wide half of the retry rule: AgentPoolConfig::$maxRetries reaches a pool through here. 0 (the default) leaves each agent to its own count; a negative value is 0.</td></tr>
 <tr><td><code>withRetryGate(?\Closure $gate): self</code></td><td>wf-impl P1-7: a pool that asks $gate before re-running a failed agent (see $retryGate); a refusal settles the agent on the attempt that ran, its error naming why it was not retried. Null removes it. A clone, like withTimeBudget().</td></tr>
 <tr><td><code>maxRetries(): int</code></td><td>The pool-wide retry floor withMaxRetries() set. Public for the reason workerProvider() is: WorkflowEngine rebuilds a pool per parallel stage and must carry this across.</td></tr>
 <tr><td><code>executor(): ?ExecutorInterface</code></td><td>Returns the executor instance used by this pool.</td></tr>
@@ -881,7 +881,7 @@
 <tr><td><code>engine(): ?EngineBackend</code></td><td></td></tr>
 <tr><td><code>execute(SubAgent $agent, CompleteRequest $request): AgentResult</code></td><td></td></tr>
 <tr><td><code>executeStream(SubAgent $agent, CompleteRequest $request): \Generator</code></td><td>The run, with its prose and tool calls streamed as they happen — what the live-agent pane paints while a stage is still working.</td></tr>
-<tr><td><code>cancel(string $agentId): void</code></td><td>Nothing to do here: this executor runs INSIDE the child AgentWorkerPool forks, so this process&#039;s own state is not where a cancel can land. The pool&#039;s kill site is the cancel, and it reaches everything this executor&#039;s run started (audit F-E2-rem): the pool kills the forked child with \SugarCraft\Code\Support\ProcessContainment::killTree() (or, when the TUI&#039;s event loop is driving the run, its loop-tick twin killTreeAsync() — audit R3), whose walk takes the engine&#039;s own turn forks below it and every Bash command they run in its own <code>setsid</code> session — a lone signal to the child would leave those running for nobody.</td></tr>
+<tr><td><code>cancel(string $agentId): void</code></td><td>Nothing to do here: this executor runs INSIDE the child AgentWorkerPool forks, so this process&#039;s own state is not where a cancel can land. The pool&#039;s kill site is the cancel, and it reaches everything this executor&#039;s run started: the pool kills the forked child with \SugarCraft\Code\Support\ProcessContainment::killTree() (or, when the TUI&#039;s event loop is driving the run, its loop-tick twin killTreeAsync()), whose walk takes the engine&#039;s own turn forks below it and every Bash command they run in its own <code>setsid</code> session — a lone signal to the child would leave those running for nobody.</td></tr>
 <tr><td><code>cancelAll(): void</code></td><td></td></tr>
 </tbody>
 </table>
@@ -1720,7 +1720,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-app-backgroundsessionstoppedmsg"><code>BackgroundSessionStoppedMsg</code> <small>final class</small></h4>
-<p>Internal Msg carrying the OUTCOME of a <code>/bg stop &lt;id&gt;</code> (audit BG-1).</p>
+<p>Internal Msg carrying the OUTCOME of a <code>/bg stop &lt;id&gt;</code>.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -1847,7 +1847,7 @@
 <h4 id="api-sugarcraft-code-app-idlecompacttickmsg"><code>IdleCompactTickMsg</code> <small>final class</small></h4>
 <p>Internal Msg produced by the idle auto-compaction watch (CTX-5, <code>compaction.idleAuto</code>).</p>
 <h4 id="api-sugarcraft-code-app-initialpromptmsg"><code>InitialPromptMsg</code> <small>final class</small></h4>
-<p>The prompt typed on the command line after the flags (<code>candy-code fix the login bug</code>), delivered by Chat::init() so it is submitted as the session&#039;s first prompt once the TUI is up (audit CLI-2(b)).</p>
+<p>The prompt typed on the command line after the flags (<code>candy-code fix the login bug</code>), delivered by Chat::init() so it is submitted as the session&#039;s first prompt once the TUI is up.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -1983,7 +1983,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-app-sessionlockretrymsg"><code>SessionLockRetryMsg</code> <small>final class</small></h4>
-<p>The tick Chat::subscriptions() declares while the open session is READ-ONLY because another TUI holds its lock (audit SES-3 residual): when it lands, Chat retries the non-blocking lock, and on success reloads the stored transcript and becomes writable.</p>
+<p>The tick Chat::subscriptions() declares while the open session is READ-ONLY because another TUI holds its lock: when it lands, Chat retries the non-blocking lock, and on success reloads the stored transcript and becomes writable.</p>
 <h4 id="api-sugarcraft-code-app-sessionpickersearchmsg"><code>SessionPickerSearchMsg</code> <small>final class</small></h4>
 <p>The debounced re-read tick behind the session picker&#039;s <code>/</code> filter (C-SES-2).</p>
 <table class="api-table">
@@ -2055,7 +2055,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-app-transcriptflushmsg"><code>TranscriptFlushMsg</code> <small>final class</small></h4>
-<p>The tick \SugarCraft\Code\Session\DebouncedTranscriptWriter::schedule() arms: when it lands, Chat writes the newest pending transcript snapshot (audit R2).</p>
+<p>The tick \SugarCraft\Code\Session\DebouncedTranscriptWriter::schedule() arms: when it lands, Chat writes the newest pending transcript snapshot.</p>
 <h4 id="api-sugarcraft-code-app-turnhooksresolvedmsg"><code>TurnHooksResolvedMsg</code> <small>final class</small></h4>
 <p>Internal Msg carrying the verdicts of a turn&#039;s <code>UserPromptSubmit</code> (and, on a session&#039;s first prompt, <code>SessionStart</code>) hook chain back from the forked child that ran it.</p>
 <table class="api-table">
@@ -2805,7 +2805,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-background-backgroundstopoutcome"><code>BackgroundStopOutcome</code> <small>enum</small></h4>
-<p>What BackgroundSupervisor::stopSession() actually achieved (audit BG-1).</p>
+<p>What BackgroundSupervisor::stopSession() actually achieved.</p>
 <p>Cases: <code>UnknownSession</code> · <code>AlreadyFinished</code> · <code>StoppedViaIpc</code> · <code>StoppedViaSignal</code> · <code>CouldNotStop</code></p>
 <p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
 <table class="api-table">
@@ -2847,9 +2847,9 @@
 <tr><td><code>static spawnHandshakeRefusalRecord(string $major): string</code></td><td>The sidecar log line recorded when a greeter offers a major this supervisor cannot speak (A7).</td></tr>
 <tr><td><code>static spawnAuthFailureMessage(?string $unknownMajor): string</code></td><td>The message spawnSession() throws when no peer authenticated in time. A7 widens it when one of them named a major this code cannot speak: silence about protocol skew is how a version mismatch comes to look like an unexplainable broken app.</td></tr>
 <tr><td><code>static procStartTime(int $pid): ?int</code></td><td>The kernel start time (clock ticks since boot, <code>/proc/&lt;pid&gt;/stat</code> field 22) of $pid, or null when procfs cannot answer.</td></tr>
-<tr><td><code>static sweepStaleIpcDirs(?string $dir = null, ?int $olderThanSeconds = null): int</code></td><td>Startup reaper for private IPC directories whose owning processes are all gone (audit BG-2), returning how many directories were removed.</td></tr>
+<tr><td><code>static sweepStaleIpcDirs(?string $dir = null, ?int $olderThanSeconds = null): int</code></td><td>Startup reaper for private IPC directories whose owning processes are all gone, returning how many directories were removed.</td></tr>
 <tr><td><code>tick(?int $now = null): void</code></td><td>Tick the supervisor — call this periodically to check session health.</td></tr>
-<tr><td><code>stopSession(string $sessionId): BackgroundStopOutcome</code></td><td>Stop a running background session — <code>/bg stop &lt;id&gt;</code> (audit BG-1).</td></tr>
+<tr><td><code>stopSession(string $sessionId): BackgroundStopOutcome</code></td><td>Stop a running background session — <code>/bg stop &lt;id&gt;</code>.</td></tr>
 <tr><td><code>stopSessionAsync(string $sessionId): PromiseInterface</code></td><td>The rungs of stopSession(), run as a loop-driven state machine. The promise resolves with the outcome once advanceStops() (driven by tick()) settles it; nothing here sleeps or waits on a socket. Answers that need no rung resolve at once.</td></tr>
 <tr><td><code>advanceStops(?float $now = null): void</code></td><td>Drive every stop this process has in flight as far as it can go without waiting.</td></tr>
 <tr><td><code>reconnect(?string $workingDirectory = null): array</code></td><td>Reconnect to background sessions when a TUI (re)opens: the ones this supervisor already holds, and — given the project they were spawned for — the ones a PREVIOUS process spawned (roadmap 4.3-3).</td></tr>
@@ -2966,7 +2966,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-background-sessionstopnotificationinterface"><code>SessionStopNotificationInterface</code> <small>interface</small></h4>
-<p>Optional companion to SessionNotificationInterface for listeners that want to tell a user-requested stop apart from a failure (audit BG-1).</p>
+<p>Optional companion to SessionNotificationInterface for listeners that want to tell a user-requested stop apart from a failure.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -3188,7 +3188,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static parse(array $argv): ParsedArgs</code></td><td>Parse $argv into a structured ParsedArgs value object.</td></tr>
-<tr><td><code>static resolveOperands(ParsedArgs $args): ParsedArgs</code></td><td>The filesystem half of operand handling (audit CLI-2): turn a first operand that names an existing directory into the root, and the words after it into the TUI&#039;s first prompt.</td></tr>
+<tr><td><code>static resolveOperands(ParsedArgs $args): ParsedArgs</code></td><td>The filesystem half of operand handling: turn a first operand that names an existing directory into the root, and the words after it into the TUI&#039;s first prompt.</td></tr>
 <tr><td><code>static rootError(ParsedArgs $args): ?string</code></td><td>The usage error for a <code>--root</code> that names no directory, or null when the parsed root is usable.</td></tr>
 <tr><td><code>static configError(ParsedArgs $args): ?string</code></td><td>The usage error for a <code>--config</code> that names no readable file, or null when the parsed config path is usable (or absent).</td></tr>
 </tbody>
@@ -3271,9 +3271,9 @@
 <tr><td><code>static skillSkips(): array</code></td><td>Every SKILL.md this process&#039;s skill scans could not read, keyed by path.</td></tr>
 <tr><td><code>static reportSkillSkips(): void</code></td><td>Tell the user, once and in one line, that some skill files were skipped.</td></tr>
 <tr><td><code>static reportMemorySkips(?string $root): void</code></td><td>Tell the user, once and in one line, that some of their memory notes could not be read and are being skipped.</td></tr>
-<tr><td><code>static reportPromptBudgetDeferrals(?string $root, ?SkillRegistry $skills = null): void</code></td><td>Tell the user, at launch, which instruction files and enabled skill bodies the system prompt leaves out (audit 15d-09 / C3 residual R1).</td></tr>
-<tr><td><code>static reportNonsenseLimits(?string $root = null): void</code></td><td>Tell the user, at launch, that <code>maxToolSteps</code> or <code>maxOutputTokens</code> holds a value the resolvers will not use (audit 15d-16 residual R12).</td></tr>
-<tr><td><code>static reportTuiErrorLogFallback(): void</code></td><td>Tell the user when this TUI session&#039;s diagnostics are not going to the home log (audit R16 follow-up, raised by w9-diag-usage).</td></tr>
+<tr><td><code>static reportPromptBudgetDeferrals(?string $root, ?SkillRegistry $skills = null): void</code></td><td>Tell the user, at launch, which instruction files and enabled skill bodies the system prompt leaves out.</td></tr>
+<tr><td><code>static reportNonsenseLimits(?string $root = null): void</code></td><td>Tell the user, at launch, that <code>maxToolSteps</code> or <code>maxOutputTokens</code> holds a value the resolvers will not use.</td></tr>
+<tr><td><code>static reportTuiErrorLogFallback(): void</code></td><td>Tell the user when this TUI session&#039;s diagnostics are not going to the home log.</td></tr>
 <tr><td><code>static commandSkips(): array</code></td><td>Every <code>*.md</code> command file this process&#039;s command walks could not read, keyed by path (E172).</td></tr>
 <tr><td><code>static hooks(?PermissionGate $gate = null, ?string $root = null): HookManager</code></td><td>The launch&#039;s PreToolUse/PostToolUse chain: the built-in guards, then whatever hookFiles() found on disk, then the permission gate.</td></tr>
 <tr><td><code>static projectCommandShellIsTrusted(string $root): bool</code></td><td>Whether the operator has opted this project root in to running the `<code> !</code>cmd<code> </code><code> form of a command file under </code>&lt;root&gt;/.candy-code/commands` — projectMcpIsTrusted()&#039;s shape for TRUSTED_PROJECT_COMMANDS_CONFIG_KEY, with the same fail-closed-on-every-uncertainty behaviour and the same once-per-process freeze.</td></tr>
@@ -3309,7 +3309,7 @@
 <tr><td><code>static lspTool(?string $root = null, ?LspClient $client = null): LspTool</code></td><td>The model-facing LspTool, wired to the launch&#039;s language servers.</td></tr>
 <tr><td><code>static egressProxy(): ?EgressProxyProcess</code></td><td>THE LAUNCH&#039;S EGRESS PROXY (C-TOOL-4.g) — started at most once per process image, when (and only when) the user-tier <code>bashSandbox</code> reads <code>allowlist</code> on a Linux jail host. <code>Bootstrap::tools()</code> calls it as its FIRST statement, so the proxy exists before any tool child is forked and every fork inherits the live unix socket path the jail re-binds; the memo answer (including the resolved-null one for <code>off</code>/<code>on</code>/ <code>no-network</code>/Darwin launches, which never need a relay) is shared by \SugarCraft\Code\Tools\Sandbox\SandboxFactory::fromSetting(), which only ever reads the shelf — a doctor probe cannot spawn.</td></tr>
 <tr><td><code>static tools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null, ?LspClient $lsp = null, bool $rgAvailable = false, bool $fdAvailable = false, ?RulesState $rulesState = null, ?AgentManager $taskManager = null, ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null): array</code></td><td>Build the built-in coding tools, filtered for the session — the whole model-facing tool array. The body moved to LaunchContext::tools() in the S1b composition split (W7-E); this stays the public door every caller and census reaches, and forwards every argument untouched.</td></tr>
-<tr><td><code>static installSecretEnvAllowlist(?array $config = null): void</code></td><td>Install the operator&#039;s <code>secretEnvAllowlist</code> on ProcessContainment::useSecretEnvAllowlist() — audit F-E1.</td></tr>
+<tr><td><code>static installSecretEnvAllowlist(?array $config = null): void</code></td><td>Install the operator&#039;s <code>secretEnvAllowlist</code> on ProcessContainment::useSecretEnvAllowlist().</td></tr>
 <tr><td><code>static unfilteredTools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null, ?LspClient $lsp = null, bool $rgAvailable = false, bool $fdAvailable = false, ?RulesState $rulesState = null): array</code></td><td>The exact array LaunchContext::unfilteredTools() builds, before the session&#039;s <code>allowedTools</code>/<code>disabledTools</code> filter. The body moved in the S1b composition split (W7-E C2); this stays the public door — <code>AgentManager::resolveGrantedTools()</code> and the ledger-sharing tests name it here — and forwards every argument untouched.</td></tr>
 <tr><td><code>static filterToolSet(array $tools): array</code></td><td>Apply the user&#039;s <code>allowedTools</code> / <code>disabledTools</code> settings to the model-facing tool set — Phase 6 item 3&#039;s <code>tools.allow</code> / <code>tools.deny</code>.</td></tr>
 <tr><td><code>static instructionLoader(?string $root = null): InstructionFileLoader</code></td><td>The one session-lifetime InstructionFileLoader shared by the backend and the Read/Edit/Glob tools, so a root CLAUDE.md/AGENTS.md is read (and its <code>@import</code>s expanded) once per session rather than once per consumer.</td></tr>
@@ -3570,7 +3570,7 @@
 <tr><td><code>static withResolvedServiceTier(EngineBackend $engine): array</code></td><td>C-PRV-3.a: the configured fast tier is lowered only where the pair the engine ACTUALLY carries shapes it. <code>default</code> never refuses: it is the standard lane, which every pair is on whether or not it can leave it, so applying it just clears any armed fast leg. <code>fast</code> consults \SugarCraft\Code\Providers\ShapesServiceTier::serviceTierFor() on <code>$engine-&gt;provider()</code> — NOT on an unwrapped primary. The earlier shape unwrapped a FallbackProvider, copied from withResolvedReasoningEffort(), where the unwrap is sound because effort rides the REQUEST and reaches whichever provider instance answers; the tier is no request field. It is a provider leg \SugarCraft\Code\Backend\EngineBackend::withServiceTier() mints by overlaying <code>$this-&gt;provider</code> — which, under a <code>fallbackModels</code> block, is the wrapper, and the wrapper implements no such interface. So the door said yes, the engine stored the word, and the wire stayed clean on the production path (a block with fallbacks): the set-but-ignored this door exists to ban. A wrapped pair therefore comes back UNTOUCHED with a reason beside it, and the word is deliberately not stored either, so a status surface reads the truth (no tier armed) instead of a promise this wire will not keep. Delegating a tier THROUGH the wrapper is not merely wider — a block spans several provider+model PAIRS whose families differ on fast eligibility (Anthropic gates <code>speed</code> by family), and one wire value for all of them could buy the premium on a model that never asked for it; the per-pair resolution belongs to the C-PRV-3.b seam. The reason half is unsaid by this caller for the documented shelf reason above; saying it is that same seam.</td></tr>
 <tr><td><code>static withConsolePermissionPrompt(EngineBackend $engine, PermissionGate $gate, bool $enabled): EngineBackend</code></td><td>Attach the console approver, or hand the engine back untouched.</td></tr>
 <tr><td><code>static taskWorkerPool(\SugarCraft\Code\Agents\AgentPoolConfig $config): \SugarCraft\Code\Agents\AgentWorkerPool</code></td><td>The governed worker pool for the Task feed (E675), built from the same agentPoolConfig() the Chat hands its workflow lanes so a <code>Task</code> dispatch honours the session&#039;s <code>maxConcurrent</code> / <code>stopOnFirstFailure</code> / worker-provider knobs.</td></tr>
-<tr><td><code>static configRoot(?string $root): ?string</code></td><td>The root a launch&#039;s <code>.candy-code/*</code> lookups resolve against — the repository, on a launch from one of its subdirectories (audit 15d-13 (b)); null stays null. The WORKING directory is never this: tools, hooks and spawned sessions keep <code>$root</code>. See ProjectRoot.</td></tr>
+<tr><td><code>static configRoot(?string $root): ?string</code></td><td>The root a launch&#039;s <code>.candy-code/*</code> lookups resolve against — the repository, on a launch from one of its subdirectories (see the 15d-13 note); null stays null. The WORKING directory is never this: tools, hooks and spawned sessions keep <code>$root</code>. See ProjectRoot.</td></tr>
 <tr><td><code>static app(?string $root = null, ?string $tuiErrorLog = null, ?string $initialPrompt = null): App</code></td><td>Build the pane shell the CLI binary runs interactively: an App hosting the very chat() model this class already builds (§5 E7, the MERGE branch).</td></tr>
 <tr><td><code>static settingsWriter(?string $root): \SugarCraft\Code\Config\Settings\SettingsWriter</code></td><td>The launch&#039;s settings write door (N-P2): its &quot;You&quot; tier goes through writeUserConfig() — the one writer config.json has — and its project tier only to a trusted project&#039;s settings.local.json. Built once per launch by workspace(), which registers it for Chat&#039;s <code>/model</code> (N-P3b); app() reuses that instance for the settings editor.</td></tr>
 <tr><td><code>static launchTrustDialog(?string $root): ?\SugarCraft\Code\Tui\TrustDialog</code></td><td>The launch dialog for an interactive TUI start (C-SEC-5.d): the \SugarCraft\Code\Cli\Bootstrap::pendingProjectTrust() census of <code>$root</code> wrapped in a dialog, or null when the root declares nothing pending or has already been asked this process. Only app() calls this — the interactive shell is the only surface that builds an App, which is what keeps <code>-p</code> and serve dialog-free by construction.</td></tr>
@@ -3624,9 +3624,9 @@
 <tr><td><code>static mcpDisabledByEnvironment(): bool</code></td><td>THE SPELLING behind Bootstrap::MCP_DISABLE_ENV, one place so the narrower truthy vocabulary — only <code>1</code>, <code>true</code>, <code>yes</code>, case-insensitive — cannot drift into the flag-style default-everything-on convention. The vocabulary itself is EnvBool::isTrue(), the single owner of the narrow house law; this method is one of its consumers. Deliberately NOT the <code>!== false &amp;&amp; !== &#039;&#039; &amp;&amp; !== &#039;0&#039;</code> shape the other switches use: here the DEFAULT-ON side must be every value, so a launcher that cannot control what its environment carries (a shard runner inheriting an operator shell) still gets the documented default unless it sees one of the three words.</td></tr>
 <tr><td><code>static mcpDisabled(): bool</code></td><td>Whether project MCP is off for this launch: Bootstrap::MCP_DISABLE_ENV, OR the operator&#039;s <code>mcp.enabled: false</code> setting.</td></tr>
 <tr><td><code>static mcpServerInventory(array $decision): array</code></td><td>What <code>.mcp.json</code> DECLARES, for <code>candy-code mcp list</code> — read, never run.</td></tr>
-<tr><td><code>static trustProjectMcp(array $decision, \Closure $permissionConfig, \Closure $trustedConfigDirPath, \Closure $trustedProjectRoots): array</code></td><td><code>candy-code mcp trust</code> — the user&#039;s explicit approval of a project&#039;s <code>.mcp.json</code> AS IT IS NOW (audit MCP-5): lists <code>trustedProjectMcp</code> for the canonical project root when it is not already there, and records every enabled server&#039;s fingerprint (McpTrustPins), replacing the root&#039;s previous record. Starts nothing.</td></tr>
+<tr><td><code>static trustProjectMcp(array $decision, \Closure $permissionConfig, \Closure $trustedConfigDirPath, \Closure $trustedProjectRoots): array</code></td><td><code>candy-code mcp trust</code> — the user&#039;s explicit approval of a project&#039;s <code>.mcp.json</code> AS IT IS NOW: lists <code>trustedProjectMcp</code> for the canonical project root when it is not already there, and records every enabled server&#039;s fingerprint (McpTrustPins), replacing the root&#039;s previous record. Starts nothing.</td></tr>
 <tr><td><code>static mcpLivenessSnapshot(array $decision, \Closure $memoClient): ?array</code></td><td>What THIS PROCESS has actually started, for the <code>/mcp</code> panel — reading the Bootstrap::$mcpClients memo, NEVER consulting Bootstrap::mcpClient().</td></tr>
-<tr><td><code>static mcpPinRefusals(array $decision, \Closure $memoClient): array</code></td><td>C-SEC-5.a: the servers the memo client&#039;s admission check refused — command, args or env drifted from what <code>mcp trust</code> fingerprinted (audit MCP-5).</td></tr>
+<tr><td><code>static mcpPinRefusals(array $decision, \Closure $memoClient): array</code></td><td>C-SEC-5.a: the servers the memo client&#039;s admission check refused — command, args or env drifted from what <code>mcp trust</code> fingerprinted .</td></tr>
 <tr><td><code>static mcpConfigMemoKey(array $decision): string</code></td><td>MCP-3: the memo key for a decision. With NO resolvable user tier (an unowned home, or the disabled switch) this is exactly the canonical project path — the key every pre-MCP-3 reader and writer used. Whenever the home resolves, the key is the two paths joined by a NUL whether or not the user file exists yet: widening on resolvability rather than on existence is what keeps a file created mid-session from missing the memo and double-building the client. A path cannot contain NUL, so no pair of real files can collide with a single-path key.</td></tr>
 <tr><td><code>static mcpConfigChangedSinceLaunch(array $decision, \Closure $storedDigest): ?bool</code></td><td>E703-α: has <code>.mcp.json</code> changed since the launch that memoised it?</td></tr>
 <tr><td><code>static mcpConfigDigest(string $path): ?array</code></td><td>The digest of $path&#039;s CURRENT bytes, or null when they cannot be read.</td></tr>
@@ -3920,7 +3920,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-commands-exportcommand"><code>ExportCommand</code> <small>final class</small></h4>
-<p>Implements <code>/export [format] [file|--path &lt;file&gt;]</code>: write the transcript to a LOCAL file with its RAW bytes (plan W4-B, audit 2026-10-21; the SEC-4 ruling&#039;s other half, and the discoverable save path the end-user reviews asked for).</p>
+<p>Implements <code>/export [format] [file|--path &lt;file&gt;]</code>: write the transcript to a LOCAL file with its RAW bytes (plan W4-B; the SEC-4 ruling&#039;s other half, and the discoverable save path the end-user reviews asked for).</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -5310,7 +5310,7 @@
 <tbody>
 <tr><td><code>__construct(array $rules, ?RulesState $rulesState = null, ?Closure $loader = null)</code></td><td></td></tr>
 <tr><td><code>static new(array $rules, ?RulesState $rulesState = null): self</code></td><td>Build a tracker over the rules the session already loaded.</td></tr>
-<tr><td><code>static fromLoader(Closure $loader, ?RulesState $rulesState = null): self</code></td><td>Build a tracker that re-reads the rule list on every consult — the shape the boot path ships, so a rule added, edited or demoted mid-session is judged by the same walk the splice makes (audit 15d-20; see the class doc-block).</td></tr>
+<tr><td><code>static fromLoader(Closure $loader, ?RulesState $rulesState = null): self</code></td><td>Build a tracker that re-reads the rule list on every consult — the shape the boot path ships, so a rule added, edited or demoted mid-session is judged by the same walk the splice makes (see the class doc-block).</td></tr>
 <tr><td><code>bindIntentSource(?Closure $source): void</code></td><td>Bind (or unbind with null) the session&#039;s intent-note source.</td></tr>
 <tr><td><code>intentSourceBound(): bool</code></td><td>Whether standing intents have been bound on this tracker (C-CTX-3.f). Introspection only — the launch wiring pin in tests/Context/StandingIntentTest.php names the one place the bind must happen (<code>MemoryTool::fromCatalog</code>); a tracker that never got a source silently answers without intents, so &quot;bound&quot; must be observable.</td></tr>
 <tr><td><code>static isPathScoped(Rule $rule): bool</code></td><td>THE ONE GATE: does this rule carry a <code>paths:</code> trigger?</td></tr>
@@ -6012,17 +6012,17 @@
 <tr><td><code>static enterForkedChild(NoticeSink $sink): void</code></td><td>The forked-turn-child half of the per-session seam: make <code>$sink</code> this process&#039;s sink for good, and make the process a WRITER ONLY.</td></tr>
 <tr><td><code>static clipSuffix(): string</code></td><td>The suffix a clipped row ends with, naming where its full text is now.</td></tr>
 <tr><td><code>static overflowNotice(int $dropped): string</code></td><td>The &quot;and N more&quot; tail row, spelled with OVERFLOW_FORMAT.</td></tr>
-<tr><td><code>static fullTextPhrase(?NoticeSink $sink = null): string</code></td><td>Where this process&#039;s complete record of a notice is — <code>full text on stderr</code>, <code>full text in ~/.candy-code/logs/candy-code.log</code> — or FULL_TEXT_NOT_KEPT (audit C4).</td></tr>
+<tr><td><code>static fullTextPhrase(?NoticeSink $sink = null): string</code></td><td>Where this process&#039;s complete record of a notice is — <code>full text on stderr</code>, <code>full text in ~/.candy-code/logs/candy-code.log</code> — or FULL_TEXT_NOT_KEPT.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-diagnostics-tuierrorlog"><code>TuiErrorLog</code> <small>final class</small></h4>
-<p>Points PHP&#039;s <code>error_log</code> ini at a private file for the life of an interactive TUI session (audit C2a).</p>
+<p>Points PHP&#039;s <code>error_log</code> ini at a private file for the life of an interactive TUI session.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static install(?string $home, ?string $tempDir = null): ?string</code></td><td>Redirect <code>error_log</code> away from the tty: into <code>&lt;$home&gt;/RELATIVE_PATH</code>, else the private temp-dir fallback, else the null device (audit R16 — see this class&#039;s doc-block for the chain).</td></tr>
+<tr><td><code>static install(?string $home, ?string $tempDir = null): ?string</code></td><td>Redirect <code>error_log</code> away from the tty: into <code>&lt;$home&gt;/RELATIVE_PATH</code>, else the private temp-dir fallback, else the null device ( see this class&#039;s doc-block for the chain).</td></tr>
 <tr><td><code>static isNullDevice(string $destination): bool</code></td><td>Whether a destination install() returned discards what is written to it — so a caller must not send a reader there.</td></tr>
-<tr><td><code>static describeDestination(string|false $value): ?string</code></td><td>How a user-facing row should name where the COMPLETE text of a diagnostic went, given an <code>error_log</code> ini value: <code>stderr</code>, a path (the home spelled <code>~</code>), <code>the system log</code>, or null when it went to the null device and nothing can be read back (audit C4).</td></tr>
+<tr><td><code>static describeDestination(string|false $value): ?string</code></td><td>How a user-facing row should name where the COMPLETE text of a diagnostic went, given an <code>error_log</code> ini value: <code>stderr</code>, a path (the home spelled <code>~</code>), <code>the system log</code>, or null when it went to the null device and nothing can be read back.</td></tr>
 <tr><td><code>static destinationIsStderr(string|false $value): bool</code></td><td>Whether an <code>error_log</code> ini value sends <code>error_log()</code> to fd 2.</td></tr>
 </tbody>
 </table>
@@ -6418,7 +6418,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(private HookRegistry $registry)</code></td><td></td></tr>
-<tr><td><code>__clone()</code></td><td>A clone gets its OWN registry, so registering on the copy leaves the original&#039;s chain alone (audit F-J5: \SugarCraft\Code\Backend\EngineBackend::withWorktreeRoot() used to add its worktree-scoped Bash guard to the parent backend&#039;s shared manager). The registry&#039;s state is arrays of hook instances, so a shallow registry clone is a full copy of the chain; the hook objects themselves are shared, exactly as they are between two turns on one manager.</td></tr>
+<tr><td><code>__clone()</code></td><td>A clone gets its OWN registry, so registering on the copy leaves the original&#039;s chain alone (\SugarCraft\Code\Backend\EngineBackend::withWorktreeRoot() used to add its worktree-scoped Bash guard to the parent backend&#039;s shared manager). The registry&#039;s state is arrays of hook instances, so a shallow registry clone is a full copy of the chain; the hook objects themselves are shared, exactly as they are between two turns on one manager.</td></tr>
 <tr><td><code>setPromptBackend(?Backend $backend): self</code></td><td>Install the backend <code>type: prompt</code> entries are answered on.</td></tr>
 <tr><td><code>setScriptSandbox(?SandboxBackend $sandbox, ?string $refusal): self</code></td><td>Install the jail <code>hooks</code>-scoped script rows run inside (C-TOOL-4.d).</td></tr>
 <tr><td><code>loadFromFile(string $path): void</code></td><td>Load hooks from a YAML hook file, adding each one to the chain.</td></tr>
@@ -6496,8 +6496,8 @@
 <tr><td><code>withAskedBy(array $names): self</code></td><td>A copy whose self::$askedBy IS $names (deduplicated, order kept).</td></tr>
 <tr><td><code>withRefusedBy(?string $name): self</code></td><td>A copy whose self::$refusedBy IS $name.</td></tr>
 <tr><td><code>refusingHook(): ?string</code></td><td>The hook that kept this verdict from permitting the call, or null when it permits or no single hook is known to have refused.</td></tr>
-<tr><td><code>static withheldNotice(?string $hook, string $reason): string</code></td><td>The text that replaces a tool&#039;s output when a <code>PostToolUse</code> chain does not permit it (audit F-H1, R6): one sentence both tool paths — \SugarCraft\Code\Runtime::settle() and \SugarCraft\Code\Chat::applyPostToolUse() — use, so a transcript reads the same whichever pipeline ran the call.</td></tr>
-<tr><td><code>static failureReason(\Throwable $e): string</code></td><td>The reason self::withheldNotice() gives when the chain THREW instead of answering (audit R6): a crashed hook has vetted nothing, so the output it was reading is withheld exactly as a refusal&#039;s is.</td></tr>
+<tr><td><code>static withheldNotice(?string $hook, string $reason): string</code></td><td>The text that replaces a tool&#039;s output when a <code>PostToolUse</code> chain does not permit it one sentence both tool paths — \SugarCraft\Code\Runtime::settle() and \SugarCraft\Code\Chat::applyPostToolUse() — use, so a transcript reads the same whichever pipeline ran the call.</td></tr>
+<tr><td><code>static failureReason(\Throwable $e): string</code></td><td>The reason self::withheldNotice() gives when the chain THREW instead of answering: a crashed hook has vetted nothing, so the output it was reading is withheld exactly as a refusal&#039;s is.</td></tr>
 <tr><td><code>askedOnlyBy(string $hookName): bool</code></td><td>True when this is an ASK and $hookName is the ONLY hook in the chain that asked.</td></tr>
 <tr><td><code>withAskEveryTime(?string $reason): self</code></td><td>A copy carrying $reason as self::$askEveryTime: a question no remembered answer may settle.</td></tr>
 <tr><td><code>isRememberable(): bool</code></td><td>Whether a remembered &quot;always&quot; may answer this ASK: the gate&#039;s question alone (askedOnlyBy()) and not one it puts every time (self::$askEveryTime). THE test every memo applies before it remembers or answers.</td></tr>
@@ -6566,7 +6566,7 @@
 </table>
 <h3>SugarCraft\Code\Hooks\BuiltIn</h3>
 <h4 id="api-sugarcraft-code-hooks-builtin-audithook"><code>AuditHook</code> <small>final class</small></h4>
-<p>One appended line per finished tool call: when, which session, which tool, what it was given, and the first 200 bytes of what it produced — plus, since audit F-H2, one line per call the engine REFUSED (recordDenial()) and per output a PostToolUse hook WITHHELD (recordWithheld()).</p>
+<p>One appended line per finished tool call: when, which session, which tool, what it was given, and the first 200 bytes of what it produced — plus, since one line per call the engine REFUSED (recordDenial()) and per output a PostToolUse hook WITHHELD (recordWithheld()).</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -6580,7 +6580,7 @@
 <tr><td><code>matcher(): string</code></td><td></td></tr>
 <tr><td><code>execute(HookContext $context): HookResult</code></td><td></td></tr>
 <tr><td><code>recordDenial(HookContext $context, DenialKind $kind, string $reason): bool</code></td><td>Record a call the engine refused before it ran, answering whether the line was written.</td></tr>
-<tr><td><code>recordWithheld(HookContext $context, string $reason, ?string $hook = null): bool</code></td><td>Record that a <code>PostToolUse</code> hook withheld a call&#039;s output from the model (audit F-H1), answering whether the line was written.</td></tr>
+<tr><td><code>recordWithheld(HookContext $context, string $reason, ?string $hook = null): bool</code></td><td>Record that a <code>PostToolUse</code> hook withheld a call&#039;s output from the model , answering whether the line was written.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-hooks-builtin-auditlogreader"><code>AuditLogReader</code> <small>final class</small></h4>
@@ -6693,7 +6693,7 @@
 <tr><td><code>event(): HookEvent</code></td><td></td></tr>
 <tr><td><code>matcher(): string</code></td><td>Every tool, including MCP tools: the gate&#039;s own classifiers decide what a name means (@see PermissionGate::isWriteTool()), so narrowing here would silently exempt whatever the pattern failed to anticipate.</td></tr>
 <tr><td><code>gate(): PermissionGate</code></td><td>The gate this hook adapts, so a caller that installed one can read its configured mode back without keeping a second reference.</td></tr>
-<tr><td><code>execute(HookContext $context): HookResult</code></td><td>Hands the gate the context&#039;s project root because that is the root the tools resolve a relative path against — without it a path rule judged the call&#039;s SPELLING, so <code>Deny Read(/proj/secret.txt)</code> let <code>secret.txt</code> and a symlink to it through (audit F-J3). An empty root (a context built with no workspace) is passed as null: anchoring at <code>&#039;&#039;</code> would anchor at <code>/</code> and invent paths the tool never opens.</td></tr>
+<tr><td><code>execute(HookContext $context): HookResult</code></td><td>Hands the gate the context&#039;s project root because that is the root the tools resolve a relative path against — without it a path rule judged the call&#039;s SPELLING, so <code>Deny Read(/proj/secret.txt)</code> let <code>secret.txt</code> and a symlink to it through. An empty root (a context built with no workspace) is passed as null: anchoring at <code>&#039;&#039;</code> would anchor at <code>/</code> and invent paths the tool never opens.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-hooks-builtin-posteditdiagnosticshook"><code>PostEditDiagnosticsHook</code> <small>final readonly class</small></h4>
@@ -6754,7 +6754,7 @@
 <tr><td><code>askPatterns(): array</code></td><td></td></tr>
 <tr><td><code>name(): string</code></td><td></td></tr>
 <tr><td><code>event(): HookEvent</code></td><td></td></tr>
-<tr><td><code>matcher(): string</code></td><td>EVERY TOOL THAT CAN PUT A FILE&#039;S BYTES INTO THE TRANSCRIPT, not just the four that used to be listed (audit F-J2). The matcher was <code>^(Bash|Edit|Write|Read)$</code>, so <code>Grep pattern=&quot;=&quot; path=&quot;.&quot; include_ignored=true</code> — classed read-only and allowed in every mode — printed <code>.env:1:DB_PASSWORD=…</code> without this hook ever being asked.</td></tr>
+<tr><td><code>matcher(): string</code></td><td>EVERY TOOL THAT CAN PUT A FILE&#039;S BYTES INTO THE TRANSCRIPT, not just the four that used to be listed. The matcher was <code>^(Bash|Edit|Write|Read)$</code>, so <code>Grep pattern=&quot;=&quot; path=&quot;.&quot; include_ignored=true</code> — classed read-only and allowed in every mode — printed <code>.env:1:DB_PASSWORD=…</code> without this hook ever being asked.</td></tr>
 <tr><td><code>execute(HookContext $context): HookResult</code></td><td>THE TWO HALVES OF THIS ARE NOT EQUALLY STRONG, and pretending otherwise would be the finding rather than the fix.</td></tr>
 <tr><td><code>static namesProtectedFile(string $command): bool</code></td><td>Does this shell line name a file the DEFAULT lists guard — a secret (self::DEFAULT_PROTECTED_PATTERNS) or the policy surface (self::POLICY_ASK_PATTERNS) — in any spelling bash would produce? For a caller that GRANTS without asking (\SugarCraft\Code\Permissions\ReadOnlyCommands::autoAllows()), so a read-only <code>grep x .env</code> is not waved through on the strength of its command name: the hook&#039;s own verdict still decides it, but nothing upstream of the hook pre-empts the question either.</td></tr>
 </tbody>
@@ -6874,7 +6874,7 @@
 <tr><td><code>static renderPriorSummariesForSummary(array $priors): string</code></td><td>The third message of a re-compaction request: the carried prior summaries wrapped in the <code>&lt;prior-summary&gt;</code> tag, followed by the merge rules self::PRIOR_SUMMARY_NOTE.</td></tr>
 <tr><td><code>static parseExchangeSummaries(string $reply, array $keys): array</code></td><td>Turn the model&#039;s numbered records into the key =&gt; summary map \SugarCraft\Code\Context\ContextCompactor::withExchangeSummaries() wants.</td></tr>
 <tr><td><code>static sanitizeSummaryLine(string $text): string</code></td><td>One bounded, control-byte-free line — same treatment Message::describeToolCall() gives a model-authored tool label, and for the same two reasons: the text is untrusted, and it is going somewhere that assumes one line.</td></tr>
-<tr><td><code>static withoutParkedSubmission(array $history, string $prompt): array</code></td><td>$history with the parked submission&#039;s own rows removed — the prompt Chat::scheduleParkedCompaction() echoed and the UserPromptSubmit notes it wrote immediately ahead of it — for the pre-turn checkpoint (audit SES-1; see Chat::dispatchTurn() for what &quot;pre-turn&quot; keeps and why).</td></tr>
+<tr><td><code>static withoutParkedSubmission(array $history, string $prompt): array</code></td><td>$history with the parked submission&#039;s own rows removed — the prompt Chat::scheduleParkedCompaction() echoed and the UserPromptSubmit notes it wrote immediately ahead of it — for the pre-turn checkpoint ( see Chat::dispatchTurn() for what &quot;pre-turn&quot; keeps and why).</td></tr>
 <tr><td><code>static contextReminderMessage(int $tokenCount): Message</code></td><td>Build the soft, non-blocking reminder message Chat::dispatchTurn() appends whenever ContextCompactor::shouldSendReminder() reports the conversation has crossed its share of the budget (CompactorConfig::$reminderThreshold, 70% by default — which is why neither this docblock nor the message names a percentage as if it were fixed). Rendered with a distinct <code>Role::System</code> (a dim &quot;system: …&quot; line, see \SugarCraft\Code\Renderer; it is agent-visible, so not the italic &quot;notice: …&quot; of a UI-only row) rather than the <code>Role::Assistant</code> bubble used for the hard idle-compaction prompt, so the two are visually distinguishable and this one never blocks the turn it rides along with.</td></tr>
 <tr><td><code>static withoutContextReminders(array $history): array</code></td><td>Drop every context-usage reminder from a history.</td></tr>
 <tr><td><code>static isContextReminder(Message $msg): bool</code></td><td>Whether $msg is one of contextReminderMessage()&#039;s own products.</td></tr>
@@ -7272,7 +7272,7 @@
 <tr><td><code>saveTodos(string $sessionId, TodoList $todos): bool</code></td><td>Save $todos as $sessionId&#039;s todo list, now — into the metadata row&#039;s <code>tasks</code> slot, keeping the row&#039;s other fields. False when nothing persists or the store refused it; never thrown, for the reason saveLedger() gives: a turn is never failed over its checklist.</td></tr>
 <tr><td><code>loadPermissionGrants(string $sessionId): array</code></td><td>$sessionId&#039;s remembered &quot;always&quot; grants as a grant map (\SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants()), or [] when nothing persists or the store cannot say.</td></tr>
 <tr><td><code>savePermissionGrants(string $sessionId, array $grants): bool</code></td><td>Save $grants (a grant map) as $sessionId&#039;s remembered grants, now. False when nothing persists or the store refused it; never thrown — a grant that is not saved is asked again after a resume, nothing worse.</td></tr>
-<tr><td><code>lock(string $sessionId): ?SessionLock</code></td><td>Take the single-writer lock on $sessionId (audit SES-3(b)), or null when another process holds it — or when there is no store to lock under.</td></tr>
+<tr><td><code>lock(string $sessionId): ?SessionLock</code></td><td>Take the single-writer lock on $sessionId, or null when another process holds it — or when there is no store to lock under.</td></tr>
 <tr><td><code>lockHolder(string $sessionId): ?int</code></td><td>The pid holding $sessionId&#039;s lock, when it can be told.</td></tr>
 <tr><td><code>identityOf(Message $message): ?array</code></td><td>The <code>[id, ref]</code> $message&#039;s row has: the one it carries, else the one a save (or identify()) gave it — the same across every wither of the row. Null while the row has never been saved or identified, and always without a store.</td></tr>
 <tr><td><code>identify(string $sessionId, Message $message): ?array</code></td><td>$message&#039;s identity in $sessionId, allocated now when its row has none, and kept by every later save. Null without a store.</td></tr>
@@ -7329,9 +7329,9 @@
 <tr><td><code>userTurnMessage(string $text, bool $resolveMentions, string $root, SessionStore|EnhancedSessionStore|null $store, ?PermissionGate $gate, ?\SugarCraft\Code\Skills\SkillRegistry $skills = null, ?\Closure $mcpProvider = null, array $extraAttachments = [], ?\Closure $agentRoster = null): array</code></td><td>The user row a submitted prompt becomes, with its mentions attached, plus one notice per mention that could not be.</td></tr>
 <tr><td><code>inlineTier(CompactionService $compaction, ContextCompactor $compactor, array $history, array $wireHistory, int $tokenLimit, int $tokenCount, \Closure $estimate, array $summaries = []): array</code></td><td>The automatic tier&#039;s synchronous heuristic route for one submission, once the caller has found the tier fired and neither the thrash breaker nor a model-written summary (CompactionService&#039;s parked route) took it.</td></tr>
 <tr><td><code>turnPrompt(array $newTurnMessages): ?string</code></td><td>The prompt $newTurnMessages carries: the content of its last user row, or null when it has none.</td></tr>
-<tr><td><code>checkpointState(array $preTurnHistory, string $draft, ?int $cursor, ?string $sessionId, array $pasteChips = [], int $pasteCounter = 0): array</code></td><td>The checkpoint state a dispatch saves: THE STATE BEFORE THE PROMPT, NOT AFTER IT (audit SES-1). Every row the submission itself added — the user&#039;s line, the hook notes, the 70% reminder — is out, because a resend through the restored draft regenerates all three; the compaction the submission triggered stays in with its reports, because a rewrite is a fact about the transcript, not about the prompt. The draft and caret are the caller&#039;s: on the ordinary route the pre-clear buffer, on the parked route whatever the box held when it was parked.</td></tr>
+<tr><td><code>checkpointState(array $preTurnHistory, string $draft, ?int $cursor, ?string $sessionId, array $pasteChips = [], int $pasteCounter = 0): array</code></td><td>The checkpoint state a dispatch saves: THE STATE BEFORE THE PROMPT, NOT AFTER IT. Every row the submission itself added — the user&#039;s line, the hook notes, the 70% reminder — is out, because a resend through the restored draft regenerates all three; the compaction the submission triggered stays in with its reports, because a rewrite is a fact about the transcript, not about the prompt. The draft and caret are the caller&#039;s: on the ordinary route the pre-clear buffer, on the parked route whatever the box held when it was parked.</td></tr>
 <tr><td><code>saveCheckpoint(SessionStore|EnhancedSessionStore|null $store, ?string $sessionId, ?string $root, array $state): ?\Closure</code></td><td>Save $state as $sessionId&#039;s next checkpoint and answer the workspace capture that belongs beside it, or null when there is none to take.</td></tr>
-<tr><td><code>recordTurn(SessionStore|EnhancedSessionStore|null $store, ?string $sessionId, array $newTurnMessages): void</code></td><td>The row&#039;s turn count and last-prompt preview, which the session picker shows instead of the system prompt every session shares (Appendix P §3.1, audit B3). Picker bookkeeping only; never blocks the prompt.</td></tr>
+<tr><td><code>recordTurn(SessionStore|EnhancedSessionStore|null $store, ?string $sessionId, array $newTurnMessages): void</code></td><td>The row&#039;s turn count and last-prompt preview, which the session picker shows instead of the system prompt every session shares (Appendix P §3.1). Picker bookkeeping only; never blocks the prompt.</td></tr>
 <tr><td><code>recordMessagesCreated(?TranscriptStore $transcripts, ?string $sessionId, array $newTurnMessages, ?TurnRunner $runner = null): array</code></td><td>Announce the prompt row(s) a dispatch commits as durable <code>message.created</code> events in the session&#039;s EventLog (Appendix O §6.5), each named by the identity its save will keep (TranscriptStore::identify()) — the same id the turn&#039;s own <code>turn.started</code> then cites as its <code>messageId</code>.</td></tr>
 </tbody>
 </table>
@@ -7467,7 +7467,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-host-commands-backgroundcommand"><code>BackgroundCommand</code> <small>final class</small></h4>
-<p><code>/bg &lt;task&gt;</code> (alias <code>/background</code>) — dispatch a task onto the BackgroundSupervisor and hand the prompt straight back ( §5 E3); <code>/bg stop &lt;id&gt;</code> stops one (audit BG-1). Moved out of <code>Chat</code> in roadmap O-2h; <code>/fork</code> (ForkCommand) shares its spawn.</p>
+<p><code>/bg &lt;task&gt;</code> (alias <code>/background</code>) — dispatch a task onto the BackgroundSupervisor and hand the prompt straight back ( §5 E3); <code>/bg stop &lt;id&gt;</code> stops one. Moved out of <code>Chat</code> in roadmap O-2h; <code>/fork</code> (ForkCommand) shares its spawn.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -7625,7 +7625,7 @@
 <tr><td><code>static refused(string $reason): self</code></td><td>The command was not run, for $reason — a turn holds the session, say. No rows and no wire code: the reason is the answer.</td></tr>
 <tr><td><code>withRows(Message ...$rows): self</code></td><td>A copy with $rows appended after this result&#039;s own.</td></tr>
 <tr><td><code>withEffect(CommandEffect $effect): self</code></td><td></td></tr>
-<tr><td><code>holdingTurn(): self</code></td><td>A copy that leaves a running turn running: <code>/workflow pause|status</code> typed while the run they control holds the session (audit WF-4). Every other command runs idle, where releasing the turn changes nothing.</td></tr>
+<tr><td><code>holdingTurn(): self</code></td><td>A copy that leaves a running turn running: <code>/workflow pause|status</code> typed while the run they control holds the session. Every other command runs idle, where releasing the turn changes nothing.</td></tr>
 <tr><td><code>isRefused(): bool</code></td><td>Whether the command did not run (self::refused() or self::clientOnly()).</td></tr>
 <tr><td><code>isClientOnly(): bool</code></td><td>Whether the command did not run here at all (self::clientOnly()).</td></tr>
 <tr><td><code>effect(CommandEffectKind $kind): ?CommandEffect</code></td><td>The first effect of $kind, or null.</td></tr>
@@ -8260,7 +8260,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-lsp-lspexchangelock"><code>LspExchangeLock</code> <small>final class</small></h4>
-<p>Cross-process mutual exclusion for one LspConnection, plus the state that must outlive whichever process held it last (audit B7).</p>
+<p>Cross-process mutual exclusion for one LspConnection, plus the state that must outlive whichever process held it last.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -8280,7 +8280,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-lsp-lspexchangestate"><code>LspExchangeState</code> <small>final class</small></h4>
-<p>What one LspConnection exchange leaves behind for the next one — in whichever process that next one runs (audit B7).</p>
+<p>What one LspConnection exchange leaves behind for the next one — in whichever process that next one runs.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -8467,7 +8467,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(private ?string $cwd = null, private float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS)</code></td><td></td></tr>
-<tr><td><code>static configuredTimeout(mixed $value): float</code></td><td>The per-call bound a <code>.mcp.json</code> <code>&quot;type&quot;: &quot;git&quot;</code> entry&#039;s <code>timeout</code> key asks for, in seconds (audit R18, residual of GIT-2).</td></tr>
+<tr><td><code>static configuredTimeout(mixed $value): float</code></td><td>The per-call bound a <code>.mcp.json</code> <code>&quot;type&quot;: &quot;git&quot;</code> entry&#039;s <code>timeout</code> key asks for, in seconds.</td></tr>
 <tr><td><code>timeoutSeconds(): float</code></td><td>The wall-clock ceiling each git invocation runs under, in seconds.</td></tr>
 <tr><td><code>gitStatus(?string $path = null): GitOperationResult</code></td><td>Get repository status.</td></tr>
 <tr><td><code>gitSnapshot(?string $path = null): GitOperationResult</code></td><td>Get repository snapshot: branch, remote, tags, and staged changes.</td></tr>
@@ -8604,13 +8604,13 @@
 <tr><td><code>startAllBlocking(): void</code></td><td>Block until no launched server is still <code>starting</code>, pumping tick() as it waits. The synchronous face of the startup state machine, for callers that want the finished server set in hand, as before.</td></tr>
 <tr><td><code>tick(): void</code></td><td>Advance every in-flight handshake that can make progress, and return at once. Meant to be called periodically from the event loop.</td></tr>
 <tr><td><code>startupStates(): array</code></td><td>The startup state of every server launched or refused in the current start cycle: <code>starting</code>, <code>ready</code>, <code>failed</code> or <code>auth-required</code>. Read-only and side-effect free, for the <code>/mcp</code> panel. Servers the config disabled, denied or the admission check refused have no row here; they keep their own reports.</td></tr>
-<tr><td><code>refusedServers(): array</code></td><td>The entries the admission check refused in the last startServers() run (audit MCP-5).</td></tr>
+<tr><td><code>refusedServers(): array</code></td><td>The entries the admission check refused in the last startServers() run.</td></tr>
 <tr><td><code>deniedServers(): array</code></td><td>The entries the last startServers() run did not start because their name matches a deny pattern (E696). Not reported as a failure: the operator&#039;s own setting declined them.</td></tr>
 <tr><td><code>strippedSecretEnv(): array</code></td><td>The inherited credential-shaped variables each stdio server was started WITHOUT in the last startServers() run, keyed by server name; servers that lost nothing are absent. Names only, never values. The launch notice reads this: a server needing one declares it in its <code>env</code> block (<code>&quot;GITHUB_TOKEN&quot;: &quot;${GITHUB_TOKEN}&quot;</code>) or the operator lists it in <code>secretEnvAllowlist</code>.</td></tr>
 <tr><td><code>strippedSecretEnvNotice(): string</code></td><td>The one-sentence launch notice for strippedSecretEnv(), or the empty string when no server lost anything.</td></tr>
 <tr><td><code>sandboxOptOutNotice(): string</code></td><td>Names the stdio servers whose <code>&quot;sandbox&quot;: false</code> opt-out was IGNORED because the entry did not come from the user settings file (C-TOOL-4.e), or the empty string when none was. A project-tier <code>.mcp.json</code> must not be able to opt its own server out of the user&#039;s jail; the server jails as scoped and the user learns why.</td></tr>
 <tr><td><code>authRequired(): array</code></td><td>The http entries the last startServers() run refused for credentials, name =&gt; [endpoint URL, HTTP status] (ISS-042). Empty unless one answered 401/403 during its handshake.</td></tr>
-<tr><td><code>authRequiredNotice(): string</code></td><td>The one-sentence launch notice for authRequired(), or the empty string when nothing was refused. The row&#039;s whole product is the command that fixes it — {@code candy-code mcp auth login &lt;server-url&gt;} — spelled in the shell form docs/MCP.md documents (the in-chat <code>/mcp auth login</code> only prints guidance; the browser leg cannot run inside the TUI). The URL, not the <code>.mcp.json</code> name, is what the store keys on, so the URL is what the printed argument must be.</td></tr>
+<tr><td><code>authRequiredNotice(): string</code></td><td>The one-sentence launch notice for authRequired(), or the empty string when nothing was refused. The row&#039;s whole product is the command that fixes it — <code>candy-code mcp auth login &lt;server-url&gt;</code> — spelled in the shell form docs/MCP.md documents (the in-chat <code>/mcp auth login</code> only prints guidance; the browser leg cannot run inside the TUI). The URL, not the <code>.mcp.json</code> name, is what the store keys on, so the URL is what the printed argument must be.</td></tr>
 <tr><td><code>stopServers(): void</code></td><td>Stop all MCP servers.</td></tr>
 <tr><td><code>pumpStderr(): void</code></td><td>Pump every STARTED stdio server&#039;s stderr once, between exchanges.</td></tr>
 <tr><td><code>startedSnapshot(): array</code></td><td>E698: a LIVENESS READOUT of the servers this client has STARTED, with zero side effects — no exchange, no <code>proc_open()</code>, no wire traffic.</td></tr>
@@ -8723,7 +8723,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-mcp-mcptrustpins"><code>McpTrustPins</code> <small>final class</small></h4>
-<p>What the user consented to when they trusted a project&#039;s <code>.mcp.json</code>: one fingerprint per server, per project root (audit MCP-5).</p>
+<p>What the user consented to when they trusted a project&#039;s <code>.mcp.json</code>: one fingerprint per server, per project root.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -8762,7 +8762,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-mcp-oauthdiscovery"><code>OAuthDiscovery</code> <small>final class</small></h4>
-<p>Audit MCP-6: locate an MCP server&#039;s OAuth authorization-server metadata the way RFC 9728 and RFC 8414 place it — the ONE discovery path both <code>mcp auth add</code> (\SugarCraft\Code\Commands\McpAuthCommand) and <code>candy-code mcp auth login</code> (OAuthLoopbackFlow) use, so the two can no longer drift apart.</p>
+<p>Locate an MCP server&#039;s OAuth authorization-server metadata the way RFC 9728 and RFC 8414 place it — the ONE discovery path both <code>mcp auth add</code> (\SugarCraft\Code\Commands\McpAuthCommand) and <code>candy-code mcp auth login</code> (OAuthLoopbackFlow) use, so the two can no longer drift apart.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -9954,13 +9954,13 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(private readonly string $memoryPath, private readonly bool $writesIndex = true, private readonly ?string $projectKey = null)</code></td><td></td></tr>
-<tr><td><code>static forProject(string $memoryPath, string $projectRoot): self</code></td><td>The home store for one project: its <code>project</code> scope lives under <code>project/&lt;key&gt;/</code>, keyed by $projectRoot&#039;s canonical path, so the notes of one repository never reach another&#039;s prompt (audit 15d-05).</td></tr>
+<tr><td><code>static forProject(string $memoryPath, string $projectRoot): self</code></td><td>The home store for one project: its <code>project</code> scope lives under <code>project/&lt;key&gt;/</code>, keyed by $projectRoot&#039;s canonical path, so the notes of one repository never reach another&#039;s prompt.</td></tr>
 <tr><td><code>static projectKeyFor(string $projectRoot): string</code></td><td>The <code>project/</code> sub-directory name for $projectRoot: a readable slug of its last path segment and a hash of its canonical path, so two checkouts named <code>app</code> never share a directory and <code>ls</code> still says which is which. A root that does not resolve is keyed by its spelling.</td></tr>
 <tr><td><code>projectKey(): ?string</code></td><td>This store&#039;s project key, or null for an unkeyed store.</td></tr>
 <tr><td><code>projectDirectory(): string</code></td><td>The directory this store&#039;s <code>project</code> scope lives in -- <code>project/&lt;key&gt;</code> for a keyed store, <code>project</code> otherwise. Not created here.</td></tr>
-<tr><td><code>bindLegacyProjectNotes(): array</code></td><td>Move the unkeyed notes an earlier build left directly in <code>project/</code> into this store&#039;s keyed directory -- &quot;the first project that reads them owns them&quot; (audit 15d-05) -- and return the file names moved.</td></tr>
+<tr><td><code>bindLegacyProjectNotes(): array</code></td><td>Move the unkeyed notes an earlier build left directly in <code>project/</code> into this store&#039;s keyed directory -- &quot;the first project that reads them owns them&quot; -- and return the file names moved.</td></tr>
 <tr><td><code>takeBoundLegacyNotes(): array</code></td><td>The legacy note files bound to this project and not yet reported, and forget them: the read side of the one-time notice. Empty for an unkeyed store and once reported.</td></tr>
-<tr><td><code>static forRepository(string $memoryPath): self</code></td><td>The store over a repository&#039;s git-visible <code>.candy-code/memory/</code> tree: every operation of the home store, but no index file is written -- loadIndex() derives the index from the notes instead (audit N2).</td></tr>
+<tr><td><code>static forRepository(string $memoryPath): self</code></td><td>The store over a repository&#039;s git-visible <code>.candy-code/memory/</code> tree: every operation of the home store, but no index file is written -- loadIndex() derives the index from the notes instead.</td></tr>
 <tr><td><code>writesIndex(): bool</code></td><td>Whether this store keeps a <code>MEMORY.md</code> index file on disk (the home store) or derives the index on read (a repository store).</td></tr>
 <tr><td><code>path(): string</code></td><td>The directory this store&#039;s scopes live under.</td></tr>
 <tr><td><code>add(string $content, string|MemoryScope $scope = &#039;user&#039;, array $tags = []): string</code></td><td>Add a new memory entry with the given content and scope.</td></tr>
@@ -11309,7 +11309,7 @@
 <tr><td><code>acceptsAssistantPrefill(string $model): bool</code></td><td>Roadmap 2.7-2: the Anthropic Messages API (rawPredict) continues a trailing assistant turn as a prefill, so a cut-off Claude reply is asked for its exact rest. Gemini and the legacy route take no prefill and are asked with a user row instead. A Claude model that refuses prefill outright answers with an error naming it, which ReplyContinuation::rejectsPrefill() turns into the same fallback.</td></tr>
 <tr><td><code>parseAnthropicUsage(array $usage, string $model): Usage</code></td><td>Parses a native Anthropic Messages-API <code>usage</code> object into the provider-counted token BUCKETS (prompt_plan.md P4.S2). Used by the unary <code>:rawPredict</code> reply AND by both usage-bearing events of parseAnthropicChunk() — one document shape, one parse, so the streaming arm cannot drift from the non-streaming one.</td></tr>
 <tr><td><code>traitCostPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
-<tr><td><code>traitCacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (audit A15, the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
+<tr><td><code>traitCacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-attachmentencoding"><code>AttachmentEncoding</code> <small>final class</small></h4>
@@ -11325,7 +11325,7 @@
 <tr><td><code>static responsesInputFile(string $mediaType, string $bytes, string $name): array</code></td><td>C-TOOL-2.g: the Responses <code>function_call_output</code> parts list&#039;s document member, in exactly one spelling — the tool-result leg in \SugarCraft\Code\Providers\Concerns\OpenAiResponsesWire is its only builder, mirroring how anthropicDocument() is the single Anthropic spelling shared by that wire&#039;s two doors. Unlike the Anthropic block (and the chat <code>file</code> part, which nests), the Responses part carries its keys flat, and the filename passes the same control-byte hygiene as filePartName() — the JSON-string hazard is wire-independent.</td></tr>
 <tr><td><code>static geminiParts(UserMessage $message): array</code></td><td>Gemini <code>generateContent</code>: a text part, then one <code>inlineData</code> part per image.</td></tr>
 <tr><td><code>static bedrockBlocks(UserMessage $message): array</code></td><td>Bedrock Converse: a text block, then one <code>image</code> block per image, then one <code>document</code> block per carryable PDF (C-TOOL-2.e). The bytes go RAW - the AWS SDK base64-encodes a blob member itself, so encoding here would send the model base64 of base64.</td></tr>
-<tr><td><code>static announceOversize(string $kind, string $bytes, int $budget): void</code></td><td>Say, once per distinct payload, that a tool-result attachment was over the provider&#039;s byte budget and so travels as its text caption only (audit once-022). The wire rebuilds the request every step, so without the memo a screenshot would repeat the notice on each replay; without the notice the user sees a model that &quot;cannot see&quot; an image it was handed.</td></tr>
+<tr><td><code>static announceOversize(string $kind, string $bytes, int $budget): void</code></td><td>Say, once per distinct payload, that a tool-result attachment was over the provider&#039;s byte budget and so travels as its text caption only . The wire rebuilds the request every step, so without the memo a screenshot would repeat the notice on each replay; without the notice the user sees a model that &quot;cannot see&quot; an image it was handed.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-bedrockprovider"><code>BedrockProvider</code> <small>final readonly class</small></h4>
@@ -11347,9 +11347,9 @@
 <tr><td><code>supportsDocuments(): bool</code></td><td>C-TOOL-2.e: document blocks ride the same family rule as images - see supportsVision() for the allow-list, and AttachmentEncoding::bedrockBlocks() for the <code>document</code> block shape (format <code>pdf</code>, RAW bytes, name shaved to the Converse charset). Every family that reads a Converse image block reads a document one; sending either to a family that does not is the same ValidationException.</td></tr>
 <tr><td><code>supportsVision(): bool</code></td><td>Whether Converse may be sent this model an <code>image</code> block (AttachmentEncoding::bedrockBlocks()). Every Claude from the 3 generation on reads images, as do Nova Lite/Pro/Premier; Claude 2, Instant, Nova Micro and the text-only families do not, and a Converse image block to one of those is a ValidationException that fails the whole turn. So the rule is a family allow-list over the same normalised id family() prices by, and anything else gets the image as a named text placeholder plus a transcript notice (\SugarCraft\Code\Backend\EngineBackend::toTypedMessages()).</td></tr>
 <tr><td><code>supportsJsonSchema(): bool</code></td><td></td></tr>
-<tr><td><code>contextWindow(): int</code></td><td>The configured model&#039;s window, looked up by its normalised family (audit A20: an exact match on the raw id sized every real versioned or inference-profile id at 8,192). 0 when the family is unknown.</td></tr>
+<tr><td><code>contextWindow(): int</code></td><td>The configured model&#039;s window, looked up by its normalised family (an exact match on the raw id sized every real versioned or inference-profile id at 8,192). 0 when the family is unknown.</td></tr>
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
-<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens (audit A15, the cache half): <code>read</code> prices <code>cacheReadInputTokens</code>, <code>write</code> prices <code>cacheWriteInputTokens</code>. Null only when the rate it resolves to is unknown or fails validation.</td></tr>
+<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens (the cache half): <code>read</code> prices <code>cacheReadInputTokens</code>, <code>write</code> prices <code>cacheWriteInputTokens</code>. Null only when the rate it resolves to is unknown or fails validation.</td></tr>
 <tr><td><code>shapesEffortFor(string $model): bool</code></td><td></td></tr>
 <tr><td><code>complete(CompleteRequest $request): CompleteResponse</code></td><td></td></tr>
 <tr><td><code>completeStream(CompleteRequest $request): \Generator</code></td><td>Streams completion responses as a generator of deltas.</td></tr>
@@ -11503,7 +11503,7 @@
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td>Roadmap 5.13a: the operator&#039;s <code>modelPrices</code> row, else the model database&#039;s rate, else a real 0.0 — a self-hosted model no database lists costs nothing to run, which is a measurement, not a shrug (see ProviderInterface::costPer1kTokens()). The database matters for the <code>anthropic</code> type and for hosted OpenAI-compatible gateways, which this class also fronts and which do bill.</td></tr>
 <tr><td><code>complete(CompleteRequest $request): CompleteResponse</code></td><td></td></tr>
 <tr><td><code>completeStream(CompleteRequest $request): \Generator</code></td><td></td></tr>
-<tr><td><code>embeddings(EmbeddingsRequest $request): EmbeddingsResponse</code></td><td>Audit A17: a transport failure or a 2xx body that is not an embeddings payload THROWS instead of returning an empty list. The old silent <code>[]</code> made an outage look exactly like &quot;no results&quot;, so a semantic-search consumer degraded without ever telling the user why. The message carries <code>$e-&gt;getMessage()</code> (the same text complete() reports as errorMessage), code 0, and the Guzzle exception as previous so TransientFailure::isTransient() still classifies 5xx/429/connect as transient and 400 as permanent. A present-but-empty <code>data: []</code> remains a legitimate empty result.</td></tr>
+<tr><td><code>embeddings(EmbeddingsRequest $request): EmbeddingsResponse</code></td><td>A transport failure or a 2xx body that is not an embeddings payload THROWS instead of returning an empty list. The old silent <code>[]</code> made an outage look exactly like &quot;no results&quot;, so a semantic-search consumer degraded without ever telling the user why. The message carries <code>$e-&gt;getMessage()</code> (the same text complete() reports as errorMessage), code 0, and the Guzzle exception as previous so TransientFailure::isTransient() still classifies 5xx/429/connect as transient and 400 as permanent. A present-but-empty <code>data: []</code> remains a legitimate empty result.</td></tr>
 <tr><td><code>parseUsage(array $usage): Usage</code></td><td>Parses the OpenAI-compatible <code>usage</code> object into the provider-counted token BUCKETS (prompt_plan.md P4.S2). This provider speaks the same family as SglangProvider::parseUsage(), whose docblock carries the live-deployment evidence (2026-09-02 skynet2 probes) and the three decisions it pins, all of which apply here with the same force:</td></tr>
 <tr><td><code>sessionAffinityHeaderValue(?string $sessionId): ?string</code></td><td>The wire value for one session id: full 64-char lowercase hex, or null when there is no session to be affine to (null or blank id).</td></tr>
 <tr><td><code>sessionAffinityHeaders(?string $requestSessionId = null): array</code></td><td>The per-request <code>headers</code> option at a <code>post()</code> site: <code>[]</code> or the one affinity header — for the request&#039;s own session id when it names one (step 0.13-a), else the host class&#039;s <code>$sessionAffinityId</code>.</td></tr>
@@ -11617,7 +11617,7 @@
 <tr><td><code>promptCache(): bool</code></td><td>Whether this provider was built to mark prompt-cache breakpoints (the <code>promptCache</code> setting). Whether a given request carries them also depends on its model - see marksPromptCache().</td></tr>
 <tr><td><code>model(): string</code></td><td></td></tr>
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
-<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (audit A15, the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
+<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
 <tr><td><code>marksPromptCache(string $model): bool</code></td><td>Does a request for <code>$model</code> carry prompt-cache breakpoints? Only on the Anthropic arm (the one wire here that spells <code>cache_control</code>), only with the <code>promptCache</code> setting on, and never for a family in NO_PROMPT_CACHE_FAMILIES. An empty id is the configured default, as on the wire (MarksPromptCache).</td></tr>
 <tr><td><code>isAnthropicModel(string $model): bool</code></td><td>Anthropic publisher models are the <code>claude-*</code> family; Vertex ids append a version suffix (<code>claude-3-5-sonnet-v2@20241022</code>), so match on the family name rather than an exact id list that would go stale on every model release.</td></tr>
 <tr><td><code>acceptsAssistantPrefill(string $model): bool</code></td><td>Roadmap 2.7-2: the Anthropic Messages API (rawPredict) continues a trailing assistant turn as a prefill, so a cut-off Claude reply is asked for its exact rest. Gemini and the legacy route take no prefill and are asked with a user row instead. A Claude model that refuses prefill outright answers with an error naming it, which ReplyContinuation::rejectsPrefill() turns into the same fallback.</td></tr>
@@ -11643,7 +11643,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-markspromptcache"><code>MarksPromptCache</code> <small>interface</small></h4>
-<p>A provider that places prompt-cache breakpoints on its requests, and can say for which model it does (audit A15, P10.S3).</p>
+<p>A provider that places prompt-cache breakpoints on its requests, and can say for which model it does.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -11707,7 +11707,7 @@
 <tr><td><code>supportsVision(): bool</code></td><td>Whether the configured model reads image parts: the provider block&#039;s override when set, else VISION_MODEL_FAMILIES minus TEXT_ONLY_MODELS. Before this every model answered yes, so an image sent to a text-only model failed the turn with the API&#039;s error.</td></tr>
 <tr><td><code>supportsJsonSchema(): bool</code></td><td></td></tr>
 <tr><td><code>withModel(string $model): static</code></td><td>This provider answering for $model (roadmap N-P3b remainder): the window and the rates below read the configured id, so a model switch through \SugarCraft\Code\Backend\EngineBackend::withModel() rebinds it here instead of leaving them the old model&#039;s.</td></tr>
-<tr><td><code>contextWindow(): int</code></td><td>Every PRICE_TABLE model is sized here (audit A13: gpt-4o-mini and the gpt-4.1 pair were priced but fell to an 8,192 default, so Chat&#039;s context tiers fired after a few messages on 128k / 1M models). An unknown model answers 0 — &quot;unknown&quot; per ProviderInterface::contextWindow() — so \SugarCraft\Code\Context\ContextWindow::resolve() applies its one named fallback instead of this file guessing a denominator.</td></tr>
+<tr><td><code>contextWindow(): int</code></td><td>Every PRICE_TABLE model is sized here (gpt-4o-mini and the gpt-4.1 pair were priced but fell to an 8,192 default, so Chat&#039;s context tiers fired after a few messages on 128k / 1M models). An unknown model answers 0 — &quot;unknown&quot; per ProviderInterface::contextWindow() — so \SugarCraft\Code\Context\ContextWindow::resolve() applies its one named fallback instead of this file guessing a denominator.</td></tr>
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
 <tr><td><code>shapesEffortFor(string $model): bool</code></td><td></td></tr>
 <tr><td><code>serviceTierFor(string $model): ?string</code></td><td>C-PRV-3.a: the public OpenAI surface answers <code>service_tier</code> for every model it speaks for. The field is documented on BOTH arms this class drives (Chat Completions and Responses) with the same value vocabulary, and Fast-mode eligibility is a property of the PROJECT and the model line, not of this file&#039;s tables — which ids accept <code>priority</code> changes with every release. An unsupported pair answers with the API&#039;s own 400 prose, the same &quot;the API&#039;s rejection is better guidance than a local guess&quot; doctrine openAiReasoningEffort() records for effort spellings, so the pair never needs a stale local allowlist here.</td></tr>
@@ -11771,7 +11771,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-providerresponseexception"><code>ProviderResponseException</code> <small>final class</small></h4>
-<p>A provider call that ended in an <code>isError</code> CompleteResponse which the retry seam in \SugarCraft\Code\Runtime could not (or was not allowed to) recover from (audit 15a A1).</p>
+<p>A provider call that ended in an <code>isError</code> CompleteResponse which the retry seam in \SugarCraft\Code\Runtime could not (or was not allowed to) recover from.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -11780,12 +11780,12 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-providerstreamexception"><code>ProviderStreamException</code> <small>final class</small></h4>
-<p>A streamed completion that failed AFTER the HTTP response had already started, so no status code is left to say so (audit 15a A2).</p>
+<p>A streamed completion that failed AFTER the HTTP response had already started, so no status code is left to say so.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static fromErrorEvent(mixed $frame, string $prefix = &#039;&#039;): ?self</code></td><td>The failure an SSE error frame describes, or null when <code>$frame</code> is not an error frame (an ordinary delta, the usage frame, <code>[DONE]</code>&#039;s null).</td></tr>
-<tr><td><code>static prematureEnd(string $prefix = &#039;&#039;): self</code></td><td>A stream that reached EOF without the protocol&#039;s terminal signal - no <code>finish_reason</code> and no <code>data: [DONE]</code> on the OpenAI wire, no <code>message_stop</code> on Anthropic&#039;s, no <code>finishReason</code> on Gemini&#039;s (audit 15a A3).</td></tr>
+<tr><td><code>static prematureEnd(string $prefix = &#039;&#039;): self</code></td><td>A stream that reached EOF without the protocol&#039;s terminal signal - no <code>finish_reason</code> and no <code>data: [DONE]</code> on the OpenAI wire, no <code>message_stop</code> on Anthropic&#039;s, no <code>finishReason</code> on Gemini&#039;s.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-rebindsmodel"><code>RebindsModel</code> <small>interface</small></h4>
@@ -11823,7 +11823,7 @@
 <tbody>
 <tr><td><code>__construct(private string $baseUrl, private string $model, private ?string $apiKey, private Client $httpClient, private ?ToolCallParserInterface $toolCallParser = null, private string|float|null $reasoningEffort = null, private array $extraTemplateKwargs = [], private ?string $sessionAffinityId = null, private ?\Closure $serverInfoLoader = null, private ?bool $supportsVision = null, private ?int $contextWindowOverride = null)</code></td><td></td></tr>
 <tr><td><code>static openAiCompatible(string $baseUrl, string $model = self::DEFAULT_MODEL, ?string $apiKey = null, ?ToolCallParserInterface $toolCallParser = null, string|float|null $reasoningEffort = null, array $extraTemplateKwargs = [], ?string $sessionAffinityId = null, bool $discoverServerInfo = false, ?bool $supportsVision = null, ?int $contextWindowOverride = null): self</code></td><td></td></tr>
-<tr><td><code>serverInfo(): ?SglangServerInfo</code></td><td>Audit 15a A18: what the server said about itself, read once per provider and memoised - null when no loader is armed or the read failed.</td></tr>
+<tr><td><code>serverInfo(): ?SglangServerInfo</code></td><td>What the server said about itself, read once per provider and memoised - null when no loader is armed or the read failed.</td></tr>
 <tr><td><code>servedModel(): ?string</code></td><td>The served model this provider adopts, for the TUI&#039;s labels - read from what serverInfo() has ALREADY memoised (the parent&#039;s first frame normally loads it, via contextWindow()), else from what a forked turn child reported (noteServedModel()). Never runs the loader: see ReportsServedModel::servedModel().</td></tr>
 <tr><td><code>noteServedModel(string $servedModel): void</code></td><td>Remember the served name a forked turn child discovered, so the parent&#039;s labels can show it. Kept apart from the <code>info</code> memo on purpose: it is a label fact, and it neither marks discovery as done nor changes what addressedToServedModel() sends.</td></tr>
 <tr><td><code>static defaultToolCallParserFor(string $model): ToolCallParserInterface</code></td><td>The parser used when the operator named none, chosen from the MODEL: DSML wrapped around the OpenAI-array parser for the DeepSeek-V4 family, the OpenAI-array parser alone otherwise. The one definition of that rule - ProviderFactory::createSglang() asks it at build time for a configured model, resolvedToolCallParser() at request time for an adopted served one. ProviderFactory&#039;s private <code>defaultToolCallParserFor()</code> docblock carries the argument for arming DSML by default on that family.</td></tr>
@@ -11843,7 +11843,7 @@
 <tr><td><code>costPer1kTokens(string $model, string $direction): float</code></td><td></td></tr>
 <tr><td><code>complete(CompleteRequest $request): CompleteResponse</code></td><td></td></tr>
 <tr><td><code>completeStream(CompleteRequest $request): \Generator</code></td><td></td></tr>
-<tr><td><code>embeddings(EmbeddingsRequest $request): EmbeddingsResponse</code></td><td>Audit A17: a transport failure or a 2xx body that is not an embeddings payload THROWS instead of returning an empty list. The old silent <code>[]</code> made an outage (model not loaded, 5xx, refused connection) look exactly like &quot;no results&quot;, so a semantic-search consumer degraded without ever telling the user why. The wrap mirrors complete()&#039;s: the server&#039;s own <code>error.message</code> when it sent one, code 0, and the Guzzle exception as previous so TransientFailure::isTransient() still classifies 5xx/429/ connect as transient and 400 as permanent. A present-but-empty <code>data: []</code> remains a legitimate empty result.</td></tr>
+<tr><td><code>embeddings(EmbeddingsRequest $request): EmbeddingsResponse</code></td><td>A transport failure or a 2xx body that is not an embeddings payload THROWS instead of returning an empty list. The old silent <code>[]</code> made an outage (model not loaded, 5xx, refused connection) look exactly like &quot;no results&quot;, so a semantic-search consumer degraded without ever telling the user why. The wrap mirrors complete()&#039;s: the server&#039;s own <code>error.message</code> when it sent one, code 0, and the Guzzle exception as previous so TransientFailure::isTransient() still classifies 5xx/429/ connect as transient and 400 as permanent. A present-but-empty <code>data: []</code> remains a legitimate empty result.</td></tr>
 <tr><td><code>static isDeepSeekV4(string $model): bool</code></td><td>True when a model id names the DeepSeek-V4 family.</td></tr>
 <tr><td><code>static isQwen3Next(string $model): bool</code></td><td>True when a model id names the Qwen3.8 family - the ids the skynet2 deployment serves as <code>Qwen/Qwen3.8-Flash-Next</code> and the bare alias <code>Qwen3.8-Flash-Next</code> (qwen.md E-70).</td></tr>
 <tr><td><code>static placeSystemRows(array $rows, ?string $systemPrompt): array</code></td><td>The one placement rule for system content on an OpenAI-shaped wire (step 1.A-1), shared with CustomProvider: rows already formatted by a provider&#039;s <code>formatMessages()</code>, the request-level prompt, out comes the body&#039;s <code>messages</code> list.</td></tr>
@@ -11855,7 +11855,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-sglangserverinfo"><code>SglangServerInfo</code> <small>final readonly class</small></h4>
-<p>What a live SGLang server says about itself: the limits and parsers it was launched with, read from its own <code>GET /model_info</code> and <code>GET /server_info</code> (audit 15a A18, revised 2026-10-02).</p>
+<p>What a live SGLang server says about itself: the limits and parsers it was launched with, read from its own <code>GET /model_info</code> and <code>GET /server_info</code> .</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -11947,7 +11947,7 @@
 <tr><td><code>model(): string</code></td><td></td></tr>
 <tr><td><code>withModel(string $model): static</code></td><td>This provider answering for $model (roadmap 4.1-1): the capability flags below read the configured id, so a model switch through \SugarCraft\Code\Backend\EngineBackend::withModel() rebinds them here instead of leaving them the old model&#039;s.</td></tr>
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
-<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (audit A15, the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
+<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
 <tr><td><code>marksPromptCache(string $model): bool</code></td><td>Does a request for <code>$model</code> carry prompt-cache breakpoints? Only on the Anthropic arm (the one wire here that spells <code>cache_control</code>), only with the <code>promptCache</code> setting on, and never for a family in NO_PROMPT_CACHE_FAMILIES. An empty id is the configured default, as on the wire (MarksPromptCache).</td></tr>
 <tr><td><code>isAnthropicModel(string $model): bool</code></td><td>Anthropic publisher models are the <code>claude-*</code> family; Vertex ids append a version suffix (<code>claude-3-5-sonnet-v2@20241022</code>), so match on the family name rather than an exact id list that would go stale on every model release.</td></tr>
 <tr><td><code>acceptsAssistantPrefill(string $model): bool</code></td><td>Roadmap 2.7-2: the Anthropic Messages API (rawPredict) continues a trailing assistant turn as a prefill, so a cut-off Claude reply is asked for its exact rest. Gemini and the legacy route take no prefill and are asked with a user row instead. A Claude model that refuses prefill outright answers with an error naming it, which ReplyContinuation::rejectsPrefill() turns into the same fallback.</td></tr>
@@ -11965,7 +11965,7 @@
 <tr><td><code>model(): string</code></td><td></td></tr>
 <tr><td><code>withModel(string $model): static</code></td><td>This provider answering for $model (roadmap 4.1-1): the capability flags below read the configured id, so a model switch through \SugarCraft\Code\Backend\EngineBackend::withModel() rebinds them here instead of leaving them the old model&#039;s.</td></tr>
 <tr><td><code>costPer1kTokens(string $model, string $direction): ?float</code></td><td></td></tr>
-<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (audit A15, the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
+<tr><td><code>cacheCostPer1kTokens(string $model, string $kind): ?float</code></td><td>USD per 1K CACHE tokens for <code>$model</code> (the cache half): <code>read</code> prices <code>cache_read_input_tokens</code> / Gemini&#039;s <code>cachedContentTokenCount</code>, <code>write</code> prices <code>cache_creation_input_tokens</code>. Null only when the rate it resolves to is unknown or fails validation - the same loud unpriced road as costPer1kTokens().</td></tr>
 <tr><td><code>marksPromptCache(string $model): bool</code></td><td>Does a request for <code>$model</code> carry prompt-cache breakpoints? Only on the Anthropic arm (the one wire here that spells <code>cache_control</code>), only with the <code>promptCache</code> setting on, and never for a family in NO_PROMPT_CACHE_FAMILIES. An empty id is the configured default, as on the wire (MarksPromptCache).</td></tr>
 <tr><td><code>isAnthropicModel(string $model): bool</code></td><td>Anthropic publisher models are the <code>claude-*</code> family; Vertex ids append a version suffix (<code>claude-3-5-sonnet-v2@20241022</code>), so match on the family name rather than an exact id list that would go stale on every model release.</td></tr>
 <tr><td><code>acceptsAssistantPrefill(string $model): bool</code></td><td>Roadmap 2.7-2: the Anthropic Messages API (rawPredict) continues a trailing assistant turn as a prefill, so a cut-off Claude reply is asked for its exact rest. Gemini and the legacy route take no prefill and are asked with a user row instead. A Claude model that refuses prefill outright answers with an error naming it, which ReplyContinuation::rejectsPrefill() turns into the same fallback.</td></tr>
@@ -12017,10 +12017,10 @@
 <tbody>
 <tr><td><code>__construct(private ToolCallParserInterface $delegate, private MarkupScanner $scanner)</code></td><td></td></tr>
 <tr><td><code>static new(?ToolCallParserInterface $delegate = null): self</code></td><td>Default root factory, per repo convention.</td></tr>
-<tr><td><code>withParameterTypes(ToolParameterTypes $types): static</code></td><td>Forwards the request&#039;s tool schemas to the DELEGATE only (audit 15a A9).</td></tr>
+<tr><td><code>withParameterTypes(ToolParameterTypes $types): static</code></td><td>Forwards the request&#039;s tool schemas to the DELEGATE only.</td></tr>
 <tr><td><code>parse(array $message): ?array</code></td><td></td></tr>
-<tr><td><code>envelopeMarkers(): array</code></td><td>This parser&#039;s envelope opener, then the delegate chain&#039;s (audit 15a A8).</td></tr>
-<tr><td><code>recover(array $message): TextualRecovery</code></td><td>parse()&#039;s decision tree, carrying the spans of the envelopes the calls came from (audit 15a A8) so the provider can cut exactly those out of the assistant&#039;s text. Whichever parser in the chain produced the calls is the one whose spans come back.</td></tr>
+<tr><td><code>envelopeMarkers(): array</code></td><td>This parser&#039;s envelope opener, then the delegate chain&#039;s.</td></tr>
+<tr><td><code>recover(array $message): TextualRecovery</code></td><td>parse()&#039;s decision tree, carrying the spans of the envelopes the calls came from so the provider can cut exactly those out of the assistant&#039;s text. Whichever parser in the chain produced the calls is the one whose spans come back.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-toolcallparser-envelopeaware"><code>EnvelopeAware</code> <small>interface</small></h4>
@@ -12033,7 +12033,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-toolcallparser-envelopeholdback"><code>EnvelopeHoldBack</code> <small>final readonly class</small></h4>
-<p>Decides how much of a streamed text can be painted now, and how much has to wait because it may be the start of a tool-call envelope (audit 15a A8).</p>
+<p>Decides how much of a streamed text can be painted now, and how much has to wait because it may be the start of a tool-call envelope.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -12058,10 +12058,10 @@
 <tbody>
 <tr><td><code>__construct(private ToolCallParserInterface $delegate, private MarkupScanner $scanner, private ?ToolParameterTypes $parameterTypes = null)</code></td><td></td></tr>
 <tr><td><code>static new(?ToolCallParserInterface $delegate = null): self</code></td><td>Default root factory, per repo convention.</td></tr>
-<tr><td><code>withParameterTypes(ToolParameterTypes $types): static</code></td><td>Audit 15a A9: the provider hands over the request&#039;s tool schemas so coerceValue() can type each value by what the tool DECLARED instead of by what the text happens to look like. Forwarded to the delegate when it is schema-aware too, so a stacked chain stays typed.</td></tr>
+<tr><td><code>withParameterTypes(ToolParameterTypes $types): static</code></td><td>The provider hands over the request&#039;s tool schemas so coerceValue() can type each value by what the tool DECLARED instead of by what the text happens to look like. Forwarded to the delegate when it is schema-aware too, so a stacked chain stays typed.</td></tr>
 <tr><td><code>parse(array $message): ?array</code></td><td></td></tr>
-<tr><td><code>envelopeMarkers(): array</code></td><td>This parser&#039;s envelope opener, then the delegate chain&#039;s (audit 15a A8).</td></tr>
-<tr><td><code>recover(array $message): TextualRecovery</code></td><td>parse()&#039;s decision tree, carrying the spans of the envelopes the calls came from (audit 15a A8), so the provider can cut them out of the assistant&#039;s text.</td></tr>
+<tr><td><code>envelopeMarkers(): array</code></td><td>This parser&#039;s envelope opener, then the delegate chain&#039;s.</td></tr>
+<tr><td><code>recover(array $message): TextualRecovery</code></td><td>parse()&#039;s decision tree, carrying the spans of the envelopes the calls came from, so the provider can cut them out of the assistant&#039;s text.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-providers-toolcallparser-openaiarraytoolcallparser"><code>OpenAiArrayToolCallParser</code> <small>final readonly class</small></h4>
@@ -12909,7 +12909,7 @@
 </table>
 <h3>SugarCraft\Code\Session</h3>
 <h4 id="api-sugarcraft-code-session-debouncedtranscriptwriter"><code>DebouncedTranscriptWriter</code> <small>final class</small></h4>
-<p>Coalesces \SugarCraft\Code\Chat&#039;s transcript saves (audit R2).</p>
+<p>Coalesces \SugarCraft\Code\Chat&#039;s transcript saves.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -12941,7 +12941,7 @@
 <tbody>
 <tr><td><code>__construct(private readonly string $dbPath, string $ftsModule = &#039;fts5&#039;)</code></td><td></td></tr>
 <tr><td><code>path(): string</code></td><td>The database file this store is open on — the address <code>shares</code> (COMPARISON §6.5) publishes into, so the TUI act and the serve reader resolve the same file without either re-deriving <code>~/.candy-code</code>.</td></tr>
-<tr><td><code>lockSession(string $sessionId): ?SessionLock</code></td><td>Take the single-writer lock on $sessionId (audit SES-3(b)), or null when another TUI holds it. See SessionLock for what the lock is and why a failure to lock opens the session writable rather than read-only.</td></tr>
+<tr><td><code>lockSession(string $sessionId): ?SessionLock</code></td><td>Take the single-writer lock on $sessionId, or null when another TUI holds it. See SessionLock for what the lock is and why a failure to lock opens the session writable rather than read-only.</td></tr>
 <tr><td><code>sessionLockHolder(string $sessionId): ?int</code></td><td>The pid recorded by whoever holds $sessionId&#039;s lock, for the read-only notice; null when unknown. Informational only.</td></tr>
 <tr><td><code>liveLockHolder(string $sessionId): ?int</code></td><td>The pid of a process that holds $sessionId&#039;s lock RIGHT NOW, or null when nobody does — the probe destructive verbs gate on (sugar_issues.md ISS-079), where sessionLockHolder() cannot be trusted because a lock file outlives its writer between a crash and the next open.</td></tr>
 <tr><td><code>createSession(string $id, string $provider, string $model, ?string $systemPrompt = null, ?string $name = null, ?string $cwd = null, ?string $gitBranch = null): void</code></td><td></td></tr>
@@ -13038,7 +13038,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-session-sessionlock"><code>SessionLock</code> <small>final class</small></h4>
-<p>The single-writer lock on one stored session (audit SES-3(b)): an exclusive <code>flock()</code> on <code>&lt;configDir&gt;/sessions/&lt;id&gt;.lock</code>, held for as long as a TUI has that session open.</p>
+<p>The single-writer lock on one stored session: an exclusive <code>flock()</code> on <code>&lt;configDir&gt;/sessions/&lt;id&gt;.lock</code>, held for as long as a TUI has that session open.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -13148,7 +13148,7 @@
 <tr><td><code>listSessionsRanked(SessionQuery $query, array $ranked): array</code></td><td>Rows for the ids $ranked names, kept to every other condition in $query, returned in RANK order rather than recency order — the <code>bodySearch</code> read path of SES-2, where the FTS5 side table has already decided the order and this method only proves the row still qualifies (kind, archived, parent, LIKE <code>search</code>) and wears its snippet. <code>pinnedFirst</code> stays a LIKE-path nicety: a body search is ordered by bm25 from the first row, which is the whole feature.</td></tr>
 <tr><td><code>childrenOf(string $id): array</code></td><td>Every direct child of $id — branches, sub-agents and background runs, archived or not — newest first.</td></tr>
 <tr><td><code>childCount(array $ids): array</code></td><td>Direct-child counts for $ids, one query for a whole picker page; an id with no children maps to 0.</td></tr>
-<tr><td><code>static gitBranchAt(string $dir): ?string</code></td><td>The branch checked out in the git work tree containing $dir, or null outside a repository or on a detached HEAD — what a new session records as <code>git_branch</code> (audit B1: the picker&#039;s Ctrl+B filter compared against a column nothing ever wrote).</td></tr>
+<tr><td><code>static gitBranchAt(string $dir): ?string</code></td><td>The branch checked out in the git work tree containing $dir, or null outside a repository or on a detached HEAD — what a new session records as <code>git_branch</code> (the picker&#039;s Ctrl+B filter compared against a column nothing ever wrote).</td></tr>
 <tr><td><code>forkSession(string $id, SessionKind $kind = SessionKind::Branch): string</code></td><td>Fork a session by copying it with a new ID.</td></tr>
 <tr><td><code>updateSession(string $id): void</code></td><td></td></tr>
 <tr><td><code>sessionCost(string $id): ?float</code></td><td>The cached dollar figure addSessionSpend() sums onto $id&#039;s row (SES-1), or null when the session never recorded a call. A read of the cache, never a re-SUM: <code>usage_records</code> stays the truth this mirrors.</td></tr>
@@ -13487,7 +13487,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-skills-skillfilereader"><code>SkillFileReader</code> <small>final class</small></h4>
-<p>Every read of a skill&#039;s files off disk, bounded (audit 15d-27).</p>
+<p>Every read of a skill&#039;s files off disk, bounded.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -13732,7 +13732,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static write(string $path, string $contents, ?int $mode = null): void</code></td><td>Atomically replace $path with $contents.</td></tr>
-<tr><td><code>static replace(string $path, string $contents, ?\Closure $writer = null): void</code></td><td>Replace the bytes of a file the user owns — a workspace source file the Edit/Write tools rewrite — without ever exposing a truncated version of it, and without changing what the file IS (audit F-T7).</td></tr>
+<tr><td><code>static replace(string $path, string $contents, ?\Closure $writer = null): void</code></td><td>Replace the bytes of a file the user owns — a workspace source file the Edit/Write tools rewrite — without ever exposing a truncated version of it, and without changing what the file IS.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-support-clipboardimage"><code>ClipboardImage</code> <small>final class</small></h4>
@@ -14028,14 +14028,14 @@
 <tr><td><code>static detachedSpawnBinary(): string</code></td><td>First token of the proven detach prefix — the <code>setsid(1)</code> path when that arm won the probe, the PHP binary when the helper arm won — or &#039;&#039; when this host offers no usable detach at all.</td></tr>
 <tr><td><code>static spawnSpec(string|array $command): string|array</code></td><td>The command to hand <code>proc_open()</code>: the original command prefixed by the proven detach wrapper when the host offers one, unchanged otherwise.</td></tr>
 <tr><td><code>static env(array $overrides = []): array</code></td><td>The inherited environment with NONINTERACTIVE_ENV forced over it and STRIPPED_ENV_NAMES removed, then $overrides applied last so a site&#039;s own required keys (API tokens, hook context) still win.</td></tr>
-<tr><td><code>static scrubbedEnv(array $overrides = [], array $unset = []): array</code></td><td>env() with the credentials removed — the environment for the spawn paths whose output the MODEL reads: Bash and Grep (through \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput) and script hooks (\SugarCraft\Code\Hooks\ScriptHook). Audit F-E1.</td></tr>
+<tr><td><code>static scrubbedEnv(array $overrides = [], array $unset = []): array</code></td><td>env() with the credentials removed — the environment for the spawn paths whose output the MODEL reads: Bash and Grep (through \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput) and script hooks (\SugarCraft\Code\Hooks\ScriptHook).</td></tr>
 <tr><td><code>static mcpEnv(array $declared = []): array</code></td><td>The environment for an MCP stdio server (item 0.14-b, decision D3): scrubbedEnv() with the server&#039;s own <code>.mcp.json</code> <code>env</code> block — <code>${VAR}</code> already resolved — applied LAST.</td></tr>
 <tr><td><code>static strippedSecretEnvNames(array $declared = []): array</code></td><td>The inherited credential-shaped names mcpEnv() withholds for a server declaring $declared — sorted, for a launch notice. Names only, never values.</td></tr>
 <tr><td><code>static isSecretEnvName(string $name): bool</code></td><td>Whether $name is credential-shaped: one of PROVIDER_SECRET_ENV_NAMES, or a match for a SECRET_ENV_PATTERNS shape. Case-insensitive, because a lower-case <code>github_token</code> is just as much a token and an over-eager scrub costs a script one variable while an under-eager one costs the credential.</td></tr>
 <tr><td><code>static secretEnvAllowed(string $name): bool</code></td><td>Whether the installed allowlist lets credential-shaped $name through.</td></tr>
 <tr><td><code>static useSecretEnvAllowlist(array $entries): void</code></td><td>Install the operator&#039;s <code>secretEnvAllowlist</code> for every later scrubbedEnv() in this process (and its forks). Replaces, never appends, so a re-read config cannot accumulate stale entries; blank and non-string entries are dropped, and <code>[]</code> restores the full scrub.</td></tr>
 <tr><td><code>static secretEnvAllowlist(): array</code></td><td>The allowlist useSecretEnvAllowlist() installed.</td></tr>
-<tr><td><code>static cdGuard(string $dir): string</code></td><td>The <code>cd DIR || exit 1</code> guard line every <code>/bin/sh -c</code> script that must run inside DIR starts with — ONE spelling for Bash and interactiveSpawnCommand() (audit F-E3, then F-E5 for the copy that kept the old form).</td></tr>
+<tr><td><code>static cdGuard(string $dir): string</code></td><td>The <code>cd DIR || exit 1</code> guard line every <code>/bin/sh -c</code> script that must run inside DIR starts with — ONE spelling for Bash and interactiveSpawnCommand() (the copy that kept the old form).</td></tr>
 <tr><td><code>static awaitGroupLeader(int $pid): void</code></td><td>The detached wrapper makes the child its own process-group leader a moment after proc_open() returns, and the timeout&#039;s group kill needs that group id. Read it with a bounded wait so a fast spawn cannot be measured before the wrapper has run. Only leadership ends the wait early: a wrapper that exits before it leads stays a zombie until reaped, and posix_getpgid() still answers for it with its parent&#039;s group, so that case pays the cap.</td></tr>
 <tr><td><code>static groupId(mixed $process): ?int</code></td><td>The process-group id a containment-aware kill should target, or null when the child does not lead its own group.</td></tr>
 <tr><td><code>static terminate(mixed $process, int $signal = 15): bool</code></td><td>Signal a (possibly wrapped) child in a way that reaches its descendants: group kill when the child leads a group, <code>proc_terminate()</code> otherwise.</td></tr>
@@ -14044,8 +14044,8 @@
 <tr><td><code>static resetInteractiveAvailabilityForTesting(): void</code></td><td>Discard the memoized host verdict so the next interactiveAvailable() re-derives it from the same STATs. Testing seam only — production callers never reset a per-process fact mid-run; the reset exists so one host can pin both the interactive-spawn branch and the 126-refusal branch instead of leaving whichever the box does not match as dead code.</td></tr>
 <tr><td><code>static interactiveSpawnCommand(string $command, ?string $cwd = null, array $jailArgvPrefix = []): array</code></td><td>The argv for a pty spawn: $command through the platform&#039;s bash — /bin/sh on POSIX, Git-for-Windows&#039; bash.exe on Windows (C-TUI-6.d, §6.3) — entered in $cwd when one is given. There is no cmd.exe leg: a Windows host without bash.exe is refused upstream through interactiveBashMissing() before this argv ever reaches a spawn, so the never-fall-back-to-cmd.exe law is structurally kept, not merely documented.</td></tr>
 <tr><td><code>static terminatePid(int $pid, int $signal = 15): bool</code></td><td>Signal a child by PID, reaching its group when it leads one and itself otherwise — the proc_open-free twin of terminate().</td></tr>
-<tr><td><code>static killTree(int $pid, float $termGraceSeconds = 0.0): void</code></td><td>KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point for any site that tears down a forked child of this package (audit B2/F-E2: Runtime&#039;s parallel deadline, AgentWorkerPool, the custom-command <code>!</code> runner). A site that runs inside an event-loop callback — EngineBackend&#039;s turn teardown and Chat&#039;s cancel sites — calls killTreeAsync() instead, which runs this same sequence one loop tick per pass (audit R3).</td></tr>
-<tr><td><code>static killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null, float $termGraceSeconds = 0.0): \React\Promise\PromiseInterface</code></td><td>killTree() WITHOUT HOLDING THE CALLER&#039;S THREAD — the spelling for a teardown that runs inside an event-loop callback (audit R3: the Escape-Escape cancel of an engine turn, a Chat tool fan-out or a forked hook chain). Resolves once signal 9 has gone out to the whole tree; like killTree() it never reaps.</td></tr>
+<tr><td><code>static killTree(int $pid, float $termGraceSeconds = 0.0): void</code></td><td>KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point for any site that tears down a forked child of this package (Runtime&#039;s parallel deadline, AgentWorkerPool, the custom-command <code>!</code> runner). A site that runs inside an event-loop callback — EngineBackend&#039;s turn teardown and Chat&#039;s cancel sites — calls killTreeAsync() instead, which runs this same sequence one loop tick per pass.</td></tr>
+<tr><td><code>static killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null, float $termGraceSeconds = 0.0): \React\Promise\PromiseInterface</code></td><td>killTree() WITHOUT HOLDING THE CALLER&#039;S THREAD — the spelling for a teardown that runs inside an event-loop callback (the Escape-Escape cancel of an engine turn, a Chat tool fan-out or a forked hook chain). Resolves once signal 9 has gone out to the whole tree; like killTree() it never reaps.</td></tr>
 <tr><td><code>static reapAsync(array $pids, float $budgetSeconds, float $pollSeconds = 0.005, ?\React\EventLoop\LoopInterface $loop = null): \React\Promise\PromiseInterface</code></td><td>Collect already-signalled children of this process on a loop timer instead of a usleep() loop: one WNOHANG pass now, then one every $pollSeconds until every pid is collected or $budgetSeconds is spent. Resolves with the pids it could NOT collect (empty when all were), so a caller with a straggler list can keep them for a later sweep.</td></tr>
 <tr><td><code>static closeOnExec(mixed $stream): bool</code></td><td>Mark $stream&#039;s descriptor FD_CLOEXEC so no command spawned afterwards inherits it; true when the flag is now set.</td></tr>
 <tr><td><code>static locateOnPath(string $binary): string</code></td><td>First executable named $binary on the process PATH, or &#039;&#039; when absent.</td></tr>
@@ -14079,7 +14079,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-support-projectroot"><code>ProjectRoot</code> <small>final class</small></h4>
-<p>The directory a launch&#039;s <code>.candy-code/*</code> lookups resolve against (audit 15d-13 (b)), as opposed to the working directory the tools are jailed to.</p>
+<p>The directory a launch&#039;s <code>.candy-code/*</code> lookups resolve against, as opposed to the working directory the tools are jailed to.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -14165,7 +14165,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-support-siblingspendledger"><code>SiblingSpendLedger</code> <small>final readonly class</small></h4>
-<p>The append-only spend file one concurrent tool group shares, so that runs forked side by side can see what each other has billed (audit B4-rem).</p>
+<p>The append-only spend file one concurrent tool group shares, so that runs forked side by side can see what each other has billed.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -14499,7 +14499,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-acceptsworktreejail"><code>AcceptsWorktreeJail</code> <small>interface</small></h4>
-<p>A Tool that resolves model-supplied paths and can therefore be re-confined to a sub-agent&#039;s git worktree after it was built (audit F-J5).</p>
+<p>A Tool that resolves model-supplied paths and can therefore be re-confined to a sub-agent&#039;s git worktree after it was built.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -14713,7 +14713,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-sharessiblingspend"><code>SharesSiblingSpend</code> <small>interface</small></h4>
-<p>A Tool that bills a provider itself and so must share its spend with the other members of a concurrent group (audit B4-rem) — today only BuiltIn\TaskTool, whose body is a whole delegated agentic run.</p>
+<p>A Tool that bills a provider itself and so must share its spend with the other members of a concurrent group — today only BuiltIn\TaskTool, whose body is a whole delegated agentic run.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -14809,11 +14809,11 @@
 <tr><td><code>diff(): ?string</code></td><td>Raw unified diff produced by an edit-shaped tool, or null.</td></tr>
 <tr><td><code>hasDiff(): bool</code></td><td></td></tr>
 <tr><td><code>usage(): ?Usage</code></td><td>Provider spend the tool itself incurred (a delegated sub-agent run), or null.</td></tr>
-<tr><td><code>denial(): ?DenialKind</code></td><td>Which of the three ways this call was stopped before it ran, or null when it was not stopped — including when it ran and failed with text that merely LOOKS like a refusal (audit F-P8).</td></tr>
+<tr><td><code>denial(): ?DenialKind</code></td><td>Which of the three ways this call was stopped before it ran, or null when it was not stopped — including when it ran and failed with text that merely LOOKS like a refusal.</td></tr>
 <tr><td><code>withDenial(?DenialKind $denial): self</code></td><td>The same result marked as stopped-before-it-ran by $denial (null clears it).</td></tr>
 <tr><td><code>withContent(string $content): self</code></td><td>The same result with its model-visible text replaced and EVERY other field kept — the seam \SugarCraft\Code\Runtime&#039;s rewrites (annotate, the UTF-8 scrub) take, so a rebuild cannot drop a field that was added after it was written. Spelled-out positional rebuilds are exactly how $usage would have leaked off a Task result between the tool and the turn&#039;s accounting.</td></tr>
 <tr><td><code>withUsage(?Usage $usage): self</code></td><td>The same result carrying $usage as the tool&#039;s own provider spend.</td></tr>
-<tr><td><code>toArray(): array</code></td><td>The provider wire-shape only -- $diff is deliberately absent, exactly like the image fields and the document fields: it is renderer-side presentation data, and inlining a whole unified diff here would duplicate it into every chat-completion request&#039;s token budget. $usage is absent for the same reason: it is accounting, not something the model reads. So is $denial: the model reads the refusal in the text, which still opens with the kind&#039;s prefix, and the structural kind is for the parties that must not trust that text (audit F-P8).</td></tr>
+<tr><td><code>toArray(): array</code></td><td>The provider wire-shape only -- $diff is deliberately absent, exactly like the image fields and the document fields: it is renderer-side presentation data, and inlining a whole unified diff here would duplicate it into every chat-completion request&#039;s token budget. $usage is absent for the same reason: it is accounting, not something the model reads. So is $denial: the model reads the refusal in the text, which still opens with the kind&#039;s prefix, and the structural kind is for the parties that must not trust that text.</td></tr>
 </tbody>
 </table>
 <h3>SugarCraft\Code\Tools\BuiltIn</h3>
@@ -15248,7 +15248,7 @@
 <tr><td><code>mergeSessionState(array $state): void</code></td><td></td></tr>
 <tr><td><code>static fromCatalog(ToolBuildContext $context): self</code></td><td></td></tr>
 <tr><td><code>name(): string</code></td><td></td></tr>
-<tr><td><code>description(): string</code></td><td>Paging is the behaviour worth stating (audit 0.12): every line comes back numbered, a file longer than one page comes back as a window that SAYS so and names the call that continues it, and a model told only &quot;read a file&quot; has no reason to suspect the content it got was the head of a larger one.</td></tr>
+<tr><td><code>description(): string</code></td><td>Paging is the behaviour worth stating: every line comes back numbered, a file longer than one page comes back as a window that SAYS so and names the call that continues it, and a model told only &quot;read a file&quot; has no reason to suspect the content it got was the head of a larger one.</td></tr>
 <tr><td><code>promptGuidance(): string</code></td><td>The facts a model needs at session scale rather than per call: lines are numbered and the numbers are not file content, a long file arrives a page at a time with a footer naming the next call, a rejected path is an error it can correct, and directory-level project rules arrive with the first read there. Kept free of sibling-tool names so the fragment stays true when this tool is wired alone (PromptGuidance).</td></tr>
 <tr><td><code>inputSchema(): array</code></td><td></td></tr>
 <tr><td><code>execute(array $args): ToolResult</code></td><td></td></tr>
@@ -15399,7 +15399,7 @@
 <tr><td><code>inputSchema(): array</code></td><td></td></tr>
 <tr><td><code>execute(array $args): ToolResult</code></td><td></td></tr>
 <tr><td><code>static invokedIn(iterable $messages): array</code></td><td>The skills $messages show this tool loading (roadmap 2.6): one entry per skill name, most recently invoked first, with the <code>args</code> of that latest call. A call whose result came back an error loaded nothing, so it is left out; a call with no result in $messages (a replayed history that kept only the call) is kept — the call is the only evidence there is, as \SugarCraft\Code\Context\TurnContextBlock::recentlyModifiedIn() reasons for Edit/Write.</td></tr>
-<tr><td><code>static substituteArguments(string $body, string $arguments): string</code></td><td>Fill the body&#039;s <code>$ARGUMENTS</code> with the model&#039;s <code>args</code> (audit F-H4: the schema advertised <code>args</code> and execute() dropped it, so a skill written around its input ran without it and the model was never told).</td></tr>
+<tr><td><code>static substituteArguments(string $body, string $arguments): string</code></td><td>Fill the body&#039;s <code>$ARGUMENTS</code> with the model&#039;s <code>args</code> (the schema advertised <code>args</code> and execute() dropped it, so a skill written around its input ran without it and the model was never told).</td></tr>
 <tr><td><code>static substituteSkillDir(string $body, string $skillPath): string</code></td><td>Replace each <code>${CLAUDE_SKILL_DIR}</code> / <code>${SKILL_DIR}</code> in $body with the directory $skillPath&#039;s SKILL.md sits in (C-EXT-2).</td></tr>
 </tbody>
 </table>
@@ -15464,7 +15464,7 @@
 <tr><td><code>delegationDepth(): int</code></td><td>How deep the agent calling this tool runs: 0 for the session&#039;s own.</td></tr>
 <tr><td><code>nestedFor(int $depth, string $parentAgentId, \Closure $emitter, ?string $scope): self</code></td><td>The copy a delegated run at $depth is handed, so it can delegate one level further: its frames go out through $emitter (the delegating run&#039;s, which reaches the parent from any process the run is in) naming $parentAgentId, and its seats are counted in $scope. Never backgrounds: a background agent is announced into the session&#039;s conversation, which a nested run is not having.</td></tr>
 <tr><td><code>withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self</code></td><td></td></tr>
-<tr><td><code>withSiblingSpend(SiblingSpendLedger $ledger): self</code></td><td>The copy \SugarCraft\Code\Runtime::executeConcurrently() runs as one member of a concurrent group: its delegated run records each step onto $ledger and counts its siblings&#039; records in its spend-cap check (audit B4-rem). Only the engine path uses it; the pool path is never parallel-safe, so it is never a group member.</td></tr>
+<tr><td><code>withSiblingSpend(SiblingSpendLedger $ledger): self</code></td><td>The copy \SugarCraft\Code\Runtime::executeConcurrently() runs as one member of a concurrent group: its delegated run records each step onto $ledger and counts its siblings&#039; records in its spend-cap check . Only the engine path uses it; the pool path is never parallel-safe, so it is never a group member.</td></tr>
 <tr><td><code>boardMember(array $args): ?\SugarCraft\Code\Agents\Board\BoardMember</code></td><td>The participant this call becomes on its batch&#039;s shared board (roadmap 4.5): the agent it names and its short description. Null for a call that will run in the background — it hands off and returns before its peers start, so a peer could only ever post to it unheard — and for one that names no agent, which is refused before it runs.</td></tr>
 <tr><td><code>withBoard(\SugarCraft\Code\Agents\Board\Board $board): self</code></td><td>The copy \SugarCraft\Code\Runtime::executeConcurrently() runs as one member of a parallel batch that shares a board (roadmap 4.5): its run is offered <code>BoardRead</code> and <code>BoardPost</code> over $board (this member&#039;s view), and the board&#039;s news reaches it as a notice on its next tool result. The board&#039;s tools are the harness&#039;s, not the preset&#039;s: a <code>tools:</code> list does not narrow them, but a <code>disallowedTools:</code> entry naming one keeps the run from it.</td></tr>
 <tr><td><code>subAgentEmitter(): ?\Closure</code></td><td></td></tr>
@@ -15509,7 +15509,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-builtin-webfetch"><code>WebFetch</code> <small>final readonly class</small></h4>
-<p>Fetches one URL and refuses everything that aims at this machine or its network. The defence is resolve-once-then-dial (audit M6+M7, wave 2026-09-30):</p>
+<p>Fetches one URL and refuses everything that aims at this machine or its network. The defence is resolve-once-then-dial:</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -15530,7 +15530,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(?string $endpoint = null, ?int $timeout = null, ?int $maxResults = null, ?callable $resolveAddresses = null, ?callable $isBlockedAddress = null, ?callable $transport = null, ?string $backend = null)</code></td><td>THERE IS NO DEFAULT ENDPOINT (audit F-W3(b)). The constructor argument wins, then <code>CANDY_CODE_SEARCH_ENDPOINT</code>, then the <code>webSearchEndpoint</code> setting (roadmap N-P4e: user tier only, since it decides where every model-composed query is sent); an empty value counts as unset, and a setting that is not an http(s) URL is ignored rather than dialled. Until one is set the tool still constructs — Bootstrap, Chat and <code>/websearch</code> build it unconditionally, and the model is better told why a search failed than shown no tool — but every call is an error naming the variable. The shipped default used to be <code>http://skynet2.interserver.net:8080/search</code>: a private host, over CLEARTEXT http, so every model-composed query (which routinely quotes code, file names and error text from the user&#039;s repository) crossed the network unencrypted to a third party, unprompted under the default <code>bypass-permissions</code>. Switching it to https would still have sent every user&#039;s queries to one maintainer&#039;s box; the honest default for a third-party data flow is none.</td></tr>
+<tr><td><code>__construct(?string $endpoint = null, ?int $timeout = null, ?int $maxResults = null, ?callable $resolveAddresses = null, ?callable $isBlockedAddress = null, ?callable $transport = null, ?string $backend = null)</code></td><td>THERE IS NO DEFAULT ENDPOINT. The constructor argument wins, then <code>CANDY_CODE_SEARCH_ENDPOINT</code>, then the <code>webSearchEndpoint</code> setting (roadmap N-P4e: user tier only, since it decides where every model-composed query is sent); an empty value counts as unset, and a setting that is not an http(s) URL is ignored rather than dialled. Until one is set the tool still constructs — Bootstrap, Chat and <code>/websearch</code> build it unconditionally, and the model is better told why a search failed than shown no tool — but every call is an error naming the variable. The shipped default used to be <code>http://skynet2.interserver.net:8080/search</code>: a private host, over CLEARTEXT http, so every model-composed query (which routinely quotes code, file names and error text from the user&#039;s repository) crossed the network unencrypted to a third party, unprompted under the default <code>bypass-permissions</code>. Switching it to https would still have sent every user&#039;s queries to one maintainer&#039;s box; the honest default for a third-party data flow is none.</td></tr>
 <tr><td><code>isParallelSafe(): bool</code></td><td>Same reasoning as WebFetch::isParallelSafe(): a search round-trip is seconds of waiting, writes nothing locally, and strands no session-scoped state in a forked child.</td></tr>
 <tr><td><code>static fromCatalog(ToolBuildContext $context): self</code></td><td></td></tr>
 <tr><td><code>name(): string</code></td><td></td></tr>
@@ -15682,7 +15682,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-concerns-rebindsworktreejail"><code>RebindsWorktreeJail</code> <small>trait</small></h4>
-<p>The one implementation of \SugarCraft\Code\Tools\AcceptsWorktreeJail every path-resolving built-in shares (audit F-J5).</p>
+<p>The one implementation of \SugarCraft\Code\Tools\AcceptsWorktreeJail every path-resolving built-in shares.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -15709,7 +15709,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-edit-editfailurehints"><code>EditFailureHints</code> <small>final class</small></h4>
-<p>The text of an Edit that matched too often or not at all (audit 0.11).</p>
+<p>The text of an Edit that matched too often or not at all.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -15730,7 +15730,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-edit-editmatcher"><code>EditMatcher</code> <small>final class</small></h4>
-<p>Finds where an Edit&#039;s <code>old_string</code> lands in a file, one stage at a time, stopping at the first stage that finds it in exactly one place (audit 0.11, roadmap 3.I-1). The chain, strictest first:</p>
+<p>Finds where an Edit&#039;s <code>old_string</code> lands in a file, one stage at a time, stopping at the first stage that finds it in exactly one place ( roadmap 3.I-1). The chain, strictest first:</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -15750,7 +15750,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-edit-indentflexiblematcher"><code>IndentFlexibleMatcher</code> <small>final class</small></h4>
-<p>Stage 2, the roadmap&#039;s &quot;indentation-flexible&quot; stage (named <code>uniform-indent</code> since audit 0.11 added it): the same lines shifted by ONE indentation delta. <code>new_string</code> is re-indented by the same delta, so a model that misjudged the nesting depth of a block gets its edit instead of a wasted turn. A block that would need a different shift per line is left to the looser stages after it.</p>
+<p>Stage 2, the roadmap&#039;s &quot;indentation-flexible&quot; stage (named <code>uniform-indent</code>): the same lines shifted by ONE indentation delta. <code>new_string</code> is re-indented by the same delta, so a model that misjudged the nesting depth of a block gets its edit instead of a wasted turn. A block that would need a different shift per line is left to the looser stages after it.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -16097,7 +16097,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-web-search-exabackend"><code>ExaBackend</code> <small>final class</small></h4>
-<p>Exa&#039;s neural search API — a fixed https host, chosen by setting <code>webSearchBackend</code> to <code>exa</code> and putting the key in <code>EXA_API_KEY</code>. POSTed JSON, <code>x-api-key</code>; the query is the only user data that leaves, and the service host is a constant (audit F-W3 by construction).</p>
+<p>Exa&#039;s neural search API — a fixed https host, chosen by setting <code>webSearchBackend</code> to <code>exa</code> and putting the key in <code>EXA_API_KEY</code>. POSTed JSON, <code>x-api-key</code>; the query is the only user data that leaves, and the service host is a constant.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -16126,7 +16126,7 @@
 <tbody>
 <tr><td><code>static new(?string $name, ?string $endpoint, int $timeout, ?callable $transport = null, ?callable $resolveAddresses = null, ?callable $isBlockedAddress = null): SearchBackend</code></td><td>Build the backend <code>$name</code> asks for.</td></tr>
 <tr><td><code>static guardedDialAddress(string $host, \Closure $resolve, \Closure $blocked): array</code></td><td>Resolve the host once and refuse it if ANY answer is blocked, else return the first answer to dial. The check this replaced asked <code>gethostbyname()</code> for one v4 answer, so an AAAA-only name at <code>::1</code>, or a record set mixing public and private, passed; it also read an unresolvable name as &quot;not blocked&quot; and let the fetch resolve again.</td></tr>
-<tr><td><code>static openHttp(array $request, string $dialAddress): array</code></td><td>The default transport: dial the vetted literal, never the hostname — the same resolve-once-then-dial shape as WebFetch (audit F-W3): handing the name to the stream layer resolved it a second time, so a TTL≈0 record could answer public to the guard and private to the dial. The name stays where the peer needs it, in <code>Host:</code> and in <code>ssl.peer_name</code> for SNI and certificate checks. Redirects are switched off at the wrapper (it otherwise follows 20, unchecked); the caller turns the 3xx it now sees into a refusal. The body is read in chunks and abandoned once past MAX_RESPONSE_SIZE, so a hostile endpoint costs at most one chunk over the cap in memory rather than whatever it chooses to stream.</td></tr>
+<tr><td><code>static openHttp(array $request, string $dialAddress): array</code></td><td>The default transport: dial the vetted literal, never the hostname — the same resolve-once-then-dial shape as WebFetch: handing the name to the stream layer resolved it a second time, so a TTL≈0 record could answer public to the guard and private to the dial. The name stays where the peer needs it, in <code>Host:</code> and in <code>ssl.peer_name</code> for SNI and certificate checks. Redirects are switched off at the wrapper (it otherwise follows 20, unchecked); the caller turns the 3xx it now sees into a refusal. The body is read in chunks and abandoned once past MAX_RESPONSE_SIZE, so a hostile endpoint costs at most one chunk over the cap in memory rather than whatever it chooses to stream.</td></tr>
 <tr><td><code>static serviceDial(string $host, \Closure $resolve, \Closure $blocked): array</code></td><td>The hosted-path twin of guardedDialAddress(): a fixed service host, the same resolve-once-then-dial discipline, refusal wording that names a SERVICE rather than a configured endpoint (nobody configured this host — the build did).</td></tr>
 <tr><td><code>static hostedFailure(string|false $body, array $headers, string $service): ?string</code></td><td>The shared failure read of a hosted response: connect failure, the 5 MB bound, then the status classes, in the order WebSearch has always applied them (size BEFORE connect-false, because a partial read is a different story from no story). Null means the response is answerable.</td></tr>
 <tr><td><code>static decode(string $body): array|string</code></td><td>Decode a hosted JSON body: the array on success, the refusal sentence otherwise (same parser bound and clipping as the SearXNG path).</td></tr>
@@ -16143,7 +16143,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-web-search-searchresponse"><code>SearchResponse</code> <small>final class</small></h4>
-<p>What one SearchBackend call answers: either a refusal (<code>error</code>, already an &quot;Error: …&quot; sentence, the loud-failure shape every WebSearch result has carried since audit F-W3 — &quot;no results&quot; would read to the model as a fact about the web) or the pieces of a digest.</p>
+<p>What one SearchBackend call answers: either a refusal (<code>error</code>, already an &quot;Error: …&quot; sentence, the loud-failure shape every WebSearch result carries &quot;no results&quot; would read to the model as a fact about the web) or the pieces of a digest.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -16164,7 +16164,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-code-tools-web-search-tavilybackend"><code>TavilyBackend</code> <small>final class</small></h4>
-<p>Tavily&#039;s hosted search API — a fixed https host, chosen by setting <code>webSearchBackend</code> to <code>tavily</code> and putting the key in <code>TAVILY_API_KEY</code>. POSTed JSON, <code>Authorization: Bearer</code>; the query is the only user data that leaves, and the service host is a constant (audit F-W3 by construction).</p>
+<p>Tavily&#039;s hosted search API — a fixed https host, chosen by setting <code>webSearchBackend</code> to <code>tavily</code> and putting the key in <code>TAVILY_API_KEY</code>. POSTed JSON, <code>Authorization: Bearer</code>; the query is the only user data that leaves, and the service host is a constant.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>

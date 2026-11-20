@@ -74,7 +74,7 @@ final class HookManager
 
     /**
      * A clone gets its OWN registry, so registering on the copy leaves the
-     * original's chain alone (audit F-J5: {@see
+     * original's chain alone ({@see
      * \SugarCraft\Code\Backend\EngineBackend::withWorktreeRoot()} used to add
      * its worktree-scoped Bash guard to the parent backend's shared manager).
      * The registry's state is arrays of hook instances, so a shallow registry

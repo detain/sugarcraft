@@ -742,7 +742,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
-     * Audit 15a A18: what the server said about itself, read once per
+     * What the server said about itself, read once per
      * provider and memoised - null when no loader is armed or the read failed.
      *
      * LAZY, AND CALLED FROM TWO PLACES ON PURPOSE. Construction must stay
@@ -1674,7 +1674,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
-     * Audit A17: a transport failure or a 2xx body that is not an embeddings
+     * A transport failure or a 2xx body that is not an embeddings
      * payload THROWS instead of returning an empty list. The old silent `[]`
      * made an outage (model not loaded, 5xx, refused connection) look exactly
      * like "no results", so a semantic-search consumer degraded without ever

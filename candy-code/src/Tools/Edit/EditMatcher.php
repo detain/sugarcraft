@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tools\Edit;
 
 /**
  * Finds where an Edit's `old_string` lands in a file, one stage at a time,
- * stopping at the first stage that finds it in exactly one place (audit 0.11,
+ * stopping at the first stage that finds it in exactly one place (
  * roadmap 3.I-1). The chain, strictest first:
  *
  *  1. `exact` — the bytes as given. Any number of occurrences is returned;

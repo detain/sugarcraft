@@ -166,7 +166,7 @@ final class ToolResult
     /**
      * Create the result of a call that was STOPPED before it ran: an error
      * whose text is $kind's rendered reason and which carries $kind
-     * structurally, so a reader never has to classify the text (audit F-P8).
+     * structurally, so a reader never has to classify the text.
      */
     public static function denied(string $name, DenialKind $kind, string $detail, ?string $id = null): self
     {

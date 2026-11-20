@@ -353,7 +353,7 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td><code>withAlignLeft(bool $v = true): self</code></td><td></td></tr>
 <tr><td><code>withStyle(string $ansiStyle): self</code></td><td></td></tr>
 <tr><td><code>withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self</code></td><td></td></tr>
-<tr><td><code>withWidthMode(ColumnWidth $mode, ?float $percent = null): self</code></td><td>The single spelling for (re)declaring a column&#039;s width mechanism (audit ST-27, findings 027+069): mode plus, for Percent only, the percentage. A non-Percent mode discards any stale percent — the ghost value that used to survive some withers and die in others; the resolver gates percent reads on the mode, so what is stored for other modes could never be honoured, only forgotten silently.</td></tr>
+<tr><td><code>withWidthMode(ColumnWidth $mode, ?float $percent = null): self</code></td><td>The single spelling for (re)declaring a column&#039;s width mechanism: mode plus, for Percent only, the percentage. A non-Percent mode discards any stale percent — the ghost value that used to survive some withers and die in others; the resolver gates percent reads on the mode, so what is stored for other modes could never be honoured, only forgotten silently.</td></tr>
 <tr><td><code>withWrapMode(WrapMode $wrapMode): self</code></td><td></td></tr>
 <tr><td><code>withSortType(SortType $type): self</code></td><td>Choose how this column&#039;s values compare under Table::sortBy() (OG-5 / ST-36). Auto (default) is float-when-both-numeric else case-insensitive text; Natural orders digit runs numerically (&quot;item2&quot; &lt; &quot;item10&quot;). Mirrors Evertras/bubble-table.Column.WithSortType.</td></tr>
 <tr><td><code>withSortFunc(?callable $fn): self</code></td><td>Per-column comparator hook; null restores $sortType. The callable gets the two cells&#039; raw values (a StyledCell is unwrapped to its value) and returns &lt;0, 0 or &gt;0 in ascending sense — Table flips it for descending.</td></tr>
@@ -411,7 +411,7 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static new(mixed $value, string $ansiStyle = &#039;&#039;): self</code></td><td>Sole construction door (audit ST-49, finding 060): value objects are built via ::new().</td></tr>
+<tr><td><code>static new(mixed $value, string $ansiStyle = &#039;&#039;): self</code></td><td>Sole construction door: value objects are built via ::new().</td></tr>
 <tr><td><code>withStyle(string $ansiStyle): self</code></td><td></td></tr>
 <tr><td><code>__toString(): string</code></td><td></td></tr>
 </tbody>
@@ -432,15 +432,15 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td><code>withoutCheckMarks(): self</code></td><td>Remove the checkbox gutter (the checked set itself is kept).</td></tr>
 <tr><td><code>withColumns(array $columns): self</code></td><td>Replace all columns with a new set.</td></tr>
 <tr><td><code>withBaseStyle(string $ansiStyle): self</code></td><td></td></tr>
-<tr><td><code>withMissingIndicator(string|StyledCell $s): self</code></td><td>Set the placeholder that paints any cell whose value is missing (raw null or StyledCell(null) — one no-value law, audit ST-50).</td></tr>
+<tr><td><code>withMissingIndicator(string|StyledCell $s): self</code></td><td>Set the placeholder that paints any cell whose value is missing (raw null or StyledCell(null) — one no-value law).</td></tr>
 <tr><td><code>withBorderStyle(string $ansiStyle): self</code></td><td>Apply an ANSI SGR style string to the default border (e.g. &quot;1;32&quot; for bold green).</td></tr>
 <tr><td><code>withSelectable(bool $v = true): self</code></td><td></td></tr>
-<tr><td><code>withPageSize(int $n): self</code></td><td>Rows per page. $n &lt;= 0 disables pagination entirely — the whole view renders as one frame and the footer disappears (the negative value is stored verbatim; every page read is gated on &gt; 0, so it behaves as off). Positive sizes re-anchor the current page and cursor via gotoPage(). Policy pointer: README &quot;Numeric setters: coercion vs throw&quot; (audit ST-62, finding 078).</td></tr>
+<tr><td><code>withPageSize(int $n): self</code></td><td>Rows per page. $n &lt;= 0 disables pagination entirely — the whole view renders as one frame and the footer disappears (the negative value is stored verbatim; every page read is gated on &gt; 0, so it behaves as off). Positive sizes re-anchor the current page and cursor via gotoPage(). Policy pointer: README &quot;Numeric setters: coercion vs throw&quot;.</td></tr>
 <tr><td><code>withPage(int $n): self</code></td><td>Navigate to a page, clamped to the valid range, and park the cursor on that page&#039;s first row (audit finding #9: an out-of-range page used to leak — a negative page made array_slice count from the END).</td></tr>
 <tr><td><code>withFrozenCols(array $indices): self</code></td><td>Pin columns by index so they remain visible during horizontal scroll.</td></tr>
-<tr><td><code>withFrozenKeys(array $keys): self</code></td><td>Key-addressed companion of self::withFrozenCols() (audit ST-24): resolves each key to its original column index — unknown keys throw naming the key — then applies the identical contiguous-prefix law.</td></tr>
+<tr><td><code>withFrozenKeys(array $keys): self</code></td><td>Key-addressed companion of self::withFrozenCols(): resolves each key to its original column index — unknown keys throw naming the key — then applies the identical contiguous-prefix law.</td></tr>
 <tr><td><code>withScrollX(int $offset): self</code></td><td>Set the horizontal scroll offset for non-frozen columns.</td></tr>
-<tr><td><code>withViewportHeight(int $height): self</code></td><td>Visible-row window for viewport virtualization. Negatives clamp to 0 and 0 means virtualization off (all rows render) — coercion, not throw, per README &quot;Numeric setters: coercion vs throw&quot; (audit ST-62, finding 078).</td></tr>
+<tr><td><code>withViewportHeight(int $height): self</code></td><td>Visible-row window for viewport virtualization. Negatives clamp to 0 and 0 means virtualization off (all rows render) — coercion, not throw, per README &quot;Numeric setters: coercion vs throw&quot;.</td></tr>
 <tr><td><code>withMaxLines(int $lines): self</code></td><td>Line budget for the data region (OG-3 / ST-20). <code>withViewportHeight()</code> counts ROWS, so under WordWrap a 2-row viewport can paint nine lines; a line-budgeted host sets this instead (or as well): whole rows are kept while their cumulative height fits <code>$lines</code>, the rest are truncated, never split. At least one row always renders, and a row that would be cut off while it is the cursor row pulls the window forward so the highlight stays on-screen. 0 (default) = no budget; negatives clamp to 0. Header, footer and borders sit outside it. Mirrors evertras/bubble-table WithTargetHeight (line-based paging).</td></tr>
 <tr><td><code>maxLines(): int</code></td><td></td></tr>
 <tr><td><code>renderedLineCount(): int</code></td><td>Total lines the current frame paints (border, header, data rows at their wrapped heights, footer) — 0 when nothing renders. Lets a line-budgeted host size the surrounding layout without parsing view() output.</td></tr>
@@ -462,11 +462,11 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td><code>withWidth(int $cols): self</code></td><td>Pin the total render width (in cells). Flex columns fill exactly the room left after Fixed/Percent columns and the inter-column gaps, so every line renders to exactly $cols cells. 0 restores the natural (column-derived) width.</td></tr>
 <tr><td><code>withHiddenCols(array $indices): self</code></td><td>Hide columns by index without removing them from the table.</td></tr>
 <tr><td><code>withStrictPercent(bool $v = true): self</code></td><td>Opt-in strict percent budgeting (OG-9 arm B / ST-61): with it on, a VISIBLE Percent set summing past 100 throws InvalidArgumentException when it is configured (here, withColumns(), withHiddenCols()) instead of being scaled down at solve time (the default, arm A: over-subscribed percents are normalised so the set never exceeds the table width). Applies to the columns the table already holds.</td></tr>
-<tr><td><code>withHiddenKeys(array $keys): self</code></td><td>Key-addressed companion of self::withHiddenCols() (audit ST-24): resolves each key to its original column index — unknown keys throw naming the key — then applies the identical validation.</td></tr>
+<tr><td><code>withHiddenKeys(array $keys): self</code></td><td>Key-addressed companion of self::withHiddenCols(): resolves each key to its original column index — unknown keys throw naming the key — then applies the identical validation.</td></tr>
 <tr><td><code>withExpandedRows(array $indices): self</code></td><td>Set which rows are expanded on the current page.</td></tr>
 <tr><td><code>toggleExpanded(int $rowIndex): self</code></td><td>Toggle the expanded state of a row on the current page.</td></tr>
 <tr><td><code>isExpanded(int $rowIndex): bool</code></td><td>Check if a row on the current page is currently expanded.</td></tr>
-<tr><td><code>addRow(Row $row): self</code></td><td>Append ONE row (audit ST-65, finding 081): each call is an immutable copy of the row set, so building N rows by looping this method is O(N²) copies — load bulk with withRows() or addRows().</td></tr>
+<tr><td><code>addRow(Row $row): self</code></td><td>Append ONE row: each call is an immutable copy of the row set, so building N rows by looping this method is O(N²) copies — load bulk with withRows() or addRows().</td></tr>
 <tr><td><code>addRows(array $rows): self</code></td><td>Append rows in ONE bulk copy (the counterpart to the single-add quadratic above; see withRows() for the replace-all form).</td></tr>
 <tr><td><code>selectNext(): self</code></td><td></td></tr>
 <tr><td><code>selectPrevious(): self</code></td><td></td></tr>
@@ -507,7 +507,7 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td><code>selectedIndex(): int</code></td><td></td></tr>
 <tr><td><code>currentPage(): int</code></td><td></td></tr>
 <tr><td><code>pageSize(): int</code></td><td></td></tr>
-<tr><td><code>sortColumns(): array</code></td><td>Active sort stack in priority order: the first entry is the primary key, later entries tie-break it (audit ST-03 — the state sortBy() and clearSort() mutate was write-only; hosts re-tracked it blind).</td></tr>
+<tr><td><code>sortColumns(): array</code></td><td>Active sort stack in priority order: the first entry is the primary key, later entries tie-break it (the state sortBy() and clearSort() mutate was write-only; hosts re-tracked it blind).</td></tr>
 <tr><td><code>activeFilters(): array</code></td><td>Active per-column filter texts, keyed by column key (the state filter()/clearFilter() mutate; an empty map means unfiltered).</td></tr>
 <tr><td><code>searchText(): string</code></td><td>Active global search needle (&#039;&#039; when unset).</td></tr>
 <tr><td><code>totalWidth(): int</code></td><td>Total rendered width of the table in columns (pinned width when set, else the solved content widths plus inter-column borders) — the pre-render budget readout candy-sql hand-computes today (audit finding 075; cross-lib note is report-only, out of group).</td></tr>

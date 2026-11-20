@@ -1381,7 +1381,7 @@ final class AgentWorkerPool
     /**
      * A pool that re-runs every failed or timed-out agent up to $retries
      * times — or up to the agent's own {@see SubAgent::$maxRetries}, when
-     * that is higher (audit WF-1(b)). The pool-wide half of the retry rule:
+     * that is higher. The pool-wide half of the retry rule:
      * {@see AgentPoolConfig::$maxRetries} reaches a pool through here. 0 (the
      * default) leaves each agent to its own count; a negative value is 0.
      *

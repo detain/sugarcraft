@@ -347,7 +347,7 @@ final readonly class HookResult
 
     /**
      * The text that replaces a tool's output when a `PostToolUse` chain does
-     * not permit it (audit F-H1, R6): one sentence both tool paths —
+     * not permit it one sentence both tool paths —
      * {@see \SugarCraft\Code\Runtime::settle()} and
      * {@see \SugarCraft\Code\Chat::applyPostToolUse()} — use, so a
      * transcript reads the same whichever pipeline ran the call.
@@ -379,7 +379,7 @@ final readonly class HookResult
 
     /**
      * The reason {@see self::withheldNotice()} gives when the chain THREW
-     * instead of answering (audit R6): a crashed hook has vetted nothing, so
+     * instead of answering: a crashed hook has vetted nothing, so
      * the output it was reading is withheld exactly as a refusal's is.
      */
     public static function failureReason(\Throwable $e): string

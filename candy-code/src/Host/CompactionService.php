@@ -2007,7 +2007,7 @@ final class CompactionService
     /**
      * $history with the parked submission's own rows removed — the prompt
      * {@see Chat::scheduleParkedCompaction()} echoed and the UserPromptSubmit notes it
-     * wrote immediately ahead of it — for the pre-turn checkpoint (audit SES-1;
+     * wrote immediately ahead of it — for the pre-turn checkpoint (
      * see {@see Chat::dispatchTurn()} for what "pre-turn" keeps and why).
      *
      * FOUND BY CONTENT AND BRACKETED BY THE PARK NOTICE, because nothing else

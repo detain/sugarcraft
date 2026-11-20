@@ -2722,8 +2722,7 @@ final class LaunchContext
     }
     /**
      * The root a launch's `.candy-code/*` lookups resolve against — the
-     * repository, on a launch from one of its subdirectories (audit 15d-13
-     * (b)); null stays null. The WORKING directory is never this: tools,
+     * repository, on a launch from one of its subdirectories (see the 15d-13 note); null stays null. The WORKING directory is never this: tools,
      * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
      */
     public static function configRoot(?string $root): ?string

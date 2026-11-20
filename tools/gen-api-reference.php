@@ -152,10 +152,10 @@ final class ApiReference
 
     /**
      * What a published summary must not contain: audit and tracker IDs (sc-23, DX-05,
-     * sugar-core-024, lib-reviews-1102, the audit 15b-28 form), and the ansicode.txt
+     * sugar-core-024, lib-reviews-1102, the audit 15b-28 and audit 032 or audit R2 forms), and the ansicode.txt
      * citation, a file this repo does not carry. See refuseInternalReferences().
      */
-    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b~';
+    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b|\b[Aa]udits?\s+(?:[A-Za-z][A-Za-z-]*-)?[A-Za-z]?\d+[a-z]?(?:-\d+)?\b~';
 
     public static function enabled(string $slug): bool
     {
@@ -1297,8 +1297,9 @@ final class ApiReference
 
     /**
      * The first PHPDoc paragraph, as HTML. Tags (lines starting with @) end it.
-     * Backtick spans become code, and the inline {@see X} and {@link X} forms
-     * are reduced to X.
+     * Backtick spans become code, the inline {@code X} form becomes a backtick span,
+     * and the inline {@see X} and {@link X} forms are reduced to X. Tags match in any
+     * letter case, as PHPDoc readers do, so {@See X} is not printed as raw text.
      */
     private static function summary(?string $doc): string
     {
@@ -1330,7 +1331,8 @@ final class ApiReference
         }
 
         $text = implode(' ', $para);
-        $text = (string) preg_replace('/\{@(?:see|link)\s+([^}]*)\}/', '$1', $text);
+        $text = (string) preg_replace('/\{@code\s+([^}]*)\}/i', '`$1`', $text);
+        $text = (string) preg_replace('/\{@(?:see|link)\s+([^}]*)\}/i', '$1', $text);
         $text = (string) preg_replace('/\{@inheritdoc\}/i', '', $text);
         $html = htmlspecialchars(trim((string) preg_replace('/\s+/', ' ', $text)), ENT_QUOTES, 'UTF-8');
 

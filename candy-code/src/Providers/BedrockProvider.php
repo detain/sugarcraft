@@ -446,7 +446,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
 
     /**
      * The configured model's window, looked up by its normalised family
-     * (audit A20: an exact match on the raw id sized every real versioned or
+     * (an exact match on the raw id sized every real versioned or
      * inference-profile id at 8,192). 0 when the family is unknown.
      *
      * ISS-073 review fix: the operator's `contextWindow` override outranks
@@ -543,7 +543,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     }
 
     /**
-     * USD per 1K CACHE tokens (audit A15, the cache half): `read` prices
+     * USD per 1K CACHE tokens (the cache half): `read` prices
      * `cacheReadInputTokens`, `write` prices `cacheWriteInputTokens`. Null
      * only when the rate it resolves to is unknown or fails validation.
      *

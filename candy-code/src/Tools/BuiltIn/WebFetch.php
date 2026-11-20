@@ -23,8 +23,7 @@ use SugarCraft\Markdown\Html\UrlReference;
 
 /**
  * Fetches one URL and refuses everything that aims at this machine or its
- * network. The defence is resolve-once-then-dial (audit M6+M7, wave
- * 2026-09-30):
+ * network. The defence is resolve-once-then-dial:
  *
  *  1. Each hop resolves the hostname ONCE across both address families.
  *     The pre-wave check used `gethostbyname()`, which answers only the IPv4

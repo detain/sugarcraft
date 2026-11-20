@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\Edit;
 
 /**
- * Stage 2, the roadmap's "indentation-flexible" stage (named `uniform-indent`
- * since audit 0.11 added it): the same lines shifted by ONE indentation delta.
+ * Stage 2, the roadmap's "indentation-flexible" stage (named `uniform-indent`): the same lines shifted by ONE indentation delta.
  * `new_string` is re-indented by the same delta, so a model that misjudged the
  * nesting depth of a block gets its edit instead of a wasted turn. A block that
  * would need a different shift per line is left to the looser stages after it.

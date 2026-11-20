@@ -1024,6 +1024,58 @@ final class GenApiReferenceTest extends TestCase
             "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Strips bidi overrides (audit 15b-28). */\nfinal class Leaky\n{\n}\n",
             '15b-28',
         ];
+        yield 'a numbered audit reference in a type summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Closes the gap (audit 032). */\nfinal class Leaky\n{\n}\n",
+            'audit 032',
+        ];
+        yield 'an audit round reference in a method summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Saves the transcript (audit R2). */\n    public function own(): void\n    {\n    }\n}\n",
+            'audit R2',
+        ];
+        yield 'a tracker-prefixed audit reference in a method summary' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Leaky\n{\n    /** Sizes the column (audit ST-62, finding 078). */\n    public function own(): void\n    {\n    }\n}\n",
+            'audit ST-62',
+        ];
+        yield 'a capitalised audit reference with a letter-suffixed number' => [
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Renders the frame. Audit 15d-09 raised it. */\nfinal class Leaky\n{\n}\n",
+            'Audit 15d-09',
+        ];
+    }
+
+    /** @return iterable<string, array{string}> a summary that names the word audit without an ID after it */
+    public static function auditWordsWithoutAnId(): iterable
+    {
+        yield 'the audit trail' => ["Writes the audit trail."];
+        yield 'an audit of the prose' => ["Runs an audit of the prose."];
+    }
+
+    #[DataProvider('auditWordsWithoutAnId')]
+    public function testTheWordAuditWithoutAnIdPassesTheGuard(string $summary): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Plain.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** $summary */\nfinal class Plain\n{\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString($summary, $html);
+    }
+
+    public function testInlineTagsInASummaryAreNeverPrintedAsRawText(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Tags.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n"
+                . "final class Tags\n{\n"
+                . "    /** Renders with {@See Optimization} and runs {@code candy-code mcp auth login <server-url>}. */\n"
+                . "    public function render(): void\n    {\n    }\n"
+                . "    /** Reads the {@link Tags::render()} result. */\n"
+                . "    public function read(): void\n    {\n    }\n"
+                . "}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('Renders with Optimization and runs <code>candy-code mcp auth login &lt;server-url&gt;</code>.', $html);
+        self::assertStringContainsString('Reads the Tags::render() result.', $html);
+        self::assertStringNotContainsString('{@', $html);
     }
 
     /** @return iterable<string, array{string}> a summary whose only words look like an ID but are not one */

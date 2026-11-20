@@ -13,7 +13,7 @@ use SugarCraft\Code\Providers\Concerns\JsonFetch;
 /**
  * What a live SGLang server says about itself: the limits and parsers it was
  * launched with, read from its own `GET /model_info` and `GET /server_info`
- * (audit 15a A18, revised 2026-10-02).
+ *.
  *
  * WHY A LIVE READ AND NOT ONE MORE TRANSCRIBED CONSTANT. Every per-model figure
  * in {@see SglangProvider} is a transcription of one deployment on one day, and

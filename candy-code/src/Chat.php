@@ -2335,7 +2335,7 @@ final class Chat implements Model
     }
 
     /**
-     * Turn on the single-writer session lock (audit SES-3(b)) and take it for
+     * Turn on the single-writer session lock and take it for
      * the session this Chat has open.
      *
      * When another TUI already holds that session, the Chat comes back
@@ -2362,7 +2362,7 @@ final class Chat implements Model
 
     /**
      * Submit $prompt as this session's first prompt once {@see init()} runs —
-     * the leftover command-line words (audit CLI-2(b)). Null or blank clears it.
+     * the leftover command-line words. Null or blank clears it.
      */
     public function withInitialPrompt(?string $prompt): self
     {
@@ -8406,8 +8406,7 @@ final class Chat implements Model
      * turn (double-Escape). The row is otherwise the restart row
      * {@see reviveCheckpointMessage()} builds; only the reason differs,
      * because "by restart" was false for a session that never restarted and
-     * the model reads this text on the next request (audit R15, the 15b-02
-     * residual). {@see isInterruptedResult()} matches it too, so it draws the
+     * the model reads this text on the next request. {@see isInterruptedResult()} matches it too, so it draws the
      * same struck-through `⊘ interrupted` state.
      */
     public const CANCELLED_TOOL_CALL = 'Tool call interrupted: the user cancelled the turn';

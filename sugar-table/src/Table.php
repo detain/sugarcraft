@@ -576,7 +576,7 @@ final class Table
 
     /**
      * Set the placeholder that paints any cell whose value is missing
-     * (raw null or StyledCell(null) — one no-value law, audit ST-50).
+     * (raw null or StyledCell(null) — one no-value law).
      *
      * ST-72 (finding 089, upstream WithMissingDataIndicatorStyled parity):
      * a StyledCell indicator paints its SGR style in ordinary cells — the
@@ -622,7 +622,7 @@ final class Table
      * stored verbatim; every page read is gated on > 0, so it behaves as
      * off). Positive sizes re-anchor the current page and cursor via
      * gotoPage(). Policy pointer: README "Numeric setters: coercion vs
-     * throw" (audit ST-62, finding 078).
+     * throw".
      */
     public function withPageSize(int $n): self
     {
@@ -721,7 +721,7 @@ final class Table
     }
 
     /**
-     * Key-addressed companion of {@see self::withFrozenCols()} (audit ST-24):
+     * Key-addressed companion of {@see self::withFrozenCols()}:
      * resolves each key to its original column index — unknown keys throw
      * naming the key — then applies the identical contiguous-prefix law.
      *
@@ -750,8 +750,7 @@ final class Table
     /**
      * Visible-row window for viewport virtualization. Negatives clamp to 0
      * and 0 means virtualization off (all rows render) — coercion, not
-     * throw, per README "Numeric setters: coercion vs throw" (audit ST-62,
-     * finding 078).
+     * throw, per README "Numeric setters: coercion vs throw".
      */
     public function withViewportHeight(int $height): self
     {
@@ -1081,7 +1080,7 @@ final class Table
     }
 
     /**
-     * Key-addressed companion of {@see self::withHiddenCols()} (audit ST-24):
+     * Key-addressed companion of {@see self::withHiddenCols()}:
      * resolves each key to its original column index — unknown keys throw
      * naming the key — then applies the identical validation.
      *
@@ -1223,7 +1222,7 @@ final class Table
     // -------------------------------------------------------------------------
 
     /**
-     * Append ONE row (audit ST-65, finding 081): each call is an immutable
+     * Append ONE row: each call is an immutable
      * copy of the row set, so building N rows by looping this method is
      * O(N²) copies — load bulk with withRows() or addRows().
      */
@@ -2092,7 +2091,7 @@ final class Table
 
     /**
      * Active sort stack in priority order: the first entry is the primary
-     * key, later entries tie-break it (audit ST-03 — the state sortBy() and
+     * key, later entries tie-break it (the state sortBy() and
      * clearSort() mutate was write-only; hosts re-tracked it blind).
      *
      * @return list<array{key: string, asc: bool}>

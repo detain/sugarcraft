@@ -371,7 +371,7 @@ $manager = Manager::builder()
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static lister(int $maxEntries = self::MAX_LIST_ENTRIES): \Closure</code></td><td></td></tr>
-<tr><td><code>static memoize(\Closure $lister, ?callable $mtime = null): \Closure</code></td><td>CF-39 (closes audit 063): memoized decorator over any lister — keyed by path, invalidated by the directory&#039;s own mtime. The injectable-lister contract is untouched (this just wraps whatever closure it is handed), so tests keep their deterministic fakes and the counter seam is the fake&#039;s own call tally.</td></tr>
+<tr><td><code>static memoize(\Closure $lister, ?callable $mtime = null): \Closure</code></td><td>CF-39: memoized decorator over any lister — keyed by path, invalidated by the directory&#039;s own mtime. The injectable-lister contract is untouched (this just wraps whatever closure it is handed), so tests keep their deterministic fakes and the counter seam is the fake&#039;s own call tally.</td></tr>
 <tr><td><code>static memo(\Closure $lister, ?callable $mtime = null): array</code></td><td></td></tr>
 </tbody>
 </table>
@@ -400,7 +400,7 @@ $manager = Manager::builder()
 <tr><td><code>openNewTab(string $path = &#039;/&#039;): self</code></td><td>Open a new tab landing on $path.</td></tr>
 <tr><td><code>closeTab(?int $index = null): self</code></td><td>Close the tab at index, unless it&#039;s the last tab</td></tr>
 <tr><td><code>switchTab(int $index): self</code></td><td>Switch to tab at index</td></tr>
-<tr><td><code>duplicateTab(): self</code></td><td>Open a new tab duplicating the CURRENT tab honestly (CF-23, closes audit 040): both pane cwds and the active side are carried over — one accidental <code>t</code> must not collapse the dual-pane pair onto the left cwd.</td></tr>
+<tr><td><code>duplicateTab(): self</code></td><td>Open a new tab duplicating the CURRENT tab honestly (CF-23): both pane cwds and the active side are carried over — one accidental <code>t</code> must not collapse the dual-pane pair onto the left cwd.</td></tr>
 <tr><td><code>undo(): self</code></td><td>Undo the last operation</td></tr>
 <tr><td><code>redo(): self</code></td><td>Redo the last undone operation</td></tr>
 <tr><td><code>canUndo(): bool</code></td><td>Check if undo is available</td></tr>
@@ -510,7 +510,7 @@ $manager = Manager::builder()
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public string $srcDir, public string $dstDir, public array $okNames, public ?array $okDstNames, public int $errors, public int $skipped, public int $overwrote, public ?string $errorReason = null)</code></td><td>CF-40 (audit 064): the payload used to be the full absolute source =&gt; destination map of the ok-set — retained on the undo stack for the life of the session. The legs are homogeneous (one source dir, one destination dir), so the message now carries the compact spelling: the two directories plus the ok-set&#039;s leg names in schedule order.</td></tr>
+<tr><td><code>__construct(public string $srcDir, public string $dstDir, public array $okNames, public ?array $okDstNames, public int $errors, public int $skipped, public int $overwrote, public ?string $errorReason = null)</code></td><td>CF-40: the payload used to be the full absolute source =&gt; destination map of the ok-set — retained on the undo stack for the life of the session. The legs are homogeneous (one source dir, one destination dir), so the message now carries the compact spelling: the two directories plus the ok-set&#039;s leg names in schedule order.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-files-msg-searchdonemsg"><code>SearchDoneMsg</code> <small>final readonly class</small></h4>
@@ -578,7 +578,7 @@ $manager = Manager::builder()
 </tbody>
 </table>
 <h4 id="api-sugarcraft-files-support-glyphset"><code>GlyphSet</code> <small>final class</small></h4>
-<p>Chrome glyph tiers (CF-35, closes audit 048).</p>
+<p>Chrome glyph tiers (CF-35).</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -598,7 +598,7 @@ $manager = Manager::builder()
 </tbody>
 </table>
 <h4 id="api-sugarcraft-files-support-launchdir"><code>LaunchDir</code> <small>final class</small></h4>
-<p>CF-22 (closes audit 031, bin leg): the launcher&#039;s door check on each argv directory. CF-16 (closes 060) moved locale detection to right-after-autoload in the bin, so the reason prose is translated here — under the default &#039;en&#039; registry the strings are byte-identical to the old raw English the LaunchDirTest pins.</p>
+<p>CF-22 (bin leg): the launcher&#039;s door check on each argv directory. CF-16 (closes 060) moved locale detection to right-after-autoload in the bin, so the reason prose is translated here — under the default &#039;en&#039; registry the strings are byte-identical to the old raw English the LaunchDirTest pins.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>

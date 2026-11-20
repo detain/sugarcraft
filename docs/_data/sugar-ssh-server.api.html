@@ -5,7 +5,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context cancelled: &lt;reason&gt;</code> (audit sugar-ssh-server-078) — a bare throw used to be the only shape this channel could carry. <code>Context::cancel()</code> hands a supplied Throwable through to <code>err()</code> verbatim, so <code>cancel(new CancellationException(&#039;hangup received&#039;))</code> is the blessed way to attach a why without defining a class of your own.</td></tr>
+<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context cancelled: &lt;reason&gt;</code> — a bare throw used to be the only shape this channel could carry. <code>Context::cancel()</code> hands a supplied Throwable through to <code>err()</code> verbatim, so <code>cancel(new CancellationException(&#039;hangup received&#039;))</code> is the blessed way to attach a why without defining a class of your own.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-sshserver-context"><code>Context</code> <small>final class</small></h4>
@@ -28,7 +28,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context deadline exceeded: &lt;reason&gt;</code> (audit sugar-ssh-server-078). With no reason the message is the plain fixed string, so anything matching on it today keeps matching.</td></tr>
+<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context deadline exceeded: &lt;reason&gt;</code>. With no reason the message is the plain fixed string, so anything matching on it today keeps matching.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-sshserver-lang"><code>Lang</code> <small>final class</small></h4>
@@ -80,7 +80,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static chmodOpenedFile($stream, string $path, int $mode): void</code></td><td>Set a file mode through a path name, but only while that name still resolves to the inode the caller actually opened (audit 037/038).</td></tr>
+<tr><td><code>static chmodOpenedFile($stream, string $path, int $mode): void</code></td><td>Set a file mode through a path name, but only while that name still resolves to the inode the caller actually opened.</td></tr>
 <tr><td><code>static openOrValidate(mixed $stream, string $target = &#039;php://stderr&#039;, string $mode = &#039;w&#039;): mixed</code></td><td></td></tr>
 </tbody>
 </table>
@@ -126,7 +126,7 @@
 <tbody>
 <tr><td><code>__construct(private readonly ?ChildSpawner $spawner = null, ?Session $session = null, private readonly array $acceptEnv = [], private readonly ?string $shell = null, private readonly array $allowedExec = [], ?callable $execGate = null, $stderr = null)</code></td><td></td></tr>
 <tr><td><code>handlePtyReq(PtyReqMsg $msg, Session $session): void</code></td><td></td></tr>
-<tr><td><code>handleWindowChange(WindowChangeMsg $msg, Session $session): void</code></td><td>Apply a peer&#039;s window change. A zero in either dimension means the sender declared nothing for it, and the current size is KEPT — the pty-req leg already resolved the session/default fallback once, and a mid-session non-declaration must not demote a known terminal to the 80×24 floor (audit 081).</td></tr>
+<tr><td><code>handleWindowChange(WindowChangeMsg $msg, Session $session): void</code></td><td>Apply a peer&#039;s window change. A zero in either dimension means the sender declared nothing for it, and the current size is KEPT — the pty-req leg already resolved the session/default fallback once, and a mid-session non-declaration must not demote a known terminal to the 80×24 floor.</td></tr>
 <tr><td><code>handleShell(ShellMsg $msg, Session $session): void</code></td><td></td></tr>
 <tr><td><code>handleExec(ExecMsg $msg, Session $session): void</code></td><td></td></tr>
 <tr><td><code>execAllowed(Session $session, array $argv): bool</code></td><td>May this decoded request be spawned?</td></tr>
@@ -364,7 +364,6 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>handle(Context $ctx, Session $session): void</code></td><td></td></tr>
-<tr><td><code>wasCalled(): bool</code></td><td>{@internal Test-only visibility accessor — exists only so the suite can observe invocation; production callers must not wire against a quarantined stub (audit 050). Delete it when a real subsystem lands, per the class&#039;s QUARANTINED note.}</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-sshserver-middleware-subsystem-subsystemhandler"><code>SubsystemHandler</code> <small>interface</small></h4>

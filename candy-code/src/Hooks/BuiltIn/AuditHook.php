@@ -16,7 +16,7 @@ use SugarCraft\Code\Support\HomeDirectory;
 /**
  * One appended line per finished tool call: when, which session, which tool,
  * what it was given, and the first 200 bytes of what it produced — plus, since
- * audit F-H2, one line per call the engine REFUSED ({@see recordDenial()}) and
+ * one line per call the engine REFUSED ({@see recordDenial()}) and
  * per output a PostToolUse hook WITHHELD ({@see recordWithheld()}).
  *
  * The three line shapes share one prefix, and the separator after the input
@@ -426,7 +426,7 @@ final class AuditHook implements HookInterface
 
     /**
      * Record that a `PostToolUse` hook withheld a call's output from the model
-     * (audit F-H1), answering whether the line was written.
+     *, answering whether the line was written.
      *
      * The call RAN, and this is its ONLY record: the chain returned at the
      * refusing hook, before reaching this one (see the class note, audit R7),

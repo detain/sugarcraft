@@ -1711,7 +1711,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
 
     /**
      * Startup reaper for private IPC directories whose owning processes are
-     * all gone (audit BG-2), returning how many directories were removed.
+     * all gone, returning how many directories were removed.
      *
      * A background daemon is DESIGNED to outlive the TUI that spawned it, so
      * when that TUI exits first nobody is left to run {@see releaseIpcFiles()}
@@ -2091,7 +2091,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
     // =========================================================================
 
     /**
-     * Stop a running background session — `/bg stop <id>` (audit BG-1).
+     * Stop a running background session — `/bg stop <id>`.
      *
      * The daemon has always understood `STOP`, but nothing sent it: a `/bg`
      * task ran to its timeout (an hour by default, in whatever permission mode
