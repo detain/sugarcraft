@@ -49,8 +49,8 @@ $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
 ```
 
 `solve()` returns one positioned `Region` per constraint, in list order —
-output `x`/`y` are offsets **inside the input region**, so each returned box
-can be painted directly. The input may itself be a sub-area: pass
+output `x`/`y` are absolute cell coordinates. The input region's origin is
+already included, so paint each returned box at its `x`/`y` as it is. The input may itself be a sub-area: pass
 `new Region($x, $y, $w, $h)` (say, a span inset by borders) and the walk
 places panes within it. The constraint array must be a **list**: `solve()`
 refuses keyed or sparse arrays at the boundary with `InvalidArgumentException`

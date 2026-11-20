@@ -158,6 +158,7 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#constraint-tour">Constraint tour</a></li>
             <li class="toc-h3"><a href="#how-it-works">How it works</a></li>
             <li class="toc-h3"><a href="#choosing-a-layout-strategy">Choosing a layout strategy</a></li>
             <li class="toc-h3"><a href="#tasks">Tasks</a></li>
@@ -186,14 +187,20 @@
     <p>Requires PHP 8.3 or newer. The package has no runtime dependencies.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <p>A classic two-pane sidebar: a fixed-width rail and a content pane that takes whatever width is left. The runnable walk ships as <code>examples/sidebar.php</code>.</p>
+    <p>A classic two-pane sidebar: a fixed-width rail and a content pane that takes whatever width is left. The runnable walk ships as <code>examples/sidebar.php</code>, which runs this split at widths 100 and 10, then a four-pane mix.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\{Direction, GreedySolver, Region};
 
 $solver = GreedySolver::new();
-$region = Region::fromSize(100, 24);
 
-// The widths in the comments are what this 100-cell split returns.
+$rects = $solver-&gt;solve(Region::fromSize(100, 20), Direction::Horizontal, [
+    Constraint::length(24),   // sidebar: 24 cells
+    Constraint::fill(1),      // content: the 76 cells left
+]);</code></pre>
+    <h3 id="constraint-tour" style="margin-top: 24px;">Constraint tour</h3>
+    <p>One 100-cell row with every constraint type. This block is a tour, not a script: no file under <code>examples/</code> runs it, and the widths in its comments are what the solver returns for it.</p>
+    <pre class="code"><code class="language-php">$region = Region::fromSize(100, 20);
+
 $rects = $solver-&gt;solve($region, Direction::Horizontal, [
     Constraint::length(20),       // 20: exactly 20 cells
     Constraint::min(10),          // 10: a floor; the Fills below take the slack
@@ -209,7 +216,7 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
     Constraint::max(15),          // 15: clamped at its ceiling
     Constraint::fill(1),          // 65: everything Max did not take
 ]);</code></pre>
-    <p><code>solve()</code> returns one positioned <code>Region</code> per constraint, in list order. The <code>x</code> and <code>y</code> offsets are relative to the input region, so each box can be painted directly.</p>
+    <p><code>solve()</code> returns one positioned <code>Region</code> per constraint, in list order. The <code>x</code> and <code>y</code> offsets are absolute cell coordinates: the input region's origin is already included, so a region at x=5 returns its first box at x=5. Paint each box at its returned <code>x</code> and <code>y</code> without adding the origin again.</p>
 
     <h3 id="how-it-works" style="margin-top: 32px;">How it works</h3>
     <p>Each solve is a pure function of the region, the direction and the constraint list. The solver keeps no state between calls, so re-solving on every <code>WindowSizeMsg</code> is the intended pattern. The package places boxes in whole terminal cells and never measures text; sizing a string with CJK, emoji or combining marks is the caller's job, and <code>sugar-core</code>'s <code>Width::of()</code> answers it.</p>
@@ -318,7 +325,7 @@ foreach ($geometry-&gt;dividerColumns() as $divider) {
 
     <h3 id="examples" style="margin-top: 40px;">Examples</h3>
     <ul>
-      <li><code>examples/sidebar.php</code>: the horizontal quickstart walk, with a fixed rail, an elastic content pane, and a crushed frame.</li>
+      <li><code>examples/sidebar.php</code>: the horizontal two-pane walk, with a fixed rail, an elastic content pane, a crushed frame at width 10, and a four-pane mix.</li>
       <li><code>examples/vertical.php</code>: the same walk on <code>Direction::Vertical</code>, where a cell is one text row.</li>
       <li><code>examples/dock.php</code>: the <code>Dock\*</code> surface, with a center pane, weighted side stacks, and the small-frame ladder that drops sides instead of throwing.</li>
     </ul>
