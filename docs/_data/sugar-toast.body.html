@@ -77,7 +77,7 @@ $toast = Toast::new(50)
 $toast-&gt;view($background, 80, 24);
 
 // On a click at a frame cell, $col and $row come from the host's mouse event.
-$hit = $toast-&gt;actionAt(col: 4, row: 1);
+$hit = $toast-&gt;actionAt(col: 4, row: 2);
 if ($hit !== null) {
     ($hit-&gt;callback)();
 }</code></pre>

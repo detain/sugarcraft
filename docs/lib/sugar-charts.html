@@ -161,9 +161,11 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#per-point-and-per-bar-colors">Per-point and per-bar colors</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
             <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
@@ -214,6 +216,9 @@ echo BarChart::new(
 
 echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A chart holds its data, width and height, and <code>view()</code> returns the rendered text without writing to the terminal. The grid renderers (LineChart, Heatmap, Scatter, OHLCChart and Waveline) draw onto a <code>Canvas</code> of cells, each holding a rune and a <code>Style</code>, and the canvas is flattened to text on <code>view()</code>. Sparkline builds on sugar-cellbuffer, and Picture emits raw protocol bytes rather than cells. Colors come from the theme and the resolver closures, and the environment color ladder applies to every text renderer.</p>
+
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Canvas</strong><span>Fixed cell grid with per-cell runes and sugar-style <code>Style</code>. Foundation for the grid renderers (LineChart, Heatmap, Scatter, OHLCChart, Waveline); Sparkline builds on sugar-cellbuffer and Picture emits raw protocol bytes.</span></div>
@@ -261,6 +266,29 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <p><strong>Label each bar with its value.</strong></p>
+    <pre class="code"><code class="language-php">use SugarCraft\Charts\BarChart\BarChart;
+
+echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
+    -&gt;withDataLabels()
+    -&gt;view() . PHP_EOL;</code></pre>
+
+    <p><strong>Plot a second named series with a legend.</strong></p>
+    <pre class="code"><code class="language-php">use SugarCraft\Charts\LineChart\LineChart;
+
+echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)
+    -&gt;withDataset('p95', [2, 3, 5, 6, 7, 4, 3])
+    -&gt;withLegend()
+    -&gt;view() . PHP_EOL;</code></pre>
+
+    <p><strong>Show a heatmap with its legend strip.</strong></p>
+    <pre class="code"><code class="language-php">use SugarCraft\Charts\Heatmap\Heatmap;
+
+echo Heatmap::new([[0, 1, 2], [3, 4, 5]], 6, 2)
+    -&gt;withLegend()
+    -&gt;view() . PHP_EOL;</code></pre>
+
     <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
@@ -301,7 +329,7 @@ Full guidance: <a href="https://github.com/sugarcraft/sugar-charts#accessibility
 </table>
 
     <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
-    <p>The charts take no keystrokes, and LineChart has no mouse hit-testing yet. The one input that is read from the environment is <code>Picture::detect()</code>. It routes on <code>TERM</code> and <code>TERM_PROGRAM</code>, and it declines under tmux and Zellij unless <code>CHARTS_PICTURE_PASSTHROUGH=1</code> is set. It is a best-effort sniff of the environment, not a terminal query.</p>
+    <p>The charts take no keystrokes, and LineChart has no mouse hit-testing yet. Apart from the color ladder under Theming, the one input read from the environment is <code>Picture::detect()</code>. It routes on <code>TERM</code> and <code>TERM_PROGRAM</code>, and it declines under tmux and Zellij unless <code>CHARTS_PICTURE_PASSTHROUGH=1</code> is set. It is a best-effort sniff of the environment, not a terminal query.</p>
 
     <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
     <p>A chart takes its palette from <code>withTheme()</code>, which reads a sugar-style <code>Theme</code>. <code>Theme::ansi()</code> keeps the 16-color tier, which suits low-vision setups. Per-point and per-bar colors come from resolver closures, <code>withSeriesColorFn()</code> and <code>withBarColor()</code>. A resolver that returns <code>null</code> keeps the default color. The environment ladder applies to every text renderer: <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> beat <code>NO_COLOR</code>, which beats <code>CLICOLOR=0</code>. Under <code>NO_COLOR</code>, the output comes back free of SGR. Image payloads are the exception, because the escapes are the image.</p>

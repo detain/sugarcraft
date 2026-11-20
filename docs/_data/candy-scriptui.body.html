@@ -29,6 +29,9 @@ candy-scriptui spin --title "Building..." -- make build
 # Filter a list (substring by default; --fuzzy for fuzzy matching).
 git branch | candy-scriptui filter</code></pre>
 
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The binary is one entry point with one subcommand per job. Each subcommand reads its input from argv or stdin, prints its result to stdout, and reports the outcome through its exit code, so the parts compose in a shell pipeline. <code>style</code>, <code>format</code>, <code>table</code> and <code>join</code> print and exit. The interactive commands draw their frame on the terminal, and when stdout is redirected the frame goes to STDERR, so the selection on stdout stays clean. Keys always come from the terminal, never from a pipe. The exit codes are the contract: 0 on success, 1 when the user aborts with Esc (except in <code>pager</code>), 130 on Ctrl+C, 124 on a <code>--timeout</code> deadline, and 128 plus the signal number on an OS signal.</p>
+
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>style</strong><span>Apply ANSI styling to argv (or stdin) and print.</span></div>
@@ -89,6 +92,23 @@ $app = new Application();
 $app-&gt;scan('My\Commands');
 $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code></pre>
 
+    <h3 style="margin-top: 40px;">Tasks</h3>
+    <p><strong>Branch on an abort.</strong> A cancelled <code>choose</code> exits 1, so the script can tell a pick from a cancel.</p>
+    <pre class="code"><code class="language-shell">if ! choice=$(candy-scriptui choose Pizza Burger Salad); then
+  echo "nothing selected" &gt;&amp;2
+  exit 1
+fi</code></pre>
+
+    <p><strong>Bound a pipeline with a timeout.</strong> <code>--timeout</code> aborts after N seconds with exit 124, so an unattended run cannot wait forever.</p>
+    <pre class="code"><code class="language-shell">git branch | candy-scriptui filter --fuzzy --timeout 30</code></pre>
+
+    <p><strong>Run a build under a spinner and keep its exit code.</strong> <code>spin</code> forwards the child's own exit code.</p>
+    <pre class="code"><code class="language-shell">candy-scriptui spin --title "Building..." -- make build
+echo "make exited $?"</code></pre>
+
+    <p><strong>Render a CSV report as a bordered table.</strong> <code>--has-header</code> treats the first row as the header.</p>
+    <pre class="code"><code class="language-shell">candy-scriptui table --has-header &lt; report.csv</code></pre>
+
     <h3 style="margin-top: 40px;">API reference: attributes and discovery</h3>
     <table class="api-table">
     <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
@@ -97,6 +117,15 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
     <tr><td><code>ValueEnum</code></td><td><code>SugarCraft\ScriptUi\Attribute\ValueEnum</code></td><td>Constrained enum for flag values</td></tr>
     <tr><td><code>CommandScanner</code></td><td><code>SugarCraft\ScriptUi\Discovery\CommandScanner</code></td><td>Namespace scanner for #[Command] classes</td></tr>
     <tr><td><code>Application::scan()</code></td><td><code>SugarCraft\ScriptUi\Application</code></td><td>Opt-in discovery method</td></tr>
+    <tr><td><code>ChooseCommand</code></td><td><code>SugarCraft\ScriptUi\Command\ChooseCommand</code></td><td>The <code>choose</code> subcommand; prints the pick and exits 1 on abort</td></tr>
+    <tr><td><code>ChooseModel</code></td><td><code>SugarCraft\ScriptUi\Model\ChooseModel</code></td><td>Single and multi-select list state behind <code>choose</code></td></tr>
+    <tr><td><code>FilterCommand</code></td><td><code>SugarCraft\ScriptUi\Command\FilterCommand</code></td><td>The <code>filter</code> subcommand; reads stdin lines and submits the highlighted match</td></tr>
+    <tr><td><code>FilterModel</code></td><td><code>SugarCraft\ScriptUi\Model\FilterModel</code></td><td>Filter-mode state; substring matching, or Smith-Waterman scoring with <code>--fuzzy</code></td></tr>
+    <tr><td><code>SpinCommand</code></td><td><code>SugarCraft\ScriptUi\Command\SpinCommand</code></td><td>The <code>spin</code> subcommand; runs a child under a spinner and forwards its exit code</td></tr>
+    <tr><td><code>FormatCommand</code></td><td><code>SugarCraft\ScriptUi\Command\FormatCommand</code></td><td>The <code>format</code> subcommand; renders Markdown through SugarMarkdown</td></tr>
+    <tr><td><code>TableCommand</code></td><td><code>SugarCraft\ScriptUi\Command\TableCommand</code></td><td>The <code>table</code> subcommand; renders CSV or TSV with a border</td></tr>
+    <tr><td><code>RealProcess</code></td><td><code>SugarCraft\ScriptUi\Process\RealProcess</code></td><td>Non-PTY child handle; owns spawn, drain, signal and reap</td></tr>
+    <tr><td><code>InteractiveRuntime</code></td><td><code>SugarCraft\ScriptUi\Runtime\InteractiveRuntime</code></td><td>Single launch point for every interactive run; keys stay on the terminal</td></tr>
     </table>
 
     <h3 style="margin-top: 40px;">Enhanced help</h3>

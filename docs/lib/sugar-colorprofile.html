@@ -156,9 +156,11 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#detection-phases">Detection phases</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
             <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
@@ -209,6 +211,9 @@ $ansi = (new Palette())-&gt;withProfile(ColorProfile::Ansi256)
 // Or wrap a stream and let it degrade (or strip, under NoTTY) on write
 ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</code></pre>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A color profile is the richest color an output stream can carry: TrueColor, Ansi256, Ansi, Ascii or NoTTY. Detection picks one of them from the environment, and degradation only goes down. A TrueColor value is rewritten to the nearest color the chosen profile can show, and nothing is ever raised to a richer profile. Ascii drops the color and keeps decoration such as bold and underline. NoTTY strips every escape, so use it for streams that are not terminals.</p>
+
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Profile detection</strong><span>One canonical 14-step ladder every surface shares, override-first: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> outrank every later leg (a falsy <code>FORCE_COLOR</code> spelling lands on the <code>Ascii</code> floor). Suppressors come next: <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) turn color off — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities. Advertised depth follows: <code>COLORTERM</code> (<code>24bit</code>/<code>truecolor</code>, plus the legacy marker <code>yes</code>, which the ladder reads as a 256-color promise, not a 24-bit one), <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code> (exactly <code>true</code> grants TrueColor; any other value, <code>false</code> and <code>1</code> included, carries no 24-bit promise), the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade (a fixed-path binary, run with a minimal child environment). The detection ladder emits five levels (TrueColor, Ansi256, Ansi, Ascii and NoTTY), and the <code>ColorProfile</code> enum that carries the result has eight.</span></div>
@@ -238,6 +243,27 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <p><strong>Pin the profile for a test or a CI log.</strong> A non-empty <code>$env</code> replaces the ambient environment, so the answer is the same on every host.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\Palette;
+
+$profile = Palette::detect(STDOUT, ['FORCE_COLOR' =&gt; '2']);
+echo $profile-&gt;label();   // ANSI 256</code></pre>
+
+    <p><strong>Strip the color and keep the decoration.</strong> Pin the Ascii floor and run the string through <code>degrade()</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\{ColorProfile, Palette};
+
+$plain = (new Palette())
+    -&gt;withProfile(ColorProfile::Ascii)
+    -&gt;degrade("\x1b[1;38;2;255;0;0mERROR\x1b[0m");
+// "\x1b[1mERROR\x1b[0m": the bold stays and the color goes</code></pre>
+
+    <p><strong>Pin one stream to a rung.</strong> <code>ProfileWriter::wrap()</code> takes the same environment array, so every write to the stream degrades to that rung.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\ProfileWriter;
+
+$writer = ProfileWriter::wrap(STDOUT, ['FORCE_COLOR' =&gt; '1']);
+$writer-&gt;write("\x1b[38;2;255;0;0mdisk low\x1b[0m\n");   // written with the ANSI red, \x1b[91m</code></pre>
 
     <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
@@ -271,7 +297,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 <table class="api-table">
 <tr><th>Env var</th><th>Step</th><th>Effect</th></tr>
 <tr><td><code>CLICOLOR_FORCE=1</code></td><td>1</td><td>Forces TrueColor past every other variable, <code>NO_COLOR</code> included. It also keeps the forced rung on a non-TTY stream.</td></tr>
-<tr><td><code>FORCE_COLOR</code></td><td>2</td><td>Sets the level: <code>3</code> or more gives TrueColor, <code>2</code> gives Ansi256, <code>1</code> gives Ansi. Any other spelling, such as <code>0</code> or <code>false</code>, lands on the Ascii floor.</td></tr>
+<tr><td><code>FORCE_COLOR</code></td><td>2</td><td>Sets the level: <code>3</code> or more gives TrueColor, and so do <code>true</code>, <code>yes</code> and <code>on</code>. <code>2</code> gives Ansi256, <code>1</code> gives Ansi. Any other spelling, such as <code>0</code> or <code>false</code>, lands on the Ascii floor.</td></tr>
 <tr><td><code>NO_COLOR</code></td><td>3</td><td>A non-empty value gives the colorless Ascii rung. Color codes are dropped, and decoration such as bold and underline is kept.</td></tr>
 <tr><td><code>CLICOLOR=0</code></td><td>4</td><td>Suppresses color.</td></tr>
 <tr><td><code>TERM=dumb</code></td><td>5</td><td>Suppresses color. It outranks <code>COLORTERM</code>.</td></tr>
@@ -375,7 +401,7 @@ vendor/bin/phpunit</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/degrade.gif" alt="One TrueColor string written through a ProfileWriter on each rung, escapes shrinking per row" onerror="this.parentElement.style.display='none'">
                 <h3 id="degrade">Degrade</h3>
-                <span class="demo-caption">Same input written per rung: <code>38;2</code> → <code>38;5</code> → <code>91</code> → <code>97</code>; the No TTY row prints <code>[Orange] [Teal] [Purple]</code> with no escapes.</span>
+                <span class="demo-caption">Same input written per rung: <code>38;2</code> → <code>38;5</code> → <code>91</code>; the Ascii row drops the color codes, and the No TTY row prints <code>[Orange] [Teal] [Purple]</code> with no escapes.</span>
             </div>
         </div>
     </div>
