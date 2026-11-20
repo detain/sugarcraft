@@ -418,7 +418,7 @@ final class CompactionService
 
     /**
      * The wire a {@see ContextCompactor} is handed: $history's AGENT-VISIBLE
-     * rows only (audit 15b-03-rem(a)).
+     * rows only.
      *
      * Compaction exists to shrink what the model is sent, and a UI-only row -
      * a command echo and its output, a queued or refused notice, a launch,

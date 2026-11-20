@@ -871,7 +871,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
-     * Audit 15b-35: the served model this provider adopts, for the TUI's
+     * The served model this provider adopts, for the TUI's
      * labels - read from what {@see serverInfo()} has ALREADY memoised (the
      * parent's first frame normally loads it, via {@see contextWindow()}),
      * else from what a forked turn child reported ({@see noteServedModel()}).
@@ -899,7 +899,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
-     * Audit 15b-35: remember the served name a forked turn child discovered,
+     * Remember the served name a forked turn child discovered,
      * so the parent's labels can show it. Kept apart from the `info` memo on
      * purpose: it is a label fact, and it neither marks discovery as done nor
      * changes what {@see addressedToServedModel()} sends.
@@ -1045,7 +1045,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
-     * Audit 15b-15: whether an attached image may go out as an `image_url`
+     * Whether an attached image may go out as an `image_url`
      * part. The provider block's `supportsVision` wins when set; otherwise the
      * SERVER answers - `/model_info`'s `has_image_understanding`, read by the
      * same memoised discovery as the context window - and a server that did

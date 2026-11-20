@@ -11,7 +11,7 @@ use SugarCraft\Code\Chat;
 /**
  * Internal Msg carrying the verdicts of a turn's `UserPromptSubmit` (and, on a
  * session's first prompt, `SessionStart`) hook chain back from the forked child
- * that ran it (audit 15b-04).
+ * that ran it.
  *
  * WHY THE CHAIN RUNS OFF update(): a {@see \SugarCraft\Code\Hooks\ScriptHook} is a blocking
  * `proc_open()` drain bounded at 60 s per hook, and it used to run inside

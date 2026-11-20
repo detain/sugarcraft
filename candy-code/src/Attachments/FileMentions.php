@@ -10,7 +10,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Image\ImageSource;
 
 /**
- * `@file` mentions in a prompt (audit 15b-15): finding them, turning them into
+ * `@file` mentions in a prompt: finding them, turning them into
  * attachments, and completing a half-typed one.
  *
  * A mention is `@` at the start of the prompt or after whitespace, followed by

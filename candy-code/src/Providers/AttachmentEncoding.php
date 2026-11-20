@@ -11,7 +11,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Messages\UserMessage;
 
 /**
- * The per-wire shapes of a user turn that carries attachments (audit 15b-15).
+ * The per-wire shapes of a user turn that carries attachments.
  *
  * ONE definition per wire family, shared by every provider speaking it, so the
  * OpenAI-compatible three (OpenAI, SGLang, Custom) cannot drift apart on what a

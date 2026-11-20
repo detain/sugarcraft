@@ -10647,7 +10647,7 @@ final class Chat implements Model
 
     /**
      * Run a command line on the user's behalf — a menu-bar row, Ctrl+N,
-     * the shell's provider picker — WITHOUT touching the draft (audit 15b-05).
+     * the shell's provider picker — WITHOUT touching the draft.
      *
      * WHY THIS EXISTS. The shell used to run these by feeding synthetic
      * keystrokes into {@see update()}: Backspace/Delete until the box was
@@ -17861,7 +17861,7 @@ final class Chat implements Model
 
     /**
      * Whether a bare Tab completes an `@file` mention — or a `$skill` one
-     * (roadmap 5.14l) — rather than cycling panes (audit 15b-15): the caret
+     * (roadmap 5.14l) — rather than cycling panes: the caret
      * ends such a token in the draft and no modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
      * the reason its docblock gives - a shell that yields Tab on a condition
      * update() does not answer turns Tab into a dead key.

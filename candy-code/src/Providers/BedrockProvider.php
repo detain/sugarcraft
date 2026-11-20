@@ -421,7 +421,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     }
 
     /**
-     * Audit 15b-15: whether Converse may be sent this model an `image` block
+     * Whether Converse may be sent this model an `image` block
      * ({@see AttachmentEncoding::bedrockBlocks()}). Every Claude from the 3
      * generation on reads images, as do Nova Lite/Pro/Premier; Claude 2,
      * Instant, Nova Micro and the text-only families do not, and a Converse
