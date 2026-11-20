@@ -29,21 +29,23 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    alone, never the content: a path already on the ledger is not quarantined
  *    again when its bytes change. So a rewrite of such a path loads between
  *    launches without a quarantine stop, and who can make one depends on how it
- *    is written. The private-bytes gate refuses world write and, with ext-posix,
- *    a foreign owner. An in-place write by another account needs group write on
- *    the file itself, since the owner stays the same. A replace-by-rename by
- *    another account creates a file that account owns, which ext-posix refuses;
- *    it loads only without ext-posix, and only from a directory another account
- *    can write (group-writable, or owned by that account).
+ *    is written. The private-bytes gate refuses world write and, whenever a uid
+ *    is known (an explicit processUid, or ext-posix), a foreign owner. An
+ *    in-place write by another account needs group write on the file itself,
+ *    since the owner stays the same. A replace-by-rename by another account
+ *    creates a file that account owns, which the owner check refuses when a uid
+ *    is known; it loads only when none is, and only from a directory another
+ *    account can write (group-writable, or owned by that account).
  *    A rewrite by the file's own uid loads everywhere. This is an open gap,
  *    carried over from the original loader and not closed here.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
  *    its parent directory must not be writable by the world (the same gate
- *    candy-code applies; group write is accepted), and, when the posix extension
- *    is available, must be owned by this process. Without ext-posix the owner
- *    check is skipped and only the world-write check runs, so a file owned by
- *    another account loads as long as it is not world-writable. That policy gap
- *    is open.
+ *    candy-code applies; group write is accepted), and must be owned by the uid
+ *    the loader is given: its processUid, else this process's effective uid when
+ *    the posix extension is available. With neither there is no uid to compare
+ *    against, so the owner check is skipped and only the world-write check runs,
+ *    and a file owned by another account loads as long as it is not
+ *    world-writable. That policy gap is open.
  *
  * The loader ANSWERS; it never announces. Every entry lands in exactly one
  * bucket (see {@see LoadResult}). A file that throws at require time is refused

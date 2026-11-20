@@ -12,8 +12,9 @@ namespace SugarCraft\Plugins\Trust;
  * that can rewrite the file or its directory could swap the code under a
  * trusted name, so both are checked before every require. A world-writable
  * file or directory is refused, and so is one owned by another uid. Group write
- * is accepted, matching candy-code's refuseLooseBytes. The owner check needs a
- * uid to compare against, so it is skipped when ext-posix is absent.
+ * is accepted, matching candy-code's refuseLooseBytes. The owner check compares
+ * against the uid the caller passes, else the process's effective uid under
+ * ext-posix. With neither there is no uid to compare against, so it is skipped.
  */
 final class PrivateBytes
 {
