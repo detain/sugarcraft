@@ -60,10 +60,14 @@ final class LspConnectionShutdownTest extends TestCase
 
     /**
      * Sits between the 0.010s a pipe-closing teardown measures and the 1.0s
-     * grace a non-closing one pays in full. Half the grace, so neither a loaded
-     * box nor a regression is ambiguous.
+     * grace a non-closing one pays in full. The regression path cannot finish
+     * before that grace (the reaper waits the whole TERM window before signal
+     * 9), so any bound under the grace still catches it whatever the load. The
+     * bound sits just under the grace: 0.5s was red on a loaded shard at 0.56s
+     * and 0.67s (load average 57 and 66) while the same test measures 0.010s on
+     * an idle box.
      */
-    private const EOF_EXIT_BOUND_SECONDS = 0.5;
+    private const EOF_EXIT_BOUND_SECONDS = 0.9;
 
     /**
      * Under one pipe buffer (64 KiB on this host). The control volume: a server
