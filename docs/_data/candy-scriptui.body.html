@@ -47,7 +47,7 @@ git branch | candy-scriptui filter</code></pre>
       <div class="feature"><strong>version</strong><span>Print the version — phar metadata first, then the composer.json ladder, then a dev fallback.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Keyboard &amp; color</h3>
+    <h3 style="margin-top: 32px;">Keys and input</h3>
     <p>Every interactive command is keyboard-driven — the README carries the full
     key map (arrows and Enter navigate; <code>j</code>/<code>k</code> and
     <code>g</code>/<code>G</code> move and jump in lists, the vim style applies
@@ -89,7 +89,7 @@ $app = new Application();
 $app-&gt;scan('My\Commands');
 $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code></pre>
 
-    <h3 style="margin-top: 40px;">New attribute types</h3>
+    <h3 style="margin-top: 40px;">API reference: attributes and discovery</h3>
     <table class="api-table">
     <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
     <tr><td><code>Command</code></td><td><code>SugarCraft\ScriptUi\Attribute\Command</code></td><td>#[Attribute] for auto-registering commands</td></tr>
@@ -122,6 +122,69 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
     <tr><td><code>Application::versionFromComposer()</code></td><td><code>SugarCraft\ScriptUi\Application</code></td><td>Version ladder: phar metadata first, then the nearest ancestor composer.json with a non-empty version, else a dev fallback</td></tr>
     </table>
     <p>candy-scriptui also reads <code>CANDY_SCRIPTUI_*</code> env fallbacks through a fail-closed allow-list of eighteen presentation option names — <code>CANDY_SCRIPTUI_&lt;OPTION&gt;</code> in uppercase arms that option when no explicit CLI flag is given, and names outside the list are ignored. Every option that answers for the user, grants capability, or redirects data is excluded by construction — <code>allow-env</code>, <code>default</code>, <code>file</code>, <code>out</code>, <code>value</code>, <code>selected</code>, <code>type</code>, <code>shell</code>, <code>password</code> — so a hostile environment can never retarget a sink or weaken a fail-closed flag. The roster is pinned in <code>EnvVarFallbackTest</code>. That exclusion is the lesson of the old universal option↔env mapping, where <code>CANDY_SCRIPTUI_ALLOW_ENV='*'</code> could arm <code>format --type template</code> to exfiltrate the whole environment and <code>CANDY_SCRIPTUI_DEFAULT=yes</code> silently answered <code>confirm</code>; both names now sit outside the allow-list and are ignored with no notice.</p>
+
+    <h3 style="margin-top: 40px;">Configuration and options</h3>
+    <p>Each subcommand takes its own flags, and <code>candy-scriptui &lt;command&gt; --help</code> lists them. These are the options that shape every command.</p>
+<table class="api-table">
+<tr><th>Option or variable</th><th>Scope</th><th>Effect</th></tr>
+<tr><td><code>--ansi</code> / <code>--no-ansi</code></td><td>Every command</td><td><code>--no-ansi</code> is final. <code>--ansi</code> outranks every environment rule.</td></tr>
+<tr><td><code>--timeout</code></td><td>Interactive commands, <code>spin</code></td><td>Gives up after the deadline and exits <code>124</code>. A malformed value exits <code>1</code>; it is never read as "no deadline".</td></tr>
+<tr><td><code>--show-output</code> / <code>--show-error</code></td><td><code>spin</code></td><td>Flushes the child's captured output, including after a timeout.</td></tr>
+<tr><td><code>FORCE_COLOR</code>, <code>CLICOLOR_FORCE</code>, <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>TERM=dumb</code></td><td>Every command</td><td>Color ladder, resolved in that order. The README's Environment section has the full table.</td></tr>
+<tr><td><code>CANDY_SCRIPTUI_&lt;OPTION&gt;</code></td><td>Presentation options</td><td>Fallback for one of eighteen allow-listed options. It applies only when no CLI flag is given. Names outside the list are ignored, and options that grant capability or redirect data are never read from the environment.</td></tr>
+<tr><td><code>CANDY_SCRIPTUI_NO_DECORATION</code></td><td>Every command</td><td>Strips decoration from the output.</td></tr>
+<tr><td><code>GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;</code></td><td>Mirror for gum scripts</td><td>A read-only, allow-listed mirror that lets an existing <code>gum</code> script keep its theming.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Theming and styling</h3>
+    <p><code>style</code> applies ANSI attributes to its arguments or to stdin, and takes <code>--foreground</code>, <code>--background</code> and <code>--bold</code>. <code>format</code> accepts the same color flags, and also <code>--code</code>. The color tier is derived from <code>TERM</code>, so the palette follows the depth the terminal advertises. <code>CANDY_SCRIPTUI_NO_DECORATION</code> strips the decoration when a script needs plain output. The color contract above applies to every command.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/cli.php</code> builds an <code>Application</code> in-process, adds one custom <code>status</code> command, and runs the argv through it. <code>php examples/cli.php status</code> prints <code>OK</code> and exits <code>0</code>. <code>php examples/cli.php stat</code> exits <code>1</code> with the typo suggestion <code>Did you mean "status"?</code>.</li>
+      <li><code>examples/setup-script.sh</code> is an interactive shell script. It chooses a shell flavor, confirms it, and branches on the confirm exit code. It uses a <code>candy-scriptui</code> on the <code>PATH</code> when one is present, and otherwise this checkout's <code>bin/</code>. Run it from a terminal.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/cli.php status
+./examples/setup-script.sh</code></pre>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite covers the commands, the model logic and the runtime. <code>BinExitCodeTest</code> pins the exit codes through the real binary, and <code>GumEnvMirrorTest</code> covers the <code>GUM_*</code> mirror. <code>EnvVarFallbackTest</code> covers the <code>CANDY_SCRIPTUI_*</code> allow-list. <code>PharBuildScriptTest</code> checks the phar build, and <code>LocaleParityTest</code> checks the catalogs.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 style="margin-top: 24px;">An interactive command exits 1 with a notice on STDERR</h3>
+    <p>It has no usable controlling terminal. <code>choose</code>, <code>confirm</code>, <code>filter</code>, <code>input</code>, <code>write</code>, <code>file</code> and <code>pager</code> refuse up front rather than paint a fake session. Run them from a terminal, or give them input and output that a terminal can reach.</p>
+
+    <h3 style="margin-top: 24px;">The captured output contains the interactive frame</h3>
+    <p>It should not. When stdout is redirected, painting goes to STDERR, and only the answer goes to stdout. Quote every capture, and never <code>eval</code> the output of a third-party script.</p>
+
+    <h3 style="margin-top: 24px;">A script cannot tell a timeout from the child's own exit code</h3>
+    <p><code>spin</code> forwards the child's exit code verbatim, the same as <code>gum</code>. A child that exits <code>2</code>, <code>124</code>, <code>130</code> or <code>143</code> looks the same as a timeout or an interrupt. Gate on the child's success (<code>0</code>) rather than on a specific non-zero code.</p>
+
+    <h3 style="margin-top: 24px;">A discovered command is not found</h3>
+    <p><code>Application::scan()</code> registers only the classes that are already loaded. Call <code>class_exists()</code> on each class first, as the auto-discovery example does.</p>
+
+    <h3 style="margin-top: 24px;">An environment fallback has no effect</h3>
+    <p>The fallback applies only to allow-listed options, and only when no CLI flag is given for that option. Check the name against the eighteen-option list, and check that the flag is absent from the command line.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>candy-scriptui follows the command set and the exit-code conventions of <a href="https://github.com/charmbracelet/gum">gum</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code.</p>
+<table class="api-table">
+<tr><th scope="col">gum</th><th scope="col">candy-scriptui</th><th scope="col">Notes</th></tr>
+<tr><td>choose, confirm, file, filter, input, write</td><td>Same subcommands</td><td>Interactive. They refuse without a terminal, and they keep keys off the data stream.</td></tr>
+<tr><td>format, join, log, pager, style, table</td><td>Same subcommands</td><td>Format adds <code>--code</code>. Pager adds <code>--hard-wrap</code> and <code>--fade</code>.</td></tr>
+<tr><td>spin</td><td><code>spin</code></td><td>Forwards the child's exit code. Runs the child through the <code>RealProcess</code> wrapper.</td></tr>
+<tr><td><code>GUM_*</code> environment</td><td><code>GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;</code> mirror</td><td>Read-only and allow-listed.</td></tr>
+<tr><td>Exit code <code>124</code> on <code>--timeout</code></td><td>Same</td><td>Matches GNU <code>timeout(1)</code>.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p><code>Application</code> is the Symfony Console shell. It adds <code>scan()</code>, <code>add()</code> and the version ladder. Each subcommand is one class in <code>Command/</code>. The interactive commands build a model from <code>Model/</code>, which holds the state of one screen, and they hand it to <code>Runtime/InteractiveRuntime</code>. That class is the single launch point for every interactive run. It keeps keys on the terminal and sends the frame to STDERR when stdout is redirected. <code>Process/RealProcess</code> runs the child for <code>spin</code>. <code>Discovery/CommandScanner</code> finds the <code>#[Command]</code> classes, and <code>Style/StyleBuilder</code> builds the styles. <code>Help/</code> and <code>Completion/</code> hold the help and completion generators, and <code>Lang</code> is the i18n facade.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The version comes from the phar metadata first, then from the nearest <code>composer.json</code> with a version, and finally from a dev fallback. The rolling phar is rebuilt for every commit that touches the app, so pin a sha256 sidecar if a script must stay on one build. The README's compatibility section covers the <code>gum</code> invocations.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
