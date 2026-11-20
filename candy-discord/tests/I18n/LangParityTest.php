@@ -80,6 +80,37 @@ final class LangParityTest extends TestCase
         }
     }
 
+    /**
+     * The attachment skip notice is read by the user without any other context,
+     * so each reason and the unnamed fallback must ride the locale's own words.
+     * Parity and placeholder checks cannot see an English value copied into a
+     * catalog, so this compares each non-English value with the English one.
+     */
+    /** @return array<string, array{string}> */
+    public static function nonEnglishLocaleProvider(): array
+    {
+        return \array_filter(self::localeProvider(), static fn (string $locale): bool => $locale !== 'en', \ARRAY_FILTER_USE_KEY);
+    }
+
+    #[DataProvider('nonEnglishLocaleProvider')]
+    public function testAttachmentSkipPathIsTranslatedOutOfEnglish(string $locale): void
+    {
+        $en = require self::LANG_DIR . '/en.php';
+        $translations = require self::LANG_DIR . "/{$locale}.php";
+
+        $untranslated = [];
+        foreach ($en as $key => $english) {
+            if (!\str_starts_with($key, self::PREFIX . 'attachments.reason.') && $key !== self::PREFIX . 'attachments.unnamed') {
+                continue;
+            }
+            if (($translations[$key] ?? $english) === $english) {
+                $untranslated[] = $key;
+            }
+        }
+
+        self::assertSame([], $untranslated, "lang/{$locale}.php carries English text for the attachment skip path");
+    }
+
     public function testEveryLiteralKeyAskedBySrcExistsInEnglish(): void
     {
         $en = require self::LANG_DIR . '/en.php';

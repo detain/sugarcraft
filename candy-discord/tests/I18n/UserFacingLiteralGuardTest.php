@@ -89,6 +89,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'array_push into $notes' => ["<?php\narray_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'fully qualified array_push into $notes' => ["<?php\n\\array_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
+        yield 'bare English under a qualified non-Lang class' => ["<?php\n\$notes[] = \\Other\\Formatter::t('Attachment dropped');\n", 2];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -98,6 +99,20 @@ final class UserFacingLiteralGuardTest extends TestCase
 
         self::assertCount(1, $hits, 'the guard must catch a bare English literal');
         self::assertStringStartsWith($line . ': ', $hits[0]);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function qualifiedLangCallFixtureProvider(): iterable
+    {
+        yield 'fully qualified Lang::t in $notes' => ["<?php\n\$notes[] = \\CandyCode\\Bundles\\Discord\\Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]);\n"];
+        yield 'namespace-qualified Lang::t in $notes' => ["<?php\n\$notes[] = Bundles\\Discord\\Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]);\n"];
+        yield 'fully qualified Lang::t as a send argument' => ["<?php\n\$this->rest->send(\$channelId, \\CandyCode\\Bundles\\Discord\\Lang::t('channels.discord.attachments.skipped', []), []);\n"];
+    }
+
+    #[DataProvider('qualifiedLangCallFixtureProvider')]
+    public function testQualifiedLangCallIsNotFlagged(string $fixture): void
+    {
+        self::assertSame([], self::bareEnglishInNotesOrSend($fixture));
     }
 
     public function testFixtureRoutedThroughLangOrAValueTestIsNotFlagged(): void
@@ -189,6 +204,25 @@ final class UserFacingLiteralGuardTest extends TestCase
             && \in_array($toks[$i - 2]['id'], [T_VARIABLE, T_STRING, ']', ')'], true);
     }
 
+    /**
+     * `Lang` written bare, or qualified (`\CandyCode\Bundles\Discord\Lang`): the
+     * lexer emits a name token rather than T_STRING for the qualified forms.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function isLangClass(array $toks, int $i): bool
+    {
+        if (!isset($toks[$i])) {
+            return false;
+        }
+        if ($toks[$i]['id'] === T_STRING) {
+            return $toks[$i]['text'] === 'Lang';
+        }
+
+        return \in_array($toks[$i]['id'], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+            && \preg_match('/(^|\\\\)Lang$/', $toks[$i]['text']) === 1;
+    }
+
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
     private static function is(array $toks, int $i, int|string $id, ?string $text = null): bool
     {
@@ -252,7 +286,7 @@ final class UserFacingLiteralGuardTest extends TestCase
         $hits = [];
         $depth = 0;
         for ($i = $from; $i < $to; ++$i) {
-            if (self::is($toks, $i, T_STRING, 'Lang') && self::is($toks, $i + 1, T_DOUBLE_COLON) && self::is($toks, $i + 2, T_STRING, 't') && self::is($toks, $i + 3, '(')) {
+            if (self::isLangClass($toks, $i) && self::is($toks, $i + 1, T_DOUBLE_COLON) && self::is($toks, $i + 2, T_STRING, 't') && self::is($toks, $i + 3, '(')) {
                 $i = self::closeIndex($toks, $i + 3);
 
                 continue;
