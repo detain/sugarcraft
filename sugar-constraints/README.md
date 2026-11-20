@@ -251,7 +251,7 @@ output unflagged in both modes.
 ## Integration and performance
 
 The solver is stateless — nothing to cache, and re-solving on every
-`ResizeMsg` is the intended pattern (and what sugar-panels and candy-code's
+`WindowSizeMsg` is the intended pattern (and what sugar-panels and candy-code's
 Dock do). Measured envelope (2026-11, PHP 8.3.6 dev box, CLI): ~0.01 ms for
 the six-constraint quickstart, ~0.15 ms for a dashboard-sized frame of ~210
 constraints, and linear growth to 100k constraints (~95 ms for one solve) —

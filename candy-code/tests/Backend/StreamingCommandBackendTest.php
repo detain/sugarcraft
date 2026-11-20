@@ -12,6 +12,21 @@ use PHPUnit\Framework\TestCase;
 
 final class StreamingCommandBackendTest extends TestCase
 {
+    /**
+     * An empty string command is a no-op on both arms, as CommandBackend makes
+     * it. Before the guard, the Windows arm handed the empty line to
+     * ChildRun::commandLine(), which throws, so the InvalidArgumentException
+     * escaped complete() and completeAsync(). The Windows arm cannot run on this
+     * host, so this pins the contract on every platform rather than the throw.
+     */
+    public function testAnEmptyStringCommandAnswersAnEmptyReplyOnBothEntryPoints(): void
+    {
+        $backend = new StreamingCommandBackend('');
+
+        $this->assertSame('', $backend->complete([Message::user('hi')])->content);
+        $this->assertSame('', $this->awaitPromise($backend->completeAsync([Message::user('hi')]))->content);
+    }
+
     public function testStreamingBackendCallsOnTokenForEachLine(): void
     {
         // Create a script that outputs tokens line by line
@@ -255,7 +270,7 @@ final class StreamingCommandBackendTest extends TestCase
      * payload is the two bytes `[]` and the stdin transfer is instantaneous —
      * which makes "silence since spawn" and "silence since the history was
      * delivered" indistinguishable, and they are not the same clock. The
-     * blocking `fwrite()` that {@see StreamingCommandBackend::pump()} replaced
+     * blocking `fwrite()` that the old pump replaced
      * returned only once the WHOLE payload had been handed over, and the old
      * code armed the deadline after it; arming it at spawn and re-arming it on
      * stdout/stderr alone silently redefined it, and a healthy wrapper reading
@@ -702,6 +717,256 @@ printf 'ok\n'
         }
     }
 
+    /**
+     * Finding 1, pinned as intended. The child exits 0 and a descendant keeps
+     * the pipes open with no token streamed. The idle budget stops applying
+     * once the direct child has exited, so the grace bounds the drain and the
+     * result is the notice, not an error, even though the idle budget is shorter
+     * than the grace.
+     */
+    public function testAnAbandonedPipeUnderAnIdleBudgetWithNoTokenIsANoticeNotAnExpiryError(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\n( sleep 5 ) &\nexit 0\n");
+
+        try {
+            $started = microtime(true);
+            $result = (new StreamingCommandBackend($script, idleTimeout: 1))->complete([], null);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertFalse($result->error, 'the command exited 0, so this is not an error');
+            $this->assertStringContainsString('pipes', $result->content);
+            $this->assertLessThan(
+                4.0,
+                $elapsed,
+                'the post-exit grace has to end the drain, or the loop waits out the grandchild',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * The idle budget on the PROMISE entry point. Every blocking deadline test
+     * above runs through complete(), which never reaches ChildRun::launch(), so
+     * the event-loop heartbeat that enforces the budget was unpinned: a silent
+     * child given a 1s budget must trip it here too, with the same notice, and
+     * the wait must end well before the 30s sleep.
+     */
+    public function testACompleteAsyncSilentChildTripsTheIdleBudget(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nsleep 30\necho 'never reached'");
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync([Message::user('hello')]),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(
+                "_[error: no output on the streaming backend's pipes for more than 1s]_",
+                $result->content,
+            );
+            $this->assertLessThan(
+                5.0,
+                $elapsed,
+                'the idle budget must end the wait on the launch path, not the 30s sleep',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * REGRESSION on the launch path. The stdin transfer counts as activity for
+     * the idle budget, and on completeAsync() that count comes from onWritable
+     * on the event loop, not from the blocking fwrite(). A healthy child that is
+     * still reading a 256 KB history in 64K bites must not be killed by a 1s
+     * budget, the same fixture as the blocking test above.
+     */
+    public function testACompleteAsyncChildStillSwallowingALargeHistoryIsNotKilledByTheIdleBudget(): void
+    {
+        $history = [Message::user(str_repeat('x', 256 * 1024))];
+        $script = $this->writeScript(
+            "#!/bin/bash\n"
+            . 'while IFS= read -r -n 65536 chunk; do sleep 0.4; done' . "\n"
+            . "printf 'ok\\n'\n",
+        );
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync($history),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame('ok', $result->content);
+            $this->assertGreaterThan(
+                1.5,
+                $elapsed,
+                'the stdin transfer has to outlive the 1s deadline by a clear margin or this proves nothing',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * The abandoned-pipe notice on the PROMISE entry point, under an idle budget
+     * shorter than the post-exit grace. The child exits 0 with a descendant still
+     * holding the pipes and no token streamed, so the result must be the notice
+     * (not an expiry error) and the drain must end on the grace.
+     */
+    public function testACompleteAsyncAbandonedPipeUnderAnIdleBudgetIsANoticeNotAnExpiryError(): void
+    {
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\n( sleep 5 ) &\nexit 0\n");
+
+        try {
+            $started = microtime(true);
+            $result = $this->awaitPromise(
+                (new StreamingCommandBackend($script, idleTimeout: 1))->completeAsync([Message::user('hello')]),
+            );
+            $elapsed = microtime(true) - $started;
+
+            $this->assertFalse($result->error, 'the command exited 0, so this is not an error');
+            $this->assertStringContainsString('pipes', $result->content);
+            $this->assertLessThan(
+                4.0,
+                $elapsed,
+                'the post-exit grace has to end the drain, or the loop waits out the grandchild',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Finding 2. A TERM-trapping child must not hold the cancel rejection for the
+     * TERM grace: the cancel is SIGKILL at once, as the replaced timer path was.
+     * The 1.0s TERM grace is the line between the two behaviours, so the bound
+     * sits below it.
+     */
+    public function testACancelledCompletionKillsATermTrappingChildAtOnce(): void
+    {
+        $backend = new StreamingCommandBackend("trap '' TERM; cat > /dev/null; sleep 5");
+        $cancellation = new CancellationToken();
+        $loop = \React\EventLoop\Loop::get();
+
+        $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+        $flip = $loop->addTimer(0.2, static function () use ($cancellation): void { $cancellation->cancel(); });
+
+        $started = microtime(true);
+        $caught = null;
+        try {
+            $this->awaitPromise($promise);
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            // The harness's own "did not settle" failure is a RuntimeException too:
+            // rethrow it so a hang reports as a hang, not as a cancel rejection.
+            throw $e;
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $elapsed = microtime(true) - $started;
+        $loop->cancelTimer($flip);
+
+        $this->assertInstanceOf(\RuntimeException::class, $caught);
+        $this->assertSame('Request cancelled', $caught->getMessage());
+        $this->assertLessThan(
+            0.9,
+            $elapsed,
+            'a TERM-trapping child held the cancel for the TERM grace: ' . sprintf('%.2fs after the cancel', $elapsed),
+        );
+    }
+
+    /**
+     * Finding 3, blocking entry point. A throwing $onToken stops the child, which
+     * would otherwise run for 5s, and the exception is rethrown from complete().
+     * The census confirms the child was reaped rather than left as a zombie.
+     */
+    public function testAThrowingOnTokenStopsTheChildAndRethrowsFromComplete(): void
+    {
+        if (!is_dir('/proc/self')) {
+            $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
+        }
+
+        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $before = self::ownZombieCount();
+            $started = microtime(true);
+            $caught = null;
+            try {
+                (new StreamingCommandBackend($script))->complete([], static function (string $token): void {
+                    throw new \DomainException("stop at {$token}");
+                });
+            } catch (\DomainException $e) {
+                $caught = $e;
+            }
+            $elapsed = microtime(true) - $started;
+
+            $this->assertInstanceOf(\DomainException::class, $caught);
+            $this->assertSame('stop at first', $caught->getMessage());
+            $this->assertLessThan(4.0, $elapsed, 'the child was waited out rather than stopped');
+            $this->assertSame(
+                $before,
+                self::ownZombieCount(),
+                'the stopped child was never waited for',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Finding 3, promise entry point. Same contract as the blocking test: a
+     * throwing $onToken stops the child and the promise rejects with that
+     * exception, and the child is reaped.
+     */
+    public function testAThrowingOnTokenStopsTheChildAndRejectsCompleteAsync(): void
+    {
+        if (!is_dir('/proc/self')) {
+            $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
+        }
+
+        // A TERM-trapping child: a graceful stop would wait out ChildRun's TERM
+        // grace (about 1s), so the sub-second bound below pins the SIGKILL path.
+        $script = $this->writeScript("#!/bin/bash\ntrap '' TERM\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
+
+        try {
+            $before = self::ownZombieCount();
+            $started = microtime(true);
+            $promise = (new StreamingCommandBackend($script))->completeAsync(
+                [Message::user('hello')],
+                static function (string $token): void {
+                    throw new \DomainException("stop at {$token}");
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\DomainException $e) {
+                $caught = $e;
+            }
+            $elapsed = microtime(true) - $started;
+
+            $this->assertInstanceOf(\DomainException::class, $caught);
+            $this->assertSame('stop at first', $caught->getMessage());
+            $this->assertLessThan(
+                1.0,
+                $elapsed,
+                'a throwing $onToken must SIGKILL the child, not wait out the TERM grace',
+            );
+            $this->assertSame(
+                $before,
+                self::ownZombieCount(),
+                'the stopped child was never waited for',
+            );
+        } finally {
+            unlink($script);
+        }
+    }
+
     /** User + system CPU seconds consumed by THIS process so far. */
     private static function cpuSeconds(): float
     {
@@ -846,8 +1111,8 @@ printf 'ok\n'
      * flushed when the completion settles.
      *
      * Counting the ticks alone cannot tell those two apart, and neither can
-     * counting the tokens: a `pump()` that buffered every line and emitted them
-     * all from `finish()` would still deliver six callbacks under a loop that
+     * counting the tokens: a sink that buffered every line and emitted them
+     * all after the child exited would still deliver six callbacks under a loop that
      * ticked throughout. What separates them is WHEN each callback fired
      * relative to the ticker, so every token records the tick count at its own
      * instant. Six tokens 150ms apart against a 20ms ticker must land at six
@@ -1027,7 +1292,7 @@ printf 'ok\n'
      * the other. Not a slow case — unbounded; a child that could exit would at
      * least hand the writer an EPIPE, and this one cannot reach its exit.
      *
-     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::pump()} writes a
+     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend} writes a
      * slice of stdin from the same iteration that drains stdout, so neither pipe
      * can fill without the other being emptied — which is why hoisting the loop
      * fixed `complete()` too, and not only the method this round set out to unblock.

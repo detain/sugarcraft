@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Backend;
 
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Message;
@@ -361,31 +362,80 @@ final class CommandBackendTest extends TestCase
     }
 
     /**
-     * A string command reaches the shell proc_open() used for it before this
-     * backend wrapped it: /bin/sh on POSIX, and cmd.exe on Windows, where a bare
-     * `/bin/sh` does not exist and every string command failed to spawn.
+     * A string command on POSIX runs under `/bin/sh -c`, the shell proc_open() used
+     * for a string before this backend ran on ChildRun.
      */
-    public function testAStringCommandIsWrappedInTheShellOfTheHostPlatform(): void
+    public function testAStringCommandIsWrappedInBinShOnPosix(): void
     {
-        $shellArgv = new \ReflectionMethod(CommandBackend::class, 'shellArgv');
-
         $this->assertSame(
             ['/bin/sh', '-c', 'printf hi'],
-            $shellArgv->invoke(null, 'printf hi', false),
+            CommandBackend::shellSpec('printf hi', false),
         );
+    }
 
-        $windows = $shellArgv->invoke(null, 'echo hi', true);
-        $this->assertSame(['/d', '/s', '/c', 'echo hi'], array_slice($windows, 1));
-        $this->assertNotSame('/bin/sh', $windows[0]);
-        $this->assertNotSame('', $windows[0]);
+    /**
+     * The Windows arm hands a string command to proc_open() as the raw cmd.exe
+     * line, unescaped. This is a deliberate change from the `COMSPEC /d /s /c`
+     * argv CommandBackend used on master: PHP escapes an argv element by element
+     * on Windows, and that escaping of the embedded double quotes is not what
+     * cmd.exe reads. This runs on every platform: it pins the spawn-spec builder,
+     * not the spawn.
+     */
+    public function testAStringCommandReachesProcOpenAsTheRawLineOnWindows(): void
+    {
+        $line = 'echo "a b" & exit /b 3';
+
+        $this->assertSame($line, CommandBackend::shellSpec($line, true));
+    }
+
+    /**
+     * shellSpec() returns the raw line, but the choice of ChildRun factory is made
+     * one step later in childRun(). A string spec must reach ChildRun::commandLine()
+     * and never ChildRun::new(), or PHP escapes the embedded quotes element by
+     * element on Windows, which is the bug the raw line replaced.
+     */
+    public function testAStringSpecIsCarriedAsTheRawLineNotAnArgv(): void
+    {
+        $line = 'echo "a b" & exit /b 3';
+        $run = CommandBackend::childRunForSpec($line, '');
+
+        $this->assertSame([$line], $this->childRunProperty($run, 'argv'));
+        $this->assertTrue($this->childRunProperty($run, 'commandLine'));
+    }
+
+    public function testAListSpecIsExecdAsAnArgvNotACommandLine(): void
+    {
+        $run = CommandBackend::childRunForSpec(['printf', 'a;b'], '');
+
+        $this->assertSame(['printf', 'a;b'], $this->childRunProperty($run, 'argv'));
+        $this->assertFalse($this->childRunProperty($run, 'commandLine'));
+    }
+
+    private function childRunProperty(ChildRun $run, string $name): mixed
+    {
+        return (new \ReflectionProperty(ChildRun::class, $name))->getValue($run);
+    }
+
+    /**
+     * An empty string command is a no-op on both arms. The Windows arm used to
+     * hand the empty line to ChildRun::commandLine(), which throws, so the
+     * InvalidArgumentException escaped complete() and completeAsync() instead of
+     * an assistant reply. Both now answer an empty reply without spawning. The
+     * Windows arm cannot run on this host, so this pins the contract on every
+     * platform rather than reproducing the throw.
+     */
+    public function testAnEmptyStringCommandAnswersAnEmptyReplyOnBothEntryPoints(): void
+    {
+        $backend = new CommandBackend('');
+
+        $this->assertSame('', $backend->complete([Message::user('hi')])->content);
+        $this->assertSame('', $this->awaitPromise($backend->completeAsync([Message::user('hi')]))->content);
     }
 
     public function testAListCommandIsExecdDirectlyOnEveryPlatform(): void
     {
-        $shellArgv = new \ReflectionMethod(CommandBackend::class, 'shellArgv');
-
-        $this->assertSame(['printf', 'a;b'], $shellArgv->invoke(null, ['printf', 'a;b'], false));
-        $this->assertSame(['printf', 'a;b'], $shellArgv->invoke(null, ['printf', 'a;b'], true));
+        $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], false));
+        $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], true));
     }
 
     private function writeScript(string $body): string

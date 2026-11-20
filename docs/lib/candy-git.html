@@ -433,7 +433,7 @@ $git = new Git(getcwd());
 <tr><th>Class</th><th>Role</th></tr>
 <tr><td><code>App</code></td><td>The TEA model. Owns the lists, cursors, focus and overlays. Each key returns a fresh instance.</td></tr>
 <tr><td><code>Git</code>, <code>GitDriver</code></td><td>The concrete shell-out driver, and the interface every operation goes through. Tests inject a fixture-backed driver.</td></tr>
-<tr><td><code>Process</code></td><td>The main <code>proc_open</code> site. It runs a bounded drain loop, pins the child environment, isolates stdin from the terminal, and tears down with TERM, a grace period, then KILL. <code>Platform::runBounded()</code> is the other caller (Windows teardown only) and does not pin the environment.</td></tr>
+<tr><td><code>Process</code></td><td>The main <code>proc_open</code> site. It runs a bounded drain loop, pins the child environment, isolates stdin from the terminal, and tears down with TERM, a grace period, then KILL. The private <code>runBounded</code> helper in <code>Platform</code> is the other caller (Windows teardown only) and does not pin the environment.</td></tr>
 <tr><td><code>Platform</code></td><td>The OS seam: the null device, PATH lookup, and process-tree kill on Windows. Both branches are unit-tested on any host.</td></tr>
 <tr><td><code>HistoryEntry</code>, <code>HistoryManager</code></td><td>One undoable operation with its inverse or a refusal marker, and the bounded undo and redo stacks.</td></tr>
 <tr><td><code>DiffViewer</code>, <code>DiffHighlighter</code></td><td>The immutable diff overlay state with hunk navigation, and the per-line highlight spans.</td></tr>
