@@ -322,9 +322,6 @@ final class ChildChannelTest extends TestCase
     }
 
     /**
-     * @param list<array<string, mixed>> $written
-     */
-    /**
      * Outside a loop-driven turn's fiber the blocking wait happens inside the
      * call, so the promise it returns is already settled with the answer.
      */
@@ -361,6 +358,9 @@ final class ChildChannelTest extends TestCase
         self::assertSame(ChildChannel::PARENT_GONE, $rejection->getMessage());
     }
 
+    /**
+     * @param list<array<string, mixed>> $written
+     */
     private function channel($child, array &$written, string $mode = 'default', ?string $root = null): ChildChannel
     {
         return ChildChannel::new(
