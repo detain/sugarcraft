@@ -207,6 +207,9 @@ flag_management:
     - name: sugar-serve-protocol
       paths: ["sugar-serve-protocol/src/**"]
       carryforward: true
+    - name: sugar-plugins
+      paths: ["sugar-plugins/src/**"]
+      carryforward: true
     - name: sugar-ws-rpc
       paths: ["sugar-ws-rpc/src/**"]
       carryforward: true
@@ -603,6 +606,12 @@ component_management:
         - "sugar-serve-protocol/src/**"
       flag_regexes:
         - "^sugar-serve-protocol$"
+    - component_id: sugar-plugins
+      name: sugar-plugins
+      paths:
+        - "sugar-plugins/src/**"
+      flag_regexes:
+        - "^sugar-plugins$"
     - component_id: sugar-ws-rpc
       name: sugar-ws-rpc
       paths:

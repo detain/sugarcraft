@@ -167,11 +167,14 @@ final class Retry
         $pending = null;
         $done = false;
         $registration = null;
-        $deferred = new Deferred(static function () use (&$done, &$timer, &$pending, $loop): never {
+        $deferred = new Deferred(static function () use (&$done, &$timer, &$pending, &$registration, $loop): never {
             $done = true;
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
             }
+            // The token registration outlives this path otherwise: it would stay on the
+            // token until that token fires, however long the caller keeps it.
+            $registration?->unsubscribe();
             $pending?->cancel();
             throw new OperationCancelledException('Reconnect cancelled');
         });

@@ -80,6 +80,7 @@ ships as `App\` — called out in the table below.
 | **SugarMCPClient** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 | **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 | **SugarIgnore** (`sugar-ignore/`) | 🟢 ready | gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code's `IgnoreRules` (owner decision G-10=A); candy-git, candy-files and candy-git-server are the intended second consumers. |
+| **SugarPlugins** (`sugar-plugins/`) | 🟢 ready | Generic plugin core for SugarCraft hosts — the plugin and channel contracts, the plugin launch context, the prompt-fence escape, and the generic loader, quarantine ledger, registry and manifest reader. Original work: no upstream port. |
 | **SugarServeProtocol** (`sugar-serve-protocol/`) | 🟢 ready | Wire contract for the `candy-code.v1` serve protocol — subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation. Original work: no upstream port. |
 | **SugarWsRpc** (`sugar-ws-rpc/`) | 🔴 planning | WebSocket RPC transport — skeleton (namespace and wiring only); the channel bundles' ServeBridge socket layer was deleted rather than moved (the in-process host door replaced it), so there is nothing to relocate here in P4-10d. Original work: no upstream port. |
 | **SugarJwt** (`sugar-jwt/`) | 🔴 planning | JWT and JWK verification — skeleton (namespace and wiring only); the Teams token and JWK code from the channel bundles moves here in P4-10d. Original work: no upstream port. |
@@ -242,6 +243,7 @@ maps each package to its upstream.
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |
 | SugarReleases (sugar-releases/) | none — first-party |
 | SugarServeProtocol (sugar-serve-protocol/) | none — first-party (original work; no upstream port) |
+| SugarPlugins (sugar-plugins/) | none — first-party (original work; no upstream port) |
 | SugarJwt (sugar-jwt/) | none — first-party (original work; no upstream port) |
 | SugarCodec (sugar-codec/) | none — first-party (original work; no upstream port) |
 | SugarClipboard (sugar-clipboard/) | none — first-party (original work; no upstream port) |
