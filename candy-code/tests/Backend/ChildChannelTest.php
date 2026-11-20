@@ -141,6 +141,29 @@ final class ChildChannelTest extends TestCase
         self::assertSame([['kind' => 'cancel_soft']], $channel->takeControls());
     }
 
+    /**
+     * The probe a sleeping tool asks each tick must see a stop or a steer
+     * without taking it: the step boundary still reads the frame afterwards.
+     */
+    public function testAnInterruptIsPendingWithoutTakingTheFrames(): void
+    {
+        [$parent, $child] = $this->pair();
+        $written = [];
+        $channel = $this->channel($child, $written);
+        self::assertFalse($channel->interruptPending(), 'an empty socket has nothing pending');
+
+        self::send($parent, ['kind' => ChildChannel::STEER, 'steerId' => 's3', 'text' => 'use tabs']);
+        self::assertTrue($channel->interruptPending());
+        self::assertTrue($channel->interruptPending(), 'asking must not take the steer');
+        self::assertSame([['steerId' => 's3', 'text' => 'use tabs']], $channel->takeSteers());
+        self::assertFalse($channel->interruptPending(), 'a steer already taken is no longer pending');
+
+        self::send($parent, ['kind' => ChildChannel::CANCEL_SOFT]);
+        self::assertTrue($channel->interruptPending());
+        self::assertTrue($channel->softCancelRequested(), 'the step boundary still reads the soft cancel');
+        self::assertTrue($channel->interruptPending(), 'a latched soft cancel stays pending');
+    }
+
     public function testASteerIsPolledWithoutAnOpenQuestion(): void
     {
         [$parent, $child] = $this->pair();

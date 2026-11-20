@@ -5616,6 +5616,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     ...\SugarCraft\Code\Support\AgentCancelRequests::takeNewCallIds(),
                 ],
             );
+            // A tool's wait inside its call (SubagentsTool::wait, ShellSend's
+            // screen hold) sleeps on this loop, so it asks the channel each tick
+            // whether the parent has sent a stop or a steer.
+            \SugarCraft\Code\Support\TurnInterrupts::listen(static fn (): bool => $channel->interruptPending());
             // complete()'s body, inlined so the loop gets the channel's two
             // per-step hooks: complete() is the frozen Backend contract
             // (BackendContractWideningTest) and cannot grow parameters.
@@ -6351,6 +6355,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
     {
         try {
+            // Accepted residual (AUD 12.1 A4, rows 47 and 49): this path has no
+            // child and no channel, so TurnInterrupts and ToolCancelRequests are
+            // not listened to here. A Subagents or ShellSend wait runs on the TUI
+            // loop and ignores Esc until it ends. The whole turn already blocks
+            // this loop, so moving only those waits would not change that.
             $engine = $this;
             // ISS-072: this path has no child, so the ranking is primed here
             // — still never in the parent of a fork.

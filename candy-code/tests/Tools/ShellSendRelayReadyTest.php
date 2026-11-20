@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Code\Support\TurnInterrupts;
 use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 
 /**
@@ -113,5 +114,29 @@ final class ShellSendRelayReadyTest extends TestCase
         $this->assertFalse($answer, 'no record inside the budget is a refusal, never a lost write');
         $this->assertGreaterThanOrEqual(ShellSend::RELAY_ATTACH_BUDGET_MS / 1000 * 0.9, $elapsed, 'the wait spans the declared budget');
         $this->assertLessThan(ShellSend::RELAY_ATTACH_BUDGET_MS / 1000 + 2.0, $elapsed, 'and stops at it');
+    }
+
+    /** A stop waiting on the channel ends the screen hold at once, not after its budget. */
+    public function testAStopEndsTheScreenHoldAtOnce(): void
+    {
+        TurnInterrupts::listen(static fn (): bool => true);
+        try {
+            $started = microtime(true);
+            ShellSend::holdScreen(10_000, 'call_hold');
+            $elapsed = microtime(true) - $started;
+        } finally {
+            TurnInterrupts::forget();
+        }
+
+        self::assertLessThan(1.0, $elapsed, 'a pending stop must not wait out the 10 s hold');
+    }
+
+    /** With nothing to stop it, the hold runs its whole budget. */
+    public function testAnUninterruptedScreenHoldRunsItsBudget(): void
+    {
+        $started = microtime(true);
+        ShellSend::holdScreen(200, 'call_hold');
+
+        self::assertGreaterThanOrEqual(0.19, microtime(true) - $started);
     }
 }
