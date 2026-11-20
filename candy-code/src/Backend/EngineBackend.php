@@ -6359,6 +6359,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // Retry::bounded usleep loops) are named in the same exception. The
             // whole turn already blocks this loop, so moving only those waits
             // would not change that.
+            //
+            // A second no-fork route reaches the same waits without passing
+            // through this method: AgentWorkerPool::startAgent's sequential arm
+            // (no pcntl_fork and no injected executor) runs executeInline() in
+            // the parent with the forkedExecutor, an EngineExecutor. A /workflow
+            // stage's agent turn therefore runs inside driveWorkflowFiber() on
+            // the TUI loop, and any ShellSend wait or SubagentsTool::wait that
+            // agent calls blocks that loop too. The verdict is unchanged: the
+            // whole agent turn already blocks the loop on that route.
             $engine = $this;
             // ISS-072: this path has no child, so the ranking is primed here
             // — still never in the parent of a fork.
