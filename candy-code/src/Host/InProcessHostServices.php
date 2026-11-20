@@ -742,7 +742,10 @@ final class InProcessHostServices implements HostServices, RootedHostServices
 
     /**
      * One loop tick of the primary feed's delivery: at most DELIVERY_BUDGET envelopes, then re-armed
-     * as a zero-delay timer while owed (a future tick would drain the whole backlog in this iteration).
+     * as a zero-delay timer while owed. The vendored FutureTickQueue runs only the callbacks counted
+     * when its tick() starts, so a future tick queued here also waits for the next iteration; either
+     * re-arm delivers one budget per iteration. The timer departs from design 3.3 (recorded in
+     * reviews/PL-5c-A-sink-design.md, section 12).
      */
     private function tick(bool $again = false): void
     {

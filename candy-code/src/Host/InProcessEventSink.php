@@ -381,9 +381,11 @@ final class InProcessEventSink implements RelayTarget
     }
 
     /**
-     * Arms one delivery tick while events are owed. The first tick is a future tick; a re-armed
-     * one is a zero-delay timer, because the future-tick queue drains to empty within the loop
-     * iteration that runs it, so re-arming there would deliver the whole backlog in one go.
+     * Arms one delivery tick while events are owed. The first tick is a future tick; a re-armed one
+     * is a zero-delay timer. The vendored FutureTickQueue runs only the callbacks counted when its
+     * tick() starts, so a future tick queued from a tick also waits for the next loop iteration:
+     * either re-arm delivers one budget per iteration, never the whole backlog at once. The
+     * timer re-arm departs from design 3.3 (recorded in reviews/PL-5c-A-sink-design.md, section 12).
      */
     private function schedule(bool $again = false): void
     {

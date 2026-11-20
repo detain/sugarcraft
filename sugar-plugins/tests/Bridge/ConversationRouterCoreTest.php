@@ -470,6 +470,22 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertSame([['sessionId' => 's1', 'askId' => 'a1', 'reply' => 'once', 'note' => 'u1']], $this->serve->permissionAnswers);
     }
 
+    /**
+     * Design 5.2 and Q11: a routed ask no event presented is only reachable through the primary-only
+     * fallback poll. When that poll is empty the ask stays unanswered, and the gap is pinned here.
+     */
+    public function testARoutedAskNoEventPresentedStaysUnansweredWhenThePrimaryPollIsEmpty(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->serve->callReplies['permission.pending'] = ['pending' => []];
+
+        $this->router->answerByAskId('a8', 'once', ['userId' => 'u1'], '', self::KEY, 'text');
+
+        $this->assertContains('permission.pending', \array_column($this->serve->calls, 'method'), 'the fallback poll runs for an ask no event presented');
+        $this->assertSame([], $this->serve->permissionAnswers, 'an empty primary poll answers nothing for a routed ask');
+    }
+
     public function testAReplayGapIsDisclosedAndTheCursorAdvancesToThroughSeq(): void
     {
         $this->build();

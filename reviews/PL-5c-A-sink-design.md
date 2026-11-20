@@ -353,3 +353,12 @@ Each open finding of the last round and where it is answered. No finding was dec
 ## 11. Review-fix record (round 6)
 
 - (MEDIUM, review finding 3) Routing refusals escaping the door as a synchronous throw: section 2.2 step 2 now says `rootFor()` and the routed call run inside the door's `answer()` wrapper, so `root_not_found` and `invalid_params` reject the promise. Test in section 5.2 (`createSessionIn` and `pendingPermissionsIn` with a non-directory root reject with `root_not_found` and do not throw).
+
+## 12. Review-fix record (impl review, round 1)
+
+Each finding of the implementation review and where it is answered. No finding was declined.
+- (LOW, re-arm rationale) Section 3.3 and Q12 name a `futureTick` re-arm. The built re-arm of a sink tick is a zero-delay timer (`addTimer(0.0)`, `InProcessEventSink::schedule()`), and so is the primary feed's (`InProcessHostServices::tick()`). The first tick stays a future tick. The vendored `react/event-loop` `FutureTickQueue::tick()` runs only the callbacks counted when it starts, so a future tick queued from a tick waits for the next loop iteration. Both re-arms pace one budget per iteration. The docblocks that said a future tick would drain the backlog in one iteration were wrong and are corrected. Delivery order and budget are unchanged.
+- (LOW, disconnect from a sink listener) Section 3.4 disconnect row. Test `testADisconnectFromASinkListenerSkipsTheLaterListenersOfThatEnvelope` in `candy-code/tests/Host/InProcessRoutedTest.php`.
+- (LOW, server-scope fan-out) Section 3.5 (`useRoot`). Test `testServerScopeEventsReachOnlyTheSinksOfTheRootsTheyUsed`.
+- (LOW, compensation with a recorded subscriber) Section 4.1, the subscriber condition (b). Test `testALateSubscribeLeavesAnotherSinksSubscriptionInPlace`.
+- (LOW, Q11 gap) Section 5.2, the `sugar-plugins` bullet. Test `testARoutedAskNoEventPresentedStaysUnansweredWhenThePrimaryPollIsEmpty` in `sugar-plugins/tests/Bridge/ConversationRouterCoreTest.php`.

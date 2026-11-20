@@ -10,6 +10,9 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
 use SugarCraft\Code\Protocol\ErrorCode;
+use SugarCraft\Code\Protocol\EventEnvelope;
+use SugarCraft\Code\Protocol\EventType;
+use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Workspace\Gateway;
@@ -399,6 +402,79 @@ final class InProcessRoutedTest extends TestCase
 
         $rows = (new \ReflectionProperty(Gateway::class, 'subscribeGen'))->getValue($this->gateway);
         self::assertSame(['no-such-4', 'no-such-5'], \array_map('strval', \array_keys($rows)), 'the oldest rows go first, and the cap holds');
+    }
+
+    public function testALateSubscribeLeavesAnotherSinksSubscriptionInPlace(): void
+    {
+        $sessionId = $this->createOther();
+        $this->call($this->door->subscribeSession($sessionId, null, null));
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->subscribeSession($sessionId, null, null));
+
+        $this->deadlines->fireDeadlines();
+        self::assertCount(1, $refusals);
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'the late subscribe answer lands');
+
+        // The main door's sink is a recorded subscriber, so the late answer must not compensate.
+        self::assertTrue($this->gateway->hasSubscribers($sessionId), 'the main door\'s subscription is still recorded');
+        $kept = (array) $this->call($this->gateway->callRoot($this->other, 'session.unsubscribe', (object) ['sessionId' => $sessionId]));
+        self::assertTrue($kept['unsubscribed'] ?? false, 'no compensating unsubscribe cancelled the subscription another sink owns');
+    }
+
+    public function testServerScopeEventsReachOnlyTheSinksOfTheRootsTheyUsed(): void
+    {
+        $this->createOther();
+        $used = $this->other;
+        $unused = $this->fixture->dir . '/unused';
+        $deleted = fn (string $root): array => \array_values(\array_filter(
+            $this->heard,
+            static fn (array $e): bool => ($e['type'] ?? null) === EventType::SESSION_DELETED && ($e['root'] ?? null) === $root,
+        ));
+
+        // A root-wide event is relayed to the clients of its own root only (no host needed: relay() is the gateway's seam).
+        $event = EventEnvelope::server(EventType::SESSION_DELETED, ['id' => 'gone-1']);
+        $relay = new \ReflectionMethod(Gateway::class, 'relay');
+        $relay->invoke($this->gateway, $used, $event->toArray(), JsonRpc::encode($event->notification()));
+        $relay->invoke($this->gateway, $unused, $event->toArray(), JsonRpc::encode($event->notification()));
+
+        self::assertTrue($this->runUntil(fn (): bool => $deleted($used) !== [], 10.0), 'the used root\'s server-scope event never reached its sink');
+        self::assertCount(1, $deleted($used));
+        self::assertSame([], $deleted($unused), 'a root this client never used reaches none of its sinks');
+    }
+
+    public function testADisconnectFromASinkListenerSkipsTheLaterListenersOfThatEnvelope(): void
+    {
+        $sessionId = $this->createOther();
+        $this->call($this->door->subscribeSession($sessionId, null, null));
+        $disconnected = false;
+        $laterHeard = [];
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$disconnected): void {
+            if (!$disconnected && ($envelope['root'] ?? null) === $this->other) {
+                $disconnected = true;
+                $this->door->disconnect();
+            }
+        }));
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$laterHeard): void {
+            if (($envelope['root'] ?? null) === $this->other) {
+                $laterHeard[] = $envelope;
+            }
+        }));
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$laterHeard): void {
+            if (($envelope['root'] ?? null) === $this->other) {
+                $laterHeard[] = $envelope;
+            }
+        }));
+
+        $this->call($this->door->sendTurn($sessionId, 'leave mid-turn', 'queue', null, [], []));
+        // An arrow function would copy $disconnected at creation, so the condition reads it by reference.
+        $gone = function () use (&$disconnected): bool {
+            return $disconnected;
+        };
+        self::assertTrue($this->runUntil($gone, 30.0), 'the sink never delivered a routed event to the listener that disconnects');
+        self::assertFalse($this->call($this->door->isConnected()));
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+        self::assertSame([], $laterHeard, 'the listeners after the disconnecting one never hear the envelope it was delivering');
     }
 
     /** A door whose 20 s call deadlines are fired by the test, connected on first use. */
