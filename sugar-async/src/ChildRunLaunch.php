@@ -36,8 +36,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *
  * The kill ladder normally ends with the result: settling cancels every timer,
  * the ladder's included. One exception is kept on purpose. A group-path launch
- * (a containment group is named) keeps its ladder poll armed past settle, for at
- * most the TERM and KILL grace, and only while a group member is still alive, so
+ * (a containment group is known: named at spawn, or latched from a live read while
+ * the leader was alive, see latchGroup()) keeps its ladder poll armed past settle,
+ * for at most the TERM and KILL grace, and only while a group member is still alive, so
  * a descendant that ignores TERM is not orphaned once its leader has settled the
  * run. The group-path ladder test in ChildRunLaunchTest pins this behavior.
  */
@@ -487,9 +488,9 @@ final class ChildRunLaunch
         // Cancelling a ladder that is still signalling descendants would orphan them:
         // it stops on its own once the group is empty or the kill budget is spent.
         // That is the one exception to "no ladder timer outlives settle": a settled
-        // group-path launch keeps its poll for at most TERM + KILL grace, and only
-        // while a containment-group member is still alive (pinned by the group-path
-        // ladder test in ChildRunLaunchTest).
+        // group-path launch (group named at spawn or latched live) keeps its poll for
+        // at most TERM + KILL grace, and only while a containment-group member is
+        // still alive (pinned by the group-path ladder test in ChildRunLaunchTest).
         if ($this->ladder !== null && $this->groupGone()) {
             $this->loop->cancelTimer($this->ladder);
             $this->ladder = null;

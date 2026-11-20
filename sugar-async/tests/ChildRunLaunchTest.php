@@ -680,9 +680,34 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertSame(ChildResult::TIMED_OUT, $result->status);
         $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
         $this->assertTrue(
-            BoundedShutdown::waitBounded(static fn (): bool => BoundedShutdown::pidExited($grandchild), 3.0),
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
             'the kill must reach the grandchild through the group the wrapper leads, not only the shell',
         );
+    }
+
+    /**
+     * Gone means signal-refused or a zombie. The grandchild is reparented to PID 1 on
+     * kill, and a PID 1 that does not reap leaves it a zombie, which
+     * BoundedShutdown::pidExited() would count as alive. Mirrors the candy-code
+     * CommandBackendTest isLive() check.
+     */
+    private static function grandchildGone(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return true;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat !== false) {
+            $after = strrpos($stat, ')');
+            $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+            return $state === 'Z' || $state === 'X';
+        }
+
+        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>/dev/null'));
+
+        return $state === '' || $state[0] === 'Z';
     }
 
     public function testOnSpawnReportsThePidOnTheLoopPath(): void
