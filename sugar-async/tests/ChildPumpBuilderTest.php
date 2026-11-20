@@ -7,6 +7,7 @@ namespace SugarCraft\Async\Tests;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
 use SugarCraft\Async\DrainResult;
 use SugarCraft\Async\WindowsPipes;
 
@@ -379,6 +380,7 @@ final class ChildPumpBuilderTest extends TestCase
         yield 'zero slice' => [static fn (ChildPump $p): ChildPump => $p->withSlice(0.0)];
         yield 'zero heartbeat' => [static fn (ChildPump $p): ChildPump => $p->withHeartbeat(0.0, static fn () => null)];
         yield 'non-resource stdin' => [static fn (ChildPump $p): ChildPump => $p->withStdin('not a pipe', 'x')];
+        yield 'zero exit grace' => [static fn (ChildPump $p): ChildPump => $p->withExitGrace(0.0)];
     }
 
     #[DataProvider('badSetters')]
@@ -386,6 +388,52 @@ final class ChildPumpBuilderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $apply(ChildPump::new([]));
+    }
+
+    /**
+     * A probe that reports the child gone ends the select walk one exit grace
+     * later, even though a grandchild still holds the pipe open. The socket
+     * stands in for that pipe: its writer stays open and silent, so EOF never
+     * comes.
+     */
+    public function testExitGraceEndsTheWalkOnceTheProbeReportsTheChildGone(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        // The pump's default clock is the monotonic one: a deadline on another scale never comes due.
+        $started = Clock::monotonicSeconds();
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline($started + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+        $elapsed = Clock::monotonicSeconds() - $started;
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertLessThan(2.0, $elapsed, 'the walk must end one grace after the exit, not at the 5s deadline');
+    }
+
+    /** The control for the grace: with no grace set, the same silent pipe holds the walk to its deadline. */
+    public function testWithoutExitGraceTheWalkRunsToTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 0.3)
+            ->withRunning(static fn (): bool => false)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
     }
 
     public function testStaticDrainKeepsItsBehaviourOverTheBuilder(): void

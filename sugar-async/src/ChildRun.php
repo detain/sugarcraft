@@ -29,6 +29,12 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * child that closes its output and then lingers past the deadline is treated
  * the same way.
  *
+ * A child that exits while a backgrounded grandchild still holds its output
+ * pipes ends the run once {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} has passed
+ * since the exit, not at the deadline. Output the grandchild writes after that
+ * cut-off is not captured, and nothing reports the drop; output written inside
+ * the grace is kept.
+ *
  * Stdin: {@see withStdin()} feeds a payload to the child. The POSIX arm does it
  * through a non-blocking pipe. On Windows a non-empty payload is refused (a
  * LogicException from run(), a rejected promise from launch()), because the
@@ -180,13 +186,33 @@ final class ChildRun
         $group = $this->groupFor($proc);
         $deadline = $clock() + $this->timeout;
 
+        // The probe keeps the status it reads: a proc_get_status() after the
+        // child has been reaped reports -1, so the exit code is taken here.
+        $exitCode = null;
+        $running = static function () use ($proc, &$exitCode): bool {
+            if ($exitCode !== null) {
+                return false;
+            }
+            $status = @\proc_get_status($proc);
+            if (!\is_array($status)) {
+                return false;
+            }
+            if ($status['running'] === true) {
+                return true;
+            }
+            $exitCode = (int) $status['exitcode'];
+
+            return false;
+        };
+
         try {
             $pump = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
                 ->withDeadline($deadline)
                 ->withCap($this->maxBytes)
                 ->withClock($clock)
                 ->withOnChunk($this->onChunk)
-                ->withRunning(WindowsPipes::runningProbe($proc));
+                ->withRunning($running)
+                ->withExitGrace(WindowsPipes::EXIT_DRAIN_GRACE_SECONDS);
             if ($this->stdin !== null && $this->stdin !== '') {
                 $pump = $pump->withStdin($pipes[0], $this->stdin);
             } else {
@@ -204,6 +230,12 @@ final class ChildRun
         self::closeAll($pipes);
 
         if ($r->reason === DrainResult::CLOSED) {
+            if ($exitCode !== null) {
+                // The liveness probe reaped the child, so proc_close() would report -1.
+                proc_close($proc);
+
+                return self::result($r, $exitCode, ChildResult::EXITED);
+            }
             $code = BoundedShutdown::reapIfExited($proc, max(0.0, $deadline - $clock()));
             if ($code !== null) {
                 return self::result($r, $code, ChildResult::EXITED);
@@ -217,7 +249,7 @@ final class ChildRun
         $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
         $status = $r->reason === DrainResult::EXPIRED ? ChildResult::TIMED_OUT : ChildResult::PIPE_FAILED;
 
-        return self::result($r, $code, $status);
+        return self::result($r, $exitCode ?? $code, $status);
     }
 
     /**

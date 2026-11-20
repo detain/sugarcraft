@@ -51,6 +51,54 @@ final class ChildRunTest extends TestCase
         $this->assertFalse($r->truncated());
     }
 
+    /**
+     * A hook backgrounds a child that inherits the output pipes and outlives the
+     * process that started it. The run ends one exit grace after the parent exits
+     * and reports its status; it must not wait out the deadline and report a timeout.
+     */
+    public function testABackgroundedChildHoldingThePipesDoesNotStretchTheRunToItsDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])->withTimeout(4.0)->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertFalse($r->timedOut());
+        $this->assertTrue($r->succeeded());
+        $this->assertLessThan(3.0, $elapsed, 'the run must end after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * Pins the exit grace's cut-off: a line a backgrounded grandchild writes inside
+     * the grace after the parent exits is kept, and one written after it is not.
+     * The grace length is a policy call, so this test fixes the shape, not the number.
+     */
+    public function testOutputWrittenAfterTheExitGraceIsCutOff(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', '(sleep 0.3; echo early; sleep 3; echo late) & exit 0'])
+            ->withTimeout(10.0)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("early\n", $r->stdout);
+        $this->assertLessThan(3.0, $elapsed, 'the run must end at the grace cut-off, before the late line is due');
+    }
+
+    /** The exit grace keeps the status the probe reads: a nonzero exit is still reported as itself. */
+    public function testABackgroundedChildDoesNotCostTheParentItsExitCode(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 3'])->withTimeout(4.0)->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(3, $r->exitCode);
+        $this->assertFalse($r->succeeded());
+    }
+
     public function testStdinPayloadIsDeliveredToTheChild(): void
     {
         $this->requirePosixPipes();

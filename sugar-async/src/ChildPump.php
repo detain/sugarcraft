@@ -112,7 +112,8 @@ final class ChildPump
      *        stream_select() seam: same contract, `$read` and `$write` narrowed in place.
      * @param null|\Closure(): bool $running  Whether the child is still running
      *        ({@see WindowsPipes::runningProbe()}). The Windows arm needs it to
-     *        end before the deadline; the select arm ends on EOF and ignores it.
+     *        end before the deadline; the select arm ends on EOF and reads the
+     *        probe only with {@see withExitGrace()} set.
      * @param null|bool $pollPipes  Force the Windows (true) or select (false)
      *        arm; null picks by the real runtime ({@see WindowsPipes::runtimeNeedsIt()}).
      * @param null|\Closure(int|string, string): void $onChunk  Live feed, every chunk
@@ -121,6 +122,7 @@ final class ChildPump
      * @param null|float $heartbeatSeconds  Interval between heartbeats, or null
      * @param null|\Closure(): void $onBeat  The heartbeat hook
      * @param null|\Closure(): void $reap  Run once after the walk, even on a throw
+     * @param null|float $exitGrace  Select arm: seconds read on after the running probe reports exit
      */
     private function __construct(
         private readonly array $pipes,
@@ -140,6 +142,7 @@ final class ChildPump
         private readonly ?float $heartbeatSeconds = null,
         private readonly ?\Closure $onBeat = null,
         private readonly ?\Closure $reap = null,
+        private readonly ?float $exitGrace = null,
     ) {
     }
 
@@ -284,6 +287,24 @@ final class ChildPump
     }
 
     /**
+     * Select arm, with a {@see withRunning()} probe: once the probe reports the
+     * child gone, keep reading for $seconds and then end the walk as CLOSED.
+     *
+     * A hook can background a child that inherits the output pipes and holds
+     * them open long after its parent has exited, so waiting for EOF would stretch
+     * every such run to the deadline. The Windows arm already ends this way. Null
+     * (the default) keeps the select arm waiting for EOF or the deadline.
+     */
+    public function withExitGrace(?float $seconds): self
+    {
+        if ($seconds !== null && ($seconds <= 0 || !is_finite($seconds))) {
+            throw new \InvalidArgumentException('Exit grace must be a positive finite number of seconds');
+        }
+
+        return $this->mutate(['exitGrace' => $seconds]);
+    }
+
+    /**
      * Read the pipes until they are all at EOF, the deadline passes, or the cap
      * stops the walk, and return what was read and why it stopped.
      *
@@ -404,6 +425,7 @@ final class ChildPump
         $failures = 0;
         $reason = DrainResult::CLOSED;
         $beatAt = $this->heartbeatSeconds === null ? null : $clock() + $this->heartbeatSeconds;
+        $exitedAt = null;
 
         // The feed outlives the output pipes: a child may close stdout and
         // stderr and still read its stdin, so the loop runs until the feed
@@ -421,6 +443,14 @@ final class ChildPump
                 break;
             }
 
+            if ($exitedAt === null && $this->exitGrace !== null && $this->running !== null && !($this->running)()) {
+                $exitedAt = $now;
+            }
+            if ($exitedAt !== null && $now - $exitedAt >= $this->exitGrace) {
+                $reason = DrainResult::CLOSED;
+                break;
+            }
+
             if ($beatAt !== null && $now >= $beatAt) {
                 $this->beat();
                 $beatAt = $clock() + (float) $this->heartbeatSeconds;
@@ -429,6 +459,9 @@ final class ChildPump
             $slice = min($remaining, $this->sliceSeconds);
             if ($beatAt !== null) {
                 $slice = min($slice, max(0.0, $beatAt - $now));
+            }
+            if ($exitedAt !== null) {
+                $slice = min($slice, max(0.0, $exitedAt + (float) $this->exitGrace - $now));
             }
 
             $read = array_values($open);
