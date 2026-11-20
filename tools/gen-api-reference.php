@@ -649,8 +649,11 @@ final class ApiReference
         if ($first === false) {
             $first = $raw;
         }
-        if (isset($imports[$first])) {
-            return $imports[$first] . substr($raw, strlen($first));
+        // PHP matches an alias without regard to case, so `extends base` after `use Demo\Lib\Base;` is Base.
+        foreach ($imports as $alias => $fqn) {
+            if (strcasecmp((string) $alias, $first) === 0) {
+                return $fqn . substr($raw, strlen($first));
+            }
         }
 
         return ($namespace === '' ? '' : $namespace . '\\') . $raw;

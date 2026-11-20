@@ -696,6 +696,20 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('<tr><td><code>own(): int</code></td><td>Own label.</td></tr>', $html);
     }
 
+    public function testAnImportedParentNamedWithDifferentLetterCaseContributesItsMethods(): void
+    {
+        // PHP resolves `use Demo\Lib\Base;` case-insensitively, so `extends base` in another namespace
+        // names Demo\Lib\Base. The import map must match the first segment without regard to case.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Lib/Base.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Lib;\n\n/** Base. */\nclass Base\n{\n    /** Says hello. */\n    public function hello(): string\n    {\n        return 'hi';\n    }\n}\n",
+            'sugar-core/src/App/Child.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\App;\n\nuse Demo\\Lib\\Base;\n\n/** Child. */\nfinal class Child extends base\n{\n    /** Own label. */\n    public function own(): int\n    {\n        return 1;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertSame(2, \substr_count($html, '<tr><td><code>hello(): string</code></td><td>Says hello.</td></tr>'), 'Base and Child both list hello()');
+        self::assertStringContainsString('<tr><td><code>own(): int</code></td><td>Own label.</td></tr>', $html);
+    }
+
     public function testAnInterfaceListsTheMethodsOfTheInterfacesItExtends(): void
     {
         $root = $this->fixtureRoot([
