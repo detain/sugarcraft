@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Background;
 
-use SugarCraft\Core\Util\AtomicJsonFile;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
+use SugarCraft\Core\Util\AtomicJsonFile;
+use function React\Promise\all;
+use function React\Promise\resolve;
 
 /**
  * The roster of {@see Schedule} rows, the file behind them, and the clock.
@@ -127,6 +130,9 @@ final class ScheduleRegistry
 
     /** schedule name => background session id of the run still in flight. */
     private array $fired = [];
+
+    /** schedule name => true while its launch is still waiting on the daemon's handshake (no session id yet). */
+    private array $spawning = [];
 
     /**
      * schedule name => the outcome of the LAST fireDue decision that named it
@@ -513,14 +519,23 @@ final class ScheduleRegistry
      * to fire, and this host leaves its schedule untouched — see
      * `skipped-foreign`.
      *
-     * @param \Closure(Schedule, int): (?string) $spawn receives the row and the
-     *        tick's now-stamp, returns the spawned session id or null; throws
-     *        to report a refused spawn
-     * @return list<array{name: string, action: string, sessionId?: string, error?: string}>
+     * A launch answers LATER: the row's lock and its in-flight marker are held
+     * until the spawn settles, so no other tick or host fires the row in the
+     * meantime, and the result for that row is filled in then. The promise
+     * resolves once every row this call started has settled, in the order the
+     * rows were due. A spawn that settles at once (a plain value or a resolved
+     * promise) is decided inside this call, so the result is available at once.
+     *
+     * @param \Closure(Schedule, int): (PromiseInterface<?string>|string|null) $spawn
+     *        receives the row and the tick's now-stamp, resolves with the
+     *        spawned session id or null; rejects (or throws) to report a refused
+     *        spawn
+     * @return PromiseInterface<list<array{name: string, action: string, sessionId?: string, error?: string}>>
      */
-    public function fireDue(int $now, \Closure $spawn): array
+    public function fireDue(int $now, \Closure $spawn): PromiseInterface
     {
         $results = [];
+        $pending = [];
         foreach ($this->due($now) as $row) {
             if (!$row->persisted) {
                 continue; // the Chat pump owns the ephemeral half
@@ -537,12 +552,13 @@ final class ScheduleRegistry
 
                 continue;
             }
-            if (isset($this->fired[$name])) {
+            if (isset($this->fired[$name]) || isset($this->spawning[$name])) {
                 // The previous run is still going: skip this slot but move the
                 // clock, so the row does not fire the instant it settles and a
                 // wedged daemon cannot pile up a backlog of fires.
                 $this->advance($name, $now);
-                $results[] = ['name' => $name, 'action' => 'skipped-busy', 'sessionId' => $this->fired[$name]];
+                $results[] = ['name' => $name, 'action' => 'skipped-busy']
+                    + (isset($this->fired[$name]) ? ['sessionId' => $this->fired[$name]] : []);
 
                 continue;
             }
@@ -554,6 +570,9 @@ final class ScheduleRegistry
 
                 continue;
             }
+            // The lock is released here unless a launch took it over, in which
+            // case the launch's settlement releases it.
+            $releaseNow = true;
             try {
                 // AUT-1 MAJOR-1: the claim excludes overlapping claims only. A
                 // peer that fired this row and RELEASED before our claim lands
@@ -573,23 +592,45 @@ final class ScheduleRegistry
                     continue;
                 }
                 $this->advance($name, $now);
+                $index = \count($results);
+                $results[] = null; // filled when the launch settles
+                $this->spawning[$name] = true;
                 try {
-                    $sessionId = $spawn($current, $now);
+                    $launch = $spawn($current, $now);
                 } catch (\Throwable $e) {
                     // The advance STAYS: a refused launch announces once per
                     // period, never once per tick, and a transient handshake
                     // failure costs one slot rather than hot-looping.
-                    $results[] = ['name' => $name, 'action' => 'error', 'error' => $e->getMessage()];
+                    unset($this->spawning[$name]);
+                    $results[$index] = ['name' => $name, 'action' => 'error', 'error' => $e->getMessage()];
 
                     continue;
                 }
-                if ($sessionId !== null) {
-                    $this->fired[$name] = $sessionId;
-                }
-                $results[] = ['name' => $name, 'action' => 'fired']
-                    + ($sessionId === null ? [] : ['sessionId' => $sessionId]);
+
+                $releaseNow = false;
+                $pending[] = ($launch instanceof PromiseInterface ? $launch : resolve($launch))->then(
+                    function (mixed $sessionId) use ($name, $lock, $index, &$results, $now): void {
+                        unset($this->spawning[$name]);
+                        $sessionId = \is_string($sessionId) && $sessionId !== '' ? $sessionId : null;
+                        if ($sessionId !== null) {
+                            $this->fired[$name] = $sessionId;
+                        }
+                        $results[$index] = ['name' => $name, 'action' => 'fired']
+                            + ($sessionId === null ? [] : ['sessionId' => $sessionId]);
+                        $this->noteOutcome($results[$index], $now);
+                        $this->releaseLock($lock);
+                    },
+                    function (mixed $e) use ($name, $lock, $index, &$results, $now): void {
+                        unset($this->spawning[$name]);
+                        $results[$index] = ['name' => $name, 'action' => 'error', 'error' => $e instanceof \Throwable ? $e->getMessage() : 'the launch was refused'];
+                        $this->noteOutcome($results[$index], $now);
+                        $this->releaseLock($lock);
+                    },
+                );
             } finally {
-                $this->releaseLock($lock);
+                if ($releaseNow) {
+                    $this->releaseLock($lock);
+                }
             }
         }
 
@@ -597,16 +638,31 @@ final class ScheduleRegistry
         // last outcome — including the refusals the serve side has no
         // transcript to announce. A row skipped-foreign before its name was
         // even claimed records too: "skipped: another host's row" is exactly
-        // the answer an operator wants beside a row that never fires.
+        // the answer an operator wants beside a row that never fires. A launch
+        // still in flight records when it settles, above.
         foreach ($results as $result) {
-            $outcome = ['action' => $result['action'], 'at' => $now];
-            if (isset($result['error'])) {
-                $outcome['error'] = $result['error'];
+            if ($result !== null) {
+                $this->noteOutcome($result, $now);
             }
-            $this->lastOutcome[$result['name']] = $outcome;
         }
 
-        return $results;
+        if ($pending === []) {
+            return resolve($results);
+        }
+
+        return all($pending)->then(function () use (&$results): array {
+            return $results;
+        });
+    }
+
+    /** Remember $result as its row's last fireDue decision (C-AGT-5.b). */
+    private function noteOutcome(array $result, int $now): void
+    {
+        $outcome = ['action' => $result['action'], 'at' => $now];
+        if (isset($result['error'])) {
+            $outcome['error'] = $result['error'];
+        }
+        $this->lastOutcome[$result['name']] = $outcome;
     }
 
     /**

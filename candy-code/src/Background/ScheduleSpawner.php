@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Background;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Host\Commands\BackgroundCommand;
@@ -55,14 +56,15 @@ final class ScheduleSpawner
      * has no binding of its own because it cannot outlive the session that
      * made it.
      *
-     * @return \Closure(Schedule, int): ?string  the spawned session id; throws
-     *         to report a refused spawn (the registry turns that into an
-     *         error result — the advance it already made is NOT rolled back,
-     *         so a broken row announces once per period, never per tick)
+     * @return \Closure(Schedule, int): PromiseInterface<?string>  resolves with the
+     *         spawned session id once the daemon authenticates; rejects (or
+     *         throws) to report a refused spawn (the registry turns that into
+     *         an error result — the advance it already made is NOT rolled
+     *         back, so a broken row announces once per period, never per tick)
      */
     public static function closure(BackgroundSupervisor $supervisor, ?AgentManager $agentManager, ?string $root): \Closure
     {
-        return static function (Schedule $row) use ($supervisor, $agentManager, $root): ?string {
+        return static function (Schedule $row) use ($supervisor, $agentManager, $root): PromiseInterface {
             $agent = BackgroundCommand::rosterAgent($agentManager);
             if ($row->provider !== null && $row->provider !== $agent->provider) {
                 // Derived, never mutated in place: the roster instance is
@@ -94,7 +96,11 @@ final class ScheduleSpawner
                 $spawn['timeoutSeconds'] = $row->timeoutSeconds;
             }
 
-            return $supervisor->spawnSession(...$spawn)->id;
+            // The launch returns at once; the daemon's handshake is accepted by the
+            // supervisor's loop, so a fire never blocks the pump that makes it.
+            return $supervisor->spawnSessionAsync(...$spawn)->then(
+                static fn (BackgroundSession $session): string => $session->id,
+            );
         };
     }
 

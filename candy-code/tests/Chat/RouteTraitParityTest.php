@@ -88,6 +88,7 @@ final class RouteTraitParityTest extends TestCase
         // above): another half-landed lane's arm without its roster row.
         'RemoteFeedPumpMsg',
         'RuntimeNoticePumpMsg',
+        'ScheduleFiredMsg', // P4-12 CC-1 row f: the schedule clock's late launch verdicts (HandlesSessionSurface) — arm landed with its roster row
         'SessionLockRetryMsg',
         'SessionPickerSearchMsg', // C-SES-2 arm landed without its roster row — base red cured in-step (P-CTX.d, 2026-10-27)
         'SessionTitledMsg',

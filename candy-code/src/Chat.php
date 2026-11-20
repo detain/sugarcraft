@@ -117,6 +117,8 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
+use SugarCraft\Code\App\ScheduleFiredMsg;
+use SugarCraft\Code\Chat\ScheduleVerdicts;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\CustomCommandExpandedMsg;
@@ -20243,8 +20245,8 @@ final class Chat implements Model
             // No daemons to poll; the clock still runs, and `/loop` rows fire
             // through the queue (persisted rows cannot: there is no supervisor
             // here to spawn them on, so their due stamps simply wait).
-            [$notices, $queued] = $this->pumpSchedules(time());
-            if ($notices === [] && $queued === []) {
+            [$notices, $queued, $fireCmd] = $this->pumpSchedules(time());
+            if ($notices === [] && $queued === [] && $fireCmd === null) {
                 return [$this, null];
             }
             $idle = $this->mutate([
@@ -20252,15 +20254,15 @@ final class Chat implements Model
                 'queuedPrompts' => [...$this->queuedPrompts, ...$queued],
             ]);
             if ($queued === [] || $idle->inFlight) {
-                return [$idle, null];
+                return [$idle, $fireCmd];
             }
 
-            return self::releaseQueuedPrompts([$idle, null]);
+            return self::releaseQueuedPrompts([$idle, $fireCmd]);
         }
 
         $supervisor->tick();
 
-        [$scheduleNotices, $scheduleQueued] = $this->pumpSchedules(time());
+        [$scheduleNotices, $scheduleQueued, $scheduleFire] = $this->pumpSchedules(time());
 
         $statuses = [];
         foreach ($supervisor->activeSessions() as $id => $session) {
@@ -20346,7 +20348,7 @@ final class Chat implements Model
         if ($notices === [] && $statuses === $this->backgroundStatuses) {
             // Nothing moved - returning $this keeps the renderer's diff empty
             // instead of repainting the transcript twice a second.
-            return [$this, null];
+            return [$this, $scheduleFire];
         }
 
         if ($announcements !== [] && $this->inFlight) {
@@ -20382,11 +20384,15 @@ final class Chat implements Model
                 'name' => implode(', ', $heartbeatAlerts),
             ]));
 
+        // The late schedule verdicts (if any) ride the same return channel as the
+        // heartbeat bell; Cmd::batch drops the absent one.
+        $cmd = $scheduleFire === null ? $ring : Cmd::batch($ring, $scheduleFire);
+
         if ($queuedEntries === [] || $polled->inFlight) {
-            return [$polled, $ring];
+            return [$polled, $cmd];
         }
 
-        return self::releaseQueuedPrompts([$polled, $ring]);
+        return self::releaseQueuedPrompts([$polled, $cmd]);
     }
 
     /**
@@ -20401,47 +20407,39 @@ final class Chat implements Model
      * ({@see Schedule::nextDueAfter()}), and a row whose previous run is still
      * up is skipped-but-advanced rather than stacked.
      *
-     * @return array{0: list<Message>, 1: list<string>} notice rows, queued prompts
+     * @return array{0: list<Message>, 1: list<string>, 2: ?\Closure} notice rows, queued prompts,
+     *         and the Cmd that delivers the launch verdicts still pending (null when none)
      */
     private function pumpSchedules(int $now): array
     {
         $registry = $this->scheduleRegistry;
         if ($registry === null) {
-            return [[], []];
+            return [[], [], null];
         }
         $registry->reloadIfChanged();
         $notices = [];
+        $fireCmd = null;
         $supervisor = $this->backgroundSupervisor;
         if ($supervisor !== null) {
-            foreach ($registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
+            // A launch answers when its daemon authenticates, so the verdicts
+            // usually arrive on a later loop turn. Verdicts that are already
+            // decided (skips, refusals, a launch that settled at once) land in
+            // this tick's transcript; the rest ride a Cmd as ScheduleFiredMsg.
+            $fired = $registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
                 $supervisor,
                 $this->agentManager,
                 $this->projectRoot,
-            )) as $result) {
-                $notice = match ($result['action']) {
-                    'fired' => Lang::t('chat.schedule.fired', ['name' => $result['name']]),
-                    'error' => Lang::t('chat.schedule.spawn_failed', [
-                        'name' => $result['name'],
-                        'error' => $result['error'] ?? '',
-                    ]),
-                    default => null,
-                };
-                if ($notice !== null) {
-                    $notices[] = Message::notice($notice);
-                }
-                // C-AGT-5.f: the same verdict, announced to outbound webhook
-                // subscribers as `schedule.fired`. Only the two decision rows
-                // the operator hears about ride out — a skip stays quiet
-                // because the TUI itself does not notice it either, and the
-                // `outcome` word is the transcript's own verdict vocabulary
-                // (`launched` / `spawn_failed`), not the raw action name.
-                if ($result['action'] === 'fired' || $result['action'] === 'error') {
-                    $this->dispatchOutboundWebhook(WebhookEvent::scheduleFired(
-                        (string) ($result['sessionId'] ?? ''),
-                        (string) $result['name'],
-                        $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
-                    ));
-                }
+            ));
+            $verdicts = null;
+            $fired->then(static function (array $results) use (&$verdicts): void {
+                $verdicts = $results;
+            });
+            if ($verdicts !== null) {
+                $notices = ScheduleVerdicts::announce($verdicts, $this->dispatchOutboundWebhook(...));
+            } else {
+                $fireCmd = Cmd::promise(static fn (): PromiseInterface => $fired->then(
+                    static fn (array $results): Msg => new ScheduleFiredMsg($results),
+                ));
             }
             // A fired row's daemon settled (or vanished): the row may claim
             // its next slot. This runs on the NEXT tick's fireDue, so a row
@@ -20468,7 +20466,7 @@ final class Chat implements Model
             $notices[] = Message::notice(Lang::t('chat.schedule.loop_queued', ['name' => $row->name]));
         }
 
-        return [$notices, $queued];
+        return [$notices, $queued, $fireCmd];
     }
 
     /**
