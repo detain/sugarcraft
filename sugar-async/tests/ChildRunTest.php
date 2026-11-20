@@ -332,6 +332,36 @@ final class ChildRunTest extends TestCase
         $apply(ChildRun::new(['true']));
     }
 
+    public function testACommandLineIsHandedToTheShellAsOneString(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('The POSIX shell line is pinned here; the Windows cmd.exe line runs on a Windows runtime.');
+        }
+
+        $r = ChildRun::commandLine('printf "%s" "a b"; exit 4')->run();
+
+        $this->assertSame('a b', $r->stdout);
+        $this->assertSame(4, $r->exitCode);
+    }
+
+    public function testACommandLineKeepsItsFormThroughTheBuilder(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('The POSIX shell line is pinned here; the Windows cmd.exe line runs on a Windows runtime.');
+        }
+
+        $r = ChildRun::commandLine('printf hi')->withTimeout(5.0)->run();
+
+        $this->assertSame('hi', $r->stdout);
+        $this->assertTrue($r->succeeded());
+    }
+
+    public function testAnEmptyCommandLineIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::commandLine('');
+    }
+
     public function testRejectsAnEmptyOrNonStringArgv(): void
     {
         try {

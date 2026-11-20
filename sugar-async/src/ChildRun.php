@@ -16,8 +16,10 @@ use function React\Promise\resolve;
  * Run one child process with a deadline and a per-stream byte cap, and collect
  * what it wrote: blocking with {@see run()}, or on a loop with {@see launch()}.
  *
- * The argv is executed directly, never through a shell. The defaults are the
- * deadline and cap {@see ChildPump} uses: ten seconds, 8 MiB per stream.
+ * The argv is executed directly, never through a shell. The one exception is
+ * {@see commandLine()}, which hands proc_open() a string, so the shell reads it.
+ * The defaults are the deadline and cap {@see ChildPump} uses: ten seconds,
+ * 8 MiB per stream.
  *
  *     $r = ChildRun::new(['git', 'status', '--porcelain'])
  *         ->withTimeout(5.0)
@@ -70,8 +72,8 @@ use function React\Promise\resolve;
  * Consumers: sugar-dashboard's BoundedCommand runs every child through run() and
  * launch() and maps the ChildResult onto its outcome. candy-code's CommandBackend
  * runs its child through ChildRun as well, from both its blocking and its launch
- * entry points. candy-code's StreamingCommandBackend still spawns with its own
- * proc_open() and is not yet on this class.
+ * entry points, and its StreamingCommandBackend runs its child through launch() and
+ * run() as well, with the idle budget, the exit grace and the cancel handle.
  */
 final class ChildRun
 {
@@ -101,6 +103,7 @@ final class ChildRun
      * @param null|float $exitGrace  run() only: seconds read on after the exit is seen, or null to read to EOF
      * @param null|CancellationToken $cancellation  Kills the child and reports CANCELLED when cancelled, or null
      * @param null|float $idleTimeout  Seconds of silence before the child is killed, or null for none
+     * @param bool $commandLine  True when $argv holds one command line for proc_open() to take as a string
      */
     private function __construct(
         private readonly array $argv,
@@ -115,6 +118,7 @@ final class ChildRun
         private readonly ?float $exitGrace = WindowsPipes::EXIT_DRAIN_GRACE_SECONDS,
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?float $idleTimeout = null,
+        private readonly bool $commandLine = false,
     ) {
     }
 
@@ -131,6 +135,23 @@ final class ChildRun
         }
 
         return new self($argv, self::DEFAULT_TIMEOUT_SECONDS, self::DEFAULT_MAX_BYTES, null, null, null);
+    }
+
+    /**
+     * A command line proc_open() takes as one string, so the shell reads it:
+     * `/bin/sh -c` on POSIX, and cmd.exe on Windows. That is the form a shell
+     * string had before it was wrapped in an argv. An argv is escaped one element
+     * at a time on Windows, and the escaping of an embedded quote is not what
+     * cmd.exe reads, so a string command must travel as the raw line. Use
+     * {@see new()} for any command that is an argv already.
+     */
+    public static function commandLine(string $line): self
+    {
+        if ($line === '') {
+            throw new \InvalidArgumentException('ChildRun needs a non-empty command line');
+        }
+
+        return new self([$line], self::DEFAULT_TIMEOUT_SECONDS, self::DEFAULT_MAX_BYTES, null, null, null, commandLine: true);
     }
 
     /** Seconds from the start of the run before the child is killed. */
@@ -528,7 +549,7 @@ final class ChildRun
 
         $pipes = [];
         $proc = @proc_open(
-            $this->argv,
+            $this->commandLine ? $this->argv[0] : $this->argv,
             [0 => $stdinDescriptor, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $this->cwd,
