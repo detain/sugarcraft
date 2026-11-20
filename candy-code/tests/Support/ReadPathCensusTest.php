@@ -240,9 +240,6 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — an inbox file under the team store this process writes',
             'SELF_LOCATED — the same inbox, re-opened to compact it',
         ],
-        'Agents/Mailbox.php|file_get_contents' => [
-            'SELF_LOCATED — a wake marker this mailbox wrote',
-        ],
         'Agents/ProcessExecutor.php|file_get_contents' => [
             'PROCESS_DERIVED — `/proc/meminfo`, a kernel interface named by a literal',
         ],

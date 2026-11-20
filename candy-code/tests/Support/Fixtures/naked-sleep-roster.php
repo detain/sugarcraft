@@ -17,7 +17,6 @@ return [
     'Agents/AgentWorkerPoolTimeoutTest.php' => 2,
     'Agents/EngineExecutorTest.php' => 5,
     'Agents/Live/AgentRunCardsLostUpdateTest.php' => 1,
-    'Agents/MailboxTest.php' => 1,
     'Agents/ProcessExecutorTest.php' => 3,
     'Backend/CancelToolStopsOnlyTheRunningCallTest.php' => 4,
     'Backend/CommandBackendChildAbandonTest.php' => 2,
