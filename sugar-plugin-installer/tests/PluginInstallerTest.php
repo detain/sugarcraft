@@ -6,6 +6,7 @@ namespace SugarCraft\PluginInstaller\Tests;
 
 use Composer\Composer;
 use Composer\Config;
+use Composer\Downloader\DownloaderInterface;
 use Composer\Downloader\DownloadManager;
 use Composer\IO\NullIO;
 use Composer\Package\Package;
@@ -14,9 +15,11 @@ use Composer\Repository\InstalledArrayRepository;
 use Composer\Repository\RepositoryManager;
 use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Plugins\Provenance\SourceRecord;
 use SugarCraft\PluginInstaller\PluginInstaller;
 use SugarCraft\PluginInstaller\Tests\Support\RecordingDownloader;
 use SugarCraft\PluginInstaller\Tests\Support\Scratch;
+use SugarCraft\PluginInstaller\Tests\Support\StagingDownloader;
 
 final class PluginInstallerTest extends TestCase
 {
@@ -64,9 +67,9 @@ final class PluginInstallerTest extends TestCase
     /**
      * @param array<string, mixed>|null $extra the root package's `extra` map
      * @param list<Package> $installed the packages the project already has installed
-     * @param RecordingDownloader|null $downloader registered for the `file` dist type, so removal records its paths
+     * @param DownloaderInterface|null $downloader registered for the `file` dist type: a RecordingDownloader records removals, a StagingDownloader writes a tree
      */
-    private function installerFor(?array $extra, array $installed = [], ?RecordingDownloader $downloader = null): PluginInstaller
+    private function installerFor(?array $extra, array $installed = [], ?DownloaderInterface $downloader = null): PluginInstaller
     {
         $composer = new Composer();
         $config = new Config(false, $this->project);
@@ -496,5 +499,81 @@ final class PluginInstallerTest extends TestCase
                 $this->assertStringNotContainsString($word, $source, basename($file) . " names $word");
             }
         }
+    }
+
+    /** A sugar-plugin package at $version, staged through the file downloader. */
+    private static function versionedPackage(string $name, string $version): Package
+    {
+        $package = new Package($name, $version . '.0', $version);
+        $package->setType('sugar-plugin');
+        $package->setInstallationSource('dist');
+        $package->setDistType('file');
+
+        return $package;
+    }
+
+    /** The provenance record in $bundleDir, read back the way a consumer reads it. */
+    private static function readSourceRecord(string $bundleDir): ?SourceRecord
+    {
+        return SourceRecord::read(
+            $bundleDir,
+            dirname($bundleDir),
+            PluginInstaller::SOURCE_RECORD_FILE,
+            static fn (string $name): bool => $name !== '',
+            ['composer'],
+        );
+    }
+
+    public function testASuccessfulInstallWritesAProvenanceRecordNamingThePackageAndVersion(): void
+    {
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader());
+
+        $installer->install(new InstalledArrayRepository(), self::versionedPackage('acme/sample-plugin', '2.1.0'));
+
+        $bundle = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->assertSame('.sugar-plugin-source.json', PluginInstaller::SOURCE_RECORD_FILE);
+        $this->assertFileExists($bundle . '/.sugar-plugin-source.json');
+        $record = self::readSourceRecord($bundle);
+        $this->assertNotNull($record, 'the install must leave a readable provenance record');
+        $this->assertSame('acme/sample-plugin', $record->repo);
+        $this->assertSame('2.1.0', $record->version);
+        $this->assertSame('sample-plugin', $record->name);
+        $this->assertSame('composer', $record->marketplace);
+        $this->assertSame('composer', $record->sourceType);
+        $this->assertGreaterThan(0, $record->installedAt);
+    }
+
+    public function testTheInstallLeavesACandyCodeMarketplaceRecordBesideItUntouched(): void
+    {
+        // A bundle directory a marketplace install already wrote into. The
+        // composer.json names the package, so the install may stage over it.
+        $bundle = $this->project . '/.candy-code/bundles/sample-plugin';
+        $this->stageTree($bundle, 'acme/sample-plugin');
+        $marketplaceRecord = '{"marketplace":"acme-hub","name":"sample-plugin","sourceType":"github","repo":"acme/sample-plugin","url":"","sha":"","installedAt":1}';
+        Scratch::write($bundle . '/.candy-code-source.json', $marketplaceRecord);
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader());
+
+        $installer->install(new InstalledArrayRepository(), self::versionedPackage('acme/sample-plugin', '1.0.0'));
+
+        $this->assertSame($marketplaceRecord, file_get_contents($bundle . '/.candy-code-source.json'));
+        $this->assertSame('1.0.0', self::readSourceRecord($bundle)?->version);
+    }
+
+    public function testAnUpdateRewritesTheRecordVersion(): void
+    {
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader());
+        $initial = self::versionedPackage('acme/sample-plugin', '1.0.0');
+        $target = self::versionedPackage('acme/sample-plugin', '2.0.0');
+        $bundle = $this->project . '/.candy-code/bundles/sample-plugin';
+
+        $installer->install(new InstalledArrayRepository(), $initial);
+        $this->assertSame('1.0.0', self::readSourceRecord($bundle)?->version);
+
+        $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+
+        $record = self::readSourceRecord($bundle);
+        $this->assertNotNull($record, 'the update must leave a readable provenance record');
+        $this->assertSame('2.0.0', $record->version, 'an update must not keep the version it was installed at');
+        $this->assertSame('acme/sample-plugin', $record->repo);
     }
 }
