@@ -174,6 +174,43 @@ final class ScheduleRegistryAsyncFireTest extends TestCase
         $this->assertSame('sess_quick', $registry->busySession('b-quick'));
     }
 
+    public function testRemovingARowMidLaunchLeavesNoMarkerWhenTheLaunchSettles(): void
+    {
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'stop-me', everySeconds: 60, prompt: 'p', nextDue: 100, root: $this->dir));
+        $launch = new Deferred();
+        $registry->fireDue(100, static fn (): PromiseInterface => $launch->promise());
+
+        $this->assertTrue($registry->remove('stop-me'), 'stop during an active spawn');
+        $launch->resolve('sess_orphan');
+
+        $this->assertNull($registry->busySession('stop-me'), 'a settle for a removed row writes no busy marker');
+        $this->assertNull($registry->lastOutcome('stop-me'), 'nor an outcome for a row that no longer exists');
+        $this->assertSame([], $registry->firedNames());
+    }
+
+    public function testARowAddedBackAfterARemovedLaunchSettlesIsFreeToFire(): void
+    {
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: 100, root: $this->dir));
+        $first = new Deferred();
+        $registry->fireDue(100, static fn (): PromiseInterface => $first->promise());
+
+        $this->assertTrue($registry->remove('nightly'));
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: 100, root: $this->dir));
+        $registry->persist();
+        $first->resolve('sess_old');
+
+        $fresh = self::settled($registry->fireDue(10_000, static fn (): string => 'sess_new'));
+
+        $this->assertSame(
+            [['name' => 'nightly', 'action' => 'fired', 'sessionId' => 'sess_new']],
+            $fresh,
+            'the re-added row fires; the removed launch must not mark it skipped-busy',
+        );
+        $this->assertSame('sess_new', $registry->busySession('nightly'));
+    }
+
     /** @return list<array<string, mixed>> the verdicts of a fireDue whose launches all settled at once */
     private static function settled(PromiseInterface $promise): array
     {

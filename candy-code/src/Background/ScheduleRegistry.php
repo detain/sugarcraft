@@ -131,8 +131,18 @@ final class ScheduleRegistry
     /** schedule name => background session id of the run still in flight. */
     private array $fired = [];
 
-    /** schedule name => true while its launch is still waiting on the daemon's handshake (no session id yet). */
+    /**
+     * schedule name => the launch token of a spawn still waiting on the daemon's
+     * handshake (no session id yet). The token lets a settling launch tell whether
+     * it still owns the row: remove() drops the marker, so a launch the row no
+     * longer owns records nothing when it settles.
+     *
+     * @var array<string, int>
+     */
     private array $spawning = [];
+
+    /** Source of {@see self::$spawning} tokens: one per launch, never reused. */
+    private int $launchSeq = 0;
 
     /**
      * schedule name => the outcome of the LAST fireDue decision that named it
@@ -365,7 +375,7 @@ final class ScheduleRegistry
     public function remove(string $name): bool
     {
         $existed = isset($this->rows[$name]) || isset($this->ephemeral[$name]);
-        unset($this->rows[$name], $this->ephemeral[$name], $this->fired[$name]);
+        unset($this->rows[$name], $this->ephemeral[$name], $this->fired[$name], $this->spawning[$name]);
 
         return $existed;
     }
@@ -594,7 +604,8 @@ final class ScheduleRegistry
                 $this->advance($name, $now);
                 $index = \count($results);
                 $results[] = null; // filled when the launch settles
-                $this->spawning[$name] = true;
+                $token = ++$this->launchSeq;
+                $this->spawning[$name] = $token;
                 try {
                     $launch = $spawn($current, $now);
                 } catch (\Throwable $e) {
@@ -609,21 +620,25 @@ final class ScheduleRegistry
 
                 $releaseNow = false;
                 $pending[] = ($launch instanceof PromiseInterface ? $launch : resolve($launch))->then(
-                    function (mixed $sessionId) use ($name, $lock, $index, &$results, $now): void {
-                        unset($this->spawning[$name]);
+                    function (mixed $sessionId) use ($name, $token, $lock, $index, &$results, $now): void {
+                        $live = $this->settleLaunch($name, $token);
                         $sessionId = \is_string($sessionId) && $sessionId !== '' ? $sessionId : null;
-                        if ($sessionId !== null) {
+                        if ($live && $sessionId !== null) {
                             $this->fired[$name] = $sessionId;
                         }
                         $results[$index] = ['name' => $name, 'action' => 'fired']
                             + ($sessionId === null ? [] : ['sessionId' => $sessionId]);
-                        $this->noteOutcome($results[$index], $now);
+                        if ($live) {
+                            $this->noteOutcome($results[$index], $now);
+                        }
                         $this->releaseLock($lock);
                     },
-                    function (mixed $e) use ($name, $lock, $index, &$results, $now): void {
-                        unset($this->spawning[$name]);
+                    function (mixed $e) use ($name, $token, $lock, $index, &$results, $now): void {
+                        $live = $this->settleLaunch($name, $token);
                         $results[$index] = ['name' => $name, 'action' => 'error', 'error' => $e instanceof \Throwable ? $e->getMessage() : 'the launch was refused'];
-                        $this->noteOutcome($results[$index], $now);
+                        if ($live) {
+                            $this->noteOutcome($results[$index], $now);
+                        }
                         $this->releaseLock($lock);
                     },
                 );
@@ -653,6 +668,25 @@ final class ScheduleRegistry
         return all($pending)->then(function () use (&$results): array {
             return $results;
         });
+    }
+
+    /**
+     * A launch settled: clear its in-flight marker if it still holds it, and
+     * report whether its row is still this host's to record against. A row
+     * removed mid-launch (or removed and added again, which took a newer launch
+     * token) has moved on, so the settlement writes no busy marker and no
+     * outcome for it; otherwise a re-added row of that name would be skipped-busy
+     * on a session nothing is tracking.
+     */
+    private function settleLaunch(string $name, int $token): bool
+    {
+        if (($this->spawning[$name] ?? null) !== $token) {
+            return false;
+        }
+        unset($this->spawning[$name]);
+        $row = $this->rows[$name] ?? null;
+
+        return $row !== null && $row->root === $this->hostRoot;
     }
 
     /** Remember $result as its row's last fireDue decision (C-AGT-5.b). */
