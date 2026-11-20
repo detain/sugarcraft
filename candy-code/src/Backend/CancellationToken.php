@@ -86,6 +86,15 @@ final class CancellationToken
     }
 
     /**
+     * The sugar-async token over the same source, for {@see \SugarCraft\Async\ChildRun::withCancellation()}:
+     * cancelling this token cancels it, so a child run on the loop is killed through the same ladder.
+     */
+    public function asyncToken(): \SugarCraft\Async\CancellationToken
+    {
+        return $this->source->token();
+    }
+
+    /**
      * Ask the work to stop at its next boundary rather than at once. Polled,
      * like {@see isCancelled()}; it fires no listener, because those are the
      * hard stop's.

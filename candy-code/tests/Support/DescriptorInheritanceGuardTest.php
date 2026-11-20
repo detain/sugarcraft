@@ -216,12 +216,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'the launch that created it',
         ],
 
-        // The handle is returned to a caller that drains it from a periodic
-        // timer on the event loop, so the child outlives `spawn()` by design.
-        'Backend/CommandBackend.php::spawn' => [
-            'count' => 1,
-            'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
-        ],
         // C-TUI-6.l: the take recorder. Handle stored in the class's live-take
         // registry (self::$live, keyed by WAV path) so stop() can SIGINT it;
         // the child carries its OWN cap (`-d`/`trim 0 <max>` from

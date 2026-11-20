@@ -61,6 +61,24 @@ trait AbandonsActiveChildren
     }
 
     /**
+     * The registry keyed by pid, for a child run through ChildRun: the handle
+     * stays inside ChildRun, and the pid it reports at spawn is all abandon needs.
+     */
+    protected function registerActivePid(int $pid): void
+    {
+        if ($pid <= 0) {
+            return;
+        }
+
+        $this->activeChildren[$pid] = ['pid' => $pid, 'proc' => null];
+    }
+
+    protected function forgetActivePid(int $pid): void
+    {
+        unset($this->activeChildren[$pid]);
+    }
+
+    /**
      * @return list<int>
      */
     public function activeChildPids(): array
