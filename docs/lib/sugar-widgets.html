@@ -346,7 +346,7 @@ final class Loading implements Model {
 }</code></pre>
 
     <h3 id="a-tab-click-activates-a-tab-on-another-bar" style="margin-top: 24px;">A tab click activates a tab on another bar</h3>
-    <p>Bars built from one template share a zone key, so when two bars use the same <code>Manager</code>, a click on one bar's tab can select the same-numbered tab on the other. Give each bar its own key with <code>withZoneKey()</code>. The key must not be empty, because an empty key throws an <code>\InvalidArgumentException</code>, and it must use the sugar-mouse id characters <code>A-Z a-z 0-9 . _ : -</code>. An illegal key is rejected when the bar renders, not when it is built.</p>
+    <p>Bars built from one template share a zone key, so when two bars use the same <code>Manager</code>, a click on one bar's tab can select the same-numbered tab on the other. Give each bar its own key with <code>withZoneKey()</code>. The key must not be empty, because an empty key throws an <code>\InvalidArgumentException</code>, and it must use the sugar-mouse id characters <code>A-Z a-z 0-9 . _ : -</code>. An illegal key is rejected when the bar renders, not when it is built, and only once a <code>Manager</code> is attached with <code>withZoneManager()</code>. Without a Manager the key is never checked.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Widgets\Tabs\Tabs;
 
 $template = Tabs::new();
@@ -354,7 +354,7 @@ $top    = $template-&gt;withLabels(['Logs', 'Stats'])-&gt;withZoneKey('top');
 $bottom = $template-&gt;withLabels(['Logs', 'Stats'])-&gt;withZoneKey('bottom');</code></pre>
 
     <h3 id="a-table-filter-finds-nothing-for-a-value-you-can-see" style="margin-top: 24px;">A table filter finds nothing for a value you can see</h3>
-    <p>The default <code>withFilter()</code> match runs a case-insensitive substring search over the raw cell values you passed to <code>row()</code>, not over the text a <code>styleFunc</code> prints. A value shown as <code>1,200</code> that is stored as <code>1200</code> is found by searching <code>1200</code>, not <code>1,200</code>. To match the displayed form, pass a predicate with <code>withFilterPredicate()</code>, which receives each row as a list of strings.</p>
+    <p>Filtering has to be switched on. Without <code>withFilterable(true)</code>, <code>withFilter()</code> hides no rows at all. With it on, the default match is a case-insensitive substring search over the raw cell strings you passed to <code>row()</code>, in every column. The header row is not searched, and a <code>styleFunc</code> cannot change what is searched, because it returns a <code>Style</code> and not text. Escape codes inside a cell string are part of the searched text, so a search term that spans one does not match. To match a different form of the value, pass a predicate with <code>withFilterPredicate()</code>, which receives each row as a list of strings.</p>
 
     <h3 id="an-options-row-wraps-onto-two-lines" style="margin-top: 24px;">An options row wraps onto two lines</h3>
     <p><code>Menu\OptionRow::render()</code> draws the two-line legacy layout, and it is deprecated. Call <code>OptionRow::renderRow()</code> for the one-line btop row, whose column widths are exact. The one-line form also takes the <code>selected</code>, <code>editing</code> and <code>hasArrows</code> flags shown in the TextEdit example above.</p>

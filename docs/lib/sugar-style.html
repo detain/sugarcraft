@@ -167,7 +167,7 @@
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#colors-still-print-under-no-color-or-into-a-pipe">Colors still print under NO_COLOR, or into a pipe</a></li>
             <li class="toc-h3"><a href="#theme-adaptive-picks-the-dark-palette-on-a-light-terminal">Theme::adaptive() picks the dark palette on a light terminal</a></li>
-            <li class="toc-h3"><a href="#a-wrapped-table-cell-stays-on-one-line">A wrapped table cell stays on one line</a></li>
+            <li class="toc-h3"><a href="#a-wrapped-table-cell-stays-on-one-line-or-render-throws-a-typeerror">A wrapped table cell stays on one line, or render() throws a TypeError</a></li>
             <li class="toc-h3"><a href="#an-overlay-hides-the-layer-beneath-it-instead-of-blending">An overlay hides the layer beneath it instead of blending</a></li>
             <li class="toc-h3"><a href="#withembeddedtitle-adds-nothing-to-the-border">withEmbeddedTitle() adds nothing to the border</a></li>
             <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
@@ -281,7 +281,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
     <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 id="colors-still-print-under-no-color-or-into-a-pipe" style="margin-top: 24px;">Colors still print under <code>NO_COLOR</code>, or into a pipe</h3>
-    <p><code>Style::new()</code> renders TrueColor unless a process-wide default has been pinned, and sugar-style never reads the environment itself. Negotiate the terminal's tier once at startup and pin it with <code>Style::setDefaultProfile()</code>. Every Style created afterwards downsamples to that tier, and <code>NoTty</code> strips every escape. The detection reads <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>TERM=dumb</code> through sugar-colorprofile.</p>
+    <p><code>Style::new()</code> renders TrueColor unless a process-wide default has been pinned, and <code>Style::new()</code> never reads the environment itself, although <code>Theme::adaptive()</code> and <code>Renderer::fromEnvironment()</code> do. Negotiate the terminal's tier once at startup and pin it with <code>Style::setDefaultProfile()</code>. Every Style created afterwards downsamples to that tier, and <code>NoTty</code> strips every escape. The detection reads <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>TERM=dumb</code> through sugar-colorprofile.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Style\Style;
 
@@ -290,8 +290,8 @@ Style::setDefaultProfile(ColorProfile::detect(null, STDOUT));</code></pre>
     <h3 id="theme-adaptive-picks-the-dark-palette-on-a-light-terminal" style="margin-top: 24px;"><code>Theme::adaptive()</code> picks the dark palette on a light terminal</h3>
     <p><code>adaptive()</code> reads only the last field of <code>COLORFGBG</code>. A value in the form <code>fg;bg</code> with a background index from 0 to 255 decides light or dark by that colour's luminance. When the variable is unset, has no <code>;</code>, or holds a non-numeric or out-of-range background, the result is the fallback, which is dark by default. Many terminals never set <code>COLORFGBG</code>, so on those the fallback decides every time. Pass <code>adaptive(false)</code> to make the fallback light, or choose <code>Theme::light()</code> or <code>Theme::dark()</code> when the host knows its background.</p>
 
-    <h3 id="a-wrapped-table-cell-stays-on-one-line" style="margin-top: 24px;">A wrapped table cell stays on one line</h3>
-    <p>A <code>Table::wrap()</code> callback must return a list of physical lines, not a single string with embedded newlines. Each element of the returned array becomes one rendered line of the row. Split the wrapped text into an array before returning it, so the row grows to match.</p>
+    <h3 id="a-wrapped-table-cell-stays-on-one-line-or-render-throws-a-typeerror" style="margin-top: 24px;">A wrapped table cell stays on one line, or <code>render()</code> throws a TypeError</h3>
+    <p>A <code>Table::wrap()</code> callback must return a list of physical lines, not a single string with embedded newlines. Each element of the returned array becomes one rendered line of the row. Split the wrapped text into an array before returning it, so the row grows to match. A callback that returns a plain string does not stay on one line. <code>render()</code> fails with <code>array_values(): Argument #1 ($array) must be of type array, string given</code>.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Table\Table;
 
