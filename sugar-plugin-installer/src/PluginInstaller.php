@@ -10,6 +10,7 @@ use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
 use Composer\Util\Filesystem;
 use React\Promise\PromiseInterface;
+use SugarCraft\Plugins\Provenance\SourceRecord;
 
 /**
  * Stages `sugar-plugin` packages to the scope the root project selects.
@@ -24,6 +25,17 @@ use React\Promise\PromiseInterface;
 final class PluginInstaller extends LibraryInstaller
 {
     public const PACKAGE_TYPE = 'sugar-plugin';
+
+    /**
+     * The provenance record each install leaves inside its bundle directory. The
+     * name is a dotfile of its own: candy-code's marketplace record is
+     * `.candy-code-source.json`, and a Composer install must never overwrite it.
+     */
+    public const SOURCE_RECORD_FILE = '.sugar-plugin-source.json';
+
+    private const SOURCE_MARKETPLACE = 'composer';
+
+    private const SOURCE_TYPE = 'composer';
 
     /**
      * True while a staging call (download, install, update) runs. Composer reads
@@ -348,12 +360,14 @@ final class PluginInstaller extends LibraryInstaller
 
     /**
      * @throws \InvalidArgumentException when the root's installer section is malformed
+     * @throws \RuntimeException when a user-tier bundle already holds the package's name
      */
     public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
     {
-        $this->configuredPath($target);
+        $path = $this->configuredPath($target);
+        $this->refuseUserTierNameClash($target, $this->existingPath($initial));
 
-        return $this->stage(fn () => parent::update($repo, $initial, $target));
+        return $this->recordSource($this->stage(fn () => parent::update($repo, $initial, $target)), $target, $path);
     }
 
     /**
@@ -372,6 +386,8 @@ final class PluginInstaller extends LibraryInstaller
     {
         $path = $this->configuredPath($package);
         $bundleRoot = dirname($path);
+
+        $this->refuseUserTierNameClash($package);
 
         foreach ($this->composer->getRepositoryManager()->getLocalRepository()->getPackages() as $installed) {
             if ($installed->getType() !== self::PACKAGE_TYPE || $installed->getName() === $package->getName()) {
@@ -399,7 +415,136 @@ final class PluginInstaller extends LibraryInstaller
             ));
         }
 
-        return $this->stage(fn () => parent::install($repo, $package));
+        return $this->recordSource($this->stage(fn () => parent::install($repo, $package)), $package, $path);
+    }
+
+    /**
+     * Writes the provenance record once the staged tree is on disk. Composer's
+     * install and update return a promise that settles after the download, so
+     * the record is written in its success branch: a failed download leaves no
+     * record behind. A record that cannot be written rejects the install, since
+     * a tree without its record is a tree nothing can attribute.
+     *
+     * @param mixed $staged the value parent::install() or parent::update() returned
+     */
+    private function recordSource(mixed $staged, PackageInterface $package, string $path): mixed
+    {
+        if (!$staged instanceof PromiseInterface) {
+            $this->writeSourceRecord($package, $path);
+
+            return $staged;
+        }
+
+        return $staged->then(function (mixed $value) use ($package, $path): mixed {
+            $this->writeSourceRecord($package, $path);
+
+            return $value;
+        });
+    }
+
+    /**
+     * The record names the bundle by its directory and the package by its
+     * Composer name, and carries the resolved version, so an update rewrites it
+     * and the record never keeps the version it was first installed at.
+     *
+     * A staged directory that is a symlink is a Composer path repository linked to
+     * a developer's checkout. A record written through the link would land in that
+     * checkout as an untracked file, so such a bundle carries no record. It reads
+     * as a bundle that arrived with its repository, which is what a link is.
+     *
+     * @throws \RuntimeException when the record cannot be written into the staged tree, or the package ships a symlink at the record's lock path
+     */
+    private function writeSourceRecord(PackageInterface $package, string $path): void
+    {
+        if (is_link($path)) {
+            return;
+        }
+
+        $this->refuseLinkedRecordLock($package, $path);
+
+        $record = SourceRecord::fromTrustedRecord(
+            self::SOURCE_MARKETPLACE,
+            basename($path),
+            self::SOURCE_TYPE,
+            $package->getPrettyName(),
+            '',
+            '',
+            time(),
+            $package->getPrettyVersion(),
+        );
+
+        $failure = $record->write($path, self::SOURCE_RECORD_FILE);
+        if ($failure !== null) {
+            throw new \RuntimeException('sugar-plugin-installer: ' . $failure . '.');
+        }
+    }
+
+    /**
+     * AtomicJsonFile takes its lock on a sidecar named after the record, opened
+     * with fopen('cb'), which follows a symlink and creates whatever it points
+     * at. A package that ships a symlink at that name could make the install
+     * create a file outside the bundle, so the install refuses before writing.
+     *
+     * The sidecar name mirrors AtomicJsonFile::lockPath(): a dot, then the
+     * record's basename, then '.lock', in the record's directory.
+     *
+     * @throws \RuntimeException when the staged tree holds a symlink at the sidecar's name
+     */
+    private function refuseLinkedRecordLock(PackageInterface $package, string $bundleDir): void
+    {
+        $lockPath = $bundleDir . '/.' . self::SOURCE_RECORD_FILE . '.lock';
+        if (!is_link($lockPath)) {
+            return;
+        }
+
+        throw new \RuntimeException(sprintf(
+            'sugar-plugin-installer: %s ships a symlink at %s, the provenance record lock path. Writing the record through it would create a file outside the bundle, so the install is refused.',
+            $package->getPrettyName(),
+            $lockPath,
+        ));
+    }
+
+    /**
+     * A project-tier bundle never inherits trust (plan_plugin.md 5.2, ruling
+     * 2026-11-20). Trust is name-exact and lives in the user tier, so a project
+     * tree that reuses a user-tier bundle name would load under that name's trust.
+     * The refusal is by name: any directory the user tier holds under the name
+     * blocks the install, whichever package it came from.
+     *
+     * Project scope never needs a home directory, so a missing home means there
+     * is no user tier to clash with and the check passes.
+     *
+     * $ownTree is the tree an update is moving away from. When the user-tier
+     * directory is that tree, the package is moving between tiers, not clashing
+     * with another bundle, so it passes. Install passes none.
+     *
+     * @throws \InvalidArgumentException when the root's installer section is malformed
+     * @throws \RuntimeException when a user-tier bundle already holds the package's name
+     */
+    private function refuseUserTierNameClash(PackageInterface $package, ?string $ownTree = null): void
+    {
+        $config = InstallerConfig::fromExtra($this->composer->getPackage()->getExtra());
+        if ($config->scope !== Scope::Project) {
+            return;
+        }
+
+        try {
+            $userPath = StagingPath::forPackage(
+                StagingPath::userBundleRoot(StagingPath::userHome()),
+                $package->getPrettyName(),
+            );
+        } catch (\InvalidArgumentException | \RuntimeException) {
+            return;
+        }
+
+        if (is_dir($userPath) && $userPath !== $ownTree) {
+            throw new \RuntimeException(sprintf(
+                'sugar-plugin-installer: %s is a project-tier install, but a user-tier bundle named %s already exists at %s. A project bundle never inherits a user-tier name or its trust, so the install is refused. Remove the user-tier bundle, or rename the package.',
+                $package->getPrettyName(),
+                basename($userPath),
+                $userPath,
+            ));
+        }
     }
 
     /**

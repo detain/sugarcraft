@@ -183,4 +183,44 @@ final class SourceRecordTest extends TestCase
 
         self::assertSame(0o600, fileperms($this->bundleDir . '/' . self::HOST_NAME) & 0o777);
     }
+
+    public function testAVersionWrittenAtInstallReadsBackUnderItsOwnField(): void
+    {
+        $record = SourceRecord::fromTrustedRecord('composer', 'sample-plugin', 'composer', 'acme/sample-plugin', '', '', 5, '2.1.0');
+
+        self::assertSame('2.1.0', $record->version);
+        self::assertNull($record->write($this->bundleDir, self::HOST_NAME));
+
+        $read = SourceRecord::read($this->bundleDir, $this->boundary(), self::HOST_NAME, self::nameRule(), ['composer']);
+        self::assertNotNull($read);
+        self::assertSame('acme/sample-plugin', $read->repo);
+        self::assertSame('2.1.0', $read->version);
+    }
+
+    public function testVersionDefaultsToEmptyAndAnExistingRecordWithoutItStillReads(): void
+    {
+        self::assertSame('', SourceRecord::fromTrustedRecord('h', 'beta', 'path', '', '', '', 1)->version);
+
+        // The shape candy-code's marketplace installs wrote before the field existed.
+        Scratch::put($this->bundleDir . '/' . self::HOST_NAME, json_encode([
+            'marketplace' => 'acme-hub', 'name' => 'beta', 'sourceType' => 'github', 'repo' => 'acme/beta',
+            'url' => '', 'sha' => str_repeat('f', 40), 'installedAt' => 4,
+        ]));
+
+        $read = SourceRecord::read($this->bundleDir, $this->boundary(), self::HOST_NAME, self::nameRule(), self::sourceTypes());
+        self::assertNotNull($read);
+        self::assertSame('acme/beta', $read->repo);
+        self::assertSame('', $read->version);
+    }
+
+    public function testANonStringVersionCollapsesToEmpty(): void
+    {
+        Scratch::put($this->bundleDir . '/' . self::HOST_NAME, json_encode([
+            'marketplace' => 'h', 'name' => 'beta', 'sourceType' => 'path', 'version' => 2,
+        ]));
+
+        $read = SourceRecord::read($this->bundleDir, $this->boundary(), self::HOST_NAME, self::nameRule(), self::sourceTypes());
+        self::assertNotNull($read);
+        self::assertSame('', $read->version);
+    }
 }

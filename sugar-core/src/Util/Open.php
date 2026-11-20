@@ -127,7 +127,7 @@ final class Open
     private const REFUSED = ['', []];
 
     /**
-     * Harden one argument for cmd.exe's `start` re-parse (sugar-core-061).
+     * Harden one argument for cmd.exe's `start` re-parse.
      *
      * proc_open hands CreateProcess a rebuilt command LINE, and cmd.exe then
      * RE-PARSES it: `&`, `|`, `<`, `>`, `^` act as operators and `%VAR%`

@@ -36,12 +36,54 @@ final class ComposerIntegrationTest extends TestCase
         mkdir($this->project, 0700, true);
 
         $this->writeSamplePlugin($this->base . '/sample');
+        $this->writeClosureStubs();
         $this->seedTrustAndLedger();
     }
 
     protected function tearDown(): void
     {
         Scratch::remove($this->base);
+    }
+
+    /**
+     * The installer requires sugarcraft/sugar-plugins, whose own requirements
+     * cannot be fetched with the network off. The scratch project therefore gets
+     * two stand-ins, sugar-core and sugar-plugins, that expose the monorepo
+     * sources and declare only the kept requirements in StubClosureDriftTest::STUBBED.
+     * The installer's SourceRecord code runs as shipped while the resolution stays
+     * offline. The closure that a real install pulls in (ext-intl and ext-ffi, through
+     * sugar-core and sugar-pty) is documented in README.md, not exercised here.
+     */
+    private function writeClosureStubs(): void
+    {
+        $monorepo = dirname(__DIR__, 2);
+        foreach (['sugar-core', 'sugar-plugins'] as $lib) {
+            if (!is_dir($monorepo . '/' . $lib . '/src')) {
+                $this->markTestSkipped("$lib sources are not beside the installer (a split-repo checkout)");
+            }
+        }
+
+        $this->writeStub('sugar-core', 'SugarCraft\\Core\\', [], $monorepo . '/sugar-core/src');
+        $this->writeStub('sugar-plugins', 'SugarCraft\\Plugins\\', ['sugarcraft/sugar-core' => '*'], $monorepo . '/sugar-plugins/src');
+    }
+
+    /**
+     * @param array<string, string> $require
+     */
+    private function writeStub(string $lib, string $namespace, array $require, string $sourceDir): void
+    {
+        $dir = $this->base . '/stubs/' . $lib;
+        Scratch::write($dir . '/composer.json', json_encode([
+            'name' => 'sugarcraft/' . $lib,
+            'description' => 'Scratch stand-in exposing the monorepo sources to the installer test.',
+            'type' => 'library',
+            'license' => 'MIT',
+            'version' => '1.0.0',
+            // An empty object, not an empty array: Composer's schema requires `require` to be an object.
+            'require' => $require === [] ? new \stdClass() : $require,
+            'autoload' => ['psr-4' => [$namespace => 'src/']],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        symlink($sourceDir, $dir . '/src');
     }
 
     private function writeSamplePlugin(string $dir): void
@@ -84,6 +126,8 @@ final class ComposerIntegrationTest extends TestCase
                 ['packagist.org' => false],
                 ['type' => 'path', 'url' => dirname(__DIR__), 'options' => ['symlink' => false]],
                 ['type' => 'path', 'url' => $this->base . '/sample', 'options' => ['symlink' => false]],
+                ['type' => 'path', 'url' => $this->base . '/stubs/sugar-plugins'],
+                ['type' => 'path', 'url' => $this->base . '/stubs/sugar-core'],
             ],
             'config' => ['allow-plugins' => ['sugarcraft/sugar-plugin-installer' => true]],
         ];
@@ -151,6 +195,10 @@ final class ComposerIntegrationTest extends TestCase
 
         $this->assertFileExists($stage . '/composer.json', 'package not staged to the selected tier');
         $this->assertFileExists($stage . '/src/Hello.php');
+        $record = json_decode((string) file_get_contents($stage . '/.sugar-plugin-source.json'), true);
+        $this->assertIsArray($record, 'the install must leave a provenance record beside the tree');
+        $this->assertSame('sugarcraft/sample-plugin', $record['repo'] ?? null);
+        $this->assertSame('composer', $record['marketplace'] ?? null);
         $this->assertDirectoryDoesNotExist($other, 'package staged to the wrong tier');
         $this->assertDirectoryDoesNotExist($this->project . '/vendor/sugarcraft/sample-plugin', 'package fell back to vendor/');
         $this->assertSame($before, Scratch::snapshot($this->home . '/.candy-code', ['bundles']), 'install touched the trust list or ledger');

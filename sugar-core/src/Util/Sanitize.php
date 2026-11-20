@@ -289,7 +289,7 @@ final class Sanitize
      * `\n`, and every remaining lone `\r` becomes `\n` too. The policy for
      * untrusted text painted into a frame that is laid out one logical line
      * per terminal row. Invisible bidi overrides and zero-width characters are
-     * rendered as `<U+XXXX>` markers on top (audit 15b-28) — see
+     * rendered as `<U+XXXX>` markers on top — see
      * {@see markInvisibleFormatting()} for which, and when.
      *
      * Why CR cannot simply survive there, as {@see untrusted()} lets it: CR is
@@ -335,7 +335,7 @@ final class Sanitize
 
     /**
      * Render the invisible bidi and zero-width format characters as visible
-     * `<U+XXXX>` markers — the display half of audit 15b-28, applied by
+     * `<U+XXXX>` markers — the display half of the invisible-formatting policy, applied by
      * {@see untrustedForDisplay()} (and, unconditionally, by
      * {@see visibleControls()}).
      *
@@ -392,9 +392,8 @@ final class Sanitize
 
     /**
      * Remove the invisible bidi and zero-width format characters that
-     * {@see markInvisibleFormatting()} marks — the strip twin of audit
-     * 15b-28, for text that must simply be free of them (a submitted
-     * prompt, a stored name) rather than shown with markers.
+     * {@see markInvisibleFormatting()} marks, for text that must simply be free of
+     * them (a submitted prompt, a stored name) rather than shown with markers.
      *
      * The two policies agree character for character, and not by restating
      * the rule: both tier sets come from {@see invisibleFormattingMaps()},

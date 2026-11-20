@@ -63,6 +63,12 @@ Refused with an exception, before anything is written:
   Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share
   one directory. This check sees the packages installed in this project. It does
   not see a tree another project staged under user scope.
+- a `project` scope install or update whose package name matches a bundle already in
+  the user tier (`~/.candy-code/bundles/<name>`). A project bundle never inherits a
+  user-tier name or its trust, so the install is refused by name, whichever package the
+  user tree came from. An update is exempt only when that user-tier tree is the
+  package's own tree and no project tree holds it: the update then moves the tree into
+  the project tier. Project scope with no home directory has no user tier to clash with.
 - a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
   Project scope never reads the home directory.
 
@@ -78,10 +84,63 @@ project tier, then the user tier, then the directory Composer recorded for the
 package. `composer remove` therefore still deletes a
 plugin staged under a section that has since been broken.
 
+## Install closure and extension requirements
+
+The installer requires `sugarcraft/sugar-plugins`, and that is deliberate. The
+provenance record below is written by `SugarCraft\Plugins\Provenance\SourceRecord`,
+the same class candy-code's marketplace install writes its own record through.
+A copy of the writer here would let the two record formats, and the atomic-write
+and lock rules behind them, drift apart, so the installer writes through the
+library's writer and keeps no copy of its own.
+
+Requiring `sugarcraft/sugar-plugins` also pulls in a closure, and a project that
+installs this package must be able to satisfy all of it:
+
+| Package | Requirements that matter here | Reached through |
+|---|---|---|
+| `sugarcraft/sugar-plugins` | `sugarcraft/sugar-core`, `ext-tokenizer`, `psr/http-message`, `react/event-loop`, `react/promise` | this package |
+| `sugarcraft/sugar-core` | `ext-intl`, `ext-mbstring`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-ansi-parser`, `react/*` | `sugar-plugins` |
+| `sugarcraft/sugar-pty` | `ext-ffi`, `sugarcraft/sugar-input`, `sugarcraft/sugar-ansi-parser`, `sugar-core`, `react/*` | `sugar-core` |
+| `sugarcraft/sugar-input` | `ext-mbstring`, `evenement/evenement`, `react/*` | `sugar-pty` |
+
+The extensions a host PHP needs are therefore `ext-ffi` (through `sugar-pty`),
+`ext-intl` (through `sugar-core`), `ext-mbstring` and `ext-tokenizer`. Composer checks
+platform requirements on `composer require` and `composer install`, so a host
+without one of them refuses to resolve the closure. Neither `ext-ffi` nor `ext-intl`
+is needed by this package's own code. They arrive because the record writer's
+package requires them.
+
+## Provenance record
+
+Each successful install and update writes `.sugar-plugin-source.json` into the staged
+directory, beside the package's files. It is read back through `SugarCraft\Plugins\Provenance\SourceRecord`
+and carries:
+
+| Field | Value |
+|---|---|
+| `marketplace` | `composer` |
+| `name` | the staged directory name (`candy-discord` for `sugarcraft/candy-discord`) |
+| `sourceType` | `composer` |
+| `repo` | the Composer package name |
+| `url`, `sha` | empty |
+| `version` | the resolved package version; an update rewrites it |
+| `installedAt` | the Unix time of the install or update |
+
+A staged directory that is a symlink, which is what a Composer `path` repository makes
+under its default symlink strategy, gets no record. The link points at the developer's
+checkout, and a record written through it would be an untracked file in that checkout.
+
+The file name is not `.candy-code-source.json`, so a marketplace record already in a
+bundle directory is never overwritten. The record is a description of what the
+installer staged, not a trust decision: a project-tier bundle still loads under no
+user-tier name, and candy-code's trust list is untouched. A record that cannot be
+written rejects the install.
+
 ## What the installer does, and does not do
 
-- It stages files only. Composer's downloader fills the directory. `composer remove`
-  deletes it, and `composer update` writes the new version to the same place.
+- It stages files, and the provenance record above. Composer's downloader fills
+  the directory. `composer remove` deletes it, and `composer update` writes the new
+  version to the same place.
 - One exception outside the staged tree: a package's declared `bin` entries are
   linked into the project's `vendor/bin` on install and update, and the links are
   removed on remove, as Composer does for any package. The links point into the
@@ -136,6 +195,14 @@ with a scratch `HOME`, `COMPOSER_HOME`, cache and network disabled. It requires
 the installer and a sample `sugar-plugin` package by path repository, then checks
 the staged tree and that the trust list and ledger bytes do not change, across
 `require` and `remove`. It skips with a reason when `composer` is not on `PATH`.
+
+The offline run cannot fetch the closure above, so the test puts two stand-ins in
+the scratch project in place of `sugarcraft/sugar-core` and `sugarcraft/sugar-plugins`.
+`StubClosureDriftTest::STUBBED` lists which requirements each stand-in keeps and
+which it drops. `StubClosureDriftTest::testStubsDropExactlyTheDocumentedRequirements`
+checks that table against the real manifests, so a new requirement in the closure
+fails the suite until the table says how it is handled. It lives in its own class
+so it still runs where `composer` is not on `PATH`.
 
 ## Plan
 
