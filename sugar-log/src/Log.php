@@ -168,7 +168,7 @@ final class Log
      * The report goes to STDERR. When $formatter is omitted it is chosen
      * ONCE, at install time, from the terminal's capability:
      * {@see PanicFormatter::pretty()} when STDERR is a TTY (or under
-     * CLICOLOR_FORCE=1), {@see PanicFormatter::plain()} otherwise. NO_COLOR
+     * a forcing CLICOLOR_FORCE), {@see PanicFormatter::plain()} otherwise. NO_COLOR
      * suppresses pretty() even on a real TTY (m-05). The decision is not
      * re-evaluated per report: a pretty handler installed while STDERR is a
      * TTY still bakes ANSI into a report captured to a file after a later
