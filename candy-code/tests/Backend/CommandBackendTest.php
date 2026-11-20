@@ -374,16 +374,33 @@ final class CommandBackendTest extends TestCase
 
     /**
      * The Windows arm hands a string command to proc_open() as the raw cmd.exe
-     * line, unescaped. PHP escapes an argv element by element on Windows, and that
-     * escaping of the embedded double quotes is not what cmd.exe reads, so an argv
-     * form here would quote the command differently from the pre-ChildRun backend.
-     * This runs on every platform: it pins the spawn-spec builder, not the spawn.
+     * line, unescaped. This is a deliberate change from the `COMSPEC /d /s /c`
+     * argv CommandBackend used on master: PHP escapes an argv element by element
+     * on Windows, and that escaping of the embedded double quotes is not what
+     * cmd.exe reads. This runs on every platform: it pins the spawn-spec builder,
+     * not the spawn.
      */
     public function testAStringCommandReachesProcOpenAsTheRawLineOnWindows(): void
     {
         $line = 'echo "a b" & exit /b 3';
 
         $this->assertSame($line, CommandBackend::shellSpec($line, true));
+    }
+
+    /**
+     * An empty string command is a no-op on both arms. The Windows arm used to
+     * hand the empty line to ChildRun::commandLine(), which throws, so the
+     * InvalidArgumentException escaped complete() and completeAsync() instead of
+     * an assistant reply. Both now answer an empty reply without spawning. The
+     * Windows arm cannot run on this host, so this pins the contract on every
+     * platform rather than reproducing the throw.
+     */
+    public function testAnEmptyStringCommandAnswersAnEmptyReplyOnBothEntryPoints(): void
+    {
+        $backend = new CommandBackend('');
+
+        $this->assertSame('', $backend->complete([Message::user('hi')])->content);
+        $this->assertSame('', $this->awaitPromise($backend->completeAsync([Message::user('hi')]))->content);
     }
 
     public function testAListCommandIsExecdDirectlyOnEveryPlatform(): void
