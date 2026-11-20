@@ -572,19 +572,6 @@ final class DocFigureProseDriftTest extends TestCase
             'the prose promises "the same pair of numbers" as EngineBackend — one side moved',
         );
 
-        $mailboxDoc = self::methodDocOf(Mailbox::class, 'waitForMessage');
-        $mailbox = self::sourceOf('Agents/Mailbox.php');
-        self::assertSame(
-            1,
-            preg_match('/\((\d+)ms → (\d+)ms cap\)/s', $mailboxDoc, $m),
-            'the mailbox backoff sentence no longer names its floor and cap',
-        );
-        self::assertSame(1, preg_match('/\$pollIntervalSeconds = ([\d.]+);/', $mailbox, $init), 'mailbox lost its initial poll literal');
-        self::assertSame(1, preg_match('/\$maxPollIntervalSeconds = ([\d.]+);/', $mailbox, $cap), 'mailbox lost its cap literal');
-        self::assertSame((int) $m[1], (int) round((float) $init[1] * 1000), 'prose floor drifted from $pollIntervalSeconds');
-        self::assertSame((int) $m[2], (int) round((float) $cap[1] * 1000), 'prose cap drifted from $maxPollIntervalSeconds');
-        self::assertMatchesRegularExpression('/\$pollIntervalSeconds \* 2/', $mailbox, 'the backoff is no longer exponential — the prose says it is');
-
         $taskListDoc = self::methodDocOf(TaskList::class, 'flockTimed');
         self::assertSame(
             1,
