@@ -877,6 +877,107 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression: a cancel that lands after a wrapped shell has exited but before the
+     * next status poll records it. The TERM rung must still reach the job the shell
+     * left in its group, so the job's TERM trap runs before any KILL. The cancel fires
+     * from the first loop tick that sees the shell as a zombie, while exited is unset.
+     */
+    public function testCancelInTheExitedShellWindowStillTerminatesTheBackgroundJob(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid') || !is_readable('/proc/self/stat')) {
+            $this->markTestSkipped('needs posix_kill, /usr/bin/setsid and procfs');
+        }
+        $marker = tempnam(sys_get_temp_dir(), 'cc1term');
+        $this->assertIsString($marker);
+        @unlink($marker);
+
+        // The job traps TERM and writes the marker before it exits; the shell exits at once.
+        $script = '(trap "printf term > ' . $marker . '; exit 0" TERM; sleep 31 & wait) & echo $!; exit 0';
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', $script],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $loop = new StreamSelectLoop();
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            null,
+            null,
+            $source->token(),
+            null,
+            null,
+            setsidWrapped: true,
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $spawnPid = (new \ReflectionProperty(ChildRunLaunch::class, 'spawnPid'))->getValue($launch);
+        $this->assertGreaterThan(0, $spawnPid, 'start() must read the wrapper pid');
+        $exited = new \ReflectionProperty(ChildRunLaunch::class, 'exited');
+
+        $fired = false;
+        $firedLive = false;
+        $watch = $loop->addPeriodicTimer(0.001, static function () use (&$fired, &$firedLive, $source, $exited, $launch, $spawnPid): void {
+            if ($fired || !self::isZombie($spawnPid)) {
+                return;
+            }
+            $fired = true;
+            $firedLive = $exited->getValue($launch) === false;
+            $source->cancel();
+        });
+
+        $trapRan = false;
+        try {
+            $loop->run();
+        } finally {
+            $loop->cancelTimer($watch);
+            $loop->cancelTimer($guard);
+            $trapRan = is_file($marker);
+            @unlink($marker);
+            // Reaps whatever a failing run left behind in the shell's group.
+            @posix_kill(-$spawnPid, 9);
+        }
+
+        $this->assertTrue($fired, 'the shell was never seen as a zombie before its exit poll, so the cancel window was not reached');
+        $this->assertTrue($firedLive, 'the cancel must land while exited is still unset');
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertTrue($trapRan, 'the TERM rung must reach the job the exited shell left, so its TERM trap runs');
+    }
+
+    /** True while $pid is a zombie: exited and not yet reaped by the status poll. */
+    private static function isZombie(int $pid): bool
+    {
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat === false) {
+            return false;
+        }
+
+        $after = strrpos($stat, ')');
+
+        return $after !== false && substr(trim(substr($stat, $after + 1)), 0, 1) === 'Z';
+    }
+
+    /**
      * Gone means signal-refused or a zombie. The grandchild is reparented to PID 1 on
      * kill, and a PID 1 that does not reap leaves it a zombie, which
      * BoundedShutdown::pidExited() would count as alive. Mirrors the candy-code

@@ -401,6 +401,10 @@ final class ChildRunLaunch
             return;
         }
 
+        // Before the first signal: a shell that exited since the last poll is only
+        // reachable through the setsid fallback in killGroup(), which needs exited set.
+        $this->probeGone();
+
         $this->killing = true;
         $this->closeAllPipes();
         $this->closeStdin();
