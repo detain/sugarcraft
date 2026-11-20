@@ -166,20 +166,22 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
     <p>The table has no configuration file and no environment variables. Its options are builder calls. Each one returns a new table. The defaults below are the values a new <code>Table::fromColumns()</code> starts with.</p>
     <table class="api-table">
 <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
-<tr><td><code>withShowHeader()</code> / <code>withShowFooter()</code></td><td>bool</td><td><code>true</code> / <code>true</code></td><td>Show the header row and the footer row.</td></tr>
-<tr><td><code>withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
-<tr><td><code>withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
-<tr><td><code>withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
-<tr><td><code>withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
-<tr><td><code>withSelectable()</code></td><td>bool</td><td><code>true</code></td><td>Show the selection highlight. <code>false</code> drops it.</td></tr>
-<tr><td><code>withZebra()</code></td><td>bool</td><td><code>false</code></td><td>Alternate the row stripe. Suppressed under the cursor row.</td></tr>
-<tr><td><code>withZebraStyleEven()</code> / <code>withZebraStyleOdd()</code></td><td>SGR string</td><td><code>'30;47'</code> / <code>''</code></td><td>Stripe for even and odd rows.</td></tr>
-<tr><td><code>withHeaderStyle()</code></td><td>SGR string</td><td><code>'1;37'</code></td><td>Header row style. Pass <code>''</code> for a plain header.</td></tr>
-<tr><td><code>withMissingIndicator()</code></td><td>string</td><td><code>'--'</code></td><td>Shown for a cell whose row has no entry for its column.</td></tr>
-<tr><td><code>withStrictPercent()</code></td><td>bool</td><td><code>false</code></td><td>Throw instead of normalizing percent column sets that total more than 100.</td></tr>
-<tr><td><code>withRowSeparator()</code></td><td>bool</td><td><code>false</code></td><td>Draw a rule between rows.</td></tr>
-<tr><td><code>withMultilineMode()</code></td><td>bool</td><td>off until set</td><td>Expand rows to their tallest cell.</td></tr>
+<tr><td><code>Table::withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
+<tr><td><code>Table::withShowHeader()</code></td><td>bool</td><td><code>true</code></td><td>Show the header row.</td></tr>
+<tr><td><code>Table::withShowFooter()</code></td><td>bool</td><td><code>true</code></td><td>Show the footer row.</td></tr>
+<tr><td><code>Table::withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
+<tr><td><code>Table::withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
+<tr><td><code>Table::withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
+<tr><td><code>Table::withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
+<tr><td><code>Table::withSelectable()</code></td><td>bool</td><td><code>true</code></td><td>Show the selection highlight. <code>false</code> drops it.</td></tr>
+<tr><td><code>Table::withZebra()</code></td><td>bool</td><td><code>false</code></td><td>Alternate the row stripe. Suppressed under the cursor row.</td></tr>
+<tr><td><code>Table::withZebraStyleEven()</code></td><td>SGR string</td><td><code>'30;47'</code></td><td>Stripe for even rows.</td></tr>
+<tr><td><code>Table::withZebraStyleOdd()</code></td><td>SGR string</td><td><code>''</code></td><td>Stripe for odd rows.</td></tr>
+<tr><td><code>Table::withHeaderStyle()</code></td><td>SGR string</td><td><code>'1;37'</code></td><td>Header row style. Pass <code>''</code> for a plain header.</td></tr>
+<tr><td><code>Table::withMissingIndicator()</code></td><td>string</td><td><code>'--'</code></td><td>Shown for a cell whose row has no entry for its column.</td></tr>
+<tr><td><code>Table::withStrictPercent()</code></td><td>bool</td><td><code>false</code></td><td>Throw instead of normalizing percent column sets that total more than 100.</td></tr>
+<tr><td><code>Table::withRowSeparator()</code></td><td>bool</td><td><code>false</code></td><td>Draw a rule between rows.</td></tr>
+<tr><td><code>Table::withMultilineMode()</code></td><td>bool</td><td>off until set</td><td>Expand rows to their tallest cell.</td></tr>
 </table>
 
     <h3 style="margin-top: 32px;">Keys and controls</h3>

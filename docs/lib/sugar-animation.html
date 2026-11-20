@@ -285,7 +285,7 @@ echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code><
 <tr><td><code>Player::$maxSeconds</code></td><td>?float</td><td><code>null</code></td><td>Stop after this many seconds.</td></tr>
 <tr><td><code>Player::$loops</code></td><td>?int</td><td><code>null</code></td><td>Stop after this many plays. <code>playOnce()</code> sets it to 1.</td></tr>
 <tr><td><code>Renderer::withAdaptiveSize()</code></td><td>int</td><td><code>0</code> reserved rows</td><td>Rows to keep free below the art when the terminal size is read.</td></tr>
-<tr><td><code>ProgramOptions(useAltScreen: …)</code></td><td>bool</td><td><code>true</code> in the examples</td><td>Run in the alternate screen. This is a sugar-core constructor argument, not a Player option.</td></tr>
+<tr><td><code>ProgramOptions::__construct()</code>, argument <code>useAltScreen</code></td><td>bool</td><td><code>false</code> in sugar-core; the examples pass <code>true</code></td><td>Run in the alternate screen. Pass it as <code>new ProgramOptions(useAltScreen: true)</code>. This is a sugar-core constructor argument, not a Player option.</td></tr>
 </table>
     <p>The decode caps (<code>Decoder::MAX_FRAMES</code>, <code>MAX_TOTAL_PIXELS</code>, <code>MAX_CELLS</code>, <code>MAX_INPUT_BYTES</code>) are class constants, not options. Read them from the class rather than copying the numbers.</p>
 
