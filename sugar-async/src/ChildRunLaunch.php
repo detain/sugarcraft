@@ -437,6 +437,10 @@ final class ChildRunLaunch
         $this->timers = [];
         // Cancelling a ladder that is still signalling descendants would orphan them:
         // it stops on its own once the group is empty or the kill budget is spent.
+        // That is the one exception to "no ladder timer outlives settle": a settled
+        // group-path launch keeps its poll for at most TERM + KILL grace, and only
+        // while a containment-group member is still alive (pinned by the group-path
+        // ladder test in ChildRunLaunchTest).
         if ($this->ladder !== null && $this->groupGone()) {
             $this->loop->cancelTimer($this->ladder);
             $this->ladder = null;

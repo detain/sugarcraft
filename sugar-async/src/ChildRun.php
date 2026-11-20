@@ -68,10 +68,11 @@ use function React\Promise\resolve;
  * removed once the child is reaped. An empty payload gives the child an immediate
  * EOF on every runtime.
  *
- * Consumers: sugar-dashboard's BoundedCommand has moved, running every child
- * through run() and launch() and mapping the ChildResult onto its outcome. The
- * candy-code CommandBackend runner is the same pattern and is still pending its
- * move to this class in the P1-5c-cc1 lane; its copy stays live until then.
+ * Consumers: sugar-dashboard's BoundedCommand runs every child through run() and
+ * launch() and maps the ChildResult onto its outcome. candy-code's CommandBackend
+ * runs its child through ChildRun as well, from both its blocking and its launch
+ * entry points. candy-code's StreamingCommandBackend still spawns with its own
+ * proc_open() and is not yet on this class.
  */
 final class ChildRun
 {

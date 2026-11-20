@@ -379,6 +379,26 @@ final class ChildRunLaunchTest extends TestCase
             $loop->cancelTimer($bound);
 
             $this->assertTrue($gone, 'the kill ladder must reach the TERM-ignoring grandchild after the run settled');
+
+            // The group-path exception is bounded: once the group is empty the ladder
+            // cancels itself on its next 5 ms tick. Run until only this probe and the
+            // bound remain on the loop, so a ladder that held on past the group's
+            // emptying fails here rather than outliving the test.
+            $drainBound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $drainProbe = $loop->addPeriodicTimer(0.01, function () use ($loop, &$drainProbe): void {
+                if ($this->armedTimers($loop) <= 2) {
+                    $loop->stop();
+                }
+            });
+            $loop->run();
+            $loop->cancelTimer($drainProbe);
+            $loop->cancelTimer($drainBound);
+            $this->assertSame(0, $this->armedTimers($loop), 'the ladder must leave the loop once the group is empty, not hold a timer past the settle');
         } finally {
             if (!BoundedShutdown::pidExited($grandchild)) {
                 @posix_kill($grandchild, 9);

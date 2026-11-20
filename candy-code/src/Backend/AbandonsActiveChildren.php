@@ -11,15 +11,17 @@ use SugarCraft\Code\Support\ProcessContainment;
 /**
  * Live-children registry backing {@see TracksActiveChildren} (CC-QA-2).
  *
- * Both command backends spawn provider children through `proc_open()` and
- * reap them inside their own drain loops. A quit, a Ctrl+C, or a double-
- * Escape cancel can tear that loop down while the command is still running:
- * the direct child — the `setsid -w` wrapper
- * {@see \SugarCraft\Code\Support\ProcessContainment::spawnSpec()} builds —
- * and every process under it then outlive the session with nobody left to
- * wait for them. Each backend registers at its single spawn choke point and
- * forgets at every reap sink, so the interrupt arms and the exit funnel can
- * abandon exactly what is still alive.
+ * Provider children are spawned by the command backends and reaped inside their
+ * own drain loops. A quit, a Ctrl+C, or a double-Escape cancel can tear that
+ * loop down while the command is still running: the direct child — the `setsid -w`
+ * wrapper {@see \SugarCraft\Code\Support\ProcessContainment::spawnSpec()} builds —
+ * and every process under it then outlive the session with nobody left to wait
+ * for them. Each backend registers at its single spawn choke point and forgets
+ * at every reap sink, so the interrupt arms and the exit funnel can abandon
+ * exactly what is still alive. StreamingCommandBackend registers its proc handle
+ * (registerActiveChild); CommandBackend runs through sugar-async's ChildRun and
+ * registers the pid reported by its onSpawn hook (registerActivePid), with no
+ * proc handle held.
  *
  * The map is mutable shared state, the same shape as the CancellationToken
  * the backends already share across `mutate()` clones: a with*() copy carries
@@ -28,7 +30,7 @@ use SugarCraft\Code\Support\ProcessContainment;
 trait AbandonsActiveChildren
 {
     /**
-     * @var array<int, array{pid: int, proc: resource}> keyed by proc resource id
+     * @var array<int, array{pid: int, proc: resource|null}> keyed by proc resource id, or by pid for a pid-only registration (proc null)
      */
     private array $activeChildren = [];
 
