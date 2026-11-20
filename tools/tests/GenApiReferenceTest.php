@@ -481,6 +481,36 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('From A.', $html);
     }
 
+    public function testAProtectedAliasIsHiddenAndNeverListedAsAPublicRow(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Concerns/A.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait A\n{\n    /** From A. */\n    public function hello(): string\n    {\n        return 'a';\n    }\n}\n",
+            'sugar-core/src/Hidden.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Demo\\Fixture\\Concerns\\A;\n\nfinal class Hidden\n{\n    use A {\n        A::hello as protected hidden;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // A's own table and Hidden's copy of hello(); the protected alias is not a public row.
+        self::assertSame(0, \substr_count($html, 'hidden(): string'), 'a protected alias is not listed as a public method');
+        self::assertSame(2, \substr_count($html, 'hello(): string'), 'the un-aliased hello() is still listed');
+    }
+
+    public function testAMultiNameInsteadofDropsEveryExcludedTrait(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Concerns/A.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait A\n{\n    /** From A. */\n    public function hello(): string\n    {\n        return 'a';\n    }\n}\n",
+            'sugar-core/src/Concerns/B.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait B\n{\n    /** From B. */\n    public function hello(): string\n    {\n        return 'b';\n    }\n}\n",
+            'sugar-core/src/Concerns/C.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture\\Concerns;\n\ntrait C\n{\n    /** From C. */\n    public function hello(): string\n    {\n        return 'c';\n    }\n}\n",
+            // C is used before B, so a C::hello that survived the insteadof would be the first source Multi merges.
+            'sugar-core/src/Multi.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nuse Demo\\Fixture\\Concerns\\A;\nuse Demo\\Fixture\\Concerns\\B;\nuse Demo\\Fixture\\Concerns\\C;\n\nfinal class Multi\n{\n    use A, C, B {\n        B::hello insteadof A, C;\n    }\n}\n",
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        // Each trait's own table names its hello(); Multi keeps only B's, so C's summary appears once.
+        self::assertSame(1, \substr_count($html, 'From C.'), 'the second excluded name is dropped from Multi');
+        self::assertSame(1, \substr_count($html, 'From A.'), 'the first excluded name is dropped from Multi');
+        self::assertSame(2, \substr_count($html, 'From B.'), 'B::hello is kept: its own table and Multi');
+    }
+
     public function testAPrivateAdaptationHidesTheMethodFromTheClassThatUsesIt(): void
     {
         $root = $this->fixtureRoot(self::traitFixture() + [
