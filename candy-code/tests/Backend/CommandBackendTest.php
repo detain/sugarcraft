@@ -320,15 +320,16 @@ final class CommandBackendTest extends TestCase
      * The script backgrounds a `sleep` and writes that pid to a scratch file, so
      * the sleep is a grandchild of the PHP process. The kill ladder signals the
      * child's process group only when a containment prefix made the child a group
-     * leader ({@see ProcessContainment::spawnSpec()}). The launch path reads that
-     * group once, at spawn, before the setsid wrapper has become a leader, so the
-     * read can miss the group and only the shell dies while the sleep is orphaned.
-     * That spawn-time read is a race: when it happens to succeed, this test passes
-     * even on the unfixed kill path, so it is not a deterministic guard for the
-     * missed-group case. The assertion is on the sleep itself, so an orphan is caught
-     * when the read misses, even when the promise rejects on time. sugar-async reads
-     * the group live while the child lives (ChildRunLaunch::killGroup()), and
-     * ChildRunLaunchTest pins that deterministically with no spawn-time group.
+     * leader ({@see ProcessContainment::spawnSpec()}). The launch takes that group
+     * from a snapshot at spawn, which can run before the setsid wrapper has become
+     * a leader, so the snapshot can miss the group and only the shell dies while the
+     * sleep is orphaned. The launch no longer depends on that one read: it latches
+     * the group live while the child lives (ChildRunLaunch::latchLiveGroup()), and
+     * once the shell has exited it falls back to the wrapper's own pid
+     * (ChildRunLaunch::killGroup()). Whether a cancel lands before the group is
+     * latched depends on timing, so this test is an end-to-end regression guard for
+     * the cancel reaching the grandchild, not a deterministic pin of the missed-group
+     * case. ChildRunLaunchTest pins that deterministically with no spawn-time group.
      *
      * The cancel waits for the pid file rather than a fixed delay: a fixed delay
      * can fire before bash has started, and then no grandchild exists to check.
