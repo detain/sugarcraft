@@ -14,6 +14,7 @@ use SugarCraft\McpClient\Protocol\ErrorCode as LibErrorCode;
 use SugarCraft\McpClient\Protocol\JsonRpc as LibJsonRpc;
 use SugarCraft\McpClient\Protocol\Request as LibRequest;
 use SugarCraft\McpClient\Protocol\RpcError as LibRpcError;
+use SugarCraft\Plugins\Host\RefusedCall;
 
 /**
  * Pins candy-code's `Protocol\JsonRpc` and the `sugar-mcp-client` copy to one
@@ -99,6 +100,40 @@ final class JsonRpcParityTest extends TestCase
         $lib = LibRpcError::of($libCode, $message, $kind, $data);
 
         self::assertSame(CandyJsonRpc::error($id, $candy), LibJsonRpc::error($id, $lib));
+    }
+
+    /**
+     * The bundles read a refusal through RefusedCall, not through the frame, so a refusal
+     * that loses its kind or data (a busy hint's retryAfterMs, say) must fail here even
+     * when both wire frames still agree. The fixture runs the refusal the bundles see.
+     *
+     * @param array<string, mixed> $data
+     */
+    #[DataProvider('errorFixtures')]
+    public function testARefusalIsARefusedCallWhoseDataIsTheWireData(string|int|null $id, string $code, string $message, array $data): void
+    {
+        $kind = $data['kind'] ?? null;
+        unset($data['kind']);
+        $candy = CandyRpcError::of(\constant(CandyErrorCode::class . '::' . $code), $message, $kind, $data);
+        $lib = LibRpcError::of(\constant(LibErrorCode::class . '::' . $code), $message, $kind, $data);
+
+        self::assertInstanceOf(RefusedCall::class, $candy);
+        $wire = \json_decode(CandyJsonRpc::error($id, $candy), true, 512, \JSON_THROW_ON_ERROR)['error'];
+        self::assertSame($wire['data'], $candy->refusalData());
+        self::assertSame($candy->refusalKind(), $wire['data']['kind']);
+        self::assertSame(
+            $wire,
+            \json_decode(LibJsonRpc::error($id, $lib), true, 512, \JSON_THROW_ON_ERROR)['error'],
+        );
+    }
+
+    public function testANamedBusyRefusalKeepsItsRetryHintThroughRefusedCall(): void
+    {
+        $candy = CandyRpcError::of(CandyErrorCode::Busy, 'later', 'too_many_turns', ['retryAfterMs' => 500]);
+
+        self::assertInstanceOf(RefusedCall::class, $candy);
+        self::assertSame('too_many_turns', $candy->refusalKind());
+        self::assertSame(['kind' => 'too_many_turns', 'retryAfterMs' => 500, 'retryable' => true], $candy->refusalData());
     }
 
     public function testNotificationFramesAgree(): void
