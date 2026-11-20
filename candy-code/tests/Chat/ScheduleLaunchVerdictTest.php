@@ -15,6 +15,7 @@ use SugarCraft\Code\Background\Schedule;
 use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
 use SugarCraft\Code\Tests\Support\SupervisorPump;
+use SugarCraft\Core\AsyncCmd;
 
 /**
  * P4-12 CC-1 row f on the TUI pump: a persisted row whose launch is still
@@ -64,12 +65,33 @@ final class ScheduleLaunchVerdictTest extends TestCase
             'the tick writes no verdict it does not have',
         );
 
-        self::assertTrue(SupervisorPump::until($supervisor, static fn (): bool => $registry->busySession('nightly') !== null));
-        $sessionId = (string) $registry->busySession('nightly');
+        // Running the Cmd is the only route the late verdict takes: its promise
+        // settles on a supervisor tick, and the message it delivers is what
+        // Chat must hand back to update().
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+        $delivered = null;
+        $async->promise->then(static function (mixed $msg) use (&$delivered): void {
+            $delivered = $msg;
+        });
+        self::assertNull($delivered, 'the launch is still waiting on its daemon');
+
+        // By reference: an arrow function would freeze $delivered at its null value.
+        self::assertTrue(
+            SupervisorPump::until($supervisor, static function () use (&$delivered): bool {
+                return $delivered !== null;
+            }),
+            'the pending launch settles through the supervisor pump',
+        );
+        self::assertInstanceOf(ScheduleFiredMsg::class, $delivered, 'the Cmd delivers the verdict as a ScheduleFiredMsg');
+        self::assertSame('nightly', $delivered->results[0]['name'] ?? null);
+        self::assertSame('fired', $delivered->results[0]['action'] ?? null);
+        $sessionId = (string) ($delivered->results[0]['sessionId'] ?? '');
+        self::assertNotSame('', $sessionId, 'the verdict names the daemon session it launched');
         $ipc = $this->ipcOf($supervisor, $sessionId);
         $this->fixtureDaemons[] = ['pid' => $ipc['pid'], 'startTime' => $ipc['startTime'] ?? null];
 
-        [$landed] = $next->update(new ScheduleFiredMsg([['name' => 'nightly', 'action' => 'fired', 'sessionId' => $sessionId]]));
+        [$landed] = $next->update($delivered);
 
         self::assertContains(
             Lang::t('chat.schedule.fired', ['name' => 'nightly']),
