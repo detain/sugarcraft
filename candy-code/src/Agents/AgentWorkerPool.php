@@ -1844,9 +1844,12 @@ final class AgentWorkerPool
         // in a Fiber under LoopDrivenTurn, so both take the Fiber branch above.
         // The fiber-less callers are direct synchronous ones (bin/, tests, and
         // App::dispatchSkill, which has no production caller). The no-fork
-        // blocking turn (EngineBackend::completeAsyncBlocking) does reach this
-        // sleep on the TUI loop when a workflow stage forks agent children: the
-        // whole turn already blocks that loop, so the sleep adds no new freeze.
+        // blocking turn (EngineBackend::completeAsyncBlocking) runs its whole
+        // turn on the TUI loop with no Fiber of its own; if a pool wait is
+        // reached there, this sleep runs on that loop. This verdict did not
+        // trace a fiber-less route from completeAsyncBlocking into idle(), so
+        // that reach is conditional, not established. Either way the whole turn
+        // already blocks that loop, so the sleep would add no new freeze.
         // Accepted residual (AUD 12.1 A4, row 49), not a wait the loop can host.
         usleep(self::WAIT_POLL_INTERVAL_USEC);
     }
