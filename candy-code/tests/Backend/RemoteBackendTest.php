@@ -20,6 +20,7 @@ use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Protocol\RpcError;
@@ -32,6 +33,7 @@ use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\StateDir;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
 
 /**
  * Roadmap O-8a: the TUI as a client of a running `candy-code serve`.
@@ -344,6 +346,49 @@ final class RemoteBackendTest extends TestCase
         self::assertNull(Attach::websocketUrl('not a url'));
     }
 
+    /**
+     * `Attach::websocketUrl` delegates to the library's `WebsocketUrl`, which
+     * refuses a bracketed host that is not an IPv6 literal. The old body built
+     * `ws://[abc]:8080/ws` for it, and that address was never dialable.
+     */
+    public function testAMalformedBracketedHostIsRefusedByTheLibraryAnswer(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[abc]:8080'));
+        self::assertNull(Attach::websocketUrl('http://[abc]:8080'));
+        self::assertSame(WebsocketUrl::from('ws://[::1]:9/ws'), Attach::websocketUrl('ws://[::1]:9/ws'));
+
+        // The verb answers the same usage error it gives any bad address, and does not dial.
+        // Its refusal goes to STDERR, which ob_start() cannot capture, so the verb runs as a child
+        // process: the exact stderr proves the usage path ran and no connect error followed it.
+        $child = $this->runBinary(['attach', '--url', 'http://[abc]:8080']);
+        self::assertSame(NonInteractive::EXIT_CONFIG, $child['code']);
+        self::assertSame('', $child['stdout']);
+        [$badUrl, $usage] = Lang::inLocale('en', static fn (): array => [
+            Lang::t('cli.attach.bad_url', ['url' => 'http://[abc]:8080']),
+            Lang::t('cli.attach.usage'),
+        ]);
+        self::assertSame('candy-code: ' . $badUrl . "\n" . $usage . "\n", $child['stderr']);
+    }
+
+    /**
+     * A live server whose discovery record names an address the library refuses. The
+     * record branch used to cast that null to '' and dial `tcp://:80`, so the connect
+     * error named neither the record nor the bad host. It now says what the record
+     * names, and does not dial.
+     */
+    public function testADiscoveryRecordNamingAnUnusableAddressSaysSoAndDoesNotDial(): void
+    {
+        $state = StateDir::open($this->fixture->dir . '/state');
+        DiscoveryFile::forThisProcess('test', 'http://[abc]:7420', '127.0.0.1', 7420, $this->fixture->root, false, null)->write($state);
+
+        $child = $this->runBinary(['attach'], ['CANDY_CODE_SERVER_DIR' => $state->path]);
+        self::assertSame(NonInteractive::EXIT_FAILURE, $child['code']);
+        self::assertSame('', $child['stdout']);
+        $reason = Lang::inLocale('en', static fn (): string => Lang::t('cli.attach.bad_record_url', ['url' => 'http://[abc]:7420']));
+        self::assertSame('candy-code attach: ' . $reason . "\n", $child['stderr']);
+        self::assertStringNotContainsString('tcp://', $child['stderr'], 'the verb must not dial an empty target');
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private function wsUrl(): string
@@ -393,5 +438,29 @@ final class RemoteBackendTest extends TestCase
         } finally {
             \ob_end_clean();
         }
+    }
+
+    /**
+     * Run `bin/candy-code` with $argv in a child process and read back its exit
+     * code and both streams. The child gets a C locale (so the English catalogue
+     * is the one it prints), stdin from /dev/null, and this test's temp directory
+     * as HOME, so nothing it touches is the developer's real home.
+     *
+     * @param list<string> $argv
+     * @param array<string, string> $extraEnv
+     * @return array{code: int, stdout: string, stderr: string}
+     */
+    private function runBinary(array $argv, array $extraEnv = []): array
+    {
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-code';
+        $env = ['LC_ALL' => 'C.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => $this->fixture->dir, ...$extraEnv];
+        $process = \proc_open([\PHP_BINARY, $bin, ...$argv], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
+        self::assertIsResource($process);
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return ['code' => \proc_close($process), 'stdout' => $stdout, 'stderr' => $stderr];
     }
 }
