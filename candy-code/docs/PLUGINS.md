@@ -140,7 +140,7 @@ Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
    it; to keep the project copy's content, move that copy under a different
    name. An untrusted name keeps both copies, as it always did.
 
-**Bundle hooks ride the same gate.** A bundle named in
+**Bundle hooks ride the same gate.** A user-tier bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
 ordinary hook pipeline — same containment and private-bytes checks, and a
 broken hook file refuses *itself* with a notice while the launch continues.
@@ -250,8 +250,8 @@ system rows in the transcript:
   the manifest, nor an **inline `hooks` object** inside `plugin.json` (the
   declined-surface reader answers with the manifest path — `hooksPaths()`
   names where the hooks ride inside it — while the decline notice names the
-  affected bundles). A bundle named in `trustedBundleChannels` reverses this
-  for its `hooks/` files, through the gate described above; inline
+  affected bundles). A user-tier bundle named in `trustedBundleChannels` reverses
+  this for its `hooks/` files, through the gate described above; inline
   `plugin.json` hook manifests remain refused on every path, as their shape
   is not the accepted one yet. Lifecycle hooks execute arbitrary programs at
   every session event; the hooks that do run are declared in the project's

@@ -315,9 +315,19 @@ final class Bundle
     {
         $entrypoints = $this->entrypoints();
 
-        return ($entrypoints['channel'] ?? []) !== []
-            || ($entrypoints['subscriber'] ?? []) !== []
-            || $this->hooksPaths() !== [];
+        if (($entrypoints['channel'] ?? []) !== [] || ($entrypoints['subscriber'] ?? []) !== []) {
+            return true;
+        }
+
+        // A bare hooks/ directory (say, holding only a README) registers nothing;
+        // only a file can be a hook, as TrustedBundleHooks already requires.
+        foreach ($this->hooksPaths() as $path) {
+            if (is_file($path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

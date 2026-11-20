@@ -349,6 +349,15 @@ final class BundleDiscoveryTest extends TestCase
         self::assertNotNull($hooked);
         self::assertTrue($hooked->hasTrustGatedContent(), 'a hooks/ directory is trust-gated');
 
+        $emptyHooks = $this->tempDir . '/empty-hooks';
+        $this->writeBundleRoot($emptyHooks, ['name' => 'empty-hooks']);
+        mkdir($emptyHooks . '/hooks', 0777, true);
+        file_put_contents($emptyHooks . '/hooks/README.md', "no hook files here\n");
+
+        $noHookFile = Bundle::fromDir($emptyHooks, 'project');
+        self::assertNotNull($noHookFile);
+        self::assertFalse($noHookFile->hasTrustGatedContent(), 'a hooks/ directory with no hook file withholds nothing');
+
         $withChannel = $this->tempDir . '/with-channel';
         $this->writeBundleRoot($withChannel, ['name' => 'with-channel', 'entrypoints' => ['channel' => 'channel.php']]);
         file_put_contents($withChannel . '/channel.php', "<?php\n");
