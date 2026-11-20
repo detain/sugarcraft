@@ -674,8 +674,16 @@ final class PluginInstallerTest extends TestCase
         $initial = self::removablePackage('acme/candy-discord');
         $target = self::versionedPackage('acme/candy-discord', '2.0.0');
 
-        $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+        $promise = $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
 
+        // The record write runs in the promise's success branch, so a failed write
+        // rejects here and must not pass unseen.
+        $refusal = $promise instanceof PromiseInterface ? self::rejectionOf($promise) : null;
+        $this->assertNull($refusal, 'the tier-move update must not reject its record write');
         $this->assertFileExists($this->project . '/.candy-code/bundles/candy-discord/composer.json', 'the update did not move the tree into the project tier');
+        $record = self::readSourceRecord($this->project . '/.candy-code/bundles/candy-discord');
+        $this->assertNotNull($record, 'the tier move must leave a readable provenance record at the project tier');
+        $this->assertSame('2.0.0', $record->version, 'the tier move must record the target version');
+        $this->assertSame('acme/candy-discord', $record->repo);
     }
 }
