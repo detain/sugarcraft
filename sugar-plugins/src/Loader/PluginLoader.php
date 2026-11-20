@@ -27,11 +27,13 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    NEXT launch. So a manifest swap that introduces a new entrypoint under a
  *    trusted name cannot run that file silently. The ledger records the path
  *    alone, never the content: a path already on the ledger is not quarantined
- *    again when its bytes change. So an in-place rewrite of a file whose path was
- *    already seen, by any account the private-bytes gate admits as a writer (the
- *    owner, or a group member when the file is group-writable), loads between
- *    launches without a quarantine stop. This is an open gap, carried over from
- *    the original loader and not closed here.
+ *    again when its bytes change. So an in-place rewrite, or a replace-by-rename,
+ *    of a file whose path was already seen, by any account that can write the
+ *    file or its parent directory, loads between launches without a quarantine
+ *    stop. The private-bytes gate does not close this: it refuses only world
+ *    write (and, with ext-posix, a foreign owner), so a group member admitted by
+ *    group write on either the file or its directory is a writer too. This is an
+ *    open gap, carried over from the original loader and not closed here.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
  *    its parent directory must not be writable by the world (the same gate
  *    candy-code applies; group write is accepted), and, when the posix extension
