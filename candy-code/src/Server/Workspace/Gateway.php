@@ -196,6 +196,12 @@ final class Gateway implements MessageHandler
         return $this->primary;
     }
 
+    /** The canonical root the server's own dispatcher serves (a `root` naming it routes to the dispatcher, as rootFor() null). */
+    public function primaryRoot(): string
+    {
+        return $this->primaryRoot;
+    }
+
     /** Start looking for idle hosts to recycle. */
     public function start(): void
     {
