@@ -335,6 +335,10 @@ final class InProcessHostServices implements HostServices, RootedHostServices
      * The root form of {@see createSession()} (PL-5c-A, section 2.6): the session is created in
      * $root, through its workspace host when $root is not the primary root. The id is bound to
      * that root, so later calls find it by `sessionId` alone.
+     *
+     * Caveat (section 2.6): with no gateway the primary answer omits `root`, since the caller's
+     * root is never checked. A non-primary root with no gateway also runs on the primary
+     * dispatcher, a latent misroute recorded in section 12 (no production caller passes a null gateway).
      */
     public function createSessionIn(string $root, ?string $name, ?string $permissionMode): PromiseInterface
     {
@@ -343,7 +347,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $params = $this->createParams($name, $permissionMode);
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->dispatcher->invoke($client, 'session.create', $params);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'session.create', $params));
             }
 
             return $this->routedCall($routed, 'session.create', $params, '', self::wire(...), function (mixed $answer) use ($routed): void {
@@ -411,6 +415,10 @@ final class InProcessHostServices implements HostServices, RootedHostServices
     /**
      * The root form of {@see pendingPermissions()} (PL-5c-A, section 2.6): the pending asks of
      * $root's workspace host, with the top-level `root` set. Items carry no `root` of their own.
+     *
+     * Caveat (section 2.6): with no gateway the primary answer omits the top-level `root`, as for
+     * {@see createSessionIn()}. A non-primary root with no gateway runs on the primary dispatcher
+     * (latent, section 12).
      */
     public function pendingPermissionsIn(string $root): PromiseInterface
     {
@@ -418,7 +426,7 @@ final class InProcessHostServices implements HostServices, RootedHostServices
             $client = $this->connected();
             $routed = $this->routeOf(['root' => $root]);
             if ($routed === null) {
-                return $this->dispatcher->invoke($client, 'permission.pending', []);
+                return $this->primaryAnswer($this->dispatcher->invoke($client, 'permission.pending', []));
             }
 
             return $this->routedCall($routed, 'permission.pending', [], '', self::wire(...), static function (): void {
@@ -641,6 +649,26 @@ final class InProcessHostServices implements HostServices, RootedHostServices
     private static function wire(mixed $answer): mixed
     {
         return Dispatcher::wireAnswer($answer);
+    }
+
+    /**
+     * The primary answer of a root form carries `root`, as a routed answer does (PL-5c-A design,
+     * section 2.6): the canonical primary root from the gateway. Without a gateway no canonical root
+     * is known, and the root the caller named was never checked against anything, so the answer
+     * names none rather than assert a root the session may not be on.
+     *
+     * @param array<string, mixed> $answer
+     *
+     * @return array<string, mixed>
+     */
+    private function primaryAnswer(array $answer): array
+    {
+        $primary = $this->gateway?->primaryRoot();
+        if ($primary !== null) {
+            $answer['root'] ??= $primary;
+        }
+
+        return $answer;
     }
 
     /** @return array<string, mixed> */
