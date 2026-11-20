@@ -135,6 +135,38 @@ final class ChildRunControlTest extends TestCase
         $this->assertLessThan(3.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
     }
 
+    public function testRunCancelRaisedFromASignalInsideThePostCloseWaitKillsTheChild(): void
+    {
+        // Both pipes close at once and the child lingers for 6 s. The SIGALRM cancel
+        // lands at about 1 s, after the pump has returned and inside the exit wait,
+        // so the wait itself must see it: the child is killed and reported CANCELLED.
+        if (!\function_exists('pcntl_signal') || !\function_exists('pcntl_alarm')) {
+            $this->markTestSkipped('needs ext-pcntl to raise the cancel from a signal handler');
+        }
+        $source = CancellationSource::new();
+        $started = microtime(true);
+
+        \pcntl_async_signals(true);
+        \pcntl_signal(\SIGALRM, static function () use ($source): void {
+            $source->cancel();
+        });
+        try {
+            \pcntl_alarm(1);
+            $r = ChildRun::new(['sh', '-c', 'exec >&- 2>&-; sleep 6'])
+                ->withTimeout(10.0)
+                ->withCancellation($source->token())
+                ->run();
+        } finally {
+            \pcntl_alarm(0);
+            \pcntl_signal(\SIGALRM, \SIG_DFL);
+            \pcntl_async_signals(false);
+        }
+
+        $this->assertSame(ChildResult::CANCELLED, $r->status);
+        $this->assertTrue($r->cancelled());
+        $this->assertLessThan(5.0, microtime(true) - $started, 'the cancel must not wait out the lingering child');
+    }
+
     public function testRunCancelAfterTheIdleStopStillReportsCancelled(): void
     {
         // The first chunk's consumer sleeps past the 1 s idle budget, so the next
@@ -330,6 +362,24 @@ final class ChildRunControlTest extends TestCase
         $this->assertSame(ChildResult::TIMED_OUT, $r->status);
         $this->assertSame('hi', $r->stdout);
         $this->assertLessThan(5.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
+    }
+
+    public function testLaunchIdleDeadlineKillsASilentChildThatClosedItsOutput(): void
+    {
+        // The launch counterpart of the run() case: both pipes close at once, then the
+        // child lingers. The idle check runs on the loop whether or not pipes are open,
+        // so the 0.5 s budget must cut the child well before the 5 s deadline.
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = microtime(true);
+
+        $r = $this->settle($loop, ChildRun::new(['sh', '-c', 'exec >&- 2>&-; sleep 6'])
+            ->withTimeout(5.0)
+            ->withIdleTimeout(0.5)
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertLessThan(3.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
     }
 
     public function testLaunchIdleDeadlineDoesNotFireWhileOutputKeepsFlowing(): void

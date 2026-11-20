@@ -358,94 +358,106 @@ final class ChildRun
         }
 
         // Unconditional: a cancel that lands after the idle heartbeat set its stop
-        // must still win, as it does in ChildRunLaunch::outcome().
+        // must still win, as it does in ChildRunLaunch::outcome(). It stays live
+        // through the post-close exit wait: run() is blocking, so a cancel raised
+        // from a signal handler can only be observed while this method is waiting.
         $cancelSubscription = $this->cancellation?->onCancel(static function () use (&$stop): void {
             $stop = self::STOP_CANCELLED;
         });
 
         try {
-            $pump = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
-                ->withDeadline($deadline)
-                ->withCap($this->maxBytes)
-                ->withClock($pumpClock)
-                ->withOnChunk($onChunk)
-                ->withRunning($running)
-                ->withExitGrace($this->exitGrace);
-            if ($this->idleTimeout !== null) {
-                $idle = $this->idleTimeout;
-                $pump = $pump->withHeartbeat(
-                    min($idle, self::IDLE_BEAT_SECONDS),
-                    static function () use (&$stop, &$lastActivity, $clock, $idle): void {
-                        if ($stop === null && $clock() - $lastActivity >= $idle) {
-                            $stop = self::STOP_IDLE;
-                        }
-                    },
-                );
-            }
-            if ($this->stdin !== null && $this->stdin !== '') {
-                // A staged Windows payload has no pipe; the child reads its file.
-                if (isset($pipes[0])) {
-                    $pump = $pump->withStdin($pipes[0], $this->stdin);
+            try {
+                $pump = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
+                    ->withDeadline($deadline)
+                    ->withCap($this->maxBytes)
+                    ->withClock($pumpClock)
+                    ->withOnChunk($onChunk)
+                    ->withRunning($running)
+                    ->withExitGrace($this->exitGrace);
+                if ($this->idleTimeout !== null) {
+                    $idle = $this->idleTimeout;
+                    $pump = $pump->withHeartbeat(
+                        min($idle, self::IDLE_BEAT_SECONDS),
+                        static function () use (&$stop, &$lastActivity, $clock, $idle): void {
+                            if ($stop === null && $clock() - $lastActivity >= $idle) {
+                                $stop = self::STOP_IDLE;
+                            }
+                        },
+                    );
                 }
-            } elseif (isset($pipes[0])) {
-                fclose($pipes[0]);
+                if ($this->stdin !== null && $this->stdin !== '') {
+                    // A staged Windows payload has no pipe; the child reads its file.
+                    if (isset($pipes[0])) {
+                        $pump = $pump->withStdin($pipes[0], $this->stdin);
+                    }
+                } elseif (isset($pipes[0])) {
+                    fclose($pipes[0]);
+                }
+                $r = $pump->pump();
+            } catch (\Throwable $e) {
+                self::closeAll($pipes);
+                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                throw $e;
             }
-            $r = $pump->pump();
-        } catch (\Throwable $e) {
+
+            // Pipes are closed before any proc_close: the reap helpers reap through
+            // proc_close, and the pipe handles are ours to close first.
             self::closeAll($pipes);
-            BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
-            throw $e;
+
+            if ($stop === null && $r->reason === DrainResult::CLOSED) {
+                if ($exitCode !== null) {
+                    // The liveness probe reaped the child, so proc_close() would report -1.
+                    proc_close($proc);
+
+                    return self::result($r, $exitCode, ChildResult::EXITED);
+                }
+                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop);
+                if ($code !== null) {
+                    return self::result($r, $code, ChildResult::EXITED);
+                }
+                // Output closed but the child is still running past the deadline, its idle
+                // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
+                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+                $status = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
+
+                return self::result($r, $code, $status);
+            }
+
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
+            $status = match (true) {
+                $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
+                $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
+                default => ChildResult::PIPE_FAILED,
+            };
+
+            return self::result($r, $exitCode ?? $code, $status);
         } finally {
             $cancelSubscription?->unsubscribe();
         }
-
-        // Pipes are closed before any proc_close: the reap helpers reap through
-        // proc_close, and the pipe handles are ours to close first.
-        self::closeAll($pipes);
-
-        if ($stop === null && $r->reason === DrainResult::CLOSED) {
-            if ($exitCode !== null) {
-                // The liveness probe reaped the child, so proc_close() would report -1.
-                proc_close($proc);
-
-                return self::result($r, $exitCode, ChildResult::EXITED);
-            }
-            $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity);
-            if ($code !== null) {
-                return self::result($r, $code, ChildResult::EXITED);
-            }
-            // Output closed but the child is still running past the deadline or its idle budget.
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
-
-            return self::result($r, $code, ChildResult::TIMED_OUT);
-        }
-
-        $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
-        $status = match (true) {
-            $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
-            $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
-            default => ChildResult::PIPE_FAILED,
-        };
-
-        return self::result($r, $exitCode ?? $code, $status);
     }
 
     /**
      * Waits for a child whose output has already closed to exit. The wait ends at
-     * the deadline, or once the idle budget has passed since the last chunk, so a
-     * silent child is cut at the same point whether or not its pipes are still open.
-     * Both ends are TIMED_OUT, so the caller does not tell them apart. Polled in
-     * the pump's own slices, the way the heartbeat checks idleness.
+     * the deadline, once the idle budget has passed since the last chunk, or once
+     * a cancel has set $stop, so a silent or cancelled child is cut at the same
+     * point whether or not its pipes are still open. The caller tells the cut
+     * apart by $stop: a cancel is CANCELLED, the other two are TIMED_OUT.
+     *
+     * Polled in short slices at every budget, not only the idle one: a cancel
+     * raised from a signal handler sets $stop while this loop sleeps, and a
+     * deadline-length slice would hold the child past it.
      *
      * @param resource $proc
      * @param callable(): float $clock
      */
-    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity): ?int
+    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop): ?int
     {
         while (true) {
+            if ($stop !== null) {
+                return null;
+            }
             $remaining = max(0.0, $deadline - $clock());
-            $slice = $idleTimeout === null ? $remaining : min($remaining, self::IDLE_BEAT_SECONDS);
-            $code = BoundedShutdown::reapIfExited($proc, $slice);
+            $code = BoundedShutdown::reapIfExited($proc, min($remaining, self::IDLE_BEAT_SECONDS));
             if ($code !== null) {
                 return $code;
             }
