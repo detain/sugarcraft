@@ -286,6 +286,23 @@ final class DepthScoreDriftTest extends TestCase
         self::assertStringContainsString('is current', $out);
     }
 
+    public function testBareCheckTakesItsRunDateFromTheHeaderNotFromToday(): void
+    {
+        // The committed header is dated today, so the pass above cannot tell a header date from today's clock.
+        $header = \DepthScore::parseHeader(self::committed());
+        $pastDate = '1999-01-01';
+        self::assertNotSame(date('Y-m-d'), $pastDate);
+        $sha = \DepthScore::resolveCommit(self::root(), $header['tree']);
+        $dir = $this->makeTmpTree('depth-score-dated-');
+        $this->fixtureDirs[] = $dir;
+        file_put_contents("$dir/DEPTH-SCORES.md", \DepthScore::generate(self::root(), $sha, $pastDate));
+
+        [$code, $out] = $this->runCli(['--check', '--out=' . "$dir/DEPTH-SCORES.md"]);
+
+        self::assertSame(0, $code, 'a bare --check must regenerate with the header run date, not today');
+        self::assertStringContainsString('is current', $out);
+    }
+
     public function testBareCheckFailsOnAStaleFileAtOut(): void
     {
         $stale = (string) preg_replace('/^(\| ([a-z0-9-]+) \| \w+ \| )([0-9.]+)/m', '${1}0.1', self::committed(), 1);
