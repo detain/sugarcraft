@@ -157,6 +157,14 @@ final class ApiReference
      */
     private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b|\b[Aa]udits?\s+(?:[A-Za-z][A-Za-z-]*-)?[A-Za-z]?\d+[a-z]?(?:-\d+)?\b~';
 
+    /**
+     * An `@internal` that reached a published summary. A summary is the first paragraph, and it
+     * ends at the first line that starts with a tag, so a tag left inside it is mid-sentence:
+     * the seam was meant to be hidden and is not, because isInternal() reads only line-leading
+     * tags. Refused rather than published as a public row.
+     */
+    private const BARE_INTERNAL_TAG = '~@internal\b~';
+
     public static function enabled(string $slug): bool
     {
         return in_array($slug, self::ENABLED, true);
@@ -1306,7 +1314,9 @@ final class ApiReference
     /**
      * Refuses a published summary that carries an internal reference: a tracker or audit ID
      * (sc-23, DX-05, sugar-core-024) or a file outside the repo (ansicode.txt). Those IDs
-     * resolve for no reader, so the PHPDoc gets rewritten instead of published.
+     * resolve for no reader, so the PHPDoc gets rewritten instead of published. A bare
+     * `@internal` is refused too: it means the tag is not line-leading, so the type or method
+     * it marks would publish as a public row.
      *
      * @param list<array{name: string, signature: string, summary: string}> $methods
      */
@@ -1321,6 +1331,12 @@ final class ApiReference
                 throw new \RuntimeException(
                     "gen-api-reference: the published PHPDoc of $fqn carries the internal reference '{$hit[0]}'; "
                     . 'rewrite that docblock so the page does not print it'
+                );
+            }
+            if (preg_match(self::BARE_INTERNAL_TAG, $text, $hit) === 1) {
+                throw new \RuntimeException(
+                    "gen-api-reference: the published PHPDoc of $fqn carries a bare '{$hit[0]}' outside a line-leading tag; "
+                    . 'move the tag to the start of its own line, or reword the sentence so the page does not print it'
                 );
             }
         }

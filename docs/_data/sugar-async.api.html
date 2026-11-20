@@ -103,7 +103,7 @@
 <tr><td><code>__construct()</code></td><td></td></tr>
 <tr><td><code>static new(): self</code></td><td>Factory for idiomatic construction.</td></tr>
 <tr><td><code>token(): CancellationToken</code></td><td>Returns the read-only token for this source.</td></tr>
-<tr><td><code>isCancelled(): bool</code></td><td>The state lives in the token (single source of truth): a cancellation raised through the token&#039;s @internal paths is visible here too, so the source and its token can never disagree on isCancelled().</td></tr>
+<tr><td><code>isCancelled(): bool</code></td><td>The state lives in the token (single source of truth): a cancellation raised through the token&#039;s internal paths is visible here too, so the source and its token can never disagree on isCancelled().</td></tr>
 <tr><td><code>cancel(): void</code></td><td>Requests cancellation. Idempotent — calling multiple times is a no-op. All callbacks registered on the token fire exactly once, in order. A throwing callback is logged and never propagates from here.</td></tr>
 <tr><td><code>onCancel(callable $callback): Subscription</code></td><td>Register a cancellation callback on this source&#039;s token. Part of the Cancellable contract — the contract makes it public. Returns the removal handle; see CancellationToken::onCancel().</td></tr>
 </tbody>

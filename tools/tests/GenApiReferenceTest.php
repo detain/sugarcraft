@@ -757,8 +757,9 @@ final class GenApiReferenceTest extends TestCase
 
     public function testProseMentioningInternalDoesNotHideAPublicType(): void
     {
-        // The word `@internal` in the middle of a sentence is not the tag. The line scan and the
+        // The word `internal` in the middle of a sentence is not the tag. The line scan and the
         // parser must both read the type as public, so the run does not refuse on a disagreement.
+        // A bare `@internal` mid-sentence is refused instead; see testAMidSentenceInternalTagIsRefused.
         $root = $this->fixtureRoot([
             'sugar-core/src/Holder.php' => <<<'PHP'
                 <?php
@@ -767,7 +768,7 @@ final class GenApiReferenceTest extends TestCase
 
                 namespace Demo\Fixture;
 
-                /** Holds a value. A later release may drop it; see the @internal policy notes. */
+                /** Holds a value. A later release may drop it; see the internal policy notes. */
                 final class Holder
                 {
                     public function get(): int
@@ -782,6 +783,91 @@ final class GenApiReferenceTest extends TestCase
 
         self::assertStringContainsString('<h4 id="api-demo-fixture-holder"><code>Holder</code> <small>final class</small></h4>', $html);
         self::assertContains('Demo\Fixture\Holder', \array_column(\ApiReference::declaredPublic($root, 'sugar-core'), 'fqn'));
+    }
+
+    public function testAMidSentenceInternalTagIsRefused(): void
+    {
+        // The tag is read only at the start of a line. A type summary that carries `@internal`
+        // mid-sentence would publish the token, and a method that carries it would publish as a
+        // public row, so the run refuses both rather than printing either.
+        $typeRoot = $this->fixtureRoot([
+            'sugar-core/src/Seal.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\n/** Seals a walk. @internal — the decoder owns the call. */\nfinal class Seal\n{\n}\n",
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("a bare '@internal' outside a line-leading tag");
+        \ApiReference::generate($typeRoot, 'sugar-core');
+    }
+
+    public function testAMidSentenceInternalTagInAMethodSummaryIsRefused(): void
+    {
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Walk.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace Demo\\Fixture;\n\nfinal class Walk\n{\n    /**\n     * Reads the frame. @internal Test seam only.\n     */\n    public function frame(): void\n    {\n    }\n}\n",
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("the published PHPDoc of Demo\\Fixture\\Walk carries a bare '@internal'");
+        \ApiReference::generate($root, 'sugar-core');
+    }
+
+    public function testALineLeadingInternalTagExcludesTheTypeAndTheMethodFromThePage(): void
+    {
+        // The tag at the start of its own line hides the seam, and the summary above it is what the
+        // page would print. Nothing in the page should name the hidden method or the hidden type.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Seal.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /**
+                 * Seals a walk.
+                 *
+                 * @internal The decoder owns the only production call.
+                 */
+                final class Seal
+                {
+                    public function inside(): void
+                    {
+                    }
+                }
+
+                PHP,
+            'sugar-core/src/Walk.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Public walk. */
+                final class Walk
+                {
+                    /**
+                     * Reads the frame.
+                     *
+                     * @internal Test seam only.
+                     */
+                    public function seam(): void
+                    {
+                    }
+
+                    /** Visible. */
+                    public function visible(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringNotContainsString('Seal', $html);
+        self::assertStringNotContainsString('inside', $html);
+        self::assertStringNotContainsString('seam', $html);
+        self::assertStringNotContainsString('@internal', $html);
+        self::assertStringContainsString('<code>Walk</code>', $html);
+        self::assertStringContainsString('visible(): void', $html);
     }
 
     public function testFixtureListsOnlyPublicTypesAndMembersGroupedByNamespace(): void

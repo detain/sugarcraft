@@ -57,7 +57,6 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static fromWalk(array $frames, ?int $loopPlays, ?string $stopReason): self</code></td><td>Seal a completed walk. @internal — Decoder::decodeFile() owns the only production call; the seam is public so tests can pin the reporting rules in isolation.</td></tr>
 <tr><td><code>frames(): array</code></td><td></td></tr>
 <tr><td><code>loopPlays(): ?int</code></td><td>Total playthroughs, <code>null</code> = loop forever (see class docblock).</td></tr>
 <tr><td><code>truncated(): bool</code></td><td>May the frame list be hiding frames? True exactly when the walk carries a stop reason — either the frame cap withheld later frames (including the documented exactly-256 false positive) or an advertised frame was skipped undecodable.</td></tr>
