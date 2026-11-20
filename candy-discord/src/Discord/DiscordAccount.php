@@ -563,23 +563,25 @@ final class DiscordAccount implements PlatformFace
             }
             $slot = \str_starts_with($mime, 'image/') ? 'images' : ($mime === 'application/pdf' ? 'documents' : '');
             if ($slot === '') {
-                $notes[] = "{$name} (unsupported type)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.unsupported', ['name' => $name]);
 
                 continue;
             }
             if ($accepted[$slot] >= $caps[$slot]) {
-                $notes[] = "{$name} (past the " . ($slot === 'images' ? 'image' : 'document') . ' limit of ' . $caps[$slot] . ')';
+                $notes[] = $slot === 'images'
+                    ? Lang::t('channels.discord.attachments.reason.past_image_limit', ['name' => $name, 'limit' => (string) $caps[$slot]])
+                    : Lang::t('channels.discord.attachments.reason.past_document_limit', ['name' => $name, 'limit' => (string) $caps[$slot]]);
 
                 continue;
             }
             $declared = (int) ($attachment['size'] ?? 0);
             if ($declared > $maxBytes) {
-                $notes[] = "{$name} (over the {$maxMb} MB cap)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.over_cap', ['name' => $name, 'mb' => (string) $maxMb]);
 
                 continue;
             }
             if ($this->mediaInFlightBytes + $declared > $totalCapBytes) {
-                $notes[] = "{$name} (past the {$maxTotalMb} MB batch budget)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.batch_budget', ['name' => $name, 'mb' => (string) $maxTotalMb]);
 
                 continue;
             }
@@ -614,18 +616,18 @@ final class DiscordAccount implements PlatformFace
             foreach ($settled as $i => $result) {
                 $job = $jobs[(int) $i];
                 if (!\is_array($result) || isset($result['error'])) {
-                    $notes[] = "{$job['name']} (download failed)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.download_failed', ['name' => $job['name']]);
 
                     continue;
                 }
                 $bytes = (string) $result['bytes'];
                 if (\strlen($bytes) > $maxBytes) {
-                    $notes[] = "{$job['name']} (over the size cap after download)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.over_cap_after_download', ['name' => $job['name']]);
 
                     continue;
                 }
                 if ($batchTotal + \strlen($bytes) > $totalCapBytes) {
-                    $notes[] = "{$job['name']} (past the {$maxTotalMb} MB batch budget)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.batch_budget', ['name' => $job['name'], 'mb' => (string) $maxTotalMb]);
 
                     continue;
                 }
