@@ -159,7 +159,21 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#detection-phases">Detection phases</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#output-is-plain-when-the-program-is-piped">Output is plain when the program is piped</a></li>
+            <li class="toc-h3"><a href="#color-still-appears-with-no-color-set">Color still appears with NO_COLOR set</a></li>
+            <li class="toc-h3"><a href="#a-truecolor-terminal-reports-ansi256">A truecolor terminal reports Ansi256</a></li>
+            <li class="toc-h3"><a href="#an-environment-key-is-ignored">An environment key is ignored</a></li>
+            <li class="toc-h3"><a href="#detection-ignores-the-variables-i-did-set">Detection ignores the variables I did set</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#profile-detection">Profile detection</a></li>
             <li class="toc-h3"><a href="#standard-colors">Standard colors</a></li>
@@ -197,7 +211,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Profile detection</strong><span>One canonical 14-step ladder every surface shares, override-first: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> outrank every later leg (a falsy <code>FORCE_COLOR</code> spelling lands on the <code>Ascii</code> floor). Suppressors come next: <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) turn color off — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities. Advertised depth follows: <code>COLORTERM</code> (<code>24bit</code>/<code>truecolor</code>, plus the legacy marker <code>yes</code> that old color terminals set — read here as 24-bit), <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code> (any non-empty value declares the environment — even the string <code>false</code>), the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade (a fixed-path binary, run with a minimal child environment). The result is a <code>ColorProfile</code>: TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii or NoTTY.</span></div>
+      <div class="feature"><strong>Profile detection</strong><span>One canonical 14-step ladder every surface shares, override-first: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> outrank every later leg (a falsy <code>FORCE_COLOR</code> spelling lands on the <code>Ascii</code> floor). Suppressors come next: <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) turn color off — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities. Advertised depth follows: <code>COLORTERM</code> (<code>24bit</code>/<code>truecolor</code>, plus the legacy marker <code>yes</code>, which the ladder reads as a 256-color promise, not a 24-bit one), <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code> (exactly <code>true</code> grants TrueColor; any other value, <code>false</code> and <code>1</code> included, carries no 24-bit promise), the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade (a fixed-path binary, run with a minimal child environment). The detection ladder emits five levels (TrueColor, Ansi256, Ansi, Ascii and NoTTY), and the <code>ColorProfile</code> enum that carries the result has eight.</span></div>
       <div class="feature"><strong>Color degradation</strong><span><code>Palette::toProfile()</code> / <code>Color::convert()</code> downsample a color to the 256-color cube and gray ramp or to the 16 ANSI slots.</span></div>
       <div class="feature"><strong>String rewriting</strong><span><code>degrade()</code> rewrites the SGR colors in a string for the current profile; under NoTTY it strips every escape — SGR, CSI, OSC and DCS sequences, SS3/APC/PM/SOS strings, the Fe escape pairs and charset selectors — decoration included, so pin the <code>Ascii</code> floor for a color-only strip. <code>ProfileWriter</code> does the same to everything written to a stream.</span></div>
       <div class="feature"><strong>StandardColors</strong><span>The 16 ANSI colors as <code>Color</code> values via the non-mutating read API — <code>StandardColors::all()</code>, <code>fromIndex(1)</code>, <code>catalog()</code>. (The <code>$red</code>/<code>$brightBlack</code> statics are deprecated process-global mutables; see the README deprecation window.)</span></div>
@@ -218,14 +232,14 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-colorprofile">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-colorprofile/blob/master/sugar-colorprofile/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-colorprofile/tree/master/sugar-colorprofile/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-colorprofile/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-colorprofile/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/colorprofile">charmbracelet/colorprofile</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Palette</td><td>static detect($stream = null, array $env = []): ColorProfile</td><td>Detect the color profile for a stream</td></tr>
@@ -252,7 +266,88 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 <tr><td>NearestColor</td><td>__construct(ColorDistance) / ansi256(Color) / ansi16(Color) / closest(Color, array) / withError(Color, ?&err) / metric() / static palette256() / palette256Lab() / palette16Lab()</td><td>Opt-in nearest-palette matcher over the cached Lab palettes</td></tr>
 <tr><td>PaletteIndex</td><td>static fromPalette(array, ColorDistance) / nearest(Color) / metric() / palette() / count()</td><td>Precomputed Lab index over any fixed palette</td></tr>
 </table>
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>Detection has no config file. The answer comes from the environment, and the host can pin it in code. The table lists the environment variables in ladder order. The first leg that matches wins.</p>
+<table class="api-table">
+<tr><th>Env var</th><th>Step</th><th>Effect</th></tr>
+<tr><td><code>CLICOLOR_FORCE=1</code></td><td>1</td><td>Forces TrueColor past every other variable, <code>NO_COLOR</code> included. It also keeps the forced rung on a non-TTY stream.</td></tr>
+<tr><td><code>FORCE_COLOR</code></td><td>2</td><td>Sets the level: <code>3</code> or more gives TrueColor, <code>2</code> gives Ansi256, <code>1</code> gives Ansi. Any other spelling, such as <code>0</code> or <code>false</code>, lands on the Ascii floor.</td></tr>
+<tr><td><code>NO_COLOR</code></td><td>3</td><td>A non-empty value gives the colorless Ascii rung. Color codes are dropped, and decoration such as bold and underline is kept.</td></tr>
+<tr><td><code>CLICOLOR=0</code></td><td>4</td><td>Suppresses color.</td></tr>
+<tr><td><code>TERM=dumb</code></td><td>5</td><td>Suppresses color. It outranks <code>COLORTERM</code>.</td></tr>
+<tr><td><code>TMUX</code> / <code>STY</code> with <code>screen*</code></td><td>6</td><td>Caps the level at Ansi256 before <code>COLORTERM</code> is read.</td></tr>
+<tr><td><code>COLORTERM</code></td><td>7</td><td><code>truecolor</code> or <code>24bit</code> gives TrueColor. <code>yes</code> gives Ansi256.</td></tr>
+<tr><td><code>TERM_PROGRAM=iTerm.app</code></td><td>8</td><td>Gives TrueColor. Matching is case-sensitive.</td></tr>
+<tr><td><code>WT_SESSION</code></td><td>9</td><td>A non-empty value gives TrueColor (Windows Terminal).</td></tr>
+<tr><td><code>GOOGLE_CLOUD_SHELL</code></td><td>10</td><td>Exactly <code>true</code> gives TrueColor.</td></tr>
+<tr><td><code>TMUX</code> / <code>STY</code> with <code>tmux*</code></td><td>11</td><td>Caps the level at Ansi256, after <code>COLORTERM</code> is read.</td></tr>
+<tr><td><code>TERM</code></td><td>12–13</td><td><code>*-256color</code>, <code>xterm-kitty</code> and <code>xterm-ghostty</code> give Ansi256. <code>xterm*</code>, <code>screen*</code> and <code>tmux*</code> give Ansi.</td></tr>
+<tr><td><code>REDUCE_MOTION</code> / <code>PREFERS_REDUCED_MOTION</code></td><td>—</td><td>Not part of the color ladder. A non-empty value other than <code>0</code>, <code>false</code>, <code>no</code> or <code>off</code> sets <code>Probe::reducedMotion()</code>.</td></tr>
+</table>
+    <p style="margin-top: 12px;">A host that needs a fixed answer pins it with <code>(new Palette())-&gt;withProfile(ColorProfile::Ansi)</code>. A <code>Palette</code> or <code>TerminalProbe</code> built with a non-empty <code>$env</code> array is hermetic: the array replaces the ambient environment, so pass every key the check reads. An empty array is not hermetic, and falls through to the process environment.</p>
+
+    <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
+    <p>The library reads no keystrokes and binds no keys. Detection takes its input from the environment and the stream being written to. The optional probes add the output of a fixed-path <code>infocmp</code> run.</p>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p>Degradation is one-way. A TrueColor value can drop to Ansi256, Ansi or Ascii, but never rises. <code>Palette::toProfile()</code> and <code>Color::convert()</code> downsample one color, and <code>degrade()</code> rewrites every SGR color in a string. Under the NoTTY profile, <code>degrade()</code> strips all escape sequences, decoration included, so pin the Ascii floor for a color-only strip. The 16 ANSI colors come from <code>StandardColors::all()</code>, <code>fromIndex()</code> and <code>catalog()</code>. Opt into the perceptual family, <code>NearestColor</code> with <code>DeltaE</code>, when a degraded value must land on a fixed palette.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/detect.php</code> detects the profile for STDOUT, and prints the plain-language description from <code>Palette::comment()</code>.</li>
+      <li><code>examples/convert.php</code> builds colors from RGB, hex and int, then converts each one to every profile level.</li>
+      <li><code>examples/degrade.php</code> wraps a stream with <code>ProfileWriter</code> and forces each of the Ansi256, Ansi and Ascii profiles in turn.</li>
+      <li><code>examples/standard-colors.php</code> lists the 16 ANSI colors through the non-mutating read API.</li>
+      <li><code>examples/probe-report.php</code> prints the phased capability report for a hermetic environment map.</li>
+      <li><code>examples/async-probe.php</code> runs the ReactPHP <code>infocmp</code> probe on a loop that the example hands in.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/detect.php
+php examples/convert.php
+php examples/degrade.php
+php examples/standard-colors.php
+php examples/probe-report.php
+php examples/async-probe.php</code></pre>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite pins the detection ladder against its drift guards (<code>LadderDriftTest</code>, <code>EnvUnificationTest</code>), the palette tables against their parity tests (<code>Ansi256TableParityTest</code>, <code>Ansi16TableParityTest</code>), and the degrade output (<code>DegradeTest</code>, <code>DegradeFidelityTest</code>). <code>ProbeTest</code>, <code>ProbeInfocmpTest</code> and the <code>AsyncProbe*</code> files cover the probes, and <code>LangParityTest</code> checks the catalogs.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="output-is-plain-when-the-program-is-piped" style="margin-top: 24px;">Output is plain when the program is piped</h3>
+    <p>That is the design. A stream with no TTY in front of it gets no color, so piping into a file stays safe to read. To keep color on a non-TTY stream, set <code>CLICOLOR_FORCE=1</code>. The force legs outrank the stream gate.</p>
+
+    <h3 id="color-still-appears-with-no-color-set" style="margin-top: 24px;">Color still appears with NO_COLOR set</h3>
+    <p><code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> outrank <code>NO_COLOR</code>. An exported force variable, from a shell alias or a CI image, can re-enable color for a user who set <code>NO_COLOR</code>. Unset the force variables, and check <code>Probe::isNoColor()</code> before you honor a force override.</p>
+
+    <h3 id="a-truecolor-terminal-reports-ansi256" style="margin-top: 24px;">A truecolor terminal reports Ansi256</h3>
+    <p>Two legs cap the level. <code>COLORTERM=yes</code> is read as a 256-color promise, and a <code>tmux</code> or <code>screen</code> session caps the level at Ansi256. Set <code>COLORTERM=truecolor</code> where the terminal honors it, or let the phase-2 terminfo probe promote the rung when the entry advertises <code>Tc</code> or <code>RGB</code>.</p>
+
+    <h3 id="an-environment-key-is-ignored" style="margin-top: 24px;">An environment key is ignored</h3>
+    <p>Env keys are matched case-exactly, so <code>No_Color</code> does not count as <code>NO_COLOR</code>. Windows reports its environment case-insensitively at the OS layer, so the same spelling can look set in a shell and still miss detection here. Use the exact spelling from the table.</p>
+
+    <h3 id="detection-ignores-the-variables-i-did-set" style="margin-top: 24px;">Detection ignores the variables I did set</h3>
+    <p>A non-empty <code>$env</code> array replaces the whole environment rather than overlaying it. Pass every key the check reads, or leave <code>$env</code> out so the process environment is used.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The port follows the concepts of <a href="https://github.com/charmbracelet/colorprofile">charmbracelet/colorprofile</a>: detect a profile from the environment, convert colors down to it, and wrap a writer so that output is downgraded to match. The mapping is behavioral. SugarCraft is developed as a native PHP project.</p>
+<table class="api-table">
+<tr><th scope="col">Concept</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
+<tr><td>Profile detection from the environment</td><td><code>Palette::detect()</code>, <code>DetectionChain</code></td><td>One shared ladder, so every surface answers the same way.</td></tr>
+<tr><td>Color profile levels</td><td><code>ColorProfile</code> enum</td><td>Eight levels. The detection ladder emits five of them.</td></tr>
+<tr><td>Color conversion</td><td><code>Color::convert()</code>, <code>Palette::toProfile()</code></td><td>One-way downsampling only.</td></tr>
+<tr><td>Writer that downgrades output</td><td><code>ProfileWriter</code></td><td>Applies <code>degrade()</code> to everything written to a stream.</td></tr>
+<tr><td>Perceptual distance (beyond detection)</td><td><code>DeltaE</code>, <code>NearestColor</code></td><td>Opt-in. Not needed for detection or degradation.</td></tr>
+</table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p><code>DetectionChain</code> is the one precedence core, and <code>Env</code> resolves and sanitizes the environment for it. <code>Palette</code> is the instance over that chain. It adds the stream TTY gate, and it does the degrading and stripping. The static <code>Probe</code> layer answers the questions that do not need an instance. <code>AsyncProbe</code> runs <code>infocmp</code> on a ReactPHP loop with bounded children, and <code>Probe\TerminalProbe</code> produces the phased report. The color math is <code>ColorMath</code> (sRGB to Lab), with <code>DeltaE</code> for the metrics and <code>NearestColor</code> for the matcher. <code>ProfileWriter</code> wraps a stream for automatic degradation.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0, so consume <code>dev-master</code>. The mutable <code>StandardColors</code> statics are deprecated in favor of <code>all()</code>, <code>fromIndex()</code> and <code>catalog()</code>, and the <code>Profile</code> name is a deprecated alias for <code>ColorProfile</code>. The deprecation window is set out in the README.</p>
     </div>
+
   </div>
 </section>
 
