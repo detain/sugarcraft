@@ -226,7 +226,9 @@ suitable for showing the user why their paste looks short (`lang/en.php`;
 locale resolution follows sugar-core's `I18n\Lang` — English-only today: the
 key resolves through sugar-core's fallback and lands on `en`). The remaining body is
 **then discarded** — counted by `discardedPasteBytes()` — until the real
-`CSI 201 ~` terminator arrives. Overflow bytes are never re-decoded as
+`CSI 201 ~` terminator arrives. The overshoot past the cap in the read that crosses
+it is counted too, except when that same read carries the terminator: such a paste
+is truncated with no overshoot count. Overflow bytes are never re-decoded as
 keystrokes: an injected 1 MiB+ paste can end up commanding your input loop,
 so the cap's force-close must consume, not reinterpret. If the terminator
 never comes (an aborted or forged paste), the open episode simply stays
@@ -407,13 +409,13 @@ Three counters on `EscapeDecoder` tell the silent paths apart:
 ```php
 $decoder->drainedReplyCount();    // replies recognized and surfaced as TerminalReplyEvent
 $decoder->droppedUnknownCount();  // sequences consumed or refused with no event (including overflowed CSI)
-$decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
+$decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap (same-read overshoot excepted)
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
 `droppedUnknownCount()` means sequences were consumed or refused without producing
 an event. That includes genuinely unrecognized sequences — private CSIs whose lead
-parameter byte routes nowhere (`<` with mouse reporting off, `=` with any final other than `c`, `!`), unmapped SS3
+parameter byte routes nowhere (`<` with mouse reporting off, `=` with a final that is not a recognized reply, such as `=1A`, `=1q`, `=5~`, or `=1u` with kitty off, `!`), unmapped SS3
 finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
 unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
 It **also** covers recognized-but-filtered frames — a Kitty event frame when the
@@ -431,9 +433,13 @@ That count covers the abandon itself, not every byte of the body: a single read
 that carries more than the budget can still decode part of its tail as keystrokes
 in that same call, and how many bytes those are depends on where the reads fell.
 A complete sequence longer
-than the cap that arrives in a single read is parsed whole and is not refused.
+than the cap that arrives in a single read is parsed whole and is not refused for
+its length: a recognized one drains or decodes as usual, while an unrecognized final
+is still counted once in `droppedUnknownCount()`.
 `discardedPasteBytes()` is the paste-only counter and never moves for a
-sequence. `reset()` zeroes all counters along with the buffers.
+sequence. It leaves out the overshoot of a paste that crosses the cap and ends in
+the same read, so its total can differ with read chunking. `reset()` zeroes all
+counters along with the buffers.
 
 ### Deferred trailing escape (opt-in)
 
@@ -501,9 +507,12 @@ field as hostile bytes:
 - **Caps never reinterpret.** A sequence that overflows its cap is refused
   with one counted drop (`droppedUnknownCount()`); paste bytes past the cap
   are discarded and counted by `discardedPasteBytes()` — the paste-only
-  counter. Neither is ever pushed back into the stream for a second parse:
-  an oversized frame cannot surface as synthesized keys, and an oversized
-  paste body cannot masquerade as keystrokes after its announce.
+  counter, with the same-read overshoot excepted (see Observability). Neither
+  is ever pushed back into the stream for a second parse: an oversized CSI
+  cannot surface as synthesized keys, and an oversized paste body cannot
+  masquerade as keystrokes after its announce. The exception is an
+  unterminated OSC/DCS past its abandon budget: a single read that carries
+  more than the budget can still decode part of its tail as keys.
 - The fleet's private-use-area arena (zone sentinels U+E000/U+E001 and the
   image-marker block from U+E002) passes through decoding byte-identical — a
   hostile paste can forge marker bytes. Frame-marked composites should sweep
