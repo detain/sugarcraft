@@ -164,6 +164,37 @@ final class DepthScoreDriftTest extends TestCase
         self::assertContains('header', \DepthScore::staleRows($stale, $generated));
     }
 
+    public function testAStaleProseSentenceIsReportedAsHeader(): void
+    {
+        [$committed, $generated] = self::regenerated();
+        self::assertStringContainsString('Grades: A at 85 or more', $committed);
+
+        $stale = str_replace('Grades: A at 85 or more', 'Grades: A at 90 or more', $committed);
+        self::assertNotSame($committed, $stale);
+        self::assertSame(['header'], \DepthScore::staleRows($stale, $generated));
+    }
+
+    public function testAStaleSlugCountIsReportedAsHeader(): void
+    {
+        [$committed, $generated] = self::regenerated();
+
+        $stale = (string) preg_replace('/Slugs: \d+/', 'Slugs: 999', $committed, 1);
+        self::assertNotSame($committed, $stale);
+        self::assertSame(['header'], \DepthScore::staleRows($stale, $generated));
+    }
+
+    public function testBareCheckFailsOnAStaleProseSentenceAtOut(): void
+    {
+        $stale = str_replace('Grades: A at 85 or more', 'Grades: A at 90 or more', self::committed());
+        $dir = $this->makeTmpTree('depth-score-prose-');
+        $this->fixtureDirs[] = $dir;
+        file_put_contents("$dir/DEPTH-SCORES.md", $stale);
+
+        [$code] = $this->runCli(['--check', '--out=' . "$dir/DEPTH-SCORES.md"]);
+
+        self::assertSame(1, $code, 'a stale sentence must fail --check just as it fails the drift test');
+    }
+
     /**
      * @return iterable<string, array{float, float}>
      */

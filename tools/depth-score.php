@@ -20,7 +20,7 @@ declare(strict_types=1);
  * see "\r\n" and "\r" as "\n", exactly as Python's text mode does.
  *
  * Usage:
- *   php tools/depth-score.php                                # HEAD, today, writes docs/DEPTH-SCORES.md
+ *   php tools/depth-score.php                                # HEAD, today, writes docs/DEPTH-SCORES.md unless it is pinned to another tree
  *   php tools/depth-score.php --run-date=2026-11-20 --tree=origin/master
  *   php tools/depth-score.php --stdout                       # print the table instead of writing it
  *   php tools/depth-score.php --check                        # exit 1 when docs/DEPTH-SCORES.md is stale
@@ -131,15 +131,16 @@ final class DepthScore
     }
 
     /**
-     * Slugs whose rows differ between two rendered documents, plus "header" when the
-     * lines above the table differ. An empty list means the two documents agree.
+     * Slugs whose rows differ between two rendered documents, plus "header" when any line
+     * outside the table rows differs (the run date, tree, slug count, grade counts and prose).
+     * An empty list means the two documents agree.
      *
      * @return list<string>
      */
     public static function staleRows(string $committed, string $generated): array
     {
         $stale = [];
-        if (self::headerOf($committed) !== self::headerOf($generated)) {
+        if (self::proseOf($committed) !== self::proseOf($generated)) {
             $stale[] = 'header';
         }
         $have = self::rowsOf($committed);
@@ -311,6 +312,22 @@ final class DepthScore
         }
 
         return [$m[1], $m[2]];
+    }
+
+    /**
+     * Every line that is not a table row, joined back together. Comparing this, rather than
+     * only the header's date and tree, is what makes a stale sentence or count show up.
+     */
+    private static function proseOf(string $markdown): string
+    {
+        $prose = [];
+        foreach (explode("\n", $markdown) as $line) {
+            if (preg_match(self::TABLE_ROW_PATTERN, $line) !== 1) {
+                $prose[] = $line;
+            }
+        }
+
+        return implode("\n", $prose);
     }
 
     /**
@@ -534,7 +551,8 @@ final class DepthScore
         Usage: php tools/depth-score.php [--run-date=YYYY-MM-DD] [--tree=<commit>] [--out=PATH | --stdout | --check]
 
           --run-date=DATE  run date written to the header (default: today; --check: the header's)
-          --tree=COMMIT    commit whose tree is scored (default: HEAD; --check: the header's)
+          --tree=COMMIT    commit whose tree is scored (default: HEAD; --check: the header's).
+                           A bare write exits 2 when --out is pinned to another tree; name it.
           --out=PATH       file to write (default: docs/DEPTH-SCORES.md)
           --stdout         print the table instead of writing it
           --check          exit 1 when the file at --out is not what the scorer produces
