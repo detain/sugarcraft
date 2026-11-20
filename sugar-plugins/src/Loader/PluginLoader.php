@@ -22,9 +22,14 @@ use SugarCraft\Plugins\Trust\TrustList;
  * 2. NOTHING LOADS THAT THE USER HAS NOT TRUSTED. A plugin's entrypoints load
  *    only when its name is on the trust list, matched exactly. An untrusted
  *    name never has its manifest read.
- * 3. FIRST SIGHT IS QUARANTINE. A trusted entrypoint is only LISTED on the
- *    launch that first reveals it. The file loads at the NEXT launch, so a
- *    manifest swap under a trusted name cannot smuggle code in silently.
+ * 3. FIRST SIGHT IS QUARANTINE, KEYED BY PATH. A trusted entrypoint PATH is
+ *    only LISTED on the launch that first reveals it, and the file loads at the
+ *    NEXT launch. So a manifest swap that introduces a new entrypoint under a
+ *    trusted name cannot run that file silently. The ledger records the path
+ *    alone, never the content: a path already on the ledger is not quarantined
+ *    again when its bytes change. A same-uid, in-place rewrite of a previously
+ *    seen file between launches therefore loads without a quarantine stop. That
+ *    gap is parity with the original loader (plan_plugin.md section 9, R2).
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
  *    its parent directory must be owned by this process and not writable by the
  *    world (the same gate candy-code applies; group write is accepted).
