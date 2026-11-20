@@ -345,6 +345,20 @@ final class DepthScoreDriftTest extends TestCase
         self::assertSame(0, $code);
     }
 
+    public function testAFailedWriteExitsTwoAndDoesNotReportSuccess(): void
+    {
+        $header = \DepthScore::parseHeader(self::committed());
+        $dir = $this->makeTmpTree('depth-score-unwritable-');
+        $this->fixtureDirs[] = $dir;
+        $file = "$dir/missing-dir/DEPTH-SCORES.md";
+
+        [$code, $out] = $this->runCli(['--run-date=' . $header['runDate'], '--tree=' . $header['tree'], '--out=' . $file]);
+
+        self::assertSame(2, $code, 'a write that never happened must exit 2, not 0');
+        self::assertStringNotContainsString('wrote', $out);
+        self::assertFileDoesNotExist($file);
+    }
+
     /**
      * @param list<string> $args
      * @return array{int, string} exit code and captured stdout

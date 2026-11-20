@@ -632,7 +632,10 @@ final class DepthScore
                     return 2;
                 }
             }
-            file_put_contents($out, $document);
+            // The warning is silenced only so the failure surfaces as the exit-2 error below, not as a PHP warning.
+            if (@file_put_contents($out, $document) === false) {
+                throw new \RuntimeException('depth-score: cannot write ' . $out . ': ' . (error_get_last()['message'] ?? 'unknown error'));
+            }
             echo "depth-score: wrote $out\n";
 
             return 0;
