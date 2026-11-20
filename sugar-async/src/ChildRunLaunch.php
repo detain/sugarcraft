@@ -221,6 +221,10 @@ final class ChildRunLaunch
 
         $got = false;
         foreach ($this->open as $slot => $pipe) {
+            // The onChunk callback may cancel the launch mid-pass, which closes every pipe.
+            if ($this->settled || $this->killing) {
+                return;
+            }
             $chunk = WindowsPipes::readAvailable($pipe, ChildPump::READ_BYTES);
             if ($chunk !== '') {
                 $this->noteRead();
@@ -283,6 +287,12 @@ final class ChildRunLaunch
         }
 
         foreach (array_keys($this->open) as $slot) {
+            // A chunk's onChunk callback runs inside readBuffered() and may cancel the
+            // launch: the ladder then closes every pipe, and may settle the run outright.
+            // Nothing below may touch a closed pipe once that has happened.
+            if ($this->settled || $this->killing) {
+                return;
+            }
             if ($this->readBuffered($slot)) {
                 continue;
             }
@@ -298,13 +308,19 @@ final class ChildRunLaunch
      * yielded bytes, so it is not silent. A pipe at EOF is closed, as onReadable()
      * would close it. The budget bounds one check against a descendant that keeps
      * the pipe refilled; such a pipe stays open and the grace restarts from the read.
+     *
+     * Stops as soon as a chunk's callback has started the kill ladder (or settled the
+     * launch): the pipe is closed by then, and reading it again is a TypeError.
      */
     private function readBuffered(int $slot): bool
     {
-        $pipe = $this->open[$slot];
         $yielded = false;
         $budget = ChildPump::SWEEP_BYTES;
         while ($budget > 0) {
+            if ($this->settled || $this->killing || !isset($this->open[$slot])) {
+                break;
+            }
+            $pipe = $this->open[$slot];
             $chunk = fread($pipe, min(ChildPump::READ_BYTES, $budget));
             if ($chunk === false || $chunk === '') {
                 // feof(), not the empty read: a non-blocking pipe returns '' while nothing is buffered.
