@@ -65,7 +65,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Theme</td><td>dark() / light() / dracula() / tokyoNight() / oneDark() / githubDark() / solarizedDark() / solarizedLight() / ansi() / adaptive()</td><td>Named theme factories</td></tr>
@@ -91,6 +91,59 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
 <tr><td>Bar</td><td>StatusBar::new()-&gt;left()/center()/right(Segment|string ...)-&gt;width()/style()-&gt;render(); HelpBar::fromMap()</td><td>One-line chrome: positioned segment groups + key→label help rows</td></tr>
 </table>
+
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p><code>Style</code> is an immutable value object. Every setter returns a new <code>Style</code> and leaves the receiver unchanged, so one base style can be reused and specialised without side effects. <code>Border</code>, <code>Table</code>, <code>Tree</code> and <code>Canvas</code> follow the same pattern.</p>
+    <p><code>render()</code> does not write escape codes blindly. It downsamples each colour to the style's colour profile, so a TrueColor value becomes a 256-colour, 16-colour or plain-text sequence depending on the tier. The same approach as the Writer in charmbracelet/colorprofile.</p>
+
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <p>Colour output is controlled per style, or once for the whole process. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Style::setDefaultProfile(?ColorProfile)</code>: process-wide, default unset, so TrueColor. Sets the colour tier that styles created by <code>Style::new()</code> render to. <code>null</code> restores TrueColor.</li>
+      <li><code>Style::colorProfile(ColorProfile)</code>: per style, default no profile set, so the process-wide default applies. Forces the tier this style's <code>render()</code> downsamples to, overriding the process-wide default.</li>
+      <li><code>Theme::adaptive(bool $fallbackDark)</code>: bool, default <code>true</code>. Palette used when <code>COLORFGBG</code> cannot decide light or dark.</li>
+      <li><code>Border::withEmbeddedTitle(text, ?TitleAnchor, ?open, ?close)</code>: anchor, junction runes, default anchor and junctions are derived from the border. Cuts a title into the border edge.</li>
+      <li><code>Table::wrap(?Closure)</code>: closure or null, default no callback set. When set, every line it returns renders, so a wrapped row spans several physical lines.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Theming</h3>
+    <p><code>Theme</code> is the palette shared by the SugarCraft libraries, with 13 colour slots. It has ten named factories: <code>dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>tokyoNight()</code>, <code>oneDark()</code>, <code>githubDark()</code>, <code>solarizedDark()</code>, <code>solarizedLight()</code>, <code>ansi()</code> and <code>adaptive()</code>. Each slot setter, such as <code>withPrimary()</code>, returns a new <code>Theme</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Color;
+use SugarCraft\Style\Theme;
+
+$theme = Theme::dracula()-&gt;withPrimary(Color::hex('#50fa7b'));</code></pre>
+
+    <h3 style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>.</p>
+    <ul>
+      <li><code>styled-text.php</code>: The lipgloss "hello world": one styled line of text.</li>
+      <li><code>style.php</code>: Foreground, background, bold, italic, underline and strikethrough, plus adaptive colour.</li>
+      <li><code>adaptive-colour.php</code>: Storing the colour once and collapsing it on both the light and dark axes.</li>
+      <li><code>border.php</code>: The same content under every built-in border style.</li>
+      <li><code>table.php</code>: A rounded-border table with custom alignment and a <code>styleFunc</code> that paints alternate rows.</li>
+      <li><code>list.php</code>: Lists with the default bullet, a custom enumerator and nested enumerators.</li>
+      <li><code>tree.php</code>: A project structure rendered under three enumerator styles.</li>
+      <li><code>dashboard.php</code>: A small dashboard built with <code>Layout::joinHorizontal()</code>, <code>joinVertical()</code> and <code>place()</code>.</li>
+      <li><code>constraint-dashboard.php</code>: A dashboard whose panes are sized by Length, Min and Percentage constraints.</li>
+      <li><code>canvas.php</code>: A styled popover layer composited over a base layer.</li>
+      <li><code>theme-roles.php</code>: The role-to-style registry and the injectable darkness seam.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-style
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The only dev dependency is PHPUnit 10. The suite asserts on the exact bytes <code>render()</code> produces, so a change to the escape sequences fails a test.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>Most classes cite the upstream they mirror in their docblock, written as <code>Mirrors charmbracelet/...</code>.</p>
+    <ul>
+      <li><code>Style</code>, colour downsampling: lipgloss <code>Style</code>, colorprofile <code>Writer</code></li>
+      <li><code>Theme</code> and its factories: lipgloss <code>Theme.dark()</code>, <code>Theme.dracula()</code>, <code>Theme.tokyoNight()</code>, and the rest</li>
+      <li><code>Layout::joinHorizontal()</code>, <code>joinVertical()</code>, <code>place()</code>: lipgloss <code>JoinHorizontal</code>, <code>JoinVertical</code>, <code>Place</code></li>
+      <li><code>Tree\Enumerator</code>: the default enumerator of lipgloss/tree</li>
+      <li><code>Canvas</code>: lipgloss <code>Canvas</code> (Bubble Tea v2)</li>
+    </ul>
 
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
