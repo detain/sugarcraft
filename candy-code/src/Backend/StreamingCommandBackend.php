@@ -215,8 +215,9 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      * A cancelled token kills the child through ChildRun's kill ladder, reaps it,
      * and rejects with 'Request cancelled'. A token already cancelled spawns
      * nothing. A throwing $onToken also stops the child, and the promise rejects
-     * with that exception. The cancel is SIGKILL at once, not the TERM grace: a
-     * user abort must not wait on a child that traps TERM.
+     * with that exception. Both the cancel and the throw are SIGKILL at once, not
+     * the TERM grace: neither a user abort nor a failed turn may wait on a child
+     * that traps TERM.
      */
     public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
@@ -240,16 +241,17 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
         // $onToken. ChildRun observes only one token, so the two are merged here.
         $stop = new CancellationSource();
         $pid = null;
-        $detach = $cancellation?->onCancel(static function () use (&$pid, $stop): void {
-            // SIGKILL at once, not the TERM grace: a user abort must not wait on a
-            // child that traps TERM. ChildRun's ladder then finds the child gone and
-            // only reaps it.
+        // SIGKILL at once, not the TERM grace: a user abort, and a $onToken that
+        // throws, must not wait on a child that traps TERM. ChildRun's ladder then
+        // finds the child gone and only reaps it.
+        $killNow = static function () use (&$pid, $stop): void {
             if ($pid !== null) {
                 ProcessContainment::terminatePid($pid, 9);
             }
             $stop->cancel();
-        });
-        $sink = new StreamingTokenSink($onToken, $stop->cancel(...));
+        };
+        $detach = $cancellation?->onCancel($killNow);
+        $sink = new StreamingTokenSink($onToken, $killNow);
 
         $child = $this->child($payload, $sink, $stop->token(), function (int $started) use (&$pid): void {
             $pid = $started;

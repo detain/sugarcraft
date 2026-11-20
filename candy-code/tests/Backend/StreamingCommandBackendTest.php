@@ -818,7 +818,9 @@ printf 'ok\n'
             $this->markTestSkipped('the zombie census needs a Linux-shaped /proc');
         }
 
-        $script = $this->writeScript("#!/bin/bash\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
+        // A TERM-trapping child: a graceful stop would wait out ChildRun's TERM
+        // grace (about 1s), so the sub-second bound below pins the SIGKILL path.
+        $script = $this->writeScript("#!/bin/bash\ntrap '' TERM\ncat > /dev/null\nprintf 'first\\n'\nsleep 5\nprintf 'too late\\n'");
 
         try {
             $before = self::ownZombieCount();
@@ -840,7 +842,11 @@ printf 'ok\n'
 
             $this->assertInstanceOf(\DomainException::class, $caught);
             $this->assertSame('stop at first', $caught->getMessage());
-            $this->assertLessThan(4.0, $elapsed, 'the child was waited out rather than stopped');
+            $this->assertLessThan(
+                1.0,
+                $elapsed,
+                'a throwing $onToken must SIGKILL the child, not wait out the TERM grace',
+            );
             $this->assertSame(
                 $before,
                 self::ownZombieCount(),
