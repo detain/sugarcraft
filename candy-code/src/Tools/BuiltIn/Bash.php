@@ -67,7 +67,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * of a build artefact or a verbose test run all produce megabytes with no
      * warning — so the bound applies during capture as well as after it (see
      * {@see CapturesProcessOutput::runCaptured()}). Zero or negative no longer
-     * means unbounded: capture falls back to CapturesProcessOutput::DEFAULT_RETAINED_BYTES
+     * means unbounded: capture falls back to {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}
      * per stream, and only the post-capture trim is skipped.
      *
      * $includeGitInstructions, $commitAttribution and $prAttribution are the

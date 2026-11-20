@@ -1002,9 +1002,10 @@ trait CapturesProcessOutput
         //
         // Deliberately WITHOUT a byte count. The only figure available here is
         // `strlen($run['stderr']) + $stderrDropped`, and it is not stable
-        // across the cap: `runCaptured()` rtrims the retained text, so an
-        // UNCAPPED capture loses its trailing newline while a capped one --
-        // whose retained slice ends mid-line -- does not. The same command
+        // across the cap: `runCaptured()` rtrims the retained text, so a capture
+        // that stayed under DEFAULT_RETAINED_BYTES loses its trailing newline
+        // while one that reached the cap -- whose retained slice ends mid-line --
+        // does not. The same command
         // would then report two different totals depending on $maxOutputBytes,
         // which is a number travelling without its domain and would also break
         // the cap-invariance the two OutputTruncationTest chatty-stderr cases

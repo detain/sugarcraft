@@ -438,7 +438,10 @@ trait TruncatesOutput
      * `toolSpillCaptureBytes` setting, else {@see ToolOutputSpill::CAPTURE_BYTES})
      * when one can, so
      * the saved file holds the overflow rather than only the bytes the cap
-     * would have kept anyway. Null means unbounded, matching a disabled cap.
+     * would have kept anyway. Null is NOT unbounded: a non-positive cap returns
+     * null, and runCaptured() then retains the default
+     * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}
+     * per stream. A caller that needs a number coalesces the null itself.
      */
     private function captureBound(int $maxOutputBytes): ?int
     {

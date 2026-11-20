@@ -56,7 +56,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * match minified assets or a lockfile, returns tens of thousands of lines
      * that would otherwise be replayed into every following request of the
      * turn. Zero or negative disables the hit-list trim only; the capture itself
-     * stays bounded by CapturesProcessOutput::DEFAULT_RETAINED_BYTES.
+     * stays bounded by {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}.
      *
      * $rgAvailable is decided by the caller at boot — see
      * {@see \SugarCraft\Code\Tools\Concerns\DetectsCapabilities} for why the
