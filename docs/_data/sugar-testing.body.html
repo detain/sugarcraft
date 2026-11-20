@@ -61,7 +61,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
     <h3 style="margin-top: 32px;">Concepts</h3>
     <p>A SugarCraft program is a <code>Model</code> with <code>init()</code>, <code>update(Msg): [Model, ?Cmd]</code> and <code>view()</code>. <code>ProgramSimulator</code> runs that loop without a terminal: it queues the messages you send, feeds each one through <code>update()</code>, renders <code>view()</code> after every step, and returns a <code>TestResult</code>. Commands are either executed (the default) or captured with <code>withRealCmdRunner(false)</code> so a test can assert that a command was produced without running it.</p>
-    <p>Input is modeled as messages, not bytes. <code>ScriptedInput</code> builds the same <code>KeyMsg</code>, <code>MouseMsg</code>, <code>ResizeMsg</code> and paste messages a live session produces. When a test needs the real byte path, <code>ScriptedInput::bytes()</code> runs raw terminal input through sugar-core's <code>InputReader</code>.</p>
+    <p>Input is modeled as messages, not bytes. <code>ScriptedInput</code> builds the same <code>KeyMsg</code>, <code>MouseMsg</code>, <code>WindowSizeMsg</code> (from <code>resize()</code>) and paste messages a live session produces. When a test needs the real byte path, <code>ScriptedInput::bytes()</code> runs raw terminal input through sugar-core's <code>InputReader</code>.</p>
     <p>Snapshots are create-only. A golden file is written once, from a deliberate seeding run, and a later mismatch fails loudly without rewriting the file. To re-baseline, delete the golden and rerun with the update variable set. The same rule applies to the TapeRecorder output: it is generated, never hand-edited.</p>
 
     <h3 style="margin-top: 32px;">Tasks</h3>
