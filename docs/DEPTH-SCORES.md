@@ -1,12 +1,12 @@
 # Upstream library and app depth scores
 
-Run date: 2026-11-20. Tree: `052c06815`. Slugs: 68 (47 libraries, 21 apps); `candy-code` is excluded because its docs are graded in `candy-code/docs/` and the public `docs/lib/candy-code.html` page. A slug with no `docs/_data/<slug>.body.html` (such as `candy-discord`) is not graded.
+Run date: 2026-11-20. Tree: `f1b46d45d`. Slugs: 69 (48 libraries, 21 apps); `candy-code` is excluded because its docs are graded in `candy-code/docs/` and the public `docs/lib/candy-code.html` page. A slug with no `docs/_data/<slug>.body.html` (such as `candy-discord`) is not graded.
 
-Score is the 0 to 100 depth heuristic from `plan_doc.md` section 3.1: 40 for the 12 standard sections present, 20 for top-10 class-name coverage, 15 for code blocks, 10 for h2 and h3 count, 10 for body size (capped at 12000 bytes), and 5 for examples and VHS references. Grades: A at 85 or more, B at 70, C at 55, D at 40, F below 40.
+Score is the 0 to 100 depth heuristic: 40 for the 12 standard sections present, 20 for top-10 class-name coverage, 15 for code blocks, 10 for h2 and h3 count, 10 for body size (capped at 12000 bytes), and 5 for examples and VHS references. Grades: A at 85 or more, B at 70, C at 55, D at 40, F below 40.
 
 The score measures structure and coverage. It does not judge accuracy or prose quality, so a high score still needs a manual read before a page is called finished.
 
-Grade counts: A 53, B 5, C 1, D 4, F 5.
+Grade counts: A 53, B 5, C 1, D 4, F 6.
 
 | Slug | Type | Score | Grade | Run date |
 |---|---|---:|:---:|---|
@@ -74,6 +74,7 @@ Grade counts: A 53, B 5, C 1, D 4, F 5.
 | sugar-log | library | 51.0 | D | 2026-11-20 |
 | sugar-async | library | 46.1 | D | 2026-11-20 |
 | sugar-serve-protocol | library | 37.2 | F | 2026-11-20 |
+| sugar-plugins | library | 35.4 | F | 2026-11-20 |
 | sugar-jwt | library | 7.5 | F | 2026-11-20 |
 | sugar-codec | library | 7.4 | F | 2026-11-20 |
 | sugar-ws-rpc | library | 7.4 | F | 2026-11-20 |

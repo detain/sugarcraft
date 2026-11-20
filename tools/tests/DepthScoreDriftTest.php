@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Guard for docs/DEPTH-SCORES.md (plan_doc.md section 3.1, PD-P5-A).
+ * Guard for docs/DEPTH-SCORES.md (PD-P5-A).
  *
  * THE TABLE MUST REPRODUCE FROM ITS OWN HEADER. The header records the run date
  * and the tree the scores came from, so this guard reads both values from the
@@ -31,6 +31,26 @@ require_once __DIR__ . '/../depth-score.php';
 
 final class DepthScoreDriftTest extends TestCase
 {
+    use TmpTree;
+
+    private const DEMO_BODY = "<h2>Usage</h2>\n<p>Foo runs.</p>\n";
+
+    private const DEMO_FOO = "<?php\n\ndeclare(strict_types=1);\n\nfinal class Foo\n{\n}\n";
+
+    private const DEMO_BAR = "<?php\n\ndeclare(strict_types=1);\n\nfinal class Bar\n{\n    public function run(): void\n    {\n    }\n}\n";
+
+    /** @var list<string> fixture directories removed in tearDown() */
+    private array $fixtureDirs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->fixtureDirs as $dir) {
+            $this->removeDir($dir);
+        }
+        $this->fixtureDirs = [];
+        parent::tearDown();
+    }
+
     private static function root(): string
     {
         return \dirname(__DIR__, 2);
@@ -171,5 +191,140 @@ final class DepthScoreDriftTest extends TestCase
     {
         $this->expectException(\RuntimeException::class);
         \DepthScore::parseHeader("# Depth scores\n\nno header here\n");
+    }
+
+    public function testNewlinesAreNormalizedLikePythonTextMode(): void
+    {
+        $normalize = new \ReflectionMethod(\DepthScore::class, 'normalizeNewlines');
+
+        self::assertSame("a\nb\nc\n\nd", $normalize->invoke(null, "a\r\nb\rc\n\r\nd"));
+    }
+
+    public function testOnlyVisiblePhpUnderSrcIsScored(): void
+    {
+        $visible = new \ReflectionMethod(\DepthScore::class, 'isVisiblePhp');
+
+        self::assertTrue($visible->invoke(null, 'sugar-x/src/Sub/Deep.php', 'sugar-x/src/'));
+        self::assertFalse($visible->invoke(null, 'sugar-x/src/.hidden/Bar.php', 'sugar-x/src/'));
+        self::assertFalse($visible->invoke(null, 'sugar-x/src/Dir/.git/Hook.php', 'sugar-x/src/'));
+        self::assertFalse($visible->invoke(null, 'sugar-x/src/.Hidden.php', 'sugar-x/src/'));
+        self::assertFalse($visible->invoke(null, 'sugar-x/src/Notes.txt', 'sugar-x/src/'));
+    }
+
+    public function testHiddenPhpFilesDoNotCountTowardClassCoverage(): void
+    {
+        $plain = $this->fixtureRepo(['docs/_data/sugar-demo.body.html' => self::DEMO_BODY, 'sugar-demo/src/Foo.php' => self::DEMO_FOO]);
+        $hidden = $this->fixtureRepo([
+            'docs/_data/sugar-demo.body.html' => self::DEMO_BODY,
+            'sugar-demo/src/Foo.php' => self::DEMO_FOO,
+            'sugar-demo/src/.hidden/Bar.php' => self::DEMO_BAR,
+        ]);
+        // Control: the same class as a visible file must change the row, or the equality below proves nothing.
+        $visible = $this->fixtureRepo([
+            'docs/_data/sugar-demo.body.html' => self::DEMO_BODY,
+            'sugar-demo/src/Foo.php' => self::DEMO_FOO,
+            'sugar-demo/src/Bar.php' => self::DEMO_BAR,
+        ]);
+
+        $plainRow = $this->rowFor($plain, 'sugar-demo');
+        self::assertSame($plainRow, $this->rowFor($hidden, 'sugar-demo'));
+        self::assertNotSame($plainRow, $this->rowFor($visible, 'sugar-demo'));
+    }
+
+    public function testAllDigitTopLevelFileNameDoesNotBreakTheScorer(): void
+    {
+        $plain = $this->fixtureRepo(['docs/_data/sugar-demo.body.html' => self::DEMO_BODY, 'sugar-demo/src/Foo.php' => self::DEMO_FOO]);
+        // PHP stores the name "2026" as an int array key; the scorer must still treat it as a path.
+        $numeric = $this->fixtureRepo([
+            'docs/_data/sugar-demo.body.html' => self::DEMO_BODY,
+            'sugar-demo/src/Foo.php' => self::DEMO_FOO,
+            '2026' => "notes\n",
+        ]);
+
+        self::assertSame($this->rowFor($plain, 'sugar-demo'), $this->rowFor($numeric, 'sugar-demo'));
+    }
+
+    public function testBareCheckPassesOnTheCommittedTable(): void
+    {
+        [$code, $out] = $this->runCli(['--check']);
+
+        self::assertSame(0, $code);
+        self::assertStringContainsString('is current', $out);
+    }
+
+    public function testBareCheckFailsOnAStaleFileAtOut(): void
+    {
+        $stale = (string) preg_replace('/^(\| ([a-z0-9-]+) \| \w+ \| )([0-9.]+)/m', '${1}0.1', self::committed(), 1);
+        self::assertNotSame(self::committed(), $stale);
+        $dir = $this->makeTmpTree('depth-score-stale-');
+        $this->fixtureDirs[] = $dir;
+        file_put_contents("$dir/DEPTH-SCORES.md", $stale);
+
+        [$code] = $this->runCli(['--check', '--out=' . "$dir/DEPTH-SCORES.md"]);
+
+        self::assertSame(1, $code);
+    }
+
+    public function testStdoutPrintsTheTableForTheNamedHeader(): void
+    {
+        $committed = self::committed();
+        $header = \DepthScore::parseHeader($committed);
+
+        [$code, $out] = $this->runCli(['--stdout', '--run-date=' . $header['runDate'], '--tree=' . $header['tree']]);
+
+        self::assertSame(0, $code);
+        self::assertSame($committed, $out);
+    }
+
+    /**
+     * @param list<string> $args
+     * @return array{int, string} exit code and captured stdout
+     */
+    private function runCli(array $args): array
+    {
+        ob_start();
+        try {
+            $code = \DepthScore::main(array_merge(['depth-score.php'], $args));
+        } finally {
+            $out = (string) ob_get_clean();
+        }
+
+        return [$code, $out];
+    }
+
+    /** The one table line for a slug from a scorer run over a fixture repository. */
+    private function rowFor(string $repo, string $slug): string
+    {
+        $document = \DepthScore::generate($repo, 'HEAD', '2026-11-20');
+        self::assertMatchesRegularExpression('/^\| ' . preg_quote($slug, '/') . ' \|/m', $document);
+        preg_match('/^\| ' . preg_quote($slug, '/') . ' \|.*$/m', $document, $m);
+
+        return $m[0];
+    }
+
+    /**
+     * A one-commit git repository holding exactly $files, so the scorer reads it the way it reads the monorepo.
+     *
+     * @param array<string|int, string> $files path => content
+     */
+    private function fixtureRepo(array $files): string
+    {
+        $dir = $this->makeTmpTree('depth-score-fixture-');
+        $this->fixtureDirs[] = $dir;
+        foreach ($files as $path => $content) {
+            $full = $dir . '/' . $path;
+            if (!is_dir(dirname($full)) && !mkdir(dirname($full), 0777, true)) {
+                throw new \RuntimeException("cannot create the fixture directory for $path");
+            }
+            file_put_contents($full, $content);
+        }
+        $git = 'git -C ' . escapeshellarg($dir);
+        $identity = '-c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false';
+        exec("$git init -q && $git add -A && $git $identity commit -q -m fixture 2>&1", $lines, $code);
+        if ($code !== 0) {
+            throw new \RuntimeException("fixture git commands failed ($code): " . implode("\n", $lines));
+        }
+
+        return $dir;
     }
 }

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * depth-score.php — the upstream library and app depth scorer (plan_doc.md section 3.1).
+ * depth-score.php — the upstream library and app depth scorer.
  *
  * WHY IT READS GIT AND NOT THE WORKING TREE. docs/DEPTH-SCORES.md records the
  * run date and the tree it was scored on in its header. DepthScoreDriftTest
@@ -25,6 +25,10 @@ declare(strict_types=1);
  *   php tools/depth-score.php --stdout                       # print the table instead of writing it
  *   php tools/depth-score.php --check                        # exit 1 when docs/DEPTH-SCORES.md is stale
  *   php tools/depth-score.php --help
+ *
+ * --check with no --run-date or --tree reads both from the committed header, the
+ * same values DepthScoreDriftTest regenerates from, so a bare --check is the CLI
+ * form of that guard. An explicit flag always wins over the header.
  *
  * Exit codes: 0 success or fresh, 1 stale table under --check, 2 usage or git error.
  */
@@ -77,7 +81,10 @@ final class DepthScore
         foreach ($slugs as $slug) {
             $sources = [];
             $examples = 0;
-            foreach ($files as $path => $entry) {
+            foreach ($files as $key => $entry) {
+                // PHP turns an all-digit top-level name such as "2026" into an int key,
+                // and strict_types would then reject it at str_starts_with().
+                $path = (string) $key;
                 if (str_starts_with($path, "$slug/src/") && self::isVisiblePhp($path, "$slug/src/")) {
                     $sources[] = ['size' => $entry['size'], 'sha' => $entry['sha']];
                     $wanted[] = $entry['sha'];
@@ -278,7 +285,7 @@ final class DepthScore
         $lines[] = '';
         $lines[] = "Run date: $runDate. Tree: `$tree`. Slugs: $total ($libs libraries, $apps apps); `candy-code` is excluded because its docs are graded in `candy-code/docs/` and the public `docs/lib/candy-code.html` page. A slug with no `docs/_data/<slug>.body.html` (such as `candy-discord`) is not graded.";
         $lines[] = '';
-        $lines[] = 'Score is the 0 to 100 depth heuristic from `plan_doc.md` section 3.1: 40 for the 12 standard sections present, 20 for top-10 class-name coverage, 15 for code blocks, 10 for h2 and h3 count, 10 for body size (capped at 12000 bytes), and 5 for examples and VHS references. Grades: A at 85 or more, B at 70, C at 55, D at 40, F below 40.';
+        $lines[] = 'Score is the 0 to 100 depth heuristic: 40 for the 12 standard sections present, 20 for top-10 class-name coverage, 15 for code blocks, 10 for h2 and h3 count, 10 for body size (capped at 12000 bytes), and 5 for examples and VHS references. Grades: A at 85 or more, B at 70, C at 55, D at 40, F below 40.';
         $lines[] = '';
         $lines[] = 'The score measures structure and coverage. It does not judge accuracy or prose quality, so a high score still needs a manual read before a page is called finished.';
         $lines[] = '';
@@ -330,7 +337,8 @@ final class DepthScore
     private static function roster(array $files): array
     {
         $slugs = [];
-        foreach (array_keys($files) as $path) {
+        foreach (array_keys($files) as $key) {
+            $path = (string) $key;
             if (preg_match('#^docs/_data/((?:sugar|candy)-[a-z0-9-]+)\.body\.html$#', $path, $m) === 1
                 && !in_array($m[1], self::EXCLUDED, true)) {
                 $slugs[] = $m[1];
@@ -525,8 +533,8 @@ final class DepthScore
         return <<<'TXT'
         Usage: php tools/depth-score.php [--run-date=YYYY-MM-DD] [--tree=<commit>] [--out=PATH | --stdout | --check]
 
-          --run-date=DATE  run date written to the header (default: today)
-          --tree=COMMIT    commit whose tree is scored (default: HEAD)
+          --run-date=DATE  run date written to the header (default: today; --check: the header's)
+          --tree=COMMIT    commit whose tree is scored (default: HEAD; --check: the header's)
           --out=PATH       file to write (default: docs/DEPTH-SCORES.md)
           --stdout         print the table instead of writing it
           --check          exit 1 when the file at --out is not what the scorer produces
@@ -543,6 +551,8 @@ final class DepthScore
         $out = $root . '/docs/DEPTH-SCORES.md';
         $stdout = false;
         $check = false;
+        $runDateSet = false;
+        $treeSet = false;
         foreach (array_slice($argv, 1) as $arg) {
             if ($arg === '--help') {
                 echo self::usage();
@@ -550,8 +560,10 @@ final class DepthScore
                 return 0;
             } elseif (str_starts_with($arg, '--run-date=')) {
                 $runDate = substr($arg, strlen('--run-date='));
+                $runDateSet = true;
             } elseif (str_starts_with($arg, '--tree=')) {
                 $tree = substr($arg, strlen('--tree='));
+                $treeSet = true;
             } elseif (str_starts_with($arg, '--out=')) {
                 $out = substr($arg, strlen('--out='));
             } elseif ($arg === '--stdout') {
@@ -566,6 +578,14 @@ final class DepthScore
         }
 
         try {
+            $committed = $check && !$stdout && is_file($out) ? (string) file_get_contents($out) : '';
+            if ($check && !$stdout && (!$runDateSet || !$treeSet)) {
+                // A bare --check must regenerate the table the way DepthScoreDriftTest does,
+                // from the values the committed header names, not from today and HEAD.
+                $header = self::parseHeader($committed);
+                $runDate = $runDateSet ? $runDate : $header['runDate'];
+                $tree = $treeSet ? $tree : $header['tree'];
+            }
             $document = self::generate($root, $tree, $runDate);
             if ($stdout) {
                 echo $document;
@@ -573,7 +593,6 @@ final class DepthScore
                 return 0;
             }
             if ($check) {
-                $committed = is_file($out) ? (string) file_get_contents($out) : '';
                 $stale = self::staleRows($committed, $document);
                 if ($stale === []) {
                     echo "depth-score: $out is current.\n";
