@@ -287,7 +287,7 @@ final class ConversationRouter extends ConversationRouterCore
                     $channel->abandonReply($ref);
                 }
                 $this->log->warn('prompt_refused', ['session' => $sessionId, 'error' => $error->getMessage()]);
-                $this->deliver($channel, $ref, '⛔ Your message never reached the agent — it was refused. Try again; if this keeps happening the served session may need /new.');
+                $this->deliver($channel, $ref, Lang::t('channels.msteams.prompt.refused'));
             },
         );
     }
