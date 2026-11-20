@@ -223,7 +223,22 @@ final class CommandBackend implements Backend, TracksActiveChildren
      */
     public static function childRun(string|array $command, string $payload): ChildRun
     {
-        $spec = ProcessContainment::spawnSpec(self::shellSpec($command, PHP_OS_FAMILY === 'Windows'));
+        return self::childRunForSpec(
+            ProcessContainment::spawnSpec(self::shellSpec($command, PHP_OS_FAMILY === 'Windows')),
+            $payload,
+        );
+    }
+
+    /**
+     * The string-versus-argv choice {@see childRun()} makes, split out so a test
+     * can pin it on every platform: a string spec must stay the raw line
+     * (ChildRun::commandLine), and only a list may be exec'd as an argv.
+     *
+     * @param string|list<string> $spec
+     * @internal public only so the spec-to-ChildRun choice is testable on every platform
+     */
+    public static function childRunForSpec(string|array $spec, string $payload): ChildRun
+    {
         $run = is_string($spec)
             ? ChildRun::commandLine($spec)
             : ChildRun::new(array_values((array) $spec));

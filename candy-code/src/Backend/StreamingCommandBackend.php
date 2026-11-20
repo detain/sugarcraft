@@ -179,6 +179,12 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
             return Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError();
         }
 
+        // Same no-op as CommandBackend: ChildRun cannot start an empty Windows
+        // command line, so answering here keeps the two arms agreeing.
+        if ($this->command === '') {
+            return Message::assistant('');
+        }
+
         // Only a failing $onToken ever cancels this source: a blocking call has
         // no caller token to forward.
         $stop = new CancellationSource();
@@ -237,6 +243,14 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
         $payload = CommandBackend::encodeHistory($history);
         if ($payload === null) {
             $deferred->resolve(Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError());
+
+            return $deferred->promise();
+        }
+
+        // Resolved without a spawn, as complete() answers it: ChildRun cannot
+        // start an empty Windows command line, and this arm must agree with it.
+        if ($this->command === '') {
+            $deferred->resolve(Message::assistant(''));
 
             return $deferred->promise();
         }

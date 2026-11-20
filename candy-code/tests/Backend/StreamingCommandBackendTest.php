@@ -12,6 +12,21 @@ use PHPUnit\Framework\TestCase;
 
 final class StreamingCommandBackendTest extends TestCase
 {
+    /**
+     * An empty string command is a no-op on both arms, as CommandBackend makes
+     * it. Before the guard, the Windows arm handed the empty line to
+     * ChildRun::commandLine(), which throws, so the InvalidArgumentException
+     * escaped complete() and completeAsync(). The Windows arm cannot run on this
+     * host, so this pins the contract on every platform rather than the throw.
+     */
+    public function testAnEmptyStringCommandAnswersAnEmptyReplyOnBothEntryPoints(): void
+    {
+        $backend = new StreamingCommandBackend('');
+
+        $this->assertSame('', $backend->complete([Message::user('hi')])->content);
+        $this->assertSame('', $this->awaitPromise($backend->completeAsync([Message::user('hi')]))->content);
+    }
+
     public function testStreamingBackendCallsOnTokenForEachLine(): void
     {
         // Create a script that outputs tokens line by line

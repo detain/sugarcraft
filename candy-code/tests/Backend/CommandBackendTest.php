@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Backend;
 
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Message;
@@ -385,6 +386,34 @@ final class CommandBackendTest extends TestCase
         $line = 'echo "a b" & exit /b 3';
 
         $this->assertSame($line, CommandBackend::shellSpec($line, true));
+    }
+
+    /**
+     * shellSpec() returns the raw line, but the choice of ChildRun factory is made
+     * one step later in childRun(). A string spec must reach ChildRun::commandLine()
+     * and never ChildRun::new(), or PHP escapes the embedded quotes element by
+     * element on Windows, which is the bug the raw line replaced.
+     */
+    public function testAStringSpecIsCarriedAsTheRawLineNotAnArgv(): void
+    {
+        $line = 'echo "a b" & exit /b 3';
+        $run = CommandBackend::childRunForSpec($line, '');
+
+        $this->assertSame([$line], $this->childRunProperty($run, 'argv'));
+        $this->assertTrue($this->childRunProperty($run, 'commandLine'));
+    }
+
+    public function testAListSpecIsExecdAsAnArgvNotACommandLine(): void
+    {
+        $run = CommandBackend::childRunForSpec(['printf', 'a;b'], '');
+
+        $this->assertSame(['printf', 'a;b'], $this->childRunProperty($run, 'argv'));
+        $this->assertFalse($this->childRunProperty($run, 'commandLine'));
+    }
+
+    private function childRunProperty(ChildRun $run, string $name): mixed
+    {
+        return (new \ReflectionProperty(ChildRun::class, $name))->getValue($run);
     }
 
     /**
