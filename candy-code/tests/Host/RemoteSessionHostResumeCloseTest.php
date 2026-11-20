@@ -320,7 +320,6 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertFalse($silent->isReadable(), 'the silent socket is closed when its attempt times out');
     }
 
-    /** @return iterable<string, array{float}> */
     /**
      * A healthy server that answers server.hello after the base deadline, but
      * within the deadline of the next attempt, must still be resumed. A fixed
@@ -381,18 +380,23 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertSame([], $verdicts, 'no verdict is delivered for a server that answers late');
     }
 
+    /** @return iterable<string, array{float}> */
     public static function invalidResumeHelloSeconds(): iterable
     {
         yield 'zero' => [0.0];
         yield 'negative' => [-1.0];
         yield 'infinite' => [INF];
         yield 'NaN' => [NAN];
+        // Finite on its own, but the attempt-twelve deadline (12 times this) overflows to INF.
+        yield 'largest grown deadline overflows' => [1.0e308];
     }
 
     /**
      * A resume's hello timeout is armed only after the hello is sent, so a bad
      * value used to throw mid-redial with the socket wired and the hello pending.
-     * It is refused at construction instead, before the stream is touched.
+     * It is refused at construction instead, before the stream is touched. The
+     * grown deadline is what must stay finite, so a base that is finite alone but
+     * overflows once the ladder multiplies it is refused the same way.
      */
     #[DataProvider('invalidResumeHelloSeconds')]
     public function testAnInvalidResumeHelloTimeoutIsRefusedBeforeTheStreamIsWired(float $seconds): void
