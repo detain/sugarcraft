@@ -173,8 +173,12 @@ final class CustomCommandShellAsyncTest extends TestCase
         [$expanding, $cmd] = $this->type($chat, '/branch')->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame(0, $backend->calls);
 
+        // The expansion's shell (spawn, group-leader wait, run) is awaited BEFORE
+        // the clock starts: the bound measures update() alone, the step that must
+        // park the prompt behind the hook without running it.
+        $expanded = $this->await($this->promiseOf($cmd));
         $started = microtime(true);
-        [$judging, $hookCmd] = $expanding->update($this->await($this->promiseOf($cmd)));
+        [$judging, $hookCmd] = $expanding->update($expanded);
         $this->assertLessThan(0.1, microtime(true) - $started, 'the expanded prompt parks behind the hook, it does not run it');
         $this->assertTrue($judging->inFlight);
         $this->assertSame(0, $backend->calls, 'the hook has not judged the prompt yet');
