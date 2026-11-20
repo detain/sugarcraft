@@ -265,26 +265,26 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
     <p>Configure first, then queue. Every <code>with*()</code> setter (<code>withRealCmdRunner()</code>, <code>withFakeCmdRunner()</code>, <code>withWindowSize()</code>, <code>withEnvironment()</code>, <code>withColorProfile()</code>) must be called before the first <code>addMsgs()</code>. A later <code>with*()</code> call throws <code>RuntimeException</code> instead of silently discarding the queued messages.</p>
     <div class="feature-grid">
       <div class="feature"><strong>ProgramSimulator::for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
-      <div class="feature"><strong>addMsgs(Msg ...$msgs)</strong><span>Fluent message enqueue. Chain as many <code>addMsgs()</code> calls as the scenario needs.</span></div>
-      <div class="feature"><strong>withRealCmdRunner(bool) / withFakeCmdRunner(Closure)</strong><span>Pass <code>false</code> to capture Cmds without executing them. The fake runner decides the message injected for each Cmd, and execution is otherwise unchanged.</span></div>
-      <div class="feature"><strong>run()</strong><span>Drain the queue and return a <code>TestResult</code> with the model, last view, captured cmds, output and frames. Subscription output is delivered right after the message that triggered it. Messages still queued when a QuitMsg or InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. <code>run()</code> can be called again.</span></div>
-      <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>, <code>EnvMsg</code> and <code>ColorProfileMsg</code> exactly as a real Program dispatches them, before <code>init()</code>. Each returns a clone.</span></div>
+      <div class="feature"><strong>ProgramSimulator::addMsgs(Msg ...$msgs)</strong><span>Fluent message enqueue. Chain as many <code>addMsgs()</code> calls as the scenario needs.</span></div>
+      <div class="feature"><strong>ProgramSimulator::withRealCmdRunner(bool) / ProgramSimulator::withFakeCmdRunner(Closure)</strong><span>Pass <code>false</code> to capture Cmds without executing them. The fake runner decides the message injected for each Cmd, and execution is otherwise unchanged.</span></div>
+      <div class="feature"><strong>ProgramSimulator::run()</strong><span>Drain the queue and return a <code>TestResult</code> with the model, last view, captured cmds, output and frames. Subscription output is delivered right after the message that triggered it. Messages still queued when a QuitMsg or InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. <code>run()</code> can be called again.</span></div>
+      <div class="feature"><strong>ProgramSimulator::withWindowSize() / ProgramSimulator::withEnvironment() / ProgramSimulator::withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>, <code>EnvMsg</code> and <code>ColorProfileMsg</code> exactly as a real Program dispatches them, before <code>init()</code>. Each returns a clone.</span></div>
     </div>
 
     <h3 id="scriptedinput" style="margin-top: 24px;">ScriptedInput</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces. <code>build()</code> returns the list, ready to splat into <code>addMsgs()</code>.</span></div>
-      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read. Reads are split into 4096-byte chunks like the runtime. Afterwards the runtime's idle recovery applies: a lone ESC becomes an Escape key, and an unterminated paste is closed.</span></div>
-      <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg and PasteMsg sequence as at runtime. Longer pastes arrive in several PasteMsg chunks.</span></div>
-      <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime. Pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
+      <div class="feature"><strong>ScriptedInput::key() / ScriptedInput::namedKey() / ScriptedInput::enter() / ScriptedInput::arrow() / ScriptedInput::mouse() / ScriptedInput::resize() / ScriptedInput::ticks()</strong><span>Fluent builders for the messages a session produces. <code>build()</code> returns the list, ready to splat into <code>addMsgs()</code>.</span></div>
+      <div class="feature"><strong>ScriptedInput::bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read. Reads are split into 4096-byte chunks like the runtime. Afterwards the runtime's idle recovery applies: a lone ESC becomes an Escape key, and an unterminated paste is closed.</span></div>
+      <div class="feature"><strong>ScriptedInput::paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg and PasteMsg sequence as at runtime. Longer pastes arrive in several PasteMsg chunks.</span></div>
+      <div class="feature"><strong>ScriptedInput::withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime. Pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
     </div>
 
     <h3 id="assertions-and-goldenfile" style="margin-top: 24px;">Assertions and GoldenFile</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test against a committed golden file. Set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> to create a missing golden. Creation is one-way, and a mismatch never rewrites the file.</span></div>
-      <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers, using the cell-grid schema that the parser validates at the boundary.</span></div>
-      <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with a readable ESC diff.</span></div>
-      <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check. A second <code>view()</code> must return identical bytes. The model-unchanged leg uses a shallow clone, so nested mutation by reference is out of its reach. Output idempotence is the guarantee.</span></div>
+      <div class="feature"><strong>Assertions::assertGoldenAnsi</strong><span>Byte-exact snapshot test against a committed golden file. Set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> to create a missing golden. Creation is one-way, and a mismatch never rewrites the file.</span></div>
+      <div class="feature"><strong>Assertions::assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers, using the cell-grid schema that the parser validates at the boundary.</span></div>
+      <div class="feature"><strong>Assertions::assertAnsiEquals</strong><span>Byte-exact ANSI comparison with a readable ESC diff.</span></div>
+      <div class="feature"><strong>Assertions::assertViewIdempotent</strong><span>Render-purity check. A second <code>view()</code> must return identical bytes. The model-unchanged leg uses a shallow clone, so nested mutation by reference is out of its reach. Output idempotence is the guarantee.</span></div>
       <div class="feature"><strong>GoldenFile</strong><span><code>load()</code> returns null only for a missing file, and unreadable or symlinked goldens throw. <code>create()</code> refuses an existing golden, <code>update()</code> is the deliberate re-baseline, and <code>resolve()</code> keeps fixture paths inside <code>fixtures/</code>.</span></div>
     </div>
 
@@ -300,9 +300,9 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
     <h3 id="taperecorder" style="margin-top: 24px;">TapeRecorder</h3>
     <div class="feature-grid">
       <div class="feature"><strong>TapeRecorder::to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to that path.</span></div>
-      <div class="feature"><strong>header() / type() / enter() / sleep()</strong><span>Emit the VHS <code>Set</code> directives and the choreography lines. Typed text is escaped, so it can never forge a standalone directive line.</span></div>
-      <div class="feature"><strong>resize() / comment() / line()</strong><span>Resize and <code>#</code> comment directives. <code>line()</code> appends one raw directive verbatim.</span></div>
-      <div class="feature"><strong>save()</strong><span>Write the completed <code>.tape</code> file. Nothing is captured from a running program, and there is no playback API.</span></div>
+      <div class="feature"><strong>TapeRecorder::header() / TapeRecorder::type() / TapeRecorder::enter() / TapeRecorder::sleep()</strong><span>Emit the VHS <code>Set</code> directives and the choreography lines. Typed text is escaped, so it can never forge a standalone directive line.</span></div>
+      <div class="feature"><strong>TapeRecorder::resize() / TapeRecorder::comment() / TapeRecorder::line()</strong><span>Resize and <code>#</code> comment directives. <code>line()</code> appends one raw directive verbatim.</span></div>
+      <div class="feature"><strong>TapeRecorder::save()</strong><span>Write the completed <code>.tape</code> file. Nothing is captured from a running program, and there is no playback API.</span></div>
       <div class="feature"><strong>TapeRecorder::keyMsgToVhs(KeyMsg)</strong><span>Static: maps a decoded key message back to VHS <code>Type</code> syntax, or returns null when unsupported, so scripted sessions turn into directives.</span></div>
     </div>
 

@@ -1525,6 +1525,9 @@ final class EscapeDecoder
         $pasteContent = $this->pasteBuffer . substr($stream, 0, $pasteEndPos);
         $this->pasteBuffer = '';
         $this->inPaste = false;
+        // Same ledger as absorbPasteBytes(): a terminator in the cap-crossing
+        // read must not leave the overshoot uncounted.
+        $this->discardedPasteBytes += max(0, strlen($pasteContent) - PasteEvent::MAX_SIZE);
 
         // Hand the post-paste tail back to decode()'s loop rather than retaining
         // it in $remainder: a long tail (bytes that legitimately follow the end
@@ -1559,6 +1562,7 @@ final class EscapeDecoder
         $pasteContent = $this->pasteBuffer . substr($afterStart, 0, $pasteEndPos);
         $this->pasteBuffer = '';
         $this->inPaste = false;
+        $this->discardedPasteBytes += max(0, strlen($pasteContent) - PasteEvent::MAX_SIZE);
 
         return [
             'events' => [PasteEvent::truncate($pasteContent)],

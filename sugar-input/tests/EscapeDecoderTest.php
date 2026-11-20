@@ -2058,6 +2058,28 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('A', $events[0]->key);
     }
 
+    public function testPasteCompletedInTheCapCrossingReadCountsTheOvershoot(): void
+    {
+        // A terminator in the same read that crosses the cap closes the paste
+        // at once; the bytes past the 1 MiB clip must still land in the ledger,
+        // whether the paste starts and ends in one decode() or the cap is
+        // crossed by the completing read of a split paste.
+        $oneCall = new EscapeDecoder();
+        $events = $oneCall->decode("\x1b[200~" . str_repeat('x', PasteEvent::MAX_SIZE + 100) . "\x1b[201~");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+        $this->assertTrue($events[0]->truncated);
+        $this->assertSame(PasteEvent::MAX_SIZE, strlen($events[0]->content));
+        $this->assertSame(100, $oneCall->discardedPasteBytes(), 'one-call overshoot is counted');
+
+        $split = new EscapeDecoder();
+        $this->assertSame([], $split->decode("\x1b[200~" . str_repeat('a', PasteEvent::MAX_SIZE - 10)));
+        $events = $split->decode(str_repeat('b', 110) . "\x1b[201~");
+        $this->assertCount(1, $events);
+        $this->assertTrue($events[0]->truncated);
+        $this->assertSame(100, $split->discardedPasteBytes(), 'split-read overshoot is counted the same way');
+    }
+
     public function testSequenceDiscardStateSurvivesAndIsClearedByReset(): void
     {
         $decoder = new EscapeDecoder();

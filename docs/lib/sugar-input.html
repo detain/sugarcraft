@@ -181,7 +181,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant, chunk-invariant, and fuzz-friendly, with counters that make dropped or discarded input observable.</p>
+<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant and fuzz-friendly, chunk-invariant once <code>deferTrailingEscape</code> holds a lone ESC, with counters that make dropped or discarded input observable.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-input</code></pre>
@@ -218,7 +218,7 @@ while (!$driver->isEof()) {
     <p>One termination caveat: <code>isEof()</code> means "ended <em>and</em> drained", not "ended". A stream that stops mid-sequence leaves the decoder holding a partial, so <code>isEof()</code> stays false and <code>read()</code> answers null forever — call <code>escapeDecoder()->reset()</code> (or bound the loop with a grace period) when shutdown must win over an unfinished frame.</p>
 
     <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
-    <p>The lib is a byte decoder. It never reads the terminal and never writes to it. The host puts the terminal into raw mode and negotiates the mouse, paste, focus and Kitty modes, then hands the decoder the bytes the terminal sends. <code>EscapeDecoder::decode()</code> turns each complete sequence into one typed <code>Event</code>, and it buffers a partial sequence until the rest arrives, so the output does not depend on how the bytes were chunked.</p>
+    <p>The lib is a byte decoder. It never reads the terminal and never writes to it. The host puts the terminal into raw mode and negotiates the mouse, paste, focus and Kitty modes, then hands the decoder the bytes the terminal sends. <code>EscapeDecoder::decode()</code> turns each complete sequence into one typed <code>Event</code>, and it buffers a partial sequence until the rest arrives, so the output does not depend on how the bytes were chunked when <code>deferTrailingEscape</code> is on. By default a read that ends on a lone ESC settles it as an Escape key at once, so a split right after a <code>0x1b</code> byte can decode differently from a single call.</p>
     <p>Each sequence belongs to one protocol family: legacy keys, Kitty keyboard, mouse, focus, bracketed paste, or a terminal reply. <code>EscapeDecoderOptions</code> switches families on and off. A frame from a disabled or unknown family is counted in <code>droppedUnknownCount()</code>, never decoded as a different key. Terminal replies, such as a cursor position report, are drained as <code>TerminalReplyEvent</code> values instead of being dropped.</p>
     <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
     <ul>
@@ -231,12 +231,12 @@ while (!$driver->isEof()) {
     </ul>
     <h3 id="escapedecoder" style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
-      <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
-      <div class="feature"><strong>remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
-      <div class="feature"><strong>flushDeferredEscape(): list&lt;Event&gt;</strong><span>Settle a lone trailing ESC on an input-idle timer (with deferTrailingEscape).</span></div>
-      <div class="feature"><strong>drainedReplyCount() / droppedUnknownCount() / discardedPasteBytes(): int</strong><span>Counters for terminal replies drained, frames refused, and bytes discarded after a paste overflow.</span></div>
-      <div class="feature"><strong>reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
+      <div class="feature"><strong>EscapeDecoder::__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
+      <div class="feature"><strong>EscapeDecoder::decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
+      <div class="feature"><strong>EscapeDecoder::remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
+      <div class="feature"><strong>EscapeDecoder::flushDeferredEscape(): list&lt;Event&gt;</strong><span>Settle a lone trailing ESC on an input-idle timer (with deferTrailingEscape).</span></div>
+      <div class="feature"><strong>EscapeDecoder::drainedReplyCount() / EscapeDecoder::droppedUnknownCount() / EscapeDecoder::discardedPasteBytes(): int</strong><span>Counters for terminal replies drained, frames refused, and bytes discarded after a paste overflow.</span></div>
+      <div class="feature"><strong>EscapeDecoder::reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
     </div>
 
     <h3 id="escapedecoderoptions" style="margin-top: 32px;">EscapeDecoderOptions</h3>
@@ -244,7 +244,7 @@ while (!$driver->isEof()) {
 
     <h3 id="inputdriver" style="margin-top: 32px;">InputDriver</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
+      <div class="feature"><strong>InputDriver::read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
     </div>
     <p><code>StreamInputDriver</code> additionally answers <code>isEof()</code> and <code>hasPending()</code> — the null alone does not distinguish idle from ended — and both the stream and React drivers expose their owned decoder via <code>escapeDecoder()</code> for <code>reset()</code>, the flush helper, and the counters.</p>
 
@@ -281,7 +281,7 @@ while (!$driver->isEof()) {
     <h3 id="testing" style="margin-top: 32px;">Testing</h3>
     <p>Run the suite from the lib root:</p>
     <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
-    <p>The suites cover the decoder and its options, each driver, the event classes, the modifier bitmask, the terminal-reply drain, and a key table parity check. Feed the decoder split byte streams in your own tests and compare the events. The result should match a single-call decode, because the decoder is chunk-invariant.</p>
+    <p>The suites cover the decoder and its options, each driver, the event classes, the modifier bitmask, the terminal-reply drain, and a key table parity check. Feed the decoder split byte streams in your own tests and compare the events. With <code>deferTrailingEscape</code> set, the result should match a single-call decode, because the decoder is then chunk-invariant. Under the default options, a split right after a <code>0x1b</code> byte can emit an Escape key before the rest of the sequence arrives, so compare those boundaries with the option on.</p>
     <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
     <ul>
       <li><strong>Arrow keys do not reach the decoder, or echo back as escape text.</strong> The terminal is still in canonical mode with echo on, so the bytes wait in the line buffer or echo to the screen. Disable ICANON and ECHO before decoding.</li>
