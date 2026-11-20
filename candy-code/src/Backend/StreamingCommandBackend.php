@@ -28,7 +28,9 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * The child is read by ChildRun's stream handling on both entry points. The
  * blocking {@see complete()} runs the same child with {@see ChildRun::run()}, which
- * parks in the kernel until a pipe moves rather than polling, and feeds the same
+ * on POSIX parks in the kernel until a pipe moves, and on Windows polls each pipe
+ * at {@see \SugarCraft\Async\WindowsPipes::POLL_MICROSECONDS}, because a Windows
+ * pipe has no readable stream to park on. Both feed the same
  * {@see StreamingTokenSink} as the promise path, so the two cannot drift about
  * what a line means.
  *
@@ -123,10 +125,12 @@ final class StreamingCommandBackend implements Backend, TracksActiveChildren
      *        ITS THREE PIPES — it neither writes output nor accepts any more of
      *        the history on stdin — before it is terminated, or 0 (the default)
      *        for no deadline.
-     *        Measured with `microtime(true)`, so a configured 1 means silence
-     *        longer than 1.0s and not "somewhere in (1.0, 2.0]" — which is what
-     *        a `time()`-based deadline meant, since a whole-second clock
-     *        quantises the arming instant by up to a second.
+     *        Measured on ChildRun's monotonic clock ({@see \SugarCraft\Async\Clock::monotonicSeconds()}),
+     *        so a configured 1 means silence longer than 1.0s and not "somewhere
+     *        in (1.0, 2.0]" — which is what a `time()`-based deadline meant,
+     *        since a whole-second clock quantises the arming instant by up to a
+     *        second. The monotonic clock also never steps backwards with the
+     *        wall clock.
      *
      *        An IDLE deadline, never a total one. This parameter used to be
      *        `$timeout = 120` and armed `time() + $timeout` once, so a
