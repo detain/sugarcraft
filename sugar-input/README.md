@@ -383,10 +383,11 @@ open OSC/DCS until its terminator (even a terminator split across the chunk
 boundary) rather than resuming key decoding mid-string, which would leak the
 tail as keystrokes. That swallowing is bounded by the **abandon budget** — 64 KiB
 of swallowed payload: a stream that never terminates the string is abandoned
-when the budget is spent, so keystrokes resume. The abandon folds the
-still-in-hand body past the boundary into **one** counted drop rather than
-replaying it as a flood of printable keys. Which noise bytes that drop covers
-depends on where the reads fell; what cannot shift with chunk size is the
+when the budget is spent, so keystrokes resume. The abandon counts
+the still-in-hand body past the boundary as **one** drop rather than replaying
+it as a flood of printable keys. A single read that carries more than the budget
+can still surface part of that residue as keys in the same call, so the key count
+depends on where the reads fell. What cannot shift with chunk size is the
 control behavior: one drain, one counted abandon, keystrokes resuming
 afterwards. Between the announce and the real terminator, up to one abandon
 budget of further traffic — including genuine keystrokes — is silently
@@ -412,7 +413,7 @@ $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
 `droppedUnknownCount()` means sequences were consumed or refused without producing
 an event. That includes genuinely unrecognized sequences — private CSIs whose lead
-parameter byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
+parameter byte routes nowhere (`<` with mouse reporting off, `=` with any final other than `c`, `!`), unmapped SS3
 finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
 unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
 It **also** covers recognized-but-filtered frames — a Kitty event frame when the
@@ -425,8 +426,11 @@ buffered tail passes the 128-byte cap is refused and counted once in
 `droppedUnknownCount()`; its trailing bytes are swallowed up to the final byte, or
 up to a fresh ESC, which starts a new sequence and is decoded as normal. Those bytes
 are never counted again. An unterminated OSC/DCS string that exhausts its 64 KiB
-abandon budget is also counted once in `droppedUnknownCount()`, when the in-hand
-body past the boundary is folded into that single drop. A complete sequence longer
+abandon budget is also counted once in `droppedUnknownCount()`, at the abandon.
+That count covers the abandon itself, not every byte of the body: a single read
+that carries more than the budget can still decode part of its tail as keystrokes
+in that same call, and how many bytes those are depends on where the reads fell.
+A complete sequence longer
 than the cap that arrives in a single read is parsed whole and is not refused.
 `discardedPasteBytes()` is the paste-only counter and never moves for a
 sequence. `reset()` zeroes all counters along with the buffers.
