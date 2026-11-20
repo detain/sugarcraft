@@ -1,9 +1,10 @@
-<p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (TrueColor / Ansi256 / Ansi / Ascii / NoTTY — the five detection-emittable levels) and degrade colors, strings and whole output streams to match it — one-way, TrueColor down, never up; an opt-in perceptual family picks the nearest palette color when a degraded value must land on a fixed set. Detection reads the shared env ladder, honoring <code>NO_COLOR</code>, <code>FORCE_COLOR</code>, <code>TERM=dumb</code> and the reduced-motion request.</p>
+<p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (TrueColor / Ansi256 / Ansi / Ascii / NoTTY — the five detection-emittable levels) and degrade colors, strings and whole output streams to match it — one-way, TrueColor down, never up; an opt-in perceptual family picks the nearest palette color when a degraded value must land on a fixed set. Detection reads the shared env ladder, honoring <code>NO_COLOR</code>, <code>FORCE_COLOR</code>, <code>TERM=dumb</code> and the reduced-motion request. It ports the concepts of <a href="https://github.com/charmbracelet/colorprofile">charmbracelet/colorprofile</a>, which detects a terminal's color profile and downgrades output to match.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-colorprofile</code></pre>
+    <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so require it as <code>sugarcraft/sugar-colorprofile:dev-master</code>; on a default-<code>stable</code> project a bare <code>sugarcraft/sugar-colorprofile</code> request does not resolve.</p>
     <p>Requires PHP 8.3+ and the <code>ext-mbstring</code> extension — the UTF-8 sweep in <code>Env::sanitize</code> and the <code>TERM</code> cap run <code>mb_convert_encoding</code>/<code>mb_strcut</code> unguarded, and until this was declared the dependency was satisfied only transitively via sugar-core while the docs claimed the opposite. The probes' optional <code>posix_*</code> calls remain feature-detected, and an absent or unreadable <code>infocmp</code> child degrades the phase-2 answer instead of failing. Direct dependencies: <code>sugarcraft/sugar-core</code>, <code>react/event-loop</code>, <code>react/child-process</code>, <code>react/promise</code> (the latter three back the async <code>AsyncProbe</code> consult).</p>
-    <p><strong>Supported targets: POSIX terminals.</strong> The phase-2 <code>infocmp</code> consult is POSIX-only by design — it queries the compiled terminfo database. The env ladder's Windows/macOS legs (<code>WT_SESSION</code>, the iTerm/Apple_Terminal hints) are untested by this repository's CI, whose ladder legs run on Linux only; on Windows the library answers from the env ladder alone. Case matters more there than anywhere else: env keys are matched <strong>case-exactly</strong>, while the Windows environment block is case-insensitive at the OS layer — an unusual spelling such as <code>No_Color</code> can exist in the shell's view and still miss detection, because the library deliberately does not alias-match env keys (<code>Env::resolve</code>).</p>
+    <p><strong>Supported targets: POSIX terminals.</strong> The phase-2 <code>infocmp</code> consult is POSIX-only by design — it queries the compiled terminfo database. The env ladder's Windows/macOS legs (<code>WT_SESSION</code>, the <code>TERM_PROGRAM=iTerm.app</code> hint, the only macOS terminal name matched, since Apple_Terminal is deliberately excluded) are untested by this repository's CI, whose ladder legs run on Linux only; on Windows the library answers from the env ladder alone. Case matters more there than anywhere else: env keys are matched <strong>case-exactly</strong>, while the Windows environment block is case-insensitive at the OS layer — an unusual spelling such as <code>No_Color</code> can exist in the shell's view and still miss detection, because the library deliberately does not alias-match env keys (<code>Env::resolve</code>).</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\{Color, ColorProfile, Palette, ProfileWriter};
@@ -186,6 +187,11 @@ vendor/bin/phpunit</code></pre>
     <h3 style="margin-top: 40px;">Changelog and versioning</h3>
     <p>The library is pre-1.0, so consume <code>dev-master</code>. The mutable <code>StandardColors</code> statics are deprecated in favor of <code>all()</code>, <code>fromIndex()</code> and <code>catalog()</code>, and the <code>Profile</code> name is a deprecated alias for <code>ColorProfile</code>. The deprecation window is set out in the README.</p>
 
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a> supplies the <code>Clamp</code> helper and the I18n catalog base that this library's <code>Color</code> and <code>Lang</code> build on.</li>
+    </ul>
+
   </div>
 </section>
 
@@ -193,7 +199,7 @@ vendor/bin/phpunit</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the four examples that have a tape: detect, standard-colors, convert and degrade. The probe-report and async-probe examples have no recording. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/detect.gif" alt="Detecting the terminal profile, then the same sentence forced through each profile">

@@ -175,12 +175,13 @@
             <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
             <li class="toc-h3"><a href="#picture-prints-a-plain-text-placeholder-instead-of-an-image">Picture prints a plain-text placeholder instead of an image</a></li>
             <li class="toc-h3"><a href="#chart-colors-disappear">Chart colors disappear</a></li>
-            <li class="toc-h3"><a href="#a-color-resolver-throws-unexpectedvalueexception">A color resolver throws UnexpectedValueException</a></li>
+            <li class="toc-h3"><a href="#a-color-resolver-throws-an-exception">A color resolver throws an exception</a></li>
             <li class="toc-h3"><a href="#the-sparkline-s-first-cell-is-blank">The sparkline&#039;s first cell is blank</a></li>
             <li class="toc-h3"><a href="#labels-from-user-data-look-wrong">Labels from user data look wrong</a></li>
             <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h3"><a href="#architecture">Architecture</a></li>
             <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#sparkline">Sparkline</a></li>
             <li class="toc-h3"><a href="#bar-chart">Bar chart</a></li>
@@ -194,7 +195,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. <code>Picture::detect()</code> is multiplexer-first — it declines under tmux/Zellij (where image escapes are swallowed) unless <code>CHARTS_PICTURE_PASSTHROUGH=1</code>, then routes iTerm2/WezTerm/kitty/Foot/mlterm/Windows Terminal on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured.</p>
+<p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. <code>Picture::detect()</code> is multiplexer-first — it declines under tmux/Zellij (where image escapes are swallowed) unless <code>CHARTS_PICTURE_PASSTHROUGH=1</code>, then routes iTerm2/WezTerm/kitty/Foot/mlterm/Windows Terminal on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured. It is modeled on <a href="https://github.com/NimbleMarkets/ntcharts">NimbleMarkets/ntcharts</a>, the Go terminal-chart library, and ports its behavior rather than its code.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts</code></pre>
@@ -233,7 +234,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
     </div>
 
     <h3 id="per-point-and-per-bar-colors" style="margin-top: 32px;">Per-point and per-bar colors</h3>
-    <p>btop tints every graph point and meter by its value through the theme gradient. <code>LineChart::withSeriesColorFn(fn(string $dataset, int $x, float $value): ?Color)</code> colors each sample's dot, fill run and outgoing connector (<code>$dataset</code> is <code>LineChart::PRIMARY_SERIES</code> for the unnamed series; <code>$x</code> is the index in the full series; <code>null</code> keeps the series color). <code>BarChart::withBarColor(fn(Bar $bar, int $i): ?Color)</code> colors each bar's body and eighth-block cap. Passing <code>null</code> restores byte-identical default output; a non-<code>Color</code> return throws <code>UnexpectedValueException</code>.</p>
+    <p>btop tints every graph point and meter by its value through the theme gradient. <code>LineChart::withSeriesColorFn(fn(string $dataset, int $x, float $value): ?Color)</code> colors each sample's dot, fill run and outgoing connector (<code>$dataset</code> is <code>LineChart::PRIMARY_SERIES</code> for the unnamed series; <code>$x</code> is the index in the full series; <code>null</code> keeps the series color). <code>BarChart::withBarColor(fn(Bar $bar, int $i): ?Color)</code> colors each bar's body and eighth-block cap. Passing <code>null</code> restores byte-identical default output. A non-<code>Color</code> return from an untyped resolver throws <code>UnexpectedValueException</code> at render time. A resolver declared with the <code>?Color</code> return type, as in the signatures above, makes PHP throw <code>TypeError</code> at the return before that check runs, so catch both when the resolver's return type is not under your control.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Charts\BarChart\{Bar, BarChart};
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Core\Util\Color;
@@ -314,7 +315,8 @@ Full guidance: <a href="https://github.com/sugarcraft/sugar-charts#accessibility
     <p>Every chart is configured through fluent setters, and each setter returns a new chart. The common ones are listed below. The full set is in the README component tables.</p>
 <table class="api-table">
 <tr><th>Setter</th><th>Applies to</th><th>Effect</th></tr>
-<tr><td><code>withYRange()</code>, <code>withXRange()</code>, <code>withXYRange()</code></td><td>LineChart, Scatter</td><td>Fix the axis bounds. <code>autoAdjustRange()</code> returns to automatic scaling.</td></tr>
+<tr><td><code>withYRange()</code>, <code>withXRange()</code></td><td>LineChart, Scatter</td><td>Fix the axis bounds. <code>autoAdjustRange()</code> returns to automatic scaling.</td></tr>
+<tr><td><code>withXYRange()</code></td><td>LineChart, Waveline</td><td>Fix both axis bounds in one call.</td></tr>
 <tr><td><code>withAxes(bool)</code>, <code>withXLabels()</code>, <code>withYLabels()</code></td><td>LineChart</td><td>Draw the axes and set their tick labels.</td></tr>
 <tr><td><code>withXLabelFormatter()</code>, <code>withYLabelFormatter()</code></td><td>LineChart</td><td>Format tick labels through a closure. The output is sanitized.</td></tr>
 <tr><td><code>withFill()</code>, <code>withMarkLines()</code></td><td>LineChart</td><td>Fill below the series, and draw reference lines.</td></tr>
@@ -364,8 +366,8 @@ vendor/bin/phpunit</code></pre>
     <h3 id="chart-colors-disappear" style="margin-top: 24px;">Chart colors disappear</h3>
     <p>Check <code>NO_COLOR</code> and <code>CLICOLOR=0</code>. Both drop the SGR from every text renderer. Set <code>CLICOLOR_FORCE=1</code> to keep color, since the force variables outrank both.</p>
 
-    <h3 id="a-color-resolver-throws-unexpectedvalueexception" style="margin-top: 24px;">A color resolver throws UnexpectedValueException</h3>
-    <p><code>withBarColor()</code> and <code>withSeriesColorFn()</code> must return a <code>Color</code> or <code>null</code>. Any other return value throws. Return <code>null</code> to keep the default color.</p>
+    <h3 id="a-color-resolver-throws-an-exception" style="margin-top: 24px;">A color resolver throws an exception</h3>
+    <p><code>withBarColor()</code> and <code>withSeriesColorFn()</code> must return a <code>Color</code> or <code>null</code>. Any other return value throws: an untyped resolver raises <code>UnexpectedValueException</code>, and a resolver typed <code>?Color</code> raises <code>TypeError</code> at the return. Return <code>null</code> to keep the default color.</p>
 
     <h3 id="the-sparkline-s-first-cell-is-blank" style="margin-top: 24px;">The sparkline's first cell is blank</h3>
     <p>That is the design. The series minimum maps to the blank leading cell, and the maximum maps to the tallest glyph, so the window is scaled to the data's range.</p>
@@ -388,6 +390,13 @@ vendor/bin/phpunit</code></pre>
 
     <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
     <p>The library is pre-1.0, so consume <code>dev-master</code>. The README's status table tracks what is shipped and what is pending. The known gaps are the LineChart mouse hit-testing, the OHLC volume pane, multi-bar grouped datasets in BarChart, and per-point rune sets for Scatter.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-cellbuffer.html">sugar-cellbuffer</a> supplies the cell buffer that Sparkline is built on.</li>
+      <li><a href="sugar-style.html">sugar-style</a> supplies the <code>Style</code> carried by every canvas cell.</li>
+      <li><a href="sugar-core.html">sugar-core</a> supplies the <code>Util\Color</code> type that resolvers return.</li>
+    </ul>
     </div>
 
   </div>

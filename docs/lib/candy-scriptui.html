@@ -181,6 +181,7 @@
             <li class="toc-h3"><a href="#architecture">Architecture</a></li>
             <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#choose">choose</a></li>
             <li class="toc-h3"><a href="#confirm">confirm</a></li>
@@ -199,10 +200,11 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">13 presentation subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write — plus completion and version utilities. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
+<p class="lede" style="margin-top: 28px;">13 presentation subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write — plus completion and version utilities. Drop into a shell script and instantly get a Charm-quality interactive UX. Its command set and exit-code conventions follow <a href="https://github.com/charmbracelet/gum">charmbracelet/gum</a>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-scriptui</code></pre>
+    <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so require it as <code>sugarcraft/candy-scriptui:dev-master</code>; on a default-<code>stable</code> project a bare <code>sugarcraft/candy-scriptui</code> request does not resolve.</p>
     <p>Or grab the rolling latest phar — rebuilt and published for every commit that
     touches this app (verify against the published <code>.phar.sha256</code> sidecar
     before making it executable):</p>
@@ -422,6 +424,13 @@ vendor/bin/phpunit</code></pre>
       <li><a href="https://github.com/sugarcraft/candy-scriptui/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-scriptui/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/gum">gum</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-forms.html">sugar-forms</a> is the form-primitives base the interactive subcommands are built on.</li>
+      <li><a href="sugar-core.html">sugar-core</a> supplies the Model, Msg and Cmd runtime types the interactive screens run on.</li>
+      <li><a href="sugar-style.html">sugar-style</a> supplies the <code>Style</code> type behind the styled output.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
