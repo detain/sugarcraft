@@ -46,7 +46,10 @@ declare(strict_types=1);
  *   php tools/gen-api-reference.php sugar-core --report   print the top-10 coverage
  *   php tools/gen-api-reference.php --help
  *
- * Exit codes: 0 success or fresh, 1 stale fragment under --check, 2 usage error.
+ * Exit codes: 0 success, fresh fragment, or top-10 coverage at or above the target.
+ * 1 a stale fragment under --check, or top-10 coverage below the target under --report.
+ * 2 a usage error, or a refusal from the generator (a declaration the parser cannot
+ * see, an unsafe summary, a colliding anchor), which prints its reason on stderr.
  */
 final class ApiReference
 {
@@ -365,8 +368,9 @@ final class ApiReference
         foreach ($hits as $hit) {
             // The docblock must be the last thing before the declaration, past any attributes.
             $before = substr($source, 0, $hit[0][1]);
+            // Same line-anchored test as parse(): prose that mentions @internal mid-sentence is not the tag.
             $internal = preg_match('~/\*\*((?:(?!\*/).)*)\*/\s*(?:#\[[^\]\n]*\]\s*)*$~s', $before, $doc) === 1
-                && preg_match('~@internal\b~', $doc[1]) === 1;
+                && self::isInternal($doc[1]);
             $spans[] = [
                 'fqn' => ($namespace === '' ? '' : $namespace . '\\') . $hit[1][0],
                 'internal' => $internal,

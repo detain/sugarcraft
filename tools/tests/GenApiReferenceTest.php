@@ -483,6 +483,35 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('visible(): void', $html);
     }
 
+    public function testProseMentioningInternalDoesNotHideAPublicType(): void
+    {
+        // The word `@internal` in the middle of a sentence is not the tag. The line scan and the
+        // parser must both read the type as public, so the run does not refuse on a disagreement.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Holder.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Holds a value. A later release may drop it; see the @internal policy notes. */
+                final class Holder
+                {
+                    public function get(): int
+                    {
+                        return 1;
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringContainsString('<h4 id="api-demo-fixture-holder"><code>Holder</code> <small>final class</small></h4>', $html);
+        self::assertContains('Demo\Fixture\Holder', \array_column(\ApiReference::declaredPublic($root, 'sugar-core'), 'fqn'));
+    }
+
     public function testFixtureListsOnlyPublicTypesAndMembersGroupedByNamespace(): void
     {
         $root = $this->fixtureRoot(self::sugarCoreFixture());
