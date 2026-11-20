@@ -281,7 +281,10 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'The result is clipped at %s bytes, with a marker naming what was dropped.',
                 number_format($this->maxOutputBytes),
             )
-            : 'There is no size cap on this instance.';
+            : sprintf(
+                'This instance sets no output cap of its own: each stream is retained up to %s bytes (8 MiB), and anything past that is dropped with a PARTIAL marker.',
+                number_format(self::DEFAULT_RETAINED_BYTES),
+            );
 
         return 'Execute a bash command. Each call is a fresh `bash -c`, so nothing carries '
             . 'over from the previous one — not the working directory (a `cd` here has no '

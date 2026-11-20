@@ -155,12 +155,18 @@ final class ToolDescriptionGuidanceTest extends TestCase
         $this->assertStringNotContainsString('65,536', (new Bash(maxOutputBytes: 4096))->description());
     }
 
-    /** A caller that disabled the cap must not advertise one. */
-    public function testBashDescriptionAdvertisesNoCapWhenTheCapIsDisabled(): void
+    /**
+     * A caller that disabled the cap must not advertise an unbounded result:
+     * capture still stops each stream at the 8 MiB ceiling, and the model has
+     * to be told that overflow makes the answer PARTIAL.
+     */
+    public function testBashDescriptionNamesTheCaptureCeilingWhenTheCapIsDisabled(): void
     {
         $description = (new Bash(maxOutputBytes: 0))->description();
 
-        $this->assertStringContainsString('no size cap on this instance', $description);
+        $this->assertStringContainsString('each stream is retained up to 8,388,608 bytes (8 MiB)', $description);
+        $this->assertStringContainsString('dropped with a PARTIAL marker', $description);
+        $this->assertStringNotContainsString('no size cap', $description);
         $this->assertStringNotContainsString('clipped at', $description);
     }
 
