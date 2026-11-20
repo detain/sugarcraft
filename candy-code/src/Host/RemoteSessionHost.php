@@ -114,7 +114,9 @@ final class RemoteSessionHost
      * state, with no verdict ever reached. The first attempt waits this long;
      * each failed attempt after it waits one base longer (10s, 20s, 30s ...),
      * so a slow but answering server is reached on a later redial. The silent
-     * case is bounded by the whole ladder, at most 78 times this value.
+     * case is bounded by the whole ladder: the hello waits total 78 times this
+     * value, and the first reconnect wait and the pauses between attempts add
+     * about 36 s on top (about 816 s with the default ladder).
      */
     public const RESUME_HELLO_SECONDS = 10.0;
 
