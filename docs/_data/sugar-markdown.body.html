@@ -1,16 +1,15 @@
-<p class="lede" style="margin-top: 28px;">Built on league/commonmark + SugarStyle. Word-wrap, OSC 8 hyperlinks, syntax highlighting, nine built-in themes plus custom JSON themes.</p>
+<p class="lede" style="margin-top: 28px;">sugar-markdown renders CommonMark into ANSI for the terminal: word-wrapped text, OSC 8 hyperlinks, syntax-highlighted code, and nine built-in themes plus JSON themes in both this library's flat schema and glamour's <code>styles.json</code> schema. It mirrors <a href="https://github.com/charmbracelet/glamour">charmbracelet/glamour</a> (Go) and is built on <code>league/commonmark</code> and <code>sugar-style</code>.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-markdown</code></pre>
+    <p style="margin-top: 12px;">Requires PHP 8.3 or newer. The sibling <code>sugarcraft/*</code> packages track <code>dev-master</code>, so mirror the monorepo's <code>minimum-stability: dev</code> with <code>prefer-stable: true</code> in your own root manifest. The HTML converter needs <code>ext-dom</code>, which is a suggestion rather than a requirement. Without it, <code>HtmlToMarkdown::convert()</code> returns <code>null</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Markdown\{Renderer, Theme};
+    <h2 style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-php"><?php
 
-// render()'s output deliberately carries no trailing newline — a
-// one-chunk document renders through stream() to exactly those same
-// bytes; the echo supplies its own "\n" as a second operand (echo
-// itself appends nothing). write() and Writer follow the same law.
-echo (new Renderer())-&gt;render(&lt;&lt;&lt;MD
+use SugarCraft\Markdown\{Renderer, Theme};
+
+$markdown = <<<'MD'
 # Welcome
 
 A few **bold** and _italic_ words, with `inline code` and a
@@ -19,77 +18,209 @@ A few **bold** and _italic_ words, with `inline code` and a
 - one
 - two
 - three
+MD;
 
-```php
-echo "hello world";
-```
-MD), "\n";
+// render() returns the ANSI string with no trailing newline.
+echo (new Renderer(Theme::dark()))->render($markdown), "\n";
 
-// Custom theme from inline JSON; for the file variant
-// (Theme::fromFile($path), optionally under a byte ceiling)
-// see examples/custom-theme.php.
+// A flat JSON theme takes one or more style slots, and the rest keep their defaults.
 $theme = Theme::fromJsonString('{"heading1":{"bold":true}}');
-echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
+echo (new Renderer($theme))->render("# Styled\n"), "\n";</code></pre>
+    <p style="margin-top: 12px;">A renderer with no theme uses <code>Theme::ansi()</code>. That is a deliberate divergence from glamour, which defaults to its dark style. Use <code>new Renderer(Theme::dark())</code> for the one-line parity path.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images, definition lists. List items always render tight — loose-list spacing is not honored, a dated port decision (2026-11). Images are text-fallback only (alt + URL, mirroring glamour pre-0.8); sixel/kitty embedding is candy-mosaic / candy-flip territory, not a markdown-layer capability. Raw HTML (inline + block) passes through as inert literal text with theme styling, control-stripped regardless of the sanitize flag; refused schemes never open an OSC-8 target — see the README <a href="https://github.com/sugarcraft/sugar-markdown/blob/master/README.md#link-safety">Link safety</a> policy.</span></div>
-      <div class="feature"><strong>Nine presets (notty aliases plain)</strong><span>ansi, plain, notty, ascii, dark, light, dracula, tokyo-night, pink. <code>new Renderer()</code> with no theme lands on <code>ansi()</code> — a dated divergence (glamour defaults to its dark style); the one-line parity path is <code>new Renderer(Theme::dark())</code>. <code>Theme::fromEnvironment()</code> honors <code>GLAMOUR_STYLE</code> with <code>NO_COLOR</code> winning over every other input.</span></div>
-      <div class="feature"><strong>Two theme schemas</strong><span><code>Theme::fromJsonString('{"heading1":{"bold":true}}')</code> takes this library's FLAT schema directly; a payload carrying a <code>document</code> block follows glamour's <code>styles.json</code> schema and routes through <code>StyleGuide</code>, whose whole surface is public (<code>isGlamourSchema()</code> / <code>fromFile()</code> / <code>theme()</code> / <code>element()</code> / <code>chroma()</code>) so you can drive the guide itself. Lenient keys, strict values: unknown keys are ignored, but bad hex (<code>"#ff5f"</code>) or out-of-range <code>ansi:99</code> throw <code>InvalidArgumentException</code>; <code>Theme::fromFile($path, ?maxBytes)</code> throws <code>RuntimeException</code> on an unreadable file or one past the byte ceiling; both decoders sweep every decoded string slot so a hostile theme prefix cannot smuggle a raw OSC/CSI.</span></div>
-      <div class="feature"><strong>Word-wrap</strong><span>Off unless you call <code>withWordWrap($cols)</code> — rendered lines follow the source (glamour defaults to 80; this port deliberately does not, dated 2026-11: width-managing consumers would get double-wrapped). Honors SGR + grapheme cluster widths. List items and blockquotes charge only their own indent or 2-cell bar, so nested lines fit the wrap width as in glamour. A whitespace-free run longer than four times the wrap width is packed into hard-break rows before the ANSI-aware wrapper sees it — byte-identical output, a 400 KB base64 blob costs its row count, not a per-cluster walk.</span></div>
-      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>On by default; disable at the library with <code>withHyperlinks(false)</code> (short alias <code>hyperlinks(false)</code>) for terminals that don't support them — the <code>--no-hyperlinks</code> spelling belongs to the candy-mdview CLI. The visible text is <code>text (url)</code> in both modes: the toggle adds or removes only the OSC-8 envelope. Email autolinks render the address hyperlinked to <code>mailto:</code> with no href suffix. <code>withInlineTableLinks(false)</code> is visual-only for OSC-8-capable terminals — a table-cell link loses BOTH the <code>(url)</code> suffix and the envelope, so avoid it for accessible output.</span></div>
-      <div class="feature"><strong>Streaming</strong><span><code>stream(iterable $chunks)</code> yields rendered sections as markdown arrives; for every split of the same input bytes into string chunks, the stream equals <code>render()</code> byte for byte. Link reference definitions carry across sections; a section with an unresolved <code>[..]</code> is held back until a later definition names one of its left labels (an unrelated definition just moves a watermark — O(1) for every held section it cannot resolve), and each section is seeded only with the definitions its own bracket spans could look up. <code>Writer::toPath()/toStream()</code> is the push-side twin — <code>feed()</code>/<code>close()</code>, one flush per section, single-use; themes with document-scope post-processing or <code>withPreservedNewLines(true)</code> buffer and emit once — <code>defersStreaming()</code> reports which regime applies.</span></div>
-      <div class="feature"><strong>Syntax highlighting</strong><span>Code blocks tokenized + colored — a curated subset: 16 languages (PHP/JS/TS/JSON/Python/Go/Bash/SQL/Rust/Java/C/C++/Ruby/YAML/HTML/CSS) and four token kinds against chroma's full lexer catalog; a fence naming anything else degrades to the plain code-block style, and a fenced body over <code>MAX_HIGHLIGHT_BYTES</code> (1,000,000) refuses to try rather than stall.</span></div>
-      <div class="feature"><strong>Bounded on hostile input</strong><span>Block nesting capped at <code>MAX_NESTED_BLOCK_DEPTH</code> (32) — past the ceiling content still renders, decoration stops; sanitization is ON by default, the opt-out carries a loud name (<code>withRawControlChars(true)</code>, alias <code>withSanitize(false)</code>); thematic rules clamp to the block's available width once a wrap width is set; and there is deliberately <em>no</em> source-size cap — output stays proportional, but put the intake guard on hostile stdin yourself. Theme files are code: pin style paths from operator config, never auto-load workspace-adjacent JSON.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p>A <strong>Renderer</strong> holds the options and the theme. It parses a document with the CommonMark parser, walks the blocks, and writes ANSI bytes. The option setters are immutable: each <code>with*()</code> returns a new renderer. A renderer is not reentrant, so use one per thread of work and reuse it across renders. <code>Renderer::cached()</code> hands back a shared instance for a theme and width, which suits a render loop.</p>
+    <p>A <strong>Theme</strong> is a set of styles for each block and inline element, plus a few scalar decorations such as heading prefixes and the image text. Every decoded string is swept for control bytes, so a theme file cannot inject a raw escape sequence. A theme file is code that the terminal runs, so load only files the operator pinned.</p>
+    <p>Streaming is the second mode. <code>stream()</code> yields rendered sections as the Markdown arrives, and for any split of the same input the joined output equals <code>render()</code> byte for byte. <code>Writer</code> is the push-side version for a sink you control.</p>
 
-    <p style="margin-top: 16px;">Every user-facing string goes through <code>Lang::t()</code> (<code>src/Lang.php</code>) with 16 locales shipped in <code>lang/</code> — consumers such as candy-mdview surface localized messages like <code>theme.read_failed</code>.</p>
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Render a file to the terminal</h3>
+    <pre class="code"><code class="language-php">$renderer = (new Renderer(Theme::tokyoNight()))->withWordWrap(100);
+echo $renderer->render(file_get_contents('README.md')), "\n";</code></pre>
+    <p>Word wrap is off unless you call <code>withWordWrap()</code>, so rendered lines follow the source. Wrapping counts terminal cells, not bytes, and it honors SGR and grapheme clusters.</p>
 
-    <h3 style="margin-top: 40px;">Accessibility</h3>
+    <h3 style="margin-top: 24px;">Pipe Markdown through a stock theme from stdin</h3>
+    <pre class="code"><code class="language-shell">cat README.md | php examples/stdin-stdout.php --theme=dracula</code></pre>
+    <p>The example reads at most 1 MiB, and an unknown theme name prints a warning to stderr and falls back to <code>ansi</code>. A longer input is refused with exit code 2.</p>
+
+    <h3 style="margin-top: 24px;">Take the theme from the environment</h3>
+    <pre class="code"><code class="language-php">$renderer = new Renderer(Theme::fromEnvironment(Theme::dark()));</code></pre>
+    <p><code>Theme::fromEnvironment()</code> reads <code>GLAMOUR_STYLE</code>, and <code>NO_COLOR</code> wins over every other input. <code>GLAMOUR_STYLE=auto</code> trusts <code>isatty</code> only, so pin <code>notty</code> or <code>ascii</code> for a pipeline behind a PTY that should carry no color.</p>
+
+    <h3 style="margin-top: 24px;">Stream a document as it arrives</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Markdown\Renderer;
+
+$renderer = new Renderer(Theme::dark());
+foreach ($renderer->stream($chunks) as $section) {
+    echo $section;
+}</code></pre>
+    <p>Each yielded section is a complete block-level unit. Link reference definitions carry across sections, and a section that refers to a definition not yet seen is held back until that definition arrives. A document that uses post-processing themes, or <code>withPreservedNewLines(true)</code>, buffers and emits once. <code>defersStreaming()</code> reports which regime applies.</p>
+
+    <h3 style="margin-top: 24px;">Fold sections under chosen headings</h3>
+    <pre class="code"><code class="language-php">$renderer = (new Renderer(Theme::dark()))->withFolds([Renderer::headingId('Usage')]);</code></pre>
+    <p>A folded heading keeps its line and a fold marker, and hides the blocks after it up to the next heading of any level. Heading IDs come from the rendered text, so <code>Renderer::headingId()</code> must see the same text the renderer does.</p>
+
+    <h3 style="margin-top: 24px;">Convert fetched HTML to Markdown</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Markdown\Html\HtmlToMarkdown;
+
+$markdown = HtmlToMarkdown::convert($html, 'https://example.com/docs/', 'UTF-8');
+if ($markdown === null) {
+    // Fall back to the raw body. See the troubleshooting entry below.
+}</code></pre>
+    <p>Scripts, styles, navigation and other non-content subtrees are dropped whole. The result is then rendered by <code>Renderer</code> like any other Markdown.</p>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <h3 style="margin-top: 24px;">Renderer</h3>
+<table class="api-table">
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>__construct(?Theme $theme = null, ?int $wrapWidth = null, bool $emitHyperlinks = true, ?string $baseUrl = null, bool $tableWrap = false, bool $inlineTableLinks = true, bool $tableColumnBudget = false, bool $preservedNewLines = false, bool $expandEmoji = false, bool $sanitize = true, bool $fenceColumnBudget = false, ?StyleSheet $styleSheetOverride = null, bool $lineNumbers = false, array $folds = [])</code></td><td>Full configuration at construction. The defaults are the ansi theme, no wrap, hyperlinks on, and sanitizing on. A zero or negative wrap width throws; use <code>null</code> to turn wrapping off</td></tr>
+<tr><td><code>render(string $markdown): string</code></td><td>Render to an ANSI string. A reused renderer starts each render from a clean block stack</td></tr>
+<tr><td><code>Renderer::renderMarkdown(string $markdown, ?Theme $theme = null)</code></td><td>One-shot render. For repeated renders, build a renderer and reuse it</td></tr>
+<tr><td><code>Renderer::cached(?Theme $theme = null, ?int $width = null)</code></td><td>Shared renderer keyed by theme identity and width. Holds at most 32 entries, evicting the least recently used</td></tr>
+<tr><td><code>Renderer::ansi()</code> / <code>plain()</code> / <code>notty()</code> / <code>ascii()</code> / <code>dark()</code> / <code>light()</code> / <code>dracula()</code> / <code>tokyoNight()</code> / <code>pink()</code></td><td>Renderer on a stock theme</td></tr>
+<tr><td><code>Renderer::fromEnvironment(?Theme $default = null)</code></td><td>Renderer on the theme that <code>Theme::fromEnvironment()</code> picks</td></tr>
+<tr><td><code>stream(iterable $chunks): Generator</code> / <code>renderSection()</code> / <code>defersStreaming(): bool</code></td><td>Section-by-section output for a chunked input / render one section / whether the streaming regime buffers</td></tr>
+<tr><td><code>write(string $markdown, mixed $output = STDOUT): int</code> / <code>writer(StreamSink $sink): Writer</code></td><td>Write a document to a stream resource / the push-side writer for a sink</td></tr>
+<tr><td><code>withTheme()</code> / <code>withWordWrap(?int)</code> / <code>withHyperlinks(bool)</code> / <code>withBaseURL()</code> / <code>withTableWrap()</code> / <code>withInlineTableLinks()</code> / <code>withTableColumnBudget()</code> / <code>withFenceColumnBudget()</code> / <code>withLineNumbers()</code> / <code>withPreservedNewLines()</code> / <code>withEmoji()</code> / <code>withSanitize()</code> / <code>withRawControlChars()</code> / <code>withStandardStyle(string)</code> / <code>withStyleSheet()</code></td><td>Immutable option setters. Each one also has a short alias without the <code>with</code> prefix, such as <code>hyperlinks(false)</code>. <code>withStandardStyle()</code> throws, naming <code>Theme::names()</code>, on an unknown name</td></tr>
+<tr><td><code>withFolds(array)</code></td><td>Immutable option setter for the folded heading IDs. It has no short alias, so there is no <code>folds()</code> method; call <code>withFolds()</code></td></tr>
+<tr><td><code>Renderer::headingId(string $text): string</code></td><td>The fold ID for a heading's rendered text</td></tr>
+</table>
+
+    <h3 style="margin-top: 32px;">Theme</h3>
+<table class="api-table">
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>Theme::ansi()</code>, <code>plain()</code>, <code>notty()</code>, <code>ascii()</code>, <code>dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>tokyoNight()</code>, <code>pink()</code></td><td>Built-in presets. <code>notty()</code> returns <code>plain()</code>, and <code>ascii()</code> keeps emphasis on bold, italic and underline alone</td></tr>
+<tr><td><code>Theme::byName(string): ?Theme</code> / <code>requireName(string): Theme</code></td><td>Lookup by slug, returning <code>null</code> for an unknown name. <code>requireName()</code> throws instead. <code>auto</code> is not a slug: it is the <code>fromEnvironment()</code> channel, so a name lookup never probes the terminal</td></tr>
+<tr><td><code>Theme::catalog()</code> / <code>catalogByName(string): ?Theme</code></td><td>Every stock theme plus the bundled <code>solarized</code>, <code>monokai</code> and <code>github</code>. The lookup ignores case, hyphens, underscores and spaces</td></tr>
+<tr><td><code>Theme::names(): list</code> / <code>Theme::isStock(Theme $theme): bool</code></td><td>The stock roster / whether the instance is a memoised stock theme. The check is by identity (<code>===</code>), not by slug, so a theme built with <code>with()</code> or <code>mapStyles()</code> is not stock even when its values match. Use <code>byName()</code> to look up by slug</td></tr>
+<tr><td><code>Theme::fromEnvironment(?Theme $default = null)</code></td><td>Resolve <code>GLAMOUR_STYLE</code>, with <code>NO_COLOR</code> taking precedence</td></tr>
+<tr><td><code>Theme::fromJsonString(string $json)</code> / <code>fromFile(string $path, ?int $maxBytes = null)</code> / <code>fromJson(string $path)</code></td><td>Load a theme from JSON. A payload with a top-level <code>document</code> object routes through <code>StyleGuide</code>. The file variant throws <code>RuntimeException</code> when the file is unreadable or over the ceiling. <code>fromJson()</code> is a deprecated alias of <code>fromFile()</code></td></tr>
+<tr><td><code>mapStyles(callable $map): Theme</code> / <code>with(...)</code></td><td>A copy with each style slot passed through a callable, or with selected slots replaced</td></tr>
+</table>
+
+    <h3 style="margin-top: 32px;">StyleGuide</h3>
+<table class="api-table">
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>StyleGuide::isGlamourSchema(array $decoded): bool</code></td><td>True when the decoded JSON has a top-level <code>document</code> object. The flat schema has no such key, so the two never collide</td></tr>
+<tr><td><code>StyleGuide::fromFile(string $path): self</code></td><td>Read a glamour style file. Throws <code>RuntimeException</code> for a missing file, a directory, an unreadable file, or one over <code>MAX_CONFIG_BYTES</code> (1,000,000 bytes), checked before the read</td></tr>
+<tr><td><code>StyleGuide::fromJsonString(string $json): self</code> / <code>fromDecoded(array $decoded): self</code></td><td>Parse a glamour document. <code>InvalidArgumentException</code> for malformed JSON or a top-level scalar. A top-level JSON array is accepted, because only <code>Theme::fromJsonString()</code> refuses lists; a <code>StyleGuide</code> built from an array carries no elements, so its theme keeps only glamour's default bold and italic and leaves every other slot plain. <code>fromDecoded()</code> lets a caller that already decoded the document avoid decoding it twice</td></tr>
+<tr><td><code>element(string $name): ?array</code> / <code>chroma(string $token): ?array</code></td><td>Raw primitive for an element block such as <code>h1</code> or <code>code_block</code>, or for a chroma token such as <code>Keyword</code>. <code>null</code> when absent</td></tr>
+<tr><td><code>indentToken(string $element = 'document'): string</code></td><td>The <code>indent_token</code> literal for an element, passed through the same sweep as the affix slots</td></tr>
+<tr><td><code>theme(): Theme</code></td><td>Materialize a native <code>Theme</code>. Missing elements fall through to a plain style, except bold and italic, which keep glamour's attribute defaults</td></tr>
+</table>
+
+    <h3 style="margin-top: 32px;">HtmlToMarkdown and UrlReference</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>HtmlToMarkdown</td><td><code>convert(string $html, string $baseUrl, ?string $charset = null): ?string</code></td><td>Convert HTML to Markdown. Returns <code>null</code> when the caller should fall back to the raw body. <code>MAX_PARSE_BYTES</code> is 512 KiB</td></tr>
+<tr><td>UrlReference</td><td><code>resolve(string $base, string $reference): string</code></td><td>RFC 3986 reference resolution. The converter uses it for every relative link, so fragments land on the document URL</td></tr>
+</table>
+
+    <h3 style="margin-top: 32px;">Streaming, highlighting and helpers</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>SectionStream</td><td><code>push(string $chunk): array</code> / <code>finish(): array</code> / <code>preview(): array</code></td><td>Incremental section splitter. Holds back a section until its link labels resolve</td></tr>
+<tr><td>SectionScanner</td><td><code>push(string $chunk): array</code> / <code>openSection(): string</code> / <code>finish(): ?string</code></td><td>Line-level scanner that splits the input into candidate sections. Bounds the buffer one push keeps live at <code>MAX_SECTION_BYTES</code> (1 MiB)</td></tr>
+<tr><td>Writer</td><td><code>toPath(Renderer, string)</code> / <code>toStream(Renderer, resource)</code> / <code>feed(string)</code> / <code>close()</code> / <code>isOpen()</code></td><td>Push-side streaming to a sink. Single use. Each section flushes once</td></tr>
+<tr><td>StreamSink</td><td><code>toStream(resource)</code> / <code>toPath(string)</code> / <code>write(string): int</code> / <code>close()</code></td><td>The output side of <code>Writer</code></td></tr>
+<tr><td>SyntaxHighlighter</td><td><code>highlight(string $code, string $language, Theme $theme, bool $lineNumbers = false): string</code></td><td>Tokenize and color one fenced block. A body over <code>MAX_HIGHLIGHT_BYTES</code> (1,000,000) falls back to the plain code-block style</td></tr>
+<tr><td>TokenWrap</td><td><code>wrap(string $s, int $max): string</code></td><td>Pack a whitespace-free run longer than four times the wrap width into hard-break rows. The output is byte-identical to the plain wrapper, and the run no longer costs a per-cluster walk</td></tr>
+<tr><td>GithubEmoji</td><td><code>MAP</code> (constant)</td><td>Shortcode to Unicode map, used when <code>withEmoji()</code> is on</td></tr>
+<tr><td>Frontmatter</td><td><code>split(string $document): ?Split</code></td><td>Separate the <code>---</code> fenced metadata block from the body. Returns <code>null</code> when there is no complete block</td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td>Wrap width</td><td><code>?int</code></td><td><code>null</code></td><td>Word-wrap column. <code>null</code> follows the source line breaks</td></tr>
+<tr><td>Hyperlinks</td><td><code>bool</code></td><td><code>true</code></td><td>OSC 8 envelope around links. The visible text is <code>text (url)</code> in both modes</td></tr>
+<tr><td>Sanitize</td><td><code>bool</code></td><td><code>true</code></td><td>Strips control characters from the output. Turning it off is <code>withRawControlChars(true)</code> or <code>withSanitize(false)</code></td></tr>
+<tr><td>Inline table links</td><td><code>bool</code></td><td><code>true</code></td><td>Keep the <code>(url)</code> suffix and the link envelope in table cells. Off is visual-only, and it drops both</td></tr>
+<tr><td>Table wrap</td><td><code>bool</code></td><td><code>false</code></td><td>Wrap each table cell at the full wrap width. It does not bound the table as a whole</td></tr>
+<tr><td>Table column budget</td><td><code>bool</code></td><td><code>false</code></td><td>Clip table cells to one physical line each, so a wide table keeps bounded geometry</td></tr>
+<tr><td>Fence column budget</td><td><code>bool</code></td><td><code>false</code></td><td>Clip each fence line, highlighted or plain, to the available width</td></tr>
+<tr><td>Line numbers</td><td><code>bool</code></td><td><code>false</code></td><td>Number the lines of a highlighted fence. The gutter uses the fence budget</td></tr>
+<tr><td>Preserved newlines</td><td><code>bool</code></td><td><code>false</code></td><td>Keep the source's blank-line runs between blocks. Streaming buffers when this is on</td></tr>
+<tr><td>Emoji</td><td><code>bool</code></td><td><code>false</code></td><td>Expand <code>:shortcode:</code> to Unicode</td></tr>
+<tr><td>Folds</td><td><code>list&lt;string&gt;</code></td><td><code>[]</code></td><td>Heading IDs to fold</td></tr>
+<tr><td>Theme</td><td><code>?Theme</code></td><td><code>Theme::ansi()</code></td><td>The style set</td></tr>
+</table>
+    <p style="margin-top: 12px;">Hard limits apply regardless of options. Block nesting is capped at <code>Renderer::MAX_NESTED_BLOCK_DEPTH</code> (32): past the ceiling content still renders, but decoration stops. A glamour document whose indent or margin exceeds <code>Theme::MAX_DOCUMENT_DECORATION</code> (256) is refused by <code>StyleGuide</code> with a named error, and <code>Theme</code> clamps such values at construction.</p>
+
+    <h2 style="margin-top: 40px;">Keys and input</h2>
+    <p>sugar-markdown handles no keys. It is a renderer, and a TUI host such as <code>candy-mdview</code> owns its own key bindings for scrolling and navigation.</p>
+
+    <h2 style="margin-top: 40px;">Theme and styling</h2>
+    <p>The nine presets are <code>ansi</code>, <code>plain</code>, <code>notty</code>, <code>ascii</code>, <code>dark</code>, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code> and <code>pink</code>. <code>notty</code> is an alias of <code>plain</code>. The catalog adds <code>solarized</code>, <code>monokai</code> and <code>github</code> from the bundled <code>themes/</code> directory.</p>
+    <p style="margin-top: 12px;">Two schemas load through <code>Theme::fromJsonString()</code>. The flat schema is this library's own, and it lists style slots such as <code>{"heading1":{"bold":true}}</code>. A payload with a top-level <code>document</code> object follows glamour's <code>styles.json</code> schema and routes through <code>StyleGuide</code>, which reads the <code>document</code> block, the element blocks and the <code>chroma</code> tokens.</p>
+    <p style="margin-top: 12px;"><code>StyleGuide::theme()</code> projects what the <code>Theme</code> can hold. It keeps the paragraph <code>block_prefix</code> and <code>block_suffix</code>, and drops the affixes on other non-document elements such as headings and block quotes. It also drops per-heading-level prefixes and chroma families beyond the four slots it has. Dropped keys stay readable through <code>element()</code> and <code>chroma()</code>, so a richer theme can use them later. Glamour's inline and block images style the alt text only, because the library does not embed images.</p>
+    <p style="margin-top: 12px;">Custom theme example: start from a stock theme and swap individual style slots with <code>Theme::with()</code>, as <code>examples/custom-theme.php</code> does.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
     <ul>
-      <li><strong>Color is the first thing to go</strong> — <code>Theme::fromEnvironment()</code> lets <code>NO_COLOR</code> win over every other input, and the stock <code>plain()</code> / <code>ascii()</code> themes drop SGR color by construction (emphasis in <code>ascii()</code> survives on bold/italic/underline alone).</li>
-      <li><strong><code>auto</code> trusts <code>isatty</code> and nothing else</strong> — it never reads <code>TERM</code>, so a <code>TERM=dumb</code> terminal or a screen-reader pipe behind a PTY still receives full SGR from <code>GLAMOUR_STYLE=auto</code>; pin <code>GLAMOUR_STYLE=notty</code> (or <code>ascii</code>) explicitly for those pipelines.</li>
-      <li><strong>Link text stays visible</strong> — the OSC-8 envelope wraps visible <code>text (url)</code>, so a non-clicking terminal loses nothing; the one exception is <code>withInlineTableLinks(false)</code>, which discards table-cell destinations entirely.</li>
-      <li><strong>Alt text always renders</strong> — <code>![alt](src)</code> keeps <code>alt</code> unconditionally, the same fallback posture refused-scheme links get via their visible <code>(url)</code> suffix.</li>
-      <li><strong>Color-free is not glyph-free</strong> — <code>plain()</code> and <code>notty()</code> still draw the decorative glyphs (▎ ─ ☐ • …); every glyph is a constructor-settable string if you need pure-ASCII output.</li>
-      <li><strong><code>blink</code> is accepted, discouraged</strong> — it lives in the theme-JSON flag vocabulary for glamour parity; WCAG 2.2.2 asks you not to ship it.</li>
+      <li><code>examples/render.php</code> renders a sample document with a handful of stock themes. With <code>GLAMOUR_STYLE</code> or <code>NO_COLOR</code> set, it adds a section for <code>Theme::fromEnvironment()</code>. Run it with <code>php examples/render.php</code>.</li>
+      <li><code>examples/themes.php</code> renders the same document under each colorful stock theme. Run it with <code>php examples/themes.php</code>.</li>
+      <li><code>examples/custom-theme.php</code> starts from a stock theme and swaps individual slots with <code>Theme::with()</code>. Run it with <code>php examples/custom-theme.php</code>.</li>
+      <li><code>examples/stdin-stdout.php</code> renders Markdown read from stdin, with an optional <code>--theme=</code> flag. Run it with <code>cat README.md | php examples/stdin-stdout.php</code>.</li>
     </ul>
+    <p style="margin-top: 12px;">The examples read <code>vendor/autoload.php</code>, so run them from the library root after <code>composer install</code>.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-markdown">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-markdown/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-markdown/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/glamour">glamour</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-markdown
+composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite includes golden ANSI snapshots under <code>tests/fixtures/</code>, checked with <code>sugar-testing</code>'s <code>assertGoldenAnsi()</code>. Golden files are create-only: <code>UPDATE_GOLDENS=1</code> makes a missing fixture and never rewrites one that differs. To accept an intended change, delete the fixture and run the suite again. Locale parity is checked by <code>LocaleParityTest</code>, and the HTML converter has its own tests under <code>tests/Html/</code>.</p>
 
-    <h3 style="margin-top: 32px;">See also</h3>
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+    <h3 style="margin-top: 24px;">Colors are missing in a pipeline</h3>
+    <p><code>GLAMOUR_STYLE=auto</code> trusts <code>isatty</code> and nothing else. A pipeline behind a PTY can still receive full SGR. Set <code>GLAMOUR_STYLE=notty</code> or <code>ascii</code> explicitly for those pipelines. <code>NO_COLOR</code> always wins over <code>GLAMOUR_STYLE</code>.</p>
+
+    <h3 style="margin-top: 24px;">A long word overflows the wrap width</h3>
+    <p>Wrapping counts terminal cells. A whitespace-free run longer than four times the wrap width is hard-broken before the wrapper sees it, so a long token is split rather than overflowing. Check that <code>withWordWrap()</code> was called, because word wrap is off by default.</p>
+
+    <h3 style="margin-top: 24px;">A link is not clickable in my terminal</h3>
+    <p>The OSC 8 envelope is on by default and wraps the visible text, and the visible text is followed by <code>(url)</code> in both modes. A terminal without OSC 8 support shows the text and the URL and nothing is lost. <code>withHyperlinks(false)</code> removes only the envelope, so the <code>(url)</code> suffix stays. A refused scheme never opens an OSC 8 target.</p>
+
+    <h3 style="margin-top: 24px;">A theme throws on load</h3>
+    <p>Lenient keys and strict values. An unknown key is ignored, but a bad hex color such as <code>#ff5f</code> or an out-of-range <code>ansi:99</code> throws <code>InvalidArgumentException</code>. A file that is unreadable or over the byte ceiling throws <code>RuntimeException</code>. Read the message, which names the field.</p>
+
+    <h3 style="margin-top: 24px;">HtmlToMarkdown returns null</h3>
+    <p>The converter returns <code>null</code> for empty input, when <code>ext-dom</code> is absent, for a body over 512 KiB, for a body the parser refuses, and for a body with no renderable text, such as a lone <code>&lt;script&gt;</code>. Fall back to the raw body in that case. The raw bytes include the text that the drop rule removed, so a caller that must never show raw content should not take the fallback.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+<table class="api-table">
+<tr><th>charmbracelet/glamour (Go)</th><th>sugar-markdown (PHP)</th></tr>
+<tr><td><code>TermRenderer</code></td><td><code>Renderer</code>, with the same wrap and hyperlink options under <code>with*()</code> names</td></tr>
+<tr><td><code>styles.json</code> style reader</td><td><code>StyleGuide</code>, with <code>isGlamourSchema()</code> routing from <code>Theme::fromJsonString()</code></td></tr>
+<tr><td>Stock style presets (<code>dark</code>, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code>, <code>pink</code>, <code>notty</code>)</td><td><code>Theme::dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>tokyoNight()</code>, <code>pink()</code>, <code>notty()</code></td></tr>
+<tr><td><code>GLAMOUR_STYLE</code> resolution</td><td><code>Theme::fromEnvironment()</code>, with <code>NO_COLOR</code> taking precedence</td></tr>
+<tr><td>Chroma syntax highlighting</td><td><code>SyntaxHighlighter</code>, a curated subset of 16 languages</td></tr>
+<tr><td>Not ported: image embedding (sixel, kitty)</td><td>Images render as alt text and URL</td></tr>
+</table>
+    <p style="margin-top: 12px;">The port mapping is in <code>docs/MATCHUPS.md</code>. The defaults that differ from glamour, namely <code>ansi</code> as the default theme and word wrap being off, are dated decisions recorded in the README.</p>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>The pipeline is parse, scan, render. <code>SectionScanner</code> splits the input into candidate sections, and <code>SectionStream</code> holds back any section whose link references are not yet defined. The renderer walks the CommonMark blocks with a block stack, and <code>TokenWrap</code> and the ANSI-aware wrapper do the layout. Every decoded string from a theme passes through the sanitizer before it reaches the output.</p>
+    <p style="margin-top: 12px;">Renderer-side limits are fixed in code: the block nesting depth, the section size, the highlight size and the theme decoration ceiling. The converter uses its own limit, a 512 KiB parse size checked before parsing. Input is not capped at the library, so a hostile stdin needs an intake guard in the host.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>sugar-markdown has no separate changelog file and is tracked from <code>dev-master</code>. Its history is the commit log of the <code>sugar-markdown/</code> directory in the monorepo. Read the <a href="https://github.com/sugarcraft/sugar-markdown/commits/master">commit history</a> for changes. Deprecated names such as <code>Theme::fromJson()</code> keep working as aliases.</p>
+
+    <h2 style="margin-top: 40px;">Related</h2>
     <ul>
-      <li><a href="sugar-style.html">SugarStyle</a> — styling primitives used by SugarMarkdown</li>
-      <li><a href="candy-mdview.html">CandyMdview</a> — CLI markdown viewer that uses SugarMarkdown for rendering</li>
+      <li><a href="sugar-style.html">sugar-style</a> provides the <code>Style</code> values that themes are made of.</li>
+      <li><a href="candy-mdview.html">candy-mdview</a> is the CLI markdown viewer built on this renderer.</li>
+      <li><a href="sugar-core.html">sugar-core</a> provides the color and sanitizing primitives.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Renderer</td><td>new Renderer(?Theme, ?int $wrapWidth, bool $emitHyperlinks, ?string $baseUrl, bool $tableWrap, bool $inlineTableLinks, bool $tableColumnBudget, bool $preservedNewLines, bool $expandEmoji, bool $sanitize, bool $fenceColumnBudget, ?StyleSheet $styleSheetOverride, bool $lineNumbers) — 13 slots</td><td>Full configuration at construction (defaults: no wrap, hyperlinks on, sanitize on); also <code>Renderer::ansi()</code> / <code>plain()</code> / <code>ascii()</code> / <code>fromEnvironment()</code></td></tr>
-<tr><td>Renderer</td><td>static renderMarkdown(markdown, ?Theme)</td><td>One-shot convenience for ad-hoc rendering; for repeated renders build a Renderer and reuse it (parser cached per instance — sequential renders only, a Renderer is not reentrant)</td></tr>
-<tr><td>Renderer</td><td>render(markdown)</td><td>Render markdown to ANSI string; a reused Renderer starts every render from a clean block stack</td></tr>
-<tr><td>Renderer</td><td>stream(iterable $chunks): Generator / write(resource) / writer($sink) / renderSection() / defersStreaming()</td><td>Incremental section-by-section rendering, stream resources, the push-side <code>Writer::toPath()/toStream()</code> family, and the buffered-vs-streaming regime readback (<code>parseSection()</code>/<code>renderParsedSection()</code> are <code>@internal</code>)</td></tr>
-<tr><td>Renderer</td><td>withTheme() / withSanitize() / withWordWrap() / withHyperlinks() / withBaseURL() / withTableWrap() / withInlineTableLinks() / withTableColumnBudget() / withFenceColumnBudget() / withLineNumbers() / withPreservedNewLines() / withEmoji() / withStandardStyle() / withStyleSheet()</td><td>Immutable option setters — every option also has a short alias without the <code>with</code> prefix (e.g. <code>hyperlinks(false)</code>, <code>styleSheet($sheet)</code>); full descriptions in the README. withPreservedNewLines() keeps the source's blank-line runs between blocks; withLineNumbers() numbers highlighted fence lines (the gutter consumes the fence budget); withStandardStyle() re-picks a stock theme and throws naming <code>Theme::names()</code> on an unknown one</td></tr>
-<tr><td>Theme</td><td>fromFile(path, ?maxBytes) / fromJsonString(json) / fromJson(path)</td><td>Load theme from a JSON file (RuntimeException on unreadable or over-ceiling — <code>fromJson()</code> remains as a deprecated alias) or from a string (InvalidArgumentException on malformed JSON or a non-object payload); lenient keys, strict values, every decoded string slot swept</td></tr>
-<tr><td>Theme</td><td>ansi(), plain(), notty(), ascii(), dark(), light(), dracula(), tokyoNight(), pink()</td><td>Built-in theme presets; <code>byName()</code> returns <code>?Theme</code> (null on unknown, which lands silently on <code>ansi()</code>) — and <code>auto</code> is deliberately not a byName slug, it is a <code>fromEnvironment()</code> channel, so a name lookup never probes the terminal; <code>requireName()</code> is the same refusal standalone</td></tr>
-<tr><td>Theme</td><td>fromEnvironment(?default) / names() / mapStyles(callable $map): Theme</td><td><code>GLAMOUR_STYLE</code> resolution with <code>NO_COLOR</code> precedence; the roster static; <code>mapStyles()</code> returns a new theme with every style slot mapped through the callable (used to project palettes, e.g. candy-code's Theme::pair)</td></tr>
-</table>
   </div>
 </section>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push to master that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the render and themes examples. The custom-theme and stdin-stdout examples have no recording yet. Regenerated automatically on every push to master that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/render.gif" alt="Render">

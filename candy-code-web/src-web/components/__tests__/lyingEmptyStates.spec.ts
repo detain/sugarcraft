@@ -11,7 +11,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { flush } from '../../__tests__/fakes';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createAppRouter } from '@/router';
 import { createMemoryHistory } from 'vue-router';
 import SessionSidebar from '@/components/SessionSidebar.vue';

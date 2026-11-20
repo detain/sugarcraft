@@ -11,6 +11,7 @@ use ReflectionProperty;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
@@ -140,6 +141,71 @@ final class BundleInstallTest extends TestCase
         self::assertSame(['clonely'], $this->entriesUnderRoot());
     }
 
+    /**
+     * A clone whose manifest links OUTSIDE its checkout is refused, and nothing
+     * is installed. The clone leg is the only install path that can reach this
+     * (the path leg's copy refuses every link first). The refusal names the link
+     * as `link_refused` rather than reporting the manifest as absent, so the
+     * verb's stderr does not send the operator looking for a file that is there.
+     */
+    public function testAClonedManifestLinkedOutsideTheCheckoutIsRefusedNotInstalled(): void
+    {
+        $outside = $this->tempDir . '/clone-outside-plugin.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+
+        $this->armFakeClone(static function (string $url, string $scratch) use ($outside): array {
+            mkdir($scratch . '/.claude-plugin', 0777, true);
+            symlink($outside, $scratch . '/.claude-plugin/plugin.json');
+
+            return ['ok' => true, 'detail' => ''];
+        });
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', 'https://example.invalid/linked.git'));
+        self::assertSame([], $this->entriesUnderRoot());
+    }
+
+    /**
+     * The verb's stderr is written to STDERR, which `ob_start()` cannot see, so
+     * the link-versus-absent choice is pinned through its message builder: a
+     * manifest linked outside the tree must be named as the link and must not
+     * be reported with the absent wording.
+     */
+    public function testANotBundleRefusalNamesALinkedManifestAsTheLink(): void
+    {
+        $outside = $this->tempDir . '/notbundle-outside-plugin.json';
+        file_put_contents($outside, json_encode(['name' => 'leaked']));
+        $staged = $this->tempDir . '/staged-linked';
+        mkdir($staged . '/.claude-plugin', 0777, true);
+        symlink($outside, $staged . '/.claude-plugin/plugin.json');
+        $source = 'https://example.invalid/linked.git';
+
+        $message = $this->notBundleMessage($staged, $source);
+
+        self::assertSame(
+            Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => '.claude-plugin/plugin.json']),
+            $message,
+        );
+        self::assertStringContainsString('.claude-plugin/plugin.json', $message);
+        self::assertNotSame(
+            Lang::t('cli.bundles.install.not_bundle', ['source' => $source]),
+            $message,
+            'a linked manifest was reported as absent, sending the operator to look for a file that is there',
+        );
+    }
+
+    public function testANotBundleRefusalForAnAbsentManifestSaysSo(): void
+    {
+        $staged = $this->tempDir . '/staged-bare';
+        mkdir($staged, 0777, true);
+        file_put_contents($staged . '/notes.txt', 'not a bundle');
+        $source = $this->tempDir . '/staged-bare';
+
+        self::assertSame(
+            Lang::t('cli.bundles.install.not_bundle', ['source' => $source]),
+            $this->notBundleMessage($staged, $source),
+        );
+    }
+
     public function testAFailedCloneIsReportedAndLeavesNeitherInstallNorScratch(): void
     {
         $this->armFakeClone(static fn (): array => ['ok' => false, 'detail' => 'repository not found']);
@@ -216,6 +282,14 @@ final class BundleInstallTest extends TestCase
     private function armFakeClone(callable $fn): void
     {
         (new ReflectionProperty(Subcommands::class, 'bundlesInstallSpawn'))->setValue(null, \Closure::fromCallable($fn));
+    }
+
+    private function notBundleMessage(string $staged, string $source): string
+    {
+        $message = (new ReflectionMethod(Subcommands::class, 'bundlesNotBundleMessage'))->invoke(null, $staged, $source);
+        self::assertIsString($message);
+
+        return $message;
     }
 
     private function verb(string ...$operands): int

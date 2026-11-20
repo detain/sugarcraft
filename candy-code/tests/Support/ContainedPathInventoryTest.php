@@ -201,9 +201,11 @@ final class ContainedPathInventoryTest extends TestCase
         // C-WEB-7.c: the non-git walk's per-frame containment re-check moved
         // with the walk into the memoized lister.
         'Attachments/WorkspaceWalk.php' => 1,
-        // The entrypoints reader bounds every declared file with one
+        // Two compares: manifestPath()'s escapesBundle() refuses a manifest whose
+        // real path leaves the bundle directory before fromDir() reads it, and the
+        // entrypoints reader bounds every declared file with one
         // \SugarCraft\Core\Util\PathJail::below() compare before the loader may touch it.
-        'Bundles/Bundle.php' => 1,
+        'Bundles/Bundle.php' => 2,
         // C-EXT-4.a: the catalog file and every relative source inside its
         // checkout are bounded by one compare each — the read gate in
         // read(), the path gate in resolveRelative().
@@ -343,7 +345,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "SEVENTY call sites in THIRTY-SEVEN files", per file — the sum and the key
+     * "SEVENTY-ONE call sites in THIRTY-SEVEN files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
