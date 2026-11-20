@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Server\Workspace;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Lang;
@@ -116,14 +117,19 @@ final class Gateway implements MessageHandler
 
     private float $forwardDeadline = self::FORWARD_DEADLINE_SECONDS;
 
-    /** @var array<string, array<string, Connection>> sessionId => connection id => subscriber */
+    /** @var array<string, array<string, RelayTarget>> sessionId => target id => subscriber */
     private array $subscribers = [];
 
-    /** @var array<string, array<string, int>> connection id => sessionId => last durable seq sent */
+    /** @var array<string, array<string, int>> target id => sessionId => last durable seq sent */
     private array $cursors = [];
 
-    /** @var array<string, array<string, Connection>> root => connection id => a client that used it */
+    /** @var array<string, array<string, RelayTarget>> root => target id => a target that used it */
     private array $rootClients = [];
+
+    /** @var array<string, int> sessionId => generation of the latest session.subscribe forwarded to a host */
+    private array $subscribeGen = [];
+
+    private int $subscribeSeq = 0;
 
     /** @var array<string, true> connection ids that said `server.hello` */
     private array $greeted = [];
@@ -226,6 +232,84 @@ final class Gateway implements MessageHandler
     public function rootOf(string $sessionId): ?string
     {
         return $this->touchSession($sessionId);
+    }
+
+    /**
+     * The root a request goes to, or null for the server's own dispatcher: the seam an
+     * in-process caller shares with the wire (PL-5c-A design, section 2.1).
+     *
+     * @throws RpcError when `root` is not a directory, or is not a string
+     */
+    public function rootFor(\stdClass $params): ?string
+    {
+        return $this->routeOf($params);
+    }
+
+    /** The generation of the latest session.subscribe forwarded for $sessionId (0 when none). */
+    public function subscribeGeneration(string $sessionId): int
+    {
+        return $this->subscribeGen[$sessionId] ?? 0;
+    }
+
+    /** Whether any relay target follows $sessionId. */
+    public function hasSubscribers(string $sessionId): bool
+    {
+        return ($this->subscribers[$sessionId] ?? []) !== [];
+    }
+
+    /** Register $target as a client of $root: it hears that root's server-scope events. */
+    public function useRoot(string $root, RelayTarget $target): void
+    {
+        $this->rootClients[$root][$target->id()] = $target;
+    }
+
+    /** Register $target as a subscriber of $sessionId, without a subscribe call (the caller made it). */
+    public function attachSubscriber(string $sessionId, RelayTarget $target): void
+    {
+        $this->subscribers[$sessionId][$target->id()] = $target;
+    }
+
+    /** Set $targetId's durable cursor for $sessionId: the seq it has been sent through. */
+    public function setTargetCursor(string $targetId, string $sessionId, int $seq): void
+    {
+        $this->cursors[$targetId][$sessionId] = $seq;
+    }
+
+    /** Move $targetId's durable cursor back, after an overflow the target did not deliver past. */
+    public function rewindCursor(string $targetId, string $sessionId, int $seq): void
+    {
+        $this->setTargetCursor($targetId, $sessionId, $seq);
+    }
+
+    /** $target stops following $sessionId; the last subscriber leaving unsubscribes upstream. */
+    public function detachSubscriber(string $sessionId, RelayTarget $target): void
+    {
+        $this->dropSubscriber($sessionId, $target->id());
+    }
+
+    /** $target leaves the gateway entirely: its root memberships, cursors and subscriptions (as a wire close does). */
+    public function detachTarget(RelayTarget $target): void
+    {
+        $targetId = $target->id();
+        foreach (\array_keys($this->rootClients) as $root) {
+            unset($this->rootClients[$root][$targetId]);
+        }
+        unset($this->cursors[$targetId]);
+        foreach (\array_keys($this->subscribers) as $sessionId) {
+            if (isset($this->subscribers[$sessionId][$targetId])) {
+                $this->dropSubscriber((string) $sessionId, $targetId);
+            }
+        }
+    }
+
+    /**
+     * A best-effort call to $root's host whose answer nobody waits for: the compensation for
+     * a late answer (PL-5c-A design, section 4.1).
+     */
+    public function callQuietly(string $root, string $method, \stdClass $params): void
+    {
+        $this->callRoot($root, $method, $params)->then(null, static function (): void {
+        });
     }
 
     // ── MessageHandler ─────────────────────────────────────────────────
@@ -427,7 +511,8 @@ final class Gateway implements MessageHandler
      */
     private function forward(Connection $connection, string|int|null $id, string $root, string $method, \stdClass $params): void
     {
-        $this->rootClients[$root][$connection->id()] = $connection;
+        $target = $this->targetFor($connection);
+        $this->rootClients[$root][$connection->id()] = $target;
         $sessionId = \is_string($params->sessionId ?? null) ? $params->sessionId : null;
 
         // The last subscriber is the only one whose leaving reaches upstream.
@@ -443,7 +528,44 @@ final class Gateway implements MessageHandler
             unset($this->subscribers[$sessionId]);
         }
 
+        $this->callRoot($root, $method, $params)->then(
+            function (mixed $result) use ($connection, $id, $method, $params, $sessionId, $target): void {
+                if ($method === 'session.subscribe' && $sessionId !== null) {
+                    $this->subscribers[$sessionId][$connection->id()] = $target;
+                    $this->cursors[$connection->id()][$sessionId] = \is_int($params->afterSeq ?? null)
+                        ? $params->afterSeq
+                        : (int) ($result->throughSeq ?? 0);
+                }
+                if ($connection->isOpen()) {
+                    $this->send($connection, (string) \json_encode(
+                        ['jsonrpc' => JsonRpc::VERSION, 'id' => $id, 'result' => $result],
+                        \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE,
+                    ));
+                }
+            },
+            function (\Throwable $e) use ($connection, $id, $root): void {
+                if ($connection->isOpen()) {
+                    $this->send($connection, JsonRpc::error($id, $this->asRefusal($root, $e)));
+                }
+            },
+        );
+    }
+
+    /**
+     * One forwarded call to $root's host, as a promise of its answer (PL-5c-A design,
+     * section 2.1). The gateway's own bookkeeping runs here, for a wire client and an
+     * in-process one alike: the in-flight count, the deadline, learn(), the session
+     * cleanup of session.delete and the root tag. The caller attaches what is its own:
+     * a connection writes the frame and records its subscription, the in-process door
+     * records its sink. Exactly one of the answer, a refusal or the deadline settles it.
+     *
+     * @return PromiseInterface<\stdClass|mixed> the host's answer; rejects with an RpcError
+     */
+    public function callRoot(string $root, string $method, \stdClass $params): PromiseInterface
+    {
+        $sessionId = \is_string($params->sessionId ?? null) ? $params->sessionId : null;
         $this->inFlight[$root] = ($this->inFlight[$root] ?? 0) + 1;
+        $deferred = new Deferred();
         // Exactly one of the answer, a failure or the deadline settles the call.
         $settled = false;
         $timer = null;
@@ -459,62 +581,63 @@ final class Gateway implements MessageHandler
 
             return true;
         };
-        $fail = function (\Throwable $e) use ($connection, $id, $root): void {
-            if ($connection->isOpen()) {
-                $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(
-                    ErrorCode::Internal,
-                    \sprintf('the workspace host for %s failed: %s', $root, \substr($e->getMessage(), 0, 300)),
-                    'workspace_failed',
-                )));
-            }
-        };
-        $timer = $this->loop->addTimer($this->forwardDeadline, function () use ($settle, $fail, $root, $method): void {
+        $timer = $this->loop->addTimer($this->forwardDeadline, function () use ($settle, $deferred, $root, $method): void {
             if ($settle()) {
-                $fail(RpcError::of(
+                $deferred->reject(RpcError::of(
                     ErrorCode::Busy,
                     \sprintf('the workspace host for %s did not answer %s in time; retry', $root, \substr($method, 0, 64)),
                     'host_timeout',
                 ));
             }
         });
+        if ($method === 'session.subscribe' && $sessionId !== null) {
+            $this->subscribeGen[$sessionId] = ++$this->subscribeSeq;
+        }
         $this->hostFor($root)->then(
-            function (WorkspaceHostClient $host) use ($connection, $id, $root, $method, $params, $sessionId, &$settled): PromiseInterface {
+            function (WorkspaceHostClient $host) use ($settle, $deferred, $root, $method, $params, $sessionId): PromiseInterface {
                 $host->touch();
 
                 return $host->rpc()->callPreserving($method, $params, $this->forwardDeadline, $this->loop)->then(
-                    function (mixed $result) use ($connection, $id, $root, $method, $params, $sessionId, &$settled): void {
-                        if ($settled) {
-                            return; // the deadline already answered the client
-                        }
+                    function (mixed $result) use ($settle, $deferred, $root, $method, $sessionId): void {
+                        // The bookkeeping runs even after the deadline answered: the host's state is the truth.
                         $this->learn($root, $method, $result);
-                        if ($method === 'session.subscribe' && $sessionId !== null) {
-                            $this->subscribers[$sessionId][$connection->id()] = $connection;
-                            $this->cursors[$connection->id()][$sessionId] = \is_int($params->afterSeq ?? null)
-                                ? $params->afterSeq
-                                : (int) ($result->throughSeq ?? 0);
-                        }
                         if ($method === 'session.delete' && $sessionId !== null) {
                             unset($this->sessionRoots[$sessionId], $this->subscribers[$sessionId]);
                         }
                         if ($result instanceof \stdClass && $method !== 'session.list') {
                             $result->root ??= $root;
                         }
-                        if ($connection->isOpen()) {
-                            $this->send($connection, (string) \json_encode(
-                                ['jsonrpc' => JsonRpc::VERSION, 'id' => $id, 'result' => $result],
-                                \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE,
-                            ));
+                        if ($settle()) {
+                            $deferred->resolve($result);
                         }
                     },
                 );
             },
-        )->then(null, function (\Throwable $e) use ($settle, $fail): void {
+        )->then(null, function (\Throwable $e) use ($settle, $deferred, $root): void {
             if ($settle()) {
-                $fail($e);
+                $deferred->reject($this->asRefusal($root, $e));
             }
         })->finally(static function () use ($settle): void {
             $settle();
         });
+
+        return $deferred->promise();
+    }
+
+    /** What a failed forward reaches the caller as: an RpcError as it is, anything else as `workspace_failed`. */
+    private function asRefusal(string $root, \Throwable $e): RpcError
+    {
+        return $e instanceof RpcError ? $e : RpcError::of(
+            ErrorCode::Internal,
+            \sprintf('the workspace host for %s failed: %s', $root, \substr($e->getMessage(), 0, 300)),
+            'workspace_failed',
+        );
+    }
+
+    /** The relay target of a wire client. */
+    private function targetFor(Connection $connection): ConnectionTarget
+    {
+        return new ConnectionTarget($connection, $this->primary);
     }
 
     /** The root of $sessionId, marking the row most recently used. */
@@ -585,7 +708,7 @@ final class Gateway implements MessageHandler
 
                     return;
                 }
-                $this->rootClients[$root][$connection->id()] = $connection;
+                $this->useRoot($root, $this->targetFor($connection));
                 $this->hostFor($root)->then(
                     function (WorkspaceHostClient $host) use ($connection, $id, $root): void {
                         $this->send($connection, JsonRpc::result($id, ['root' => $root, 'primary' => false, 'running' => true, 'pid' => $host->pid()]));
@@ -712,34 +835,32 @@ final class Gateway implements MessageHandler
         $message = \is_array($message) ? $message : null;
 
         $targets = $sessionId === null ? ($this->rootClients[$root] ?? []) : ($this->subscribers[$sessionId] ?? []);
-        $seq = ($envelope['durable'] ?? false) === true && \is_int($envelope['seq'] ?? null) ? $envelope['seq'] : null;
-        foreach ($targets as $connectionId => $connection) {
+        $durable = ($envelope['durable'] ?? false) === true;
+        $seq = $durable && \is_int($envelope['seq'] ?? null) ? $envelope['seq'] : null;
+        // Live-only: sheddable under overflow, deltas of one part coalesce.
+        $ephemeral = $message !== null && $seq === null && !$durable;
+        $coalesceKey = $ephemeral && \in_array($envelope['type'] ?? null, [SessionEvent::ASSISTANT_DELTA, SessionEvent::REASONING_DELTA], true)
+            ? $sessionId . '|' . $envelope['type'] . '|' . ($envelope['turnId'] ?? '')
+            : null;
+        foreach ($targets as $targetId => $target) {
+            if (!$target->accepts($sessionId)) {
+                continue;
+            }
             if ($seq !== null && $sessionId !== null) {
-                if ($seq <= ($this->cursors[$connectionId][$sessionId] ?? 0)) {
+                if ($seq <= ($this->cursors[$targetId][$sessionId] ?? 0)) {
                     continue;
                 }
-                $this->cursors[$connectionId][$sessionId] = $seq;
+                $this->cursors[$targetId][$sessionId] = $seq;
             }
-            if (!$connection->isOpen()) {
+            if (!$target->isOpen()) {
                 continue;
             }
             // A pinned viewer hears only its pinned sessions: a root-wide
             // (server-scope) event of a workspace is not its to see.
-            if ($sessionId === null && $connection->viewerSessions() !== null) {
+            if ($sessionId === null && $target->viewerSessions() !== null) {
                 continue;
             }
-            if ($message === null || $seq !== null || ($envelope['durable'] ?? false) === true) {
-                $this->send($connection, $text);
-
-                continue;
-            }
-            // Live-only: sheddable under overflow, deltas of one part coalesce.
-            $this->outbox($connection)?->pushEphemeral(
-                $message,
-                \in_array($envelope['type'] ?? null, [SessionEvent::ASSISTANT_DELTA, SessionEvent::REASONING_DELTA], true)
-                    ? $sessionId . '|' . $envelope['type'] . '|' . ($envelope['turnId'] ?? '')
-                    : null,
-            );
+            $target->deliver($message, $text, $coalesceKey, $ephemeral, $seq, $sessionId);
         }
     }
 
@@ -780,10 +901,12 @@ final class Gateway implements MessageHandler
                 'dropped' => 0,
                 'action' => 'resubscribe',
             ])->notification());
-            foreach ($this->subscribers[$sessionId] as $connection) {
-                if ($connection->isOpen()) {
-                    $this->send($connection, $text);
+            $message = \json_decode($text, true, JsonRpc::MAX_DEPTH);
+            foreach ($this->subscribers[$sessionId] as $target) {
+                if ($target->isOpen()) {
+                    $target->deliver(\is_array($message) ? $message : null, $text, null, false, null, (string) $sessionId);
                 }
+                $target->unfollowed((string) $sessionId);
             }
             unset($this->subscribers[$sessionId]);
         }
