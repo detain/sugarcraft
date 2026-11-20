@@ -174,9 +174,12 @@ final class InProcessHostServices implements HostServices, RootedHostServices
     /**
      * Close the in-process client. Events it was already owed are delivered first (the primary
      * feed's and the routed sink's), then the client leaves the host, which drops its feed
-     * subscriptions and its routed subscriptions. Called from a listener, the owed events are
-     * delivered by the drain already running (in order, to every listener) and the client still
-     * closes here. A later connect() starts with no follows (see the class docblock).
+     * subscriptions and its routed subscriptions. Called from a primary-feed listener, the owed
+     * routed events are delivered inside this call. Called from a routed-sink listener, the sink's
+     * remaining backlog is dropped instead of delivered: the running sink delivery cannot re-enter,
+     * and the client is closed before the listeners after the caller hear the envelope (PL-5c-A
+     * sink design, section 3.4). The primary queue is not touched by that drop. A later connect()
+     * starts with no follows (see the class docblock).
      */
     public function disconnect(): PromiseInterface
     {
