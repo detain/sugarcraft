@@ -122,15 +122,34 @@ file is read at all, so `--safe-mode` loads zero plugin code by construction.
 
 Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
 
-1. **First sight is quarantine.** An entrypoint never seen before is *listed*
-   at launch and loaded only at the **next** launch, so a manifest swapped
-   under a trusted name cannot smuggle new code in silently. The seen-ledger
-   lives in `~/.candy-code/channels.json`, mode 0600.
-2. **The bytes must be private.** The file and its directory must be owned by
-   your account and not world-writable, or the entry is refused. A trusted
-   name records who consented; it says nothing about the file being intact.
+1. **First sight is quarantine, keyed by path.** An entrypoint *path* never
+   seen before is *listed* at launch and loaded only at the **next** launch,
+   so a manifest that adds a new entrypoint under a trusted name cannot smuggle
+   new code in silently. The seen-ledger lives in `~/.candy-code/channels.json`,
+   mode 0600, and records paths only, never bytes. A rewrite of a file at a path
+   already on the ledger is not listed again and loads without a quarantine
+   stop. Who can make one depends on how it is written. An in-place write by
+   another account needs group write on the file itself. A replace-by-rename by
+   another account is refused by the owner check (item 2) when the posix
+   extension is available, and loads only without it, from a directory another
+   account can write (group-writable, or owned by that account). A rewrite by
+   your own account loads everywhere. That gap is open.
+2. **The bytes must be private.** The file and its directory must be
+   not world-writable and, when the posix extension is available, owned by
+   your account, or the entry is refused. A trusted name records who consented;
+   it says nothing about the file being intact.
+3. **Only a user-tier copy can use the name.** Trust is never inherited by a
+   project-tier bundle (one under `<repo>/.candy-code/bundles`). A project copy
+   that carries a trusted name has its channel and hook content refused, and
+   the launch says so; its commands, skills and agents still load, as they do
+   for any project bundle. When a user-tier and a project-tier bundle share a
+   name, the user-tier copy is the one that loads and the project copy is
+   skipped with a warning, trusted or not. The skipped copy's commands, skills,
+   agents and hooks do not load either, so a user-tier copy that lacks one of
+   them hides it; to keep the project copy's content, move that copy under a
+   different name.
 
-**Bundle hooks ride the same gate.** A bundle named in
+**Bundle hooks ride the same gate.** A user-tier bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
 ordinary hook pipeline — same containment and private-bytes checks, and a
 broken hook file refuses *itself* with a notice while the launch continues.
@@ -240,8 +259,8 @@ system rows in the transcript:
   the manifest, nor an **inline `hooks` object** inside `plugin.json` (the
   declined-surface reader answers with the manifest path — `hooksPaths()`
   names where the hooks ride inside it — while the decline notice names the
-  affected bundles). A bundle named in `trustedBundleChannels` reverses this
-  for its `hooks/` files, through the gate described above; inline
+  affected bundles). A user-tier bundle named in `trustedBundleChannels` reverses
+  this for its `hooks/` files, through the gate described above; inline
   `plugin.json` hook manifests remain refused on every path, as their shape
   is not the accepted one yet. Lifecycle hooks execute arbitrary programs at
   every session event; the hooks that do run are declared in the project's
@@ -292,9 +311,9 @@ What matters from the plugin side:
   repository is never read, which is the same law that keeps a bundle's
   `.mcp.json` from auto-starting;
 - bundles run their commands, skills and agents always; their hooks and
-  channel/subscriber entrypoints only when the bundle is named in
-  `trustedBundleChannels`; and MCP servers only through a declaration you
-  imported deliberately.
+  channel/subscriber entrypoints only when a user-tier bundle is named in
+  `trustedBundleChannels` (a project-tier copy of that name is refused); and
+  MCP servers only through a declaration you imported deliberately.
 
 ## Installing and listing
 

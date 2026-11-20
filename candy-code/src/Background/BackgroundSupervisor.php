@@ -794,8 +794,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $result = ['error' => $e];
             },
         );
-        // Synchronous callers (a forked turn child, the serve protocol, tests) wait
-        // here by pumping the same state machine the TUI drives from tick(). The
+        // Synchronous callers (a forked turn child, tests) wait here by pumping the
+        // same state machine the TUI drives from tick(). The serve answers its
+        // bg.spawn through spawnSessionAsync() and never reaches this wait. The
         // deadline is enforced inside advanceSpawns(), so this always returns.
         while ($result === null) {
             $this->advanceSpawns();

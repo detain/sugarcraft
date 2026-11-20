@@ -245,21 +245,25 @@ final class BackgroundEvents
         // as `schedule.fired` — the same two rows the TUI's pump announces
         // (`fired` as `launched`, `error` as `spawn_failed`); skips stay
         // quiet there too. The client-facing `bg.*` event set is unchanged.
-        foreach ($this->schedules->fireDue(
+        // A launch answers when its daemon authenticates, so the verdicts arrive
+        // on the loop after this pump: the webhook verdicts ride the settle.
+        $this->schedules->fireDue(
             time(),
             ScheduleSpawner::closure($this->supervisor, $this->agentManager, $this->root ?? ''),
-        ) as $result) {
-            if ($this->webhooks === null) {
-                continue;
+        )->then(function (array $results): void {
+            foreach ($results as $result) {
+                if ($this->webhooks === null) {
+                    continue;
+                }
+                if ($result['action'] === 'fired' || $result['action'] === 'error') {
+                    $this->webhooks->dispatch(WebhookEvent::scheduleFired(
+                        (string) ($result['sessionId'] ?? ''),
+                        (string) $result['name'],
+                        $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
+                    ));
+                }
             }
-            if ($result['action'] === 'fired' || $result['action'] === 'error') {
-                $this->webhooks->dispatch(WebhookEvent::scheduleFired(
-                    (string) ($result['sessionId'] ?? ''),
-                    (string) $result['name'],
-                    $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
-                ));
-            }
-        }
+        });
         foreach ($this->schedules->firedNames() as $name) {
             $sessionId = $this->schedules->busySession($name);
             $session = $sessionId === null ? null : $this->supervisor->session($sessionId);

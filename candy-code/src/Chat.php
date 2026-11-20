@@ -9045,7 +9045,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * THIRTY-SEVEN OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * THIRTY-EIGHT OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
@@ -20259,8 +20259,8 @@ final class Chat implements Model
             // No daemons to poll; the clock still runs, and `/loop` rows fire
             // through the queue (persisted rows cannot: there is no supervisor
             // here to spawn them on, so their due stamps simply wait).
-            [$notices, $queued] = $this->pumpSchedules(time());
-            if ($notices === [] && $queued === []) {
+            [$notices, $queued, $fireCmd] = $this->pumpSchedules(time());
+            if ($notices === [] && $queued === [] && $fireCmd === null) {
                 return [$this, null];
             }
             $idle = $this->mutate([
@@ -20268,15 +20268,15 @@ final class Chat implements Model
                 'queuedPrompts' => [...$this->queuedPrompts, ...$queued],
             ]);
             if ($queued === [] || $idle->inFlight) {
-                return [$idle, null];
+                return [$idle, $fireCmd];
             }
 
-            return self::releaseQueuedPrompts([$idle, null]);
+            return self::releaseQueuedPrompts([$idle, $fireCmd]);
         }
 
         $supervisor->tick();
 
-        [$scheduleNotices, $scheduleQueued] = $this->pumpSchedules(time());
+        [$scheduleNotices, $scheduleQueued, $scheduleFire] = $this->pumpSchedules(time());
 
         $statuses = [];
         foreach ($supervisor->activeSessions() as $id => $session) {
@@ -20362,7 +20362,7 @@ final class Chat implements Model
         if ($notices === [] && $statuses === $this->backgroundStatuses) {
             // Nothing moved - returning $this keeps the renderer's diff empty
             // instead of repainting the transcript twice a second.
-            return [$this, null];
+            return [$this, $scheduleFire];
         }
 
         if ($announcements !== [] && $this->inFlight) {
@@ -20397,12 +20397,12 @@ final class Chat implements Model
             : $polled->terminalNotification('candy-code: ' . Lang::t('chat.schedule.heartbeat.alert', [
                 'name' => implode(', ', $heartbeatAlerts),
             ]));
-
+        // Late schedule verdicts ride the bell's return channel; batch drops the absent one.
+        $cmd = $scheduleFire === null ? $ring : Cmd::batch($ring, $scheduleFire);
         if ($queuedEntries === [] || $polled->inFlight) {
-            return [$polled, $ring];
+            return [$polled, $cmd];
         }
-
-        return self::releaseQueuedPrompts([$polled, $ring]);
+        return self::releaseQueuedPrompts([$polled, $cmd]);
     }
 
     /**

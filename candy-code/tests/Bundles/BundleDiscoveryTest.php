@@ -241,4 +241,157 @@ final class BundleDiscoveryTest extends TestCase
 
         self::assertSame([], $bundles);
     }
+
+    /**
+     * One bundle per name, and the user tier is the copy that survives: a
+     * project-tier duplicate is skipped with a warning naming it, never listed
+     * beside its user-tier twin (ruling 2026-11-20).
+     */
+    public function testAUserTierCopyWinsADuplicateNameAndTheProjectCopyIsSkipped(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project, [], ['twin']);
+        $bundles = $discovery->discover();
+
+        self::assertCount(1, $bundles, 'the duplicate trusted name is listed once');
+        self::assertSame('user', $bundles[0]->tier, 'the user-tier copy is the one that loads');
+        self::assertSame(
+            realpath($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin'),
+            $bundles[0]->dir,
+        );
+        $shadowed = array_values(array_filter(
+            $discovery->warnings(),
+            static fn (string $warning): bool => str_contains($warning, 'twin') && str_contains($warning, (string) realpath($project)),
+        ));
+        self::assertCount(1, $shadowed, 'the skipped project copy is named by its directory');
+    }
+
+    /**
+     * The dedupe is not scoped to trusted names: the ruling says a user-tier and
+     * a project-tier copy that share a name leave the user-tier copy as the one
+     * that loads, trusted or not. The project copy is skipped with a warning,
+     * and it is NOT recorded for the trust notice, because an untrusted name was
+     * never refused for trust.
+     */
+    public function testAnUntrustedDuplicateNameKeepsOnlyTheUserCopy(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project, [], ['some-other-bundle']);
+        $bundles = $discovery->discover();
+
+        self::assertCount(1, $bundles, 'an untrusted duplicate name is listed once');
+        self::assertSame('user', $bundles[0]->tier, 'the user-tier copy is the one that loads');
+        $shadowed = array_filter(
+            $discovery->warnings(),
+            static fn (string $warning): bool => str_contains($warning, 'twin') && str_contains($warning, (string) realpath($project)),
+        );
+        self::assertCount(1, $shadowed, 'the skipped project copy is named by its directory');
+        self::assertSame([], $discovery->shadowedTrustedCopies(), 'an untrusted name draws no trust notice');
+    }
+
+    /**
+     * The dedupe collapses project-tier copies of a trusted name and nothing
+     * else: two user-tier copies of one trusted name are both the user's own
+     * consent to that name, so both are discovered.
+     */
+    public function testTwoUserTierCopiesOfATrustedNameAreBothDiscovered(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $elsewhere = $this->tempDir . '/elsewhere/twin';
+        $this->writeBundleRoot($elsewhere, ['name' => 'twin']);
+
+        $bundles = (new BundleDiscovery($project, [$elsewhere], ['twin']))->discover();
+
+        self::assertCount(2, $bundles, 'two user-tier copies of one trusted name are not collapsed');
+        self::assertSame(['user', 'user'], array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles));
+    }
+
+    /** A project-tier bundle with no user-tier twin is kept under its own tier. */
+    public function testAProjectTierBundleWithoutAUserTwinIsKept(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/solo', ['name' => 'solo']);
+
+        $bundles = (new BundleDiscovery($project))->discover();
+
+        self::assertCount(1, $bundles);
+        self::assertSame('project', $bundles[0]->tier);
+    }
+
+    /**
+     * Only channel, subscriber and hook content is refused for a project copy of
+     * a trusted name; skills, commands and agents load regardless, so a bundle
+     * carrying none of the trust-gated kinds reports no trust-gated content.
+     */
+    public function testOnlyChannelSubscriberAndHookContentIsTrustGated(): void
+    {
+        $skillsOnly = $this->tempDir . '/skills-only';
+        $this->writeBundleRoot($skillsOnly, ['name' => 'skills-only']);
+        mkdir($skillsOnly . '/skills/demo', 0777, true);
+        file_put_contents($skillsOnly . '/skills/demo/SKILL.md', "demo\n");
+
+        $skills = Bundle::fromDir($skillsOnly, 'project');
+        self::assertNotNull($skills);
+        self::assertFalse($skills->hasTrustGatedContent(), 'skills alone are never refused by trust');
+
+        $withHooks = $this->tempDir . '/with-hooks';
+        $this->writeBundleRoot($withHooks, ['name' => 'with-hooks']);
+        mkdir($withHooks . '/hooks', 0777, true);
+        file_put_contents($withHooks . '/hooks/hooks.json', '{"hooks":{}}');
+
+        $hooked = Bundle::fromDir($withHooks, 'project');
+        self::assertNotNull($hooked);
+        self::assertTrue($hooked->hasTrustGatedContent(), 'a hooks/ directory is trust-gated');
+
+        $emptyHooks = $this->tempDir . '/empty-hooks';
+        $this->writeBundleRoot($emptyHooks, ['name' => 'empty-hooks']);
+        mkdir($emptyHooks . '/hooks', 0777, true);
+        file_put_contents($emptyHooks . '/hooks/README.md', "no hook files here\n");
+
+        $noHookFile = Bundle::fromDir($emptyHooks, 'project');
+        self::assertNotNull($noHookFile);
+        self::assertFalse($noHookFile->hasTrustGatedContent(), 'a hooks/ directory with no hook file withholds nothing');
+
+        $withChannel = $this->tempDir . '/with-channel';
+        $this->writeBundleRoot($withChannel, ['name' => 'with-channel', 'entrypoints' => ['channel' => 'channel.php']]);
+        file_put_contents($withChannel . '/channel.php', "<?php\n");
+
+        $channel = Bundle::fromDir($withChannel, 'project');
+        self::assertNotNull($channel);
+        self::assertTrue($channel->hasTrustGatedContent(), 'a channel entrypoint is trust-gated');
+    }
+
+    /**
+     * A project-tier copy shadowed by its user-tier twin never reaches discover()'s
+     * list, but the trust notice still needs it: it is listed by
+     * shadowedTrustedCopies(), so the refusal of its channel content is announced.
+     */
+    public function testAShadowedProjectCopyOfATrustedNameIsListedForTheTrustNotice(): void
+    {
+        $project = $this->tempDir . '/project';
+        $projectCopy = $project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin';
+        $this->writeBundleRoot($projectCopy, ['name' => 'twin', 'entrypoints' => ['channel' => 'channel.php']]);
+        file_put_contents($projectCopy . '/channel.php', "<?php\n");
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+
+        $discovery = new BundleDiscovery($project, [], ['twin']);
+        $bundles = $discovery->discover();
+        $shadowed = $discovery->shadowedTrustedCopies();
+
+        self::assertSame(['user'], array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles));
+        self::assertCount(1, $shadowed, 'the shadowed project copy is recorded for the trust notice');
+        self::assertSame('project', $shadowed[0]->tier);
+        self::assertTrue($shadowed[0]->hasTrustGatedContent());
+
+        $again = new BundleDiscovery($project, [], []);
+        $again->discover();
+        self::assertSame([], $again->shadowedTrustedCopies(), 'an untrusted name is shadowed without a trust notice, so nothing is recorded');
+    }
 }

@@ -43,10 +43,19 @@ final class BundleDiscovery
     /** The generic walk: containment, manifest detection, warnings and refusals. */
     private readonly PluginDiscovery $scanner;
 
-    /** @param list<string> $configPaths the user-tier pluginPaths entries */
+    /** @var list<Bundle> project-tier copies of trusted names that dedupeByName() dropped this walk */
+    private array $shadowedTrusted = [];
+
+    /**
+     * @param list<string> $configPaths  the user-tier pluginPaths entries
+     * @param list<string> $trustedNames the names listed in `trustedBundleChannels`; a project
+     *                                  copy of one of these that dedupeByName() drops is kept for
+     *                                  the trust notice (see {@see shadowedTrustedCopies()})
+     */
     public function __construct(
         private readonly string $projectRoot,
         private readonly array $configPaths = [],
+        private readonly array $trustedNames = [],
     ) {
         // A manifest that links outside its bundle is not a bundle, and it is not
         // passed over quietly either: warnRefusedLink() names the link. It is NOT
@@ -81,6 +90,7 @@ final class BundleDiscovery
     public function discover(): array
     {
         $this->scanner->reset();
+        $this->shadowedTrusted = [];
 
         $home = HomeDirectory::owned();
         $userFloor = $home === null ? null : $home . '/' . Bundle::INSTALLED_RELATIVE_PATH;
@@ -122,7 +132,60 @@ final class BundleDiscovery
         /** @var list<Bundle> $bundles */
         $bundles = $this->scanner->bundles();
 
-        return $bundles;
+        return $this->dedupeByName($bundles);
+    }
+
+    /**
+     * A project-tier copy is dropped when a user-tier bundle of the same name
+     * exists: the user-tier copy is the one that loads, and the project copy is
+     * skipped with a warning naming its directory (ruling 2026-11-20). That drop
+     * is whole-bundle, so the skipped copy's commands, skills, agents and hooks
+     * do not load either. Trust never flows to a project copy.
+     *
+     * Two user-tier copies of one name are NOT collapsed here: both are
+     * user-tier consents to the same name, and each loads through its own
+     * entrypoints. A channel name the first copy already registered is refused
+     * by the registry's collision check, not by this dedupe.
+     *
+     * A dropped copy of a TRUSTED name is also kept in {@see $shadowedTrusted}, because
+     * its channel and hook content is refused for trust and the launch notice must
+     * say so. A dropped copy of an untrusted name was never refused for trust, so
+     * nothing is recorded for it.
+     *
+     * @param list<Bundle> $bundles
+     *
+     * @return list<Bundle>
+     */
+    private function dedupeByName(array $bundles): array
+    {
+        $userNames = [];
+
+        foreach ($bundles as $bundle) {
+            if ($bundle->tier === 'user') {
+                $userNames[$bundle->name] = true;
+            }
+        }
+
+        $kept = [];
+
+        foreach ($bundles as $bundle) {
+            if ($bundle->tier !== 'user' && isset($userNames[$bundle->name])) {
+                $this->scanner->addWarning(Lang::t('bundles.shadowed_project', [
+                    'name' => $bundle->name,
+                    'dir' => $bundle->dir,
+                ]));
+
+                if (\in_array($bundle->name, $this->trustedNames, true)) {
+                    $this->shadowedTrusted[] = $bundle;
+                }
+
+                continue;
+            }
+
+            $kept[] = $bundle;
+        }
+
+        return $kept;
     }
 
     /**
@@ -158,6 +221,19 @@ final class BundleDiscovery
         ]));
 
         return true;
+    }
+
+    /**
+     * The project-tier copies of trusted names that the last discover() dropped
+     * for a user-tier twin. They are absent from discover()'s list, so a caller
+     * that announces trust refusals reads them here; the shadow warning alone
+     * says nothing about trust.
+     *
+     * @return list<Bundle>
+     */
+    public function shadowedTrustedCopies(): array
+    {
+        return $this->shadowedTrusted;
     }
 
     /** @return list<string> per-bundle problems, worded for a launch notice */
