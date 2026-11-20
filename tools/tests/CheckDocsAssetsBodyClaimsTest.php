@@ -457,6 +457,34 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         );
     }
 
+    public function testAFullyQualifiedSugarcraftNameAloneInACodeSpanIsChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // A qualified SugarCraft name written alone is a class claim too: a wrong
+        // one is named, with or without a leading backslash, and in any case.
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class SugarCraft\Alpha\Nope, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Use <code>SugarCraft\\Alpha\\Nope</code>.</p>'),
+        );
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names class sugarcraft\Alpha\Nope, which no <slug>/src declares'],
+            $this->claimsFor($root, '<p>Use <code>\\sugarcraft\\Alpha\\Nope</code>.</p>'),
+        );
+        $this->assertSame([], $this->claimsFor($root, '<p>Use <code>\\SugarCraft\\Alpha\\Widget</code>.</p>'));
+        // A namespace the monorepo declares classes under is a place, not a class.
+        $this->assertSame([], $this->claimsFor($root, '<p>Contracts live under <code>SugarCraft\\Alpha\\Concerns</code>.</p>'));
+    }
+
+    public function testARelativeQualifiedNameAloneInACodeSpanIsNotChecked(): void
+    {
+        $root = $this->makeFixture();
+
+        // A relative span is resolved against the body's own namespace, which the
+        // guard does not do; it is left unchecked rather than checked wrongly.
+        $this->assertSame([], $this->claimsFor($root, '<p>See <code>Util\\Nope</code>.</p>'));
+    }
+
     public function testABareKnownClassNameInACodeSpanIsAccepted(): void
     {
         $root = $this->makeFixture();

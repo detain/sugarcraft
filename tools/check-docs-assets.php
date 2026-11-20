@@ -108,6 +108,16 @@ final class CheckDocsAssets
     private const BARE_CLASS_SHAPE = '~^\\\\?[A-Z][A-Za-z0-9]*$~';
 
     /**
+     * A fully qualified name inside the SugarCraft\ namespace written alone in a
+     * code span (`<code>SugarCraft\Vterm\Terminal</code>`), with an optional
+     * leading backslash. The namespace prefix is matched in any case, as
+     * isSugarcraftName() does. A relative qualified span (`Util\Width`) is not
+     * matched: it is relative to the body's own namespace, which this guard does
+     * not resolve, so it is left unchecked rather than checked wrongly.
+     */
+    private const BARE_SUGARCRAFT_SHAPE = '~^\\\\?(?i:sugarcraft)\\\\(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9]*$~';
+
+    /**
      * @var list<string> keyboard key names a body writes in code spans; `ReleaseA`
      *      is the Kitty release-event form of a key, the name KeyEvent documents
      */
@@ -818,8 +828,15 @@ final class CheckDocsAssets
             // prose span of that name: the span may be a SugarCraft claim, and
             // only a resolvable class settles it. An explicit import from outside
             // SugarCraft still does, since the `use` says which class is meant.
+            // That exemption is body-wide, not per snippet: a prose span has no
+            // snippet to belong to, so a same-named SugarCraft claim in the same
+            // body is exempt too. The trade-off is deliberate (pinned by
+            // testAnExplicitImportFromOutsideSugarcraftStillExemptsItsBareSpan).
             foreach (self::bareCodeSpanNames($html) as $name) {
                 if (self::isIllustrativeName($name, [], $external, $imports) || self::isNonClassName($name, $nonClass)) {
+                    continue;
+                }
+                if (str_contains($name, '\\') && self::isNamespaceReference($name, $index)) {
                     continue;
                 }
                 $census['claims']++;
@@ -878,12 +895,33 @@ final class CheckDocsAssets
         $names = [];
         foreach ($spans[1] as $span) {
             $name = trim($span);
-            if (preg_match(self::BARE_CLASS_SHAPE, $name) === 1 && preg_match('~[a-z]~', $name) === 1) {
+            $bare = preg_match(self::BARE_CLASS_SHAPE, $name) === 1 || preg_match(self::BARE_SUGARCRAFT_SHAPE, $name) === 1;
+            if ($bare && preg_match('~[a-z]~', $name) === 1) {
                 $names[] = $name;
             }
         }
 
         return array_values(array_unique($names));
+    }
+
+    /**
+     * True when a qualified name a body writes alone is a namespace, not a class:
+     * some declared class sits under it (`SugarCraft\Pty\Contract` names the
+     * directory of contract types). A namespace span is prose about where a
+     * class lives, so it is never a class claim.
+     *
+     * @param array{fqn: array<string, list<string>>, short: array<string, list<string>>} $index
+     */
+    private static function isNamespaceReference(string $name, array $index): bool
+    {
+        $prefix = strtolower(ltrim($name, '\\')) . '\\';
+        foreach (array_keys($index['fqn']) as $fqn) {
+            if (str_starts_with($fqn, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -893,6 +931,12 @@ final class CheckDocsAssets
      * `<slug>/tests/` tree declares (a test fixture, never a library class), and
      * every package name (the Pascal form of a `<slug>/` directory, such as
      * `SugarSpring`). Keys are lowercase.
+     *
+     * The exemption is by spelling alone, across every source tree, so a bare
+     * class claim whose short name matches a method, enum case or constant
+     * elsewhere in src is not checked. That collision is the accepted cost: a
+     * bare span carries no context that says which kind of name it means, and
+     * the monorepo's enum cases and tool names are the bare words a body writes.
      *
      * Only a registered tool name counts as a string: the value of a `const NAME`
      * or a `name:` attribute argument (`#[BuiltInTool(name: 'AskUser')]`), read in
