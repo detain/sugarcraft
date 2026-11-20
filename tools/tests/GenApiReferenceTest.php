@@ -483,6 +483,60 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('visible(): void', $html);
     }
 
+    public function testAnInternalTypeWithBracketedAttributeArgumentsIsLeftOut(): void
+    {
+        // Attribute arguments may hold brackets, a list spanning lines, or a string with a `]`.
+        // The token parser reads the tag through the attribute, so the line scan must read it
+        // too, or the run refuses on a disagreement that is not the scan's fault.
+        $root = $this->fixtureRoot([
+            'sugar-core/src/Seam.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** @internal */
+                #[Route([1, 2])]
+                #[Tags(
+                    ['a', 'b'],
+                    "close ] here"
+                )]
+                final class Seam
+                {
+                    public function inside(): void
+                    {
+                    }
+                }
+
+                PHP,
+            'sugar-core/src/Open.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace Demo\Fixture;
+
+                /** Public. */
+                #[Route([1, 2])]
+                final class Open
+                {
+                    /** Visible. */
+                    public function visible(): void
+                    {
+                    }
+                }
+
+                PHP,
+        ]);
+        $html = \ApiReference::generate($root, 'sugar-core');
+
+        self::assertStringNotContainsString('Seam', $html);
+        self::assertStringNotContainsString('inside', $html);
+        self::assertStringContainsString('<code>Open</code>', $html);
+        self::assertSame(['Demo\Fixture\Open'], \array_column(\ApiReference::declaredPublic($root, 'sugar-core'), 'fqn'));
+    }
+
     public function testProseMentioningInternalDoesNotHideAPublicType(): void
     {
         // The word `@internal` in the middle of a sentence is not the tag. The line scan and the

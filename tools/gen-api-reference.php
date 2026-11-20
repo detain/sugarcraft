@@ -369,7 +369,9 @@ final class ApiReference
             // The docblock must be the last thing before the declaration, past any attributes.
             $before = substr($source, 0, $hit[0][1]);
             // Same line-anchored test as parse(): prose that mentions @internal mid-sentence is not the tag.
-            $internal = preg_match('~/\*\*((?:(?!\*/).)*)\*/\s*(?:#\[[^\]\n]*\]\s*)*$~s', $before, $doc) === 1
+            // Attributes may nest brackets and quote strings that hold brackets, so the chain is
+            // matched as balanced groups, not up to the first `]`.
+            $internal = preg_match('~/\*\*((?:(?!\*/).)*)\*/\s*(?:#(?<attr>\[(?:[^\[\]"\']++|"(?:[^"\\\\]|\\\\.)*+"|\'(?:[^\'\\\\]|\\\\.)*+\'|(?&attr))*\])\s*)*$~s', $before, $doc) === 1
                 && self::isInternal($doc[1]);
             $spans[] = [
                 'fqn' => ($namespace === '' ? '' : $namespace . '\\') . $hit[1][0],
