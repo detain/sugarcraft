@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} richiede un valore, ma la lista degli argomenti è terminata',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} non accetta un valore',
     'cli.argv.worktree.with_subcommand' => '--worktree indica una worktree per una sessione principale; i verbi dei sottocomandi eseguono il proprio flusso e potrebbero solo ignorarla',
+    'cli.attach.bad_record_url' => 'il record del server in esecuzione indica {url}, che non è un indirizzo http(s):// o ws(s):// utilizzabile',
     'cli.attach.bad_url' => 'candy-code attach: --url {url} non è un indirizzo http(s):// o ws(s)://',
     'cli.attach.closed_during_handshake' => 'il server ha chiuso la connessione durante l\'handshake',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag} non si applica ad attach',

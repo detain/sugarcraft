@@ -20,6 +20,11 @@ if (!\is_file($host)) {
 require_once $host;
 require_once __DIR__ . '/../src/autoload.php';
 
+// The suites assert catalog copy verbatim. Without this pin, T::detect() reads
+// LC_ALL/LC_MESSAGES/LANG from the host environment, so a non-English shell
+// would translate the expected text and turn the assertions red.
+\SugarCraft\Core\I18n\T::setLocale('en');
+
 // msteams-27: suites here bound waits with timers on the loop, so the
 // stable-clock pin is loaded FIRST when the host tree ships sugar-testing
 // (under ext-uv deadlines are computed against a clock refreshed once per

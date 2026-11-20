@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Host;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use Ratchet\RFC6455\Messaging\MessageBuffer;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Host\InProcessEventSink;
 use SugarCraft\Code\Host\InProcessHostServices;
+use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
@@ -17,8 +21,10 @@ use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Workspace\Gateway;
+use SugarCraft\Code\Server\Workspace\WorkspaceHostClient;
 use SugarCraft\Code\Tests\Host\Support\CallDeadlineLoop;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
+use SugarCraft\McpClient\PendingCalls;
 use SugarCraft\Plugins\Host\RefusedCall;
 
 /**
@@ -39,18 +45,33 @@ final class InProcessRoutedTest extends TestCase
     /** @var list<array<string, mixed>> the envelopes the door's listener heard */
     private array $heard = [];
 
+    /** @var list<string> the server log lines, in order */
+    private array $logs = [];
+
     /** The loop the timed door arms its call deadlines on; the tests that need a timeout fire them. */
     private CallDeadlineLoop $deadlines;
 
     /** A second door whose call deadlines are recorded, not armed (made on first use by {@see timedDoor()}). */
     private ?InProcessHostServices $timed = null;
 
+    /**
+     * The scripted child of the root the scripted tests use (see {@see scriptHost()}): its RPC, and the
+     * requests the gateway sent it, in order.
+     *
+     * @var array{root: string, rpc: RemoteSessionHost, sent: \ArrayObject<int, array<string, mixed>>}|null
+     */
+    private ?array $scripted = null;
+
+    private int $scriptedSeq = 0;
+
     protected function setUp(): void
     {
         if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
             self::markTestSkipped('workspace hosts run forked turns: needs ext-pcntl and ext-posix');
         }
-        $this->fixture = ProtocolFixture::new();
+        $this->fixture = ProtocolFixture::new(log: function (string $line): void {
+            $this->logs[] = $line;
+        });
         $this->other = $this->fixture->dir . '/other';
         $home = $this->fixture->dir . '/home';
         \mkdir($this->other, 0o700, true);
@@ -80,6 +101,7 @@ final class InProcessRoutedTest extends TestCase
             $this->call($this->timed->disconnect());
         }
         $this->call($this->door->disconnect());
+        $this->unscript();
         $this->gateway->stop('test over');
         $this->fixture->tearDown();
     }
@@ -495,6 +517,44 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame([], $laterHeard, 'the listeners after the disconnecting one never hear the envelope it was delivering');
     }
 
+    /**
+     * Pinned by InProcessEventSink::pump()'s re-entrancy guard: disconnect() flushes the sink from inside
+     * a delivery, and without the guard that nested flush would deliver the 2000 owed events (red check:
+     * removing the guard fails this test with "2000 is identical to 1").
+     */
+    public function testADisconnectFromARoutedSinkListenerDropsTheRoutedBacklogItOwes(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        // Subscribed before the backlog is relayed, so no delivery can run before they are in place.
+        $routedHeard = 0;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$routedHeard, $root): void {
+            if (($envelope['root'] ?? null) === $root) {
+                $routedHeard++;
+            }
+        }));
+        $disconnected = false;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$disconnected, $root): void {
+            if (!$disconnected && ($envelope['root'] ?? null) === $root) {
+                $disconnected = true;
+                $this->door->disconnect();
+            }
+        }));
+        for ($seq = 1; $seq <= 2000; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+
+        // Only the counting listener, registered before the disconnecting one, hears the envelope that disconnects.
+        self::assertTrue($this->runUntil(function () use (&$disconnected): bool {
+            return $disconnected;
+        }, 30.0), 'the sink never delivered a routed event to the listener that disconnects');
+        $this->fixture->run(0.05);
+        self::assertSame(1, $routedHeard, 'the owed routed backlog is dropped, not delivered: only the disconnecting envelope was heard');
+        self::assertFalse($this->call($this->door->isConnected()));
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+    }
+
     /** A door whose 20 s call deadlines are fired by the test, connected on first use. */
     public function testARoutedAnswerPastTheFrameCeilingIsRefusedTooLarge(): void
     {
@@ -513,7 +573,9 @@ final class InProcessRoutedTest extends TestCase
 
     public function testARoutedAnswerNestedPastTheWireDecodeDepthIsRefusedTooDeep(): void
     {
-        // Encodes under the value depth (511) but decodes past the wire client's depth (64): too_deep.
+        // Direct: the door's conversion alone. Encodes under the value depth (511) but decodes past the
+        // wire client's depth (64): too_deep. The child's frame decode drops such an answer before it gets
+        // here, so the end-to-end path is the timeout test below.
         $nested = 'leaf';
         for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
             $nested = ['n' => $nested];
@@ -527,6 +589,43 @@ final class InProcessRoutedTest extends TestCase
         }
     }
 
+    /**
+     * RECORDED DEVIATION from design 5.2, owner ruling pending. Design 5.2 asks for too_deep; end to
+     * end, a routed answer nested past the wire decode depth is not refused too_deep. The child's
+     * RemoteSessionHost::receive decodes the frame at JsonRpc::MAX_DEPTH and drops it undecoded, so
+     * the door never converts it and the caller gets the call's deadline: a timeout, retryable Busy.
+     * This asserts what the door does today, so a change on either side is seen here. A fix that
+     * returns too_deep turns this red by design; flip the assertions once the owner rules.
+     */
+    #[Group('recorded-deviation')]
+    public function testARoutedAnswerNestedPastTheWireDecodeDepthTimesOutEndToEnd(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->sessionSnapshot($sessionId, 10));
+
+        $nested = 'leaf';
+        for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
+            $nested = ['n' => $nested];
+        }
+        $sent = $this->scripted['sent'];
+        self::assertSame('session.get', $sent[\count($sent) - 1]['method'], 'the routed call sent session.get to the child');
+        $this->replyToLast($nested);
+
+        self::assertSame(1, $this->deadlines->fireDeadlines(), 'the routed call armed one 20 s deadline');
+        self::assertCount(1, $refusals, 'the caller is refused at the deadline, not with too_deep');
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertSame(ErrorCode::Busy, $refusals[0]->errorCode);
+
+        // The child never answers, so its gateway call and RPC deadline stay armed on the shared loop. The
+        // child's transport failing (what a dead host does) settles both, and no timer outlives the test.
+        $pending = (new \ReflectionProperty(RemoteSessionHost::class, 'pending'))->getValue($this->scripted['rpc']);
+        $pending->failAll(new \RuntimeException('the child closed its socket'));
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($root) === 0), 'the gateway settled the call once the child failed');
+        self::assertCount(1, $refusals, 'the caller is settled once, not again by the child failure');
+    }
+
     public function testARoutedSubscribeAnswerPastTheFrameCeilingIsCompensatedAndRecordsNoSink(): void
     {
         $this->assertRoutedSubscribeRefused(['text' => \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES)], 'too_large');
@@ -534,6 +633,8 @@ final class InProcessRoutedTest extends TestCase
 
     public function testARoutedSubscribeAnswerNestedPastTheWireDecodeDepthIsCompensatedAndRecordsNoSink(): void
     {
+        // Direct, through subscribeAnswer(): the child's frame decode drops such an answer, so this does not
+        // reach the door end to end. The end-to-end path is testARoutedAnswerNestedPastTheWireDecodeDepthTimesOutEndToEnd.
         $nested = 'leaf';
         for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
             $nested = ['n' => $nested];
@@ -598,6 +699,209 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame(0, $this->inFlightOf($this->other), 'the failed call leaves no in-flight count');
     }
 
+    public function testDisconnectDeliversARoutedBacklogAboveTheBudgetBeforeItReturns(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $sink = $this->scriptedSubscribe($sessionId);
+        $total = 2000;
+        self::assertGreaterThan(InProcessEventSink::DELIVERY_BUDGET, $total, 'the backlog is above one tick\'s budget');
+        for ($seq = 1; $seq <= $total; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+        // No loop turn runs between the relays and disconnect(), so the whole backlog is still owed.
+        self::assertSame([], $this->seqsOf($sessionId), 'nothing is delivered while the backlog is owed');
+
+        $this->door->disconnect();
+
+        self::assertSame(\range(1, $total), $this->seqsOf($sessionId), 'disconnect() delivers the whole owed backlog, in order, before it returns');
+        self::assertFalse($sink->isOpen(), 'the sink is closed');
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+
+        $this->relayRouted($root, $this->durable($sessionId, $total + 1));
+        $this->fixture->run(0.05);
+        self::assertCount($total, $this->seqsOf($sessionId), 'nothing reaches the client after it left');
+    }
+
+    public function testDisconnectFromAPrimaryListenerDeliversTheRoutedBacklogItOwes(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $sink = $this->scriptedSubscribe($sessionId);
+        $total = 2000;
+        for ($seq = 1; $seq <= $total; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+        // The primary listener leaves from a primary delivery, where the sink drain is idle, so the
+        // owed routed backlog must still be delivered in full by that disconnect().
+        $left = false;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$left): void {
+            if (!$left && !\array_key_exists('root', $envelope)) {
+                $left = true;
+                $this->door->disconnect();
+            }
+        }));
+        (new \ReflectionMethod(InProcessHostServices::class, 'enqueue'))->invoke($this->door, EventEnvelope::server(EventType::SERVER_TICK));
+
+        // An arrow function would copy $left now and never see the listener set it, so the wait closes over it by reference.
+        self::assertTrue($this->runUntil(static function () use (&$left): bool {
+            return $left;
+        }, 5.0), 'the primary listener left from its delivery');
+        self::assertSame(\range(1, $total), $this->seqsOf($sessionId), 'every owed routed event is delivered, in order, before the leave returns');
+        self::assertFalse($sink->isOpen(), 'the sink is closed');
+        self::assertNull($this->sinkOf($this->door), 'the disconnect cleared the sink');
+    }
+
+    public function testAListenerThatThrowsDoesNotStopTheOthersHearingARoutedEvent(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $sink = $this->scriptedSubscribe($sessionId);
+        $this->call($this->door->subscribeEvents(static function (): void {
+            throw new \RuntimeException('a listener that fails on every event');
+        }));
+        $later = [];
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$later): void {
+            $later[] = $envelope;
+        }));
+
+        $this->relayRouted($root, $this->durable($sessionId, 1));
+        $sink->flush();
+
+        self::assertSame([1], $this->seqsOf($sessionId), 'the listener before the failing one hears the event');
+        $laterSeqs = [];
+        foreach ($later as $envelope) {
+            if (($envelope['sessionId'] ?? null) === $sessionId) {
+                $laterSeqs[] = $envelope['seq'];
+            }
+        }
+        self::assertSame([1], $laterSeqs, 'the listener after the failing one still hears the event');
+        self::assertStringContainsString('in-process event listener failed', \implode("\n", $this->logs), 'the listener failure is logged');
+        self::assertTrue($sink->isOpen(), 'a listener that throws does not close the sink');
+    }
+
+    public function testARoutedAnswerPastTheFrameCeilingIsRefusedTooLargeEndToEnd(): void
+    {
+        // The scripted child sends the oversized result itself, so the refusal can only come from the
+        // door's encode gate (Dispatcher::wireAnswer), not from a frame the child already refused.
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $oversized = \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES);
+        $calls = [
+            'session.get' => fn (): PromiseInterface => $this->door->sessionSnapshot($sessionId, 10),
+            'session.send' => fn (): PromiseInterface => $this->door->sendTurn($sessionId, 'hi', 'queue', null, [], []),
+            'session.create' => fn (): PromiseInterface => $this->door->createSessionIn($root, null, null),
+        ];
+
+        foreach ($calls as $method => $call) {
+            $promise = $call();
+            $this->replyToLast(['id' => $sessionId, 'blob' => $oversized]);
+            $sent = $this->scripted['sent'];
+            self::assertSame($method, $sent[\count($sent) - 1]['method'], "$method: the routed call sent that method to the child");
+
+            $answer = $this->fixture->await($promise);
+            self::assertInstanceOf(RpcError::class, $answer, "$method: an answer past the frame ceiling is not delivered");
+            self::assertSame('too_large', $answer->refusalKind(), "$method: refused too_large by the door");
+        }
+    }
+
+    public function testARoutedAndAPrimaryListenerGetTheSameArrayApartFromRoot(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        $envelope = EventEnvelope::fromLogRow($sessionId, [
+            'seq' => 1,
+            'type' => 'turn.started',
+            'ts' => 1001,
+            'payload' => ['turnId' => 't1', 'text' => 'same', 'parts' => [1, 2]],
+        ]);
+
+        $this->relayRouted($root, $envelope);
+        // The primary feed's own path: the envelope the in-process client is handed by the dispatcher.
+        (new \ReflectionMethod(InProcessHostServices::class, 'enqueue'))->invoke($this->door, $envelope);
+        self::assertTrue($this->runUntil(fn (): bool => \count($this->eventsFor($sessionId)) >= 2, 5.0), 'both feeds delivered the event');
+
+        $routed = [];
+        $primary = [];
+        foreach ($this->eventsFor($sessionId) as $heard) {
+            if (\array_key_exists('root', $heard)) {
+                $routed[] = $heard;
+            } else {
+                $primary[] = $heard;
+            }
+        }
+        self::assertCount(1, $routed, 'one routed delivery');
+        self::assertCount(1, $primary, 'one primary delivery');
+        self::assertSame($root, $routed[0]['root'], 'the routed delivery names its root');
+        self::assertSame($primary[0], \array_diff_key($routed[0], ['root' => true]), 'a routed and a primary listener get the same array, apart from root');
+    }
+
+    public function testARoutedAndAPrimaryListenerGetEmptyDataAsAnArray(): void
+    {
+        // The primary envelope carries stdClass for empty data, and drain() turns that into []. The routed
+        // copy is re-decoded as an array by Gateway::relay, so it is [] before drain() sees it. Both
+        // listeners must get [] (PL-5d, decision c); only the primary half exercises the conversion.
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        $envelope = EventEnvelope::fromLogRow($sessionId, [
+            'seq' => 2,
+            'type' => 'turn.started',
+            'ts' => 1002,
+            'payload' => ['turnId' => 't2'],
+        ]);
+
+        $this->relayRouted($root, $envelope);
+        (new \ReflectionMethod(InProcessHostServices::class, 'enqueue'))->invoke($this->door, $envelope);
+        self::assertTrue($this->runUntil(fn (): bool => \count($this->eventsFor($sessionId)) >= 2, 5.0), 'both feeds delivered the event');
+
+        $routed = [];
+        $primary = [];
+        foreach ($this->eventsFor($sessionId) as $heard) {
+            if (\array_key_exists('root', $heard)) {
+                $routed[] = $heard;
+            } else {
+                $primary[] = $heard;
+            }
+        }
+        self::assertCount(1, $routed, 'one routed delivery');
+        self::assertCount(1, $primary, 'one primary delivery');
+        self::assertSame([], $routed[0]['data'], 'a routed listener gets empty data as []');
+        self::assertSame([], $primary[0]['data'], 'a primary listener gets empty data as []');
+    }
+
+    public function testAWireRequestIsAnsweredWhileARoutedBacklogIsStillOwed(): void
+    {
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        $total = 2000;
+        for ($seq = 1; $seq <= $total; $seq++) {
+            $this->relayRouted($root, $this->durable($sessionId, $seq));
+        }
+
+        $pending = $this->door->sessionSnapshot($sessionId, 10);
+        // A zero-length run is one loop turn: the sink's first tick delivers one budget, then its next tick is armed for the next turn.
+        $this->fixture->run(0.0);
+        self::assertGreaterThan(0, \count($this->seqsOf($sessionId)), 'the sink delivered its first budget');
+        self::assertLessThan($total, \count($this->seqsOf($sessionId)), 'the backlog is still owed when the answer comes');
+
+        $value = null;
+        $owedAtAnswer = null;
+        $pending->then(function (mixed $reply) use (&$value, &$owedAtAnswer, $sessionId, $total): void {
+            $value = $reply;
+            $owedAtAnswer = $total - \count($this->seqsOf($sessionId));
+        });
+        $this->replyToLast(['id' => $sessionId, 'messages' => []]);
+        self::assertTrue($this->runUntil(fn (): bool => $value !== null, 5.0), 'the wire request was answered');
+
+        self::assertIsArray($value, 'the routed answer is an array, as the primary one is');
+        self::assertGreaterThan(0, $owedAtAnswer, 'the answer arrived while the backlog was still owed');
+        self::assertTrue($this->runUntil(fn (): bool => \count($this->seqsOf($sessionId)) === $total, 30.0), 'the backlog still drains after the answer');
+        self::assertSame(\range(1, $total), $this->seqsOf($sessionId), 'in order, with none lost');
+    }
+
     public function testAColdCallStartsTheRootsHostAndAnswersThroughIt(): void
     {
         self::assertNotContains($this->other, $this->gateway->hostRoots(), 'no host runs for the root yet');
@@ -660,6 +964,117 @@ final class InProcessRoutedTest extends TestCase
         for ($i = 1; $i < \count($seqs); $i++) {
             self::assertGreaterThan($seqs[$i - 1], $seqs[$i], 'the session events arrive in strictly increasing sequence');
         }
+    }
+
+    /**
+     * A workspace host for a fresh directory whose child is a fake: the gateway reaches it through
+     * a real RemoteSessionHost, whose frames go to a mock buffer, so each request is recorded and
+     * the test answers it through the host's own reply path. The door and the gateway above run
+     * unchanged; only the child's frames are scripted.
+     */
+    private function scriptedRoot(): string
+    {
+        $path = $this->fixture->dir . '/scripted';
+        \mkdir($path, 0o700, true);
+        $root = (string) \realpath($path);
+
+        $sent = new \ArrayObject();
+        $buffer = $this->createMock(MessageBuffer::class);
+        $buffer->method('sendMessage')->willReturnCallback(
+            static function (string $payload) use ($sent): void {
+                $sent->append(\json_decode(\trim($payload), true, 512, \JSON_THROW_ON_ERROR));
+            },
+        );
+        $rpc = (new \ReflectionClass(RemoteSessionHost::class))->newInstanceWithoutConstructor();
+        $this->setPrivate($rpc, 'pending', new PendingCalls());
+        $this->setPrivate($rpc, 'buffer', $buffer);
+        $host = (new \ReflectionClass(WorkspaceHostClient::class))->newInstanceWithoutConstructor();
+        $this->setPrivate($host, 'rpc', $rpc);
+
+        $hosts = (array) (new \ReflectionProperty(Gateway::class, 'hosts'))->getValue($this->gateway);
+        $hosts[$root] = $host;
+        (new \ReflectionProperty(Gateway::class, 'hosts'))->setValue($this->gateway, $hosts);
+        $this->scripted = ['root' => $root, 'rpc' => $rpc, 'sent' => $sent];
+
+        return $root;
+    }
+
+    /** Answers the scripted child's last request with $result, through the host's own reply path. */
+    private function replyToLast(mixed $result): void
+    {
+        if ($this->scripted === null) {
+            throw new \LogicException('no scripted host: call scriptedRoot() first');
+        }
+        $sent = $this->scripted['sent'];
+        $request = $sent[\count($sent) - 1];
+        $payload = \json_encode(['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => $result], \JSON_THROW_ON_ERROR);
+        (new \ReflectionMethod(RemoteSessionHost::class, 'receive'))->invoke($this->scripted['rpc'], $payload);
+    }
+
+    /** A session created on the scripted root through the door, answered by the scripted child. */
+    private function scriptedSession(string $root): string
+    {
+        $created = $this->door->createSessionIn($root, null, null);
+        $this->replyToLast(['id' => 'scripted-' . (++$this->scriptedSeq)]);
+
+        return (string) ((array) $this->call($created))['id'];
+    }
+
+    /** The door's routed subscribe to $sessionId, answered by the scripted child; returns the door's sink. */
+    private function scriptedSubscribe(string $sessionId): InProcessEventSink
+    {
+        $subscribed = $this->door->subscribeSession($sessionId, null, null);
+        $this->replyToLast(['sessionId' => $sessionId, 'throughSeq' => 0]);
+        $this->call($subscribed);
+
+        return $this->sinkOf($this->door) ?? throw new \LogicException('the door has no routed sink');
+    }
+
+    /** One event of $root's session, through the gateway's own relay(), as its host callback delivers it. */
+    private function relayRouted(string $root, EventEnvelope $envelope): void
+    {
+        (new \ReflectionMethod(Gateway::class, 'relay'))->invoke($this->gateway, $root, $envelope->toArray(), JsonRpc::encode($envelope->notification()));
+    }
+
+    private function durable(string $sessionId, int $seq): EventEnvelope
+    {
+        return EventEnvelope::fromLogRow($sessionId, ['seq' => $seq, 'type' => 'turn.started', 'ts' => 1000 + $seq, 'payload' => ['turnId' => 't1', 'n' => $seq]]);
+    }
+
+    /** @return list<int> the durable seqs the door's listener heard for $sessionId, in order */
+    private function seqsOf(string $sessionId): array
+    {
+        $seqs = [];
+        foreach ($this->eventsFor($sessionId) as $heard) {
+            if (\is_int($heard['seq'] ?? null)) {
+                $seqs[] = $heard['seq'];
+            }
+        }
+
+        return $seqs;
+    }
+
+    /** @return list<array<string, mixed>> what the door's listener heard for $sessionId, in order */
+    private function eventsFor(string $sessionId): array
+    {
+        return \array_values(\array_filter($this->heard, static fn (array $e): bool => ($e['sessionId'] ?? null) === $sessionId));
+    }
+
+    private function unscript(): void
+    {
+        if ($this->scripted === null) {
+            return;
+        }
+        $property = new \ReflectionProperty(Gateway::class, 'hosts');
+        $hosts = (array) $property->getValue($this->gateway);
+        unset($hosts[$this->scripted['root']]);
+        $property->setValue($this->gateway, $hosts);
+        $this->scripted = null;
+    }
+
+    private function setPrivate(object $object, string $property, mixed $value): void
+    {
+        (new \ReflectionProperty($object, $property))->setValue($object, $value);
     }
 
     private function timedDoor(): InProcessHostServices

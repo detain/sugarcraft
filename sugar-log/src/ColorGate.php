@@ -10,7 +10,8 @@ use SugarCraft\ColorProfile\Probe;
  * Shared destination gate for ANSI delivery (C2).
  *
  * Styling may only reach destinations that can render it: a real terminal,
- * or anywhere at all when the user sets CLICOLOR_FORCE=1 (explicit override,
+ * or anywhere at all when the user sets CLICOLOR_FORCE to any non-empty value
+ * other than 0 (explicit override,
  * same spelling as the sugar-colorprofile detection chain). The widely-assumed
  * FORCE_COLOR name is NOT honored by this gate — the
  * construction-time color-profile probe does read it (sugar-colorprofile

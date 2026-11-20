@@ -456,11 +456,11 @@ sequence a terminal can send.
   - While a history search is active, Ctrl+C is reclaimed: it cancels back
     to the pre-search line rather than aborting.
 
-Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
-`Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
-implemented under the canonical string spelling instead: `Readline::onKey()`
-and every prompt's key path accept all of `'ctrl_a'` through `'ctrl_z'`,
-which is what `Key::normalize()` turns a raw control byte into.
+Every `Ctrl+letter` shown has a matching `Key::` constant, `Key::CtrlA` through
+`Key::CtrlZ`, and the canonical string spelling `'ctrl_a'` through `'ctrl_z'`
+is what `Key::normalize()` turns a raw control byte into. Four control bytes
+normalize to a named key instead: 0x08 (Ctrl+H) to `Key::Backspace`, 0x09
+(Ctrl+I) to `Key::Tab`, and 0x0A and 0x0D (Ctrl+J and Ctrl+M) to `Key::Enter`.
 
 Ctrl+[ is an ESC on every terminal and behaves as `esc`, not as Ctrl+C.
 

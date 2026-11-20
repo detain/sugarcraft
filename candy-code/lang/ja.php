@@ -117,6 +117,7 @@ return [
     'cli.argv.verb_flag.missing' => '{verb} {flag} は値を期待するが、引数リストが終了した',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} は値を取らない',
     'cli.argv.worktree.with_subcommand' => '--worktree は1つのメインセッション用ワークツリーを指定する。サブコマンドは独自フローを実行するため無視される',
+    'cli.attach.bad_record_url' => '実行中のサーバーのレコードが指定する {url} は、使用可能な http(s):// または ws(s):// アドレスではない',
     'cli.attach.bad_url' => 'candy-code attach: --url {url} は http(s):// または ws(s):// アドレスではない',
     'cli.attach.closed_during_handshake' => 'ハンドシェイク中にサーバーが接続をクローズした',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag} は attach に適用されません',
