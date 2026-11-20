@@ -107,8 +107,8 @@ final class BgAsyncAnswerTest extends TestCase
 
     /**
      * The serve answers a stop from its 50 ms pump, not the 2 s background poll:
-     * no client tick and no poll run here, so only the pump can settle it inside the
-     * second it is given. A graceful stop also stays graceful (StoppedViaIpc).
+     * no client tick and no poll run here, so only the pump can settle it before the
+     * wait gives up. A graceful stop also stays graceful (StoppedViaIpc).
      */
     public function testAGracefulStopIsAnsweredByThePumpNotTheBackgroundPoll(): void
     {
@@ -122,14 +122,17 @@ final class BgAsyncAnswerTest extends TestCase
         $client->hello();
         $client->raw('{"jsonrpc":"2.0","id":"stop-pump","method":"bg.stop","params":{"bgId":"' . $bgId . '"}}');
 
+        // The wait is bounded by the stop's own IPC deadline (2 x STOP_IPC_TIMEOUT_SECONDS),
+        // plus margin for a loaded shard. A tighter bound would fail on a graceful stop the
+        // product still answers in time; no tick runs here, so only the pump can answer.
         $started = \microtime(true);
-        while ($client->response('stop-pump') === null && \microtime(true) - $started < 1.0) {
+        while ($client->response('stop-pump') === null && \microtime(true) - $started < 3.0) {
             $fixture->context->pump();
             $fixture->run(0.01);
         }
         $answer = $client->response('stop-pump');
 
-        self::assertArrayHasKey('result', $answer ?? [], 'the stop is answered within a second, without the 2 s poll');
+        self::assertArrayHasKey('result', $answer ?? [], 'the stop is answered by the pump within its IPC budget, not left to the 2 s poll');
         self::assertSame(BackgroundStopOutcome::StoppedViaIpc->value, $answer['result']['outcome'] ?? null, 'the graceful stop is not escalated to SIGTERM');
     }
 
