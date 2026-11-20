@@ -31,8 +31,11 @@ use SugarCraft\Plugins\Trust\TrustList;
  *    seen file between launches therefore loads without a quarantine stop. That
  *    gap is parity with the original loader (plan_plugin.md section 9, R2).
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
- *    its parent directory must be owned by this process and not writable by the
- *    world (the same gate candy-code applies; group write is accepted).
+ *    its parent directory must not be writable by the world (the same gate
+ *    candy-code applies; group write is accepted), and, when the posix extension
+ *    is available, must be owned by this process. Without ext-posix the owner
+ *    check is skipped and only the world-write check runs; that policy gap is
+ *    recorded as an R-item in plan_plugin.md section 9.
  *
  * The loader ANSWERS; it never announces. Every entry lands in exactly one
  * bucket (see {@see LoadResult}). A file that throws at require time is refused
