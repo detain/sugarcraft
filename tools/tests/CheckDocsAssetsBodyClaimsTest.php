@@ -683,6 +683,50 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         );
     }
 
+    public function testABarePdoClassNameAndItsConstructorAreAcceptedWithTheSameVerdictOnEveryHost(): void
+    {
+        $root = $this->makeFixture();
+        // PDO is a PHP core class: a bare span, a constructor and a listed static call pass
+        // whether or not ext-pdo is loaded, and a misspelled static call is named.
+        $body = '<p>Opens a <code>PDO</code> connection.</p>'
+            . '<pre><code>$pdo = new PDO($dsn);</code></pre>'
+            . '<pre><code>PDO::getAvailableDrivers();</code></pre>';
+        $misspelt = '<pre><code>PDO::getAvailableDrivrs();</code></pre>';
+        $expected = [
+            'claims: docs/_data/alpha.body.html names PDO::getAvailableDrivrs(), which PHP\'s PDO does not define',
+        ];
+
+        // Each verdict is also read in a child PHP with -n, where ext-pdo is absent unless compiled in.
+        $this->assertSame([], $this->claimsFor($root, $body));
+        $claims = $this->bodyClaimsWithoutIni($root);
+        if ($claims === null) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertSame([], $claims);
+
+        $this->assertSame($expected, $this->claimsFor($root, $misspelt));
+        $this->assertSame($expected, $this->bodyClaimsWithoutIni($root));
+    }
+
+    public function testThePdoMethodListMatchesTheExtensionWhenLoaded(): void
+    {
+        if (!class_exists('PDO', false)) {
+            $this->markTestSkipped('ext-pdo is not loaded on this host, so the list has nothing to match.');
+        }
+
+        // Read the private list through reflection so the test pins the constant itself.
+        // A loaded driver adds sqlite*, pgsql* or mysql* methods to PDO; those are left out
+        // of the list on purpose, so they are dropped from the real set too.
+        $listed = (new \ReflectionClassConstant(\CheckDocsAssets::class, 'PDO_METHODS'))->getValue();
+        $real = array_values(array_filter(
+            array_map('strtolower', get_class_methods('PDO')),
+            static fn (string $method): bool => preg_match('/^(sqlite|pgsql|mysql)/', $method) === 0,
+        ));
+        sort($listed);
+        sort($real);
+        $this->assertSame($real, $listed);
+    }
+
     public function testThePdoStatementMethodListMatchesTheExtensionWhenLoaded(): void
     {
         if (!class_exists('PDOStatement', false)) {

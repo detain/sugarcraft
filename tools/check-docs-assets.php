@@ -165,7 +165,7 @@ final class CheckDocsAssets
      * lacks an extension, so a span would pass on one machine and fail on another.
      * The list is every class and interface the Core, SPL, date, Reflection and
      * json extensions declare under PHP 8.3, the set a PHP 8.3 build always
-     * carries. PDOException and PDOStatement are the exception: they come from
+     * carries. PDO, PDOException and PDOStatement are the exception: they come from
      * the PDO extension, and stay listed because they were listed before. FFI is the
      * other extension name listed: sugar-pty requires ext-ffi, and its docs body
      * writes FFI::cdef(). Matched case-insensitively, as PHP matches class names. A
@@ -192,7 +192,7 @@ final class CheckDocsAssets
         'JsonException', 'JsonSerializable', 'LengthException', 'LimitIterator',
         'LogicException', 'MultipleIterator', 'NoRewindIterator', 'OuterIterator',
         'OutOfBoundsException', 'OutOfRangeException', 'OverflowException', 'Override',
-        'ParentIterator', 'ParseError', 'PDOException', 'PDOStatement', 'RangeException',
+        'ParentIterator', 'ParseError', 'PDO', 'PDOException', 'PDOStatement', 'RangeException',
         'RecursiveArrayIterator',
         'RecursiveCachingIterator', 'RecursiveCallbackFilterIterator',
         'RecursiveDirectoryIterator', 'RecursiveFilterIterator', 'RecursiveIterator',
@@ -211,6 +211,20 @@ final class CheckDocsAssets
         'stdClass', 'Stringable', 'Throwable', 'Traversable', 'TypeError', 'UnderflowException',
         'UnexpectedValueException', 'UnhandledMatchError', 'UnitEnum', 'ValueError', 'WeakMap',
         'WeakReference', '__PHP_Incomplete_Class', 'php_user_filter',
+    ];
+
+    /**
+     * Methods a body may claim on the PDO class, lowercased, for the same reason as
+     * PDO_STATEMENT_METHODS. Driver-specific methods (sqlite*, pgsql*, mysql*) are left
+     * out: they exist only when a driver is loaded, so a claim on one is named everywhere.
+     * testThePdoMethodListMatchesTheExtensionWhenLoaded pins it.
+     *
+     * @var list<string>
+     */
+    private const PDO_METHODS = [
+        '__construct', 'begintransaction', 'commit', 'errorcode', 'errorinfo', 'exec',
+        'getattribute', 'getavailabledrivers', 'intransaction', 'lastinsertid', 'prepare',
+        'query', 'quote', 'rollback', 'setattribute',
     ];
 
     /**
@@ -1341,6 +1355,7 @@ final class CheckDocsAssets
     private static function fixedCoreMethods(string $lower): ?array
     {
         return match ($lower) {
+            'pdo' => self::PDO_METHODS,
             'pdostatement' => self::PDO_STATEMENT_METHODS,
             'ffi' => self::FFI_METHODS,
             // PDOException declares no methods of its own; it inherits Exception's, which every build carries.
