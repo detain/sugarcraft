@@ -942,6 +942,21 @@ final class ScriptHookTest extends TestCase
         $this->assertSame('blocked', $result->message);
     }
 
+    public function testExitTwoWithNoOutputStillHardDenies(): void
+    {
+        $hook = new ScriptHook(
+            name: 'silent_block_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit 2',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $this->assertTrue($result->isDenied(), 'a silent hard exit must deny, not fall through to allow');
+    }
+
     public function testFromConfigHonoursAnExplicitName(): void
     {
         $hook = ScriptHook::fromConfig([
