@@ -122,11 +122,12 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 
     <h3 style="margin-top: 32px;">Keys</h3>
     <p><code>Keys\KeyMap</code> binds keys to actions on a component's content. <code>on()</code> registers a key, optionally with Ctrl, Alt or Shift, and <code>off()</code> removes it. <code>has()</code> and <code>registeredKeys()</code> report what is bound. A key bound twice keeps its first action, and the later one is logged and ignored.</p>
+    <p>Each action is a callable that takes the <code>Key</code> and returns the <code>Foundation\Item</code> that replaces the content. Return <code>$content</code> to keep the content as it is; returning <code>null</code> throws a <code>TypeError</code> when the key is pressed.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Keys\KeyMap;
 
 $keys = KeyMap::new($content)
-    -&gt;on('r', fn () =&gt; null)
-    -&gt;on('q', fn () =&gt; null, ctrl: true);</code></pre>
+    -&gt;on('r', fn () =&gt; $content)
+    -&gt;on('q', fn () =&gt; $content, ctrl: true);</code></pre>
     <p><code>Keys\KeyRegistry</code> is a separate, process-wide table. It stores each binding with a description and a category, so status bars and help screens can list them. <code>register()</code>, <code>get()</code>, <code>byCategory()</code>, <code>categories()</code> and <code>match()</code> read and write that table, and <code>reset()</code> empties it.</p>
 
     <h3 style="margin-top: 32px;">Theming</h3>
