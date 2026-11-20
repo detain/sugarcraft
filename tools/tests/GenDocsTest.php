@@ -937,6 +937,82 @@ final class GenDocsTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    // API reference splice (PD2): docs/_data/<slug>.api.html into the body's marker
+    // -----------------------------------------------------------------
+
+    private const API_MARKER = '<!-- api-reference:generated -->';
+
+    public function testASplicePutsTheFragmentWhereTheMarkerWas(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>before</p>' . self::API_MARKER . '<p>after</p>');
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $page = $this->page($root, 'fixture-alpha');
+        $this->assertStringContainsString('<p>before</p><h3>Demo</h3><p>after</p>', $page);
+        $this->assertStringNotContainsString(self::API_MARKER, $page);
+    }
+
+    /**
+     * A marker with no fragment would publish the raw comment in place of a reference,
+     * and a green build would not show it. The run must stop before any page is written.
+     */
+    public function testAMarkerWithNoFragmentFailsClosedAndWritesNothing(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>x</p>' . self::API_MARKER);
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('does not exist', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    /** A second marker would splice the fragment twice, so the page would carry two references. */
+    public function testAMarkerAppearingTwiceFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", self::API_MARKER . self::API_MARKER);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('(found 2)', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    public function testAFragmentWithNoMarkerInItsBodyFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('(found 0)', $r['output']);
+    }
+
+    /**
+     * A page with a generated reference is authored with a marker, and extracting it would
+     * copy the fragment into the body. The extract run must skip it and write no _data.
+     */
+    public function testExtractLeavesAPageWithAGeneratedReferenceAlone(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        $this->assertSame(0, $this->runScript($root)['exit']);
+        \unlink("$root/docs/_data/fixture-alpha.json");
+        \unlink("$root/docs/_data/fixture-alpha.body.html");
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root, ['--extract']);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertStringContainsString("skipping 'fixture-alpha'", $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-alpha.json");
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-alpha.body.html");
+    }
+
+    // -----------------------------------------------------------------
     // Failure modes
     // -----------------------------------------------------------------
 

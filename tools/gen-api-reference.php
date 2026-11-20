@@ -12,17 +12,24 @@ declare(strict_types=1);
  * text, not from Reflection, so the generator never autoloads or runs a lib's
  * code and its output is a pure function of the committed tree. A type or
  * method whose PHPDoc carries `@internal` is not public API and is left out.
+ * The public methods a class inherits from a trait it `use`s are listed under
+ * the class, as PHP exposes them.
  *
  * WHAT IT WRITES. Namespace headings, then one entry per type with its first
  * PHPDoc paragraph and a method table (signature and summary). The output is
  * marked GENERATED in its first line and must never be hand-edited.
  *
+ * TWO SOURCES FOR THE TYPE LIST. The token parser builds the entries, and a
+ * line-anchored scan of the same files counts the declarations. collect()
+ * refuses to continue when the two disagree, so a type the parser cannot see
+ * fails the run rather than leaving the page and the coverage figure without it.
+ *
  * TOP-10 COVERAGE. A companion to the class coverage in tools/depth-score.php,
  * not the same figure. This generator takes the ten largest public types by
- * source bytes and counts how many are named in the fragment, since the fragment
- * is what it controls. depth-score ranks every first declaration, @internal ones
- * included, and counts names in the page body, so the two can grade different
- * sets. Target is at least 80 percent (plan section 5.3, item 6).
+ * their own declaration span and counts how many of them the fragment gives a
+ * heading (its anchor id). depth-score ranks every first declaration, @internal
+ * ones included, and counts names in the page body, so the two can grade
+ * different sets. Target is at least 80 percent (plan section 5.3, item 6).
  *
  * PILOT SCOPE. Only the libs in ApiReference::ENABLED are built. Phase 4 widens
  * that list as a reviewed edit; nothing else changes.
@@ -69,7 +76,8 @@ final class ApiReference
      * The fragment for one lib, a pure function of <root>/<slug>/src.
      *
      * @throws \InvalidArgumentException when the slug is not enabled
-     * @throws \RuntimeException when the src tree is missing or unreadable
+     * @throws \RuntimeException when the src tree is missing, unreadable, or
+     *                           its declarations do not match what the parser found
      */
     public static function generate(string $root, string $slug): string
     {
@@ -77,10 +85,14 @@ final class ApiReference
     }
 
     /**
-     * Top-10 coverage of a fragment: the ten largest public types by source
-     * bytes (ties broken by name), and how many of them the HTML names.
+     * Top-10 coverage of a fragment: the ten largest public types by declaration
+     * span (ties broken by name), and how many of them the HTML gives a heading.
      *
-     * @param list<array{fqn: string, short: string, namespace: string, size: int}> $types
+     * The heading's anchor id is the measure, not the name. Most public types are
+     * already named in a lib's prose, so a name match would read 100 percent
+     * whether or not the fragment carries the type at all.
+     *
+     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}> $types
      * @return array{top: list<string>, covered: int, percent: float}
      */
     public static function coverage(array $types, string $html): array
@@ -94,7 +106,7 @@ final class ApiReference
         $top = array_slice($ranked, 0, 10);
         $covered = 0;
         foreach ($top as $type) {
-            if (preg_match('/\b' . preg_quote($type['short'], '/') . '\b/u', $html) === 1) {
+            if (str_contains($html, 'id="' . self::anchor($type['fqn']) . '"')) {
                 $covered++;
             }
         }
@@ -108,7 +120,7 @@ final class ApiReference
     }
 
     /**
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, methods: list<array{signature: string, summary: string}>}>
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}>
      */
     public static function collect(string $root, string $slug): array
     {
@@ -131,12 +143,40 @@ final class ApiReference
         }
         sort($files, SORT_STRING);
 
-        $types = [];
+        $declared = [];
+        $parsed = [];
         foreach ($files as $path) {
             $source = (string) file_get_contents($path);
-            foreach (self::parse($source, strlen($source)) as $type) {
-                $types[] = $type;
+            foreach (self::declaredNames($source) as $name) {
+                $declared[] = $name;
             }
+            foreach (self::parse($source) as $type) {
+                $parsed[] = $type;
+            }
+        }
+        self::checkDeclarations($slug, $declared, array_column($parsed, 'fqn'));
+
+        $index = [];
+        foreach ($parsed as $type) {
+            $index[$type['fqn']] = $type;
+        }
+
+        $types = [];
+        foreach ($parsed as $type) {
+            if ($type['internal']) {
+                continue;
+            }
+            $types[] = [
+                'fqn' => $type['fqn'],
+                'short' => $type['short'],
+                'namespace' => $type['namespace'],
+                'kind' => $type['kind'],
+                'size' => $type['size'],
+                'summary' => $type['summary'],
+                'cases' => $type['cases'],
+                'backed' => $type['backed'],
+                'methods' => self::withTraitMethods($index, $type['fqn'], $slug),
+            ];
         }
         usort($types, static fn (array $a, array $b): int => strcmp($a['fqn'], $b['fqn']));
 
@@ -144,18 +184,69 @@ final class ApiReference
     }
 
     /**
-     * Declarations in one PHP file. Only top-level type declarations count;
-     * anonymous classes, `X::class` and braced namespaces are rejected loudly
-     * rather than skipped, since a silently dropped type would pass the
-     * coverage check for the wrong reason.
+     * The line-anchored scan and the token parser must agree on every declared
+     * type, internal ones included. A mismatch names both sides of the gap.
      *
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, methods: list<array{signature: string, summary: string}>}>
+     * @param list<string> $declared FQNs from the line scan
+     * @param list<string> $parsed FQNs from the token parser
      */
-    private static function parse(string $source, int $size): array
+    private static function checkDeclarations(string $slug, array $declared, array $parsed): void
+    {
+        sort($declared, SORT_STRING);
+        sort($parsed, SORT_STRING);
+        if ($declared === $parsed) {
+            return;
+        }
+
+        throw new \RuntimeException(sprintf(
+            'gen-api-reference: %s/src declares %d type(s) but the parser found %d; declared but not parsed: [%s]; parsed but not declared: [%s]',
+            $slug,
+            count($declared),
+            count($parsed),
+            implode(', ', array_values(array_diff($declared, $parsed))),
+            implode(', ', array_values(array_diff($parsed, $declared)))
+        ));
+    }
+
+    /**
+     * The FQN of every top-level type declaration in one file, found by a
+     * line-anchored scan. PSR-12 puts a top-level declaration at column zero, so
+     * this does not need the token parser and is a second source for the same set.
+     *
+     * @return list<string>
+     */
+    private static function declaredNames(string $source): array
+    {
+        $namespace = preg_match('/^namespace\s+([A-Za-z_\\\\][A-Za-z0-9_\\\\]*)\s*;/m', $source, $m) === 1 ? $m[1] : '';
+        preg_match_all('/^(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/m', $source, $names);
+
+        return array_map(
+            static fn (string $short): string => ($namespace === '' ? '' : $namespace . '\\') . $short,
+            $names[1]
+        );
+    }
+
+    /**
+     * Declarations in one PHP file, internal ones included (collect() drops them).
+     * Only top-level type declarations count; anonymous classes, `X::class` and
+     * braced namespaces are rejected loudly rather than skipped, since a silently
+     * dropped type would pass the coverage check for the wrong reason.
+     *
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}>
+     */
+    private static function parse(string $source): array
     {
         $tokens = token_get_all($source);
         $count = count($tokens);
+        // Byte offset of each token, so a type's size is its own span and not its file's.
+        $offsets = [];
+        $pos = 0;
+        foreach ($tokens as $tok) {
+            $offsets[] = $pos;
+            $pos += strlen(is_array($tok) ? $tok[1] : $tok);
+        }
         $namespace = '';
+        $imports = [];
         $depth = 0;
         $doc = null;
         $mods = [];
@@ -176,9 +267,7 @@ final class ApiReference
                 } elseif ($tok === '}') {
                     $depth--;
                     if ($current !== null && $current['open'] && $depth === 0) {
-                        if (!self::isInternal($current['doc'])) {
-                            $done[] = self::finish($current, $size);
-                        }
+                        $done[] = self::finish($current, $offsets[$i] + 1 - $current['start']);
                         $current = null;
                     }
                     $doc = null;
@@ -211,6 +300,25 @@ final class ApiReference
                     $mods[] = strtolower($text);
                     break;
 
+                case T_USE:
+                    // Top level: an import, which a trait name in the same file resolves through.
+                    // Inside a class body: a trait use, whose names are resolved now while the
+                    // imports for this file are known.
+                    if ($depth === 0) {
+                        [$pairs, $i] = self::useStatement($tokens, $i + 1);
+                        foreach ($pairs as [$name, $alias]) {
+                            $imports[$alias] = ltrim($name, '\\');
+                        }
+                    } elseif ($depth === 1 && $current !== null && $current['open']) {
+                        [$pairs, $i] = self::useStatement($tokens, $i + 1);
+                        foreach ($pairs as [$name]) {
+                            $current['traits'][] = self::resolveName($name, $imports, $namespace);
+                        }
+                    }
+                    $doc = null;
+                    $mods = [];
+                    break;
+
                 case T_NAMESPACE:
                     $next = self::nextSignificant($tokens, $i + 1);
                     if ($next !== null && $tokens[$next] === '{') {
@@ -224,6 +332,7 @@ final class ApiReference
                             throw new \RuntimeException('gen-api-reference: braced namespace blocks are not supported; use a `namespace X;` statement');
                         }
                         $namespace = ltrim($tokens[$next][1], '\\');
+                        $imports = [];
                         $i = $next;
                     }
                     $doc = null;
@@ -249,15 +358,20 @@ final class ApiReference
                         T_ENUM => 'enum',
                         default => 'class',
                     };
+                    // `enum Name: string` is backed; `enum Name implements X` is not.
+                    $after = self::nextSignificant($tokens, $name + 1);
                     $current = [
                         'namespace' => $namespace,
                         'short' => $tokens[$name][1],
                         'kind' => $kind,
                         'modifiers' => $mods,
                         'doc' => $doc,
+                        'backed' => $kind === 'enum' && $after !== null && $tokens[$after] === ':',
+                        'start' => $offsets[$i],
                         'open' => false,
                         'methods' => [],
                         'cases' => [],
+                        'traits' => [],
                     ];
                     $i = $name;
                     $doc = null;
@@ -288,6 +402,131 @@ final class ApiReference
         }
 
         return $done;
+    }
+
+    /**
+     * The `use` statement whose keyword precedes $from.
+     *
+     * @return array{0: list<array{0: string, 1: string}>, 1: int} [raw name, alias] pairs, and the index of the closing `;`
+     */
+    private static function useStatement(array $tokens, int $from): array
+    {
+        $pairs = [];
+        $words = [];
+        for ($k = $from, $n = count($tokens); $k < $n; $k++) {
+            $t = $tokens[$k];
+            if ($t === '{') {
+                throw new \RuntimeException('gen-api-reference: group and trait-adaptation `use` blocks are not supported; write one name per statement');
+            }
+            if ($t === ';' || $t === ',') {
+                $pairs = self::useItem($words, $pairs);
+                $words = [];
+                if ($t === ';') {
+                    return [$pairs, $k];
+                }
+                continue;
+            }
+            if (is_array($t) && in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $words[] = $t;
+        }
+
+        throw new \RuntimeException('gen-api-reference: unterminated use statement');
+    }
+
+    /**
+     * @param list<mixed> $words the significant tokens of one comma-separated item
+     * @param list<array{0: string, 1: string}> $pairs
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function useItem(array $words, array $pairs): array
+    {
+        $first = $words[0] ?? null;
+        if (is_array($first) && in_array($first[0], [T_FUNCTION, T_CONST], true)) {
+            return $pairs;
+        }
+        $name = null;
+        $alias = null;
+        $afterAs = false;
+        foreach ($words as $word) {
+            if (!is_array($word)) {
+                continue;
+            }
+            if ($word[0] === T_AS) {
+                $afterAs = true;
+                continue;
+            }
+            if ($afterAs) {
+                $alias = $word[1];
+                $afterAs = false;
+                continue;
+            }
+            if ($name === null && in_array($word[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
+                $name = $word[1];
+            }
+        }
+        if ($name === null) {
+            return $pairs;
+        }
+        $pos = strrpos($name, '\\');
+        $pairs[] = [$name, $alias ?? ($pos === false ? $name : substr($name, $pos + 1))];
+
+        return $pairs;
+    }
+
+    /**
+     * The FQN a name refers to at the point it is written: a leading backslash is
+     * absolute, an imported first segment expands through the import, and anything
+     * else is relative to the namespace.
+     *
+     * @param array<string, string> $imports alias => FQN
+     */
+    private static function resolveName(string $raw, array $imports, string $namespace): string
+    {
+        if (str_starts_with($raw, '\\')) {
+            return substr($raw, 1);
+        }
+        $first = strstr($raw, '\\', true);
+        if ($first === false) {
+            $first = $raw;
+        }
+        if (isset($imports[$first])) {
+            return $imports[$first] . substr($raw, strlen($first));
+        }
+
+        return ($namespace === '' ? '' : $namespace . '\\') . $raw;
+    }
+
+    /**
+     * The public methods of one type: its own, then those of each trait it uses.
+     * A method the type declares itself wins over a trait's method of the same
+     * name, as PHP resolves it.
+     *
+     * @param array<string, array<string, mixed>> $index every parsed type, keyed by FQN
+     * @param list<string> $trail the types already on the path, a guard against a trait cycle
+     * @return list<array{name: string, signature: string, summary: string}>
+     */
+    private static function withTraitMethods(array $index, string $fqn, string $slug, array $trail = []): array
+    {
+        $methods = $index[$fqn]['methods'];
+        $names = array_column($methods, 'name');
+        foreach ($index[$fqn]['traits'] as $traitFqn) {
+            if (!isset($index[$traitFqn]) || $index[$traitFqn]['kind'] !== 'trait') {
+                throw new \RuntimeException("gen-api-reference: $fqn uses $traitFqn, which is not a trait declared under $slug/src");
+            }
+            if (in_array($traitFqn, $trail, true)) {
+                continue;
+            }
+            foreach (self::withTraitMethods($index, $traitFqn, $slug, [...$trail, $fqn]) as $method) {
+                if (!in_array($method['name'], $names, true)) {
+                    $methods[] = $method;
+                    $names[] = $method['name'];
+                }
+            }
+        }
+
+        return $methods;
     }
 
     /**
@@ -342,6 +581,7 @@ final class ApiReference
             }
         }
         $type['methods'][] = [
+            'name' => $tokens[$name][1],
             'signature' => implode(' ', $prefix) . ($prefix === [] ? '' : ' ') . $tokens[$name][1] . $sig,
             'summary' => self::summary($doc),
         ];
@@ -349,15 +589,16 @@ final class ApiReference
 
     /**
      * @param array<string, mixed> $type
-     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, methods: list<array{signature: string, summary: string}>}
+     * @return array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, internal: bool, traits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}
      */
     private static function finish(array $type, int $size): array
     {
         $fqn = ($type['namespace'] === '' ? '' : $type['namespace'] . '\\') . $type['short'];
-        $kind = $type['kind'];
-        foreach (['abstract', 'final'] as $modifier) {
+        // PHP's own order: `final readonly class`. Only classes take these words.
+        $words = [];
+        foreach (['abstract', 'final', 'readonly'] as $modifier) {
             if (in_array($modifier, $type['modifiers'], true) && $type['kind'] === 'class') {
-                $kind = $modifier . ' ' . $kind;
+                $words[] = $modifier;
             }
         }
 
@@ -365,10 +606,13 @@ final class ApiReference
             'fqn' => $fqn,
             'short' => $type['short'],
             'namespace' => $type['namespace'],
-            'kind' => $kind,
+            'kind' => implode(' ', [...$words, $type['kind']]),
             'size' => $size,
             'summary' => self::summary($type['doc']),
             'cases' => $type['cases'],
+            'backed' => $type['backed'],
+            'internal' => self::isInternal($type['doc']),
+            'traits' => $type['traits'],
             'methods' => $type['methods'],
         ];
     }
@@ -421,10 +665,28 @@ final class ApiReference
     }
 
     /**
-     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, methods: list<array{signature: string, summary: string}>}> $types
+     * The id a type's heading carries. Two names that flatten to the same id
+     * would send an in-page link to the wrong heading, so render() refuses them.
+     */
+    private static function anchor(string $fqn): string
+    {
+        return 'api-' . strtolower((string) preg_replace('/[^A-Za-z0-9]+/', '-', $fqn));
+    }
+
+    /**
+     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}> $types
      */
     private static function render(string $slug, array $types): string
     {
+        $anchors = [];
+        foreach ($types as $type) {
+            $id = self::anchor($type['fqn']);
+            if (isset($anchors[$id])) {
+                throw new \RuntimeException('gen-api-reference: ' . $anchors[$id] . ' and ' . $type['fqn'] . ' both take the anchor id ' . $id . '; rename one');
+            }
+            $anchors[$id] = $type['fqn'];
+        }
+
         $out = [];
         $out[] = '<!-- GENERATED by tools/gen-api-reference.php from ' . $slug . '/src. Do not edit by hand. '
             . 'Regenerate with: php tools/gen-api-reference.php ' . $slug . ' -->';
@@ -446,12 +708,11 @@ final class ApiReference
     }
 
     /**
-     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, methods: list<array{signature: string, summary: string}>} $type
+     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>} $type
      */
     private static function renderType(array $type): string
     {
-        $id = 'api-' . strtolower((string) preg_replace('/[^A-Za-z0-9]+/', '-', $type['fqn']));
-        $h = '<h4 id="' . $id . '"><code>' . htmlspecialchars($type['short'], ENT_QUOTES, 'UTF-8')
+        $h = '<h4 id="' . self::anchor($type['fqn']) . '"><code>' . htmlspecialchars($type['short'], ENT_QUOTES, 'UTF-8')
             . '</code> <small>' . htmlspecialchars($type['kind'], ENT_QUOTES, 'UTF-8') . '</small></h4>';
         $parts = [$h];
         if ($type['summary'] !== '') {
@@ -463,6 +724,14 @@ final class ApiReference
                 $type['cases']
             );
             $parts[] = '<p>Cases: ' . implode(' · ', $cases) . '</p>';
+        }
+        if ($type['kind'] === 'enum') {
+            // PHP supplies these methods, so no declaration in src/ carries them and the table below cannot.
+            $provided = '<code>cases()</code>';
+            if ($type['backed']) {
+                $provided .= ', <code>from()</code> and <code>tryFrom()</code>';
+            }
+            $parts[] = '<p>PHP also provides ' . $provided . '.</p>';
         }
         if ($type['methods'] !== []) {
             $rows = [];
