@@ -122,10 +122,13 @@ file is read at all, so `--safe-mode` loads zero plugin code by construction.
 
 Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
 
-1. **First sight is quarantine.** An entrypoint never seen before is *listed*
-   at launch and loaded only at the **next** launch, so a manifest swapped
-   under a trusted name cannot smuggle new code in silently. The seen-ledger
-   lives in `~/.candy-code/channels.json`, mode 0600.
+1. **First sight is quarantine, keyed by path.** An entrypoint *path* never
+   seen before is *listed* at launch and loaded only at the **next** launch,
+   so a manifest that adds a new entrypoint under a trusted name cannot smuggle
+   new code in silently. The seen-ledger lives in `~/.candy-code/channels.json`,
+   mode 0600, and records paths only, never bytes. A rewrite of a file at a path
+   already on the ledger is not listed again and loads without a quarantine
+   stop; that gap is tracked as R2 in `plan_plugin.md` section 9.
 2. **The bytes must be private.** The file and its directory must be owned by
    your account and not world-writable, or the entry is refused. A trusted
    name records who consented; it says nothing about the file being intact.

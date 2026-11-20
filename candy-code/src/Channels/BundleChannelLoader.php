@@ -23,13 +23,16 @@ use SugarCraft\Code\Server\ErrorLog;
  *    frozen-at-launch list (C-SEC-3.b). A checked-out project can never
  *    widen it; safe mode answers the empty list before anything reads this
  *    class, so `--safe-mode` loads zero plugin code by construction.
- * 3. FIRST SIGHT IS QUARANTINE. Even a trusted entrypoint is only LISTED
- *    on the launch that first reveals it — the hooks law's
+ * 3. FIRST SIGHT IS QUARANTINE, KEYED BY PATH. Even a trusted entrypoint is
+ *    only LISTED on the launch that first reveals its PATH — the hooks law's
  *    quarantine-first-launch semantics, copied honestly: the operator sees
  *    the notice, and the file loads at the NEXT launch. The seen-ledger
- *    lives in {@see ChannelsStore} (0600, user-owned). A manifest swap
- *    under a trusted name therefore cannot smuggle code in silently:
- *    every new path costs a launch of visible listing first.
+ *    lives in {@see ChannelsStore} (0600, user-owned) and records the path
+ *    alone, never the bytes. A manifest swap that adds a NEW path under a
+ *    trusted name therefore cannot smuggle code in silently: every new path
+ *    costs a launch of visible listing first. A same-uid, in-place rewrite of
+ *    an already-seen path is not quarantined again; that gap is parity with
+ *    the original loader (plan_plugin.md section 9, R2).
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the
  *    entrypoint file AND its parent directory must be owned by this
  *    process's uid and not world-writable — the same refusal
