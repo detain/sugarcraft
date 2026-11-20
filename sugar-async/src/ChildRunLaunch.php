@@ -77,7 +77,7 @@ final class ChildRunLaunch
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk, or null
      * @param null|float $idleTimeout  Seconds of silence before the kill ladder starts, or null for none
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
-     * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle
+     * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle, or on the reap if the child still holds it
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -336,19 +336,26 @@ final class ChildRunLaunch
         $this->cancelSubscription = null;
 
         $code = $this->exitCode;
+        $staged = $this->stagedStdin;
         if ($this->exited) {
-            // Seen gone by the status poll, so proc_close() cannot wait.
+            // Seen gone by the status poll, so proc_close() cannot wait. The child is
+            // reaped, so a failed removal of the staged payload has nothing to retry.
             $reaped = proc_close($this->proc);
             $code ??= $reaped;
+            if ($staged !== null) {
+                StagedStdin::removeOrRetry($staged, true);
+            }
         } else {
-            // Survived the kill budget: reaped on the loop once the kernel releases it.
-            BoundedShutdown::reapWhenExited($this->loop, $this->proc);
-        }
-
-        // Removed after the reap so the child is no longer reading it. A child that
-        // survived the kill budget may still hold it open; a failed unlink is left alone.
-        if ($this->stagedStdin !== null) {
-            @unlink($this->stagedStdin);
+            // Survived the kill budget: a child that still holds the staged payload
+            // refuses its removal. A refused removal is kept and retried on the reap.
+            $retry = $staged !== null && StagedStdin::removeOrRetry($staged, false);
+            BoundedShutdown::reapWhenExited(
+                $this->loop,
+                $this->proc,
+                $retry ? static function (?int $status) use ($staged): void {
+                    StagedStdin::removeOrRetry($staged, true);
+                } : null,
+            );
         }
 
         $r = $this->capture->result(DrainResult::CLOSED);
