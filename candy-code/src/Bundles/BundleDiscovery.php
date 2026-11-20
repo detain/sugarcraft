@@ -131,14 +131,18 @@ final class BundleDiscovery
     }
 
     /**
-     * One bundle per TRUSTED name: when a user-tier bundle and a project-tier
-     * bundle share a name listed in `trustedBundleChannels`, the user-tier copy
-     * is the one that loads and the project copy is skipped with a warning.
-     * Trust is by name, so two copies of one trusted name would otherwise both
-     * answer to the same consent; the user tier is the only tier that may hold
-     * it (ruling 2026-11-20). An untrusted name keeps every copy it was found
-     * with, so a project-tier bundle that was never trusted is discovered as it
-     * always was.
+     * A project-tier copy of a TRUSTED name is dropped when a user-tier bundle
+     * of that name exists: the user-tier copy is the one that loads, and the
+     * project copy is skipped with a warning. That drop is whole-bundle, so the
+     * skipped copy's commands, skills, agents and hooks do not load either.
+     * Trust never flows to a project copy (ruling 2026-11-20).
+     *
+     * Two user-tier copies of one trusted name are NOT collapsed here: both are
+     * user-tier consents to the same name, and each loads through its own
+     * entrypoints. A channel name the first copy already registered is refused
+     * by the registry's collision check, not by this dedupe. An untrusted name keeps
+     * every copy it was found with, so a project-tier bundle that was never
+     * trusted is discovered as it always was.
      *
      * @param list<Bundle> $bundles
      *

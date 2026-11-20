@@ -293,6 +293,25 @@ final class BundleDiscoveryTest extends TestCase
         );
         self::assertSame([], array_values($shadowed), 'no project copy is skipped as shadowed');
     }
+
+    /**
+     * The dedupe collapses project-tier copies of a trusted name and nothing
+     * else: two user-tier copies of one trusted name are both the user's own
+     * consent to that name, so both are discovered.
+     */
+    public function testTwoUserTierCopiesOfATrustedNameAreBothDiscovered(): void
+    {
+        $project = $this->tempDir . '/project';
+        $this->writeBundleRoot($this->home . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/twin', ['name' => 'twin']);
+        $elsewhere = $this->tempDir . '/elsewhere/twin';
+        $this->writeBundleRoot($elsewhere, ['name' => 'twin']);
+
+        $bundles = (new BundleDiscovery($project, [$elsewhere], ['twin']))->discover();
+
+        self::assertCount(2, $bundles, 'two user-tier copies of one trusted name are not collapsed');
+        self::assertSame(['user', 'user'], array_map(static fn (Bundle $bundle): string => $bundle->tier, $bundles));
+    }
+
     /** A project-tier bundle with no user-tier twin is kept under its own tier. */
     public function testAProjectTierBundleWithoutAUserTwinIsKept(): void
     {

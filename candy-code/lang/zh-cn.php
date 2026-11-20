@@ -4431,7 +4431,7 @@ TXT,
     'settings.trustedBundleCommands.help' => '允许其命令文件运行 !`cmd` shell 块的插件包名称；每条命令仍由权限门裁定。名称须与包自身清单中的名称一致，且仅用户层安装有效——项目的检出不可能自我授予 shell，即便冒用已列出的名称也不行。选择加入不是绕过：权限门只有 Deny 规则会拒绝，被评定为 Ask 的规则将无人值守地执行——展开没有可显示的提示。默认为空，因此包命令不运行 shell。',
 
     'settings.trustedBundleChannels.label' => '受信任的频道插件包',
-    'settings.trustedBundleChannels.help' => '其中声明的频道入口点可在进程内加载的包名称。仅从你自己的配置文件读取；默认为空。下次启动时生效。',    'settings.mcpPromptShell.label' => 'MCP 提示词 shell',
+    'settings.trustedBundleChannels.help' => '仅用户层级的包名称，其中声明的频道入口点可在进程内加载。同名的项目层级包永不加载。仅从你自己的配置文件读取；默认为空。下次启动时生效。',    'settings.mcpPromptShell.label' => 'MCP 提示词 shell',
     'settings.mcpPromptShell.help' => '允许其提示词正文运行 !`cmd` shell 块的 MCP 服务器键；每条命令仍由权限门裁定。名称须与您的用户配置赋予服务器的键一致。仅限用户层；默认为空，因此获取的提示词不运行 shell。选择加入不是绕过：权限门只有 Deny 规则会拒绝，被评定为 Ask 的规则将无人值守地执行——展开没有可显示的提示。',
     'settings.trustedProjectHooks.help' => '允许运行 .candy-code/hooks.yaml 的项目根目录。',
     'settings.trustedProjectMcp.help' => '允许启动 .mcp.json 服务器的项目根目录。',
