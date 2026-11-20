@@ -81,8 +81,8 @@ final class ChildCapture
         return false;
     }
 
-    public function result(string $reason): DrainResult
+    public function result(string $reason, bool $abandonedAfterExit = false): DrainResult
     {
-        return new DrainResult($this->buffers, $this->dropped, $reason);
+        return new DrainResult($this->buffers, $this->dropped, $reason, $abandonedAfterExit);
     }
 }

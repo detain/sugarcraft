@@ -7,6 +7,7 @@ namespace SugarCraft\Core\Tests\Util\Proc;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
+use React\EventLoop\TimerInterface;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
@@ -446,6 +447,32 @@ final class BoundedShutdownTest extends TestCase
         self::assertTrue($gone);
         self::assertSame([15, 9], $sent, 'the rung order is TERM then the integer-literal 9');
         self::assertSame(1, $hookCalls, 'the escalation hook fires once between the rungs');
+    }
+
+    public function testEscalateAsyncReturnsItsPollTimerSoACallerCanCancelTheLadder(): void
+    {
+        $loop = new StreamSelectLoop();
+        $sent = [];
+
+        $timer = BoundedShutdown::escalateAsync(
+            $loop,
+            static function (int $signal) use (&$sent): void {
+                $sent[] = $signal;
+            },
+            static fn (): bool => false,
+            null,
+            0.05,
+            0.05,
+        );
+        self::assertInstanceOf(TimerInterface::class, $timer);
+
+        $loop->cancelTimer($timer);
+        $loop->addTimer(0.2, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        self::assertSame([15], $sent, 'a cancelled ladder sends its TERM rung and never escalates to 9');
     }
 
     public function testEscalateAsyncReportsStillRunningWhenTheKillBudgetRunsOut(): void

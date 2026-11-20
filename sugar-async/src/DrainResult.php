@@ -24,11 +24,14 @@ final class DrainResult
     /**
      * @param array<int|string, string> $buffers  Bytes kept per slot (head of the stream, at most maxBytes)
      * @param array<int|string, int> $dropped  Bytes refused per slot because its buffer was full
+     * @param bool $abandonedAfterExit  The walk ended on the post-exit silence budget with a pipe still open
+     *                                  (a descendant held it), so the pipe was abandoned rather than read to EOF
      */
     public function __construct(
         public readonly array $buffers,
         public readonly array $dropped,
         public readonly string $reason,
+        public readonly bool $abandonedAfterExit = false,
     ) {
     }
 

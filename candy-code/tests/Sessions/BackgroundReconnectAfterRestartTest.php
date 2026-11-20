@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -224,6 +225,56 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
         $this->assertStringContainsString('READOPTED42', $settled->output);
         $this->assertFileDoesNotExist($recordPath);
         $this->assertFileDoesNotExist($ipc['bufferPath']);
+    }
+
+    public function testASessionSpawnedFromTheLoopIsReadoptedByTheNextProcess(): void
+    {
+        foreach (['proc_open', 'pcntl_fork', 'posix_setsid', 'stream_socket_server'] as $fn) {
+            if (!function_exists($fn)) {
+                $this->markTestSkipped("{$fn}() unavailable");
+            }
+        }
+        $this->setUpDaemonFixture();
+        putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; sleep 1; printf LOOPADOPTED42');
+
+        // The launch goes through the loop-driven accept (D6 option A: restart adoption is
+        // completed, and it must hold for a daemon accepted from the loop, not only the sync wrapper).
+        $first = new BackgroundSupervisor(tempRoot: $this->root);
+        $session = null;
+        $first->spawnSessionAsync(
+            name: 'loop spawned',
+            agent: $this->agent(),
+            task: 'finish after the restart',
+            workingDirectory: $this->fixtureHome,
+            timeoutSeconds: 30,
+        )->then(static function (\SugarCraft\Code\Background\BackgroundSession $settled) use (&$session): void {
+            $session = $settled;
+        });
+        SupervisorPump::until($first, static function () use (&$session): bool {
+            return $session !== null;
+        });
+        $this->assertNotNull($session, 'the loop never accepted the daemon');
+
+        $ipc = $this->ipcOf($first, $session->id);
+        $this->fixtureDaemons[] = ['pid' => $ipc['pid'], 'startTime' => $ipc['startTime'] ?? null];
+        array_push($this->fixtureFiles, $ipc['socketPath'], $ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? '');
+
+        $recordPath = $this->indexDir() . '/' . $session->id . '.json';
+        $this->assertFileExists($recordPath, 'a loop-driven spawn leaves an index record');
+        $record = json_decode((string) file_get_contents($recordPath), true);
+        $record['owner'] = $this->deadOwner();
+        file_put_contents($recordPath, (string) json_encode($record));
+        unset($first);
+
+        $second = new BackgroundSupervisor(tempRoot: $this->root);
+        $adopted = $second->reconnect($this->fixtureHome);
+        $this->assertArrayHasKey($session->id, $adopted, 'the restarted process must adopt the loop-spawned daemon');
+
+        SupervisorPump::until($second, static fn (): bool => !$second->getSession($session->id)?->isActive());
+
+        $settled = $second->getSession($session->id);
+        $this->assertSame(BackgroundSessionStatus::Completed, $settled?->status, 'the adopted daemon never settled');
+        $this->assertStringContainsString('LOOPADOPTED42', $settled->output);
     }
 
     // -------------------------------------------------------------------------

@@ -427,8 +427,23 @@ per-stream byte cap, and returns a `ChildResult`:
 A child past its deadline is killed (SIGTERM, a grace period, SIGKILL) and reported
 as `TIMED_OUT`. `run()` uses the sugar-core `BoundedShutdown` ladder; `launch()` runs
 the same rungs on loop timers with the same budgets. Defaults: ten seconds, 8 MiB per stream.
-`withStdin()` feeds a payload; on Windows a non-empty payload is refused, because
-the Windows runtime cannot give a non-blocking stdin pipe.
+
+`withIdleTimeout($seconds)` is an opt-in silence budget. A child that writes nothing to
+either stream for that long is killed through the same ladder and reported as
+`TIMED_OUT`, the same status as the deadline. It is off by default, and a closed-output
+child that lingers is cut at the budget too.
+
+`withCancellation($token)` takes the `CancellationToken` of a `CancellationSource`.
+Cancelling the source kills the child through the same ladder, reaps it, and reports
+`CANCELLED`. A token that is already cancelled spawns nothing. `run()` is blocking, so it
+only observes a cancel raised from its own callbacks (`withOnChunk()`, `withOnSpawn()`,
+or a signal handler); `launch()` observes a cancel from anywhere on the loop.
+
+`withStdin()` feeds a payload. On POSIX it goes through a non-blocking pipe. On the
+Windows runtime, which cannot give a non-blocking stdin pipe, a non-empty payload is
+staged to a private temp file that the child reads as its stdin; the file is removed
+once the child is reaped. A null or empty payload gives the child an immediate EOF on
+every runtime.
 
 `ChildPump::new($pipes)` is the builder under `ChildRun`, usable on its own over pipes
 you opened: `withDeadline()`, `withCap()`, `withOnChunk()` (live feed),

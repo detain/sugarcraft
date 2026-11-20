@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Containment;
 use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 
@@ -709,6 +710,39 @@ final class ProcessContainment
     }
 
     /**
+     * Longest wait for a detached shell to become its own process-group leader
+     * before the timeout kill reads that group ({@see awaitGroupLeader()}). The
+     * wrapper leads within a millisecond or two on an idle host, but the exec
+     * of `setsid` before its setsid() call can take hundreds of milliseconds
+     * under load, and a cap that expires first leaves the spawn-time group
+     * unrecorded: a backgrounded job then survives its timeout kill. The wait
+     * ends at once on leadership, so this cap is paid by a wrapper that never
+     * leads, including one that exited before it did.
+     */
+    public const GROUP_LEADER_WAIT_SECONDS = 1.0;
+
+    /**
+     * The detached wrapper makes the child its own process-group leader a moment
+     * after proc_open() returns, and the timeout's group kill needs that group
+     * id. Read it with a bounded wait so a fast spawn cannot be measured before
+     * the wrapper has run. Only leadership ends the wait early: a wrapper that
+     * exits before it leads stays a zombie until reaped, and posix_getpgid()
+     * still answers for it with its parent's group, so that case pays the cap.
+     *
+     * Run from a ChildRun spawn seam (withOnSpawn), before the group is measured.
+     */
+    public static function awaitGroupLeader(int $pid): void
+    {
+        if (!\function_exists('posix_getpgid')) {
+            return;
+        }
+        $deadline = microtime(true) + self::GROUP_LEADER_WAIT_SECONDS;
+        while (($group = @posix_getpgid($pid)) !== false && $group !== $pid && microtime(true) < $deadline) {
+            usleep(500);
+        }
+    }
+
+    /**
      * The process-group id a containment-aware kill should target, or null
      * when the child does not lead its own group.
      *
@@ -731,17 +765,7 @@ final class ProcessContainment
      */
     public static function groupId(mixed $process): ?int
     {
-        if (!\is_resource($process) || !\function_exists('posix_getpgid')) {
-            return null;
-        }
-
-        $status = \proc_get_status($process);
-        $pid = (int) ($status['pid'] ?? 0);
-        if ($pid <= 0) {
-            return null;
-        }
-
-        return \posix_getpgid($pid) === $pid ? $pid : null;
+        return Containment::groupId($process);
     }
 
     /**
@@ -776,12 +800,7 @@ final class ProcessContainment
             return \proc_terminate($process, $signal);
         }
 
-        $groupId = self::groupId($process);
-        if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
-            return true;
-        }
-
-        return \proc_terminate($process, $signal);
+        return Containment::terminate($process, $signal);
     }
 
     /**
