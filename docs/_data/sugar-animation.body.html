@@ -2,7 +2,7 @@
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-animation</code></pre>
-    <p>Requires PHP 8.3 or newer. <code>ext-gd</code> is needed only for the GIF path (<code>Decoder</code>). <code>AnsiArt</code>, <code>ArtLibrary</code>, <code>ArtLoop</code> and <code>Player</code> run without it. Without GD, every <code>Decoder</code> entry point throws a <code>RuntimeException</code> that names the missing extension.</p>
+    <p>Requires PHP 8.3 or newer. <code>ext-gd</code> is needed only for the GIF path (<code>Decoder</code>). <code>AnsiArt</code>, <code>ArtLibrary</code>, <code>ArtLoop</code> and <code>Player</code> run without it. Without GD, <code>Decoder::decode()</code>, <code>Decoder::decodeFile()</code> and <code>Decoder::decodeBytes()</code> throw a <code>RuntimeException</code> that names the missing extension. <code>Decoder::readFile()</code> and <code>Decoder::loopCount()</code> do not use GD and keep working.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">// Decode a GIF from disk and play it in the alternate screen.
@@ -37,7 +37,7 @@ echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code><
     <p><strong>Bound a run.</strong> Chain <code>playOnce()</code>, <code>withLoops(3)</code> or <code>withMaxSeconds(10.0)</code> on the <code>Player</code>. Each returns a new instance.</p>
     <p><strong>Pin the frame rate.</strong> Call <code>withFixedFps(12.0)</code> to advance on a uniform wall-clock cadence instead of the per-frame GIF delays.</p>
     <p><strong>Choose the viewport-fit renderer.</strong> Pass <code>Renderer::withAdaptiveSize()</code> to the <code>Player</code> constructor. It reads the terminal size from STDOUT with <code>PosixBackend::queryWinsize(1)</code> and clips the art to the viewport. It throws a <code>RuntimeException</code> when STDOUT is not a terminal, so guard the call in piped output or CI and fall back to <code>Renderer::new()</code>. Pass <code>Renderer::withAdaptiveSize(reservedRows: 2)</code> to leave rows free for your own chrome.</p>
-    <p><strong>Pick a logo variant by terminal depth.</strong> Build an <code>ArtLibrary</code> with <code>ArtLibrary::fromDir($dir)</code>, then call <code>pick($slug, $depthTag)</code>. The depth tag falls back in the order <code>tc</code>, <code>256</code>, <code>16</code>.</p>
+    <p><strong>Pick a logo variant by terminal depth.</strong> Build an <code>ArtLibrary</code> with <code>ArtLibrary::fromDir($dir)</code>, then call <code>pick($slug, $depthTag)</code>. The requested depth is tried first. If the slug has no variant at that depth, the adjacent depths are tried in a fixed order: a <code>tc</code> request falls back to <code>256</code> then <code>16</code>, a <code>256</code> request to <code>tc</code> then <code>16</code>, and a <code>16</code> request to <code>256</code> then <code>tc</code>.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -84,7 +84,7 @@ echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code><
 <tr><td>AnsiArt::isAnimated()</td><td>isAnimated(): bool</td><td>True when the file carries more than one frame.</td></tr>
 <tr><td>AnsiCell::new()</td><td>new(string $glyph, string $sgr = ''): self</td><td>One cell: its glyph and its canonical whole-state SGR.</td></tr>
 <tr><td>ArtLibrary::fromDir()</td><td>fromDir(string $dir, bool $includeSkinny = false): self</td><td>Index a <code>.ansi</code> corpus from a directory.</td></tr>
-<tr><td>ArtLibrary::pick()</td><td>pick(string $slug, string $depthTag, bool $preferAnimated = true): ?AnsiArt</td><td>Select a slug at the deepest supported depth (<code>tc</code>, then <code>256</code>, then <code>16</code>).</td></tr>
+<tr><td>ArtLibrary::pick()</td><td>pick(string $slug, string $depthTag, bool $preferAnimated = true): ?AnsiArt</td><td>Select a slug at the requested depth. If that depth has no variant, the adjacent depths are tried in cascade order: <code>tc</code> then <code>256</code> then <code>16</code> for a <code>tc</code> request, <code>256</code> then <code>tc</code> then <code>16</code> for a <code>256</code> request, and <code>16</code> then <code>256</code> then <code>tc</code> for a <code>16</code> request.</td></tr>
 <tr><td>ArtLibrary::randomSlug()</td><td>randomSlug(string $depthTag, bool $preferAnimated = true, ?callable $rng = null): ?string</td><td>Pick a random slug that the depth tag supports.</td></tr>
 <tr><td>ArtLibrary::mergeManifest()</td><td>mergeManifest(string $jsonlPath): self</td><td>Add the entries from a JSONL manifest to the index.</td></tr>
 <tr><td>ArtLoop::new()</td><td>new(int $frameCount, float $frameSeconds = 0.1, float $pauseSeconds = 2.5): self</td><td>Cycle frames by elapsed seconds, with a pause between cycles.</td></tr>

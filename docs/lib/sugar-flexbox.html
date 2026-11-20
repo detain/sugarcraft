@@ -367,7 +367,7 @@ $vp = Viewport::fromContent($document, width: 80, height: 20)
 php examples/table.php
 php examples/sort-filter.php
 php examples/viewport-keys.php</code></pre>
-    <p>The first three print a frame and exit. <code>viewport-keys.php</code> prints its frames as it runs, so pipe it through a pager or read it in a terminal.</p>
+    <p><code>flexbox.php</code>, <code>table.php</code> and <code>sort-filter.php</code> each print a short run of frames (three, four and five) and exit. <code>viewport-keys.php</code> prints its frames as it runs, so pipe it through a pager or read it in a terminal.</p>
 
     <h3 id="testing" style="margin-top: 32px;">Testing</h3>
     <pre class="code"><code class="language-shell">composer install
@@ -420,7 +420,7 @@ vendor/bin/phpunit</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h3 id="demos">Demos</h3>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the flexbox, table and sort-filter examples. <code>viewport-keys.php</code> has no recording. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/flexbox.gif" alt="Three panels: a ratio row, a stacked column, a centered row" onerror="this.parentElement.style.display='none'">
