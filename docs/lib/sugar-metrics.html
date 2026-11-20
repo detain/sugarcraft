@@ -244,7 +244,7 @@ use SugarCraft\Metrics\Backend\StatsdBackend;
 $memory = new InMemoryBackend();
 $reg    = Registry::new(MultiBackend::new($memory, StatsdBackend::new('127.0.0.1', 8125)));
 $reg-&gt;counter('http.requests', 1);
-echo $memory-&gt;counterValue('http.requests');   // 1.0</code></pre>
+echo $memory-&gt;counterValue('http.requests');   // prints 1 (PHP echoes the float 1.0 without a decimal point)</code></pre>
 
     <h3 id="bound-label-cardinality">Bound label cardinality</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
@@ -340,7 +340,7 @@ Server::new()
     </table>
 
     <h2 id="changelog" style="margin-top: 40px;">Changelog and versioning</h2>
-    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>. Breaking changes are recorded in the README under <em>Breaking changes</em>. For example, <code>MultiBackendException::getErrors()</code> became <code>errors()</code> to follow the bare-accessor convention, so code that still calls <code>getErrors()</code> must switch.</p>
+    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>. Breaking changes are recorded in the README under <em>Breaking changes</em>. For example, the <code>getErrors</code> accessor on the multi-backend exception was renamed to <code>errors</code> to follow the bare-accessor convention, so code that still calls the old <code>getErrors</code> method must switch.</p>
 
     <p style="margin-top: 48px;"><a href="https://github.com/sugarcraft/sugar-metrics" class="btn btn-primary">Source on GitHub →</a></p>
     </div>
