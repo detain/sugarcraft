@@ -382,9 +382,23 @@ final class LspInstaller
             ['npm_config_cache' => $installRoot . '/.npm-cache'],
         );
 
+        // runCaptured keeps the HEAD of a stream past its bound, so an npm run
+        // that wrote beyond the ceiling has lost the final lines where its
+        // error summary sits. Name the loss in the text the failure reports,
+        // or the kept head reads as the whole answer.
+        $stderr = (string) $outcome['stderr'];
+        $dropped = (int) ($outcome['stderrDropped'] ?? 0);
+        if ($dropped > 0) {
+            $stderr .= sprintf(
+                "\n... [npm stderr truncated: %d bytes omitted after the first %d; the final lines were not retained]",
+                $dropped,
+                strlen($stderr),
+            );
+        }
+
         return [
             'exitCode' => (int) $outcome['exitCode'],
-            'stderr' => (string) $outcome['stderr'],
+            'stderr' => $stderr,
             'timedOut' => (bool) $outcome['timedOut'],
         ];
     }

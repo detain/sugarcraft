@@ -200,7 +200,9 @@ trait TruncatesOutput
      * newline drops bytes without leaving damage.
      *
      * A non-positive $maxBytes disables the cap, which keeps the trait usable
-     * from a tool whose caller has deliberately opted out.
+     * from a tool whose caller has deliberately opted out. That skips the clip
+     * only: a positive $alreadyDropped still gets its marker, because bytes the
+     * capture already lost must not read as a complete answer.
      *
      * $saveSpill false is a PROBE: the same text, byte for byte in length, but
      * nothing is written — see {@see truncateMerged()}.
