@@ -19,8 +19,10 @@ use SugarCraft\Plugins\Discovery\Root;
  *     lands BELOW the plain foreign directories in every surface's precedence
  *     (the mapping is per-loader; see `Cli\Bootstrap`'s bundle wiring).
  *  2. `~/.candy-code/bundles/` — tier `user`, the destination
- *     `candy-code bundles install` writes to. A symlink inside it may point
- *     anywhere in home and nowhere outside it.
+ *     `candy-code bundles install` writes to. A bundle directory symlink may
+ *     point anywhere in home and nowhere outside it, but its manifest must
+ *     resolve inside that bundle (see {@see Bundle::manifestPath()}): a
+ *     manifest link that escapes the bundle is refused, never followed.
  *  3. Every directory listed in the `pluginPaths` setting — tier `user`, the
  *     operator's explicit word: a listed path is trusted as given (like every
  *     other user-tier path setting), and it may be either a bundle itself
@@ -46,8 +48,21 @@ final class BundleDiscovery
         private readonly string $projectRoot,
         private readonly array $configPaths = [],
     ) {
+        // A manifest that links outside its bundle is not a bundle, and it is not
+        // passed over quietly either: warnRefusedLink() names the link. It is NOT
+        // handed to the reader, which would report it as an unparseable manifest,
+        // and a refused container entry is not walked into (its children would
+        // otherwise be loaded from a bundle whose own manifest was refused).
         $this->scanner = new PluginDiscovery(
-            Bundle::hasManifest(...),
+            function (string $dir): bool {
+                if (Bundle::hasManifest($dir)) {
+                    return true;
+                }
+
+                $this->warnRefusedLink($dir);
+
+                return false;
+            },
             static fn (string $dir, string $tier, ?string $boundary): ?Bundle
                 => Bundle::fromDir($dir, $tier, self::ownerOf($tier, $boundary)),
             static fn (string $dir, string $real, string $tier, string $boundary): string
@@ -76,11 +91,11 @@ final class BundleDiscovery
         // and hand the user's own hooks to the project-tier trust path, so the user
         // tier wins — the same first-root-wins rule `bundles update` applies.
         if (!self::isSameDirectory($projectFloor, $userFloor)) {
-            $this->scanner->scan([new Root($projectFloor, 'project', $this->projectRoot)]);
+            $this->scanRoot(new Root($projectFloor, 'project', $this->projectRoot));
         }
 
         if ($home !== null) {
-            $this->scanner->scan([new Root($userFloor, 'user', $home)]);
+            $this->scanRoot(new Root($userFloor, 'user', $home));
         }
 
         foreach ($this->configPaths as $path) {
@@ -101,13 +116,48 @@ final class BundleDiscovery
             // other user-tier path setting draws — so it carries no boundary even
             // though it is badged `user`. A bundle directory and a container both
             // resolve through the generic scan with that null boundary.
-            $this->scanner->scan([new Root($real, 'user', null)]);
+            $this->scanRoot(new Root($real, 'user', null));
         }
 
         /** @var list<Bundle> $bundles */
         $bundles = $this->scanner->bundles();
 
         return $bundles;
+    }
+
+    /**
+     * Scan one root, unless the root itself is a bundle whose manifest links
+     * outside it: that root is named and skipped whole, so its children are
+     * never read as bundles of their own.
+     */
+    private function scanRoot(Root $root): void
+    {
+        if ($this->warnRefusedLink($root->dir)) {
+            return;
+        }
+
+        $this->scanner->scan([$root]);
+    }
+
+    /**
+     * Name $dir when its manifest links outside the bundle, the way the
+     * installer's bundlesNotBundle() names the same refusal. True when $dir was
+     * refused that way (and the warning was recorded).
+     */
+    private function warnRefusedLink(string $dir): bool
+    {
+        $link = Bundle::refusedManifest($dir);
+
+        if ($link === null) {
+            return false;
+        }
+
+        $this->scanner->addWarning(Lang::t('bundles.manifest-link-refused', [
+            'dir' => $dir,
+            'link' => $link,
+        ]));
+
+        return true;
     }
 
     /** @return list<string> per-bundle problems, worded for a launch notice */
