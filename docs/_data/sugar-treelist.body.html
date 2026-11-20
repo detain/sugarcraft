@@ -1,8 +1,8 @@
 <p class="lede" style="margin-top: 28px;">SugarTreelist is a list view for terminal UIs: box-drawing or line-number gutters, cursor navigation, whitespace-faithful word wrap, and live filtering. It ports the cursor, filter and render surface of <a href="https://github.com/charmbracelet/bubbles/tree/main/list">charmbracelet/bubbles/list</a>, and takes its gutter vocabulary from <a href="https://github.com/treilik/bubblelister">treilik/bubblelister</a>. It is a renderer, not a TEA program: the component is a plain <code>final class Model</code> that your host program's <code>view()</code> calls into, and the host owns the keys, the input line and the chrome around the list.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
-    <p style="margin-top: 12px;">The manifest requires PHP <code>^8.3</code>. It pulls in <code>sugarcraft/sugar-fuzzy</code> for fuzzy scoring and <code>psr/log</code> for the optional <code>LoggerInterface</code> on <code>view()</code>.</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist:@dev</code></pre>
+    <p style="margin-top: 12px;">The package has no tagged release yet, so it ships only <code>dev-master</code>, and the <code>@dev</code> constraint is required until the first version tag lands. The manifest requires PHP <code>^8.3</code>. It pulls in <code>sugarcraft/sugar-fuzzy</code> for fuzzy scoring and <code>psr/log</code> for the optional <code>LoggerInterface</code> on <code>view()</code>.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\TreeList\Model;
@@ -17,7 +17,7 @@ $model = Model::tree()
 echo $model->view();
 
 // Move the cursor down two items. Reset the delta memo so this paints a full
-// frame under its own header instead of a positional delta.
+// frame instead of a positional delta.
 $model = $model->withCursor(2);
 $model->resetPreviousFrame();
 echo $model->view();</code></pre>
@@ -160,7 +160,7 @@ if (!$model->isEmpty()) {
 <ul>
   <li><code>examples/basic.php</code> renders five fruit names with the Default gutters, then moves the cursor and repaints.</li>
   <li><code>examples/custom-styling.php</code> plugs a hand-written star prefixer and a cursor-marker suffixer into a plain <code>Model::new()</code>.</li>
-  <li><code>examples/long-items.php</code> wraps four descriptions in a 60-column viewport.</li>
+  <li><code>examples/long-items.php</code> renders four descriptions in a 60-column viewport. Only the second and third wrap across several rows; the first and fourth fit on one row.</li>
 </ul>
     <pre class="code"><code class="language-shell">php examples/basic.php
 php examples/custom-styling.php

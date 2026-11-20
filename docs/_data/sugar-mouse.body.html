@@ -1,8 +1,8 @@
 <p class="lede" style="margin-top: 28px;">SugarMouse finds clickable regions in a rendered terminal frame and resolves mouse events to them. You wrap each region in private-use sentinel tags, scan the frame to record each region's bounding box, then hit-test mouse events against those boxes. The primitive <code>Scanner</code> owns its own state, so no global wiring is needed. The <code>Zones\Manager</code> layer adds prefixed managers for nested components, plus hover, drag and multi-click trackers. It ports the Mark, Scan and Get pattern of <a href="https://github.com/lrstanley/bubblezone">lrstanley/bubblezone</a>, and <code>ZoneClickTracker</code> addresses <a href="https://github.com/lrstanley/bubblezone/issues/10">bubblezone issue #10</a>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mouse</code></pre>
-    <p style="margin-top: 12px;">The manifest requires PHP <code>^8.3</code>. The only package dependency is <code>sugarcraft/sugar-core</code>, which supplies the mouse message types and the width oracle.</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mouse:@dev</code></pre>
+    <p style="margin-top: 12px;">The package has no tagged release yet, so it ships only <code>dev-master</code>, and the <code>@dev</code> constraint is required until the first version tag lands. The manifest requires PHP <code>^8.3</code>. The only package dependency is <code>sugarcraft/sugar-core</code>, which supplies the mouse message types and the width oracle.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Mouse\Mark;
