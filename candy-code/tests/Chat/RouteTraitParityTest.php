@@ -48,6 +48,7 @@ final class RouteTraitParityTest extends TestCase
         'AutoCommittedMsg',
         'BackgroundSessionSpawnedMsg',
         'BackgroundSessionStoppedMsg',
+        'ShellSendSettledMsg', // P4-12 CC-1: the settled `/shells send` row, HandlesSessionSurface arm
         'BackgroundTickMsg',
         'BackendToolEventsMsg',
         'BangShellResultMsg',

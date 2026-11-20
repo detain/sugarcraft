@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Poll;
 use SugarCraft\Async\Retry;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\CarriesSessionState;
@@ -299,6 +303,62 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
             static fn(mixed $ready): bool => $ready === false,
             self::RELAY_ATTACH_BUDGET_MS,
             Backoff::new((float) self::RELAY_ATTACH_TICK_MS, 1.0),
+        );
+    }
+
+    /**
+     * The single probe behind {@see relayReady()}: TRUE when the row names no
+     * pid path (a pre-relay merged row) or its pid record already names a pid.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function relayAttached(array $row): bool
+    {
+        $pidPath = $row['ptyPidPath'] ?? null;
+        if (!\is_string($pidPath) || $pidPath === '') {
+            return true;
+        }
+
+        return self::pidRecorded($pidPath);
+    }
+
+    /**
+     * The readiness law of {@see relayReady()}, waited for ON THE LOOP instead
+     * of in a usleep(). `/shells send` runs on the TUI's interface loop, where
+     * a sleep freezes rendering, input and every timer for up to the whole
+     * attach budget (P4-12 CC-1). This polls {@see relayAttached()} on a loop
+     * timer at the same tick and the same budget, and resolves TRUE the moment
+     * the relay attaches, FALSE once the budget passes with no record. Any
+     * other failure rejects.
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return PromiseInterface<bool>
+     */
+    public static function relayReadyAsync(array $row, ?LoopInterface $loop = null): PromiseInterface
+    {
+        if (self::relayAttached($row)) {
+            return \React\Promise\resolve(true);
+        }
+
+        // Attempt 1 runs at once and attempt n lands at (n - 1) ticks, so the
+        // last attempt sits exactly on the budget, as Retry::bounded's does.
+        $attempts = intdiv(self::RELAY_ATTACH_BUDGET_MS, self::RELAY_ATTACH_TICK_MS) + 1;
+
+        return Poll::until(
+            static fn (): ?bool => self::relayAttached($row) ? true : null,
+            Backoff::new((float) self::RELAY_ATTACH_TICK_MS, 1.0)->withAttempts($attempts),
+            null,
+            $loop,
+        )->then(
+            static fn (bool $ready): bool => $ready,
+            static function (\Throwable $error): bool {
+                if ($error instanceof TimeoutException) {
+                    return false;
+                }
+
+                throw $error;
+            },
         );
     }
 

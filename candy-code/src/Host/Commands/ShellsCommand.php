@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Tools\BuiltIn\PtyRun;
 use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 
@@ -28,12 +31,12 @@ use SugarCraft\Code\Tools\BuiltIn\ShellSend;
  * `human` so the row's audit counter sees the hand that pressed.
  *
  * A send here obeys the SAME readiness law as the tool — it waits the
- * declared attach budget once through {@see ShellSend::relayReady} rather
+ * declared attach budget once through {@see ShellSend::relayReadyAsync} rather
  * than letting a fast `/shells send` after a spawn type into a FIFO nobody
  * is reading yet — but it is still ONE try: the sendBounded re-trial loop
  * belongs to the model's path, and a human who draws the honest not-ready
- * answer simply presses again. Blocking the interface loop past the budget
- * for a kernel promise that may never land is not what a command should do.
+ * answer simply presses again. The wait runs on a loop timer, so the interface
+ * loop keeps rendering and reading input while it waits (P4-12 CC-1).
  *
  * OWNERSHIP rides the rows C-TOOL-3.c tags: every read passes
  * `$context->currentSessionId()` as the owner, so the table a session lists
@@ -206,12 +209,29 @@ final class ShellsCommand implements HostCommand
         // pause — and answers honestly when the window passes without an
         // attach. The write-retry loop inside send() still absorbs the
         // two-statement gap the pump itself carries.
+        //
+        // That wait runs on a loop timer, not in a sleep (P4-12 CC-1): this
+        // method is on the interface loop, and a sleep here froze rendering
+        // and input for the whole budget. A relay that has already attached
+        // is still typed into at once; only the not-yet-attached case goes
+        // off-turn, and its answer lands as its own row.
         $row = $registry->status($id, $owner);
-        if ($row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayReady($row)) {
-            return CommandResult::errorReply($text, Lang::t('host.shells.send_not_ready', [
-                'id' => $id,
-                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
-            ]));
+        if ($row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayAttached($row)) {
+            return CommandResult::echo($text)->withEffect(CommandEffect::async(
+                static fn (): PromiseInterface => ShellSend::relayReadyAsync($row)->then(
+                    static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
+                        $ready
+                            ? $registry->send($id, $decoded, 'human', $owner)
+                            : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
+                                'id' => $id,
+                                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
+                            ])],
+                        $id,
+                        $decoded,
+                    )),
+                ),
+                static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null,
+            ));
         }
 
         $answer = $registry->send($id, $decoded, 'human', $owner);
@@ -224,6 +244,26 @@ final class ShellsCommand implements HostCommand
             'bytes' => (string) \strlen($decoded),
             'cursor' => (string) (int) $answer['cursor'],
         ]));
+    }
+
+    /**
+     * The row a settled `send` answers with, worded and flagged the way the
+     * on-turn answer is: a sent line, or the refusal the registry or the
+     * attach budget gave, flagged as an error.
+     *
+     * @param array<string, mixed> $answer `send()`'s answer, or a refusal built here
+     */
+    private static function sendRow(array $answer, string $id, string $decoded): Message
+    {
+        if (($answer['ok'] ?? false) !== true) {
+            return Message::assistant((string) ($answer['error'] ?? ''))->withUiOnly()->withError();
+        }
+
+        return Message::assistant(Lang::t('host.shells.send_sent', [
+            'id' => $id,
+            'bytes' => (string) \strlen($decoded),
+            'cursor' => (string) (int) $answer['cursor'],
+        ]))->withUiOnly();
     }
 
     /**

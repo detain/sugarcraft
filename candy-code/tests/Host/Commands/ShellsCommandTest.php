@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Host\Commands;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Host\Commands\CommandContext;
+use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\ShellsCommand;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -299,7 +302,7 @@ final class ShellsCommandTest extends TestCase
         $this->trackShell($registry, $id);
 
         $marker = 'c6kc' . bin2hex(random_bytes(4));
-        $body = self::body($this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>'));
+        $body = $this->settledBody($this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>'));
         self::assertStringContainsString('Typed into shell ' . $id, $body);
         self::assertStringContainsString('(' . (strlen($marker) + 1) . ' bytes)', $body, 'the byte count is the DECODED size — <Enter> folded to one byte');
         self::assertMatchesRegularExpression('/cursor \d+/', $body, 'the human answer threads the cursor to read from');
@@ -313,6 +316,66 @@ final class ShellsCommandTest extends TestCase
         }
         $shown = self::body($this->dispatchShells($registry, '/shells output ' . $id . ' 0'));
         self::assertStringContainsString($marker, $shown, 'what the human typed is on the screen the human can read back');
+    }
+
+    public function testSendWhileTheRelayIsNotAttachedAnswersLaterAndNeverHoldsTheDispatch(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'attach wait', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $marker = 'att' . bin2hex(random_bytes(3));
+        $began = microtime(true);
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>');
+        $held = microtime(true) - $began;
+
+        // Whether the relay had attached by now or not, the dispatch answers
+        // at once: a not-yet-attached relay is waited for on the loop, never
+        // in a sleep that would hold the interface for the whole budget.
+        self::assertLessThan(1.0, $held, 'the dispatch must not wait out the attach budget itself');
+        if ($result->effect(CommandEffectKind::Async) !== null) {
+            self::assertCount(1, $result->rows, 'an unattached send echoes the command and nothing else yet');
+            self::assertSame('/shells send ' . $id . ' ' . $marker . '<Enter>', self::body($result));
+        }
+
+        $settled = $this->settledBody($result);
+        self::assertTrue(
+            str_contains($settled, 'Typed into shell ' . $id) || str_contains($settled, 'had not opened its input'),
+            'the settled row is the send answer or the honest not-ready refusal, got: ' . $settled,
+        );
+    }
+
+    /**
+     * The row a `send` answers with. A send that waited for its relay answers
+     * through its async effect, so the thunk runs here and the loop is driven
+     * until its promise settles; an on-turn answer is read as it stands.
+     */
+    private function settledBody(CommandResult $result): string
+    {
+        $effect = $result->effect(CommandEffectKind::Async);
+        if ($effect === null) {
+            return self::body($result);
+        }
+
+        $loop = Loop::get();
+        $settled = null;
+        $guard = $loop->addTimer(15.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        ($effect->run())()->then(static function (mixed $msg) use (&$settled, $loop): void {
+            $settled = $msg;
+            $loop->stop();
+        });
+        if ($settled === null) {
+            $loop->run();
+        }
+        $loop->cancelTimer($guard);
+
+        self::assertInstanceOf(ShellSendSettledMsg::class, $settled, 'the send settles with its row inside the guard');
+
+        return $settled->message->content;
     }
 
     private function shellsContext(?BackgroundShellRegistry $registry): CommandContext

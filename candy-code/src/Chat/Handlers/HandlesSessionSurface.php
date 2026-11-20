@@ -107,6 +107,7 @@ use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\ModelCatalogReadyMsg;
@@ -225,6 +226,11 @@ trait HandlesSessionSurface
             return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()->withError(
                 \SugarCraft\Code\Host\Commands\BackgroundCommand::isSpawnFailure($msg),
             )]]), null];
+        }
+        if ($msg instanceof ShellSendSettledMsg) {
+            // The answer to a `/shells send` that waited for its relay: one UI-only row,
+            // appended where the echo already sits (P4-12 CC-1).
+            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
         }
         if ($msg instanceof BackgroundSessionStoppedMsg) {
             // Record the settled status as already announced, so the next
