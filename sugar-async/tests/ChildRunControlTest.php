@@ -120,6 +120,34 @@ final class ChildRunControlTest extends TestCase
         $this->assertLessThan(5.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
     }
 
+    public function testRunIdleDeadlineKillsASilentChildThatClosedItsOutput(): void
+    {
+        // Both pipes close at once, then the child lingers. The pump reaches CLOSED,
+        // and the idle budget must still cut the child well before the 5 s deadline.
+        $started = microtime(true);
+
+        $r = ChildRun::new(['sh', '-c', 'exec >&- 2>&-; sleep 6'])
+            ->withTimeout(5.0)
+            ->withIdleTimeout(0.5)
+            ->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertLessThan(3.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
+    }
+
+    public function testRunClosedOutputChildThatExitsInsideTheIdleBudgetIsExited(): void
+    {
+        // Output closes at once and the child exits 0.3 s later, inside the 0.5 s
+        // idle budget: the post-close wait must report the exit, not a kill.
+        $r = ChildRun::new(['sh', '-c', 'exec >&- 2>&-; sleep 0.3; exit 3'])
+            ->withTimeout(5.0)
+            ->withIdleTimeout(0.5)
+            ->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(3, $r->exitCode);
+    }
+
     public function testRunIdleDeadlineDoesNotFireWhileOutputKeepsFlowing(): void
     {
         // Twelve chunks, 150 ms apart: 1.8 s in all, well past the 0.6 s idle budget,

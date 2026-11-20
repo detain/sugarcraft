@@ -411,11 +411,11 @@ final class ChildRun
 
                 return self::result($r, $exitCode, ChildResult::EXITED);
             }
-            $code = BoundedShutdown::reapIfExited($proc, max(0.0, $deadline - $clock()));
+            $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity);
             if ($code !== null) {
                 return self::result($r, $code, ChildResult::EXITED);
             }
-            // Output closed but the child is still running past the deadline.
+            // Output closed but the child is still running past the deadline or its idle budget.
             $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
 
             return self::result($r, $code, ChildResult::TIMED_OUT);
@@ -429,6 +429,34 @@ final class ChildRun
         };
 
         return self::result($r, $exitCode ?? $code, $status);
+    }
+
+    /**
+     * Waits for a child whose output has already closed to exit. The wait ends at
+     * the deadline, or once the idle budget has passed since the last chunk, so a
+     * silent child is cut at the same point whether or not its pipes are still open.
+     * Both ends are TIMED_OUT, so the caller does not tell them apart. Polled in
+     * the pump's own slices, the way the heartbeat checks idleness.
+     *
+     * @param resource $proc
+     * @param callable(): float $clock
+     */
+    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity): ?int
+    {
+        while (true) {
+            $remaining = max(0.0, $deadline - $clock());
+            $slice = $idleTimeout === null ? $remaining : min($remaining, self::IDLE_BEAT_SECONDS);
+            $code = BoundedShutdown::reapIfExited($proc, $slice);
+            if ($code !== null) {
+                return $code;
+            }
+            if ($clock() >= $deadline) {
+                return null;
+            }
+            if ($idleTimeout !== null && $clock() - $lastActivity >= $idleTimeout) {
+                return null;
+            }
+        }
     }
 
     /**
