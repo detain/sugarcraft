@@ -544,8 +544,8 @@ final class CommandSpec
      * of `setsid` before its setsid() call can take hundreds of milliseconds
      * under load, and a cap that expires first leaves the spawn-time group
      * unrecorded: a backgrounded job then survives its timeout kill. The wait
-     * ends at once on leadership or on the wrapper's exit, so this cap is only
-     * ever paid by a wrapper that never leads.
+     * ends at once on leadership, so this cap is paid by a wrapper that never
+     * leads, including one that exited before it did.
      */
     private const GROUP_LEADER_WAIT_SECONDS = 1.0;
 
@@ -852,7 +852,9 @@ final class CommandSpec
      * The detached wrapper makes the child its own process-group leader a moment
      * after proc_open() returns, and the timeout's group kill needs that group
      * id. Read it with a bounded wait so a fast spawn cannot be measured before
-     * the wrapper has run; a child that exits first ends the wait at once.
+     * the wrapper has run. Only leadership ends the wait early: a wrapper that
+     * exits before it leads stays a zombie until reaped, and posix_getpgid()
+     * still answers for it with its parent's group, so that case pays the cap.
      */
     private static function awaitGroupLeader(int $pid): void
     {
