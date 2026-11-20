@@ -20,7 +20,8 @@ use SugarCraft\Plugins\Bridge\ConversationRouterCore;
  * messages, SQL) is deliberately outside it. The attachment skip path is the
  * one flow where a bare English string reaches a user without a slot name, so
  * DiscordAccount.php is also checked token by token: a letter-bearing literal
- * written into `$notes` (by any assignment or `array_push`), used as the
+ * written into `$notes` (by any assignment, `.=`, `+=`, `array_push`,
+ * `array_unshift` or `array_splice`), used as the
  * attachment `$name` fallback, or anywhere inside the arguments of a send call
  * or of the `$say` / `$reply` closures (including inside nested calls and
  * arrays) must go through `Lang::t` instead. A `Lang::t` placeholder value is
@@ -93,6 +94,11 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'concatenation-assign into $notes' => ["<?php\n\$notes .= 'Attachment dropped';\n", 2];
         yield 'array_push into $notes' => ["<?php\narray_push(\$notes, 'Attachment dropped');\n", 2];
         yield 'fully qualified array_push into $notes' => ["<?php\n\\array_push(\$notes, 'Attachment dropped');\n", 2];
+        yield 'array_unshift into $notes' => ["<?php\narray_unshift(\$notes, 'Attachment dropped');\n", 2];
+        yield 'fully qualified array_unshift into $notes' => ["<?php\n\\array_unshift(\$notes, 'Attachment dropped');\n", 2];
+        yield 'array_splice replacement into $notes' => ["<?php\narray_splice(\$notes, 0, 0, ['Attachment dropped']);\n", 2];
+        yield 'fully qualified array_splice replacement into $notes' => ["<?php\n\\array_splice(\$notes, 0, 0, ['Attachment dropped']);\n", 2];
+        yield 'array-union assign into $notes' => ["<?php\n\$notes += ['Attachment dropped'];\n", 2];
         yield 'bare English fallback for an unnamed attachment' => ["<?php\n\$name = (string) (\$attachment['filename'] ?? 'attachment');\n", 2];
         yield 'bare English coalesce-assigned to $name' => ["<?php\n\$name ??= 'attachment';\n", 2];
         yield 'bare literal passed to a nullsafe send call' => ["<?php\n\$this->rest?->send(\$channelId, 'Attachments were skipped', []);\n", 2];
@@ -126,6 +132,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'fully qualified Lang::t in $notes' => ["<?php\n\$notes[] = \\CandyCode\\Bundles\\Discord\\Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]);\n"];
         yield 'namespace-qualified Lang::t in $notes' => ["<?php\n\$notes[] = Bundles\\Discord\\Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]);\n"];
         yield 'fully qualified Lang::t as a send argument' => ["<?php\n\$this->rest->send(\$channelId, \\CandyCode\\Bundles\\Discord\\Lang::t('channels.discord.attachments.skipped', []), []);\n"];
+        yield 'Lang::t through array_unshift into $notes' => ["<?php\narray_unshift(\$notes, Lang::t('channels.discord.attachments.reason.unsupported', ['name' => \$name]));\n"];
+        yield 'Lang::t through array-union assign into $notes' => ["<?php\n\$notes += [Lang::t('channels.discord.attachments.skipped', [])];\n"];
     }
 
     #[DataProvider('qualifiedLangCallFixtureProvider')]
@@ -187,7 +195,7 @@ final class UserFacingLiteralGuardTest extends TestCase
                 \array_push($hits, ...self::bareLiterals($toks, $op + 1, self::statementEnd($toks, $op + 1)));
             } elseif (self::is($toks, $i, T_VARIABLE, '$name') && (self::is($toks, $i + 1, '=') || self::is($toks, $i + 1, T_COALESCE_EQUAL))) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 2, self::statementEnd($toks, $i + 2)));
-            } elseif (self::isCall($toks, $i, 'array_push') && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
+            } elseif (self::isNotesMutator($toks, $i) && self::is($toks, $i + 1, '(') && self::is($toks, $i + 2, T_VARIABLE, '$notes') && self::is($toks, $i + 3, ',')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 4, self::closeIndex($toks, $i + 1)));
             } elseif ((self::is($toks, $i, T_OBJECT_OPERATOR) || self::is($toks, $i, T_NULLSAFE_OBJECT_OPERATOR)) && self::is($toks, $i + 1, T_STRING, 'send') && self::is($toks, $i + 2, '(')) {
                 \array_push($hits, ...self::bareLiterals($toks, $i + 3, self::closeIndex($toks, $i + 2)));
@@ -200,8 +208,8 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
-     * Index of the assignment operator after `$notes`, `$notes[...]`, or the
-     * append form `.=`; null when `$notes` is only read.
+     * Index of the assignment operator after `$notes`, `$notes[...]`, or one of
+     * the append forms `.=` and `+=` (array union); null when `$notes` is only read.
      *
      * @param list<array{id: int|string, text: string, line: int}> $toks
      */
@@ -212,7 +220,31 @@ final class UserFacingLiteralGuardTest extends TestCase
             $op = self::closeIndex($toks, $op) + 1;
         }
 
-        return self::is($toks, $op, '=') || self::is($toks, $op, T_CONCAT_EQUAL) || self::is($toks, $op, T_COALESCE_EQUAL) ? $op : null;
+        $writes = ['=', T_CONCAT_EQUAL, T_COALESCE_EQUAL, T_PLUS_EQUAL];
+        foreach ($writes as $write) {
+            if (self::is($toks, $op, $write)) {
+                return $op;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The array functions that write their first argument in place. The first
+     * argument is `$notes`, so every literal in the rest of the call is a note.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function isNotesMutator(array $toks, int $i): bool
+    {
+        foreach (['array_push', 'array_unshift', 'array_splice'] as $function) {
+            if (self::isCall($toks, $i, $function)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
@@ -464,17 +496,34 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
-     * The `channels.discord.*` literal keys that `Lang::t` calls in `$source`
-     * name, single- or double-quoted. A double-quoted typo must reach the
-     * catalog check the same way a single-quoted one does.
+     * The literal keys that `Lang::t` calls in `$source` name, single- or
+     * double-quoted, whatever the key's prefix. Every literal key is read, so a
+     * mistyped prefix (`channel.discord.*`) reaches the catalog check too. A
+     * key with a quote, a backslash or a `$` is left out: it is not a plain
+     * literal the catalogs can be checked against.
      *
      * @return list<string>
      */
     private static function langKeysIn(string $source): array
     {
-        \preg_match_all('/Lang::t\(\s*([\'"])(channels\.discord\.[A-Za-z0-9_.]+)\1/', $source, $m);
+        \preg_match_all('/Lang::t\(\s*([\'"])([^\'"$\\\\]+)\1/', $source, $m);
 
         return $m[2];
+    }
+
+    /**
+     * The `Lang::t` keys in `$source` that sit outside the bundle's
+     * `channels.discord.*` keyspace. A key outside it is the English a user
+     * reads when the catalog misses it, whichever context the call sits in.
+     *
+     * @return list<string>
+     */
+    private static function foreignLangKeysIn(string $source): array
+    {
+        return \array_values(\array_filter(
+            self::langKeysIn($source),
+            static fn (string $key): bool => !\str_starts_with($key, 'channels.discord.'),
+        ));
     }
 
     /**
@@ -513,6 +562,32 @@ final class UserFacingLiteralGuardTest extends TestCase
 
         self::assertNotSame([], $missing, 'the catalog check must read the key whichever quote it uses');
         self::assertContains('en.php channels.discord.attachments.reason.unsuported', $missing);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function foreignPrefixLangKeyFixtureProvider(): iterable
+    {
+        yield 'single-quoted mistyped prefix in a slash description' => ["<?php\n'description' => Lang::t('channel.discord.pair.grant'),\n", 'channel.discord.pair.grant'];
+        yield 'double-quoted mistyped prefix in a slash description' => ["<?php\n'description' => Lang::t(\"channel.discord.pair.grant\"),\n", 'channel.discord.pair.grant'];
+        yield 'foreign prefix as a plain value' => ["<?php\n\$label = Lang::t('pair.grant');\n", 'pair.grant'];
+    }
+
+    #[DataProvider('foreignPrefixLangKeyFixtureProvider')]
+    public function testForeignPrefixLangKeyIsFlaggedInAnyContext(string $fixture, string $key): void
+    {
+        self::assertSame([$key], self::foreignLangKeysIn($fixture));
+    }
+
+    public function testEveryLangTCallNamesAChannelsDiscordKey(): void
+    {
+        $foreign = [];
+        foreach (self::sources() as $file) {
+            foreach (self::foreignLangKeysIn((string) \file_get_contents($file)) as $key) {
+                $foreign[] = \basename($file) . ' ' . $key;
+            }
+        }
+
+        self::assertSame([], $foreign, 'every Lang::t key in src must sit under channels.discord.*');
     }
 
     public function testEveryLangKeyUsedExistsInEnglishAndEveryLocale(): void
