@@ -104,7 +104,23 @@ final class NotifyConversationTest extends TestCase
         $this->buildFace(['groups' => ['conv-1' => ['policy' => 'disabled']]]);
         $pending = $this->face->notifyConversation(['conversationId' => 'conv-1'], 'late news');
         self::assertNotNull($pending, 'the conversation is still in the store');
-        self::assertSame('rejected', $this->awaitPromise($pending)['state']);
+        $outcome = $this->awaitPromise($pending);
+        self::assertSame('rejected', $outcome['state']);
+        self::assertSame(
+            'msteams notify refused: the conversation is no longer served',
+            $outcome['value']->getMessage(),
+            'the rejection stays readable English for the host and the log',
+        );
+    }
+
+    public function testADeliverWithoutAConversationReferenceIsRefusedInEnglish(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing']);
+
+        $outcome = $this->awaitPromise($this->face->deliver(['conversationId' => ''], 'hello'));
+
+        self::assertSame('rejected', $outcome['state']);
+        self::assertSame('msteams deliver without a conversationReference ref', $outcome['value']->getMessage());
     }
 
     public function testTheReplyAddressSurvivesARestart(): void

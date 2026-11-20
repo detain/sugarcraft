@@ -90,8 +90,8 @@ final class WebsocketUrlTest extends TestCase
 
     public function testHostAcceptedMalformedAddressesAreRefused(): void
     {
-        // Inputs candy-code's Attach::websocketUrl turns into a URL today. This class
-        // refuses them with null, and the host delegating here changes them on purpose.
+        // Malformed addresses this class refuses with null. candy-code's
+        // Attach::websocketUrl delegates here, so the host refuses them too.
         $malformed = [
             'http://[abc]:8080',
             'http://[v1.fe]:8080',

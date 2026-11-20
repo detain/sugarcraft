@@ -8,11 +8,10 @@ namespace SugarCraft\ServeProtocol\Url;
  * Turns the address a server prints (or a browser opens) into the ws(s) URL
  * the serve protocol is dialled at.
  *
- * The pure half of candy-code's `Attach::websocketUrl`, with one deliberate
- * divergence: the host's method still builds a URL for a few malformed
- * addresses (`http://[abc]:8080`, `http://::1`, `http://[fe80::1%]:8080` and
- * similar) that this class refuses with null. Delegating the host here turns
- * those into null on purpose; they were never dialable. The pinned set is
+ * The pure half of candy-code's `Attach::websocketUrl`, which delegates here,
+ * so the host and this class refuse the same malformed addresses with null
+ * (`http://[abc]:8080`, `http://::1`, `http://[fe80::1%]:8080` and similar).
+ * They were never dialable. The pinned set is
  * `WebsocketUrlTest::testHostAcceptedMalformedAddressesAreRefused`.
  */
 final class WebsocketUrl

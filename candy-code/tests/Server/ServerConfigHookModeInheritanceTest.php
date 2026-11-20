@@ -181,7 +181,7 @@ final class ServerConfigHookModeInheritanceTest extends TestCase
 
         $start = \strpos($source, 'HookWebhooks::new(');
         self::assertIsInt($start, 'the webhook route is mounted in the Serve unit');
-        $end = \strpos($source, 'spawnSession(', $start);
+        $end = \strpos($source, 'spawnSessionAsync(', $start);
         self::assertIsInt($end, 'the hook run closure spawns through the background supervisor');
         $closure = \substr($source, $start, $end - $start);
 

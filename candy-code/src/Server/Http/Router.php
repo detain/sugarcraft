@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Share\ShareStore;
@@ -32,7 +33,7 @@ final class Router
 {
     /**
      * @param \Closure(ServerRequestInterface): ResponseInterface $upgrade
-     * @param \Closure(ServerRequestInterface): ResponseInterface $api
+     * @param \Closure(ServerRequestInterface): (ResponseInterface|PromiseInterface<ResponseInterface>) $api
      * @param \Closure(ServerRequestInterface): ResponseInterface $static
      * @param (\Closure(ServerRequestInterface): ?ResponseInterface)|null $share
      *        the {@see SharePageController}; null means this server publishes
@@ -56,7 +57,7 @@ final class Router
     ) {
     }
 
-    public function __invoke(ServerRequestInterface $request): ResponseInterface
+    public function __invoke(ServerRequestInterface $request): ResponseInterface|PromiseInterface
     {
         try {
             return $this->dispatch($request);
@@ -73,7 +74,7 @@ final class Router
         }
     }
 
-    private function dispatch(ServerRequestInterface $request): ResponseInterface
+    private function dispatch(ServerRequestInterface $request): ResponseInterface|PromiseInterface
     {
         $path = $request->getUri()->getPath();
 
@@ -122,6 +123,10 @@ final class Router
             }
         }
 
-        return Responses::secured(\str_starts_with($path, '/api/') ? ($this->api)($request) : ($this->static)($request));
+        $answer = \str_starts_with($path, '/api/') ? ($this->api)($request) : ($this->static)($request);
+
+        // A webhook launch answers later, as a promise: the security headers go on
+        // the response it settles to, which is what the wire sends.
+        return $answer instanceof PromiseInterface ? $answer->then(Responses::secured(...)) : Responses::secured($answer);
     }
 }

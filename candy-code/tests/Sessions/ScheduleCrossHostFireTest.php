@@ -78,11 +78,11 @@ final class ScheduleCrossHostFireTest extends TestCase
         // row locks are FREE again by the time the stale host reaches them.
         $peer = $this->snapshottedHost();
         $peerFires = [];
-        $peer->fireDue(self::TICK, $this->collectingSpawn($peerFires));
+        self::fire($peer, self::TICK, $this->collectingSpawn($peerFires));
         $this->assertSame(['row1', 'row2'], $peerFires, 'the peer legitimately owns the first fire');
 
         $staleFires = [];
-        $results = $stale->fireDue(self::TICK, $this->collectingSpawn($staleFires));
+        $results = self::fire($stale, self::TICK, $this->collectingSpawn($staleFires));
 
         $this->assertSame([], $staleFires, 'a claim that follows a release must not re-run the peer');
         $this->assertSame(
@@ -108,7 +108,7 @@ final class ScheduleCrossHostFireTest extends TestCase
         $editor->persist();
 
         $spawned = 0;
-        $results = $busy->fireDue(self::TICK, static function () use (&$spawned): ?string {
+        $results = self::fire($busy, self::TICK, static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'must-not-run';
@@ -134,13 +134,13 @@ final class ScheduleCrossHostFireTest extends TestCase
         // A peer fires row1 for real and adds a row of its own.
         $peer = $this->snapshottedHost();
         $peer->add(new Schedule(name: 'added-later', everySeconds: 60, prompt: 'q', nextDue: self::TICK + 5, root: $this->dir));
-        $peer->fireDue(self::TICK, static fn (): ?string => 'sess_peer');
+        self::fire($peer, self::TICK, static fn (): ?string => 'sess_peer');
 
         // The busy host still believes row1 is due (its head snapshot predates
         // the peer's write). The advance must notice, and touch no file: the
         // old shape rewrote the whole roster on every such tick.
         $stampBefore = $this->fileStamp();
-        $results = $busy->fireDue(self::TICK, static fn (): ?string => 'must-not-run');
+        $results = self::fire($busy, self::TICK, static fn (): ?string => 'must-not-run');
 
         $this->assertSame('skipped-busy', $results[0]['action']);
         $this->assertSame($stampBefore, $this->fileStamp(), 'a clock that did not move rewrites nothing');
@@ -164,7 +164,7 @@ final class ScheduleCrossHostFireTest extends TestCase
         $editor->remove('row1');
         $editor->persist();
 
-        $busy->fireDue(self::TICK, static fn (): ?string => 'must-not-run');
+        self::fire($busy, self::TICK, static fn (): ?string => 'must-not-run');
 
         $this->assertSame(['row2'], \array_column($this->diskRoster(), 'name'), 'a deleted schedule stays deleted');
     }
@@ -179,7 +179,7 @@ final class ScheduleCrossHostFireTest extends TestCase
         $editor->persist();
 
         $spawned = 0;
-        $results = $stale->fireDue(self::TICK, static function () use (&$spawned): ?string {
+        $results = self::fire($stale, self::TICK, static function () use (&$spawned): ?string {
             ++$spawned;
 
             return 'must-not-run';
@@ -245,7 +245,7 @@ final class ScheduleCrossHostFireTest extends TestCase
         $this->assertStringContainsString('fired=row1,row2', $output, 'the peer took both rows');
 
         $staleFires = [];
-        $results = $stale->fireDue(self::TICK, $this->collectingSpawn($staleFires));
+        $results = self::fire($stale, self::TICK, $this->collectingSpawn($staleFires));
 
         $this->assertSame([], $staleFires, 'no row runs twice across two hosts between slots');
         $this->assertSame(
@@ -277,13 +277,13 @@ final class ScheduleCrossHostFireTest extends TestCase
         $foreign->load();
 
         $bFires = [];
-        $results = $foreign->fireDue(self::TICK, $this->collectingSpawn($bFires));
+        $results = self::fire($foreign, self::TICK, $this->collectingSpawn($bFires));
         $this->assertSame([], $bFires, 'the other project spawns nothing from this file');
         $this->assertSame(['row1' => 'skipped-foreign'], \array_column($results, 'action', 'name'));
         $this->assertFalse(\is_file($this->dir . '/.candy-code/schedules/row1.lock'), 'it never even claims the row lock');
 
         $aFires = [];
-        $bound->fireDue(self::TICK, $this->collectingSpawn($aFires));
+        self::fire($bound, self::TICK, $this->collectingSpawn($aFires));
         $this->assertSame(['row1'], $aFires, 'the bound host runs it once, exactly as before');
         $this->assertSame(['row1' => self::TICK + self::DAY], $this->diskClocks(), 'and advances it exactly once');
     }
@@ -379,10 +379,13 @@ final class ScheduleCrossHostFireTest extends TestCase
             $now = (int) $argv[2];
 
             $fired = [];
-            $results = $registry->fireDue($now, static function (Schedule $row) use (&$fired): ?string {
+            $results = [];
+            $registry->fireDue($now, static function (Schedule $row) use (&$fired): string {
                 $fired[] = $row->name;
 
                 return 'peer_' . $row->name;
+            })->then(static function (array $settled) use (&$results): void {
+                $results = $settled;
             });
 
             foreach ($results as $result) {
@@ -406,5 +409,23 @@ final class ScheduleCrossHostFireTest extends TestCase
             return;
         }
         @\unlink($path);
+    }
+
+    /**
+     * Runs fireDue and returns its verdicts. The spawns in these fixtures answer
+     * at once, so the promise is settled before fireDue returns; a launch that
+     * stays pending is covered by {@see ScheduleRegistryAsyncFireTest}.
+     *
+     * @return list<array{name: string, action: string, sessionId?: string, error?: string}>
+     */
+    private static function fire(ScheduleRegistry $registry, int $now, \Closure $spawn): array
+    {
+        $verdicts = null;
+        $registry->fireDue($now, $spawn)->then(static function (array $settled) use (&$verdicts): void {
+            $verdicts = $settled;
+        });
+        self::assertIsArray($verdicts, 'fireDue must answer at once when every launch settles at once');
+
+        return $verdicts;
     }
 }
