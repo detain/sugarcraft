@@ -118,6 +118,15 @@ final class CheckDocsAssets
     private const BARE_SUGARCRAFT_SHAPE = '~^\\\\?(?i:sugarcraft)\\\\(?:[A-Za-z_]\w*\\\\)*[A-Z][A-Za-z0-9]*$~';
 
     /**
+     * Attribute groups that may stand before the keyword of a class, interface,
+     * trait or enum declaration on the same line (`#[\Attribute] enum Lamp: string`).
+     * One level of nested brackets in an argument is kept whole, as in
+     * attributeBodies(). Every declaration scan uses it, so an attributed
+     * declaration is indexed the same as a bare one.
+     */
+    private const DECLARATION_ATTRIBUTES = '(?:#\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*';
+
+    /**
      * @var list<string> keyboard key names a body writes in code spans; `ReleaseA`
      *      is the Kitty release-event form of a key, the name KeyEvent documents
      */
@@ -163,9 +172,11 @@ final class CheckDocsAssets
      * A bare name is resolved against this fixed list rather than the host's
      * loaded classes: `class_exists()` answers differently on a host that has or
      * lacks an extension, so a span would pass on one machine and fail on another.
-     * The list is every class and interface the Core, SPL, date, Reflection and
-     * json extensions declare under PHP 8.3, the set a PHP 8.3 build always
-     * carries. PDO, PDOException and PDOStatement are the exception: they come from
+     * The list is every class and interface the Core, SPL, date, Reflection, json
+     * and standard extensions declare under PHP 8.3, the set a PHP 8.3 build
+     * always carries. standard contributes AssertionError, Directory,
+     * __PHP_Incomplete_Class and php_user_filter.
+     * testTheCoreClassListIsTheHostsCoreExtensionClasses pins it to the host. PDO, PDOException and PDOStatement are the exception: they come from
      * the PDO extension, and stay listed because they were listed before. FFI is the
      * other extension name listed: sugar-pty requires ext-ffi, and its docs body
      * writes FFI::cdef(). Matched case-insensitively, as PHP matches class names. A
@@ -1079,7 +1090,7 @@ final class CheckDocsAssets
         foreach (glob("$root/*/tests", GLOB_ONLYDIR) ?: [] as $tests) {
             foreach (self::phpFiles($tests) as $path) {
                 preg_match_all(
-                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    '~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
                     self::readCached($path),
                     $decl,
                 );
@@ -1219,7 +1230,7 @@ final class CheckDocsAssets
         $imports = [];
         preg_match_all('~<pre\b[^>]*>(.*?)</pre>~s', $html, $blocks);
         foreach ($blocks[1] as $code) {
-            preg_match_all('~(?:^|[\n>])\s*(?:(?:final|abstract|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~', $code, $decl);
+            preg_match_all('~(?:^|[\n>])\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:final|abstract|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~', $code, $decl);
             foreach ($decl[1] as $name) {
                 $declared[$name] = true;
             }
@@ -1422,7 +1433,7 @@ final class CheckDocsAssets
                 $text = self::readCached($path);
                 $ns = self::fileScope($text)['ns'];
                 preg_match_all(
-                    '~^\s*(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
+                    '~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*(?:class|interface|trait|enum)\s+([A-Za-z_]\w*)~m',
                     $text,
                     $decl,
                 );
@@ -1539,7 +1550,7 @@ final class CheckDocsAssets
             // one, so no `function` line declares them.
             $implied = strtolower($method);
             if (in_array($implied, ['cases', 'from', 'tryfrom'], true)
-                && preg_match('~^\s*(?:(?:abstract|final|readonly)\s+)*enum\s+' . preg_quote($short, '~') . '\b(\s*:)?~mi', $text, $enum) === 1
+                && preg_match('~^\s*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)\s+)*enum\s+' . preg_quote($short, '~') . '\b(\s*:)?~mi', $text, $enum) === 1
             ) {
                 if ($implied === 'cases' || isset($enum[1])) {
                     return true;
@@ -1672,7 +1683,7 @@ final class CheckDocsAssets
     {
         $list = '(\\\\?[A-Za-z_][\w\\\\]*(?:\s*,\s*\\\\?[A-Za-z_][\w\\\\]*)*)';
         $refs = [];
-        preg_match_all('~^[ \t]*(?:(?:abstract|final|readonly)[ \t]+)*(?:class|interface|enum)[ \t]+[A-Za-z_]\w*([^{;]*)~m', $text, $headers);
+        preg_match_all('~^[ \t]*' . self::DECLARATION_ATTRIBUTES . '(?:(?:abstract|final|readonly)[ \t]+)*(?:class|interface|enum)[ \t]+[A-Za-z_]\w*([^{;]*)~m', $text, $headers);
         foreach ($headers[1] as $header) {
             preg_match_all('~\b(?:extends|implements)\s+' . $list . '~', $header, $clauses);
             foreach ($clauses[1] as $names) {

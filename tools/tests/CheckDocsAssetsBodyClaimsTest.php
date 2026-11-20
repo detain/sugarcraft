@@ -776,6 +776,45 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         $this->assertSame($real, $listed);
     }
 
+    public function testAnEnumDeclaredBehindAnAttributeOnTheSameLineIsStillAnEnum(): void
+    {
+        $root = $this->makeFixture();
+        // An attribute on the declaration's own line must not hide the enum keyword:
+        // the backed enum carries from(), the pure one does not.
+        $this->put("$root/alpha/src/Lamp.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            #[\Attribute] enum Lamp: string
+            {
+                case On = 'on';
+            }
+
+            PHP);
+        $this->put("$root/alpha/src/Dial.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            #[\Attribute(\Attribute::TARGET_CLASS)] enum Dial
+            {
+                case Up;
+            }
+
+            PHP);
+
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>\\SugarCraft\\Alpha\\Lamp::from(\'on\');</code></pre>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Dial::from(), but no declaration of SugarCraft\Alpha\Dial carries that method'],
+            $this->claimsFor($root, '<pre><code>\\SugarCraft\\Alpha\\Dial::from(\'up\');</code></pre>'),
+        );
+    }
+
     public function testAnEnumKeywordInProseDoesNotMakeAClassAnEnum(): void
     {
         $root = $this->makeFixture();
@@ -808,16 +847,47 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         $root = $this->makeFixture();
 
         // Names a body writes bare that PHP always defines; a host-loaded class
-        // must never turn a bare span into an undeclared-class finding.
+        // must never turn a bare span into an undeclared-class finding. Only
+        // PascalCase names reach this check: bareCodeSpanNames() drops a span
+        // that starts with an underscore or a lowercase letter, so
+        // __PHP_Incomplete_Class and php_user_filter are not pinned here. They
+        // stay in CORE_CLASS_NAMES for builtInDeclaresMethod(), which reads a
+        // parent class such as `extends php_user_filter`.
         $names = [
             'RuntimeException', 'InvalidArgumentException', 'Exception', 'Closure', 'DateTime',
             'stdClass', 'ArrayIterator', 'Generator', 'Traversable', 'ArrayAccess', 'Attribute',
             'UnitEnum', 'Fiber', 'DomainException', 'LengthException', 'JsonSerializable',
-            'AssertionError', 'Directory', '__PHP_Incomplete_Class', 'php_user_filter',
+            'AssertionError', 'Directory',
         ];
         $spans = implode(' ', array_map(static fn (string $n): string => "<code>$n</code>", $names));
 
         $this->assertSame([], $this->claimsFor($root, "<p>$spans</p>"));
+    }
+
+    public function testTheCoreClassListIsTheHostsCoreExtensionClasses(): void
+    {
+        $listed = array_map('strtolower', (new \ReflectionClassConstant(\CheckDocsAssets::class, 'CORE_CLASS_NAMES'))->getValue());
+        // PDO and FFI are listed from their own extensions, checked by their own pins.
+        $otherExtensions = ['pdo', 'pdoexception', 'pdostatement', 'ffi'];
+        $hostCore = [];
+        foreach (array_merge(get_declared_classes(), get_declared_interfaces()) as $name) {
+            $extension = (new \ReflectionClass($name))->getExtensionName();
+            if (in_array($extension, ['Core', 'SPL', 'date', 'Reflection', 'json', 'standard'], true)) {
+                $hostCore[] = strtolower($name);
+            }
+        }
+        $expected = array_values(array_diff($listed, $otherExtensions));
+        sort($expected);
+        $hostCore = array_values(array_unique($hostCore));
+        sort($hostCore);
+
+        // A listed name the host does not declare is a misspelling, on any PHP version.
+        $this->assertSame([], array_values(array_diff($expected, $hostCore)));
+        if (PHP_VERSION_ID >= 80400) {
+            $this->markTestSkipped('PHP 8.4 adds classes to these extensions, so the gap check pins the PHP 8.3 set only.');
+        }
+        // A host class missing from the list is a deletion, or a name the list never had.
+        $this->assertSame([], array_values(array_diff($hostCore, $expected)));
     }
 
     public function testAThirdPartyOrUpstreamNameInACodeSpanIsNotChecked(): void

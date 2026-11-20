@@ -48,7 +48,7 @@ final class ScriptsShellHygieneTest extends TestCase
         'parallel-tests.sh' => 'the candy-code shard runner; semantics guarded by the trio + RT-26 tuning pins',
         'rename-remote.sh' => 'one-shot remote rename helper',
         'set-org-default-master.sh' => 'one-shot default-branch flip; data shape guarded by ProvisioningRosterTest',
-        'sync-sugarcraft-local.sh' => 'a manual runner with no CI gate (owner-run local port of the sync-sugarcraft jobs); listed for redirect',
+        'sync-sugarcraft-local.sh' => 'manual sync-sugarcraft runner with no CI gate',
     ];
 
     public function testEveryShellScriptParsesAndTheRosterNeitherGainsNorRots(): void
