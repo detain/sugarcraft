@@ -9,6 +9,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Message;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 final class CommandBackendTest extends TestCase
 {
@@ -505,15 +506,7 @@ final class CommandBackendTest extends TestCase
      */
     private static function waitUntilGone(int $pid, float $seconds): bool
     {
-        $deadline = microtime(true) + $seconds;
-        while (self::isLive($pid)) {
-            if (microtime(true) >= $deadline) {
-                return false;
-            }
-            usleep(50_000);
-        }
-
-        return true;
+        return BoundedShutdown::waitBounded(static fn (): bool => !self::isLive($pid), $seconds);
     }
 
     /** Live means signalable and not a zombie. Reads /proc where it exists, `ps` elsewhere. */
@@ -531,7 +524,9 @@ final class CommandBackendTest extends TestCase
             return $state !== 'Z' && $state !== 'X';
         }
 
-        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>/dev/null'));
+        // Stderr is read back with the output, not discarded: a missing ps then shows up as the
+        // reply, which the first-character test below reads as live rather than hiding it.
+        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>&1'));
 
         return $state !== '' && $state[0] !== 'Z';
     }
