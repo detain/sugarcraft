@@ -72,16 +72,38 @@ $req-&gt;counter('events');</code></pre>
     <p>Values from callers you do not trust should be hashed or bucketed before tagging. The backends sweep wire-framing characters, but every distinct value still creates a new series.</p>
 
     <h3>Record SSH session telemetry</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\SshServer\Server;
+    <pre class="code"><code class="language-php">use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 
+// The library arms no timers and the textfile is written only on flush() or at
+// exit, so a long-lived server must flush after each session itself.
+final class FlushMetrics implements Middleware
+{
+    public function __construct(private readonly Registry $registry)
+    {
+    }
+
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        $next($ctx, $session);
+        $this->registry->flush();
+    }
+}
+
 $reg = Registry::new(PrometheusFileBackend::new('/var/lib/ssh/metrics.prom'));
 
+// FlushMetrics is registered first so it wraps SessionMetrics and flushes after
+// SessionMetrics has recorded the session's duration and error samples.
 Server::new()
+    -&gt;use(new FlushMetrics($reg))
     -&gt;use(SessionMetrics::new($reg))
     -&gt;serve();</code></pre>
+    <p>Long-lived servers must call <code>flush()</code> themselves: the metrics library never does it on a timer, so without a flush per session the textfile shows no <code>ssh_session_*</code> series until the process exits. The shipped <code>examples/ssh-server-with-metrics.php</code> follows the same pattern.</p>
 
     <h2 id="api" style="margin-top: 40px;">API reference</h2>
     <table class="api-table">
