@@ -420,10 +420,12 @@ progressive protocol is disabled, a disabled family's mouse report, or a stray
 `CSI 201~` paste-end marker with no paste open. What never lands in this counter
 is a complete `?`- or `>`-prefixed private report: those drain as
 `TerminalReplyEvent`s. So a non-zero count does not necessarily mean this
-terminal sends frames the decoder fails to model. A sequence longer than the
-128-byte cap is refused and counted once in `droppedUnknownCount()`; its
-trailing bytes are swallowed up to the final byte, or up to a fresh ESC, which
-starts a new sequence and is decoded as normal. Those bytes are never counted again.
+terminal sends frames the decoder fails to model. An incomplete sequence whose
+buffered tail passes the 128-byte cap is refused and counted once in
+`droppedUnknownCount()`; its trailing bytes are swallowed up to the final byte, or
+up to a fresh ESC, which starts a new sequence and is decoded as normal. Those bytes
+are never counted again. A complete sequence longer than the cap that arrives in a
+single read is parsed whole and is not refused.
 `discardedPasteBytes()` is the paste-only counter and never moves for a
 sequence. `reset()` zeroes all counters along with the buffers.
 
