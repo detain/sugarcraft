@@ -231,8 +231,10 @@ trait HandlesSessionSurface
             // The answer to a `/shells send` that waited for its relay: one UI-only row,
             // appended where the echo already sits (P4-12 CC-1). The wait can outlive
             // the session it was typed in, so a row for a session no longer on screen
-            // is dropped, the same rule the side-question answer follows.
-            if ($msg->sessionId !== $this->currentSessionId) {
+            // is dropped, the same rule the side-question answer follows. A `/clear`
+            // since the send empties the transcript the row was typed into, so the
+            // transcript generation is checked as well as the session.
+            if ($msg->sessionId !== $this->currentSessionId || $msg->transcriptEpoch !== $this->transcriptEpoch) {
                 return [$this, null];
             }
 

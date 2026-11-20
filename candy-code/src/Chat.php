@@ -1928,6 +1928,13 @@ final class Chat implements Model
          * In memory only; `/compact --undo` refuses it once a turn has run.
          */
         private readonly ?array $compactionRecord = null,
+        /**
+         * The transcript generation: `/clear` moves it on. A `/shells send`
+         * answer carries the generation it was typed under, so a row whose
+         * wait outlived a clear is dropped rather than landing in the emptied
+         * transcript. Appended at the TAIL, like the parameters above it.
+         */
+        private readonly int $transcriptEpoch = 0,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -8746,6 +8753,7 @@ final class Chat implements Model
             // breaker un-trippable — every keystroke would hand the tier a clean
             // slate. Same reason 'tokenTracker' above is carried by identity.
             'consecutiveRefillCompactions' => $this->consecutiveRefillCompactions,
+            'transcriptEpoch' => $this->transcriptEpoch,
             'queuedPrompts' => $this->queuedPrompts,
             'pendingTurnHooks' => $this->pendingTurnHooks,
             'resolvedTurnHooks' => $this->resolvedTurnHooks,
@@ -11824,6 +11832,7 @@ final class Chat implements Model
             scheduleRegistry: $this->scheduleRegistry,
             lastCompaction: $this->compactionRecord['source'] ?? null,
             windowAssumed: $this->contextWindowAssumed(),
+            transcriptEpoch: $this->transcriptEpoch,
         );
     }
 
@@ -11893,6 +11902,10 @@ final class Chat implements Model
                         'pendingIdleCompaction' => null,
                         // Unarm the breaker with the transcript that tripped it.
                         'consecutiveRefillCompactions' => 0,
+                        // A shell-send answer still waiting on its relay belongs
+                        // to the transcript this clear emptied; the new epoch
+                        // makes its settled arm drop the row.
+                        'transcriptEpoch' => $this->transcriptEpoch + 1,
                     ];
                     break;
 

@@ -9,6 +9,8 @@ use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 
 /**
  * A `/shells send` that waited for its relay answers with a
@@ -58,5 +60,44 @@ final class ShellSendSettledRowTest extends TestCase
 
         $this->assertNull($cmd, 'a dropped row starts nothing');
         $this->assertSame($chat->history, $next->history, 'the row must not land in the session now on screen');
+    }
+
+    /**
+     * The finding: `/clear` keeps the session id, so a wait that outlives it
+     * must be told apart by the transcript generation it was typed under.
+     */
+    public function testARowWhoseWaitOutlivedAClearLandsNowhere(): void
+    {
+        $row = Message::assistant('Typed into shell sh-0badf00d (4 bytes).')->withUiOnly();
+        $cleared = $this->typed(new Chat(currentSessionId: 'session-A'), '/clear');
+        $this->assertSame([], $cleared->history, 'fixture: /clear really emptied the transcript');
+        $this->assertSame('session-A', $cleared->currentSessionId(), 'fixture: /clear keeps the session id');
+
+        [$next, $cmd] = $cleared->update(new ShellSendSettledMsg($row, 'session-A', 0));
+
+        $this->assertNull($cmd, 'a dropped row starts nothing');
+        $this->assertSame([], $next->history, 'the row was typed before the clear and must not land in the emptied transcript');
+    }
+
+    public function testARowTypedUnderTheCurrentGenerationStillLandsAfterAClear(): void
+    {
+        $row = Message::assistant('Typed into shell sh-0badf00d (4 bytes).')->withUiOnly();
+        $cleared = $this->typed(new Chat(currentSessionId: 'session-A'), '/clear');
+
+        [$next] = $cleared->update(new ShellSendSettledMsg($row, 'session-A', 1));
+
+        $last = $next->history[count($next->history) - 1];
+        $this->assertSame('Typed into shell sh-0badf00d (4 bytes).', $last->content, 'a send typed after the clear keeps its answer');
+    }
+
+    /** Type $draft into $chat and press Enter, as a user would. */
+    private function typed(Chat $chat, string $draft): Chat
+    {
+        foreach (mb_str_split($draft) as $char) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
+        }
+        [$chat] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $chat;
     }
 }

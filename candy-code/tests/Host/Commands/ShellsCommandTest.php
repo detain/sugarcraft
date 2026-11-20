@@ -433,6 +433,28 @@ final class ShellsCommandTest extends TestCase
         self::assertNotSame('', $settled, 'running the effect performs the queued send and settles its row');
     }
 
+    public function testTheSettledSendCarriesTheTranscriptEpochItWasTypedUnder(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'epoch stamp', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        // Hold the shell's queue slot, so the send is queued and waits on the loop
+        // whatever the relay's state is.
+        $gate = new Deferred();
+        ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+
+        $result = $this->dispatchShells($registry, '/shells send ' . $id . ' epoch<Enter>', 4);
+        $gate->resolve(true);
+        $this->drainLoop();
+        $settled = $this->settledSend($result);
+
+        self::assertSame(4, $settled->transcriptEpoch, 'the answer must carry the generation its send was typed under');
+        self::assertSame('session-A', $settled->sessionId);
+    }
+
     /**
      * The send-queue slots of $registry, read through the private WeakMap so a
      * test can see whether building a command claimed one.
@@ -484,10 +506,18 @@ final class ShellsCommandTest extends TestCase
      */
     private function settledBody(CommandResult $result): string
     {
-        $effect = $result->effect(CommandEffectKind::Async);
-        if ($effect === null) {
+        if ($result->effect(CommandEffectKind::Async) === null) {
             return self::body($result);
         }
+
+        return $this->settledSend($result)->message->content;
+    }
+
+    /** Run a queued or relay-waiting send's effect and hand back the settled message. */
+    private function settledSend(CommandResult $result): ShellSendSettledMsg
+    {
+        $effect = $result->effect(CommandEffectKind::Async);
+        self::assertNotNull($effect, 'the send waits, so it answers through an async effect');
 
         $loop = Loop::get();
         $settled = null;
@@ -505,22 +535,27 @@ final class ShellsCommandTest extends TestCase
 
         self::assertInstanceOf(ShellSendSettledMsg::class, $settled, 'the send settles with its row inside the guard');
 
-        return $settled->message->content;
+        return $settled;
     }
 
-    private function shellsContext(?BackgroundShellRegistry $registry): CommandContext
+    private function shellsContext(?BackgroundShellRegistry $registry, int $transcriptEpoch = 0): CommandContext
     {
         $workspace = WorkspaceContext::new(root: $this->root);
         if ($registry !== null) {
             $workspace = $workspace->withService(BackgroundShellRegistry::class, $registry);
         }
 
-        return CommandContext::new(root: $this->root, sessionId: 'session-A', workspace: $workspace);
+        return CommandContext::new(
+            root: $this->root,
+            sessionId: 'session-A',
+            workspace: $workspace,
+            transcriptEpoch: $transcriptEpoch,
+        );
     }
 
-    private function dispatchShells(BackgroundShellRegistry $registry, string $text): CommandResult
+    private function dispatchShells(BackgroundShellRegistry $registry, string $text, int $transcriptEpoch = 0): CommandResult
     {
-        return (new ShellsCommand())->run($this->shellsContext($registry), $text);
+        return (new ShellsCommand())->run($this->shellsContext($registry, $transcriptEpoch), $text);
     }
 
     private function trackShell(BackgroundShellRegistry $registry, string $id): void

@@ -71,7 +71,7 @@ final class ShellsCommand implements HostCommand
         return match ($verb) {
             'list' => CommandResult::reply($text, self::listing($registry, $owner)),
             'output' => self::output($text, $registry, $words, $owner),
-            'send' => self::send($text, $registry, $words, $owner),
+            'send' => self::send($text, $registry, $words, $owner, $context->transcriptEpoch),
             'stop' => self::stop($text, $registry, $words, $owner),
             default => CommandResult::errorReply($text, Lang::t('host.shells.usage')),
         };
@@ -184,7 +184,7 @@ final class ShellsCommand implements HostCommand
      *
      * @param list<string> $words
      */
-    private static function send(string $text, BackgroundShellRegistry $registry, array $words, ?string $owner): CommandResult
+    private static function send(string $text, BackgroundShellRegistry $registry, array $words, ?string $owner, int $transcriptEpoch): CommandResult
     {
         $id = $words[2] ?? '';
         if ($id === '') {
@@ -237,7 +237,7 @@ final class ShellsCommand implements HostCommand
                             ])],
                         $id,
                         $decoded,
-                    ), $owner),
+                    ), $owner, $transcriptEpoch),
                 )),
                 static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null,
             ));
