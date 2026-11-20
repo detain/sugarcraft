@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use Ratchet\RFC6455\Messaging\Frame;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use React\Stream\CompositeStream;
+use React\Stream\ThroughStream;
 use function React\Promise\reject;
+use function React\Promise\resolve;
 use SugarCraft\Async\Backoff;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Code\Cli\Attach;
@@ -327,6 +331,82 @@ final class AttachResumeTest extends TestCase
         self::assertStringContainsString('will not resume', $closes[0]);
         self::assertStringContainsString('session_not_found', $closes[0]);
         self::assertFalse($host->isOpen());
+    }
+
+    public function testAResumeHelloTheServerAnswersWithAnErrorCountsAsAnAttempt(): void
+    {
+        // The hello's own failure is the attempt's failure: the ladder redials
+        // it until the budget is spent, and only then ends the attachment.
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, $this->brokenRedials('answer-with-error', $dials));
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the refused resume hellos ran out the budget');
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'each failed resume hello spent one attempt');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
+
+    public function testASocketThatDiesMidResumeHelloCountsAsAnAttempt(): void
+    {
+        // A socket dying while its hello is pending rejects that hello, and the
+        // rejection is the attempt's one failure, so the ladder keeps redialing.
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, $this->brokenRedials('die-mid-hello', $dials));
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the dying hellos ran out the budget');
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'each hello lost to a dead socket spent one attempt');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
+
+    /**
+     * A redial whose sockets never answer a resume hello cleanly. "answer-with-error"
+     * replies to the hello with a top-level JSON-RPC error; "die-mid-hello" closes
+     * the socket before any reply. Both cost the ladder one attempt each.
+     */
+    private function brokenRedials(string $mode, int &$dials): \Closure
+    {
+        return function () use ($mode, &$dials): PromiseInterface {
+            $dials++;
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $out->on('data', static function (string $bytes) use ($in, $mode): void {
+                if ($mode === 'die-mid-hello') {
+                    Loop::get()->futureTick(static function () use ($in): void {
+                        $in->close();
+                    });
+
+                    return;
+                }
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true, 512, \JSON_THROW_ON_ERROR);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'error' => ['code' => -32000, 'message' => 'resume refused']];
+                Loop::get()->futureTick(static function () use ($in, $reply): void {
+                    $in->emit('data', [(new Frame(\json_encode($reply, \JSON_THROW_ON_ERROR), true, Frame::OP_TEXT))->getContents()]);
+                });
+            });
+
+            return resolve([new CompositeStream($in, $out), '']);
+        };
     }
 
     /** @param list<array<string, mixed>> $received */
