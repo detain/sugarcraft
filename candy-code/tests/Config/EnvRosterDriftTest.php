@@ -1474,8 +1474,6 @@ final class EnvRosterDriftTest extends TestCase
         'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
         'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'TERM', 'COLORFGBG',
         'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR', 'COLUMNS', 'NUMBER_OF_PROCESSORS',
-        // Windows only: the shell proc_open() runs a string command through (cmd.exe unless COMSPEC names another).
-        'COMSPEC',
         // C-TUI-7.b: emulator identity carriers that survive a multiplexer,
         // read by Support\MacAltNotice's kitty probe (docs row names all three).
         'KITTY_WINDOW_ID', 'GHOSTTY_RESOURCES_DIR', 'WEZTERM_PANE',
