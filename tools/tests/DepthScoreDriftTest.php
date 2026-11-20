@@ -276,6 +276,41 @@ final class DepthScoreDriftTest extends TestCase
         self::assertSame($committed, $out);
     }
 
+    public function testBareWriteRefusesToRepinAFileToAnotherTree(): void
+    {
+        $committed = self::committed();
+        $runDate = \DepthScore::parseHeader($committed)['runDate'];
+        $dir = $this->makeTmpTree('depth-score-repin-');
+        $this->fixtureDirs[] = $dir;
+        $file = "$dir/DEPTH-SCORES.md";
+        $pinned = (string) preg_replace('/Tree: `[0-9a-f]{7,40}`/', 'Tree: `0000000`', $committed, 1);
+        file_put_contents($file, $pinned);
+
+        [$code] = $this->runCli(['--run-date=' . $runDate, '--out=' . $file]);
+
+        self::assertSame(2, $code);
+        self::assertSame($pinned, file_get_contents($file));
+
+        [$code] = $this->runCli(['--run-date=' . $runDate, '--tree=HEAD', '--out=' . $file]);
+
+        self::assertSame(0, $code, 'an explicit --tree is the way to re-pin the file');
+        self::assertNotSame($pinned, file_get_contents($file));
+    }
+
+    public function testBareWriteAcceptsAFileAlreadyPinnedToTheScoredTree(): void
+    {
+        $runDate = \DepthScore::parseHeader(self::committed())['runDate'];
+        $head = \DepthScore::parseHeader(\DepthScore::generate(self::root(), 'HEAD', $runDate))['tree'];
+        $dir = $this->makeTmpTree('depth-score-same-pin-');
+        $this->fixtureDirs[] = $dir;
+        $file = "$dir/DEPTH-SCORES.md";
+        file_put_contents($file, (string) preg_replace('/Tree: `[0-9a-f]{7,40}`/', 'Tree: `' . $head . '`', self::committed(), 1));
+
+        [$code] = $this->runCli(['--run-date=' . $runDate, '--out=' . $file]);
+
+        self::assertSame(0, $code);
+    }
+
     /**
      * @param list<string> $args
      * @return array{int, string} exit code and captured stdout

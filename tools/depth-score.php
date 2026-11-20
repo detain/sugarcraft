@@ -603,6 +603,17 @@ final class DepthScore
 
                 return 1;
             }
+            if (!$treeSet && is_file($out)) {
+                // A bare write would re-pin the file to HEAD without saying so, and the drift guard
+                // would still pass on the result. Refuse instead, so the pinned tree is named explicitly.
+                $pinned = self::headerOf((string) file_get_contents($out))[1];
+                $scored = self::parseHeader($document)['tree'];
+                if ($pinned !== '' && $pinned !== $scored) {
+                    fwrite(STDERR, "depth-score: $out is pinned to tree `$pinned` and this run scores `$scored`. Pass --tree=$scored to re-pin it, or --tree=$pinned to reproduce it.\n");
+
+                    return 2;
+                }
+            }
             file_put_contents($out, $document);
             echo "depth-score: wrote $out\n";
 
