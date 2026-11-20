@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Async\StagedStdin;
 
 /**
@@ -92,5 +93,65 @@ final class StagedStdinTest extends TestCase
         self::assertSame([], $seen, 'nothing is removed before the reap');
         $hook(0);
         self::assertSame(['/staged/payload.bin'], $seen);
+    }
+
+    public function testAnExitedPathRemovalThatWorksFirstTimeIsNotRetried(): void
+    {
+        $loop = new StreamSelectLoop();
+        $calls = 0;
+
+        StagedStdin::removeAfterExit($loop, '/staged/a', static function (string $p) use (&$calls): bool {
+            $calls++;
+
+            return true;
+        });
+        $this->runFor($loop, 0.2);
+
+        self::assertSame(1, $calls);
+    }
+
+    public function testARefusedExitedPathRemovalIsRetriedOnTheLoopUntilItWorks(): void
+    {
+        // The first attempt runs at once; the refusals are retried on the loop, and the
+        // third attempt takes the file once the OS has released its handle.
+        $loop = new StreamSelectLoop();
+        $seen = [];
+        $results = [false, false, true];
+
+        StagedStdin::removeAfterExit($loop, '/staged/payload.bin', static function (string $p) use (&$seen, &$results): bool {
+            $seen[] = $p;
+
+            return \array_shift($results) ?? true;
+        });
+        self::assertSame(['/staged/payload.bin'], $seen, 'the first attempt is synchronous');
+
+        $this->runFor($loop, 0.5);
+
+        self::assertSame(['/staged/payload.bin', '/staged/payload.bin', '/staged/payload.bin'], $seen);
+    }
+
+    public function testTheExitedPathRetryStopsAfterItsBudget(): void
+    {
+        // A file that never comes free is left behind: the retries are bounded, and
+        // the loop goes idle once the budget is spent.
+        $loop = new StreamSelectLoop();
+        $calls = 0;
+
+        StagedStdin::removeAfterExit($loop, '/staged/a', static function (string $p) use (&$calls): bool {
+            $calls++;
+
+            return false;
+        }, 3, 0.01);
+        $this->runFor($loop, 0.3);
+
+        self::assertSame(3, $calls);
+    }
+
+    private function runFor(StreamSelectLoop $loop, float $seconds): void
+    {
+        $loop->addTimer($seconds, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
     }
 }
