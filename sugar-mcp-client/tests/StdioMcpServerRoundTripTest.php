@@ -722,14 +722,16 @@ final class StdioMcpServerRoundTripTest extends TestCase
         // reference). Before the thread, the closure captured $deadline by
         // value, the credit died at the leg boundary, and this start failed.
         $handlerAnswered = false;
+        $handlerRuns = 0;
         $server = new StdioMcpServer(
             'credited',
             PHP_BINARY,
             [self::fixture('credentialed_handshake_server.php'), '0.65'],
             startTimeoutSeconds: 1.0,
-            onServerMessage: static function (string $method, ?array $params, bool $isNotification) use (&$handlerAnswered): ?array {
+            onServerMessage: static function (string $method, ?array $params, bool $isNotification) use (&$handlerAnswered, &$handlerRuns): ?array {
                 usleep(600_000);
                 $handlerAnswered = true;
+                ++$handlerRuns;
 
                 return null; // the default ping answer
             },
@@ -742,7 +744,13 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
         self::assertTrue($handlerAnswered, 'the fixture never spoke during the initialize leg');
         self::assertGreaterThan(1.0, $elapsed, 'a start that finished inside the raw budget proves nothing about the credit');
-        self::assertLessThan(1.6, $elapsed, 'the credited deadline was not honored: handler time still consumed the budget');
+        // The fixture pushes exactly one server request, so exactly one handler run
+        // is the contract. A doubled run is caught by this count regardless of timing.
+        self::assertSame(1, $handlerRuns, 'the server-request handler must run once per server request');
+        // A clean run on this box measured 1.82 s against a ~1.25 s raw leg, and a
+        // doubled run (~1.85 s) sits inside that jitter band, so no timing bound can
+        // catch it. This bound only guards a gross overrun; the count above guards the doubling.
+        self::assertLessThan(2.5, $elapsed, 'the credited deadline was not honored: handler time still consumed the budget');
         self::assertSame(
             ['credentialed'],
             array_map(static fn ($tool): string => $tool->name, $server->listTools()),
