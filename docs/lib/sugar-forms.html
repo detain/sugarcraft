@@ -163,7 +163,13 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#keys">Keys</a></li>
+            <li class="toc-h3"><a href="#theming">Theming</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#values-has-no-entry-for-a-field">values() has no entry for a field</a></li>
             <li class="toc-h3"><a href="#a-boolean-predicate-goes-to-withvalidator">A boolean predicate goes to withValidator()</a></li>
@@ -279,7 +285,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
@@ -309,6 +315,75 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use sugar-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
+
+    <h3 id="configuration" style="margin-top: 32px;">Configuration</h3>
+    <p>Each option is set through a fluent builder method on <code>Form</code>, <code>TextInput</code> or an async-capable field. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Form::withAccessible(bool)</code>: bool, default <code>false</code>. Switches to the single-line plain-text view of the focused field.</li>
+      <li><code>Form::withShowHelp(bool)</code>: bool, default <code>true</code>. Shows the key-help line under the form.</li>
+      <li><code>Form::withShowErrors(bool)</code>: bool, default <code>true</code>. Paints each field's inline error.</li>
+      <li><code>Form::withErrorSummary(bool)</code>: bool, default <code>false</code>. Lists every validation error at once after a failed submit.</li>
+      <li><code>Form::withTheme(Theme)</code>: <code>Theme</code>, default <code>Theme::ansi()</code>. Sets the palette every field is painted with.</li>
+      <li><code>Form::withKeyMap(?KeyMap)</code>: <code>?KeyMap</code>, default <code>null</code>, which uses <code>KeyMap::new()</code>. Rebinds Next, Prev, Submit and Abort.</li>
+      <li><code>TextInput::charLimit(int)</code>: int, default <code>4096</code>. Bounds a paste or insert to this many characters. <code>0</code> turns the bound off.</li>
+      <li><code>withAsyncSuggestions(callable, int $debounceMs)</code>: int, default <code>150</code>. Milliseconds to wait after the last keystroke before a suggestion fetch starts.</li>
+      <li><code>withAsyncSuggestions(..., ?float $fetchTimeoutSeconds)</code>: ?float, default <code>null</code>. Wall-clock ceiling per fetch. <code>null</code> adds no timeout.</li>
+    </ul>
+
+    <h3 id="keys" style="margin-top: 32px;">Keys</h3>
+    <p>The default <code>KeyMap::new()</code> binds the following keys.</p>
+    <ul>
+      <li>Next: <code>Tab</code>, <code>↓</code></li>
+      <li>Prev: <code>Shift+Tab</code>, <code>Alt+Tab</code>, <code>↑</code></li>
+      <li>Submit: <code>Enter</code></li>
+      <li>Abort: <code>Esc</code>, <code>Ctrl+C</code></li>
+    </ul>
+    <p><code>MultiSelect</code> adds <code>j</code> and <code>k</code> for cursor movement and <code>Space</code> to toggle an option. <code>KeyMap::withNext()</code>, <code>withPrev()</code>, <code>withSubmit()</code> and <code>withAbort()</code> each replace one binding list, and <code>Form::withKeyMap()</code> installs the result. Passing <code>null</code> restores the defaults.</p>
+
+    <h3 id="theming" style="margin-top: 32px;">Theming</h3>
+    <p>Seven presets are available as static factories on <code>Theme</code>: <code>ansi()</code> (the default), <code>plain()</code>, <code>charm()</code>, <code>dracula()</code>, <code>catppuccin()</code>, <code>base16()</code> and <code>base()</code>. <code>Theme::catalog()</code> returns their names. Apply one with <code>Form::withTheme()</code>:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Theme;
+
+$form = Form::new(Input::new('name')->withTitle('Your name?'))
+    -&gt;withTheme(Theme::dracula());</code></pre>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>.</p>
+    <ul>
+      <li><code>burger.php</code>: The canonical burger order form from the huh README, built from three fields. Renders the first frame.</li>
+      <li><code>confirm.php</code>: The Confirm field in three states: default-no, default-yes and custom labels.</li>
+      <li><code>form.php</code>: A static render of one form made of an Input, a Select and a Confirm.</li>
+      <li><code>hide.php</code>: Conditional visibility through <code>withHideFunc()</code>.</li>
+      <li><code>input.php</code>: The Input field with a title, description and placeholder.</li>
+      <li><code>multi-page-form.php</code>: A multi-page form with conditional show and hide.</li>
+      <li><code>multi-select.php</code>: The MultiSelect field with min and max bounds.</li>
+      <li><code>no-color.php</code>: How a program reads <code>NO_COLOR</code> and <code>CLICOLOR</code> through sugar-core and renders to match.</li>
+      <li><code>select.php</code>: The single-choice Select field.</li>
+      <li><code>spinner.php</code>: A blocking <code>ActionSpinner</code> that runs a worker callable while it spins on STDERR.</li>
+      <li><code>text.php</code>: The multi-line Text field.</li>
+      <li><code>themes.php</code>: The same form rendered under five built-in themes.</li>
+    </ul>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-forms
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test touches the event loop, because the async-suggestion tests arm debounce and timeout timers on it. <code>sugar-testing</code> is a <code>require-dev</code> dependency, and <code>tests/GoldenRenderTest.php</code> uses its golden-file helpers.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The engine ports <code>charmbracelet/huh</code>, and the primitives port <code>charmbracelet/bubbles</code>. Most class docblocks cite the upstream method they mirror, written as <code>Mirrors charmbracelet/...</code>.</p>
+    <ul>
+      <li><code>Form</code> (with <code>withTheme</code>, <code>withAccessible</code>, <code>withErrorSummary</code>): <code>huh.Form</code> with <code>WithTheme</code>, <code>WithAccessible</code>, <code>WithErrorSummary</code></li>
+      <li><code>Group</code>: <code>huh.Group</code></li>
+      <li><code>Theme</code>: <code>huh.Theme</code></li>
+      <li><code>Field\Note</code>: <code>huh.Note</code></li>
+      <li><code>Spinner\Spinner</code> and <code>Spinner\TickMsg</code>: <code>bubbles</code> spinner</li>
+      <li><code>TextArea\TextArea</code>: <code>bubbles</code> textarea</li>
+      <li><code>Viewport\Viewport</code>: <code>bubbles</code> viewport</li>
+      <li><code>Cursor\Cursor</code>: <code>bubbles</code> cursor</li>
+    </ul>
 
     <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
 
