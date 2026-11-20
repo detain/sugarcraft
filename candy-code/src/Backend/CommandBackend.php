@@ -137,8 +137,10 @@ final class CommandBackend implements Backend, TracksActiveChildren
     /**
      * Starts the same child {@see complete()} runs, on the event loop instead of
      * blocking, so the caller's render/input loop keeps running for the whole
-     * round-trip. The history goes to stdin through the loop's write stream, a
-     * slice at a time, so a full pipe costs a loop tick rather than the turn.
+     * round-trip. On POSIX the history goes to stdin through the loop's write
+     * stream, a slice at a time, so a full pipe costs a loop tick rather than the
+     * turn. On Windows there is no write stream: the payload is staged to a
+     * private temp file the child reads as its stdin, and no stdin pipe is written.
      *
      * A cancelled token kills the child through ChildRun's kill ladder (TERM, a
      * grace, then KILL) and rejects with 'Request cancelled'. A token already

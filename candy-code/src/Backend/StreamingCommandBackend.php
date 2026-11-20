@@ -20,11 +20,14 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * WHAT "AS IT ARRIVES" MEANS. Both halves — the callback AND the display — are
  * true on the {@see completeAsync()} path. `completeAsync()` starts the child with
- * sugar-async's {@see ChildRun::launch()}, which reads its pipes from stream
- * callbacks on the event loop, so the ReactPHP loop keeps turning for the whole
- * completion and `Chat`'s `withTick` subscription — the thing that turns a
- * `TokenDelta` into text on screen — runs between tokens. A per-token callback
- * and a repaint per token, not one repaint at the end.
+ * sugar-async's {@see ChildRun::launch()}, which on POSIX reads its pipes from
+ * stream callbacks on the event loop. On Windows, where a pipe has no readable
+ * stream, launch() instead polls each pipe from a periodic loop timer at
+ * {@see \SugarCraft\Async\WindowsPipes::POLL_MICROSECONDS}, so a token surfaces on
+ * the next poll tick rather than on readiness. Either way the ReactPHP loop keeps
+ * turning for the whole completion and `Chat`'s `withTick` subscription — the thing
+ * that turns a `TokenDelta` into text on screen — runs between tokens. A per-token
+ * callback and a repaint per token, not one repaint at the end.
  *
  * The child is read by ChildRun's stream handling on both entry points. The
  * blocking {@see complete()} runs the same child with {@see ChildRun::run()}, which
