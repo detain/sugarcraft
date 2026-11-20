@@ -598,6 +598,43 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         $this->assertSame([], $result['claims']);
     }
 
+    public function testAMethodClaimOnAPdoCoreNameGetsTheSameVerdictOnEveryHost(): void
+    {
+        $root = $this->makeFixture();
+
+        // The verdict comes from a fixed method list, so it cannot flip between a host
+        // that loads ext-pdo and one that does not. A misspelled method is named either way.
+        $this->assertSame([], $this->claimsFor($root,
+            '<pre><code>PDOStatement::fetchAll();</code></pre>'
+            . '<pre><code>PDOException::getMessage();</code></pre>',
+        ));
+        $this->assertSame(
+            [
+                'claims: docs/_data/alpha.body.html names PDOStatement::fethcAll(), which PHP\'s PDOStatement does not define',
+                'claims: docs/_data/alpha.body.html names PDOException::getMesage(), which PHP\'s PDOException does not define',
+            ],
+            $this->claimsFor($root,
+                '<pre><code>PDOStatement::fethcAll();</code></pre>'
+                . '<pre><code>PDOException::getMesage();</code></pre>',
+            ),
+        );
+    }
+
+    public function testThePdoStatementMethodListMatchesTheExtensionWhenLoaded(): void
+    {
+        if (!class_exists('PDOStatement', false)) {
+            $this->markTestSkipped('ext-pdo is not loaded on this host, so the list has nothing to match.');
+        }
+
+        // Read the private list through reflection so the test pins the constant itself,
+        // not only the verdicts it produces.
+        $listed = (new \ReflectionClassConstant(\CheckDocsAssets::class, 'PDO_STATEMENT_METHODS'))->getValue();
+        $real = array_map('strtolower', get_class_methods('PDOStatement'));
+        sort($listed);
+        sort($real);
+        $this->assertSame($real, $listed);
+    }
+
     public function testAnEnumKeywordInProseDoesNotMakeAClassAnEnum(): void
     {
         $root = $this->makeFixture();
@@ -635,6 +672,7 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
             'RuntimeException', 'InvalidArgumentException', 'Exception', 'Closure', 'DateTime',
             'stdClass', 'ArrayIterator', 'Generator', 'Traversable', 'ArrayAccess', 'Attribute',
             'UnitEnum', 'Fiber', 'DomainException', 'LengthException', 'JsonSerializable',
+            'AssertionError', 'Directory', '__PHP_Incomplete_Class', 'php_user_filter',
         ];
         $spans = implode(' ', array_map(static fn (string $n): string => "<code>$n</code>", $names));
 

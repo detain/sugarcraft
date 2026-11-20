@@ -168,14 +168,15 @@ final class CheckDocsAssets
      * carries. PDOException and PDOStatement are the exception: they come from
      * the PDO extension, and stay listed because they were listed before. Matched
      * case-insensitively, as PHP matches class names. A method claim
-     * (`Name::method()`) still resolves on the host through internalClass(), which
-     * needs the class to be loaded to read it.
+     * (`Name::method()`) on a PDO name is checked against a fixed method list
+     * (fixedCoreMethods()), so it does not depend on the host either; other
+     * core names resolve through internalClass().
      *
      * @var list<string>
      */
     private const CORE_CLASS_NAMES = [
         'AllowDynamicProperties', 'AppendIterator', 'ArgumentCountError', 'ArithmeticError',
-        'ArrayAccess', 'ArrayIterator', 'ArrayObject', 'Attribute', 'BackedEnum',
+        'ArrayAccess', 'ArrayIterator', 'ArrayObject', 'AssertionError', 'Attribute', 'BackedEnum',
         'BadFunctionCallException', 'BadMethodCallException', 'CachingIterator',
         'CallbackFilterIterator', 'ClosedGeneratorException', 'Closure', 'CompileError',
         'Countable', 'DateError', 'DateException', 'DateInterval',
@@ -183,7 +184,7 @@ final class CheckDocsAssets
         'DateMalformedIntervalStringException', 'DateMalformedPeriodStringException',
         'DateMalformedStringException', 'DateObjectError', 'DatePeriod', 'DateRangeError',
         'DateTime', 'DateTimeImmutable', 'DateTimeInterface', 'DateTimeZone',
-        'DirectoryIterator', 'DivisionByZeroError', 'DomainException', 'EmptyIterator', 'Error',
+        'Directory', 'DirectoryIterator', 'DivisionByZeroError', 'DomainException', 'EmptyIterator', 'Error',
         'ErrorException', 'Exception', 'Fiber', 'FiberError', 'FilesystemIterator',
         'FilterIterator', 'Generator', 'GlobIterator', 'InfiniteIterator', 'InternalIterator',
         'InvalidArgumentException', 'Iterator', 'IteratorAggregate', 'IteratorIterator',
@@ -208,7 +209,23 @@ final class CheckDocsAssets
         'SplPriorityQueue', 'SplQueue', 'SplStack', 'SplSubject', 'SplTempFileObject',
         'stdClass', 'Stringable', 'Throwable', 'Traversable', 'TypeError', 'UnderflowException',
         'UnexpectedValueException', 'UnhandledMatchError', 'UnitEnum', 'ValueError', 'WeakMap',
-        'WeakReference',
+        'WeakReference', '__PHP_Incomplete_Class', 'php_user_filter',
+    ];
+
+    /**
+     * Methods a body may claim on the PDO classes, lowercased. ext-pdo is not part of
+     * every PHP build, so a method claim is checked against this list rather than the
+     * host's reflection: a loaded extension must not flip the verdict.
+     * testThePdoStatementMethodListMatchesTheExtensionWhenLoaded pins it to the
+     * extension's own method set wherever ext-pdo is loaded.
+     *
+     * @var list<string>
+     */
+    private const PDO_STATEMENT_METHODS = [
+        'bindcolumn', 'bindparam', 'bindvalue', 'closecursor', 'columncount',
+        'debugdumpparams', 'errorcode', 'errorinfo', 'execute', 'fetch', 'fetchall',
+        'fetchcolumn', 'fetchobject', 'getattribute', 'getcolumnmeta', 'getiterator',
+        'nextrowset', 'rowcount', 'setattribute', 'setfetchmode',
     ];
 
     /**
@@ -1281,10 +1298,17 @@ final class CheckDocsAssets
             return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
         }
 
+        // Checked against a fixed list, never the host's reflection: whether ext-pdo is
+        // loaded must not change the verdict for a misspelled method.
+        $fixed = self::fixedCoreMethods($lower);
+        if ($fixed !== null) {
+            return in_array(strtolower($method), $fixed, true)
+                ? null
+                : "names $short::$method(), which PHP's $short does not define";
+        }
+
         $internal = self::internalClass($short);
         if ($internal === null) {
-            // A core name the host has not loaded (PDOStatement without ext-pdo) cannot
-            // be checked for its methods here, so the verdict must not depend on the host.
             return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
         }
         if (method_exists($internal, $method)) {
@@ -1292,6 +1316,21 @@ final class CheckDocsAssets
         }
 
         return "names $short::$method(), which PHP's $short does not define";
+    }
+
+    /**
+     * The lowercased methods a PDO core name carries, or null for every other name.
+     *
+     * @return ?list<string>
+     */
+    private static function fixedCoreMethods(string $lower): ?array
+    {
+        return match ($lower) {
+            'pdostatement' => self::PDO_STATEMENT_METHODS,
+            // PDOException declares no methods of its own; it inherits Exception's, which every build carries.
+            'pdoexception' => array_map('strtolower', get_class_methods(\Exception::class)),
+            default => null,
+        };
     }
 
     /** True when $short is one of the PHP core names in CORE_CLASS_NAMES, in any case. */
