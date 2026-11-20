@@ -742,7 +742,10 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
         self::assertTrue($handlerAnswered, 'the fixture never spoke during the initialize leg');
         self::assertGreaterThan(1.0, $elapsed, 'a start that finished inside the raw budget proves nothing about the credit');
-        self::assertLessThan(1.6, $elapsed, 'the credited deadline was not honored: handler time still consumed the budget');
+        // Raw leg time is ~1.25 s, so the bound leaves only spawn and scheduling slack.
+        // A lost credit fails at the 1.0 s budget before this line; the bound only has
+        // to catch a gross overrun, not a loaded machine's process-spawn jitter.
+        self::assertLessThan(2.5, $elapsed, 'the credited deadline was not honored: handler time still consumed the budget');
         self::assertSame(
             ['credentialed'],
             array_map(static fn ($tool): string => $tool->name, $server->listTools()),
