@@ -180,19 +180,6 @@ composer install
 vendor/bin/phpunit</code></pre>
     <p>The suite is PHPUnit 10 and uses <code>sugar-testing</code> from <code>require-dev</code>. <code>tests/GoldenRenderTest.php</code> compares rendered output against golden files with its helpers.</p>
 
-    <h3 style="margin-top: 32px;">Upstream mapping</h3>
-    <p>Most component classes cite the bubbles component they mirror, written as <code>Mirrors charmbracelet/bubbles</code> in the docblock.</p>
-    <ul>
-      <li><code>Table\Table</code>, <code>Table\Column</code>, <code>Table\Styles</code>: bubbles <code>table</code> and its <code>Column</code> struct</li>
-      <li><code>Paginator\Paginator</code>: bubbles <code>paginator</code></li>
-      <li><code>Help\Help</code>, <code>Help\Styles</code>: bubbles <code>help</code> and <code>help.Styles</code></li>
-      <li><code>Key\Binding</code>: bubbles <code>key.NewBinding</code></li>
-      <li><code>Progress\Progress</code>, <code>Progress\AnimatedProgress</code>: bubbles <code>progress</code></li>
-      <li><code>Tabs\Tabs</code>: bubbles tabs</li>
-      <li><code>Stopwatch\Stopwatch</code>: bubbles <code>stopwatch</code></li>
-      <li><code>Timer\Timer</code>: bubbles <code>timer</code></li>
-    </ul>
-
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 style="margin-top: 24px;">A spinner freezes on its first frame</h3>
@@ -227,6 +214,19 @@ $bottom = $template-&gt;withLabels(['Logs', 'Stats'])-&gt;withZoneKey('bottom');
 
     <h3 style="margin-top: 24px;">An options row wraps onto two lines</h3>
     <p><code>Menu\OptionRow::render()</code> draws the two-line legacy layout, and it is deprecated. Call <code>OptionRow::renderRow()</code> for the one-line btop row, whose column widths are exact. The one-line form also takes the <code>selected</code>, <code>editing</code> and <code>hasArrows</code> flags shown in the TextEdit example above.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>Most component classes cite the bubbles component they mirror, written as <code>Mirrors charmbracelet/bubbles</code> in the docblock.</p>
+    <ul>
+      <li><code>Table\Table</code>, <code>Table\Column</code>, <code>Table\Styles</code>: bubbles <code>table</code> and its <code>Column</code> struct</li>
+      <li><code>Paginator\Paginator</code>: bubbles <code>paginator</code></li>
+      <li><code>Help\Help</code>, <code>Help\Styles</code>: bubbles <code>help</code> and <code>help.Styles</code></li>
+      <li><code>Key\Binding</code>: bubbles <code>key.NewBinding</code></li>
+      <li><code>Progress\Progress</code>, <code>Progress\AnimatedProgress</code>: bubbles <code>progress</code></li>
+      <li><code>Tabs\Tabs</code>: bubbles tabs</li>
+      <li><code>Stopwatch\Stopwatch</code>: bubbles <code>stopwatch</code></li>
+      <li><code>Timer\Timer</code>: bubbles <code>timer</code></li>
+    </ul>
 
     <h2 style="margin-top: 40px;">Changelog and versioning</h2>
     <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-widgets/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-widgets">github.com/detain/sugarcraft/commits/master/sugar-widgets</a>. The re-exports from sugar-forms, such as <code>Spinner</code>, <code>TextArea</code> and <code>FilePicker</code>, are deprecated in their docblocks. None of them names a removal version yet, so do not plan their removal for a fixed release. Depend on <code>sugarcraft/sugar-forms</code> directly for new code.</p>

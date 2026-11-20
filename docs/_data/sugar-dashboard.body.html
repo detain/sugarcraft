@@ -152,18 +152,6 @@ composer install
 vendor/bin/phpunit</code></pre>
     <p>The suite is plain PHPUnit 10 with the root <code>vendor/autoload.php</code> bootstrap. It does not use <code>sugar-testing</code>.</p>
 
-    <h3 style="margin-top: 32px;">Upstream mapping</h3>
-    <p>Most of the btop-derived code cites its source in the class docblock, as <code>Mirrors aristocratos/btop</code>, and the rest name the project they were adapted from.</p>
-    <ul>
-      <li><code>Plot\Braille\DualSampleGraph</code>: btop <code>Draw::Graph</code></li>
-      <li><code>Plot\Chart\Meter</code>: btop <code>Draw::Meter</code></li>
-      <li><code>Plot\Gradient101</code>, <code>Foundation\GradientStore</code>: btop <code>Theme::generateGradients</code> and <code>Theme::g</code></li>
-      <li><code>Foundation\NetAutoScale</code>: btop network-graph ceiling</li>
-      <li><code>Plot\DistanceFade</code>, <code>Plot\ProcRow\ProcRowComposer</code>: btop process-list distance fade and row layout</li>
-      <li><code>Keys\KeyRegistry</code>: teautils <code>KeyRegistry</code></li>
-      <li><code>Keys\KeyMap</code>: the keymap handling in bubble-keymap, adapted to PHP</li>
-    </ul>
-
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 style="margin-top: 24px;"><code>render()</code> returns <code>Loading...</code> instead of the grid</h3>
@@ -182,6 +170,18 @@ echo $grid-&gt;render();</code></pre>
     <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Plot\Chart\Meter;
 
 echo Meter::new(0.62)-&gt;withWidth(20)-&gt;render(), "\n";</code></pre>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>Most of the btop-derived code cites its source in the class docblock, as <code>Mirrors aristocratos/btop</code>, and the rest name the project they were adapted from.</p>
+    <ul>
+      <li><code>Plot\Braille\DualSampleGraph</code>: btop <code>Draw::Graph</code></li>
+      <li><code>Plot\Chart\Meter</code>: btop <code>Draw::Meter</code></li>
+      <li><code>Plot\Gradient101</code>, <code>Foundation\GradientStore</code>: btop <code>Theme::generateGradients</code> and <code>Theme::g</code></li>
+      <li><code>Foundation\NetAutoScale</code>: btop network-graph ceiling</li>
+      <li><code>Plot\DistanceFade</code>, <code>Plot\ProcRow\ProcRowComposer</code>: btop process-list distance fade and row layout</li>
+      <li><code>Keys\KeyRegistry</code>: teautils <code>KeyRegistry</code></li>
+      <li><code>Keys\KeyMap</code>: the keymap handling in bubble-keymap, adapted to PHP</li>
+    </ul>
 
     <h2 style="margin-top: 40px;">Changelog and versioning</h2>
     <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-dashboard/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-dashboard">github.com/detain/sugarcraft/commits/master/sugar-dashboard</a>. Most of the deprecated symbols in <code>src/</code> carry a <code>REMOVED-IN: 2.0.0</code> marker in their docblock, so they go in 2.0.0. The exceptions are <code>Module\LegacyModule</code>, which names only <code>v0.x</code>, and the <code>ALIGN_*</code> string constants on <code>Components\Card\Footer</code>, which name no version. Do not plan the removal of either for 2.0.0 until a release says so.</p>

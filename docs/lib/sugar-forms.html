@@ -169,7 +169,6 @@
             <li class="toc-h3"><a href="#theming">Theming</a></li>
             <li class="toc-h3"><a href="#examples">Examples</a></li>
             <li class="toc-h3"><a href="#testing">Testing</a></li>
-            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#values-has-no-entry-for-a-field">values() has no entry for a field</a></li>
             <li class="toc-h3"><a href="#a-boolean-predicate-goes-to-withvalidator">A boolean predicate goes to withValidator()</a></li>
@@ -177,6 +176,7 @@
             <li class="toc-h3"><a href="#suggestions-never-arrive-or-a-fetch-fails-after-a-timeout">Suggestions never arrive, or a fetch fails after a timeout</a></li>
             <li class="toc-h3"><a href="#no-color-or-term-dumb-still-gets-colored-output">NO_COLOR or TERM=dumb still gets colored output</a></li>
             <li class="toc-h3"><a href="#values-read-as-empty-after-the-program-ends">Values read as empty after the program ends</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#form">Form</a></li>
@@ -352,7 +352,7 @@ $form = Form::new(Input::new('name')->withTitle('Your name?'))
     <h3 id="examples" style="margin-top: 32px;">Examples</h3>
     <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>.</p>
     <ul>
-      <li><code>burger.php</code>: The canonical burger order form from the huh README, built from three fields. Renders the first frame.</li>
+      <li><code>burger.php</code>: The canonical burger order form from the huh README, built from four fields: bun, patty, extras and a Confirm. Renders the first frame.</li>
       <li><code>confirm.php</code>: The Confirm field in three states: default-no, default-yes and custom labels.</li>
       <li><code>form.php</code>: A static render of one form made of an Input, a Select and a Confirm.</li>
       <li><code>hide.php</code>: Conditional visibility through <code>withHideFunc()</code>.</li>
@@ -371,19 +371,6 @@ $form = Form::new(Input::new('name')->withTitle('Your name?'))
 composer install
 vendor/bin/phpunit</code></pre>
     <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test touches the event loop, because the async-suggestion tests arm debounce and timeout timers on it. <code>sugar-testing</code> is a <code>require-dev</code> dependency, and <code>tests/GoldenRenderTest.php</code> uses its golden-file helpers.</p>
-
-    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
-    <p>The engine ports <code>charmbracelet/huh</code>, and the primitives port <code>charmbracelet/bubbles</code>. Most class docblocks cite the upstream method they mirror, written as <code>Mirrors charmbracelet/...</code>.</p>
-    <ul>
-      <li><code>Form</code> (with <code>withTheme</code>, <code>withAccessible</code>, <code>withErrorSummary</code>): <code>huh.Form</code> with <code>WithTheme</code>, <code>WithAccessible</code>, <code>WithErrorSummary</code></li>
-      <li><code>Group</code>: <code>huh.Group</code></li>
-      <li><code>Theme</code>: <code>huh.Theme</code></li>
-      <li><code>Field\Note</code>: <code>huh.Note</code></li>
-      <li><code>Spinner\Spinner</code> and <code>Spinner\TickMsg</code>: <code>bubbles</code> spinner</li>
-      <li><code>TextArea\TextArea</code>: <code>bubbles</code> textarea</li>
-      <li><code>Viewport\Viewport</code>: <code>bubbles</code> viewport</li>
-      <li><code>Cursor\Cursor</code>: <code>bubbles</code> cursor</li>
-    </ul>
 
     <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
 
@@ -404,6 +391,19 @@ vendor/bin/phpunit</code></pre>
 
     <h3 id="values-read-as-empty-after-the-program-ends" style="margin-top: 24px;">Values read as empty after the program ends</h3>
     <p><code>Form</code> is immutable, and the <code>run()</code> method of sugar-core's <code>Program</code> drives a copy and returns the final model. The <code>$form</code> you built before the run never holds the submitted values. Capture the return value and read it, and check <code>isSubmitted()</code> first, because an aborted form returns too.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The engine ports <code>charmbracelet/huh</code>, and the primitives port <code>charmbracelet/bubbles</code>. Most class docblocks cite the upstream method they mirror, written as <code>Mirrors charmbracelet/...</code>.</p>
+    <ul>
+      <li><code>Form</code> (with <code>withTheme</code>, <code>withAccessible</code>, <code>withErrorSummary</code>): <code>huh.Form</code> with <code>WithTheme</code>, <code>WithAccessible</code>, <code>WithErrorSummary</code></li>
+      <li><code>Group</code>: <code>huh.Group</code></li>
+      <li><code>Theme</code>: <code>huh.Theme</code></li>
+      <li><code>Field\Note</code>: <code>huh.Note</code></li>
+      <li><code>Spinner\Spinner</code> and <code>Spinner\TickMsg</code>: <code>bubbles</code> spinner</li>
+      <li><code>TextArea\TextArea</code>: <code>bubbles</code> textarea</li>
+      <li><code>Viewport\Viewport</code>: <code>bubbles</code> viewport</li>
+      <li><code>Cursor\Cursor</code>: <code>bubbles</code> cursor</li>
+    </ul>
 
     <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
     <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of <code>sugar-forms/</code> in the monorepo, which the <a href="https://github.com/sugarcraft/sugar-forms/commits/master">split mirror on GitHub</a> records. The API table above marks the deprecated accessors on <code>Form</code> and the <code>Fuzzy\FuzzyMatcher</code> shim. Every deprecation whose docblock reads <code>REMOVED-IN: 2.0.0</code> retires in 2.0.0. That covers the <code>getString()</code>, <code>getInt()</code>, <code>getBool()</code>, <code>getArray()</code> and <code>getFocusedField()</code> accessors on <code>Form</code>, the <code>getDescription()</code> and <code>getError()</code> accessors on <code>Field</code> and its subclasses, the <code>getWidth()</code> and <code>getHeight()</code> accessors on <code>Viewport</code>, and the legacy setters and accessors on <code>TextArea</code>, <code>TextInput</code>, <code>ItemList</code> and <code>FilePicker</code>. The <code>Fuzzy\FuzzyMatcher</code> shim, which delegates to sugar-fuzzy, has no removal version yet, so do not plan its removal for 2.0.0.</p>

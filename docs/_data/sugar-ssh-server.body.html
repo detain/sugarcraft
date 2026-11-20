@@ -3,13 +3,6 @@
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ssh-server</code></pre>
 
-    <h3 style="margin-top: 32px;">Concepts</h3>
-    <p>The server runs a middleware pipeline inside the process that sshd spawns under <code>ForceCommand</code>. It opens no listener of its own. What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction, and there are two transports:</p>
-    <ul>
-      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
-      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
-    </ul>
-
     <h3 style="margin-top: 32px;">Quickstart — in-process bash</h3>
     <pre class="code"><code class="language-php">// /opt/wish/server.php — invoked by sshd ForceCommand
 require '/opt/wish/vendor/autoload.php';
@@ -43,6 +36,13 @@ exit(Server::new()
     -&gt;serve());</code></pre>
 
     <p>The <code>wishuser</code> in both <code>Auth</code> allowlists is what the sshd <code>Match</code> block makes true: under <code>ForceCommand</code> the entry script runs <em>as the target account</em>, so <code>$s-&gt;user</code> is that account on every connection, and an allowlist of human names refuses 100% of logins with exit <code>Server::EXIT_DENIED</code>. Per-user separation needs per-user <code>Match</code> blocks or <code>authorized_keys</code> <code>command=</code> entries, each running its own entry script.</p>
+
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>The server runs a middleware pipeline inside the process that sshd spawns under <code>ForceCommand</code>. It opens no listener of its own. What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction, and there are two transports:</p>
+    <ul>
+      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
+      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
+    </ul>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -149,14 +149,6 @@ composer install
 vendor/bin/phpunit</code></pre>
     <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test arms a timer on the shared event loop. <code>sugar-testing</code> is a <code>require-dev</code> dependency.</p>
 
-    <h3 style="margin-top: 32px;">Upstream mapping</h3>
-    <p>The server is inspired by charmbracelet/wish, which is also cited in the docblocks. Other classes mirror Go concepts directly.</p>
-    <ul>
-      <li><code>Context</code>: Go <code>context.Context</code>: <code>Done()</code> and <code>Deadline()</code> semantics</li>
-      <li>Promise handling in the transports: charmbracelet/wish <code>PromiseDispatch.awaitPromise</code></li>
-      <li><code>HostSshdTransport</code>: sugar-ssh-server's own pre-PTY-upgrade architecture, kept for existing deployments. It has no upstream counterpart.</li>
-    </ul>
-
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 style="margin-top: 24px;">The client gets exit status 129 and the child never starts</h3>
@@ -182,6 +174,14 @@ vendor/bin/phpunit</code></pre>
 
     <h3 style="margin-top: 24px;">One abusive client locks out a whole bastion</h3>
     <p>The <code>ip:</code> bucket in <code>RateLimit</code> keys on the direct TCP peer, so a bastion, a load balancer or a <code>ProxyJump</code> hop collapses many operators into one bucket. Enable the username bucket (<code>$userBurst</code>), or move throttling to the fronting layer. Keep the state file and its lock on a local filesystem, because <code>flock</code> on NFS can be silently absent.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The server is inspired by charmbracelet/wish, which is also cited in the docblocks. Other classes mirror Go concepts directly.</p>
+    <ul>
+      <li><code>Context</code>: Go <code>context.Context</code>: <code>Done()</code> and <code>Deadline()</code> semantics</li>
+      <li>Promise handling in the transports: charmbracelet/wish <code>PromiseDispatch.awaitPromise</code></li>
+      <li><code>HostSshdTransport</code>: sugar-ssh-server's own pre-PTY-upgrade architecture, kept for existing deployments. It has no upstream counterpart.</li>
+    </ul>
 
     <h2 style="margin-top: 40px;">Changelog and versioning</h2>
     <p>The package has no separate changelog file and no release tag in the monorepo, so its history is the commit log of <code>sugar-ssh-server/</code>, mirrored on <a href="https://github.com/sugarcraft/sugar-ssh-server/commits/master">GitHub</a>. One change to know about when you upgrade: <code>Server</code> is immutable. Before audit sugar-ssh-server-008, <code>use()</code> changed the server in place. It now returns a new server, so a bare <code>$server->use($m);</code> no longer registers anything.</p>
