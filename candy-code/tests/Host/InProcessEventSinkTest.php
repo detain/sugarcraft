@@ -169,6 +169,43 @@ final class InProcessEventSinkTest extends TestCase
         self::assertSame(['s2'], $sink->followedSessions());
     }
 
+    public function testADurableEventShedsAQueuedDeltaBeforeItOverflowsTheSession(): void
+    {
+        $sink = $this->sink();
+        $sink->follow('s1', 0);
+        // Fill the queue with live deltas only, each under its own text so none coalesces (the byte bound is not reached).
+        for ($n = 1; $n <= InProcessEventSink::QUEUE_BOUND; $n++) {
+            $this->deliverLive($sink, 's1', 'd' . $n);
+        }
+        $this->deliverDurable($sink, 's1', 1);
+
+        self::assertTrue($sink->accepts('s1'), 'a delta made room, so the session did not overflow');
+        self::assertTrue($sink->isOpen(), 'the sink stays open');
+        $sink->flush();
+
+        self::assertSame([1], $this->seqsOf('s1'), 'the durable event is queued behind the deltas and delivered');
+        self::assertSame('server.overflow', $this->heard[0]['type'], 'the shed is reported first, at the first shed position');
+        self::assertSame(['sessionId' => 's1', 'dropped' => 1, 'action' => 'resubscribe'], $this->heard[0]['data']);
+        self::assertSame('s1', $this->heard[\count($this->heard) - 1]['sessionId'], 'the durable event is the last one heard');
+        self::assertSame(InProcessEventSink::QUEUE_BOUND - 1 + 2, \count($this->heard), 'the notice, the 2047 kept deltas and the durable event');
+    }
+
+    public function testUnfollowDropsTheOwedEventsAsTheDocumentedRoutedDivergence(): void
+    {
+        // Pins the divergence documented on InProcessEventSink::unfollow(): the routed purge drops
+        // owed events with no notice, where the primary feed keeps envelopes it already queued.
+        $sink = $this->sink();
+        $sink->follow('s1', 0);
+        $this->deliverDurable($sink, 's1', 1);
+        $this->deliverDurable($sink, 's1', 2);
+        $sink->unfollow('s1');
+        $sink->flush();
+
+        self::assertSame([], $this->heard, 'the owed events are purged and no notice is sent');
+        self::assertSame([], $sink->followedSessions());
+        self::assertTrue($sink->accepts('s1'), 'an unfollow is not a stop: a later follow is accepted');
+    }
+
     private function sink(): InProcessEventSink
     {
         static $n = 0;

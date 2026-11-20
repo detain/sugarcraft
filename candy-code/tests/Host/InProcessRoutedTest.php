@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
+use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
@@ -478,6 +479,97 @@ final class InProcessRoutedTest extends TestCase
     }
 
     /** A door whose 20 s call deadlines are fired by the test, connected on first use. */
+    public function testARoutedAnswerPastTheFrameCeilingIsRefusedTooLarge(): void
+    {
+        // The routed conversion is the one gate a routed answer takes before a bundle (the door's
+        // wire() conversion, which every routed call shares). Driven directly: an end-to-end answer
+        // past the ceiling is not practical in a test.
+        $wire = new \ReflectionMethod(InProcessHostServices::class, 'wire');
+        try {
+            $wire->invoke(null, ['text' => \str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES)]);
+            self::fail('an answer past the frame ceiling must be refused');
+        } catch (RpcError $refusal) {
+            self::assertSame('too_large', $refusal->refusalKind());
+        }
+        self::assertSame(['text' => 'ok'], $wire->invoke(null, ['text' => 'ok']), 'a small answer passes unchanged');
+    }
+
+    public function testARoutedAnswerNestedPastTheWireDecodeDepthIsRefusedTooDeep(): void
+    {
+        // Encodes under the value depth (511) but decodes past the wire client's depth (64): too_deep.
+        $nested = 'leaf';
+        for ($level = 0; $level < JsonRpc::MAX_DEPTH + 10; $level++) {
+            $nested = ['n' => $nested];
+        }
+        $wire = new \ReflectionMethod(InProcessHostServices::class, 'wire');
+        try {
+            $wire->invoke(null, $nested);
+            self::fail('an answer nested past the wire decode depth must be refused');
+        } catch (RpcError $refusal) {
+            self::assertSame('too_deep', $refusal->refusalKind());
+        }
+    }
+
+    public function testTheDoorIsNeverRefusedViewerSessionDeniedOrOwnerOnly(): void
+    {
+        // Design 2.5: the in-process door is an owner with no connection, so the gateway's scope
+        // law never applies to it. call() rethrows any refusal, so a refused call fails here.
+        $sessionId = (string) $this->call($this->door->createSessionIn($this->other, null, null))['id'];
+        $this->call($this->door->subscribeSession($sessionId, null, null));
+        self::assertIsArray($this->call($this->door->sessionSnapshot($sessionId, 10)));
+        self::assertIsArray($this->call($this->door->pendingPermissionsIn($this->other)));
+        $this->call($this->door->unsubscribeSession($sessionId));
+    }
+
+    public function testAFailedHostStartRejectsTheRoutedCallWorkspaceFailed(): void
+    {
+        // The start-failure path: a host that cannot start rejects the call with workspace_failed,
+        // and the gateway keeps no host for the root. The start table is set directly to a rejected start.
+        $starting = new \ReflectionProperty(Gateway::class, 'starting');
+        $starting->setValue($this->gateway, [$this->other => \React\Promise\reject(new \RuntimeException('the child would not start'))]);
+        try {
+            $answer = $this->fixture->await($this->gateway->callRoot($this->other, 'session.list', (object) []));
+        } finally {
+            $starting->setValue($this->gateway, []);
+        }
+
+        self::assertInstanceOf(RpcError::class, $answer);
+        self::assertSame('workspace_failed', $answer->refusalKind());
+        self::assertNotContains($this->other, $this->gateway->hostRoots());
+        self::assertSame(0, $this->inFlightOf($this->other), 'the failed call leaves no in-flight count');
+    }
+
+    public function testAColdCallStartsTheRootsHostAndAnswersThroughIt(): void
+    {
+        self::assertNotContains($this->other, $this->gateway->hostRoots(), 'no host runs for the root yet');
+        $answer = $this->call($this->gateway->callRoot($this->other, 'session.list', (object) []));
+
+        self::assertNotNull($answer);
+        self::assertContains($this->other, $this->gateway->hostRoots(), 'the cold call started the host');
+    }
+
+    public function testASendTurnFromInsideAListenerQueuesItsEventBehindTheOwedOnes(): void
+    {
+        $sessionId = (string) $this->call($this->door->createSessionIn($this->other, null, null))['id'];
+        $this->call($this->door->subscribeSession($sessionId, null, null));
+        $reentered = null;
+        $this->call($this->door->subscribeEvents(function (array $envelope) use (&$reentered, $sessionId): void {
+            if (($envelope['type'] ?? null) === 'turn.completed' && $reentered === null) {
+                // Re-entrant: a routed call made from a delivery returns a promise and never runs the drain again.
+                $reentered = $this->door->sendTurn($sessionId, 'second', 'queue', null, [], []);
+            }
+        }));
+
+        $first = $this->call($this->door->sendTurn($sessionId, 'first', 'queue', null, [], []));
+        self::assertSame('started', $first['admitted']);
+        self::assertTrue($this->runUntil(fn (): bool => \count($this->eventsOf('turn.completed')) >= 2, 40.0), 'the turn sent from inside the listener never completed');
+
+        self::assertInstanceOf(PromiseInterface::class, $reentered, 'the listener made the re-entrant call');
+        self::assertIsArray($this->call($reentered));
+        $completed = $this->eventsOf('turn.completed');
+        self::assertSame([$sessionId, $sessionId], \array_column($completed, 'sessionId'), 'both turns completed, in order, on the routed session');
+    }
+
     private function timedDoor(): InProcessHostServices
     {
         if ($this->timed === null) {

@@ -21,10 +21,17 @@ use SugarCraft\Code\Server\Workspace\RelayTarget;
  * events (deltas) up to {@see LIVE_BYTES_BOUND} encoded bytes. Over a live bound, a delta
  * coalesces into a queued one with the same key, else the oldest live event is shed. Each
  * shed is counted into one `server.overflow` notice per session, placed at the first shed
- * position; the session keeps flowing. A durable event that finds the queue full cannot be
- * shed: the session's queued events from its first undelivered durable event onward are
- * replaced by one notice, the session stops until the client resubscribes, and the gateway
- * cursor is rewound to the last seq the listeners actually received.
+ * position; the session keeps flowing. A durable event that finds the queue full first sheds
+ * queued live deltas, oldest first, while any remains (the session keeps flowing). Only when no
+ * delta is left to shed does it overflow: the session's queued events from its first undelivered
+ * durable event onward are replaced by one notice, the session stops until the client
+ * resubscribes, and the gateway cursor is rewound to the last seq the listeners actually received.
+ *
+ * Unfollow divergence (PL-5c-A design, section 3.4). {@see unfollow()} drops the session's
+ * owed, undelivered events. The primary path does not: `session.unsubscribe` on a primary
+ * session leaves the envelopes already in the primary feed's queue to reach the listeners,
+ * because that queue is shared and is not filtered by session. The routed sink drops them
+ * deliberately, so a routed unfollow is final and no owed event arrives after it.
  *
  * The cursor is the gateway's (`cursors[id][session]`, the same table the wire uses), so this
  * class keeps none of its own beyond what it has delivered for each session.
@@ -123,6 +130,10 @@ final class InProcessEventSink implements RelayTarget
             return;
         }
 
+        // A durable event sheds queued live deltas before it may overflow the session: deltas are the
+        // only sheddable class, so the session keeps flowing while a delta can make room.
+        while ($this->queued >= self::QUEUE_BOUND && $this->shedOldestLive()) {
+        }
         if ($this->queued >= self::QUEUE_BOUND) {
             $this->overflow($sessionId, $root);
             $this->schedule();
@@ -152,7 +163,12 @@ final class InProcessEventSink implements RelayTarget
         $this->gateway->setTargetCursor($this->id, $sessionId, $cursor);
     }
 
-    /** The client unsubscribed from $sessionId: forget it and its queued events. */
+    /**
+     * The client unsubscribed from $sessionId: forget it and purge its owed events. This is the
+     * routed divergence from the primary path (see the class docblock): the primary feed keeps
+     * envelopes it already queued. Latent: no bundle calls unsubscribeSession() yet, so this
+     * purge is reached only through the door, and no shipped bundle exercises it.
+     */
     public function unfollow(string $sessionId): void
     {
         unset($this->followed[$sessionId], $this->stopped[$sessionId], $this->delivered[$sessionId]);
