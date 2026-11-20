@@ -1631,6 +1631,12 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             if (!$session->isActive() || $session->isSettled()) {
                 continue;
             }
+            // A stop in flight owns this session's settlement: it reads the buffer once
+            // the daemon is gone, and a tick settling it first would release the files
+            // that stop still needs to report what the daemon did.
+            if (isset($this->pendingStops[$id])) {
+                continue;
+            }
 
             if ($this->reapFinishedDaemon($id, $session)) {
                 continue;
