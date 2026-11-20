@@ -342,7 +342,7 @@ final class ForkCarriesHistoryTest extends TestCase
     private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
     {
         $resolved = null;
-        $cmd()->promise->then(function ($msg) use (&$resolved): void {
+        $this->launchedAsyncCmd($cmd)->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
         SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
@@ -355,11 +355,26 @@ final class ForkCarriesHistoryTest extends TestCase
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $resolved = null;
-        $cmd()->promise->then(function ($msg) use (&$resolved): void {
+        $this->launchedAsyncCmd($cmd)->promise->then(function ($msg) use (&$resolved): void {
             $resolved = $msg;
         });
 
         return $resolved;
+    }
+
+    /**
+     * The AsyncCmd a spawn Cmd launches. A background spawn batches the launch
+     * with the tick that arms the poll, and the launch is the first member.
+     */
+    private function launchedAsyncCmd(\Closure $cmd): \SugarCraft\Core\AsyncCmd
+    {
+        $result = $cmd();
+        if ($result instanceof \SugarCraft\Core\BatchMsg) {
+            $result = ($result->cmds[0])();
+        }
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $result);
+
+        return $result;
     }
 
     private function removeTree(string $path): void

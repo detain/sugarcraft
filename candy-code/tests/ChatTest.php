@@ -4241,6 +4241,11 @@ final class ChatTest extends TestCase
     private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
     {
         $asyncCmd = $cmd();
+        if ($asyncCmd instanceof BatchMsg) {
+            // A background spawn batches its launch with the tick that arms the poll;
+            // the launch is the first member.
+            $asyncCmd = ($asyncCmd->cmds[0])();
+        }
         $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
         $resolved = null;
         $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
@@ -4257,6 +4262,9 @@ final class ChatTest extends TestCase
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $asyncCmd = $cmd();
+        if ($asyncCmd instanceof BatchMsg) {
+            $asyncCmd = ($asyncCmd->cmds[0])();
+        }
         $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
         $resolved = null;
         $asyncCmd->promise->then(function ($msg) use (&$resolved): void {

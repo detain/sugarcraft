@@ -11958,7 +11958,7 @@ final class Chat implements Model
                     break;
 
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::Async:
-                    $cmds[] = Cmd::promise($effect->run());
+                    array_push($cmds, ...$effect->asyncCmds());
                     break;
 
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::OccupyTurn:

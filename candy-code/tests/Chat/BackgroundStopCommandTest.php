@@ -168,6 +168,10 @@ final class BackgroundStopCommandTest extends TestCase
     {
         $this->assertInstanceOf(\Closure::class, $cmd);
         $async = $cmd();
+        if ($async instanceof \SugarCraft\Core\BatchMsg) {
+            // A background spawn batches its launch with the tick that arms the poll.
+            $async = ($async->cmds[0])();
+        }
         $this->assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
         $async->promise->then(static function ($msg) use (&$resolved): void {

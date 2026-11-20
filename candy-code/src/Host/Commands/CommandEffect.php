@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\Commands;
 
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\TitleSource;
+use SugarCraft\Core\Cmd;
 
 /**
  * One session change a slash command asks for, beside the rows it appends
@@ -124,12 +126,43 @@ final class CommandEffect
      * a settled command that FAILED lands a flagged row, and the renderer
      * never sniffs text to find that out.
      *
+     * $armsBackgroundPoll marks a run that registers a background spawn when it
+     * starts: the supervisor advances that spawn only from its poll, and nothing
+     * reconciles the poll's subscription after the run, so the host must queue a
+     * tick straight after it ({@see armsBackgroundPoll()}).
+     *
      * @param \Closure(): PromiseInterface<mixed> $run
      * @param (\Closure(mixed): ?Message)|null $describe
      */
-    public static function async(\Closure $run, ?\Closure $describe = null): self
+    public static function async(\Closure $run, ?\Closure $describe = null, bool $armsBackgroundPoll = false): self
     {
-        return new self(CommandEffectKind::Async, ['run' => $run, 'describe' => $describe]);
+        return new self(CommandEffectKind::Async, [
+            'run' => $run,
+            'describe' => $describe,
+            'armsBackgroundPoll' => $armsBackgroundPoll,
+        ]);
+    }
+
+    /** Whether the run registers a background spawn that only the poll advances ({@see async()}). */
+    public function armsBackgroundPoll(): bool
+    {
+        return ($this->data['armsBackgroundPoll'] ?? false) === true;
+    }
+
+    /**
+     * The Cmds an Async effect queues, in order. A run that registers a background
+     * spawn is followed by a tick: the run registers the spawn only when it starts,
+     * and the Msg carrying its promise does not reconcile subscriptions, so nothing
+     * else arms the poll until the next key. The Program runs a batch's members in
+     * order, so the tick lands after the spawn is registered and arms the poll.
+     *
+     * @return list<\Closure>
+     */
+    public function asyncCmds(): array
+    {
+        $launch = Cmd::promise($this->run());
+
+        return $this->armsBackgroundPoll() ? [$launch, Cmd::send(new BackgroundTickMsg())] : [$launch];
     }
 
     /**

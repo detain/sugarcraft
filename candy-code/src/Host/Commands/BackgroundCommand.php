@@ -93,6 +93,7 @@ final class BackgroundCommand implements HostCommand
         return CommandEffect::async(
             self::spawnThunk($supervisor, $context->agentManager, $context->projectRoot(), $command, $name, $task, $forkedSessionId),
             self::spawnRow(...),
+            armsBackgroundPoll: true,
         );
     }
 
