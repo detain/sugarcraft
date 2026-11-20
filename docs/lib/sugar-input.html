@@ -335,8 +335,8 @@ while (!$driver->isEof()) {
 <tr><td>EscapeDecoder</td><td>remainder(): string</td><td>Get unconsumed bytes</td></tr>
 <tr><td>EscapeDecoder</td><td>flushDeferredEscape(): list&lt;Event&gt;</td><td>Settle a deferred lone ESC on input idle</td></tr>
 <tr><td>EscapeDecoder</td><td>drainedReplyCount(): int</td><td>Terminal replies drained as events</td></tr>
-<tr><td>EscapeDecoder</td><td>droppedUnknownCount(): int</td><td>Frames refused (unknown or disabled family)</td></tr>
-<tr><td>EscapeDecoder</td><td>discardedPasteBytes(): int</td><td>Bytes discarded after a paste overflow</td></tr>
+<tr><td>EscapeDecoder</td><td>droppedUnknownCount(): int</td><td>Frames refused (unknown or disabled family), an incomplete sequence whose buffered tail passes the 128-byte cap, or an unterminated OSC/DCS string abandoned past its 64 KiB budget</td></tr>
+<tr><td>EscapeDecoder</td><td>discardedPasteBytes(): int</td><td>Paste bytes discarded after a paste overflow (paste only, never sequences)</td></tr>
 <tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial, paste and string state</td></tr>
 <tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null (idle/EOF)</td></tr>
 <tr><td>StreamInputDriver</td><td>isEof(): bool / hasPending(): bool</td><td>Distinguish ended-and-drained from idle</td></tr>
