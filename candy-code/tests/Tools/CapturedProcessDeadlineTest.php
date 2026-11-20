@@ -120,6 +120,35 @@ final class CapturedProcessDeadlineTest extends TestCase
         self::assertTrue(self::gone($pid), "the backgrounded part {$pid} survived a confirmed group kill");
     }
 
+    /**
+     * A host with no usable setsid spawns the child unwrapped: it shares this
+     * process's group, only its pid is signalled, and the backgrounded part
+     * survives the deadline. The claim must say so, on every host, not only on
+     * the ones that happen to lack setsid.
+     */
+    public function testAnUnwrappedChildNeverClaimsItsGroupWasKilled(): void
+    {
+        $pidFile = $this->dir . '/unwrapped.pid';
+        $pid = 0;
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([]);
+        try {
+            $run = self::host()->capture(
+                'sleep 30 & echo $! > ' . escapeshellarg($pidFile) . '; wait',
+                0.5,
+            );
+            $pid = (int) trim((string) @file_get_contents($pidFile));
+        } finally {
+            ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
+            if ($pid > 0) {
+                @posix_kill($pid, 9);
+            }
+        }
+
+        self::assertTrue($run['timedOut'], var_export($run, true));
+        self::assertGreaterThan(0, $pid, 'the fixture never started its backgrounded part');
+        self::assertFalse($run['groupKilled'], 'an unwrapped child has no group of its own to claim');
+    }
+
     public function testAChildThatClosedItsPipesIsStillBoundedByTheDeadline(): void
     {
         // EOF arrives at once, so only the post-drain exit wait can bound this.
