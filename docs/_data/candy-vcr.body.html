@@ -78,6 +78,7 @@ candy-vcr record --output demo.cas --idle-trim 1.0 -- bash demo.sh</code></pre>
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
 use SugarCraft\Vcr\Player;
+use App\MyModel;
 
 $result = Player::open('/tmp/session.cas')->play(
     programFactory: fn ($input, $output, $loop) => new Program(
