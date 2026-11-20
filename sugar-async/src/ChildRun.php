@@ -106,6 +106,7 @@ final class ChildRun
      * @param bool $commandLine  True when $argv holds one command line for proc_open() to take as a string
      * @param null|float $heartbeatSeconds  Interval between heartbeats, or null for none
      * @param null|\Closure(): void $onHeartbeat  The heartbeat hook, or null
+     * @param bool $groupLeader  True when a containment wrapper made the child lead its own group, so its pid is the group
      */
     private function __construct(
         private readonly array $argv,
@@ -123,6 +124,7 @@ final class ChildRun
         private readonly bool $commandLine = false,
         private readonly ?float $heartbeatSeconds = null,
         private readonly ?\Closure $onHeartbeat = null,
+        private readonly bool $groupLeader = false,
     ) {
     }
 
@@ -294,6 +296,20 @@ final class ChildRun
     }
 
     /**
+     * The child leads its own process group because a containment wrapper started
+     * it (`setsid -w`), so its pid is the group id the kill rungs signal. The group
+     * is then taken from the pid at spawn, while the child is certainly alive, rather
+     * than measured with {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::groupId()},
+     * which answers null when the wrapper has not yet made itself a group leader or
+     * has already exited. Leave it false for an unwrapped child: that child shares
+     * this process's group, and a group kill would signal this process.
+     */
+    public function withGroupLeader(bool $leads): self
+    {
+        return $this->mutate(['groupLeader' => $leads]);
+    }
+
+    /**
      * Heartbeat: $onBeat is called at most every $seconds for as long as the child
      * runs, so a caller can keep a liveness watchdog fed through a silent child. The
      * first call comes one interval in. run() beats while it reads the pipes and while
@@ -326,9 +342,9 @@ final class ChildRun
             return self::cancelledResult();
         }
 
-        [$proc, $pipes, $staged] = $this->spawn();
+        [$proc, $pipes, $staged, $group] = $this->spawn();
         try {
-            return $this->collect($proc, $pipes);
+            return $this->collect($proc, $pipes, $group);
         } finally {
             // The collect() above reaps the child before it returns, so the staged stdin is no longer read.
             if ($staged !== null) {
@@ -358,11 +374,10 @@ final class ChildRun
         }
 
         try {
-            [$proc, $pipes, $staged] = $this->spawn($loop);
+            [$proc, $pipes, $staged, $group] = $this->spawn($loop);
         } catch (\Throwable $e) {
             return reject($e);
         }
-        $group = $this->groupFor($proc);
 
         $deferred = new Deferred();
         (new ChildRunLaunch(
@@ -392,10 +407,9 @@ final class ChildRun
      * @param resource $proc
      * @param array<int, resource> $pipes
      */
-    private function collect($proc, array $pipes): ChildResult
+    private function collect($proc, array $pipes, ?int $group): ChildResult
     {
         $clock = Clock::monotonicSeconds(...);
-        $group = $this->groupFor($proc);
         $deadline = $clock() + $this->timeout;
 
         // The probe keeps the status it reads: a proc_get_status() after the
@@ -574,7 +588,7 @@ final class ChildRun
      * the stdin is a file) and the staged file to remove once the child is reaped.
      * A launch passes its loop, so an abandoned child is reaped on a timer.
      *
-     * @return array{0: resource, 1: array<int, resource>, 2: ?string}
+     * @return array{0: resource, 1: array<int, resource>, 2: ?string, 3: ?int}
      */
     private function spawn(?LoopInterface $loop = null): array
     {
@@ -604,10 +618,10 @@ final class ChildRun
 
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
         }
+        // Read before onSpawn runs: a wrapped child's group is reliably readable only
+        // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
+        $group = $this->groupFor($proc);
         if ($this->onSpawn !== null) {
-            // Read before onSpawn runs: a wrapped child's group is reliably readable only
-            // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
-            $group = $this->groupFor($proc);
             try {
                 ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
             } catch (\Throwable $e) {
@@ -617,7 +631,7 @@ final class ChildRun
             }
         }
 
-        return [$proc, $pipes, $staged];
+        return [$proc, $pipes, $staged, $group];
     }
 
     /**
@@ -714,7 +728,16 @@ final class ChildRun
      */
     private function groupFor($proc): ?int
     {
-        return $this->groupPid ?? Containment::groupId($proc);
+        if ($this->groupPid !== null) {
+            return $this->groupPid;
+        }
+        if ($this->groupLeader) {
+            $pid = (int) (proc_get_status($proc)['pid'] ?? 0);
+
+            return $pid > 0 ? $pid : null;
+        }
+
+        return Containment::groupId($proc);
     }
 
     /**

@@ -663,4 +663,36 @@ final class ChildRunTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         ChildRun::new(['true'])->withHeartbeat(0.0, static fn () => null);
     }
+
+    /**
+     * A wrapped child whose leader exits at once while a backgrounded grandchild
+     * holds the pipes: the group must be taken from the pid at spawn, so the
+     * deadline kill still reaches the grandchild after the leader is gone.
+     */
+    public function testWithGroupLeaderKillsTheGroupAfterTheLeaderExited(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $pidFile = tempnam(sys_get_temp_dir(), 'childrun-leader-');
+        try {
+            $r = ChildRun::new(['/usr/bin/setsid', '-w', '/bin/sh', '-c', 'sleep 30 & echo $! > ' . escapeshellarg((string) $pidFile) . '; exit 0'])
+                ->withGroupLeader(true)
+                ->withExitGrace(null)
+                ->withTimeout(0.5)
+                ->run();
+
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $grandchild = (int) trim((string) file_get_contents((string) $pidFile));
+            $this->assertGreaterThan(0, $grandchild, 'the fixture never started its backgrounded part');
+            $deadline = microtime(true) + 2.0;
+            while (\posix_kill($grandchild, 0) && microtime(true) < $deadline) {
+                usleep(20000);
+            }
+            $this->assertFalse(\posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+        } finally {
+            @unlink((string) $pidFile);
+        }
+    }
 }
