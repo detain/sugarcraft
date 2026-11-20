@@ -63,6 +63,12 @@ Refused with an exception, before anything is written:
   Names that differ only by vendor (`acme/candy-x` and `sugarcraft/candy-x`) share
   one directory. This check sees the packages installed in this project. It does
   not see a tree another project staged under user scope.
+- a `project` scope install or update whose package name matches a bundle already in
+  the user tier (`~/.candy-code/bundles/<name>`). A project bundle never inherits a
+  user-tier name or its trust, so the install is refused by name, whichever package the
+  user tree came from. An update is exempt only when that user-tier tree is the
+  package's own tree and no project tree holds it: the update then moves the tree into
+  the project tier. Project scope with no home directory has no user tier to clash with.
 - a home directory that is not an absolute `HOME` or `USERPROFILE`, under `user` scope.
   Project scope never reads the home directory.
 
@@ -78,10 +84,37 @@ project tier, then the user tier, then the directory Composer recorded for the
 package. `composer remove` therefore still deletes a
 plugin staged under a section that has since been broken.
 
+## Provenance record
+
+Each successful install and update writes `.sugar-plugin-source.json` into the staged
+directory, beside the package's files. It is read back through `SugarCraft\Plugins\Provenance\SourceRecord`
+and carries:
+
+| Field | Value |
+|---|---|
+| `marketplace` | `composer` |
+| `name` | the staged directory name (`candy-discord` for `sugarcraft/candy-discord`) |
+| `sourceType` | `composer` |
+| `repo` | the Composer package name |
+| `url`, `sha` | empty |
+| `version` | the resolved package version; an update rewrites it |
+| `installedAt` | the Unix time of the install or update |
+
+A staged directory that is a symlink, which is what a Composer `path` repository makes
+under its default symlink strategy, gets no record. The link points at the developer's
+checkout, and a record written through it would be an untracked file in that checkout.
+
+The file name is not `.candy-code-source.json`, so a marketplace record already in a
+bundle directory is never overwritten. The record is a description of what the
+installer staged, not a trust decision: a project-tier bundle still loads under no
+user-tier name, and candy-code's trust list is untouched. A record that cannot be
+written rejects the install.
+
 ## What the installer does, and does not do
 
-- It stages files only. Composer's downloader fills the directory. `composer remove`
-  deletes it, and `composer update` writes the new version to the same place.
+- It stages files, and the provenance record above. Composer's downloader fills
+  the directory. `composer remove` deletes it, and `composer update` writes the new
+  version to the same place.
 - One exception outside the staged tree: a package's declared `bin` entries are
   linked into the project's `vendor/bin` on install and update, and the links are
   removed on remove, as Composer does for any package. The links point into the
