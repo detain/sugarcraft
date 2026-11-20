@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Host\Commands;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Host\Commands\CommandContext;
@@ -345,6 +347,96 @@ final class ShellsCommandTest extends TestCase
             str_contains($settled, 'Typed into shell ' . $id) || str_contains($settled, 'had not opened its input'),
             'the settled row is the send answer or the honest not-ready refusal, got: ' . $settled,
         );
+    }
+
+    public function testASendQueuedBehindAPendingOneRunsOnlyAfterItSettles(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+        $settled = [];
+
+        $first = ShellsCommand::sequenced($registry, 'sh-0000000a', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        });
+        $second = ShellsCommand::sequenced($registry, 'sh-0000000a', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'second';
+
+            return \React\Promise\resolve(true);
+        });
+        $first->then(static function () use (&$settled): void {
+            $settled[] = 'first';
+        });
+        $second->then(static function () use (&$settled): void {
+            $settled[] = 'second';
+        });
+
+        self::assertSame(['first'], $ran, 'the later send must not type while the earlier one still waits on its relay');
+
+        $gate->resolve(true);
+        $this->drainLoop();
+
+        self::assertSame(['first', 'second'], $ran, 'the later send runs once the earlier one has settled');
+        self::assertSame(['first', 'second'], $settled, 'the settled rows keep dispatch order too');
+    }
+
+    public function testAFailedEarlierSendDoesNotHoldBackTheNextOne(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+
+        ShellsCommand::sequenced($registry, 'sh-0000000b', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        })->then(null, static function (): void {
+        });
+        $later = ShellsCommand::sequenced($registry, 'sh-0000000b', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'second';
+
+            return \React\Promise\resolve(true);
+        });
+
+        $gate->reject(new \RuntimeException('the attach wait broke'));
+        $this->drainLoop();
+
+        self::assertSame(['first', 'second'], $ran, 'a send that rejected must release the queue, not wedge it');
+        $later->then(null, static function (): void {
+        });
+    }
+
+    /** Run the loop until the ticks queued by a settled send have fired. */
+    private function drainLoop(): void
+    {
+        $loop = Loop::get();
+        $loop->addTimer(0.01, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+    }
+
+    public function testSendsToDifferentShellsDoNotQueueBehindEachOther(): void
+    {
+        $registry = $this->shellsRegistry();
+        $gate = new Deferred();
+        $ran = [];
+
+        ShellsCommand::sequenced($registry, 'sh-0000000c', static function () use (&$ran, $gate): PromiseInterface {
+            $ran[] = 'first';
+
+            return $gate->promise();
+        });
+        ShellsCommand::sequenced($registry, 'sh-0000000d', static function () use (&$ran): PromiseInterface {
+            $ran[] = 'other shell';
+
+            return \React\Promise\resolve(true);
+        });
+
+        self::assertSame(['first', 'other shell'], $ran, 'the queue is per shell id, so another shell is typed at once');
+        $gate->resolve(true);
     }
 
     /**

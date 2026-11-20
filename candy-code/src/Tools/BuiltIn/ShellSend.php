@@ -284,9 +284,12 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
      * write-retry loop is the whole defence there, and refusing a legacy
      * row outright would invent a door the engine does not have). FALSE
      * only after the declared budget passed with no record — which is
-     * answered as "typed nothing", never as a lost write. PUBLIC because
-     * `/shells send` obeys the same law through this one predicate — the
-     * readiness rule lives once.
+     * answered as "typed nothing", never as a lost write. PUBLIC for the tool
+     * path's own callers and tests. `/shells send` does NOT call this method:
+     * it waits through {@see relayReadyAsync()}, which polls
+     * {@see relayAttached()} on a loop timer with the same tick and budget. A
+     * change to this method's wait or its budget handling does not reach
+     * `/shells send`; the probe and the constants are what the two paths share.
      *
      * @param array<string, mixed> $row
      */

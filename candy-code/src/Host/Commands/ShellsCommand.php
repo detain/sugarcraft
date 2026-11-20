@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
@@ -215,21 +217,27 @@ final class ShellsCommand implements HostCommand
         // and input for the whole budget. A relay that has already attached
         // is still typed into at once; only the not-yet-attached case goes
         // off-turn, and its answer lands as its own row.
+        // A send that finds an earlier send to this shell still waiting queues
+        // behind it, even when the relay has attached by now: typing at once
+        // would put these bytes ahead of the ones the earlier send still holds.
         $row = $registry->status($id, $owner);
-        if ($row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayAttached($row)) {
+        $behindRelay = $row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayAttached($row);
+        if ($behindRelay || self::sendInFlight($registry, $id)) {
+            $answer = self::sequenced($registry, $id, static fn (): PromiseInterface => self::relayGate($row)->then(
+                static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
+                    $ready
+                        ? $registry->send($id, $decoded, 'human', $owner)
+                        : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
+                            'id' => $id,
+                            'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
+                        ])],
+                    $id,
+                    $decoded,
+                )),
+            ));
+
             return CommandResult::echo($text)->withEffect(CommandEffect::async(
-                static fn (): PromiseInterface => ShellSend::relayReadyAsync($row)->then(
-                    static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
-                        $ready
-                            ? $registry->send($id, $decoded, 'human', $owner)
-                            : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
-                                'id' => $id,
-                                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
-                            ])],
-                        $id,
-                        $decoded,
-                    )),
-                ),
+                static fn (): PromiseInterface => $answer,
                 static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null,
             ));
         }
@@ -264,6 +272,85 @@ final class ShellsCommand implements HostCommand
             'bytes' => (string) \strlen($decoded),
             'cursor' => (string) (int) $answer['cursor'],
         ]))->withUiOnly();
+    }
+
+    /**
+     * The last queued send per registry and shell id, kept until it settles.
+     * A WeakMap so a dropped registry takes its queue with it.
+     *
+     * @var \WeakMap<BackgroundShellRegistry, array<string, PromiseInterface<mixed>>>|null
+     */
+    private static ?\WeakMap $sendTails = null;
+
+    /**
+     * Run $step once every earlier send to this shell has settled, and return
+     * its promise. Each `/shells send` that waits on a relay used to poll on
+     * its own timer, so two pending sends could settle in either order and
+     * reach the shell reversed. Chaining each send behind the one before keeps
+     * the bytes in dispatch order, and a failed earlier send does not hold up
+     * the ones after it.
+     *
+     * @param \Closure(): PromiseInterface<mixed> $step
+     *
+     * @return PromiseInterface<mixed>
+     */
+    public static function sequenced(BackgroundShellRegistry $registry, string $id, \Closure $step): PromiseInterface
+    {
+        self::$sendTails ??= new \WeakMap();
+        $tails = self::$sendTails[$registry] ?? [];
+        $previous = $tails[$id] ?? null;
+        // The next step starts on a loop tick, not inside the earlier send's
+        // resolution: the earlier send's own listeners (its settled row) attach
+        // before its promise settles, so they run before the next send's row.
+        $next = static function () use ($step): PromiseInterface {
+            $deferred = new Deferred();
+            Loop::get()->futureTick(static function () use ($deferred, $step): void {
+                $deferred->resolve(\React\Promise\resolve(null)->then(static fn (): PromiseInterface => $step()));
+            });
+
+            return $deferred->promise();
+        };
+        $settled = $previous === null
+            ? $step()
+            : $previous->then(static fn (): PromiseInterface => $next(), static fn (): PromiseInterface => $next());
+        $tails[$id] = $settled;
+        self::$sendTails[$registry] = $tails;
+
+        // Clear the slot only while it still holds this send: a later send may
+        // already have chained itself on, and that one owns the slot now.
+        $release = static function () use ($registry, $id, $settled): void {
+            $tails = self::$sendTails[$registry] ?? [];
+            if (($tails[$id] ?? null) === $settled) {
+                unset($tails[$id]);
+                self::$sendTails[$registry] = $tails;
+            }
+        };
+        $settled->then($release, $release);
+
+        return $settled;
+    }
+
+    private static function sendInFlight(BackgroundShellRegistry $registry, string $id): bool
+    {
+        return isset(self::$sendTails[$registry][$id]);
+    }
+
+    /**
+     * The readiness gate of one send: the relay's attach wait for a row that
+     * is an interactive shell, and an open gate for anything else (a shell
+     * that has since vanished is refused by the registry door, not here).
+     *
+     * @param array<string, mixed>|null $row
+     *
+     * @return PromiseInterface<bool>
+     */
+    private static function relayGate(?array $row): PromiseInterface
+    {
+        if ($row === null || (bool) ($row['interactive'] ?? false) !== true) {
+            return \React\Promise\resolve(true);
+        }
+
+        return ShellSend::relayReadyAsync($row);
     }
 
     /**

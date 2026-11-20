@@ -1838,6 +1838,14 @@ final class AgentWorkerPool
             return;
         }
 
+        // Verdict for AUD row 49 (P4-12 CC-1): this sleep is off the TUI loop in
+        // production. The TUI reaches the pool through Chat::workflowRun(), a
+        // Fiber stepped from a loop timer, and a forked turn child runs its turn
+        // in a Fiber under LoopDrivenTurn, so both take the Fiber branch above.
+        // The fiber-less callers are direct synchronous ones (bin/, tests, and
+        // App::dispatchSkill, which has no production caller). The no-fork
+        // blocking turn never gets here either: it forks no children, so
+        // nothing is outstanding to wait on.
         usleep(self::WAIT_POLL_INTERVAL_USEC);
     }
 
