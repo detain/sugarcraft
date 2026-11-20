@@ -79,18 +79,22 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
 
     /**
      * Attach a host to a live session, then drop its link and run the loop
-     * until the ladder settles or the guard fires.
+     * until the ladder settles or the guard fires. A $malformed drop sends a
+     * frame the host cannot read while the link is still open, so the host
+     * drops it from inside a live socket rather than after a close.
      *
      * @param list<CompositeStream> $opened
      * @param list<array{attached: int, reason: ?string}> $dials
+     * @param ?CompositeStream $initial receives the initial link, so a test can inspect the socket the drop left behind
      * @return array{0: RemoteSessionHost, 1: list<string>} the host and the close verdicts it delivered
      */
-    private function dropAndRedial(array &$opened, int $refuseCount, array &$dials): array
+    private function dropAndRedial(array &$opened, int $refuseCount, array &$dials, bool $malformed = false, ?CompositeStream &$initial = null): array
     {
         $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
         $host = null;
         $host = RemoteSessionHost::overStream(
-            new CompositeStream($link, new ThroughStream()),
+            $initial,
             reopen: $this->fakeServer($opened, $refuseCount, $dials, $host),
             after: static function (float $seconds, \Closure $run): void {
                 Loop::futureTick($run);
@@ -107,7 +111,12 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         });
 
         $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
-        $link->close();
+        if ($malformed) {
+            // An unmasked frame with a reserved opcode: the host drops the link while it is still open.
+            $link->emit('data', [(new Frame('', true, 0x3))->getContents()]);
+        } else {
+            $link->close();
+        }
         Loop::run();
         Loop::cancelTimer($guard);
 
@@ -146,5 +155,26 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertFalse($opened[0]->isReadable(), 'the first refused socket is closed');
         self::assertFalse($opened[1]->isReadable(), 'the second refused socket is closed');
         self::assertTrue($opened[2]->isReadable(), 'the resumed socket stays attached');
+    }
+
+    /**
+     * The link the host was dropped from is still open when the ladder starts,
+     * so the resume that follows must close it, not just the sockets it dialed.
+     */
+    public function testAResumeClosesTheOpenLinkADroppedHostLeftBehind(): void
+    {
+        $opened = [];
+        $dials = [];
+        $initial = null;
+        [$host, $verdicts] = $this->dropAndRedial($opened, 1, $dials, true, $initial);
+
+        self::assertSame([], $verdicts, 'the second attempt resumes, so no verdict is delivered');
+        self::assertTrue($host->isOpen(), 'the host is attached to the resumed socket');
+        self::assertCount(2, $opened);
+        $this->assertNothingAttachedAtDial($dials);
+        self::assertFalse($initial->isReadable(), 'the dropped link is still readable: the resume did not close it');
+        self::assertFalse($initial->isWritable(), 'the dropped link is still writable: the resume did not close it');
+        self::assertFalse($opened[0]->isReadable(), 'the refused socket is closed');
+        self::assertTrue($opened[1]->isReadable(), 'the resumed socket stays attached');
     }
 }
