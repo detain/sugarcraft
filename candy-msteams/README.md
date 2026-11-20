@@ -341,7 +341,9 @@ The group reveal notice, the approver pairing replies, the approval card and
 expiry text, the `[skipped: ...]` media notes and the refused-prompt notice are
 catalog keys too. `tests/I18n/UserFacingLiteralGuardTest` keeps them there: it
 token-scans `MsTeamsAccount.php` and `ConversationRouter.php` and fails on a
-prose literal that is not inside a log or exception call.
+prose literal that is not inside a `->log->` call, the `NoSessionIdException`
+constructor, or the `RuntimeException` rejection of `deliver` and
+`notifyConversation` in `MsTeamsAccount.php` (host-facing, never shown in chat).
 
 Boot and log lines are deliberately content-free English: event names and
 account labels, never message bodies or secrets.

@@ -15,8 +15,10 @@ use PHPUnit\Framework\TestCase;
  * The check is token based. A string literal that contains a three-letter word
  * and a space is prose, and prose in these files is user text, so it is flagged
  * unless it sits in a `->log->` call, is the message of a NoSessionIdException (the
- * one exception class the router's failureReason() maps to catalog copy), or is an
- * array key. Event codes, separators and identifiers carry no space and pass.
+ * one exception class the router's failureReason() maps to catalog copy), is the
+ * RuntimeException message of a HOST_DIAGNOSTIC method (a rejection that never reaches
+ * the chat), or is an array key. Event codes, separators and identifiers carry no
+ * space and pass.
  * Two single-word shapes are flagged too: a sentence such as `'Done.'`, and a bare
  * word that is a ternary branch (`? 'attachment' :`), the usual shape of a display
  * fallback. A bare word elsewhere is not separable from an identifier by tokens
@@ -34,16 +36,49 @@ final class UserFacingLiteralGuardTest extends TestCase
         'Bridge/ConversationRouter.php',
     ];
 
+    /**
+     * Methods whose rejection text never reaches a Teams chat. `deliver` rejections
+     * are logged by the router's `deliver_failed` line; `notifyConversation` rejections
+     * return to the host's own caller. Their English stays readable in the log and
+     * the host, so the RuntimeException literal is exempt only inside these methods.
+     *
+     * @var array<string, list<string>>
+     */
+    private const HOST_DIAGNOSTIC = [
+        'MsTeams/MsTeamsAccount.php' => ['deliver', 'notifyConversation'],
+    ];
+
     public function testUserFacingFilesCarryNoBareEnglish(): void
     {
         foreach (self::USER_FACING as $file) {
             $source = (string) \file_get_contents(self::SRC . '/' . $file);
             $found = \array_map(
                 static fn (array $hit): string => "{$file}:{$hit['line']} {$hit['literal']}",
-                self::bareEnglishIn($source),
+                self::bareEnglishIn($source, self::HOST_DIAGNOSTIC[$file] ?? []),
             );
             self::assertSame([], $found, 'bare English literal reaches a user; move it into lang/');
         }
+    }
+
+    public function testHostDiagnosticRejectionIsExemptInItsNamedMethod(): void
+    {
+        $code = "public function deliver(): void { throw new \\RuntimeException('msteams deliver without a conversationReference ref'); }";
+
+        self::assertSame([], self::bareEnglishIn("<?php\n{$code}\n", ['deliver']));
+    }
+
+    public function testHostDiagnosticExemptionDoesNotCoverTheSameLiteralElsewhere(): void
+    {
+        $code = "public function sendRaw(): void { throw new \\RuntimeException('msteams deliver without a conversationReference ref'); }";
+
+        self::assertCount(1, self::bareEnglishIn("<?php\n{$code}\n", ['deliver']));
+    }
+
+    public function testHostDiagnosticExemptionDoesNotCoverOtherProseInItsMethod(): void
+    {
+        $code = "public function deliver(): void { \$this->sendRaw(\$s, \$c, 'Only an approver can manage pairings.'); }";
+
+        self::assertCount(1, self::bareEnglishIn("<?php\n{$code}\n", ['deliver']));
     }
 
     /** @return iterable<string, array{string}> */
@@ -93,9 +128,11 @@ final class UserFacingLiteralGuardTest extends TestCase
     /**
      * Token scan. Returns each prose literal with its source line.
      *
+     * @param list<string> $hostMethods methods whose RuntimeException message is host-facing (HOST_DIAGNOSTIC)
+     *
      * @return list<array{line: int, literal: string}>
      */
-    public static function bareEnglishIn(string $source): array
+    public static function bareEnglishIn(string $source, array $hostMethods = []): array
     {
         $toks = [];
         foreach (\token_get_all($source) as $tok) {
@@ -118,10 +155,42 @@ final class UserFacingLiteralGuardTest extends TestCase
             if (!$prose || self::isArrayKey($toks, $i) || self::insideDiagnosticCall($toks, $i)) {
                 continue;
             }
+            if (self::isHostDiagnostic($toks, $i, $hostMethods)) {
+                continue;
+            }
             $hits[] = ['line' => $tok['line'], 'literal' => $tok['text']];
         }
 
         return $hits;
+    }
+
+    /**
+     * True when token $i is the first argument of `new \RuntimeException(` inside one of
+     * the named methods. The enclosing method is the nearest named `function` above the
+     * literal: methods do not nest and closures are unnamed, so the named function found
+     * is the method whose body holds the literal.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     * @param list<string> $hostMethods
+     */
+    private static function isHostDiagnostic(array $toks, int $i, array $hostMethods): bool
+    {
+        if ($hostMethods === [] || ($toks[$i - 1]['id'] ?? null) !== '(') {
+            return false;
+        }
+        // PHP 8 tokenizes `\RuntimeException` as one name token, so the callee is matched whole.
+        $callee = $toks[$i - 2]['text'] ?? '';
+        $isNew = ($toks[$i - 3]['id'] ?? null) === \T_NEW;
+        if (\preg_match('/(^|\\\\)RuntimeException$/', $callee) !== 1 || !$isNew) {
+            return false;
+        }
+        for ($k = $i - 1; $k >= 0; $k--) {
+            if ($toks[$k]['id'] === \T_FUNCTION && ($toks[$k + 1]['id'] ?? null) === \T_STRING) {
+                return \in_array($toks[$k + 1]['text'], $hostMethods, true);
+            }
+        }
+
+        return false;
     }
 
     private static function isProse(string $text): bool
