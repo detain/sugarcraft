@@ -366,7 +366,7 @@ final class ConversationRouter extends ConversationRouterCore
         }
         $text = \implode("\n\n", $parts);
 
-        return $text === '' ? 'Done.' : $text;
+        return $text === '' ? Lang::t('channels.msteams.turn.done') : $text;
     }
 
     /**

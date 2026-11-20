@@ -757,7 +757,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
                 continue;
             }
             $name = \is_string($attachment['name'] ?? null) ? \trim($attachment['name']) : '';
-            $name = $name === '' ? 'attachment' : $name;
+            $name = $name === '' ? Lang::t('channels.msteams.media.unnamed_attachment') : $name;
             $declared = \is_string($attachment['contentType'] ?? null) ? \strtolower(\trim($attachment['contentType'])) : '';
             $url = self::inlineUrl($attachment);
             if ($url === '') {

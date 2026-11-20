@@ -16,6 +16,10 @@ use PHPUnit\Framework\TestCase;
  * and a space is prose, and prose in these files is user text, so it is flagged
  * unless it sits in a `->log->` call or an exception constructor (diagnostic text,
  * not shown to a user) or is an array key. Event codes, separators and identifiers carry no space and pass.
+ * Two single-word shapes are flagged too: a sentence such as `'Done.'`, and a bare
+ * word that is a ternary branch (`? 'attachment' :`), the usual shape of a display
+ * fallback. A bare word elsewhere is not separable from an identifier by tokens
+ * alone, so it stays a review matter.
  * A `Lang::t` key is a single token with no space, so a routed string never trips
  * the check.
  */
@@ -50,6 +54,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'multi-line notice' => ["\$text = \"This conversation is not enabled\\n\\n\" . \$id;"];
         yield 'refused prompt in deliver' => ["\$this->deliver(\$ch, \$ref, \"⛔ Your message never reached the agent.\");"];
         yield 'default tool name' => ["\$tool = (string) (\$ask['tool'] ?? 'a tool');"];
+        yield 'single-word sentence' => ["\$text = 'Done.';"];
+        yield 'bare word as a ternary fallback' => ["\$name = \$name === '' ? 'attachment' : \$name;"];
     }
 
     #[DataProvider('bareEnglishFixtureProvider')]
@@ -68,6 +74,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'array key with spaces' => ["\$row = ['the key name' => 1];"];
         yield 'event code and identifiers' => ["\$row = ['text' => 'message', 'type' => 'msteams_media'];"];
         yield 'separator only' => ["\$sep = \\implode('; ', \$notes);"];
+        yield 'routed ternary fallback' => ["\$name = \$name === '' ? Lang::t('channels.msteams.media.unnamed_attachment') : \$name;"];
+        yield 'bare word compared, not shown' => ["\$first = \$name === 'help';"];
         yield 'exception message is diagnostic' => ["throw new \\RuntimeException('msteams notify refused: the conversation is no longer served');"];
     }
 
@@ -101,7 +109,8 @@ final class UserFacingLiteralGuardTest extends TestCase
             if (!\in_array($tok['id'], [\T_CONSTANT_ENCAPSED_STRING, \T_ENCAPSED_AND_WHITESPACE], true)) {
                 continue;
             }
-            if (!self::isProse($tok['text']) || self::isArrayKey($toks, $i) || self::insideDiagnosticCall($toks, $i)) {
+            $prose = self::isProse($tok['text']) || self::isTernaryFallback($toks, $i);
+            if (!$prose || self::isArrayKey($toks, $i) || self::insideDiagnosticCall($toks, $i)) {
                 continue;
             }
             $hits[] = ['line' => $tok['line'], 'literal' => $tok['text']];
@@ -113,8 +122,24 @@ final class UserFacingLiteralGuardTest extends TestCase
     private static function isProse(string $text): bool
     {
         $bare = \preg_replace('/\\\\u\{[0-9A-Fa-f]+\}/', '', $text) ?? $text;
+        $sentence = \preg_match('/^[\'"][A-Za-z]{3,}[.!?][\'"]$/', $bare) === 1;
 
-        return \preg_match('/[A-Za-z]{3,}/', $bare) === 1 && \preg_match('/\s/', $bare) === 1;
+        return $sentence || (\preg_match('/[A-Za-z]{3,}/', $bare) === 1 && \preg_match('/\s/', $bare) === 1);
+    }
+
+    /**
+     * A bare word between `?` and `:`, such as the `'attachment'` in
+     * `$name === '' ? 'attachment' : $name`, is a display fallback in these files.
+     *
+     * @param list<array{id: int|string, text: string, line: int}> $toks
+     */
+    private static function isTernaryFallback(array $toks, int $i): bool
+    {
+        $word = $toks[$i]['text'];
+
+        return ($toks[$i - 1]['id'] ?? null) === '?'
+            && ($toks[$i + 1]['id'] ?? null) === ':'
+            && \preg_match('/^[\'"][A-Za-z]{3,}[\'"]$/', $word) === 1;
     }
 
     /** @param list<array{id: int|string, text: string, line: int}> $toks */
