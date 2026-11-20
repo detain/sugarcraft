@@ -92,6 +92,14 @@ final class ChildRunLaunch
 
     private ?Subscription $cancelSubscription = null;
 
+    /**
+     * Process group the kill rungs signal, or null for the direct child. Seeded from
+     * the spawn-time read and latched from a live read while the child is alive: a
+     * containment wrapper may not have become a group leader yet at spawn, so the
+     * spawn-time value is often null even though the group exists.
+     */
+    private ?int $groupPid;
+
     private bool $settled = false;
 
     private readonly bool $windows;
@@ -99,7 +107,7 @@ final class ChildRunLaunch
     /**
      * @param resource $proc
      * @param array<int, resource> $pipes  0 stdin (absent when the stdin is a staged file), 1 stdout, 2 stderr
-     * @param null|int $groupPid  Process group the kill rungs signal, or null for the direct child
+     * @param null|int $groupPid  Spawn-time process group the kill rungs signal, or null to read it live
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk, or null
      * @param null|float $idleTimeout  Seconds of silence before the kill ladder starts, or null for none
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
@@ -114,7 +122,7 @@ final class ChildRunLaunch
         private readonly float $timeout,
         int $maxBytes,
         private readonly Deferred $deferred,
-        private readonly ?int $groupPid = null,
+        ?int $groupPid = null,
         ?\Closure $onChunk = null,
         private readonly ?float $idleTimeout = null,
         private readonly ?CancellationToken $cancellation = null,
@@ -122,6 +130,7 @@ final class ChildRunLaunch
         private readonly ?float $exitGrace = null,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
+        $this->groupPid = $groupPid;
         $this->stdinPipe = $pipes[0] ?? null;
         $this->capture = new ChildCapture([1, 2], [], $maxBytes, $onChunk);
         $this->windows = WindowsPipes::runtimeNeedsIt();
@@ -349,6 +358,9 @@ final class ChildRunLaunch
             return true;
         }
 
+        // Latched before the status read: proc_get_status() reaps a dead leader, and a
+        // reaped leader no longer names its group.
+        $this->latchGroup();
         $status = proc_get_status($this->proc);
         if ($status['running'] !== false) {
             return false;
@@ -423,12 +435,26 @@ final class ChildRunLaunch
     }
 
     /**
+     * Keeps the group the live child leads, when no group was named at spawn. A
+     * group read is only reliable while the leader is alive, so this runs on each
+     * exit poll and at kill time, and never once the child is seen gone. Stays null
+     * for an unwrapped child, which leads no group of its own.
+     */
+    private function latchGroup(): void
+    {
+        if ($this->groupPid === null && !$this->exited) {
+            $this->groupPid = Containment::groupId($this->proc);
+        }
+    }
+
+    /**
      * Signals are integer literals (sugar-core doctrine); a gone child takes the
      * signal as a no-op. A containment-wrapped child signals its whole group first,
      * as BoundedShutdown does, and falls back to the direct child.
      */
     private function signal(int $signal): void
     {
+        $this->latchGroup();
         Containment::signal($this->proc, $this->groupPid, $signal);
     }
 

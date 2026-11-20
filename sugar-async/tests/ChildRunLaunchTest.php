@@ -626,6 +626,65 @@ final class ChildRunLaunchTest extends TestCase
         );
     }
 
+    /**
+     * The launch path names no group at spawn when the containment wrapper has not
+     * yet become a group leader, so the rungs must read the group the child leads
+     * while it is alive. Without that read a deadline kill signals only the shell,
+     * and the background job outlives the run.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheGroupTheWrapperLeads(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => BoundedShutdown::pidExited($grandchild), 3.0),
+            'the kill must reach the grandchild through the group the wrapper leads, not only the shell',
+        );
+    }
+
     public function testOnSpawnReportsThePidOnTheLoopPath(): void
     {
         $this->requirePosixPipes();

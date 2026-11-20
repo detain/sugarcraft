@@ -317,12 +317,16 @@ final class CommandBackendTest extends TestCase
      * A cancel has to reach the grandchildren, not only the shell it started.
      *
      * The script backgrounds a `sleep` and writes that pid to a scratch file, so
-     * the sleep is a grandchild of the PHP process. ChildRun's kill ladder signals
-     * the child's process group only when a containment prefix made the child a
-     * group leader ({@see ProcessContainment::spawnSpec()}). With setsid the group
-     * takes the sleep down with the shell; without it only the shell dies and the
-     * sleep is orphaned. The assertion is on the sleep itself, so an orphan is
-     * caught even when the promise rejects on time.
+     * the sleep is a grandchild of the PHP process. The kill ladder signals the
+     * child's process group only when a containment prefix made the child a group
+     * leader ({@see ProcessContainment::spawnSpec()}), and on the launch path the
+     * group is not known at spawn: the wrapper may not have run its setsid yet when
+     * the spawn-time read happens. ChildRunLaunch therefore takes the group from a
+     * live read while the child is alive (on each exit poll and at kill time), so
+     * the setsid group takes the sleep down with the shell. Had that read been
+     * missed, only the shell would die and the sleep would be orphaned. The
+     * assertion is on the sleep itself, so an orphan is caught even when the
+     * promise rejects on time.
      *
      * The cancel waits for the pid file rather than a fixed delay: a fixed delay
      * can fire before bash has started, and then no grandchild exists to check.
