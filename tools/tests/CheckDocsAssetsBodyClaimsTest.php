@@ -559,6 +559,49 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testAnEnumKeywordInProseDoesNotMakeAClassAnEnum(): void
+    {
+        $root = $this->makeFixture();
+        // Plain is a final class; its docblock prose reads "the enum plain: string",
+        // which must not pass as a backed enum declaration, so from() is named.
+        $this->put("$root/alpha/src/Plain.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            /**
+             * Keeps the state, where the enum plain: string mapping is documented.
+             */
+            final class Plain
+            {
+            }
+
+            PHP);
+
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names SugarCraft\Alpha\Plain::from(), but no declaration of SugarCraft\Alpha\Plain carries that method'],
+            $this->claimsFor($root, '<pre><code>\\SugarCraft\\Alpha\\Plain::from(\'x\');</code></pre>'),
+        );
+    }
+
+    public function testEveryCommonPhpCoreClassNameAloneIsAccepted(): void
+    {
+        $root = $this->makeFixture();
+
+        // Names a body writes bare that PHP always defines; a host-loaded class
+        // must never turn a bare span into an undeclared-class finding.
+        $names = [
+            'RuntimeException', 'InvalidArgumentException', 'Exception', 'Closure', 'DateTime',
+            'stdClass', 'ArrayIterator', 'Generator', 'Traversable', 'ArrayAccess', 'Attribute',
+            'UnitEnum', 'Fiber', 'DomainException', 'LengthException', 'JsonSerializable',
+        ];
+        $spans = implode(' ', array_map(static fn (string $n): string => "<code>$n</code>", $names));
+
+        $this->assertSame([], $this->claimsFor($root, "<p>$spans</p>"));
+    }
+
     public function testAThirdPartyOrUpstreamNameInACodeSpanIsNotChecked(): void
     {
         $root = $this->makeFixture();

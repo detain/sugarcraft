@@ -157,24 +157,58 @@ final class CheckDocsAssets
     ];
 
     /**
-     * PHP core and SPL class, interface and enum names a body may write as a bare
-     * code span (`<code>Countable</code>`) without a SugarCraft declaration.
+     * PHP class, interface and enum names a body may write as a bare code span
+     * (`<code>Countable</code>`) without a SugarCraft declaration.
      *
      * A bare name is resolved against this fixed list rather than the host's
      * loaded classes: `class_exists()` answers differently on a host that has or
      * lacks an extension, so a span would pass on one machine and fail on another.
-     * The list is the names the docs bodies use, and it changes only when a body
-     * starts naming a new core class. Matched case-insensitively, as PHP matches
-     * class names. A method claim (`Name::method()`) still resolves on the host
-     * through internalClass(), which needs the class to be loaded to read it.
+     * The list is every class and interface the Core, SPL, date, Reflection and
+     * json extensions declare under PHP 8.3, the set a PHP 8.3 build always
+     * carries. PDOException and PDOStatement are the exception: they come from
+     * the PDO extension, and stay listed because they were listed before. Matched
+     * case-insensitively, as PHP matches class names. A method claim
+     * (`Name::method()`) still resolves on the host through internalClass(), which
+     * needs the class to be loaded to read it.
      *
      * @var list<string>
      */
     private const CORE_CLASS_NAMES = [
-        'ArgumentCountError', 'Countable', 'DateTimeImmutable', 'Error', 'IteratorAggregate',
-        'JsonException', 'JsonSerializable', 'LogicException', 'OutOfBoundsException',
-        'OutOfRangeException', 'OverflowException', 'PDOException', 'PDOStatement',
-        'Stringable', 'Throwable', 'TypeError', 'UnexpectedValueException', 'ValueError',
+        'AllowDynamicProperties', 'AppendIterator', 'ArgumentCountError', 'ArithmeticError',
+        'ArrayAccess', 'ArrayIterator', 'ArrayObject', 'Attribute', 'BackedEnum',
+        'BadFunctionCallException', 'BadMethodCallException', 'CachingIterator',
+        'CallbackFilterIterator', 'ClosedGeneratorException', 'Closure', 'CompileError',
+        'Countable', 'DateError', 'DateException', 'DateInterval',
+        'DateInvalidOperationException', 'DateInvalidTimeZoneException',
+        'DateMalformedIntervalStringException', 'DateMalformedPeriodStringException',
+        'DateMalformedStringException', 'DateObjectError', 'DatePeriod', 'DateRangeError',
+        'DateTime', 'DateTimeImmutable', 'DateTimeInterface', 'DateTimeZone',
+        'DirectoryIterator', 'DivisionByZeroError', 'DomainException', 'EmptyIterator', 'Error',
+        'ErrorException', 'Exception', 'Fiber', 'FiberError', 'FilesystemIterator',
+        'FilterIterator', 'Generator', 'GlobIterator', 'InfiniteIterator', 'InternalIterator',
+        'InvalidArgumentException', 'Iterator', 'IteratorAggregate', 'IteratorIterator',
+        'JsonException', 'JsonSerializable', 'LengthException', 'LimitIterator',
+        'LogicException', 'MultipleIterator', 'NoRewindIterator', 'OuterIterator',
+        'OutOfBoundsException', 'OutOfRangeException', 'OverflowException', 'Override',
+        'ParentIterator', 'ParseError', 'PDOException', 'PDOStatement', 'RangeException',
+        'RecursiveArrayIterator',
+        'RecursiveCachingIterator', 'RecursiveCallbackFilterIterator',
+        'RecursiveDirectoryIterator', 'RecursiveFilterIterator', 'RecursiveIterator',
+        'RecursiveIteratorIterator', 'RecursiveRegexIterator', 'RecursiveTreeIterator',
+        'Reflection', 'ReflectionAttribute', 'ReflectionClass', 'ReflectionClassConstant',
+        'ReflectionEnum', 'ReflectionEnumBackedCase', 'ReflectionEnumUnitCase',
+        'ReflectionException', 'ReflectionExtension', 'ReflectionFiber', 'ReflectionFunction',
+        'ReflectionFunctionAbstract', 'ReflectionGenerator', 'ReflectionIntersectionType',
+        'ReflectionMethod', 'ReflectionNamedType', 'ReflectionObject', 'ReflectionParameter',
+        'ReflectionProperty', 'ReflectionReference', 'ReflectionType', 'ReflectionUnionType',
+        'ReflectionZendExtension', 'Reflector', 'RegexIterator', 'ReturnTypeWillChange',
+        'RuntimeException', 'SeekableIterator', 'SensitiveParameter', 'SensitiveParameterValue',
+        'Serializable', 'SplDoublyLinkedList', 'SplFileInfo', 'SplFileObject', 'SplFixedArray',
+        'SplHeap', 'SplMaxHeap', 'SplMinHeap', 'SplObjectStorage', 'SplObserver',
+        'SplPriorityQueue', 'SplQueue', 'SplStack', 'SplSubject', 'SplTempFileObject',
+        'stdClass', 'Stringable', 'Throwable', 'Traversable', 'TypeError', 'UnderflowException',
+        'UnexpectedValueException', 'UnhandledMatchError', 'UnitEnum', 'ValueError', 'WeakMap',
+        'WeakReference',
     ];
 
     /**
@@ -1433,7 +1467,7 @@ final class CheckDocsAssets
             // one, so no `function` line declares them.
             $implied = strtolower($method);
             if (in_array($implied, ['cases', 'from', 'tryfrom'], true)
-                && preg_match('~\benum\s+' . preg_quote($short, '~') . '\b(\s*:)?~i', $text, $enum) === 1
+                && preg_match('~^\s*(?:(?:abstract|final|readonly)\s+)*enum\s+' . preg_quote($short, '~') . '\b(\s*:)?~mi', $text, $enum) === 1
             ) {
                 if ($implied === 'cases' || isset($enum[1])) {
                     return true;
