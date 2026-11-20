@@ -321,6 +321,66 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
     }
 
     /** @return iterable<string, array{float}> */
+    /**
+     * A healthy server that answers server.hello after the base deadline, but
+     * within the deadline of the next attempt, must still be resumed. A fixed
+     * deadline failed every attempt the same way, so the attachment gave up
+     * though the server was reachable; the deadline now grows per failed attempt.
+     */
+    public function testASlowButAnsweringServerHelloIsResumedOnALaterRedial(): void
+    {
+        $link = new ThroughStream();
+        $initial = new CompositeStream($link, new ThroughStream());
+        $dialed = 0;
+        $reopen = static function () use (&$dialed): PromiseInterface {
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $stream = new CompositeStream($in, $out);
+            $answered = ++$dialed;
+            $out->on('data', static function (string $bytes) use ($in, $answered): void {
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'result' => ['resumed' => ['session-1' => ['fromSeq' => 0, 'throughSeq' => 0]]]];
+                // Each hello is answered 80 ms late: past the 50 ms base deadline, inside the 100 ms second one.
+                Loop::addTimer(0.08, static function () use ($in, $reply, $answered): void {
+                    $in->emit('data', [(new Frame((string) \json_encode($reply), true, Frame::OP_TEXT))->getContents()]);
+                    if ($answered >= 2) {
+                        Loop::stop();
+                    }
+                });
+            });
+
+            return resolve([$stream, '']);
+        };
+        $host = RemoteSessionHost::overStream(
+            $initial,
+            reopen: $reopen,
+            after: static function (float $seconds, \Closure $run): void {
+                Loop::futureTick($run);
+            },
+            redialBackoff: Backoff::new(1.0, 2.0, 2)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS),
+            resumeHelloSeconds: 0.05,
+        );
+        foreach (['sessionId' => 'session-1', 'hello' => ['protocol' => 1]] as $property => $value) {
+            (new \ReflectionProperty($host, $property))->setValue($host, $value);
+        }
+        $verdicts = [];
+        $host->onClose(static function (string $reason) use (&$verdicts): void {
+            $verdicts[] = $reason;
+            Loop::stop();
+        });
+
+        $guard = Loop::addTimer(10.0, static fn () => Loop::stop());
+        $link->close();
+        Loop::run();
+        Loop::cancelTimer($guard);
+
+        self::assertSame(2, $dialed, 'the first hello outlived its base deadline, and the second redial was answered inside its longer one');
+        self::assertTrue($host->isOpen(), 'the slow server is resumed, so the host is attached again');
+        self::assertSame([], $verdicts, 'no verdict is delivered for a server that answers late');
+    }
+
     public static function invalidResumeHelloSeconds(): iterable
     {
         yield 'zero' => [0.0];
