@@ -1283,7 +1283,9 @@ final class CheckDocsAssets
 
         $internal = self::internalClass($short);
         if ($internal === null) {
-            return "names class $short, which no <slug>/src declares";
+            // A core name the host has not loaded (PDOStatement without ext-pdo) cannot
+            // be checked for its methods here, so the verdict must not depend on the host.
+            return self::isCoreClassName($short) ? null : "names class $short, which no <slug>/src declares";
         }
         if (method_exists($internal, $method)) {
             return null;

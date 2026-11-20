@@ -559,6 +559,45 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testAMethodClaimOnAnAllowlistedCoreNameIsAcceptedWithoutTheHostExtension(): void
+    {
+        $root = $this->makeFixture();
+        $this->put("$root/docs/_data/alpha.body.html",
+            '<html><body><pre><code>PDOStatement::execute();</code></pre></body></html>');
+
+        // The verdict must not depend on whether ext-pdo is loaded, so the bodies are
+        // read in a child PHP with -n (no ini, no PDO) and the class is checked there.
+        $script = $this->tmpDir . '/claims-without-pdo.php';
+        $this->put($script, <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            require $argv[1];
+
+            echo json_encode([
+                'loaded' => class_exists('PDOStatement', false),
+                'claims' => \CheckDocsAssets::bodyClaims($argv[2]),
+            ], JSON_THROW_ON_ERROR);
+
+            PHP);
+
+        $base = [\PHP_BINARY, '-n', '-d', 'extension_dir=' . (string) \ini_get('extension_dir')];
+        // The guard needs \PhpToken, and -n skips php.ini, so tokenizer is passed in unless
+        // this build already compiles it in. The probe asks the child, not this process.
+        [$probe] = $this->runPhp([...$base, '-r', 'echo extension_loaded("tokenizer") ? "1" : "0";']);
+        $args = $probe === '1' ? $base : [...$base, '-d', 'extension=tokenizer'];
+
+        [$out, $err, $code] = $this->runPhp([...$args, $script, \dirname(__DIR__) . '/check-docs-assets.php', $root]);
+        $this->assertSame(0, $code, "child PHP exited $code: $out$err");
+
+        $result = \json_decode($out, true, 512, \JSON_THROW_ON_ERROR);
+        if ($result['loaded']) {
+            $this->markTestSkipped('This PHP build loads PDOStatement with no ini, so the host-free arm cannot run here.');
+        }
+        $this->assertSame([], $result['claims']);
+    }
+
     public function testAnEnumKeywordInProseDoesNotMakeAClassAnEnum(): void
     {
         $root = $this->makeFixture();
@@ -1035,5 +1074,18 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
             throw new \RuntimeException("could not create directory for $path");
         }
         file_put_contents($path, $contents);
+    }
+
+    /** @return array{0: string, 1: string, 2: int} stdout, stderr and exit code of a child PHP command */
+    private function runPhp(array $argv): array
+    {
+        $process = \proc_open($argv, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($process);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return [$out, $err, \proc_close($process)];
     }
 }
