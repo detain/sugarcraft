@@ -884,6 +884,7 @@ candy-code/tests/Cli/NonInteractiveErrorLabelTest.php	0.211	5
 candy-code/tests/Tools/GenerateVideoTest.php	0.211	19
 candy-code/tests/Hooks/HookEnvironmentDocumentationDriftTest.php	0.210	1
 candy-code/tests/Renderer/C1ControlFrameTest.php	0.210	39
+candy-code/tests/Chat/ShellSendSettledRowTest.php	0.207	2
 candy-code/tests/Chat/ComposerVimModeTest.php	0.206	20
 candy-code/tests/Context/StandingIntentTest.php	0.206	23
 candy-code/tests/Support/MutateDriftGuardTest.php	0.206	5

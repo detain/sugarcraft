@@ -338,6 +338,10 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
      *
      * WHY NOT ONE usleep(). The sleep holds the turn child's loop, so the
      * parent's frames sit unread for the whole budget (up to MAX_WAIT_MS).
+     *
+     * Deliberate behavior change for AUD 12.1 A4 (rows 47 and 49): it
+     * supersedes the "no change" verdict recorded in 15c0e360e, so a stop
+     * or steer now ends the hold early.
      */
     public static function holdScreen(int $waitMs, string $callId = ''): void
     {

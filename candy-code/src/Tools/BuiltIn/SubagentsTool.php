@@ -215,6 +215,9 @@ final readonly class SubagentsTool implements Tool, BuildsFromCatalog, Delegates
         $messages = [];
         // A sleep here holds the turn child's loop, so the parent's stop and
         // steer frames are read only between ticks: each tick asks for them.
+        // This is a deliberate behavior change for AUD 12.1 A4 (rows 47 and
+        // 49). It supersedes the earlier "no change" verdict recorded in
+        // 15c0e360e: a pending stop or steer now ends the wait early.
         $interrupted = false;
         while (true) {
             if (ToolCancelRequests::isRequested($callId)) {
