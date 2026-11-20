@@ -52,6 +52,9 @@ final class ChildRunLaunch
 
     private bool $exited = false;
 
+    /** The exit grace ran out with a pipe still open: a descendant held it, and it was cut. */
+    private bool $abandonedPipes = false;
+
     private ?int $exitCode = null;
 
     private float $exitedAt = 0.0;
@@ -78,6 +81,7 @@ final class ChildRunLaunch
      * @param null|float $idleTimeout  Seconds of silence before the kill ladder starts, or null for none
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
      * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle, or on the reap if the child still holds it
+     * @param null|float $exitGrace  Seconds of pipe silence read on after the exit is seen, or null to read to EOF
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -92,6 +96,7 @@ final class ChildRunLaunch
         private readonly ?float $idleTimeout = null,
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?string $stagedStdin = null,
+        private readonly ?float $exitGrace = null,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
@@ -166,6 +171,10 @@ final class ChildRunLaunch
             $this->stdinOffset = strlen($this->stdinBytes);
         } else {
             $this->stdinOffset += $written;
+            if ($written > 0) {
+                // A child still taking its stdin is working: the idle budget counts this as activity.
+                $this->lastActivityAt = Clock::monotonicSeconds();
+            }
         }
 
         if ($this->stdinOffset >= strlen($this->stdinBytes)) {
@@ -211,7 +220,29 @@ final class ChildRunLaunch
 
             return;
         }
+        $this->abandonSilentPipesAfterExit();
         $this->checkDone();
+    }
+
+    /**
+     * The post-exit grace: once the child is gone, its pipes are read until they
+     * have been silent for the grace, counted from the later of the exit and the
+     * last chunk. A pipe still open at that cut is held by a descendant, so it is
+     * abandoned and the result reports it. Not run once the kill ladder has started.
+     */
+    private function abandonSilentPipesAfterExit(): void
+    {
+        if (!$this->exited || $this->killing || $this->exitGrace === null || $this->open === []) {
+            return;
+        }
+
+        $quietFrom = max($this->exitedAt, $this->lastActivityAt);
+        if (Clock::monotonicSeconds() - $quietFrom < $this->exitGrace) {
+            return;
+        }
+
+        $this->abandonedPipes = true;
+        $this->closeAllPipes();
     }
 
     /**
@@ -364,6 +395,7 @@ final class ChildRunLaunch
             $status,
             $r->droppedBytes(1) + $r->droppedBytes(2),
             $r->droppedBytes(2),
+            $this->abandonedPipes,
         ));
     }
 

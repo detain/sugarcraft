@@ -446,4 +446,76 @@ final class ChildPumpBuilderTest extends TestCase
         $this->assertSame('same', $r->buffer(1));
         $this->assertSame(DrainResult::CLOSED, $r->reason);
     }
+
+    /**
+     * The grace cut with a pipe still open is an abandonment: the probe reports the
+     * child gone at once, the pipe stays silent, and the walk ends on the grace.
+     */
+    public function testExitGraceCutWithAPipeStillOpenIsReportedAsAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertTrue($r->abandonedAfterExit, 'a pipe cut by the grace while still open was abandoned');
+    }
+
+    /** A pipe that reaches EOF after the exit is read to the end, not abandoned. */
+    public function testAPipeReadToEofAfterTheExitIsNotAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+        fwrite($writer, 'tail');
+        fclose($writer);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame('tail', $r->buffer(1));
+        $this->assertFalse($r->abandonedAfterExit);
+    }
+
+    /** Every stdin byte the child accepts is reported to the write hook, and the payload arrives whole. */
+    public function testOnStdinWriteReportsEveryAcceptedByte(): void
+    {
+        $this->requirePosixPipes();
+        [$out, $outWriter] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        [$stdin, $stdinReader] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($out);
+        fclose($outWriter);
+
+        $written = 0;
+        $r = ChildPump::new([1 => $out])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withStdin($stdin, 'hello stdin')
+            ->withOnStdinWrite(static function (int $bytes) use (&$written): void {
+                $written += $bytes;
+            })
+            ->withPollPipes(false)
+            ->pump();
+
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame(11, $written, 'the hook sees every byte the pipe accepted');
+        $this->assertSame('hello stdin', stream_get_contents($stdinReader));
+
+        fclose($out);
+        fclose($stdinReader);
+    }
 }

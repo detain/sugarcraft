@@ -502,4 +502,65 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertGreaterThan(0, $pid);
         $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
     }
+
+    /**
+     * The launch counterpart of the run() abandonment: the parent exits at once and
+     * a backgrounded descendant keeps the pipes open and silent. Launch cuts them
+     * after the silence budget and settles, EXITED with the pipe reported abandoned,
+     * long before the 4 s deadline.
+     */
+    public function testLaunchAbandonsAPipeHeldByADescendantAfterTheExitGrace(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertTrue($r->succeeded());
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the silence budget');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the silence budget before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch must settle after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * Launch reads on while the pipes keep yielding after the exit: a descendant
+     * that writes every half second for two seconds is read to EOF, so all five
+     * lines are kept and nothing is abandoned.
+     */
+    public function testLaunchExitGraceCountsSilenceNotTimeFromTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', '(for i in 1 2 3 4 5; do echo $i; sleep 0.5; done) & exit 0'])
+            ->withTimeout(10.0)
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("1\n2\n3\n4\n5\n", $r->stdout);
+        $this->assertFalse($r->abandonedPipes());
+    }
+
+    /** The control for the launch grace: with it removed, a held pipe holds launch to its deadline. */
+    public function testLaunchWithoutAnExitGraceHoldsAHeldPipeToTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(2.0)
+            ->withExitGrace(null)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertFalse($r->abandonedPipes(), 'a deadline kill is not an abandonment');
+        $this->assertGreaterThanOrEqual(1.5, $elapsed, 'launch waits for the deadline while the pipe is held');
+    }
 }

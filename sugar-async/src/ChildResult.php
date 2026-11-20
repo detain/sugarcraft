@@ -29,6 +29,8 @@ final class ChildResult
      * @param int $droppedBytes  Bytes refused by the per-stream cap, both streams together
      * @param int $droppedStderrBytes  The part of $droppedBytes that came from stderr, so a caller
      *                                 that discards stderr can report stdout's drops alone
+     * @param bool $abandonedPipes  Output pipes were abandoned after the child exited: a descendant
+     *                              still held them, and they were cut once silent for the exit grace
      */
     public function __construct(
         public readonly string $stdout,
@@ -37,7 +39,18 @@ final class ChildResult
         public readonly string $status,
         public readonly int $droppedBytes,
         public readonly int $droppedStderrBytes = 0,
+        public readonly bool $abandonedPipes = false,
     ) {
+    }
+
+    /**
+     * True exactly when a pipe was abandoned after the child exited, before it
+     * reached EOF. A pipe closed by the child's exit alone, or cut by a kill on the
+     * deadline, idle budget or cancel, is not abandoned.
+     */
+    public function abandonedPipes(): bool
+    {
+        return $this->abandonedPipes;
     }
 
     public function timedOut(): bool

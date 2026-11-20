@@ -45,10 +45,13 @@ use function React\Promise\resolve;
  * never killed unless the caller asked for the idle budget.
  *
  * A child that exits while a backgrounded grandchild still holds its output
- * pipes ends the run once {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} has passed
- * since the exit, not at the deadline, unless {@see withExitGrace()} removed that
- * grace. Output the grandchild writes after that cut-off is not captured, and
- * nothing reports the drop; output written inside the grace is kept.
+ * pipes ends the run once the pipes have been silent for
+ * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} (counted from the later of the exit
+ * and the last chunk), not at the deadline, unless {@see withExitGrace()} removed
+ * that grace. launch() applies the same silence budget. A pipe cut that way while
+ * still open is abandoned, and {@see ChildResult::abandonedPipes()} reports it.
+ * Output written after a silent stretch longer than the grace is not captured, and
+ * nothing reports that drop; output written inside the grace is kept.
  *
  * Stdin: {@see withStdin()} feeds a payload to the child. On POSIX the payload
  * goes through a non-blocking pipe. On the Windows runtime, where a non-blocking
@@ -131,13 +134,13 @@ final class ChildRun
     }
 
     /**
-     * How long run() reads on after the child's exit is seen, when a backgrounded
-     * grandchild still holds the output pipes. The default is the WindowsPipes
-     * grace. Null removes the grace: run() then reads until EOF or the deadline,
-     * so a held pipe keeps the call going to its deadline, where the group is
-     * killed and the result is TIMED_OUT. Callers that bound a whole command by
-     * its budget pass null. launch() ignores this: it has no exit grace on POSIX
-     * and always reads to EOF or the deadline.
+     * How long run() and launch() read on after the child's exit is seen, when a
+     * backgrounded grandchild still holds the output pipes. The budget is silence:
+     * the pipes are read until none has yielded a chunk for this many seconds, then
+     * abandoned. The default is the WindowsPipes grace. Null removes the grace:
+     * the call then reads until EOF or the deadline, so a held pipe keeps it going
+     * to its deadline, where the group is killed and the result is TIMED_OUT.
+     * Callers that bound a whole command by its budget pass null.
      */
     public function withExitGrace(?float $seconds): self
     {
@@ -150,9 +153,11 @@ final class ChildRun
 
     /**
      * Opt-in silence budget. The child is killed through the kill ladder once it
-     * has written nothing to stdout or stderr for this many seconds, and reported
-     * as TIMED_OUT. Any chunk read resets the budget, dropped bytes included.
-     * Null (the default) disables it, so a quiet child runs until its deadline.
+     * has neither written to stdout or stderr nor accepted a stdin write for this
+     * many seconds, and reported as TIMED_OUT. Any chunk read resets the budget,
+     * dropped bytes included, and so does each stdin write the child takes: a child
+     * still consuming its input is working, not idle. Null (the default) disables
+     * it, so a quiet child runs until its deadline.
      */
     public function withIdleTimeout(?float $seconds): self
     {
@@ -303,6 +308,7 @@ final class ChildRun
             $this->idleTimeout,
             $this->cancellation,
             $staged,
+            $this->exitGrace,
         ))->start();
 
         return $deferred->promise();
@@ -376,6 +382,11 @@ final class ChildRun
                     ->withExitGrace($this->exitGrace);
                 if ($this->idleTimeout !== null) {
                     $idle = $this->idleTimeout;
+                    $pump = $pump->withOnStdinWrite(
+                        static function () use (&$lastActivity, $clock): void {
+                            $lastActivity = $clock();
+                        },
+                    );
                     $pump = $pump->withHeartbeat(
                         min($idle, self::IDLE_BEAT_SECONDS),
                         static function () use (&$stop, &$lastActivity, $clock, $idle): void {
@@ -599,6 +610,7 @@ final class ChildRun
             $status,
             self::dropped($r),
             $r->droppedBytes(2),
+            $r->abandonedAfterExit,
         );
     }
 

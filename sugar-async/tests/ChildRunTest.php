@@ -66,7 +66,50 @@ final class ChildRunTest extends TestCase
         $this->assertSame(ChildResult::EXITED, $r->status);
         $this->assertFalse($r->timedOut());
         $this->assertTrue($r->succeeded());
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the silence budget');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the silence budget before it is cut');
         $this->assertLessThan(3.0, $elapsed, 'the run must end after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * The grace counts silence, not time from the exit: a grandchild that writes
+     * every half second for two seconds after the parent exits keeps the pipes
+     * read, so every line is kept. A fixed one-second window from the exit would
+     * cut the output after the third line. The pipe reaches EOF when the writer
+     * ends, so nothing is abandoned.
+     */
+    public function testExitGraceCountsSilenceNotTimeFromTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', '(for i in 1 2 3 4 5; do echo $i; sleep 0.5; done) & exit 0'])
+            ->withTimeout(10.0)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("1\n2\n3\n4\n5\n", $r->stdout, 'output that keeps coming inside the silence budget is kept');
+        $this->assertFalse($r->abandonedPipes(), 'a pipe read to EOF is not abandoned');
+        $this->assertLessThan(6.0, $elapsed, 'the walk must end at EOF, not at the deadline');
+    }
+
+    /** Abandonment is an exit-time cut: a deadline kill of a held pipe is a timeout, not an abandonment. */
+    public function testADeadlineKillOfAHeldPipeIsNotReportedAsAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & sleep 6'])->withTimeout(1.0)->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertFalse($r->abandonedPipes(), 'the parent never exited, so no pipe was abandoned after an exit');
+    }
+
+    /** A pipe that is read to EOF with its child is not abandoned, and neither is a child that never held one. */
+    public function testPipesClosedByTheChildAreNotAbandoned(): void
+    {
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "done");'))->run();
+
+        $this->assertSame('done', $r->stdout);
+        $this->assertFalse($r->abandonedPipes());
     }
 
     /**
@@ -92,8 +135,10 @@ final class ChildRunTest extends TestCase
 
     /**
      * Pins the exit grace's cut-off: a line a backgrounded grandchild writes inside
-     * the grace after the parent exits is kept, and one written after it is not.
-     * The grace length is a policy call, so this test fixes the shape, not the number.
+     * the grace is kept, and one written after the pipes have been silent for the
+     * whole grace is not. The 'early' line restarts the silence count, so the cut
+     * lands one grace after it, well before 'late' is due. The grace length is a
+     * policy call, so this test fixes the shape, not the number.
      */
     public function testOutputWrittenAfterTheExitGraceIsCutOff(): void
     {

@@ -427,4 +427,78 @@ final class ChildRunControlTest extends TestCase
         $this->assertSame(ChildResult::EXITED, $r->status);
         $this->assertSame($payload, $r->stdout);
     }
+
+    /** The reader takes 8 KiB every 60 ms and prints nothing until EOF: silent on output, busy on stdin. */
+    private const STDIN_TAKER = '$n = 0; while (($c = fread(STDIN, 8192)) !== "" && $c !== false) { $n += strlen($c); usleep(60000); } fwrite(STDOUT, (string) $n);';
+
+    /**
+     * Stdin the child accepts counts as activity. The child writes nothing until
+     * its input ends, so only the stdin writes keep the idle budget from cutting it.
+     * The payload is well past the pipe buffer, so the feed is paced by the child's
+     * reads, about every 60 ms. The budget must outlast the drain of the buffer
+     * after the last write (about 0.5 s on Linux, 64 KiB at this pace), because the
+     * child is still reading buffered input then and no write is accepted. The
+     * 1 s budget leaves that margin; without the stdin activity the child is cut at 1 s.
+     */
+    public function testRunStdinTakenByTheChildCountsAsIdleActivity(): void
+    {
+        $this->requirePosixPipes();
+        $payload = str_repeat('x', 262144);
+
+        $r = ChildRun::new($this->php(self::STDIN_TAKER))
+            ->withStdin($payload)
+            ->withTimeout(20.0)
+            ->withIdleTimeout(1.0)
+            ->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'a child still accepting its stdin is not idle');
+        $this->assertSame((string) strlen($payload), $r->stdout);
+    }
+
+    public function testLaunchStdinTakenByTheChildCountsAsIdleActivity(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $payload = str_repeat('x', 262144);
+
+        $r = $this->settle($loop, ChildRun::new($this->php(self::STDIN_TAKER))
+            ->withStdin($payload)
+            ->withTimeout(20.0)
+            ->withIdleTimeout(1.0)
+            ->launch($loop), 20.0);
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'a child still accepting its stdin is not idle');
+        $this->assertSame((string) strlen($payload), $r->stdout);
+    }
+
+    /** The control for the stdin budget: one small write at the start is not enough to keep a silent child alive. */
+    public function testRunChildSilentOnBothOutputAndStdinIsKilledByIdle(): void
+    {
+        $started = microtime(true);
+
+        $r = ChildRun::new($this->php('sleep(30);'))
+            ->withStdin('x')
+            ->withTimeout(20.0)
+            ->withIdleTimeout(0.4)
+            ->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertLessThan(5.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
+    }
+
+    public function testLaunchChildSilentOnBothOutputAndStdinIsKilledByIdle(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = microtime(true);
+
+        $r = $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+            ->withStdin('x')
+            ->withTimeout(20.0)
+            ->withIdleTimeout(0.4)
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertLessThan(5.0, microtime(true) - $started, 'the idle kill must not wait for the deadline');
+    }
 }
