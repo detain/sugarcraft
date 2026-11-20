@@ -10,7 +10,10 @@ use SugarCraft\Code\Events\PermissionAsked;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
+use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Backend\Support\InteractiveTurnHarness;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\ToolCall;
 
 /**
  * P4-12 CC-1 e0 review: a forked turn child runs its turn on the loop, and it
@@ -51,11 +54,25 @@ final class ForkedTurnOwnsItsLoopTest extends TestCase
         $loop = Loop::get();
         // Armed before the fork, so the child inherits it in its copy of the loop.
         $tick = $loop->addPeriodicTimer(0.001, static function () use ($marks): void {
-            \file_put_contents($marks, \getmypid() . "\n", FILE_APPEND);
+            \file_put_contents($marks, 'P ' . \getmypid() . "\n", FILE_APPEND);
         });
 
+        // The first answer runs in the child, before the ask, and arms a timer on
+        // the child's own loop. That timer can fire only if the turn suspended on
+        // the loop during the ask; a turn that blocked on the socket never runs it.
+        $provider = new ScriptedProvider([
+            static function () use ($marks): CompleteResponse {
+                Loop::get()->addPeriodicTimer(0.001, static function () use ($marks): void {
+                    \file_put_contents($marks, 'C ' . \getmypid() . "\n", FILE_APPEND);
+                });
+
+                return new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Edit', [])]);
+            },
+            new CompleteResponse(content: 'done'),
+        ]);
+
         $events = [];
-        $backend = InteractiveTurnHarness::backend(InteractiveTurnHarness::provider());
+        $backend = InteractiveTurnHarness::backend($provider);
         try {
             $state = InteractiveTurnHarness::settle(
                 $backend->completeInteractive(
@@ -90,14 +107,42 @@ final class ForkedTurnOwnsItsLoopTest extends TestCase
         self::assertCount(1, $finished);
         self::assertSame('ran', $finished[0]->result->content());
 
-        $pids = \array_values(\array_filter(\explode("\n", (string) \file_get_contents($marks)), static fn (string $line): bool => $line !== ''));
-        self::assertNotEmpty($pids, 'fixture: the parent timer never fired, so the proof is vacuous');
+        $lines = \array_values(\array_filter(\explode("\n", (string) \file_get_contents($marks)), static fn (string $line): bool => $line !== ''));
+        $inherited = self::pidsTagged($lines, 'P ');
+        $own = self::pidsTagged($lines, 'C ');
         $parent = (string) \getmypid();
-        $foreign = \array_values(\array_unique(\array_filter($pids, static fn (string $pid): bool => $pid !== $parent)));
+        self::assertNotEmpty(
+            \array_filter($inherited, static fn (string $pid): bool => $pid === $parent),
+            'fixture: the parent timer never fired, so the proof is vacuous',
+        );
+        $foreign = \array_values(\array_unique(\array_filter($inherited, static fn (string $pid): bool => $pid !== $parent)));
         self::assertSame(
             [],
             $foreign,
             'the forked turn child fired a timer it inherited from the parent (pids: ' . \implode(', ', $foreign) . ')',
         );
+        $childPids = \array_values(\array_unique(\array_filter($own, static fn (string $pid): bool => $pid !== $parent)));
+        self::assertNotEmpty(
+            $childPids,
+            'the child never ran its own loop during the ask, so it did not suspend on the loop',
+        );
+    }
+
+    /**
+     * The pids written after one tag, e.g. `P 123` gives `123` for tag `P `.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private static function pidsTagged(array $lines, string $tag): array
+    {
+        $pids = [];
+        foreach ($lines as $line) {
+            if (\str_starts_with($line, $tag)) {
+                $pids[] = \substr($line, \strlen($tag));
+            }
+        }
+
+        return $pids;
     }
 }
