@@ -32,6 +32,7 @@ use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\StateDir;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
 
 /**
  * Roadmap O-8a: the TUI as a client of a running `candy-code serve`.
@@ -342,6 +343,21 @@ final class RemoteBackendTest extends TestCase
         self::assertSame('ws://[::1]:9/ws', Attach::websocketUrl('ws://[::1]:9/ws'));
         self::assertNull(Attach::websocketUrl('ftp://x'));
         self::assertNull(Attach::websocketUrl('not a url'));
+    }
+
+    /**
+     * `Attach::websocketUrl` delegates to the library's `WebsocketUrl`, which
+     * refuses a bracketed host that is not an IPv6 literal. The old body built
+     * `ws://[abc]:8080/ws` for it, and that address was never dialable.
+     */
+    public function testAMalformedBracketedHostIsRefusedByTheLibraryAnswer(): void
+    {
+        self::assertNull(WebsocketUrl::from('http://[abc]:8080'));
+        self::assertNull(Attach::websocketUrl('http://[abc]:8080'));
+        self::assertSame(WebsocketUrl::from('ws://[::1]:9/ws'), Attach::websocketUrl('ws://[::1]:9/ws'));
+
+        // The verb answers the same usage error it gives any bad address, and does not dial.
+        self::assertSame(NonInteractive::EXIT_CONFIG, $this->runVerb(['attach', '--url', 'http://[abc]:8080']));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

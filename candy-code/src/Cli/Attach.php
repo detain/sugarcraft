@@ -20,6 +20,7 @@ use SugarCraft\Async\Backoff;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
 use SugarCraft\Code\Backend\RemoteBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
@@ -68,9 +69,6 @@ final class Attach
 {
     /** How long connecting, the handshake and opening the session may take. */
     public const CONNECT_TIMEOUT_SECONDS = 15.0;
-
-    /** The WebSocket path every `candy-code serve` answers on. */
-    public const WS_PATH = '/ws';
 
     /** The flags `attach` accepts (see {@see ParsedArgs::SUBCOMMAND_FLAGS}). */
     public const FLAGS = ['--url'];
@@ -265,21 +263,7 @@ final class Attach
      */
     public static function websocketUrl(string $url): ?string
     {
-        $parts = \parse_url(\trim($url));
-        if (!\is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-        $scheme = match (\strtolower($parts['scheme'])) {
-            'http', 'ws' => 'ws',
-            'https', 'wss' => 'wss',
-            default => null,
-        };
-        if ($scheme === null || $parts['host'] === '') {
-            return null;
-        }
-        $host = \str_contains($parts['host'], ':') && !\str_starts_with($parts['host'], '[') ? '[' . $parts['host'] . ']' : $parts['host'];
-
-        return $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '') . self::WS_PATH;
+        return WebsocketUrl::from($url);
     }
 
     /**
