@@ -126,8 +126,8 @@ final class CommandEffect
      * a settled command that FAILED lands a flagged row, and the renderer
      * never sniffs text to find that out.
      *
-     * $armsBackgroundPoll marks a run that registers a background spawn when it
-     * starts: the supervisor advances that spawn only from its poll, and nothing
+     * $armsBackgroundPoll marks a run that registers a background spawn or stop when
+     * it starts: the supervisor advances that work only from its poll, and nothing
      * reconciles the poll's subscription after the run, so the host must queue a
      * tick straight after it ({@see armsBackgroundPoll()}).
      *

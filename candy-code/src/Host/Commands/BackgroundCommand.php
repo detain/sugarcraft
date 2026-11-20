@@ -60,9 +60,12 @@ final class BackgroundCommand implements HostCommand
 
         $stopTarget = self::stopTarget($supervisor, $task);
         if ($stopTarget !== null) {
+            // A stop is driven by the loop like a spawn, so it queues the same wake-up:
+            // without it an idle TUI waits for the next poll tick to advance the stop.
             return CommandResult::echo($text)->withEffect(CommandEffect::async(
                 self::stopThunk($supervisor, $stopTarget),
                 self::stopRow(...),
+                armsBackgroundPoll: true,
             ));
         }
 
