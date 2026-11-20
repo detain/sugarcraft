@@ -279,7 +279,18 @@ $picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'));
 $date = $picker->hitTest(0, 0); // the header row is chrome, so null</code></pre>
 
     <h3 id="record-transitions-for-analytics-or-undo" style="margin-top: 24px;">Record transitions for analytics or undo</h3>
-    <p>Pass an <code>EventStore</code> to <code>Model::new()</code>, and drain it with <code>release()</code> after each update. Every value change is recorded as one of eight <code>PickerEvent</code> kinds. The payloads and their shape are listed in the API reference. <code>examples/interactive.php</code> prints the drained transcript.</p>
+    <p>Pass an <code>EventStore</code> to <code>Model::new()</code>, and drain it with <code>release()</code> after each update. Every value change is recorded as one of eight <code>PickerEvent</code> kinds. <code>release()</code> returns the rows oldest first, each shaped <code>array{type, payload, time}</code>, where <code>time</code> is whole epoch seconds. The payload keys for each kind are:</p>
+<ul>
+  <li><code>cursor_moved</code>: <code>{index, date}</code>, with <code>date</code> null on a blank cell.</li>
+  <li><code>range_started</code>: <code>{date}</code>.</li>
+  <li><code>date_selected</code>: <code>{date}</code> in single mode, or <code>{date, rangeStart, rangeEnd}</code> when a range completes.</li>
+  <li><code>date_cleared</code>: an empty payload.</li>
+  <li><code>range_restarted</code>: <code>{from, to}</code>, where <code>to</code> may equal <code>from</code>.</li>
+  <li><code>range_cleared</code>: <code>{from}</code>.</li>
+  <li><code>selection_refused</code>: <code>{date, reason}</code>, where <code>reason</code> is <code>out_of_bounds</code> or <code>empty_cell</code>, and <code>date</code> is null on a blank cell.</li>
+  <li><code>month_changed</code>: <code>{year, month}</code>.</li>
+</ul>
+    <p><code>examples/interactive.php</code> prints the drained transcript.</p>
 
     <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
     <p>The table covers the public surface. Each DatePicker method returns a new picker, and each Model method returns a new model, unless the row says otherwise.</p>
@@ -433,7 +444,7 @@ vendor/bin/phpunit</code></pre>
 </table>
 
     <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
-    <p>The month grid is laid out by <code>DatePicker</code> into a 7-column buffer from sugar-cellbuffer, and <code>Buffer::toAnsi()</code> serializes it. Cell widths come from the sugar-core width oracle, so the rendered width agrees with <code>renderWidth()</code>. <code>Model</code> wraps the picker as a sugar-core <code>Model</code>. Its <code>update()</code> maps key messages onto the picker, and it records each transition through the <code>EventStoreInterface</code>. <code>Navigation</code> holds the static grid-index conversion, and <code>DateRange</code> is the immutable endpoint value.</p>
+    <p>The month grid is laid out by <code>DatePicker</code> into a sugar-cellbuffer buffer that is nine rows high and 21 to 63 cells wide (25 to 63 with the week column), and <code>Buffer::toAnsi()</code> serializes it. Cell widths come from the sugar-core width oracle, so the rendered width agrees with <code>renderWidth()</code>. <code>Model</code> wraps the picker as a sugar-core <code>Model</code>. Its <code>update()</code> maps key messages onto the picker, and it records each transition through the <code>EventStoreInterface</code>. <code>Navigation</code> holds the static grid-index conversion, and <code>DateRange</code> is the immutable endpoint value.</p>
 
     <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
     <p>The package is pre-1.0 and ships only <code>dev-master</code>. It was renamed in 2026-10 from <code>sugarcraft/sugar-calendar</code>, and the namespace moved from <code>SugarCraft\Calendar\</code> to <code>SugarCraft\DatePicker\</code>. The upstream PascalCase method spellings still resolve to the camelCase methods, and <code>ApiAliasTest</code> pins them.</p>
