@@ -183,7 +183,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         $conversationId = (string) ($ref['conversationId'] ?? '');
         $serviceUrl = (string) ($ref['serviceUrl'] ?? '');
         if ($conversationId === '' || $serviceUrl === '') {
-            return \React\Promise\reject(new \RuntimeException('msteams deliver without a conversationReference ref'));
+            return \React\Promise\reject(new \RuntimeException('msteams.deliver.no_conversation_reference'));
         }
         $activity = [
             'type' => 'message',
@@ -1005,7 +1005,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             ? $this->strCfg('dmPolicy', 'pairing') !== 'disabled'
             : $this->groupServed($conversationId);
         if (!$stillServed) {
-            return \React\Promise\reject(new \RuntimeException('msteams notify refused: the conversation is no longer served'));
+            return \React\Promise\reject(new \RuntimeException('msteams.notify.conversation_not_served'));
         }
         $ref = [
             'serviceUrl' => (string) ($stored['serviceUrl'] ?? ''),

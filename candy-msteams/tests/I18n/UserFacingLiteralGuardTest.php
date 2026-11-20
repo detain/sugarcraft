@@ -14,8 +14,9 @@ use PHPUnit\Framework\TestCase;
  *
  * The check is token based. A string literal that contains a three-letter word
  * and a space is prose, and prose in these files is user text, so it is flagged
- * unless it sits in a `->log->` call or an exception constructor (diagnostic text,
- * not shown to a user) or is an array key. Event codes, separators and identifiers carry no space and pass.
+ * unless it sits in a `->log->` call, is the message of a NoSessionIdException (the
+ * one exception class the router's failureReason() maps to catalog copy), or is an
+ * array key. Event codes, separators and identifiers carry no space and pass.
  * Two single-word shapes are flagged too: a sentence such as `'Done.'`, and a bare
  * word that is a ternary branch (`? 'attachment' :`), the usual shape of a display
  * fallback. A bare word elsewhere is not separable from an identifier by tokens
@@ -53,6 +54,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'skipped prefix in a concatenation' => ["\$disclosed = '[skipped: ' . \\implode('; ', \$notes) . ']';"];
         yield 'multi-line notice' => ["\$text = \"This conversation is not enabled\\n\\n\" . \$id;"];
         yield 'refused prompt in deliver' => ["\$this->deliver(\$ch, \$ref, \"⛔ Your message never reached the agent.\");"];
+        yield 'exception message the core shows in chat' => ["throw new \\RuntimeException('Session is busy, try again.');"];
+        yield 'exception class other than the mapped one' => ["throw new \\CandyCode\\Bundles\\MsTeams\\Bridge\\SessionBusyException('Session is busy, try again.');"];
         yield 'default tool name' => ["\$tool = (string) (\$ask['tool'] ?? 'a tool');"];
         yield 'method name ending in Error is not diagnostic' => ["\$this->sendError('Approval expired, answer again.');"];
         yield 'single-word sentence' => ["\$text = 'Done.';"];
@@ -77,8 +80,8 @@ final class UserFacingLiteralGuardTest extends TestCase
         yield 'separator only' => ["\$sep = \\implode('; ', \$notes);"];
         yield 'routed ternary fallback' => ["\$name = \$name === '' ? Lang::t('channels.msteams.media.unnamed_attachment') : \$name;"];
         yield 'bare word compared, not shown' => ["\$first = \$name === 'help';"];
-        yield 'exception message is diagnostic' => ["throw new \\RuntimeException('msteams notify refused: the conversation is no longer served');"];
-        yield 'unqualified exception class is diagnostic' => ["throw new NoSessionIdException('session.create returned no id');"];
+        yield 'mapped exception class is never shown' => ["throw new NoSessionIdException('session.create returned no id');"];
+        yield 'qualified mapped exception class is never shown' => ["throw new \\CandyCode\\Bundles\\MsTeams\\Bridge\\NoSessionIdException('session.create returned no id');"];
     }
 
     #[DataProvider('passingFixtureProvider')]
@@ -181,9 +184,11 @@ final class UserFacingLiteralGuardTest extends TestCase
     }
 
     /**
-     * `->log->info(`, or the constructor of a `new` expression on an exception class
-     * such as `new \RuntimeException(`. A method whose name merely ends in `Error` or
-     * `Exception` (`$this->sendError(`) is user-facing and is not exempt.
+     * `->log->info(`, or the constructor of `new NoSessionIdException(`. Any other
+     * exception message reaches the chat: the core's failureReason() returns
+     * getMessage(), and the router maps only NoSessionIdException to catalog copy.
+     * A method whose name merely ends in `Error` or `Exception` (`$this->sendError(`)
+     * is user-facing and is not exempt.
      *
      * @param list<array{id: int|string, text: string, line: int}> $toks
      */
@@ -191,12 +196,12 @@ final class UserFacingLiteralGuardTest extends TestCase
     {
         $callee = $toks[$open - 1]['text'] ?? '';
         $isNew = ($toks[$open - 2]['id'] ?? null) === \T_NEW;
-        $isException = $isNew && \preg_match('/(Exception|Error)$/', $callee) === 1;
+        $isMappedException = $isNew && \preg_match('/(^|\\\\)NoSessionIdException$/', $callee) === 1;
         $isLog = ($toks[$open - 1]['id'] ?? null) === \T_STRING
             && ($toks[$open - 2]['id'] ?? null) === \T_OBJECT_OPERATOR
             && ($toks[$open - 3]['id'] ?? null) === \T_STRING
             && ($toks[$open - 3]['text'] ?? '') === 'log';
 
-        return $isException || $isLog;
+        return $isMappedException || $isLog;
     }
 }
