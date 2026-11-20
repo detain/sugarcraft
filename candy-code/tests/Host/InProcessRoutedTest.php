@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Host;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Ratchet\RFC6455\Messaging\MessageBuffer;
 use React\EventLoop\Loop;
@@ -551,12 +552,14 @@ final class InProcessRoutedTest extends TestCase
     }
 
     /**
-     * End to end, a routed answer nested past the wire decode depth is not refused too_deep. The
-     * child's RemoteSessionHost::receive decodes the frame at JsonRpc::MAX_DEPTH and drops it
-     * undecoded, so the door never converts it and the caller gets the call's deadline: a timeout,
-     * retryable Busy. Design 5.2 asks for too_deep; this pins what the door does today, so a change
-     * on either side is seen here.
+     * RECORDED DEVIATION from design 5.2, owner ruling pending. Design 5.2 asks for too_deep; end to
+     * end, a routed answer nested past the wire decode depth is not refused too_deep. The child's
+     * RemoteSessionHost::receive decodes the frame at JsonRpc::MAX_DEPTH and drops it undecoded, so
+     * the door never converts it and the caller gets the call's deadline: a timeout, retryable Busy.
+     * This asserts what the door does today, so a change on either side is seen here. A fix that
+     * returns too_deep turns this red by design; flip the assertions once the owner rules.
      */
+    #[Group('recorded-deviation')]
     public function testARoutedAnswerNestedPastTheWireDecodeDepthTimesOutEndToEnd(): void
     {
         $root = $this->scriptedRoot();
@@ -794,6 +797,39 @@ final class InProcessRoutedTest extends TestCase
         self::assertCount(1, $primary, 'one primary delivery');
         self::assertSame($root, $routed[0]['root'], 'the routed delivery names its root');
         self::assertSame($primary[0], \array_diff_key($routed[0], ['root' => true]), 'a routed and a primary listener get the same array, apart from root');
+    }
+
+    public function testARoutedAndAPrimaryListenerGetEmptyDataAsAnArray(): void
+    {
+        // The wire encodes empty data as an object, so the routed envelope carries stdClass here. Both
+        // listeners must still get [], as drain() gives the primary feed (PL-5d, decision c).
+        $root = $this->scriptedRoot();
+        $sessionId = $this->scriptedSession($root);
+        $this->scriptedSubscribe($sessionId);
+        $envelope = EventEnvelope::fromLogRow($sessionId, [
+            'seq' => 2,
+            'type' => 'turn.started',
+            'ts' => 1002,
+            'payload' => ['turnId' => 't2'],
+        ]);
+
+        $this->relayRouted($root, $envelope);
+        (new \ReflectionMethod(InProcessHostServices::class, 'enqueue'))->invoke($this->door, $envelope);
+        self::assertTrue($this->runUntil(fn (): bool => \count($this->eventsFor($sessionId)) >= 2, 5.0), 'both feeds delivered the event');
+
+        $routed = [];
+        $primary = [];
+        foreach ($this->eventsFor($sessionId) as $heard) {
+            if (\array_key_exists('root', $heard)) {
+                $routed[] = $heard;
+            } else {
+                $primary[] = $heard;
+            }
+        }
+        self::assertCount(1, $routed, 'one routed delivery');
+        self::assertCount(1, $primary, 'one primary delivery');
+        self::assertSame([], $routed[0]['data'], 'a routed listener gets empty data as []');
+        self::assertSame([], $primary[0]['data'], 'a primary listener gets empty data as []');
     }
 
     public function testAWireRequestIsAnsweredWhileARoutedBacklogIsStillOwed(): void

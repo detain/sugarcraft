@@ -194,7 +194,9 @@ final class InProcessEventSinkTest extends TestCase
     {
         $sink = $this->sink();
         $sink->follow('s1', 0);
-        // Distinct texts, so no delta coalesces: the queue is full of deltas, and the next two shed the oldest.
+        // Short deltas keep the live bytes under LIVE_BYTES_BOUND, so coalesce() never runs and each delta stays
+        // its own entry. The texts are distinct so the expected order below can name each one. The queue is full
+        // of deltas, and the next two shed the oldest.
         for ($n = 1; $n <= InProcessEventSink::QUEUE_BOUND; $n++) {
             $this->deliverLive($sink, 's1', 'd' . $n);
         }
