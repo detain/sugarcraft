@@ -213,6 +213,11 @@ final class RemoteSessionHost
         ?Backoff $redialBackoff = null,
         float $resumeHelloSeconds = self::RESUME_HELLO_SECONDS,
     ) {
+        // Checked before the stream is wired: a resume's hello arms this timeout
+        // only after it is sent, so a bad value must fail here, not mid-redial.
+        if ($resumeHelloSeconds <= 0 || !is_finite($resumeHelloSeconds)) {
+            throw new \InvalidArgumentException('resumeHelloSeconds must be a positive finite number of seconds');
+        }
         $this->reopen = $reopen;
         $this->after = $after;
         $this->redialBackoff = $redialBackoff;

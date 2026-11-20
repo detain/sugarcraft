@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Host;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Ratchet\RFC6455\Messaging\Frame;
 use React\EventLoop\Loop;
@@ -317,5 +318,36 @@ final class RemoteSessionHostResumeCloseTest extends TestCase
         self::assertTrue($host->isOpen(), 'the second attempt resumes, so the host is attached again');
         self::assertSame([], $verdicts, 'no verdict is delivered once the session resumes');
         self::assertFalse($silent->isReadable(), 'the silent socket is closed when its attempt times out');
+    }
+
+    /** @return iterable<string, array{float}> */
+    public static function invalidResumeHelloSeconds(): iterable
+    {
+        yield 'zero' => [0.0];
+        yield 'negative' => [-1.0];
+        yield 'infinite' => [INF];
+        yield 'NaN' => [NAN];
+    }
+
+    /**
+     * A resume's hello timeout is armed only after the hello is sent, so a bad
+     * value used to throw mid-redial with the socket wired and the hello pending.
+     * It is refused at construction instead, before the stream is touched.
+     */
+    #[DataProvider('invalidResumeHelloSeconds')]
+    public function testAnInvalidResumeHelloTimeoutIsRefusedBeforeTheStreamIsWired(float $seconds): void
+    {
+        $in = new ThroughStream();
+        $stream = new CompositeStream($in, new ThroughStream());
+        $listenersBefore = \count($in->listeners('data'));
+
+        try {
+            RemoteSessionHost::overStream($stream, resumeHelloSeconds: $seconds);
+            self::fail('an invalid resumeHelloSeconds must be refused');
+        } catch (\InvalidArgumentException $failure) {
+            self::assertStringContainsString('resumeHelloSeconds', $failure->getMessage());
+        }
+
+        self::assertCount($listenersBefore, $in->listeners('data'), 'the stream was never wired to the host');
     }
 }
