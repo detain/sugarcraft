@@ -452,13 +452,15 @@ final class PluginInstaller extends LibraryInstaller
      * checkout as an untracked file, so such a bundle carries no record. It reads
      * as a bundle that arrived with its repository, which is what a link is.
      *
-     * @throws \RuntimeException when the record cannot be written into the staged tree
+     * @throws \RuntimeException when the record cannot be written into the staged tree, or the package ships a symlink at the record's lock path
      */
     private function writeSourceRecord(PackageInterface $package, string $path): void
     {
         if (is_link($path)) {
             return;
         }
+
+        $this->refuseLinkedRecordLock($package, $path);
 
         $record = SourceRecord::fromTrustedRecord(
             self::SOURCE_MARKETPLACE,
@@ -475,6 +477,31 @@ final class PluginInstaller extends LibraryInstaller
         if ($failure !== null) {
             throw new \RuntimeException('sugar-plugin-installer: ' . $failure . '.');
         }
+    }
+
+    /**
+     * AtomicJsonFile takes its lock on a sidecar named after the record, opened
+     * with fopen('cb'), which follows a symlink and creates whatever it points
+     * at. A package that ships a symlink at that name could make the install
+     * create a file outside the bundle, so the install refuses before writing.
+     *
+     * The sidecar name mirrors AtomicJsonFile::lockPath(): a dot, then the
+     * record's basename, then '.lock', in the record's directory.
+     *
+     * @throws \RuntimeException when the staged tree holds a symlink at the sidecar's name
+     */
+    private function refuseLinkedRecordLock(PackageInterface $package, string $bundleDir): void
+    {
+        $lockPath = $bundleDir . '/.' . self::SOURCE_RECORD_FILE . '.lock';
+        if (!is_link($lockPath)) {
+            return;
+        }
+
+        throw new \RuntimeException(sprintf(
+            'sugar-plugin-installer: %s ships a symlink at %s, the provenance record lock path. Writing the record through it would create a file outside the bundle, so the install is refused.',
+            $package->getPrettyName(),
+            $lockPath,
+        ));
     }
 
     /**

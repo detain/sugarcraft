@@ -15,6 +15,7 @@ use Composer\Repository\InstalledArrayRepository;
 use Composer\Repository\RepositoryManager;
 use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
+use React\Promise\PromiseInterface;
 use SugarCraft\Plugins\Provenance\SourceRecord;
 use SugarCraft\PluginInstaller\PluginInstaller;
 use SugarCraft\PluginInstaller\Tests\Support\LinkingDownloader;
@@ -591,6 +592,52 @@ final class PluginInstallerTest extends TestCase
         $this->assertNotNull($record, 'the update must leave a readable provenance record');
         $this->assertSame('2.0.0', $record->version, 'an update must not keep the version it was installed at');
         $this->assertSame('acme/sample-plugin', $record->repo);
+    }
+
+    /** The reason an install promise rejects with, or null when it settles. */
+    private static function rejectionOf(PromiseInterface $promise): ?\Throwable
+    {
+        $reason = null;
+        $promise->then(null, static function (\Throwable $caught) use (&$reason): void {
+            $reason = $caught;
+        });
+
+        return $reason;
+    }
+
+    public function testAShippedSymlinkAtTheRecordLockRefusesTheInstallBeforeAnythingIsCreatedThroughIt(): void
+    {
+        // The sidecar lock is opened with fopen('cb'), which follows a symlink and creates
+        // its target. The package's symlink points at a file that does not exist yet.
+        $outside = Scratch::dir('outside');
+        $target = $outside . '/new-file';
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader(
+            symlinks: ['..sugar-plugin-source.json.lock' => $target],
+        ));
+
+        $promise = $installer->install(new InstalledArrayRepository(), self::versionedPackage('acme/sample-plugin', '1.0.0'));
+
+        $refusal = $promise instanceof PromiseInterface ? self::rejectionOf($promise) : null;
+        $this->assertNotNull($refusal, 'a shipped symlink at the lock path must reject the install');
+        $this->assertStringContainsString('ships a symlink at', $refusal->getMessage());
+        $this->assertFileDoesNotExist($target, 'the refused install must not create a file at the link target');
+        $this->assertFileDoesNotExist($this->project . '/.candy-code/bundles/sample-plugin/' . PluginInstaller::SOURCE_RECORD_FILE, 'no record may be written when the lock is refused');
+        Scratch::remove($outside);
+    }
+
+    public function testARecordThatCannotBeWrittenRejectsTheInstall(): void
+    {
+        // A directory where the lock file belongs makes AtomicJsonFile fail to open it, so
+        // SourceRecord::write() returns its failure string and the install must reject.
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader(
+            directories: ['..sugar-plugin-source.json.lock'],
+        ));
+
+        $promise = $installer->install(new InstalledArrayRepository(), self::versionedPackage('acme/sample-plugin', '1.0.0'));
+
+        $refusal = $promise instanceof PromiseInterface ? self::rejectionOf($promise) : null;
+        $this->assertNotNull($refusal, 'a record that cannot be written must reject the install');
+        $this->assertStringContainsString('bundle source record could not be written', $refusal->getMessage());
     }
 
     public function testProjectUpdateRefusesANameAUserTierBundleAlreadyHolds(): void

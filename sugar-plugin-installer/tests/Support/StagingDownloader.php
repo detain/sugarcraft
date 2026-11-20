@@ -16,6 +16,16 @@ use React\Promise\PromiseInterface;
  */
 final class StagingDownloader implements DownloaderInterface
 {
+    /**
+     * @param array<string, string> $symlinks entry name => link target, planted in the staged tree
+     * @param list<string> $directories names of empty directories planted in the staged tree
+     */
+    public function __construct(
+        private readonly array $symlinks = [],
+        private readonly array $directories = [],
+    ) {
+    }
+
     public function getInstallationSource(): string
     {
         return 'dist';
@@ -57,6 +67,12 @@ final class StagingDownloader implements DownloaderInterface
             mkdir($path, 0700, true);
         }
         Scratch::write($path . '/composer.json', (string) json_encode(['name' => $package->getName()]));
+        foreach ($this->directories as $name) {
+            mkdir($path . '/' . $name, 0700);
+        }
+        foreach ($this->symlinks as $name => $target) {
+            symlink($target, $path . '/' . $name);
+        }
 
         return \React\Promise\resolve(null);
     }
