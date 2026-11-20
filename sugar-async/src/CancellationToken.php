@@ -107,7 +107,8 @@ final class CancellationToken
      *
      * The returned handle removes the registration while it is still pending:
      * unsubscribe() before the cancellation drops the callback without
-     * running it. Long-lived tokens reused across many short operations
+     * running it, including when an earlier callback of the same fire
+     * unsubscribes it. Long-lived tokens reused across many short operations
      * MUST unsubscribe at settlement (see AsyncOps::cancellable() and
      * AsyncOps::retry() for the pattern) — otherwise one closure accumulates
      * per operation until the token fires.
@@ -168,8 +169,14 @@ final class CancellationToken
         // hooks — teardown ladders (Ctrl-C handlers, destructors, session
         // shutdown) run to completion, and every remaining callback still
         // executes.
-        foreach ($this->callbacks as $callback) {
-            $this->invokeLogged($callback);
+        //
+        // Iterates the ids, not a snapshot of the list: a callback that
+        // unsubscribes a later registration must keep that one from running.
+        foreach (array_keys($this->callbacks) as $id) {
+            if (!array_key_exists($id, $this->callbacks)) {
+                continue;
+            }
+            $this->invokeLogged($this->callbacks[$id]);
         }
         $this->callbacks = [];
     }
