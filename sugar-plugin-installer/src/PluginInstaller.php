@@ -360,10 +360,12 @@ final class PluginInstaller extends LibraryInstaller
 
     /**
      * @throws \InvalidArgumentException when the root's installer section is malformed
+     * @throws \RuntimeException when a user-tier bundle already holds the package's name
      */
     public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
     {
         $path = $this->configuredPath($target);
+        $this->refuseUserTierNameClash($target, $this->existingPath($initial));
 
         return $this->recordSource($this->stage(fn () => parent::update($repo, $initial, $target)), $target, $path);
     }
@@ -476,10 +478,14 @@ final class PluginInstaller extends LibraryInstaller
      * Project scope never needs a home directory, so a missing home means there
      * is no user tier to clash with and the check passes.
      *
+     * $ownTree is the tree an update is moving away from. When the user-tier
+     * directory is that tree, the package is moving between tiers, not clashing
+     * with another bundle, so it passes. Install passes none.
+     *
      * @throws \InvalidArgumentException when the root's installer section is malformed
      * @throws \RuntimeException when a user-tier bundle already holds the package's name
      */
-    private function refuseUserTierNameClash(PackageInterface $package): void
+    private function refuseUserTierNameClash(PackageInterface $package, ?string $ownTree = null): void
     {
         $config = InstallerConfig::fromExtra($this->composer->getPackage()->getExtra());
         if ($config->scope !== Scope::Project) {
@@ -495,7 +501,7 @@ final class PluginInstaller extends LibraryInstaller
             return;
         }
 
-        if (is_dir($userPath)) {
+        if (is_dir($userPath) && $userPath !== $ownTree) {
             throw new \RuntimeException(sprintf(
                 'sugar-plugin-installer: %s is a project-tier install, but a user-tier bundle named %s already exists at %s. A project bundle never inherits a user-tier name or its trust, so the install is refused. Remove the user-tier bundle, or rename the package.',
                 $package->getPrettyName(),

@@ -576,4 +576,43 @@ final class PluginInstallerTest extends TestCase
         $this->assertSame('2.0.0', $record->version, 'an update must not keep the version it was installed at');
         $this->assertSame('acme/sample-plugin', $record->repo);
     }
+
+    public function testProjectUpdateRefusesANameAUserTierBundleAlreadyHolds(): void
+    {
+        // The project already stages acme/candy-discord at its own tier. Another
+        // project later put sugarcraft/candy-discord in the user tier, so an update
+        // here would leave the same name in both tiers, the trust-inheriting one included.
+        $downloader = new RecordingDownloader();
+        $this->stageTree($this->project . '/.candy-code/bundles/candy-discord', 'acme/candy-discord');
+        $this->stageTree($this->home . '/.candy-code/bundles/candy-discord', 'sugarcraft/candy-discord');
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], $downloader);
+        $initial = self::removablePackage('acme/candy-discord');
+        $target = self::versionedPackage('acme/candy-discord', '2.0.0');
+
+        $refusal = null;
+        try {
+            $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+        } catch (\RuntimeException $caught) {
+            $refusal = $caught;
+        }
+
+        $this->assertNotNull($refusal, 'an update must not reuse a user-tier bundle name');
+        $this->assertStringContainsString('user-tier bundle named candy-discord already exists', $refusal->getMessage());
+        $this->assertSame([], $downloader->removed, 'the refused update must not remove the project tree');
+        $this->assertFileExists($this->project . '/.candy-code/bundles/candy-discord/composer.json');
+    }
+
+    public function testProjectUpdateMovesAUserTierTreeItsOwnPackageHolds(): void
+    {
+        // The user tier holds this package's own tree, so the update is a move between
+        // tiers, not a clash with another bundle, and it must go through.
+        $this->stageTree($this->home . '/.candy-code/bundles/candy-discord', 'acme/candy-discord');
+        $installer = $this->installerFor(['sugar-plugin-installer' => ['scope' => 'project']], [], new StagingDownloader());
+        $initial = self::removablePackage('acme/candy-discord');
+        $target = self::versionedPackage('acme/candy-discord', '2.0.0');
+
+        $installer->update(new InstalledArrayRepository([$initial]), $initial, $target);
+
+        $this->assertFileExists($this->project . '/.candy-code/bundles/candy-discord/composer.json', 'the update did not move the tree into the project tier');
+    }
 }
