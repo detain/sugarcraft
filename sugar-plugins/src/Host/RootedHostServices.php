@@ -23,7 +23,8 @@ interface RootedHostServices
      *
      * Caveat (section 2.6): a host with no gateway answers the primary root form without `root`,
      * because no canonical root is known and the caller's root was never verified. Only a host
-     * with a gateway names the root in the primary answer.
+     * with a gateway names the root in the primary answer. A non-primary $root with no gateway
+     * also runs on the primary dispatcher, a latent misroute recorded in section 12 of the design.
      *
      * @return PromiseInterface<array<string, mixed>>
      */
@@ -33,7 +34,8 @@ interface RootedHostServices
      * The pending permission asks of $root's workspace host, with the top-level `root` set.
      *
      * Caveat (section 2.6): as for {@see createSessionIn()}, a host with no gateway answers the
-     * primary root form without a top-level `root`.
+     * primary root form without a top-level `root`, and a non-primary $root with no gateway runs
+     * on the primary dispatcher (latent, section 12 of the design).
      *
      * @return PromiseInterface<array<string, mixed>>
      */
