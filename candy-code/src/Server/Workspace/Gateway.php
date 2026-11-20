@@ -126,8 +126,14 @@ final class Gateway implements MessageHandler
     /** @var array<string, array<string, RelayTarget>> root => target id => a target that used it */
     private array $rootClients = [];
 
-    /** @var array<string, int> sessionId => generation of the latest session.subscribe forwarded to a host */
+    /**
+     * @var array<string, int> sessionId => generation of the latest session.subscribe forwarded to a host.
+     * Capped at maxSessionRoots rows: a row is dropped only when its session has no subscriber and no subscribe in flight.
+     */
     private array $subscribeGen = [];
+
+    /** @var array<string, int> sessionId => session.subscribe calls to its host still unanswered */
+    private array $subscribePending = [];
 
     private int $subscribeSeq = 0;
 
@@ -569,7 +575,8 @@ final class Gateway implements MessageHandler
         // Exactly one of the answer, a failure or the deadline settles the call.
         $settled = false;
         $timer = null;
-        $settle = function () use (&$settled, &$timer, $root): bool {
+        $tracksSubscribe = $method === 'session.subscribe' && $sessionId !== null;
+        $settle = function () use (&$settled, &$timer, $root, $tracksSubscribe, $sessionId): bool {
             if ($settled) {
                 return false;
             }
@@ -578,6 +585,9 @@ final class Gateway implements MessageHandler
                 $this->loop->cancelTimer($timer);
             }
             $this->inFlight[$root] = \max(0, ($this->inFlight[$root] ?? 1) - 1);
+            if ($tracksSubscribe) {
+                $this->endSubscribe((string) $sessionId);
+            }
 
             return true;
         };
@@ -590,8 +600,8 @@ final class Gateway implements MessageHandler
                 ));
             }
         });
-        if ($method === 'session.subscribe' && $sessionId !== null) {
-            $this->subscribeGen[$sessionId] = ++$this->subscribeSeq;
+        if ($tracksSubscribe) {
+            $this->beginSubscribe((string) $sessionId);
         }
         $this->hostFor($root)->then(
             function (WorkspaceHostClient $host) use ($settle, $deferred, $root, $method, $params, $sessionId): PromiseInterface {
@@ -602,6 +612,10 @@ final class Gateway implements MessageHandler
                         // The bookkeeping runs even after the deadline answered: the host's state is the truth.
                         $this->learn($root, $method, $result);
                         if ($method === 'session.delete' && $sessionId !== null) {
+                            // The host has dropped the session, so each follower is told it is no longer forwarded (as lost() does).
+                            foreach ($this->subscribers[$sessionId] ?? [] as $target) {
+                                $target->unfollowed($sessionId);
+                            }
                             unset($this->sessionRoots[$sessionId], $this->subscribers[$sessionId]);
                         }
                         if ($result instanceof \stdClass && $method !== 'session.list') {
@@ -622,6 +636,44 @@ final class Gateway implements MessageHandler
         });
 
         return $deferred->promise();
+    }
+
+    /** A session.subscribe to $sessionId is on its way to a host: it takes the newest generation, and its row is not pruned. */
+    private function beginSubscribe(string $sessionId): void
+    {
+        unset($this->subscribeGen[$sessionId]);
+        $this->subscribeGen[$sessionId] = ++$this->subscribeSeq;
+        $this->subscribePending[$sessionId] = ($this->subscribePending[$sessionId] ?? 0) + 1;
+        $this->pruneSubscribeGen();
+    }
+
+    /** The host has answered (or the call gave up) for one session.subscribe to $sessionId. */
+    private function endSubscribe(string $sessionId): void
+    {
+        $left = ($this->subscribePending[$sessionId] ?? 1) - 1;
+        if ($left > 0) {
+            $this->subscribePending[$sessionId] = $left;
+
+            return;
+        }
+        unset($this->subscribePending[$sessionId]);
+    }
+
+    /**
+     * Keeps subscribeGen within maxSessionRoots, oldest row first. A row a late answer still compares
+     * against is kept: its session has a subscribe in flight or a subscriber recorded.
+     */
+    private function pruneSubscribeGen(): void
+    {
+        foreach (\array_keys($this->subscribeGen) as $sessionId) {
+            if (\count($this->subscribeGen) <= $this->maxSessionRoots) {
+                break;
+            }
+            if (isset($this->subscribePending[$sessionId]) || ($this->subscribers[$sessionId] ?? []) !== []) {
+                continue;
+            }
+            unset($this->subscribeGen[$sessionId]);
+        }
     }
 
     /** What a failed forward reaches the caller as: an RpcError as it is, anything else as `workspace_failed`. */

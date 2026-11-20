@@ -457,6 +457,19 @@ final class ConversationRouterCoreTest extends TestCase
         $this->assertSame([['sessionId' => 's1', 'askId' => 'a9', 'reply' => 'once', 'note' => 'u1']], $this->serve->permissionAnswers);
     }
 
+    public function testAPresentedAskIsAnsweredThroughTheSessionItsEventNamedWithoutThePrimaryPoll(): void
+    {
+        $this->build();
+        $this->bindWithPrompt();
+        $this->emitDurable('permission.requested', 2, ['askId' => 'a1']);
+        $this->serve->callReplies['permission.pending'] = ['pending' => []];
+
+        $this->router->answerByAskId('a1', 'once', ['userId' => 'u1'], '', self::KEY, 'text');
+
+        $this->assertNotContains('permission.pending', \array_column($this->serve->calls, 'method'), 'the event recorded the ask\'s session, so no fallback poll runs');
+        $this->assertSame([['sessionId' => 's1', 'askId' => 'a1', 'reply' => 'once', 'note' => 'u1']], $this->serve->permissionAnswers);
+    }
+
     public function testAReplayGapIsDisclosedAndTheCursorAdvancesToThroughSeq(): void
     {
         $this->build();

@@ -514,7 +514,6 @@ final class InProcessHostServices implements HostServices, RootedHostServices
     {
         $gateway = $this->gateway ?? throw new \LogicException('a routed call needs the gateway');
         $sink = $this->sinkFor();
-        $gateway->useRoot($root, $sink);
 
         return $this->routedCall(
             $root,
@@ -535,6 +534,8 @@ final class InProcessHostServices implements HostServices, RootedHostServices
                     return $wire;
                 }
                 $throughSeq = $answer instanceof \stdClass ? (int) ($answer->throughSeq ?? 0) : 0;
+                // The root's server-scope events reach the sink only once the subscribe is answered: a refused or timed-out one leaves no row.
+                $gateway->useRoot($root, $sink);
                 $gateway->attachSubscriber($sessionId, $sink);
                 $sink->follow($sessionId, $afterSeq ?? $throughSeq);
 

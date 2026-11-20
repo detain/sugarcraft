@@ -8,8 +8,11 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\InProcessHostServices;
+use SugarCraft\Code\Protocol\ErrorCode;
+use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Workspace\Gateway;
+use SugarCraft\Code\Tests\Host\Support\CallDeadlineLoop;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Plugins\Host\RefusedCall;
 
@@ -30,6 +33,12 @@ final class InProcessRoutedTest extends TestCase
 
     /** @var list<array<string, mixed>> the envelopes the door's listener heard */
     private array $heard = [];
+
+    /** The loop the timed door arms its call deadlines on; the tests that need a timeout fire them. */
+    private CallDeadlineLoop $deadlines;
+
+    /** A second door whose call deadlines are recorded, not armed (made on first use by {@see timedDoor()}). */
+    private ?InProcessHostServices $timed = null;
 
     protected function setUp(): void
     {
@@ -57,10 +66,14 @@ final class InProcessRoutedTest extends TestCase
         $this->call($this->door->subscribeEvents(function (array $envelope): void {
             $this->heard[] = $envelope;
         }));
+        $this->deadlines = new CallDeadlineLoop();
     }
 
     protected function tearDown(): void
     {
+        if ($this->timed !== null) {
+            $this->call($this->timed->disconnect());
+        }
         $this->call($this->door->disconnect());
         $this->gateway->stop('test over');
         $this->fixture->tearDown();
@@ -132,9 +145,12 @@ final class InProcessRoutedTest extends TestCase
         $sessionId = (string) $this->call($this->door->createSessionIn($this->other, null, null))['id'];
         $this->call($this->door->subscribeSession($sessionId, null, null));
         self::assertContains($sessionId, $this->call($this->door->followedSessions()));
+        $sinkId = $this->sinkOf($this->door)?->id();
+        self::assertContains($sinkId, $this->rootClientIds($this->other), 'an answered subscribe registers the sink for its root');
 
         $this->call($this->door->disconnect());
         self::assertFalse($this->gateway->hasSubscribers($sessionId), 'the sink leaves the gateway with the client');
+        self::assertNotContains($sinkId, $this->rootClientIds($this->other), 'and leaves the root clients with it');
         self::assertSame([], $this->call($this->door->followedSessions()));
         self::assertFalse($this->call($this->door->isConnected()));
     }
@@ -164,6 +180,172 @@ final class InProcessRoutedTest extends TestCase
         $again = $this->call($this->door->subscribeSession($sessionId, null, null));
         self::assertIsArray($again, 'the next call starts a fresh host for the root');
         self::assertNotSame($pid, $this->gateway->host($this->other)?->pid());
+    }
+
+    public function testARoutedRefusalIsTheChildHostsOwnRefusal(): void
+    {
+        $sessionId = $this->createOther();
+
+        $refused = $this->fixture->await($this->door->respondPermission($sessionId, 'no-such-ask', 'once', null));
+
+        self::assertInstanceOf(RefusedCall::class, $refused);
+        self::assertSame('ask_not_found', $refused->refusalKind(), 'the child host answers the refusal, as the wire does');
+    }
+
+    public function testSessionDeleteTellsTheSinkTheSessionIsNoLongerFollowed(): void
+    {
+        $sessionId = $this->createOther();
+        $this->call($this->door->subscribeSession($sessionId, null, null));
+        self::assertContains($sessionId, $this->call($this->door->followedSessions()));
+
+        $this->call($this->gateway->callRoot($this->other, 'session.delete', (object) ['sessionId' => $sessionId]));
+
+        self::assertFalse($this->gateway->hasSubscribers($sessionId), 'the gateway drops the deleted session\'s subscribers');
+        self::assertNotContains($sessionId, $this->call($this->door->followedSessions()), 'the sink no longer lists the deleted session');
+    }
+
+    public function testAnUnansweredRoutedCallIsRefusedOnceAndItsLateAnswerIsDropped(): void
+    {
+        $sessionId = $this->createOther();
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->sessionSnapshot($sessionId, 10));
+
+        self::assertSame(1, $this->deadlines->fireDeadlines(), 'the routed call armed one 20 s deadline');
+        self::assertCount(1, $refusals, 'the caller is refused when the deadline passes');
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertSame(ErrorCode::Busy, $refusals[0]->errorCode);
+
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'the late answer lands and the gateway settles its call');
+        self::assertCount(1, $refusals, 'the late answer does not settle the caller a second time');
+    }
+
+    public function testALateSubscribeIsCompensatedOnTheHostAndRecordsNoSink(): void
+    {
+        $sessionId = $this->createOther();
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->subscribeSession($sessionId, null, null));
+
+        $this->deadlines->fireDeadlines();
+        self::assertCount(1, $refusals);
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'the late subscribe answer lands');
+
+        self::assertFalse($this->gateway->hasSubscribers($sessionId), 'the late answer records no subscriber');
+        self::assertSame([], $this->call($timed->followedSessions()));
+        self::assertSame([], $this->rootClientIds($this->other), 'a refused subscribe leaves no root client behind');
+        $after = (array) $this->call($this->gateway->callRoot($this->other, 'session.unsubscribe', (object) ['sessionId' => $sessionId]));
+        self::assertFalse($after['unsubscribed'] ?? true, 'the compensating unsubscribe already left the host with no subscription');
+    }
+
+    public function testAnOverlappingSubscribeKeepsTheLaterSubscription(): void
+    {
+        $sessionId = $this->createOther();
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->subscribeSession($sessionId, null, null));
+        $this->deadlines->fireDeadlines();
+        self::assertCount(1, $refusals, 'the first subscribe is refused while its answer is still on its way');
+
+        $second = $this->call($timed->subscribeSession($sessionId, null, null));
+
+        self::assertIsArray($second);
+        self::assertSame($this->other, $second['root']);
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'both host calls have answered');
+        self::assertSame([$sessionId], $this->call($timed->followedSessions()), 'the sink follows the session through the later subscribe');
+        self::assertTrue($this->gateway->hasSubscribers($sessionId));
+        $kept = (array) $this->call($this->gateway->callRoot($this->other, 'session.unsubscribe', (object) ['sessionId' => $sessionId]));
+        self::assertTrue($kept['unsubscribed'] ?? false, 'the late first answer sent no compensation that would cancel the later subscribe');
+    }
+
+    public function testALateCreateIsDeletedOnTheHostSoARetryCreatesOneSession(): void
+    {
+        $timed = $this->timedDoor();
+        $refusals = $this->refusalsOf($timed->createSessionIn($this->other, null, null));
+
+        $this->deadlines->fireDeadlines();
+        self::assertCount(1, $refusals);
+        self::assertSame('timeout', $refusals[0]->refusalKind());
+        self::assertTrue($this->runUntil(fn (): bool => $this->inFlightOf($this->other) === 0), 'the late create answer and its compensation land');
+
+        $listed = (array) $this->call($this->gateway->callRoot($this->other, 'session.list', (object) []));
+        self::assertSame([], $listed['items'] ?? [], 'the late session was deleted, so a retry is the only one the host holds');
+    }
+
+    public function testARoutedCallTouchesTheIdleClockOfItsHost(): void
+    {
+        $sessionId = $this->createOther();
+        $this->fixture->run(1.1);
+        $host = $this->gateway->host($this->other);
+        self::assertNotNull($host);
+        self::assertGreaterThan(1.0, $host->idleSeconds(), 'the host has been idle for the wait');
+
+        $this->call($this->door->sessionSnapshot($sessionId, 10));
+
+        self::assertLessThan(1.0, $host->idleSeconds(), 'the routed call touched the host idle clock');
+    }
+
+    public function testTheSubscribeGenerationRowsStayWithinTheirCap(): void
+    {
+        (new \ReflectionProperty(Gateway::class, 'maxSessionRoots'))->setValue($this->gateway, 2);
+
+        foreach (['no-such-1', 'no-such-2', 'no-such-3', 'no-such-4', 'no-such-5'] as $sessionId) {
+            $this->fixture->await($this->gateway->callRoot($this->other, 'session.subscribe', (object) ['sessionId' => $sessionId]));
+        }
+
+        $rows = (new \ReflectionProperty(Gateway::class, 'subscribeGen'))->getValue($this->gateway);
+        self::assertSame(['no-such-4', 'no-such-5'], \array_map('strval', \array_keys($rows)), 'the oldest rows go first, and the cap holds');
+    }
+
+    /** A door whose 20 s call deadlines are fired by the test, connected on first use. */
+    private function timedDoor(): InProcessHostServices
+    {
+        if ($this->timed === null) {
+            $this->timed = InProcessHostServices::new($this->fixture->dispatcher, $this->deadlines, $this->gateway);
+            $this->call($this->timed->connect());
+        }
+
+        return $this->timed;
+    }
+
+    /** A session on the other root, created through the door. */
+    private function createOther(): string
+    {
+        return (string) $this->call($this->door->createSessionIn($this->other, null, null))['id'];
+    }
+
+    /**
+     * Collects what a promise rejects with, without throwing at the test; it stays empty for an answer.
+     * The rejection may arrive after this returns, so the collector is shared by reference, not copied.
+     *
+     * @return \ArrayObject<int, RpcError>
+     */
+    private function refusalsOf(PromiseInterface $promise): \ArrayObject
+    {
+        $refusals = new \ArrayObject();
+        $promise->then(null, function (\Throwable $e) use ($refusals): void {
+            $refusals[] = $e;
+        });
+
+        return $refusals;
+    }
+
+    private function inFlightOf(string $root): int
+    {
+        $counts = (new \ReflectionProperty(Gateway::class, 'inFlight'))->getValue($this->gateway);
+
+        return (int) ($counts[$root] ?? 0);
+    }
+
+    /** @return list<string> the target ids registered for $root */
+    private function rootClientIds(string $root): array
+    {
+        $clients = (new \ReflectionProperty(Gateway::class, 'rootClients'))->getValue($this->gateway);
+
+        return \array_map('strval', \array_keys($clients[$root] ?? []));
+    }
+
+    private function sinkOf(InProcessHostServices $door): ?\SugarCraft\Code\Host\InProcessEventSink
+    {
+        return (new \ReflectionProperty(InProcessHostServices::class, 'sink'))->getValue($door);
     }
 
     /** @return mixed the value, or the throwable the call rejected with */

@@ -517,13 +517,13 @@ final class InProcessHostServicesTest extends TestCase
     }
 
     /**
-     * The routing limit (PL-5c-B): the in-process door serves the primary root only. A session
-     * that lives on another root is refused session_not_found here, the refusal the primary wire
-     * gives an id it does not hold, except permission.respond, which answers ask_not_found: it
-     * finds no hosted session and no relayed question to answer. Step (A) of Phase 5 lifts this
-     * limit; this pins it until then.
+     * A door built without a gateway serves the primary root only: the gateway is the routing seam
+     * (PL-5c-A), so with none a session that lives on another root is refused exactly as the primary
+     * wire refuses an id it does not hold, except permission.respond, which answers ask_not_found.
+     * The routed behavior of the same nine methods, on a real workspace host, is pinned in
+     * InProcessRoutedTest.
      */
-    public function testANonPrimarySessionIsRefusedAsTheWireRefusesAnUnheldIdOnTheInProcessDoor(): void
+    public function testWithoutAGatewayANonPrimarySessionIsRefusedAsTheWireRefusesAnUnheldId(): void
     {
         $this->connect();
         $other = ProtocolFixture::new();
