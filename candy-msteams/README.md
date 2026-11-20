@@ -337,24 +337,14 @@ over the `channels.msteams.*` key family in `lang/`, a plugin-owned catalog
 loaded through `SugarCraft\Plugins\Lang`, mirrored across all twelve locales and
 checked by `tests/I18n/LangParityTest`.
 
-Three families are still bare English and have no catalog key yet, so they show
-in English in every locale:
-
-- the unreviewed-group reveal text (`MsTeamsAccount`, the group-reveal notice);
-- the approver pairing replies (`MsTeamsAccount::handlePairCommand`: the
-  approver-only refusal, the approve answers, the DM-only list hint and the
-  pending list);
-- the refused-prompt notice (`ConversationRouter`, "Your message never reached
-  the agent").
-
-Moving them into the plugin catalog is open work; until it lands they are the
-exception to the rule above.
+The group reveal notice, the approver pairing replies, the approval card and
+expiry text, the `[skipped: ...]` media notes and the refused-prompt notice are
+catalog keys too. `tests/I18n/UserFacingLiteralGuardTest` keeps them there: it
+token-scans `MsTeamsAccount.php` and `ConversationRouter.php` and fails on a
+prose literal that is not inside a log or exception call.
 
 Boot and log lines are deliberately content-free English: event names and
-account labels, never message bodies or secrets. Unlike `candy-discord`, this
-bundle does not yet ship a `UserFacingLiteralGuardTest`. New delivered strings
-are caught by review, and a guard that would also catch the bare literals above
-is open as a fan-out cost arm.
+account labels, never message bodies or secrets.
 
 ## Settings reference
 
