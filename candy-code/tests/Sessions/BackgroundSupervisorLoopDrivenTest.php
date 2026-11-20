@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Background\BackgroundSession;
@@ -23,6 +25,7 @@ use SugarCraft\Code\Background\BackgroundSupervisor;
 final class BackgroundSupervisorLoopDrivenTest extends TestCase
 {
     use StoppableDaemonFixtureTrait;
+    use ReapsForkedChildrenTrait;
 
     /** One advance call may never sit on a daemon for this long. */
     private const MAX_ADVANCE_SECONDS = 0.5;
@@ -40,6 +43,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         $this->tearDownDaemonFixture();
         parent::tearDown();
     }
@@ -220,6 +224,83 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertFileDoesNotExist($bufferPath, 'a dropped spawn left its buffer behind');
     }
 
+    public function testAForkedChildNeitherAdvancesNorFailsItsParentsPendingSpawn(): void
+    {
+        putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; sleep 1; printf LOOPFORK42');
+        $supervisor = new BackgroundSupervisor();
+
+        $error = null;
+        $session = null;
+        $supervisor->spawnSessionAsync(
+            name: 'forked',
+            agent: $this->agent(),
+            task: 'a forked turn child runs inside the launch window',
+            workingDirectory: $this->fixtureHome,
+            timeoutSeconds: 30,
+        )->then(
+            static function (BackgroundSession $settled) use (&$session): void {
+                $session = $settled;
+            },
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+        [$socketPath] = $this->pendingPaths($supervisor);
+
+        $child = $this->forkTracked();
+        $this->assertGreaterThanOrEqual(0, $child, 'pcntl_fork() failed');
+        if ($child === 0) {
+            // Past the spawn's deadline on purpose: an advance that still owned the
+            // parent's spawn would fail it now and discard its socket.
+            $supervisor->advanceSpawns(microtime(true) + 3600.0);
+            $supervisor->advanceStops();
+            ForkedChild::exitNow(0);
+        }
+        pcntl_waitpid($child, $status, 0);
+        $this->forgetForkedChild($child);
+
+        $this->assertNull($error, 'a forked child must not fail its parent\'s spawn');
+        $this->assertNull($session, 'a forked child must not settle its parent\'s spawn');
+        $this->assertCount(1, array_values((new \ReflectionProperty(BackgroundSupervisor::class, 'pendingSpawns'))->getValue($supervisor)), 'the parent still has its spawn pending');
+        $this->assertFileExists($socketPath, 'a forked child discarded its parent\'s socket');
+
+        $supervisor->teardown();
+        $this->assertInstanceOf(\RuntimeException::class, $error, 'the parent tears its own spawn down');
+        $this->drainLaunchers($supervisor);
+    }
+
+    public function testAForkedChildNeitherDrivesNorSettlesItsParentsStop(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $spawned = $this->spawnSleepingDaemon($supervisor);
+        $id = $spawned['session']->id;
+
+        $outcome = null;
+        $supervisor->stopSessionAsync($id)->then(static function (BackgroundStopOutcome $o) use (&$outcome): void {
+            $outcome = $o;
+        });
+
+        $child = $this->forkTracked();
+        $this->assertGreaterThanOrEqual(0, $child, 'pcntl_fork() failed');
+        if ($child === 0) {
+            // Past every rung's deadline on purpose: an advance that still owned the
+            // stop would walk it into the signal rungs against the daemon.
+            $supervisor->advanceStops(microtime(true) + 3600.0);
+            ForkedChild::exitNow(0);
+        }
+        pcntl_waitpid($child, $status, 0);
+        $this->forgetForkedChild($child);
+
+        $this->assertNull($outcome, 'a forked child must not settle its parent\'s stop');
+
+        SupervisorPump::until($supervisor, static function () use (&$outcome): bool {
+            return $outcome !== null;
+        });
+        $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $outcome, 'the parent must still drive its own stop through the acknowledged STOP');
+        $this->assertSame(BackgroundSessionStatus::Stopped, $supervisor->getSession($id)?->status);
+        $this->assertFileDoesNotExist($spawned['ipc']['socketPath'], 'a stopped daemon left its socket behind');
+    }
+
     public function testAStopIsPendingUntilTheLoopDrivesItThroughItsRungs(): void
     {
         $supervisor = new BackgroundSupervisor();
@@ -263,11 +344,9 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
             $second = $o;
         });
 
-        $deadline = microtime(true) + 20.0;
-        while (($first === null || $second === null) && microtime(true) < $deadline) {
-            $supervisor->advanceStops();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static function () use (&$first, &$second): bool {
+            return $first !== null && $second !== null;
+        });
 
         $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $first);
         $this->assertSame($first, $second, 'a second stop must join the first, not race it');
@@ -287,6 +366,25 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertSame(BackgroundStopOutcome::UnknownSession, $outcome);
     }
 
+    public function testTeardownSettlesAStopThisProcessStillOwes(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $spawned = $this->spawnSleepingDaemon($supervisor);
+        $id = $spawned['session']->id;
+
+        $outcome = null;
+        $supervisor->stopSessionAsync($id)->then(static function (BackgroundStopOutcome $o) use (&$outcome): void {
+            $outcome = $o;
+        });
+        $this->assertNull($outcome, 'the stop is still in flight when the TUI quits');
+
+        $supervisor->teardown();
+
+        $this->assertSame(BackgroundStopOutcome::StoppedViaIpc, $outcome, 'quitting mid-stop must still drive the stop to its outcome');
+        $this->assertSame(BackgroundSessionStatus::Stopped, $supervisor->getSession($id)?->status);
+        $this->assertFileDoesNotExist($spawned['ipc']['socketPath'], 'a stop settled by teardown left its socket behind');
+    }
+
     /** @return array{0: string, 1: string} the socket and buffer paths of the one pending spawn */
     private function pendingPaths(BackgroundSupervisor $supervisor): array
     {
@@ -300,11 +398,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
     private function drainLaunchers(BackgroundSupervisor $supervisor): void
     {
         $reaps = new \ReflectionProperty(BackgroundSupervisor::class, 'launcherReaps');
-        $deadline = microtime(true) + 10.0;
-        while ($reaps->getValue($supervisor) !== [] && microtime(true) < $deadline) {
-            $supervisor->advanceSpawns();
-            usleep(20_000);
-        }
+        SupervisorPump::until($supervisor, static fn (): bool => $reaps->getValue($supervisor) === [], 10.0);
         $this->assertSame([], $reaps->getValue($supervisor), 'a retired launcher was never collected');
     }
 

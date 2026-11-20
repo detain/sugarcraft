@@ -1596,6 +1596,7 @@ candy-code/tests/Server/ServerConfigHookModeInheritanceTest.php	0.009	24
 candy-code/tests/Share/JsonlTranscriptWriterTest.php	0.009	9
 candy-code/tests/Tui/ComposerVimTest.php	0.009	27
 candy-code/tests/Tui/SessionPickerWidgetTest.php	0.009	13
+candy-code/tests/Host/Commands/BackgroundStopThunkTest.php	0.008	1
 candy-code/tests/Agents/PathJailTest.php	0.008	18
 candy-code/tests/Chat/EscWordMotionTest.php	0.008	4
 candy-code/tests/Chat/InitCommandTest.php	0.008	6

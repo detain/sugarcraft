@@ -81,8 +81,12 @@ final class BackgroundStopThunkTest extends TestCase
      */
     private function injectFinishedDaemon(BackgroundSupervisor $supervisor, string $id, string $buffer): void
     {
-        $proc = proc_open(['true'], [], $pipes);
+        // stderr is piped, not inherited, so the suite's own stderr stays clean.
+        $proc = proc_open(['true'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         $deadPid = (int) proc_get_status($proc)['pid'];
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
         proc_close($proc);
 
         $agent = new Agent(

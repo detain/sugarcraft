@@ -92,7 +92,7 @@ return [
     'Session/EnhancedSessionStoreTest.php' => 3,
     'Session/SessionStoreTest.php' => 6,
     'Sessions/BackgroundIpcCleanupTest.php' => 1,
-    'Sessions/BackgroundSupervisorLoopDrivenTest.php' => 3,
+    'Sessions/BackgroundSupervisorLoopDrivenTest.php' => 2,
     'Sessions/BackgroundPermissionRelayTest.php' => 1,
     'Sessions/BackgroundReconnectAfterRestartTest.php' => 1,
     'Sessions/BackgroundSessionRunnerTest.php' => 1,

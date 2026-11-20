@@ -273,7 +273,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * {@see advanceSpawns()} and escalates on its own bounded budget, so a
      * reap never parks the loop that drives it.
      *
-     * @var list<array{proc: mixed, stage: string, deadline: float}>
+     * @var list<array{proc: mixed, stage: string, deadline: float, ownerPid: int}>
      */
     private array $launcherReaps = [];
 
@@ -284,6 +284,48 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * @var array<string, array<string, mixed>>
      */
     private array $pendingStops = [];
+
+    /**
+     * Whether an entry of {@see $pendingSpawns}, {@see $pendingStops} or
+     * {@see $launcherReaps} was made by this process. A forked turn child inherits
+     * all three, and must not advance or settle them: its handshake, signal and
+     * file cleanup would act on its parent's daemon.
+     *
+     * @param array<string, mixed> $entry
+     */
+    private static function ownedHere(array $entry): bool
+    {
+        return ($entry['ownerPid'] ?? null) === getmypid();
+    }
+
+    /** True when this process has a spawn or a stop in flight. */
+    private function hasOwnedPending(): bool
+    {
+        foreach ($this->pendingSpawns as $pending) {
+            if (self::ownedHere($pending)) {
+                return true;
+            }
+        }
+        foreach ($this->pendingStops as $stop) {
+            if (self::ownedHere($stop)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** True when this process has a stop in flight. */
+    private function hasOwnedStop(): bool
+    {
+        foreach ($this->pendingStops as $stop) {
+            if (self::ownedHere($stop)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public function __construct(
         ?SessionNotificationInterface $listener = null,
@@ -597,7 +639,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // process's behalf joins here — this is what the host's background
         // poll is armed by, so it is where such a session must first appear.
         $this->adoptHandedOff();
-        if ($this->pendingSpawns !== [] || $this->pendingStops !== []) {
+        if ($this->hasOwnedPending()) {
             return true;
         }
 
@@ -904,7 +946,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     {
         $now ??= microtime(true);
         foreach (array_keys($this->pendingSpawns) as $sessionId) {
-            if (!isset($this->pendingSpawns[$sessionId])) {
+            if (!isset($this->pendingSpawns[$sessionId]) || !self::ownedHere($this->pendingSpawns[$sessionId])) {
                 continue;
             }
             $childPid = $this->pumpSpawn($sessionId);
@@ -923,16 +965,25 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * retired and its IPC files are removed; the daemon, which never registers, exits
      * on its own when its connect to the removed socket fails.
      *
-     * Only spawns this process launched are touched (see `ownerPid`). Runs from
+     * Only spawns and stops this process launched are touched (see `ownerPid`). Runs from
      * {@see __destruct()}, so a TUI that quits inside the launch window does not
      * strand the spawn's files or leave a promise that never settles.
      */
     public function teardown(): void
     {
-        $pid = getmypid();
         foreach (array_keys($this->pendingSpawns) as $sessionId) {
-            if (isset($this->pendingSpawns[$sessionId]) && $this->pendingSpawns[$sessionId]['ownerPid'] === $pid) {
+            if (isset($this->pendingSpawns[$sessionId]) && self::ownedHere($this->pendingSpawns[$sessionId])) {
                 $this->failSpawn($sessionId, 'the background session was abandoned before its daemon authenticated');
+            }
+        }
+
+        // A stop this process owns is driven to its outcome here, rung by rung, as
+        // stopSession() drives it. Quitting mid-stop must not leave the daemon running
+        // while rung 2 or 3 was still due. Every rung has a deadline, so this returns.
+        while ($this->hasOwnedStop()) {
+            $this->advanceStops();
+            if ($this->hasOwnedStop()) {
+                usleep(20_000);
             }
         }
     }
@@ -965,6 +1016,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             'proc' => $proc,
             'stage' => $signal ? 'term' : 'wait',
             'deadline' => microtime(true) + ProcessReaper::TERMINATE_GRACE_SECONDS,
+            'ownerPid' => getmypid(),
         ];
     }
 
@@ -978,6 +1030,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     {
         $now = microtime(true);
         foreach ($this->launcherReaps as $index => $reap) {
+            if (!self::ownedHere($reap)) {
+                continue;
+            }
             if (proc_get_status($reap['proc'])['running'] !== true) {
                 proc_close($reap['proc']);
                 unset($this->launcherReaps[$index]);
@@ -2038,7 +2093,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
      */
     public function stopSessionAsync(string $sessionId): PromiseInterface
     {
-        if (isset($this->pendingStops[$sessionId])) {
+        if (isset($this->pendingStops[$sessionId]) && self::ownedHere($this->pendingStops[$sessionId])) {
             return $this->pendingStops[$sessionId]['deferred']->promise();
         }
 
@@ -2076,17 +2131,18 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             'payload' => '',
             'buf' => '',
             'deferred' => $deferred,
+            'ownerPid' => getmypid(),
         ];
 
         return $deferred->promise();
     }
 
-    /** Drive every stop in flight as far as it can go without waiting. */
+    /** Drive every stop this process has in flight as far as it can go without waiting. */
     public function advanceStops(?float $now = null): void
     {
         $now ??= microtime(true);
         foreach (array_keys($this->pendingStops) as $sessionId) {
-            if (isset($this->pendingStops[$sessionId])) {
+            if (isset($this->pendingStops[$sessionId]) && self::ownedHere($this->pendingStops[$sessionId])) {
                 $this->pumpStop($sessionId, $now);
             }
         }
