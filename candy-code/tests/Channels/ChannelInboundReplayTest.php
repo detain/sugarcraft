@@ -278,12 +278,12 @@ final class ChannelInboundReplayTest extends TestCase
         $name = 'cc-p4d-inb-' . $slug . '-' . \getmypid() . '-' . (++$this->inboxSerial);
         \file_put_contents($dir . '/.claude-plugin/plugin.json', json_encode(['name' => $name, 'version' => '1.0.0']));
 
-        return Bundle::fromDir($dir, 'project');
+        return Bundle::fromDir($dir, 'user');
     }
 
     private function inboxRefresh(Bundle $bundle): Bundle
     {
-        return Bundle::fromDir($bundle->dir, 'project');
+        return Bundle::fromDir($bundle->dir, 'user');
     }
 
     /**

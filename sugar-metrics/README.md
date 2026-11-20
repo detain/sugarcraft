@@ -268,18 +268,55 @@ Conventions the shipped backends keep to: emit verbs may throw on structurally i
 Wires session telemetry into a SugarSshServer stack:
 
 ```php
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 
+// The library arms no timers and the textfile is written only on flush() or at
+// exit, so a long-lived server must flush after each session itself.
+final class FlushMetrics implements Middleware
+{
+    public function __construct(private readonly Registry $registry)
+    {
+    }
+
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        // finally: a session that throws is the one whose error sample must reach the textfile.
+        $completed = false;
+        try {
+            $next($ctx, $session);
+            $completed = true;
+        } finally {
+            try {
+                $this->registry->flush();
+            } catch (\Throwable $flushError) {
+                // A flush failure must not replace the session's own exception;
+                // on a clean session there is none to protect, so it surfaces.
+                if ($completed) {
+                    throw $flushError;
+                }
+            }
+        }
+    }
+}
+
 $reg = Registry::new(PrometheusFileBackend::new('/var/lib/ssh/metrics.prom'));
 
+// FlushMetrics is registered first so it wraps SessionMetrics and flushes after
+// SessionMetrics has recorded the session's duration and error samples.
 Server::new()
+    ->use(new FlushMetrics($reg))
     ->use(SessionMetrics::new($reg))
     ->use(/* ... your stack ... */)
     ->serve();
 ```
+
+Long-lived servers must call `flush()` themselves, as `FlushMetrics` does. Without a flush per session the textfile shows no `ssh_session_*` series until the process exits. The bundled `examples/ssh-server-with-metrics.php` follows the same pattern.
 
 Per session this emits:
 

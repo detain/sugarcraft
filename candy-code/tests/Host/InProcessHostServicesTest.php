@@ -879,6 +879,28 @@ final class InProcessHostServicesTest extends TestCase
         $this->call($bundleHost->disconnect());
     }
 
+    /**
+     * Without a gateway the door cannot name the canonical primary root, and it never checks the root
+     * a caller passes, so the primary answer of a root form must not echo that root back: the session
+     * still lands on the primary dispatcher, but its answer asserts no root it was not checked against.
+     */
+    public function testWithoutAGatewayARootFormAnswerNamesNoRootItDidNotVerify(): void
+    {
+        $this->connect();
+
+        $created = $this->call($this->host->createSessionIn('/no/such/dir', null, null));
+        self::assertIsArray($created);
+        self::assertArrayNotHasKey('root', $created, 'no gateway, so the unverified caller root is not echoed back');
+        self::assertIsArray(
+            $this->wire->call('session.get', ['sessionId' => $created['id'], 'limit' => 10]),
+            'the session is on the primary dispatcher',
+        );
+
+        $pending = $this->call($this->host->pendingPermissionsIn('/no/such/dir'));
+        self::assertIsArray($pending);
+        self::assertArrayNotHasKey('root', $pending, 'the pending answer carries no unverified root either');
+    }
+
     private function call(PromiseInterface $promise): mixed
     {
         $value = $this->fixture->await($promise);

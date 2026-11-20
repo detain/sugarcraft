@@ -11,8 +11,7 @@ namespace SugarCraft\Core;
  * hatch for terminal features the framework doesn't wrap (e.g. iTerm2
  * inline images, OSC 7 cwd reporting). The sentinel never reaches the
  * model: the dispatch arm writes the bytes and returns, so a consumer
- * that branches on RawMsg inside `update()` sees nothing — that claim
- * was the stale intercept text (sugar-core-038).
+ * that branches on RawMsg inside `update()` sees nothing.
  */
 final class RawMsg implements Msg
 {

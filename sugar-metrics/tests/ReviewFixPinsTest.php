@@ -581,4 +581,58 @@ final class ReviewFixPinsTest extends TestCase
         $this->assertSame(2, $seen, 'both inspection examples must still exist for this guard');
     }
 
+    public function testFlushMetricsRecipeFlushesInsideFinallyInReadmeAndBody(): void
+    {
+        // A session that throws is the one whose error sample must reach the
+        // textfile, so the flush sits in a finally. Its own failure must not
+        // replace the session's exception, so the flush is guarded. The body is
+        // the published copy; the README carries the same recipe.
+        $sources = [
+            'README FlushMetrics recipe' => __DIR__ . '/../README.md',
+            'body FlushMetrics recipe' => __DIR__ . '/../../docs/_data/sugar-metrics.body.html',
+        ];
+        foreach ($sources as $label => $path) {
+            if (!\is_file($path)) {
+                self::markTestSkipped("{$label} source is not present in this checkout");
+            }
+            $text = (string) file_get_contents($path);
+            $this->assertMatchesRegularExpression(
+                '/finally \{\s*try \{\s*\$this->registry(?:->|-&gt;)flush\(\);\s*\} catch \(\\\\Throwable \$flushError\) \{/',
+                $text,
+                "{$label} must flush inside a finally block, guarded so a flush failure cannot replace the session's exception",
+            );
+            $this->assertDoesNotMatchRegularExpression(
+                '/\$next\(\$ctx, \$session\);\s*\$this->registry(?:->|-&gt;)flush\(\);/',
+                $text,
+                "{$label} must not flush only on the normal return path",
+            );
+        }
+    }
+
+    public function testShippedSshExampleFlushesAfterSessionMetricsRecordsItsSamples(): void
+    {
+        // The body says the shipped example follows the FlushMetrics pattern, so
+        // the flush middleware must be registered before SessionMetrics (wrapping
+        // it) and must own the example's only flush, inside a finally.
+        $example = (string) file_get_contents(__DIR__ . '/../examples/ssh-server-with-metrics.php');
+        $flushUse = strpos($example, '->use(new FlushMetrics($registry))');
+        $metricsUse = strpos($example, '->use(SessionMetrics::new($registry))');
+        $this->assertNotFalse($flushUse, 'the example must register FlushMetrics');
+        $this->assertNotFalse($metricsUse, 'the example must register SessionMetrics');
+        $this->assertLessThan($metricsUse, $flushUse, 'FlushMetrics must be registered before SessionMetrics so it wraps it');
+        $this->assertSame(1, substr_count($example, '->flush()'), 'the example must flush from exactly one place');
+        $this->assertStringContainsString('} finally {', $example, 'the example flush must run in a finally block');
+    }
+
+    public function testBodyNamesNoRemovedAccessor(): void
+    {
+        // Every method the body names must exist; the removed get-prefixed
+        // accessor must not come back as prose.
+        $path = __DIR__ . '/../../docs/_data/sugar-metrics.body.html';
+        if (!\is_file($path)) {
+            self::markTestSkipped('sugar-metrics body source is not present in this checkout');
+        }
+        $this->assertStringNotContainsString('getErrors', (string) file_get_contents($path));
+    }
+
 }

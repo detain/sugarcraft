@@ -33,9 +33,10 @@ abstract class Constraint
     }
 
     /**
-     * At least `$n` cells — a soft floor. Grows only when slack survives every
-     * Fill and Max in the set (they eat slack first); does not guarantee `$n`
-     * when demand exceeds the area.
+     * At least `$n` cells — a soft floor. Takes slack directly only when the
+     * set has neither Fill nor Max; otherwise grows only from cells a Max clamp
+     * hands back, which Min takes before Fill. Does not guarantee `$n` when
+     * demand exceeds the area.
      *
      * Mirrors ratatui `Constraint::Min(n)`.
      */

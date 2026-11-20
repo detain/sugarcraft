@@ -4066,7 +4066,11 @@ final class Subcommands
         // working directory, resolved to its project root): without it `list`
         // scans `/.candy-code/bundles` and cannot see the bundle the install
         // just placed.
-        $discovery = new BundleDiscovery(ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
+        $discovery = new BundleDiscovery(
+            ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))),
+            $paths,
+            Bootstrap::trustedBundleChannelNames(),
+        );
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {

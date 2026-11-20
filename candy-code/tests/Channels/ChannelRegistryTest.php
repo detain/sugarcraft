@@ -445,7 +445,7 @@ final class ChannelRegistryTest extends TestCase
      */
     private function refresh(Bundle $bundle): Bundle
     {
-        $fresh = Bundle::fromDir($bundle->dir, 'project');
+        $fresh = Bundle::fromDir($bundle->dir, 'user');
         self::assertNotNull($fresh, 'the baked fixture bundle must still parse: ' . $bundle->dir);
         return $fresh;
     }
@@ -456,7 +456,7 @@ final class ChannelRegistryTest extends TestCase
         mkdir($dir . '/.claude-plugin', 0777, true);
         $name = 'cc-p1-reg-' . $slug . '-' . getmypid() . '-' . (++$this->serial);
         file_put_contents($dir . '/.claude-plugin/plugin.json', (string) json_encode(['name' => $name, 'version' => '1.0.0']));
-        $bundle = Bundle::fromDir($dir, 'project');
+        $bundle = Bundle::fromDir($dir, 'user');
         self::assertNotNull($bundle);
         return $bundle;
     }
