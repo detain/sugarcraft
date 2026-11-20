@@ -118,9 +118,11 @@ a concrete class.
   set has neither `Min` nor `Fill`, `Max`-clamp reclaims are shared with
   Length/Percentage/Ratio and inflate them (the **reclaim ladder** — step 6
   below).
-- `Constraint::min(int $n)` — soft floor of `$n` cells. It grows only when **slack**
-  (what the fixed reservation leaves over) survives Fill and Max
-  (proportional clamp under demand); on its own it absorbs the whole span.
+- `Constraint::min(int $n)` — soft floor of `$n` cells. It takes **slack**
+  (what the fixed reservation leaves over) directly only when the set has
+  neither Fill nor Max, where on its own it absorbs the whole span. Otherwise
+  it grows only from cells a Max clamp hands back, which it takes before Fill
+  (proportional clamp under demand).
 - `Constraint::max(int $n)` — ceiling, greedy: takes slack up to the cap, and its clamp pass can hand cells back to the rest of the set (ladder step 6).
 - `Constraint::fill(int $weight = 1)` — proportional claim on the slack left
   after the **fixed reservation** (Length plus resolved Percentage/Ratio —
@@ -153,9 +155,11 @@ code-side mirror of this walk. The seven steps, condensed:
    loss back one cell per shrunk region; a **well-constrained set** — one the
    walk finishes without gap or overflow — then tiles the span exactly.
 
-In action: Fill and Max share the slack first (Max greedily, up to its cap);
-a `Min` grows only when there is neither. The clamp pass then hands back what
-Maxes gave up, which is how a "fixed" `length(10)` becomes 95 in
+In action: Fill and Max share the slack first (Max weighted by its cap, then
+clamped to it); a `Min` takes slack directly only when there is neither. The
+clamp pass then hands back what Maxes gave up: to the `Min` first when there
+is one, then to `Fill`, and otherwise to the fixed sizes. That last rung is
+how a "fixed" `length(10)` becomes 95 in
 `[length(10), max(5)]@100 → [95, 5]`. Every one of these shapes is pinned in
 `tests/SolverEdgeCaseTest.php` and swept for the sum law by
 `tests/WidthSumInvariantSweepTest.php`.
