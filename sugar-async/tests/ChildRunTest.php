@@ -274,4 +274,62 @@ final class ChildRunTest extends TestCase
         $this->assertNotNull((new \ReflectionProperty($tuned, 'onChunk'))->getValue($tuned));
         $this->assertSame(4242, (new \ReflectionProperty($tuned->withTimeout(2.0), 'groupPid'))->getValue($tuned->withTimeout(2.0)));
     }
+
+    public function testOnSpawnReportsTheChildPidBeforeTheResultIsAssembled(): void
+    {
+        $this->requirePosixPipes();
+        $reported = [];
+        $r = ChildRun::new($this->php('fwrite(STDOUT, (string) getmypid());'))
+            ->withOnSpawn(static function (int $pid) use (&$reported): void {
+                $reported[] = $pid;
+            })
+            ->run();
+
+        $this->assertCount(1, $reported);
+        $this->assertGreaterThan(0, $reported[0]);
+        $this->assertSame((string) $reported[0], $r->stdout);
+    }
+
+    public function testTheSpawnCallbackCarriesThroughTheBuilderAndNullRemovesIt(): void
+    {
+        $base = ChildRun::new(['true']);
+        $tuned = $base->withOnSpawn(static fn (int $pid) => null);
+
+        $this->assertNotSame($base, $tuned);
+        $this->assertNull((new \ReflectionProperty($base, 'onSpawn'))->getValue($base));
+        $this->assertNotNull((new \ReflectionProperty($tuned, 'onSpawn'))->getValue($tuned));
+        $this->assertNull((new \ReflectionProperty($tuned->withOnSpawn(null), 'onSpawn'))->getValue($tuned->withOnSpawn(null)));
+    }
+
+    /**
+     * An unnamed group is measured while the child lives: a wrapped child that
+     * leads its own group takes its descendants down with it on timeout, the
+     * same as a caller that passed the group id explicitly.
+     */
+    public function testATimedOutWrappedChildTakesItsDescendantsDown(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || trim((string) shell_exec('command -v setsid')) === '') {
+            $this->markTestSkipped('Needs setsid and ext-posix to lead a process group.');
+        }
+        $marker = tempnam(sys_get_temp_dir(), 'cr-grandchild-');
+        $code = '$p = proc_open(["sleep", "30"], [], $pipes); $s = proc_get_status($p); '
+            . 'file_put_contents(' . var_export($marker, true) . ', (string) $s["pid"]); sleep(30);';
+        try {
+            $r = ChildRun::new(['setsid', '-w', '--', PHP_BINARY, '-r', $code])
+                ->withTimeout(1.5)
+                ->run();
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+
+            $grandchild = (int) @file_get_contents($marker);
+            $this->assertGreaterThan(0, $grandchild, 'the grandchild must have started');
+            $until = microtime(true) + 2.0;
+            while (posix_kill($grandchild, 0) && microtime(true) < $until) {
+                usleep(20_000);
+            }
+            $this->assertFalse(posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+        } finally {
+            @unlink($marker);
+        }
+    }
 }

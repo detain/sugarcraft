@@ -460,4 +460,20 @@ final class ChildRunLaunchTest extends TestCase
             'the containment group kill must reach the grandchild',
         );
     }
+
+    public function testOnSpawnReportsThePidOnTheLoopPath(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $reported = [];
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, (string) getmypid());'))
+            ->withOnSpawn(static function (int $pid) use (&$reported): void {
+                $reported[] = $pid;
+            })
+            ->launch($loop));
+
+        $this->assertCount(1, $reported);
+        $this->assertGreaterThan(0, $reported[0]);
+        $this->assertSame((string) $reported[0], $r->stdout);
+    }
 }

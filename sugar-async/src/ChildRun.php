@@ -57,6 +57,7 @@ final class ChildRun
      * @param null|array<string, string> $env  Environment, or null to inherit
      * @param null|int $groupPid  Process group the child leads (a containment wrapper), or null
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk read, or null
+     * @param null|\Closure(int): void $onSpawn  Told the child's pid right after it starts, or null
      */
     private function __construct(
         private readonly array $argv,
@@ -67,6 +68,7 @@ final class ChildRun
         private readonly ?array $env,
         private readonly ?int $groupPid = null,
         private readonly ?\Closure $onChunk = null,
+        private readonly ?\Closure $onSpawn = null,
     ) {
     }
 
@@ -150,6 +152,21 @@ final class ChildRun
     }
 
     /**
+     * Spawn seam: called once, with the child's pid, right after the child
+     * starts and before anything is read or signalled. A child started behind a
+     * containment wrapper leads its own process group, so this pid is also the
+     * group id a kill rung needs; a runner records it here and passes it to
+     * {@see withGroupPid()} for the rest of the run, because the group id cannot
+     * be measured once the child has been reaped. Null removes the callback.
+     *
+     * @param null|callable(int): void $onSpawn
+     */
+    public function withOnSpawn(?callable $onSpawn): self
+    {
+        return $this->mutate(['onSpawn' => $onSpawn === null ? null : \Closure::fromCallable($onSpawn)]);
+    }
+
+    /**
      * Run the child to completion, blocking the caller, and return what it wrote.
      *
      * @throws \LogicException for a non-empty stdin payload on the Windows runtime
@@ -177,7 +194,7 @@ final class ChildRun
             $r = $pump->pump();
         } catch (\Throwable $e) {
             self::closeAll($pipes);
-            BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
+            BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
             throw $e;
         }
 
@@ -191,12 +208,12 @@ final class ChildRun
                 return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::EXITED, self::dropped($r));
             }
             // Output closed but the child is still running past the deadline.
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
+            $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
 
             return new ChildResult($r->buffer(1), $r->buffer(2), $code, ChildResult::TIMED_OUT, self::dropped($r));
         }
 
-        $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->groupPid);
+        $code = BoundedShutdown::terminateBounded($proc, groupPid: $this->liveGroupId($proc));
         $status = $r->reason === DrainResult::EXPIRED ? ChildResult::TIMED_OUT : ChildResult::PIPE_FAILED;
 
         return new ChildResult($r->buffer(1), $r->buffer(2), $code, $status, self::dropped($r));
@@ -242,6 +259,19 @@ final class ChildRun
         return $deferred->promise();
     }
 
+    /**
+     * The group a kill rung signals: the one the caller named, else the group the
+     * child leads right now. Measured while the child is alive, which is the only
+     * time {@see Containment::groupId()} is reliable; an unwrapped child never
+     * leads a group, so this stays null for it and the kill keeps the direct child.
+     *
+     * @param resource $proc
+     */
+    private function liveGroupId($proc): ?int
+    {
+        return $this->groupPid ?? Containment::groupId($proc);
+    }
+
     private function guardStdin(): void
     {
         if ($this->stdin !== null && $this->stdin !== '' && WindowsPipes::runtimeNeedsIt()) {
@@ -264,6 +294,9 @@ final class ChildRun
         );
         if (!is_resource($proc)) {
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
+        }
+        if ($this->onSpawn !== null) {
+            ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
         }
 
         return [$proc, $pipes];
