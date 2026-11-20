@@ -159,6 +159,7 @@
             <li class="toc-h3"><a href="#concepts">Concepts</a></li>
             <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h3"><a href="#accessors">Accessors</a></li>
             <li class="toc-h3"><a href="#security-untrusted-content">Security &amp; untrusted content</a></li>
             <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
@@ -171,7 +172,6 @@
             <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h3"><a href="#architecture">Architecture</a></li>
             <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#demos">Demos</a></li>
             <li class="toc-h3"><a href="#frozen-paginated">Frozen + paginated</a></li>
@@ -255,91 +255,6 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
       <div class="feature"><strong>Empty states</strong><span>No visible columns render as an empty string. No rows render a centered, translatable "No data" line.</span></div>
     </div>
 
-    <h3 id="accessors" style="margin-top: 32px;">Accessors</h3>
-    <p>Property reads are bare. Public <code>readonly</code> state, such as <code>$column-&gt;style</code>, <code>$row-&gt;data</code> and <code>$cell-&gt;value</code>, is read directly. Derived values are bare methods, such as <code>columns()</code>, <code>currentRow()</code> and <code>scrollY()</code>. The library ships no <code>get*()</code> accessors. <code>RowData</code> keeps its keyed map lookup with <code>get()</code>, <code>has()</code> and <code>all()</code>.</p>
-
-    <h3 id="security-untrusted-content" style="margin-top: 32px;">Security &amp; untrusted content</h3>
-    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>view()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
-
-    <h3 id="accessibility" style="margin-top: 32px;">Accessibility</h3>
-    <p>Selection is pure reverse video (<code>ESC[0;7m</code>) — color-independent — and zebra striping is a fixed black-on-white inversion; both stay readable on any palette, and <code>withSelectable(false)</code> drops the highlight entirely. The empty-state message is translatable. There is no <code>NO_COLOR</code>, non-TTY or plain-text degrade path (SGR is always emitted); for assistive tech prefer <code>Border::ascii()</code> or <code>Border::hidden()</code> with <code>withHeaderStyle('')</code>, since box glyphs and the default TrueColor header add noise and light-theme contrast risk, and no semantic header/column association exists beyond visual alignment.</p>
-
-    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
-    <p>The table has no configuration file and no environment variables. Its options are builder calls. Each one returns a new table. The defaults below are the values a new <code>Table::fromColumns()</code> starts with.</p>
-    <table class="api-table">
-<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
-<tr><td><code>withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
-<tr><td><code>withShowHeader()</code> / <code>withShowFooter()</code></td><td>bool</td><td><code>true</code> / <code>true</code></td><td>Show the header row and the footer row.</td></tr>
-<tr><td><code>withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
-<tr><td><code>withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
-<tr><td><code>withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
-<tr><td><code>withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
-<tr><td><code>withSelectable()</code></td><td>bool</td><td><code>true</code></td><td>Show the selection highlight. <code>false</code> drops it.</td></tr>
-<tr><td><code>withZebra()</code></td><td>bool</td><td><code>false</code></td><td>Alternate the row stripe. Suppressed under the cursor row.</td></tr>
-<tr><td><code>withZebraStyleEven()</code> / <code>withZebraStyleOdd()</code></td><td>SGR string</td><td><code>'30;47'</code> / <code>''</code></td><td>Stripe for even and odd rows.</td></tr>
-<tr><td><code>withHeaderStyle()</code></td><td>SGR string</td><td><code>'1;37'</code></td><td>Header row style. Pass <code>''</code> for a plain header.</td></tr>
-<tr><td><code>withMissingIndicator()</code></td><td>string</td><td><code>'--'</code></td><td>Shown for a cell whose row has no entry for its column.</td></tr>
-<tr><td><code>withStrictPercent()</code></td><td>bool</td><td><code>false</code></td><td>Throw instead of normalizing percent column sets that total more than 100.</td></tr>
-<tr><td><code>withRowSeparator()</code></td><td>bool</td><td><code>false</code></td><td>Draw a rule between rows.</td></tr>
-<tr><td><code>withMultilineMode()</code></td><td>bool</td><td>off until set</td><td>Expand rows to their tallest cell.</td></tr>
-</table>
-
-    <h3 id="keys-and-controls" style="margin-top: 32px;">Keys and controls</h3>
-    <p><code>handleScrollKey()</code> accepts a key name or a <code>KeyEvent</code>. It maps the spellings below to scroll moves, and <code>handleKey()</code> is an older alias. The window follows the cursor, so a scroll key never moves the window past the selected row. The offset is clamped to <code>maxScrollY()</code>, then pulled back toward the selected row. To travel the whole list, move the cursor instead. The table does not listen for keys itself. Your program reads the key, then passes it in.</p>
-    <table class="api-table">
-<tr><th>Key name</th><th>Action</th></tr>
-<tr><td><code>arrowUp</code> or <code>ArrowUp</code></td><td>Scroll up one row, as far as the selected row allows.</td></tr>
-<tr><td><code>arrowDown</code> or <code>ArrowDown</code></td><td>Scroll down one row, as far as the selected row allows.</td></tr>
-<tr><td><code>pageUp</code> or <code>pageup</code></td><td>Scroll up one page of rows, as far as the selected row allows.</td></tr>
-<tr><td><code>pageDown</code> or <code>pagedown</code></td><td>Scroll down one page of rows, as far as the selected row allows.</td></tr>
-<tr><td><code>home</code></td><td>Move the window toward the first row. It stops at the selected row.</td></tr>
-<tr><td><code>end</code></td><td>Move the window toward the last row. It stops at the selected row.</td></tr>
-</table>
-    <p>Use <code>selectNext()</code> and <code>selectPrevious()</code> to move the row cursor in code. The window follows the cursor. <code>scrollYForKey()</code> returns the offset a key would produce, without changing the table.</p>
-
-    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
-    <p>Styles are SGR parameter strings. They are parsed into a structured attribute set and canonicalized to 24-bit color at render time. <code>withBaseStyle()</code> styles every cell. <code>withHeaderStyle()</code> and <code>withBorderStyle()</code> style the header and the border. <code>Column::withStyle()</code> and <code>Row::withStyle()</code> style one column or one row. A cell-level callback is set with <code>withStyleFunc()</code>. It receives the row, the column and the value, and returns a style or an SGR string. The callback output is not sanitized, so return only trusted styles. Zebra striping uses <code>withZebra()</code>, <code>withZebraStyleEven()</code> and <code>withZebraStyleOdd()</code>. Border families come from <code>withBorder()</code>, and the checkbox marks come from <code>withCheckMarks()</code>.</p>
-
-    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/basic.php"><code>examples/basic.php</code></a>: sort by score, filter the name column, and paginate.</li>
-      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/features.php"><code>examples/features.php</code></a>: a wide host-telemetry table with pagination and a frozen first column.</li>
-    </ul>
-    <pre class="code"><code class="language-shell">php examples/basic.php
-php examples/features.php</code></pre>
-    <p><code>basic.php</code> prints six tables, one per section, and <code>features.php</code> prints two. Both exit on their own and work without a terminal, so you can capture their output.</p>
-
-    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
-    <pre class="code"><code class="language-shell">composer install
-vendor/bin/phpunit</code></pre>
-    <p>The suite runs with PHPUnit 10. <code>GoldenRenderTest</code> compares full frames against files in <code>tests/fixtures/</code>, and <code>TableTest</code> covers the table's core behavior. Focused files pin the features one at a time, including <code>TableFrozenColsTest</code>, <code>TableCheckedRowsTest</code>, <code>TableExpansionTest</code>, <code>TableGlobalSearchTest</code>, <code>TableSanitizeTest</code>, <code>TableLineBudgetTest</code> and <code>TableMultilineCjkTest</code>. <code>LangCoverageTest</code> checks that every key passed to <code>Lang::t()</code> exists in <code>lang/en.php</code>.</p>
-
-    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
-    <ul>
-      <li><strong>Sorting or filtering has no effect on the output.</strong> Those methods return a new table. Store the result, then call <code>view()</code> on it. Once any column is marked with <code>withFilterable()</code>, only marked columns take a filter, so mark the column you want to filter.</li>
-      <li><strong>A percent-width column is larger than expected.</strong> Percent sets that total more than 100 are normalized by default. Turn on <code>withStrictPercent()</code> to throw instead.</li>
-      <li><strong><code>withFrozenCols()</code> throws.</strong> Frozen columns must be a contiguous prefix that starts at column 0, such as <code>[0, 1]</code>. A set like <code>[0, 2]</code> is refused.</li>
-      <li><strong>Text from a user shows up as <code>·</code> or <code>&lt;U+XXXX&gt;</code>.</strong> That is the sanitizer working. Control bytes, bidi overrides and zero-width characters become visible markers. Clean the data before you add it, if you want plain text.</li>
-      <li><strong>Output has escape codes when piped.</strong> The table always emits SGR. There is no <code>NO_COLOR</code> or non-TTY fallback. Use <code>withBaseStyle('')</code>, <code>withHeaderStyle('')</code> and <code>withZebra(false)</code> for plainer output.</li>
-      <li><strong>A cell that looks styled is printed raw.</strong> Casting a <code>StyledCell</code> to a string bypasses sanitization. Render the whole table through <code>view()</code> instead.</li>
-    </ul>
-
-    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
-    <table class="api-table">
-<tr><th>Upstream idea (Evertras/bubble-table)</th><th>SugarTable class</th><th>Notes</th></tr>
-<tr><td>Table with columns and rows</td><td><code>Table</code>, <code>Column</code>, <code>Row</code></td><td>Native PHP. The API is shaped for PHP, not a line-for-line port.</td></tr>
-<tr><td>Row data keyed by column</td><td><code>RowData</code></td><td>A keyed map with immutable <code>with()</code>.</td></tr>
-<tr><td>Pagination and cursor</td><td><code>Table::selectNext()</code>, <code>nextPage()</code></td><td>Native PHP. The cursor follows the page.</td></tr>
-<tr><td>Per-cell styling</td><td><code>StyledCell</code>, <code>withStyleFunc()</code></td><td>Limited to a restricted SGR set, with sanitization applied.</td></tr>
-</table>
-    <p>The deliberate differences from upstream are listed in the library README under Divergences from Upstream.</p>
-
-    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
-    <p>Layout is pure. <code>computeColumnWidths()</code> turns the column width modes into cell counts for a given table width. <code>view()</code> then renders the header, the page of rows and the footer through a <code>RenderCanvas</code>. <code>CellLineMemo</code> caches the rendered lines of a cell, so a table that repaints the same rows does less work. Every value is sanitized at the point it enters, and the frame is built from sanitized text only.</p>
-
-    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
-    <p>The package has no separate changelog file. The history of <code>sugar-table/</code> is the commit log in the monorepo. The README has two sections that explain the choices behind the API. The Naming section covers the camelCase house API. The Divergences from Upstream section lists the deliberate differences from the Go project. The package is published as <code>sugarcraft/sugar-table</code> on Packagist and follows the monorepo release flow.</p>
-
     <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Call</th><th>Signature</th><th>Description</th></tr>
@@ -420,6 +335,91 @@ vendor/bin/phpunit</code></pre>
 <tr><td>SortType</td><td>enum</td><td>Auto, Text, Natural.</td></tr>
 <tr><td>FooterType</td><td>enum</td><td>Page, Rows, Both. The footer renders only when pagination is on.</td></tr>
 </table>
+
+    <h3 id="accessors" style="margin-top: 32px;">Accessors</h3>
+    <p>Property reads are bare. Public <code>readonly</code> state, such as <code>$column-&gt;style</code>, <code>$row-&gt;data</code> and <code>$cell-&gt;value</code>, is read directly. Derived values are bare methods, such as <code>columns()</code>, <code>currentRow()</code> and <code>scrollY()</code>. The library ships no <code>get*()</code> accessors. <code>RowData</code> keeps its keyed map lookup with <code>get()</code>, <code>has()</code> and <code>all()</code>.</p>
+
+    <h3 id="security-untrusted-content" style="margin-top: 32px;">Security &amp; untrusted content</h3>
+    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>view()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
+
+    <h3 id="accessibility" style="margin-top: 32px;">Accessibility</h3>
+    <p>Selection is pure reverse video (<code>ESC[0;7m</code>) — color-independent — and zebra striping is a fixed black-on-white inversion; both stay readable on any palette, and <code>withSelectable(false)</code> drops the highlight entirely. The empty-state message is translatable. There is no <code>NO_COLOR</code>, non-TTY or plain-text degrade path (SGR is always emitted); for assistive tech prefer <code>Border::ascii()</code> or <code>Border::hidden()</code> with <code>withHeaderStyle('')</code>, since box glyphs and the default TrueColor header add noise and light-theme contrast risk, and no semantic header/column association exists beyond visual alignment.</p>
+
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <p>The table has no configuration file and no environment variables. Its options are builder calls. Each one returns a new table. The defaults below are the values a new <code>Table::fromColumns()</code> starts with.</p>
+    <table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
+<tr><td><code>withShowHeader()</code> / <code>withShowFooter()</code></td><td>bool</td><td><code>true</code> / <code>true</code></td><td>Show the header row and the footer row.</td></tr>
+<tr><td><code>withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
+<tr><td><code>withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
+<tr><td><code>withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
+<tr><td><code>withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
+<tr><td><code>withSelectable()</code></td><td>bool</td><td><code>true</code></td><td>Show the selection highlight. <code>false</code> drops it.</td></tr>
+<tr><td><code>withZebra()</code></td><td>bool</td><td><code>false</code></td><td>Alternate the row stripe. Suppressed under the cursor row.</td></tr>
+<tr><td><code>withZebraStyleEven()</code> / <code>withZebraStyleOdd()</code></td><td>SGR string</td><td><code>'30;47'</code> / <code>''</code></td><td>Stripe for even and odd rows.</td></tr>
+<tr><td><code>withHeaderStyle()</code></td><td>SGR string</td><td><code>'1;37'</code></td><td>Header row style. Pass <code>''</code> for a plain header.</td></tr>
+<tr><td><code>withMissingIndicator()</code></td><td>string</td><td><code>'--'</code></td><td>Shown for a cell whose row has no entry for its column.</td></tr>
+<tr><td><code>withStrictPercent()</code></td><td>bool</td><td><code>false</code></td><td>Throw instead of normalizing percent column sets that total more than 100.</td></tr>
+<tr><td><code>withRowSeparator()</code></td><td>bool</td><td><code>false</code></td><td>Draw a rule between rows.</td></tr>
+<tr><td><code>withMultilineMode()</code></td><td>bool</td><td>off until set</td><td>Expand rows to their tallest cell.</td></tr>
+</table>
+
+    <h3 id="keys-and-controls" style="margin-top: 32px;">Keys and controls</h3>
+    <p><code>handleScrollKey()</code> accepts a key name or a <code>KeyEvent</code>. It maps the spellings below to scroll moves, and <code>handleKey()</code> is an older alias. The window follows the cursor, so a scroll key never moves the window past the selected row. The offset is clamped to <code>maxScrollY()</code>, then pulled back toward the selected row. To travel the whole list, move the cursor instead. The table does not listen for keys itself. Your program reads the key, then passes it in.</p>
+    <table class="api-table">
+<tr><th>Key name</th><th>Action</th></tr>
+<tr><td><code>arrowUp</code> or <code>ArrowUp</code></td><td>Scroll up one row, as far as the selected row allows.</td></tr>
+<tr><td><code>arrowDown</code> or <code>ArrowDown</code></td><td>Scroll down one row, as far as the selected row allows.</td></tr>
+<tr><td><code>pageUp</code> or <code>pageup</code></td><td>Scroll up one page of rows, as far as the selected row allows.</td></tr>
+<tr><td><code>pageDown</code> or <code>pagedown</code></td><td>Scroll down one page of rows, as far as the selected row allows.</td></tr>
+<tr><td><code>home</code></td><td>Move the window toward the first row. It stops at the selected row.</td></tr>
+<tr><td><code>end</code></td><td>Move the window toward the last row. It stops at the selected row.</td></tr>
+</table>
+    <p>Use <code>selectNext()</code> and <code>selectPrevious()</code> to move the row cursor in code. The window follows the cursor. <code>scrollYForKey()</code> returns the offset a key would produce, without changing the table.</p>
+
+    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
+    <p>Styles are SGR parameter strings. They are parsed into a structured attribute set and canonicalized to 24-bit color at render time. <code>withBaseStyle()</code> styles every cell. <code>withHeaderStyle()</code> and <code>withBorderStyle()</code> style the header and the border. <code>Column::withStyle()</code> and <code>Row::withStyle()</code> style one column or one row. A cell-level callback is set with <code>withStyleFunc()</code>. It receives the row, the column and the value, and returns a style or an SGR string. The callback output is not sanitized, so return only trusted styles. Zebra striping uses <code>withZebra()</code>, <code>withZebraStyleEven()</code> and <code>withZebraStyleOdd()</code>. Border families come from <code>withBorder()</code>, and the checkbox marks come from <code>withCheckMarks()</code>.</p>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/basic.php"><code>examples/basic.php</code></a>: sort by score, filter the name column, and paginate.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-table/blob/master/examples/features.php"><code>examples/features.php</code></a>: a wide host-telemetry table with pagination and a frozen first column.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/features.php</code></pre>
+    <p><code>basic.php</code> prints six tables, one per section, and <code>features.php</code> prints two. Both exit on their own and work without a terminal, so you can capture their output.</p>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite runs with PHPUnit 10. <code>GoldenRenderTest</code> compares full frames against files in <code>tests/fixtures/</code>, and <code>TableTest</code> covers the table's core behavior. Focused files pin the features one at a time, including <code>TableFrozenColsTest</code>, <code>TableCheckedRowsTest</code>, <code>TableExpansionTest</code>, <code>TableGlobalSearchTest</code>, <code>TableSanitizeTest</code>, <code>TableLineBudgetTest</code> and <code>TableMultilineCjkTest</code>. <code>LangCoverageTest</code> checks that every key passed to <code>Lang::t()</code> exists in <code>lang/en.php</code>.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Sorting or filtering has no effect on the output.</strong> Those methods return a new table. Store the result, then call <code>view()</code> on it. Once any column is marked with <code>withFilterable()</code>, <code>filter()</code> on an unmarked column throws an <code>InvalidArgumentException</code>, so mark the column you want to filter.</li>
+      <li><strong>A percent-width column is larger than expected.</strong> Percent sets that total more than 100 are normalized by default. Turn on <code>withStrictPercent()</code> to throw instead.</li>
+      <li><strong><code>withFrozenCols()</code> throws.</strong> Frozen columns must be a contiguous prefix that starts at column 0, such as <code>[0, 1]</code>. A set like <code>[0, 2]</code> is refused.</li>
+      <li><strong>Text from a user shows up as <code>·</code> or <code>&lt;U+XXXX&gt;</code>.</strong> That is the sanitizer working. Control bytes, bidi overrides and zero-width characters become visible markers. Clean the data before you add it, if you want plain text.</li>
+      <li><strong>Output has escape codes when piped.</strong> The table always emits SGR. There is no <code>NO_COLOR</code> or non-TTY fallback. Use <code>withBaseStyle('')</code>, <code>withHeaderStyle('')</code> and <code>withZebra(false)</code> for plainer output.</li>
+      <li><strong>A cell that looks styled is printed raw.</strong> Casting a <code>StyledCell</code> to a string bypasses sanitization. Render the whole table through <code>view()</code> instead.</li>
+    </ul>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Upstream idea (Evertras/bubble-table)</th><th>SugarTable class</th><th>Notes</th></tr>
+<tr><td>Table with columns and rows</td><td><code>Table</code>, <code>Column</code>, <code>Row</code></td><td>Native PHP. The API is shaped for PHP, not a line-for-line port.</td></tr>
+<tr><td>Row data keyed by column</td><td><code>RowData</code></td><td>A keyed map with immutable <code>with()</code>.</td></tr>
+<tr><td>Pagination and cursor</td><td><code>Table::selectNext()</code>, <code>nextPage()</code></td><td>Native PHP. The cursor follows the page.</td></tr>
+<tr><td>Per-cell styling</td><td><code>StyledCell</code>, <code>withStyleFunc()</code></td><td>Limited to a restricted SGR set, with sanitization applied.</td></tr>
+</table>
+    <p>The deliberate differences from upstream are listed in the library README under Divergences from Upstream.</p>
+
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>Layout is pure. <code>computeColumnWidths()</code> turns the column width modes into cell counts for a given table width. <code>view()</code> then renders the header, the page of rows and the footer through a <code>RenderCanvas</code>. <code>CellLineMemo</code> caches the rendered lines of a cell, so a table that repaints the same rows does less work. Every value is sanitized at the point it enters, and the frame is built from sanitized text only.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package has no separate changelog file. The history of <code>sugar-table/</code> is the commit log in the monorepo. The README has two sections that explain the choices behind the API. The Naming section covers the camelCase house API. The Divergences from Upstream section lists the deliberate differences from the Go project. The package is published as <code>sugarcraft/sugar-table</code> on Packagist and follows the monorepo release flow.</p>
 
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>

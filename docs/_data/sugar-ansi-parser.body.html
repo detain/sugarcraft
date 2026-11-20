@@ -57,7 +57,7 @@ $parser-&gt;parseComplete("\x1b]8;;https://example.org\x1b\\link");
 $osc-&gt;hyperlinkUri(); // https://example.org, read while the link is open
 // A close (an empty URI) resets this to '', so read the URI before the close arrives.</code></pre>
 
-    <p><strong>Bound a long-lived log.</strong> <code>DebugHandler</code> keeps an unbounded <code>$log</code> by default, which suits test fixtures. For a long-lived mirror, pass <code>maxLogRows</code> and the log becomes a keep-newest ring that counts evictions in <code>$dropped</code>:</p>
+    <p><strong>Bound a long-lived log.</strong> <code>DebugHandler</code> keeps an unbounded <code>$log</code> by default, which suits test fixtures. For a long-lived mirror, pass <code>maxLogRows</code> and the log keeps only the newest rows, counting evictions in <code>$dropped</code>. Trimming runs in batches, so the log can hold up to <code>maxLogRows</code> + <code>min(4096, maxLogRows)</code> rows before it trims back to <code>maxLogRows</code>:</p>
     <pre class="code"><code class="language-php">$debug = new DebugHandler(maxLogRows: 500);
 $parser = new Parser($debug);</code></pre>
 
@@ -88,7 +88,7 @@ if ($file !== null &amp;&amp; $file-&gt;isFile()) {
 <tr><td>Parser::feed()</td><td>feed(string $bytes): void</td><td>Stream input. Sequences split across calls are reassembled.</td></tr>
 <tr><td>Parser::flush()</td><td>flush(): void</td><td>End-of-stream settlement of a pending string payload (OSC, DCS, SOS, PM or APC).</td></tr>
 <tr><td>Parser::parseComplete()</td><td>parseComplete(string $bytes): void</td><td><code>feed()</code> then <code>flush()</code> in one call.</td></tr>
-<tr><td>Parser::reset()</td><td>reset(): void</td><td>Return the machine to the ground state.</td></tr>
+<tr><td>Parser::reset()</td><td>reset(): void</td><td>Flush first: a pending OSC, DCS, SOS, PM or APC payload dispatches to the handler, then all state clears. To abandon a stream without that dispatch, call <code>discard()</code>.</td></tr>
 <tr><td>Parser::discard()</td><td>discard(): void</td><td>Throw away pending payloads and in-progress UTF-8 without emitting them, then return to the ground state.</td></tr>
 <tr><td>Parser::currentState()</td><td>currentState(): State</td><td>The current state of the 15-state machine.</td></tr>
 <tr><td>Parser::subparams()</td><td>subparams(): array</td><td>Colon-structure flags for the current dispatch. Read them inside <code>csiDispatch()</code>.</td></tr>
