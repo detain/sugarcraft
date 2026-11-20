@@ -517,6 +517,11 @@ final class InProcessRoutedTest extends TestCase
         self::assertSame([], $laterHeard, 'the listeners after the disconnecting one never hear the envelope it was delivering');
     }
 
+    /**
+     * Pinned by InProcessEventSink::pump()'s re-entrancy guard: disconnect() flushes the sink from inside
+     * a delivery, and without the guard that nested flush would deliver the 2000 owed events (red check:
+     * removing the guard fails this test with "2000 is identical to 1").
+     */
     public function testADisconnectFromARoutedSinkListenerDropsTheRoutedBacklogItOwes(): void
     {
         $root = $this->scriptedRoot();
