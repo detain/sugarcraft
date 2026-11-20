@@ -737,7 +737,7 @@ final class CheckDocsAssets
             // and a bare directory mention ("examples/") is not a claim.
             preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)examples/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)~', $html, $examples, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
             foreach ($examples as $hit) {
-                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0])) {
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0]) || self::isForeignUrl($html, $hit[0][1], $hit[1][0])) {
                     continue;
                 }
                 $census['claims']++;
@@ -752,7 +752,7 @@ final class CheckDocsAssets
             // subdirectory or a .png named here must exist as written.
             preg_match_all('~((?:[A-Za-z0-9_.-]+/)*)\.vhs/((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)~', $html, $vhs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
             foreach ($vhs as $hit) {
-                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0])) {
+                if (self::isFilesystemPlaceholder($html, $hit[0][1], $hit[1][0]) || self::isForeignUrl($html, $hit[0][1], $hit[1][0])) {
                     continue;
                 }
                 $census['claims']++;
@@ -780,6 +780,23 @@ final class CheckDocsAssets
         $first = explode('/', $prefix, 2)[0];
 
         return !str_contains($first, '.');
+    }
+
+    /**
+     * A path inside an absolute URL whose owner is not a SugarCraft account
+     * (`https://github.com/someone/else/blob/main/examples/x.py`) is a third-party
+     * link, not a claim about a package here, so the example and vhs legs skip it.
+     * The owner is the segment after the host: `sugarcraft` or `detain` (the repo
+     * owner in the raw.githubusercontent.com form) keep the claim checked.
+     */
+    private static function isForeignUrl(string $html, int $offset, string $prefix): bool
+    {
+        if ($offset < 2 || substr($html, $offset - 2, 2) !== '//') {
+            return false;
+        }
+        $segments = array_values(array_filter(explode('/', $prefix), static fn (string $p): bool => $p !== ''));
+
+        return !in_array(strtolower($segments[1] ?? ''), ['sugarcraft', 'detain'], true);
     }
 
     /**
@@ -992,6 +1009,9 @@ final class CheckDocsAssets
      */
     private static function resolveName(string $ref, array $scope): string
     {
+        if (str_starts_with($ref, '\\')) {
+            return substr($ref, 1);
+        }
         if (str_contains($ref, '\\')) {
             return $ref;
         }
@@ -1014,7 +1034,13 @@ final class CheckDocsAssets
     private static function declaresMethod(array $index, string $fqn, string $method, array &$visited): bool
     {
         $short = self::shortName($fqn);
-        foreach ($index['fqn'][strtolower($fqn)] ?? [] as $file) {
+        $files = $index['fqn'][strtolower($fqn)] ?? [];
+        if ($files === []) {
+            // A parent the SugarCraft tree does not declare may be a PHP built-in
+            // (`extends \RuntimeException`), and the method can come from there.
+            return self::builtInDeclaresMethod($fqn, $method);
+        }
+        foreach ($files as $file) {
             if (isset($visited[$file])) {
                 continue;
             }
@@ -1033,8 +1059,7 @@ final class CheckDocsAssets
                 }
             }
             $scope = self::fileScope($text);
-            preg_match_all('~\b(?:extends|use|implements)\s+\\\\?([A-Za-z_][\w\\\\]*)~', $text, $refs);
-            foreach (array_unique($refs[1]) as $ref) {
+            foreach (array_unique(self::typeRefs($text)) as $ref) {
                 if (self::declaresMethod($index, self::resolveName($ref, $scope), $method, $visited)) {
                     return true;
                 }
@@ -1042,6 +1067,48 @@ final class CheckDocsAssets
         }
 
         return false;
+    }
+
+    /**
+     * The types a file's declarations pull in: every parent and interface named
+     * in a class, interface or enum header (a comma list after `implements`, or
+     * after `extends` on an interface), and every trait a class body uses. A
+     * top-level `use` is an import, not an inheritance edge, so it is not followed:
+     * a class that merely imports a sibling does not carry the sibling's methods.
+     *
+     * @return list<string> names as written, a leading backslash kept (it marks a fully qualified name)
+     */
+    private static function typeRefs(string $text): array
+    {
+        $list = '(\\\\?[A-Za-z_][\w\\\\]*(?:\s*,\s*\\\\?[A-Za-z_][\w\\\\]*)*)';
+        $refs = [];
+        preg_match_all('~^[ \t]*(?:(?:abstract|final|readonly)[ \t]+)*(?:class|interface|enum)[ \t]+[A-Za-z_]\w*([^{;]*)~m', $text, $headers);
+        foreach ($headers[1] as $header) {
+            preg_match_all('~\b(?:extends|implements)\s+' . $list . '~', $header, $clauses);
+            foreach ($clauses[1] as $names) {
+                array_push($refs, ...preg_split('~\s*,\s*~', $names));
+            }
+        }
+        preg_match_all('~^[ \t]+use[ \t]+' . $list . '[ \t]*[;{]~m', $text, $traits);
+        foreach ($traits[1] as $names) {
+            array_push($refs, ...preg_split('~\s*,\s*~', $names));
+        }
+
+        return $refs;
+    }
+
+    /**
+     * True when $fqn names a PHP built-in class, interface or enum that carries
+     * $method, so a SugarCraft class extending it inherits the method with no
+     * SugarCraft declaration to find it in.
+     */
+    private static function builtInDeclaresMethod(string $fqn, string $method): bool
+    {
+        if (!class_exists($fqn, false) && !interface_exists($fqn, false) && !enum_exists($fqn, false)) {
+            return false;
+        }
+
+        return (new \ReflectionClass($fqn))->isInternal() && method_exists($fqn, $method);
     }
 
     /** The PHP built-in class, interface or enum called $short, or null when there is none. */

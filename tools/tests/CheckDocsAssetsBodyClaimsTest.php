@@ -287,6 +287,53 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
         ));
     }
 
+    public function testATopLevelImportDoesNotGiveAClassTheImportedMethods(): void
+    {
+        $root = $this->makeFixture();
+
+        // Plain imports Widget for a type hint and extends nothing: it carries no
+        // make(), and PHP would fatal on Plain::make().
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Plain::make(), but no declaration of Plain carries that method'],
+            $this->claimsFor($root, '<pre><code>Plain::make();</code></pre>'),
+        );
+    }
+
+    public function testEveryTraitInACommaListIsFollowed(): void
+    {
+        $root = $this->makeFixture();
+
+        // Both uses two traits in one statement; vanish() comes from the second.
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Both::stamped(); Both::vanish();</code></pre>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Both::nope(), but no declaration of Both carries that method'],
+            $this->claimsFor($root, '<pre><code>Both::nope();</code></pre>'),
+        );
+    }
+
+    public function testAThirdPartyUrlIsNotAClaimAboutALocalPackage(): void
+    {
+        $root = $this->makeFixture();
+
+        // The owner is someone else, so no package here can hold these paths.
+        $this->assertSame([], $this->claimsFor($root,
+            '<p><code>https://github.com/someone/else/blob/main/examples/x.py</code> and '
+            . '<code>https://raw.githubusercontent.com/someone/else/main/.vhs/x.gif</code>.</p>',
+        ));
+    }
+
+    public function testAMethodInheritedFromAPhpBuiltInParentIsAccepted(): void
+    {
+        $root = $this->makeFixture();
+
+        // Err extends PHP's RuntimeException, so getMessage() is inherited; nope() is nowhere.
+        $this->assertSame([], $this->claimsFor($root, '<pre><code>Err::getMessage();</code></pre>'));
+        $this->assertSame(
+            ['claims: docs/_data/alpha.body.html names Err::nope(), but no declaration of Err carries that method'],
+            $this->claimsFor($root, '<pre><code>Err::nope();</code></pre>'),
+        );
+    }
+
     public function testDeriveRunsTheBodyClaimsLeg(): void
     {
         $root = $this->makeFixture();
@@ -403,6 +450,64 @@ final class CheckDocsAssetsBodyClaimsTest extends TestCase
             enum Pure
             {
                 case X;
+            }
+
+            PHP);
+        // Plain imports Widget at top level but does not extend it, so it carries none of Widget's methods.
+        $this->put("$root/alpha/src/Plain.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            use SugarCraft\Alpha\Widget;
+
+            final class Plain
+            {
+                public function __construct(private Widget $widget)
+                {
+                }
+            }
+
+            PHP);
+        $this->put("$root/alpha/src/Concerns/Vanishing.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha\Concerns;
+
+            trait Vanishing
+            {
+                public static function vanish(): void
+                {
+                }
+            }
+
+            PHP);
+        $this->put("$root/alpha/src/Both.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Both
+            {
+                use \SugarCraft\Alpha\Concerns\Stamp, \SugarCraft\Alpha\Concerns\Vanishing;
+            }
+
+            PHP);
+        $this->put("$root/alpha/src/Err.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace SugarCraft\Alpha;
+
+            final class Err extends \RuntimeException
+            {
             }
 
             PHP);
