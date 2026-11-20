@@ -104,6 +104,28 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeIndex() / fadeColor() / metricPosition() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
 <tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / withColumns() / withPalette() / withProcColors() / withProcGradient() / withFamily() / row(ProcRow, row, selected, selectMax, ?graph, followed, ?profile)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colors and mini-graphs</td></tr>
 </table>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;"><code>render()</code> returns <code>Loading...</code> instead of the grid</h3>
+    <p>A grid draws nothing until <code>setSize()</code> has been called with a non-zero width and height. <code>setSize()</code> returns a sized copy and leaves the receiver alone, so keep the result. Call it again whenever the terminal is resized.</p>
+    <pre class="code"><code class="language-php">$grid = $grid-&gt;setSize($cols, $rows);
+echo $grid-&gt;render();</code></pre>
+
+    <h3 style="margin-top: 24px;">Items added to a grid never appear</h3>
+    <p><code>withItem()</code> clones the grid and returns the clone, so the receiver never gains the item. A call whose return value is discarded adds nothing. Assign each result, or chain the calls, as the Quickstart does.</p>
+
+    <h3 style="margin-top: 24px;">A multi-column grid shows one column</h3>
+    <p><code>StackedGrid</code> stacks every item into a single column when the width is under 90 cells. That threshold is the default of <code>Breakpoint::narrow()</code>, and the grid does not pass another value. Widen the terminal, or show fewer items when the width is narrow.</p>
+
+    <h3 style="margin-top: 24px;">A meter reads full for a value such as 62</h3>
+    <p><code>Meter::new()</code> takes a ratio from 0 to 1, not a percentage, and its constructor clamps the ratio into that range. <code>Meter::new(62)</code> is therefore a full bar. Pass the fraction instead.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Plot\Chart\Meter;
+
+echo Meter::new(0.62)-&gt;withWidth(20)-&gt;render(), "\n";</code></pre>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-dashboard/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-dashboard">github.com/detain/sugarcraft/commits/master/sugar-dashboard</a>. Most of the deprecated symbols in <code>src/</code> carry a <code>REMOVED-IN: 2.0.0</code> marker in their docblock, so they go in 2.0.0. The exceptions are <code>Module\LegacyModule</code>, which names only <code>v0.x</code>, and the <code>ALIGN_*</code> string constants on <code>Components\Card\Footer</code>, which name no version. Do not plan the removal of either for 2.0.0 until a release says so.</p>
   </div>
 </section>
 

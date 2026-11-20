@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Server;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Server\Workspace\ConnectionTarget;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
@@ -145,7 +146,7 @@ final class GatewayScopeEnforcementTest extends TestCase
         $owner->clear();
 
         $clients = new \ReflectionProperty(Gateway::class, 'rootClients');
-        $clients->setValue($this->gateway, [$this->other => ['pin' => $pinned->connection, 'own' => $owner->connection]]);
+        $clients->setValue($this->gateway, [$this->other => ['pin' => new ConnectionTarget($pinned->connection, $this->fixture->dispatcher), 'own' => new ConnectionTarget($owner->connection, $this->fixture->dispatcher)]]);
         $payload = (string) \json_encode(['jsonrpc' => '2.0', 'method' => 'event', 'params' => ['type' => 'server.notice', 'durable' => true, 'seq' => 1, 'data' => []]]);
         $relay = new \ReflectionMethod(Gateway::class, 'relay');
         $relay->invoke($this->gateway, $this->other, ['type' => 'server.notice', 'durable' => true, 'seq' => 1], $payload);

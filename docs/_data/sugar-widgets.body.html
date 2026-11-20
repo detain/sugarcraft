@@ -132,6 +132,44 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;">A spinner freezes on its first frame</h3>
+    <p>The spinner animates only while a tick loop runs, and the loop starts with the <code>Cmd</code> that <code>tick()</code> returns. Return <code>$spinner-&gt;tick()</code> from <code>init()</code>, and forward every message to the spinner's <code>update()</code>, returning the Cmd it gives back. Each tick carries the id of the spinner that scheduled it, and <code>update()</code> ignores any tick with a different id. So keep one spinner in the Model rather than rebuilding it inside <code>update()</code>, which strands the tick already in flight.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\{Model, Msg, Subscriptions};
+use SugarCraft\Forms\Spinner\Spinner;
+
+final class Loading implements Model {
+    public function __construct(public readonly Spinner $sp) {}
+
+    public function init(): ?\Closure { return $this-&gt;sp-&gt;tick(); }
+    public function subscriptions(): ?Subscriptions { return null; }
+
+    public function update(Msg $msg): array {
+        [$sp, $cmd] = $this-&gt;sp-&gt;update($msg);
+        return [new self($sp), $cmd];
+    }
+
+    public function view(): string { return $this-&gt;sp-&gt;view(); }
+}</code></pre>
+
+    <h3 style="margin-top: 24px;">A tab click activates a tab on another bar</h3>
+    <p>Bars built from one template share a zone key, so when two bars use the same <code>Manager</code>, a click on one bar's tab can select the same-numbered tab on the other. Give each bar its own key with <code>withZoneKey()</code>. The key must not be empty, because an empty key throws an <code>\InvalidArgumentException</code>, and it must use the sugar-mouse id characters <code>A-Z a-z 0-9 . _ : -</code>. An illegal key is rejected when the bar renders, not when it is built, and only once a <code>Manager</code> is attached with <code>withZoneManager()</code>. Without a Manager the key is never checked.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Widgets\Tabs\Tabs;
+
+$template = Tabs::new();
+$top    = $template-&gt;withLabels(['Logs', 'Stats'])-&gt;withZoneKey('top');
+$bottom = $template-&gt;withLabels(['Logs', 'Stats'])-&gt;withZoneKey('bottom');</code></pre>
+
+    <h3 style="margin-top: 24px;">A table filter finds nothing for a value you can see</h3>
+    <p>Filtering has to be switched on. Without <code>withFilterable(true)</code>, <code>withFilter()</code> hides no rows at all. With it on, the default match is a case-insensitive substring search over the raw cell strings you passed to <code>row()</code>, in every column. The header row is not searched, and a <code>styleFunc</code> cannot change what is searched, because it returns a <code>Style</code> and not text. Escape codes inside a cell string are part of the searched text, so a search term that spans one does not match. To match a different form of the value, pass a predicate with <code>withFilterPredicate()</code>, which receives each row as a list of strings.</p>
+
+    <h3 style="margin-top: 24px;">An options row wraps onto two lines</h3>
+    <p><code>Menu\OptionRow::render()</code> draws the two-line legacy layout, and it is deprecated. Call <code>OptionRow::renderRow()</code> for the one-line btop row, whose column widths are exact. The one-line form also takes the <code>selected</code>, <code>editing</code> and <code>hasArrows</code> flags shown in the TextEdit example above.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-widgets/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-widgets">github.com/detain/sugarcraft/commits/master/sugar-widgets</a>. The re-exports from sugar-forms, such as <code>Spinner</code>, <code>TextArea</code> and <code>FilePicker</code>, are deprecated in their docblocks. None of them names a removal version yet, so do not plan their removal for a fixed release. Depend on <code>sugarcraft/sugar-forms</code> directly for new code.</p>
   </div>
 </section>
 
