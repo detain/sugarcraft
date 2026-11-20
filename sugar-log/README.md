@@ -17,7 +17,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — styled when the destination is a color-capable terminal; the per-write gate is tty-ness plus `CLICOLOR_FORCE` (any value other than empty or `0`), while `NO_COLOR` and `FORCE_COLOR` act at construction time through the color-profile probe — see [Styling](#styling)
+- **Colorful human-readable output** — styled when the destination is a color-capable terminal; the per-write gate is tty-ness plus `CLICOLOR_FORCE` (exactly `1`), while `NO_COLOR` and `FORCE_COLOR` act at construction time through the color-profile probe — see [Styling](#styling)
 - **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields (a channel analogue: give each subsystem its own `withPrefix()`/`with()` child)
@@ -264,8 +264,8 @@ different layers decide that — they read different variables:
   default. Changing the environment afterwards does not re-probe an existing
   logger.
 - **Per write (the destination gate):** `ColorGate` looks at exactly two
-  things: `CLICOLOR_FORCE` (any value other than empty or `0`; `1` is the
-  usual spelling) and whether the stream is a TTY. It never reads `NO_COLOR` or
+  things: `CLICOLOR_FORCE=1` (the exact value `1`; anything else is ignored)
+  and whether the stream is a TTY. It never reads `NO_COLOR` or
   `FORCE_COLOR` — plain bytes reach files and pipes by design, and a TTY user
   who exports `NO_COLOR` after construction is not plain-ified per write.
 
@@ -459,7 +459,7 @@ Untrusted data can never forge or reshape a record:
 - **Hostile shapes** — reference cycles in context terminate at a depth cap
   (`[...]`), non-finite floats become `'INF'`/`'-INF'`/`'NAN'`, a throwing
   `__toString()` is contained (the object reports its class name), and if an
-  encode fails anyway the JSON fallback replaces only the offending field's value with `"[unencodable]"` — the
+  encode fails anyway the JSON fallback drops only the offending field — the
   envelope and every other entry survive, flagged by `_encode_error`.
 
 ## Panic handlers
