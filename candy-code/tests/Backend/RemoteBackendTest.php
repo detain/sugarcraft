@@ -20,6 +20,7 @@ use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Protocol\RpcError;
@@ -357,7 +358,16 @@ final class RemoteBackendTest extends TestCase
         self::assertSame(WebsocketUrl::from('ws://[::1]:9/ws'), Attach::websocketUrl('ws://[::1]:9/ws'));
 
         // The verb answers the same usage error it gives any bad address, and does not dial.
-        self::assertSame(NonInteractive::EXIT_CONFIG, $this->runVerb(['attach', '--url', 'http://[abc]:8080']));
+        // Its refusal goes to STDERR, which ob_start() cannot capture, so the verb runs as a child
+        // process: the exact stderr proves the usage path ran and no connect error followed it.
+        $child = $this->runBinary(['attach', '--url', 'http://[abc]:8080']);
+        self::assertSame(NonInteractive::EXIT_CONFIG, $child['code']);
+        self::assertSame('', $child['stdout']);
+        [$badUrl, $usage] = Lang::inLocale('en', static fn (): array => [
+            Lang::t('cli.attach.bad_url', ['url' => 'http://[abc]:8080']),
+            Lang::t('cli.attach.usage'),
+        ]);
+        self::assertSame('candy-code: ' . $badUrl . "\n" . $usage . "\n", $child['stderr']);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
@@ -409,5 +419,28 @@ final class RemoteBackendTest extends TestCase
         } finally {
             \ob_end_clean();
         }
+    }
+
+    /**
+     * Run `bin/candy-code` with $argv in a child process and read back its exit
+     * code and both streams. The child gets a C locale (so the English catalogue
+     * is the one it prints), stdin from /dev/null, and this test's temp directory
+     * as HOME, so nothing it touches is the developer's real home.
+     *
+     * @param list<string> $argv
+     * @return array{code: int, stdout: string, stderr: string}
+     */
+    private function runBinary(array $argv): array
+    {
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-code';
+        $env = ['LC_ALL' => 'C.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => $this->fixture->dir];
+        $process = \proc_open([\PHP_BINARY, $bin, ...$argv], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
+        self::assertIsResource($process);
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return ['code' => \proc_close($process), 'stdout' => $stdout, 'stderr' => $stderr];
     }
 }
