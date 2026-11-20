@@ -152,7 +152,7 @@ $vp = Viewport::fromContent($document, width: 80, height: 20)
 <tr><td><code>Viewport::withStickyHeader()</code></td><td>int, rows</td><td>0</td><td>Rows pinned at the top while the rest scrolls.</td></tr>
 <tr><td><code>Viewport::withSmoothScroll()</code></td><td>bool</td><td><code>false</code></td><td>Off settles every scroll in one frame. Turn it on to animate scrolls.</td></tr>
 <tr><td><code>Viewport::withMouseWheelDelta()</code></td><td>int, lines</td><td>3</td><td>Lines moved per wheel notch.</td></tr>
-<tr><td><code>Viewport::withMouseWheelEnabled()</code></td><td>bool</td><td><code>true</code></td><td>Scroll the viewport on wheel notches, three lines each by default. <code>false</code> ignores the wheel.</td></tr>
+<tr><td><code>Viewport::withMouseWheelEnabled()</code></td><td>bool</td><td><code>true</code></td><td>Scroll the viewport on wheel notches, three lines each by default. <code>false</code> ignores the wheel. The terminal reports wheel notches only when the program enables mouse reporting, such as <code>new ProgramOptions(mouseMode: MouseMode::CellMotion)</code>.</td></tr>
 </table>
 
     <h3 style="margin-top: 32px;">Keys and controls</h3>
@@ -169,7 +169,7 @@ $vp = Viewport::fromContent($document, width: 80, height: 20)
 <tr><td><code>Home</code> / <code>g</code></td><td>Jump to the top.</td></tr>
 <tr><td><code>End</code> / <code>G</code></td><td>Jump to the bottom.</td></tr>
 </table>
-    <p>Mouse-wheel scrolling is on by default, and each wheel notch scrolls three lines. Pass <code>withMouseWheelEnabled(false)</code> to turn it off, and <code>withMouseWheelDelta()</code> to change the step. <code>examples/viewport-keys.php</code> drives the full key set.</p>
+    <p>Mouse-wheel scrolling is on by default, and each wheel notch scrolls three lines. The terminal reports wheel notches only when the program enables mouse reporting, such as <code>new ProgramOptions(mouseMode: MouseMode::CellMotion)</code>; with the default options no wheel message reaches <code>Viewport::update()</code>. Pass <code>withMouseWheelEnabled(false)</code> to turn it off, and <code>withMouseWheelDelta()</code> to change the step. <code>examples/viewport-keys.php</code> drives the full key set.</p>
 
     <h3 style="margin-top: 32px;">Theme and styling</h3>
     <p>Styles are SGR parameter strings, not theme objects. Pass them to <code>Column::withStyle()</code>, <code>Table::withCursorStyle()</code> and <code>Table::withHeaderStyle()</code>. The ruler characters come from <code>Table::withRulerChars()</code>, and the column separator from <code>Table::withSeparator()</code>. The cursor style paints over a column style. Validated SGR that you pass in is emitted as given. The library does not read <code>NO_COLOR</code> or <code>TERM</code>, so color policy belongs to your host program.</p>

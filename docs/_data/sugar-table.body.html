@@ -150,7 +150,7 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td>ColumnWidth</td><td>enum</td><td>Fixed, Percent, Dynamic, Content, Flex.</td></tr>
 <tr><td>WrapMode</td><td>enum</td><td>None, WordWrap, Character.</td></tr>
 <tr><td>SortType</td><td>enum</td><td>Auto, Text, Natural.</td></tr>
-<tr><td>FooterType</td><td>enum</td><td>Page, Rows, Both. The footer renders only when pagination is on.</td></tr>
+<tr><td>FooterType</td><td>enum</td><td>Page, Rows, Both. The footer appears when pagination is on or when <code>withStaticFooter()</code> sets a fixed label.</td></tr>
 </table>
 
     <h3 style="margin-top: 32px;">Accessors</h3>
@@ -169,7 +169,7 @@ echo $table-&gt;scrollY(), PHP_EOL;          // 26</code></pre>
 <tr><td><code>Table::withPageSize()</code></td><td>int</td><td><code>0</code></td><td>Rows per page. <code>0</code> turns pagination off.</td></tr>
 <tr><td><code>Table::withShowHeader()</code></td><td>bool</td><td><code>true</code></td><td>Show the header row.</td></tr>
 <tr><td><code>Table::withShowFooter()</code></td><td>bool</td><td><code>true</code></td><td>Show the footer row.</td></tr>
-<tr><td><code>Table::withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears only when pagination is on.</td></tr>
+<tr><td><code>Table::withFooterType()</code></td><td><code>FooterType</code></td><td><code>Page</code></td><td>Footer content: <code>Page</code>, <code>Rows</code> or <code>Both</code>. The footer appears when pagination is on or when <code>withStaticFooter()</code> sets a fixed label. A static label replaces the Page/Rows text, so this option has no effect then.</td></tr>
 <tr><td><code>Table::withPaginationWrap()</code></td><td>bool</td><td><code>false</code></td><td>Cycle the cursor and the pages at the ends.</td></tr>
 <tr><td><code>Table::withViewportHeight()</code></td><td>int</td><td><code>0</code></td><td>Rows rendered at once. <code>0</code> renders every row.</td></tr>
 <tr><td><code>Table::withMaxLines()</code></td><td>int</td><td><code>0</code></td><td>Line budget for the data region. See <code>maxLines()</code> and <code>renderedLineCount()</code>.</td></tr>
