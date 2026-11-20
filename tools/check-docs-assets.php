@@ -683,6 +683,9 @@ final class CheckDocsAssets
      */
     public static function bodyClaims(string $root): array
     {
+        // A direct caller may rewrite a body between calls, so this entry point
+        // never trusts a memo an earlier call left behind (derive() resets it too).
+        self::$readCache = [];
         $bodies = glob("$root/docs/_data/*.body.html") ?: [];
         if ($bodies === []) {
             return [];
