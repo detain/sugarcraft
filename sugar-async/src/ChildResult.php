@@ -19,6 +19,12 @@ final class ChildResult
     public const PIPE_FAILED = 'pipe-failed';
 
     /**
+     * The cancellation token fired before the child finished; the child was killed
+     * through the same kill ladder as a deadline, and reaped.
+     */
+    public const CANCELLED = 'cancelled';
+
+    /**
      * @param null|int $exitCode  The exit status, or null when it could not be reaped
      * @param int $droppedBytes  Bytes refused by the per-stream cap, both streams together
      * @param int $droppedStderrBytes  The part of $droppedBytes that came from stderr, so a caller
@@ -37,6 +43,11 @@ final class ChildResult
     public function timedOut(): bool
     {
         return $this->status === self::TIMED_OUT;
+    }
+
+    public function cancelled(): bool
+    {
+        return $this->status === self::CANCELLED;
     }
 
     public function truncated(): bool

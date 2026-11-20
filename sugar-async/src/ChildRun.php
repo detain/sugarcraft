@@ -7,8 +7,10 @@ namespace SugarCraft\Async;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
-use function React\Promise\reject;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Core\Util\Proc\WindowsPipes as CoreWindowsPipes;
+use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * Run one child process with a deadline and a per-stream byte cap, and collect
@@ -29,16 +31,32 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * child that closes its output and then lingers past the deadline is treated
  * the same way.
  *
+ * Cancellation: {@see withCancellation()} takes the token of a
+ * {@see CancellationSource}. Cancelling the source kills the child through the
+ * same ladder as the deadline, reaps it, and reports CANCELLED. A token that is
+ * already cancelled spawns nothing. run() is blocking, so it can only observe a
+ * cancel raised from its own callbacks ({@see withOnChunk()}, {@see withOnSpawn()}
+ * or a signal handler); launch() observes a cancel from anywhere on the loop.
+ *
+ * Idle deadline: {@see withIdleTimeout()} is an opt-in silence budget. A child
+ * that writes nothing to either stream for longer than the budget is killed
+ * through the same ladder and reported as TIMED_OUT, the same status as the total
+ * deadline. Off by default, so a child that is quiet but within its deadline is
+ * never killed unless the caller asked for the idle budget.
+ *
  * A child that exits while a backgrounded grandchild still holds its output
  * pipes ends the run once {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} has passed
  * since the exit, not at the deadline, unless {@see withExitGrace()} removed that
  * grace. Output the grandchild writes after that cut-off is not captured, and
  * nothing reports the drop; output written inside the grace is kept.
  *
- * Stdin: {@see withStdin()} feeds a payload to the child. The POSIX arm does it
- * through a non-blocking pipe. On Windows a non-empty payload is refused (a
- * LogicException from run(), a rejected promise from launch()), because the
- * Windows runtime cannot give a non-blocking stdin pipe.
+ * Stdin: {@see withStdin()} feeds a payload to the child. On POSIX the payload
+ * goes through a non-blocking pipe. On the Windows runtime, where a non-blocking
+ * stdin pipe cannot be had, a non-empty payload is staged to a private temp file
+ * and handed to the child as its stdin descriptor, the way candy-code's
+ * CommandBackend stages its history; the child reads it to EOF and the file is
+ * removed once the child is reaped. An empty payload gives the child an immediate
+ * EOF on every runtime.
  *
  * Consumers: sugar-dashboard's BoundedCommand has moved, running every child
  * through run() and launch() and mapping the ChildResult onto its outcome. The
@@ -54,8 +72,12 @@ final class ChildRun
     /** Per-stream cap when none was set: the ChildPump default. */
     public const DEFAULT_MAX_BYTES = ChildPump::DEFAULT_MAX_BYTES;
 
-    private const WINDOWS_STDIN_MESSAGE = 'ChildRun stdin needs non-blocking pipes, which the Windows runtime cannot give; '
-        . 'pass the payload to the child as a file instead.';
+    /** Longest gap between idle checks in run(): the pump's own slice, so the check costs no extra wakeups. */
+    private const IDLE_BEAT_SECONDS = 0.1;
+
+    /** Why run() stopped the walk before the output closed. */
+    private const STOP_IDLE = 'idle';
+    private const STOP_CANCELLED = 'cancelled';
 
     /**
      * @param list<string> $argv
@@ -65,6 +87,8 @@ final class ChildRun
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk read, or null
      * @param null|\Closure(int): void $onSpawn  Told the child's pid right after it starts, or null
      * @param null|float $exitGrace  run() only: seconds read on after the exit is seen, or null to read to EOF
+     * @param null|CancellationToken $cancellation  Kills the child and reports CANCELLED when cancelled, or null
+     * @param null|float $idleTimeout  Seconds of silence before the child is killed, or null for none
      */
     private function __construct(
         private readonly array $argv,
@@ -77,6 +101,8 @@ final class ChildRun
         private readonly ?\Closure $onChunk = null,
         private readonly ?\Closure $onSpawn = null,
         private readonly ?float $exitGrace = WindowsPipes::EXIT_DRAIN_GRACE_SECONDS,
+        private readonly ?CancellationToken $cancellation = null,
+        private readonly ?float $idleTimeout = null,
     ) {
     }
 
@@ -121,6 +147,31 @@ final class ChildRun
         }
 
         return $this->mutate(['exitGrace' => $seconds]);
+    }
+
+    /**
+     * Opt-in silence budget. The child is killed through the kill ladder once it
+     * has written nothing to stdout or stderr for this many seconds, and reported
+     * as TIMED_OUT. Any chunk read resets the budget, dropped bytes included.
+     * Null (the default) disables it, so a quiet child runs until its deadline.
+     */
+    public function withIdleTimeout(?float $seconds): self
+    {
+        if ($seconds !== null && ($seconds <= 0 || !is_finite($seconds))) {
+            throw new \InvalidArgumentException('Idle timeout must be null or a positive finite number of seconds');
+        }
+
+        return $this->mutate(['idleTimeout' => $seconds]);
+    }
+
+    /**
+     * Cancellation: once $token is cancelled the child is killed through the same
+     * ladder as the deadline, reaped, and the result reports CANCELLED. The caller
+     * holds the {@see CancellationSource} and calls cancel() on it. Null removes it.
+     */
+    public function withCancellation(?CancellationToken $token): self
+    {
+        return $this->mutate(['cancellation' => $token]);
     }
 
     /** Bytes kept per stream (>= 0); output past it is read and counted, not kept. */
@@ -195,14 +246,78 @@ final class ChildRun
     /**
      * Run the child to completion, blocking the caller, and return what it wrote.
      *
-     * @throws \LogicException for a non-empty stdin payload on the Windows runtime
-     * @throws \RuntimeException when the child cannot be started
+     * @throws \RuntimeException when the child cannot be started, or its stdin cannot be staged
      */
     public function run(): ChildResult
     {
-        $this->guardStdin();
+        if ($this->alreadyCancelled()) {
+            return self::cancelledResult();
+        }
+
+        [$proc, $pipes, $staged] = $this->spawn();
+        try {
+            return $this->collect($proc, $pipes);
+        } finally {
+            // The collect() above reaps the child before it returns, so the staged stdin is no longer read.
+            if ($staged !== null) {
+                @unlink($staged);
+            }
+        }
+    }
+
+    /**
+     * Start the child on $loop and return a promise of its result. The loop is
+     * never blocked: output is read by stream callbacks, the deadline is a timer,
+     * and the reap is a short periodic check for the exit. A child still running
+     * after its kill budget is reaped by that same check once the kernel releases
+     * it, never by a blocking proc_close().
+     *
+     * The promise resolves (never rejects) once the child is done, including when
+     * it was cancelled, and rejects only when it cannot be started.
+     *
+     * @return PromiseInterface<ChildResult>
+     */
+    public function launch(LoopInterface $loop): PromiseInterface
+    {
+        if ($this->alreadyCancelled()) {
+            return resolve(self::cancelledResult());
+        }
+
+        try {
+            [$proc, $pipes, $staged] = $this->spawn();
+        } catch (\RuntimeException $e) {
+            return reject($e);
+        }
+        $group = $this->groupFor($proc);
+
+        $deferred = new Deferred();
+        (new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            $staged === null ? ($this->stdin ?? '') : '',
+            $this->timeout,
+            $this->maxBytes,
+            $deferred,
+            $group,
+            $this->onChunk,
+            $this->idleTimeout,
+            $this->cancellation,
+            $staged,
+        ))->start();
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The blocking body of {@see run()}: the pump, the stop checks and the kill ladder.
+     *
+     * @param resource $proc
+     * @param array<int, resource> $pipes
+     */
+    private function collect($proc, array $pipes): ChildResult
+    {
         $clock = Clock::monotonicSeconds(...);
-        [$proc, $pipes] = $this->spawn();
         $group = $this->groupFor($proc);
         $deadline = $clock() + $this->timeout;
 
@@ -225,17 +340,55 @@ final class ChildRun
             return false;
         };
 
+        // Set when the walk must end early: the pump's clock then reads the deadline,
+        // so its next pass ends the walk as EXPIRED and the deadline's kill path runs.
+        $stop = null;
+        $lastActivity = $clock();
+        $pumpClock = static function () use (&$stop, $deadline, $clock): float {
+            return $stop === null ? $clock() : $deadline;
+        };
+
+        $onChunk = $this->onChunk;
+        if ($this->idleTimeout !== null) {
+            $onChunk = static function (int|string $slot, string $chunk) use (&$lastActivity, $clock, $onChunk): void {
+                $lastActivity = $clock();
+                if ($onChunk !== null) {
+                    $onChunk($slot, $chunk);
+                }
+            };
+        }
+
+        $cancelSubscription = $this->cancellation?->onCancel(static function () use (&$stop): void {
+            if ($stop === null) {
+                $stop = self::STOP_CANCELLED;
+            }
+        });
+
         try {
             $pump = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
                 ->withDeadline($deadline)
                 ->withCap($this->maxBytes)
-                ->withClock($clock)
-                ->withOnChunk($this->onChunk)
+                ->withClock($pumpClock)
+                ->withOnChunk($onChunk)
                 ->withRunning($running)
                 ->withExitGrace($this->exitGrace);
+            if ($this->idleTimeout !== null) {
+                $idle = $this->idleTimeout;
+                $pump = $pump->withHeartbeat(
+                    min($idle, self::IDLE_BEAT_SECONDS),
+                    static function () use (&$stop, &$lastActivity, $clock, $idle): void {
+                        if ($stop === null && $clock() - $lastActivity >= $idle) {
+                            $stop = self::STOP_IDLE;
+                        }
+                    },
+                );
+            }
             if ($this->stdin !== null && $this->stdin !== '') {
-                $pump = $pump->withStdin($pipes[0], $this->stdin);
-            } else {
+                // A staged Windows payload has no pipe; the child reads its file.
+                if (isset($pipes[0])) {
+                    $pump = $pump->withStdin($pipes[0], $this->stdin);
+                }
+            } elseif (isset($pipes[0])) {
                 fclose($pipes[0]);
             }
             $r = $pump->pump();
@@ -243,13 +396,15 @@ final class ChildRun
             self::closeAll($pipes);
             BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
             throw $e;
+        } finally {
+            $cancelSubscription?->unsubscribe();
         }
 
         // Pipes are closed before any proc_close: the reap helpers reap through
         // proc_close, and the pipe handles are ours to close first.
         self::closeAll($pipes);
 
-        if ($r->reason === DrainResult::CLOSED) {
+        if ($stop === null && $r->reason === DrainResult::CLOSED) {
             if ($exitCode !== null) {
                 // The liveness probe reaped the child, so proc_close() would report -1.
                 proc_close($proc);
@@ -267,50 +422,55 @@ final class ChildRun
         }
 
         $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group));
-        $status = $r->reason === DrainResult::EXPIRED ? ChildResult::TIMED_OUT : ChildResult::PIPE_FAILED;
+        $status = match (true) {
+            $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
+            $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
+            default => ChildResult::PIPE_FAILED,
+        };
 
         return self::result($r, $exitCode ?? $code, $status);
     }
 
     /**
-     * Start the child on $loop and return a promise of its result. The loop is
-     * never blocked: output is read by stream callbacks, the deadline is a timer,
-     * and the reap is a short periodic check for the exit. A child still running
-     * after its kill budget is reaped by that same check once the kernel releases
-     * it, never by a blocking proc_close().
+     * The spawn: the child's stdin is a pipe, or on the Windows runtime a staged
+     * file when there is a payload. Returns the process, its pipes (no key 0 when
+     * the stdin is a file) and the staged file to remove once the child is reaped.
      *
-     * The promise resolves (never rejects) once the child is done, and rejects
-     * only when it cannot be started, or on a stdin payload on Windows.
-     *
-     * @return PromiseInterface<ChildResult>
+     * @return array{0: resource, 1: array<int, resource>, 2: ?string}
      */
-    public function launch(LoopInterface $loop): PromiseInterface
+    private function spawn(): array
     {
-        if (WindowsPipes::runtimeNeedsIt() && $this->stdin !== null && $this->stdin !== '') {
-            return reject(new \LogicException(self::WINDOWS_STDIN_MESSAGE));
+        $staged = null;
+        if ($this->stdin !== null && $this->stdin !== '' && WindowsPipes::runtimeNeedsIt()) {
+            $staged = CoreWindowsPipes::stageStdin($this->stdin);
+            if ($staged === null) {
+                throw new \RuntimeException('ChildRun: could not stage stdin for ' . $this->argv[0]);
+            }
+            $stdinDescriptor = ['file', $staged, 'r'];
+        } else {
+            $stdinDescriptor = ['pipe', 'r'];
         }
 
-        try {
-            [$proc, $pipes] = $this->spawn();
-        } catch (\RuntimeException $e) {
-            return reject($e);
-        }
-        $group = $this->groupFor($proc);
-
-        $deferred = new Deferred();
-        (new ChildRunLaunch(
-            $loop,
-            $proc,
+        $pipes = [];
+        $proc = @proc_open(
+            $this->argv,
+            [0 => $stdinDescriptor, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
-            $this->stdin ?? '',
-            $this->timeout,
-            $this->maxBytes,
-            $deferred,
-            $group,
-            $this->onChunk,
-        ))->start();
+            $this->cwd,
+            $this->env,
+        );
+        if (!is_resource($proc)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
 
-        return $deferred->promise();
+            throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
+        }
+        if ($this->onSpawn !== null) {
+            ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
+        }
+
+        return [$proc, $pipes, $staged];
     }
 
     /**
@@ -341,6 +501,17 @@ final class ChildRun
         return $measured ?? Containment::groupId($proc);
     }
 
+    private function alreadyCancelled(): bool
+    {
+        return $this->cancellation !== null && $this->cancellation->isCancelled();
+    }
+
+    /** Nothing ran, so there is nothing read and no exit to report. */
+    private static function cancelledResult(): ChildResult
+    {
+        return new ChildResult('', '', null, ChildResult::CANCELLED, 0);
+    }
+
     private static function result(DrainResult $r, ?int $code, string $status): ChildResult
     {
         return new ChildResult(
@@ -351,36 +522,6 @@ final class ChildRun
             self::dropped($r),
             $r->droppedBytes(2),
         );
-    }
-
-    private function guardStdin(): void
-    {
-        if ($this->stdin !== null && $this->stdin !== '' && WindowsPipes::runtimeNeedsIt()) {
-            throw new \LogicException(self::WINDOWS_STDIN_MESSAGE);
-        }
-    }
-
-    /**
-     * @return array{0: resource, 1: array<int, resource>}  The process and its pipes: 0 stdin, 1 stdout, 2 stderr
-     */
-    private function spawn(): array
-    {
-        $pipes = [];
-        $proc = @proc_open(
-            $this->argv,
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            $this->cwd,
-            $this->env,
-        );
-        if (!is_resource($proc)) {
-            throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
-        }
-        if ($this->onSpawn !== null) {
-            ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
-        }
-
-        return [$proc, $pipes];
     }
 
     /** @param array<int, resource> $pipes */
