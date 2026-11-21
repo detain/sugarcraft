@@ -161,7 +161,10 @@ trait ChildPollTrait
             return $this->exitCode;
         }
         if (!\is_resource($this->process)) {
-            return $this->exitCode ?? 0;
+            // Closed with no code captured (the status died in another
+            // waitpid): the same -1 "gone, code unknown" the end of wait()
+            // reports, not a fabricated clean exit.
+            return $this->exitCode ?? -1;
         }
 
         // Fast path: use waitpid FFI for sub-millisecond detection.

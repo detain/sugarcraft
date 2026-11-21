@@ -129,6 +129,65 @@ final class PumpRecorderTapTest extends TestCase
         }
     }
 
+    public function testRecorderTeesTheTailDrainedAfterTheChildExited(): void
+    {
+        $this->requirePtySyscalls();
+
+        // A child that has exited before the pump's first read leaves all of
+        // its output to the post-loop drain, which must tee it too.
+        $cassettePath = \tempnam(\sys_get_temp_dir(), 'pump-rec-');
+        $this->assertIsString($cassettePath);
+
+        $pair = (new PosixPtySystem())->open(80, 24);
+        $stdin = \fopen('/dev/null', 'r');
+        $stdout = \fopen('php://temp', 'r+');
+        $recorder = null;
+
+        try {
+            $this->assertIsResource($stdin);
+            $this->assertIsResource($stdout);
+            $child = $pair->slave()->spawn(['/bin/bash', '-c', "printf 'tail-marker\\n'"]);
+            $this->assertSame(0, $child->wait());
+
+            $recorder = Recorder::open($cassettePath);
+            $exitCode = (new PosixPump())->run(
+                $pair->master(),
+                $stdin,
+                $stdout,
+                $child,
+                (new PumpOptions())->withRecorder($recorder),
+            );
+            $recorder->close();
+            $recorder = null;
+
+            $this->assertSame(0, $exitCode);
+            $pumpOutput = \stream_get_contents($stdout, -1, 0);
+            $this->assertStringContainsString('tail-marker', $pumpOutput, 'the drain must deliver the tail');
+
+            $outputBlob = '';
+            foreach ((new JsonlFormat())->read($cassettePath)->events as $event) {
+                if ($event->kind === EventKind::Output) {
+                    $outputBlob .= (string) ($event->payload['b'] ?? '');
+                }
+            }
+            $this->assertStringContainsString('tail-marker', $outputBlob, 'the drained tail must reach the cassette');
+        } finally {
+            if ($recorder !== null) {
+                $recorder->close();
+            }
+            if (\is_resource($stdin)) {
+                \fclose($stdin);
+            }
+            if (\is_resource($stdout)) {
+                \fclose($stdout);
+            }
+            $pair->master()->close();
+            if (\file_exists($cassettePath)) {
+                @\unlink($cassettePath);
+            }
+        }
+    }
+
     public function testRecorderIsNoOpWhenUnset(): void
     {
         $this->requirePtySyscalls();

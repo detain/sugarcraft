@@ -179,6 +179,39 @@ final class PosixChildKillOnDropTest extends TestCase
         $this->assertSame(128 + 9, $exit, 'the pending promise must settle with the exit status the drop left');
     }
 
+    public function testOnExitReportsUnknownWhenAThirdPartyReapedTheChildBeforeTheDrop(): void
+    {
+        if (!\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('ext-pcntl is required to reap the child behind the handle.');
+        }
+
+        // The review repro: the drop closed the shared process with no code
+        // captured, and the listener's wait() then reported a clean 0.
+        $loop = new StreamSelectLoop();
+        $child = $this->spawnTermTrapper()->withKillOnDrop($this->termPolicy());
+        $pid = $child->pid();
+        \posix_kill($pid, 9);
+        $this->assertSame($pid, \pcntl_waitpid($pid, $status), 'the third party must reap the child');
+
+        $exit = null;
+        $child->onExit($loop, static function (int $code) use (&$exit): void {
+            $exit = $code;
+        }, 0.01);
+        unset($child);
+
+        $safety = $loop->addTimer(5.0, static fn () => $loop->stop());
+        $check = $loop->addPeriodicTimer(0.01, static function () use (&$exit, $loop): void {
+            if ($exit !== null) {
+                $loop->stop();
+            }
+        });
+        $loop->run();
+        $loop->cancelTimer($safety);
+        $loop->cancelTimer($check);
+
+        $this->assertSame(-1, $exit, 'a status that died in another waitpid is unknown (-1), never a clean exit');
+    }
+
     public function testDroppingAKillOnDropHandleAfterTheExitSendsNothing(): void
     {
         $child = $this->spawnTermTrapper()->withKillOnDrop($this->termPolicy());
