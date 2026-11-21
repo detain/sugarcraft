@@ -63,6 +63,9 @@ final class SettingsSchema
     /** @var array<string, list<SettingDefinition>> by locale */
     private static array $all = [];
 
+    /** @var array<string, array<string, SettingDefinition>> by locale, then by key */
+    private static array $byKey = [];
+
     private function __construct()
     {
     }
@@ -97,15 +100,27 @@ final class SettingsSchema
         return self::$all[$locale] = $definitions;
     }
 
+    /**
+     * The definition of $key, or null when no reader consults it.
+     *
+     * INDEXED, NOT SCANNED: every settings read on the paint path
+     * (UiSettings::value(), so mouse mode and screen-reader mode, among
+     * others) asks this, several times a frame, and a scan of every
+     * definition per read was 5-10% of a shell frame (profiled on
+     * ShellContrastTest). Keys are unique ({@see all()} refuses a
+     * duplicate), so one index per locale answers every read.
+     */
     public static function byKey(string $key): ?SettingDefinition
     {
-        foreach (self::all() as $definition) {
-            if ($definition->key === $key) {
-                return $definition;
+        $locale = T::locale();
+        if (!isset(self::$byKey[$locale])) {
+            self::$byKey[$locale] = [];
+            foreach (self::all() as $definition) {
+                self::$byKey[$locale][$definition->key] = $definition;
             }
         }
 
-        return null;
+        return self::$byKey[$locale][$key] ?? null;
     }
 
     /** @return list<string> */
