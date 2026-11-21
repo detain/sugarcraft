@@ -1432,6 +1432,46 @@ final class ChildRunLaunchTest extends TestCase
     }
 
     /**
+     * Regression: a heartbeat hook that throws on the launch path. The throw used to
+     * escape the loop with no kill and no settle, so the child kept running and the
+     * promise never settled. As in run(), the child is killed and reaped, and the
+     * caller sees the throw, here as the rejection.
+     */
+    public function testAHeartbeatThatThrowsKillsTheChildAndRejectsTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to see whether the child survived');
+        }
+        $loop = new StreamSelectLoop();
+        $pid = 0;
+        $start = hrtime(true);
+        try {
+            $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+                ->withTimeout(20.0)
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+                })
+                ->withHeartbeat(0.2, static function (): void {
+                    throw new \LogicException('beat failed');
+                })
+                ->launch($loop));
+            $this->fail('the heartbeat throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('beat failed', $e->getMessage());
+        } finally {
+            $alive = $pid > 0 && \posix_kill($pid, 0);
+            if ($alive) {
+                \posix_kill($pid, 9);
+            }
+        }
+
+        $this->assertGreaterThan(0, $pid, 'onSpawn never saw the child');
+        $this->assertFalse($alive, 'the child outlived a heartbeat throw on the launch path');
+        $this->assertLessThan(10.0, (hrtime(true) - $start) / 1e9, 'the launch waited on the child instead of killing it');
+    }
+
+    /**
      * launch() reports a signal death the way run() does: exitCode keeps the -1
      * sentinel and the signal number rides beside it. launch() used to drop the
      * number, so the same SIGTERM death read signal 15 from run() and null here.

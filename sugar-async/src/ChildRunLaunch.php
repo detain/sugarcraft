@@ -23,6 +23,10 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * grace budgets, and the result settles as TIMED_OUT (deadline or idle) or
  * CANCELLED. Signals are integer literals, the sugar-core doctrine.
  *
+ * A heartbeat hook that throws ends the launch the way a throwing beat ends run():
+ * the child is killed through the same ladder and reaped, and the promise then
+ * rejects with the thrown exception instead of resolving.
+ *
  * The TERM/KILL ladder and the reap are sugar-core's loop variants,
  * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::escalateAsync()} and
  * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::reapWhenExited()}, so a rung
@@ -107,6 +111,9 @@ final class ChildRunLaunch
 
     private bool $settled = false;
 
+    /** A heartbeat hook threw: the kill ladder runs, and the promise rejects with this. */
+    private ?\Throwable $failure = null;
+
     private readonly bool $windows;
 
     /**
@@ -158,8 +165,7 @@ final class ChildRunLaunch
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
         $this->timers[] = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, fn () => $this->checkExit());
         if ($this->heartbeatSeconds !== null && $this->onHeartbeat !== null) {
-            $beat = $this->onHeartbeat;
-            $this->timers[] = $this->loop->addPeriodicTimer($this->heartbeatSeconds, static fn () => $beat());
+            $this->timers[] = $this->loop->addPeriodicTimer($this->heartbeatSeconds, fn () => $this->beat());
         }
 
         if ($this->windows) {
@@ -186,6 +192,31 @@ final class ChildRunLaunch
         // Last, so a token that is already cancelled runs the ladder against a fully armed child.
         if ($this->cancellation !== null) {
             $this->cancelSubscription = $this->cancellation->onCancel(fn () => $this->cancel());
+        }
+    }
+
+    /**
+     * One heartbeat. A throw from the hook must not escape the loop: that would leave
+     * the child running and the promise unsettled. As run() does on a beat that
+     * throws, the child is killed and reaped, and the throw then reaches the caller,
+     * here as the promise's rejection. No further beat runs once one has thrown.
+     */
+    private function beat(): void
+    {
+        if ($this->settled || $this->failure !== null || $this->onHeartbeat === null) {
+            return;
+        }
+
+        try {
+            ($this->onHeartbeat)();
+        } catch (\Throwable $e) {
+            if ($this->settled) {
+                return;
+            }
+            $this->failure = $e;
+            // A ladder already running (deadline, idle, cancel) carries on, and its
+            // finish() rejects with the failure; otherwise the ladder starts here.
+            $this->expire();
         }
     }
 
@@ -595,6 +626,14 @@ final class ChildRunLaunch
                 $this->proc,
                 StagedStdin::reapHook($staged, $retry),
             );
+        }
+
+        if ($this->failure !== null) {
+            // The child is reaped above (or left to the loop's reap past the kill
+            // budget), so the rejection leaves nothing running unaccounted for.
+            $this->deferred->reject($this->failure);
+
+            return;
         }
 
         $r = $this->capture->result(DrainResult::CLOSED);

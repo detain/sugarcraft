@@ -378,7 +378,8 @@ final class ChildRun
      * first call comes one interval in. run() beats while it reads the pipes and while
      * it waits for an exit after the output has closed; launch() beats on a loop timer
      * until the run settles. Calls come from this process only. Unlike the idle budget,
-     * a beat never ends the run.
+     * a beat never ends the run, unless the hook throws: the child is then killed and
+     * reaped, and run() rethrows the throw while launch() rejects with it.
      *
      * @param callable(): void $onBeat
      */
@@ -423,10 +424,12 @@ final class ChildRun
      * after its kill budget is reaped by that same check once the kernel releases
      * it, never by a blocking proc_close().
      *
-     * The promise resolves (never rejects) once the child is done, including when
-     * it was cancelled. It rejects when the child cannot be started, or when onSpawn
-     * throws whatever the type: the child is killed first, and the throw is the
-     * rejection reason.
+     * The promise resolves once the child is done, including when it was cancelled.
+     * It rejects when the child cannot be started, or when onSpawn throws whatever
+     * the type: the child is killed first, and the throw is the rejection reason. It
+     * also rejects when the heartbeat hook throws: the child is killed through the
+     * kill ladder and reaped first, as run() does before it rethrows a beat's throw,
+     * and the throw is the rejection reason.
      *
      * @return PromiseInterface<ChildResult>
      */
