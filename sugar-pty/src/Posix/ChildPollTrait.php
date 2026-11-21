@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Pty\Lang;
 
 /**
  * Package-private trait shared by {@see \SugarCraft\Pty\Child} and any other
@@ -39,6 +40,13 @@ trait ChildPollTrait
     private ?int $exitCode = null;
 
     private const WNOHANG = 1;
+
+    /**
+     * Probe cadence of {@see onExit()}'s fallback poll, used only where
+     * SIGCHLD cannot be delivered: close to the sync {@see wait()} loop's
+     * 10 ms sleep, at effectively zero CPU.
+     */
+    private const EXIT_FALLBACK_POLL_SECONDS = 0.015;
 
     /**
      * Try to reap an exited child via waitpid() FFI (non-blocking).
@@ -203,34 +211,172 @@ trait ChildPollTrait
     }
 
     /**
+     * Run $fn once, with the exit status, when this child exits.
+     *
+     * DRIVEN BY SIGCHLD where the runtime delivers it: the listener rides the
+     * loop's own signal API ({@see LoopInterface::addSignal()}), so the loop
+     * multiplexes it with every other SIGCHLD listener instead of this class
+     * claiming the process-global disposition for itself. A delivered SIGCHLD
+     * only queues a probe on the next loop tick; the probe asks this child
+     * alone ({@see exited()}, a `waitpid(pid, WNOHANG)`), so a SIGCHLD from any
+     * other child costs one probe and never reaps someone else's status.
+     *
+     * NO POLL ON THE SIGNAL PATH. Nothing periodic is armed: the loop sleeps
+     * until a child exits. One probe runs on the next tick after the listener
+     * is armed, because a SIGCHLD delivered before that was not heard.
+     *
+     * THE FALLBACK. A periodic {@see exited()} probe every $fallbackPollSec
+     * takes over only where SIGCHLD cannot be delivered: no ext-pcntl (no
+     * `SIGCHLD` constant), a loop whose `addSignal()` throws
+     * \BadMethodCallException (StreamSelectLoop without pcntl), or a SIGCHLD
+     * disposition the loop does not own. That last case is a handler installed
+     * with `pcntl_signal()` directly, such as
+     * {@see \SugarCraft\Pty\SignalForwarder::attachSigchld()}, or SIG_IGN:
+     * arming the loop's listener would replace that handler, and the loop puts
+     * SIG_DFL back, not the old handler, when its last listener goes.
+     *
+     * A handler installed with `pcntl_signal()` AFTER this call replaces the
+     * loop's and silences the listener, and $fn then never runs; install such
+     * handlers first, so this call sees them and falls back to the poll.
+     *
+     * EXACTLY ONCE. $fn never runs synchronously inside this call, even for a
+     * child that has already exited: it runs on a loop tick or timer, with
+     * {@see wait()} semantics (128 + signo for a signal death read through
+     * the FFI probe; -1 when the code could not be captured). The listener or
+     * timer is removed before $fn runs, so an exception $fn throws escapes
+     * that tick of `$loop->run()` without a second call.
+     *
+     * The armed listener or timer keeps $loop running until $fn has run or the
+     * returned closure is called, the same as a pending timer would.
+     *
+     * Mirrors charmbracelet/x/xpty.Cmd.Wait() (the Go side blocks a goroutine;
+     * here the loop holds a callback).
+     *
+     * @param callable(int):void $fn
+     * @param float              $fallbackPollSec probe cadence in seconds, used
+     *                                            only where SIGCHLD cannot be
+     *                                            delivered
+     * @return \Closure():void detaches $fn if it has not run yet (removes the
+     *                         listener or timer); a no-op once $fn has run
+     * @throws \InvalidArgumentException if $fallbackPollSec is not a finite
+     *                                   number of seconds > 0
+     */
+    public function onExit(
+        LoopInterface $loop,
+        callable $fn,
+        float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS,
+    ): \Closure {
+        if (!\is_finite($fallbackPollSec) || $fallbackPollSec <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('child.on_exit_poll_invalid', [
+                'seconds' => $fallbackPollSec,
+            ]));
+        }
+
+        $settled = false;
+        $probeQueued = false;
+        /** @var int|null $signal */
+        $signal = null;
+        /** @var \Closure|null $listener */
+        $listener = null;
+        /** @var TimerInterface|null $timer */
+        $timer = null;
+
+        $disarm = static function () use (&$signal, &$listener, &$timer, $loop): void {
+            if ($listener !== null) {
+                $loop->removeSignal($signal, $listener);
+                $listener = null;
+            }
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+        };
+
+        $probe = function () use (&$settled, &$probeQueued, $disarm, $fn): void {
+            $probeQueued = false;
+            if ($settled || !$this->exited()) {
+                return;
+            }
+            $settled = true;
+            $disarm();
+            // exited() === true guarantees wait() returns without blocking:
+            // the exit status is already captured (or the process handle is
+            // gone), so this is reaping + cache-read only.
+            $fn($this->wait());
+        };
+
+        // A burst of SIGCHLDs collapses into one queued probe. The listener
+        // only queues: with pcntl async signals it runs between two opcodes of
+        // whatever code was executing, so $fn must not run from it.
+        $queueProbe = static function () use (&$probeQueued, $loop, $probe): void {
+            if ($probeQueued) {
+                return;
+            }
+            $probeQueued = true;
+            $loop->futureTick($probe);
+        };
+
+        $detach = static function () use (&$settled, $disarm): void {
+            $settled = true;
+            $disarm();
+        };
+
+        if ($this->exited()) {
+            $queueProbe();
+
+            return $detach;
+        }
+
+        $sigchld = self::deliverableSigchld();
+        if ($sigchld !== null) {
+            $handler = static function () use ($queueProbe): void {
+                $queueProbe();
+            };
+            try {
+                $loop->addSignal($sigchld, $handler);
+                $signal = $sigchld;
+                $listener = $handler;
+            } catch (\BadMethodCallException) {
+                // The loop cannot deliver signals: fall through to the poll.
+            }
+        }
+
+        if ($listener !== null) {
+            $queueProbe();
+
+            return $detach;
+        }
+
+        $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+
+        return $detach;
+    }
+
+    /**
      * Async variant of {@see wait()}: returns a ReactPHP promise that
      * resolves with the child's exit code without ever blocking the
      * event loop.
      *
-     * Implementation is a periodic-timer poll of the non-blocking
-     * {@see exited()} probe (which itself fast-paths through the FFI
-     * `waitpid(WNOHANG)` in {@see tryWaitpid()}). A SIGCHLD handler is
-     * deliberately NOT used: POSIX signal dispositions are process-global,
-     * so installing one would silently conflict with user code and with
-     * sugar-pty's own SignalForwarder, and ext-pcntl (plus a loop backend
-     * that tolerates foreign `pcntl_signal` calls) is not guaranteed.
-     * A 15 ms default poll keeps exit-detection latency comparable to the
-     * sync `wait()` fallback loop while costing effectively zero CPU.
+     * Built on {@see onExit()}: SIGCHLD wakes the loop where the runtime
+     * delivers it, and nothing periodic is armed. $pollIntervalSec is the
+     * cadence of onExit()'s fallback poll only, used where SIGCHLD cannot be
+     * delivered (see onExit() for when that is).
      *
-     * Multiple concurrent waitAsync() calls each get their own timer and
+     * Multiple concurrent waitAsync() calls each get their own listener and
      * all resolve independently — the exit code is cached on first capture
      * so later resolutions are pure reads.
      *
-     * Cancelling the returned promise cancels the poll timer for THAT
-     * call only (other pending waitAsync() promises keep polling) and
-     * rejects with a \RuntimeException. The child itself is not signalled.
+     * Cancelling the returned promise detaches THAT call's listener (or
+     * fallback timer) only — other pending waitAsync() promises keep
+     * waiting — and rejects with a \RuntimeException. The child itself is
+     * not signalled.
      *
      * @param LoopInterface|null $loop            defaults to the global Loop::get()
-     * @param float              $pollIntervalSec exit-probe cadence in seconds
+     * @param float              $pollIntervalSec fallback exit-probe cadence in seconds
      * @return PromiseInterface<int> resolves with the exit code ({@see wait()} semantics,
      *                               including -1 when the code could not be captured)
      */
-    public function waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = 0.015): PromiseInterface
+    public function waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = self::EXIT_FALLBACK_POLL_SECONDS): PromiseInterface
     {
         if ($pollIntervalSec <= 0.0) {
             throw new \InvalidArgumentException("pollIntervalSec must be > 0; got {$pollIntervalSec}");
@@ -240,35 +386,54 @@ trait ChildPollTrait
             return \React\Promise\resolve($this->wait());
         }
 
-        // Resolve the loop only when a timer is actually needed — the
+        // Resolve the loop only when a listener is actually needed — the
         // already-exited fast path must not instantiate the global loop.
         $loop ??= Loop::get();
 
-        /** @var TimerInterface|null $timer */
-        $timer = null;
-        $deferred = new Deferred(function (callable $resolve, callable $reject) use (&$timer, $loop): void {
-            if ($timer !== null) {
-                $loop->cancelTimer($timer);
-                $timer = null;
+        /** @var \Closure|null $detach */
+        $detach = null;
+        $deferred = new Deferred(static function (callable $resolve, callable $reject) use (&$detach): void {
+            if ($detach !== null) {
+                $detach();
+                $detach = null;
             }
             $reject(new \RuntimeException('waitAsync() cancelled before the child exited'));
         });
 
-        $timer = $loop->addPeriodicTimer($pollIntervalSec, function () use (&$timer, $loop, $deferred): void {
-            if (!$this->exited()) {
-                return;
-            }
-            if ($timer !== null) {
-                $loop->cancelTimer($timer);
-                $timer = null;
-            }
-            // exited() === true guarantees wait() returns without blocking:
-            // the exit status is already captured (or the process handle is
-            // gone), so this is reaping + cache-read only.
-            $deferred->resolve($this->wait());
-        });
+        $detach = $this->onExit($loop, static function (int $code) use ($deferred): void {
+            $deferred->resolve($code);
+        }, $pollIntervalSec);
 
         return $deferred->promise();
+    }
+
+    /**
+     * The SIGCHLD number when the loop may own its delivery, else null.
+     *
+     * Only an untouched disposition (SIG_DFL) or one a ReactPHP loop installed
+     * (its signal multiplexer) is taken. Under ext-uv or ext-ev the loop
+     * installs its handler below PHP, so pcntl still reads SIG_DFL and the
+     * loop's own `addSignal()` decides.
+     */
+    private static function deliverableSigchld(): ?int
+    {
+        if (!\defined('SIGCHLD')) {
+            return null;
+        }
+        $signo = (int) \constant('SIGCHLD');
+        if (!\function_exists('pcntl_signal_get_handler')) {
+            return $signo;
+        }
+        $handler = \pcntl_signal_get_handler($signo);
+        if ($handler === \SIG_DFL) {
+            return $signo;
+        }
+        // react/event-loop's StreamSelectLoop installs [SignalsHandler, 'call'].
+        if (\is_array($handler) && ($handler[0] ?? null) instanceof \React\EventLoop\SignalsHandler) {
+            return $signo;
+        }
+
+        return null;
     }
 
     /**
@@ -310,6 +475,13 @@ trait ChildPollTrait
         }
         $status = @\proc_get_status($this->process);
         if (\is_array($status) && ($status['running'] ?? true) === false) {
+            // Keep the code this status poll consumed: a handle that shares
+            // this child (PosixChild::withKillOnDrop()) reads it after the
+            // close below.
+            $code = (int) ($status['exitcode'] ?? -1);
+            if ($code >= 0 && $this->exitCode === null) {
+                $this->exitCode = $code;
+            }
             @\proc_close($this->process);
             $this->process = null;
         }

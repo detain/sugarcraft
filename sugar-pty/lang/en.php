@@ -92,5 +92,6 @@ return [
     'windows.wide.to_utf16_unavailable' => 'PHP cannot convert to UTF-16LE on this build',
     'termination.signal_invalid' => 'TerminationPolicy signal must be a signal number from 1 to {max}; got {signal}',
     'termination.async_cancelled' => 'TerminationPolicy::applyAsync() was cancelled before the ladder settled',
+    'child.on_exit_poll_invalid' => 'onExit() fallback poll interval must be a finite number of seconds > 0; got {seconds}',
     'termination.budget_invalid' => 'TerminationPolicy {name} must be a finite number of seconds >= 0; got {seconds}',
 ];
