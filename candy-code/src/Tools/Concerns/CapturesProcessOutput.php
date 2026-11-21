@@ -298,7 +298,9 @@ trait CapturesProcessOutput
         return [
             'stdout' => rtrim($r->stdout, "\n"),
             'stderr' => rtrim($r->stderr, "\n"),
-            'exitCode' => $timedOut ? 124 : ($r->exitCode ?? -1),
+            // A signal death reads -1 from ChildRun's poll, which is not the number the
+            // result reports: the signal is, as proc_close() gives it on an unpolled child.
+            'exitCode' => $timedOut ? 124 : ($r->signal ?? $r->exitCode ?? -1),
             'truncatedBytes' => $r->droppedBytes,
             'stdoutDropped' => $stdoutDropped,
             'stderrDropped' => $stderrDropped,

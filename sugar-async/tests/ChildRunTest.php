@@ -188,6 +188,30 @@ final class ChildRunTest extends TestCase
         $this->assertFalse($r->succeeded());
     }
 
+    /**
+     * A signal death keeps exitCode -1, the sentinel launch() also reports, and the
+     * number moves to signal(). PHP's status poll reads the number only in termsig,
+     * and the poll is what reaps the child, so the number is taken from that poll.
+     */
+    public function testASignalDeathCarriesTheSignalNumberBesideTheSentinel(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])->withTimeout(5.0)->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
+    public function testAnExitCodeCarriesNoSignal(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'exit 3'])->withTimeout(5.0)->run();
+
+        $this->assertSame(3, $r->exitCode);
+        $this->assertNull($r->signal);
+    }
+
     public function testStdinPayloadIsDeliveredToTheChild(): void
     {
         $this->requirePosixPipes();

@@ -89,6 +89,9 @@ final class ChildRun
     /** How often an abandoned launch child is checked for exit before its handle is closed. */
     private const ABANDON_POLL_SECONDS = 0.02;
 
+    /** How often reapIfExited() polls a child whose output has closed. */
+    private const REAP_POLL_MICROSECONDS = 10_000;
+
     /** Why run() stopped the walk before the output closed. */
     private const STOP_IDLE = 'idle';
     private const STOP_CANCELLED = 'cancelled';
@@ -454,8 +457,9 @@ final class ChildRun
         // child has been reaped reports -1, so the exit code is taken here.
         // The pid is kept with it: a reaped setsid wrapper names the group its job stayed in.
         $exitCode = null;
+        $signal = null;
         $spawnPid = 0;
-        $running = static function () use ($proc, &$exitCode, &$spawnPid): bool {
+        $running = static function () use ($proc, &$exitCode, &$signal, &$spawnPid): bool {
             if ($exitCode !== null) {
                 return false;
             }
@@ -468,6 +472,7 @@ final class ChildRun
                 return true;
             }
             $exitCode = (int) $status['exitcode'];
+            $signal = self::signalOf($status);
 
             return false;
         };
@@ -559,11 +564,11 @@ final class ChildRun
                     // The liveness probe reaped the child, so proc_close() would report -1.
                     proc_close($proc);
 
-                    return self::result($r, $exitCode, ChildResult::EXITED);
+                    return self::result($r, $exitCode, ChildResult::EXITED, $signal);
                 }
-                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat);
+                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat, $signal);
                 if ($code !== null) {
-                    return self::result($r, $code, ChildResult::EXITED);
+                    return self::result($r, $code, ChildResult::EXITED, $signal);
                 }
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
@@ -582,7 +587,7 @@ final class ChildRun
                 default => ChildResult::PIPE_FAILED,
             };
 
-            return self::result($r, $exitCode ?? $code, $status);
+            return self::result($r, $exitCode ?? $code, $status, $signal);
         } finally {
             $cancelSubscription?->unsubscribe();
         }
@@ -603,7 +608,7 @@ final class ChildRun
      * @param callable(): float $clock
      * @param null|\Closure(): void $beat  The throttled heartbeat, beaten once per slice while the wait lasts
      */
-    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop, ?\Closure $beat = null): ?int
+    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop, ?\Closure $beat = null, ?int &$signal = null): ?int
     {
         while (true) {
             if ($stop !== null) {
@@ -613,7 +618,7 @@ final class ChildRun
                 $beat();
             }
             $remaining = max(0.0, $deadline - $clock());
-            $code = BoundedShutdown::reapIfExited($proc, min($remaining, self::IDLE_BEAT_SECONDS));
+            $code = self::reapIfExited($proc, min($remaining, self::IDLE_BEAT_SECONDS), $clock, $signal);
             if ($code !== null) {
                 return $code;
             }
@@ -624,6 +629,48 @@ final class ChildRun
                 return null;
             }
         }
+    }
+
+    /**
+     * BoundedShutdown::reapIfExited() for a child whose output has closed, with the
+     * signal kept. The poll that reaps the child reads a signal death as exit code
+     * -1 and carries the number only in termsig, and proc_close() after that poll
+     * reports -1 again, so the number has to be taken from the poll itself.
+     *
+     * @param resource $proc
+     * @param callable(): float $clock
+     */
+    private static function reapIfExited($proc, float $budget, callable $clock, ?int &$signal): ?int
+    {
+        $until = $clock() + $budget;
+        while (true) {
+            $status = \proc_get_status($proc);
+            if ($status['running'] !== true) {
+                $signal = self::signalOf($status);
+                \proc_close($proc);
+
+                return (int) $status['exitcode'];
+            }
+            if ($clock() >= $until) {
+                return null;
+            }
+            usleep(self::REAP_POLL_MICROSECONDS);
+        }
+    }
+
+    /**
+     * The number of the signal that ended a child, from a status poll that saw
+     * the child die of one; null for an exit, or a status that carries no signal.
+     *
+     * @param array<string, mixed> $status a proc_get_status() result
+     */
+    private static function signalOf(array $status): ?int
+    {
+        if (($status['signaled'] ?? false) !== true || !isset($status['termsig'])) {
+            return null;
+        }
+
+        return (int) $status['termsig'];
     }
 
     /**
@@ -860,7 +907,7 @@ final class ChildRun
         return new ChildResult('', '', null, ChildResult::CANCELLED, 0);
     }
 
-    private static function result(DrainResult $r, ?int $code, string $status): ChildResult
+    private static function result(DrainResult $r, ?int $code, string $status, ?int $signal = null): ChildResult
     {
         return new ChildResult(
             $r->buffer(1),
@@ -870,6 +917,7 @@ final class ChildRun
             self::dropped($r),
             $r->droppedBytes(2),
             $r->abandonedAfterExit,
+            $signal,
         );
     }
 

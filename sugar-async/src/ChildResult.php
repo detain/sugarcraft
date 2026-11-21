@@ -31,6 +31,9 @@ final class ChildResult
      *                                 that discards stderr can report stdout's drops alone
      * @param bool $abandonedPipes  Output pipes were abandoned after the child exited: a descendant
      *                              still held them, and they were cut once silent for the exit grace
+     * @param null|int $signal  The number of the signal that killed the child, when the status poll
+     *                          that reaped it saw one. $exitCode is -1 for that death; this is the
+     *                          number the -1 stands for, and null when no signal was observed
      */
     public function __construct(
         public readonly string $stdout,
@@ -40,6 +43,7 @@ final class ChildResult
         public readonly int $droppedBytes,
         public readonly int $droppedStderrBytes = 0,
         public readonly bool $abandonedPipes = false,
+        public readonly ?int $signal = null,
     ) {
     }
 
