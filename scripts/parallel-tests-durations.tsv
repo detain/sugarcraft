@@ -1173,7 +1173,7 @@ candy-code/tests/Agents/Live/TranscriptLogTailTest.php	0.053	12
 candy-code/tests/Palette/PaletteCatalogTest.php	0.053	10
 candy-code/tests/Tui/AgentActivityLineTest.php	0.053	31
 candy-code/tests/Tui/StallDetectorTest.php	0.053	21
-candy-code/tests/Agents/PrimaryAgentTest.php	0.052	10
+candy-code/tests/Agents/PrimaryAgentTest.php	0.052	11
 candy-code/tests/App/SlashMenuTabCompletionTest.php	0.052	16
 candy-code/tests/Cli/BootstrapSubdirectoryLaunchTest.php	0.052	3
 candy-code/tests/Commands/CommandFailureTranscriptTest.php	0.052	7

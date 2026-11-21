@@ -1442,6 +1442,14 @@ final class AgentManager
      * (narrow-only doctrine, the same one
      * {@see \SugarCraft\Code\Agents\PrimaryAgent::apply()} documents).
      *
+     * AN EMPTIED GRANT IS `[]` HERE, as on {@see grantedToolsFor()}: a grant
+     * the preset's own denylist (or `mcpServers` allowlist) empties — `tools:
+     * ['Bash']` with `disallowedTools: ['Bash']` — is a narrowing to nothing,
+     * not silence. {@see \SugarCraft\Code\Agents\PrimaryAgent::apply()}
+     * reads null as "leave the launch roster standing", so a null here kept the
+     * very tool the preset denies on the main chat. Runtime still sends an
+     * empty roster on the wire as null (`$app->tools ?: null`).
+     *
      * @return ?list<Tool>
      *
      * @throws \RuntimeException the same unresolved-grant refusal the
@@ -1450,7 +1458,7 @@ final class AgentManager
      */
     public function toolsForPrimary(Agent $agent): ?array
     {
-        return $this->resolveGrantedTools($agent);
+        return $this->resolveGrantedTools($agent, emptiedAsAbsent: false);
     }
 
     /**
@@ -1551,7 +1559,8 @@ final class AgentManager
      * @param bool $emptiedAsAbsent true (every request-building caller) sends a
      *        grant its own denylist or server allowlist emptied as null, per the
      *        measurement at the return; false returns `[]` for a caller that
-     *        reads null as "inherit everything" ({@see grantedToolsFor()}).
+     *        reads null as "inherit everything" ({@see grantedToolsFor()},
+     *        {@see toolsForPrimary()}).
      * @return ?list<Tool>
      * @throws \RuntimeException When a declaration is malformed, resolves to no
      *         tool in the registry, or the registry holds a non-{@see Tool}.
@@ -1804,8 +1813,9 @@ final class AgentManager
         //
         // The DECISION does not rest on the paragraph. It is pinned by
         // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
-        // which reds if this returns `[]`. {@see grantedToolsFor()} opts out:
-        // its caller reads null as "no narrowing", so it gets the `[]`.
+        // which reds if this returns `[]`. {@see grantedToolsFor()} and
+        // {@see toolsForPrimary()} opt out: their callers read null as "no
+        // narrowing", so they get the `[]`.
         return $granted === [] && $emptiedAsAbsent ? null : $granted;
     }
 

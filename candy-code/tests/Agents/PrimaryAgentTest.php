@@ -85,6 +85,26 @@ final class PrimaryAgentTest extends TestCase
         $this->assertSame([$alpha, $beta], array_values($applied->tools()), 'null-law: silence is not a narrowing');
     }
 
+    /**
+     * A grant the preset's own denylist empties is a narrowing to NOTHING, not
+     * silence: toolsForPrimary() used to hand it back as null, which apply()
+     * reads as "leave the launch roster standing", so the main chat kept the
+     * very tool the preset denies.
+     */
+    public function testAGrantItsOwnDenylistEmptiesLeavesTheMainChatNoTools(): void
+    {
+        [$alpha, $beta] = [$this->primaryTool('alpha'), $this->primaryTool('beta')];
+        $manager = $this->managerWith([$alpha, $beta]);
+
+        [, $applied] = PrimaryAgent::apply(
+            $this->backend([$alpha, $beta]),
+            $manager,
+            $this->agent(tools: ['alpha'], disallowedTools: ['alpha']),
+        );
+
+        $this->assertSame([], array_values($applied->tools()), 'a fully denied grant must not inherit the launch roster');
+    }
+
     public function testApplyCarriesModelAndEffortButNeverAnInheritedModel(): void
     {
         $launch = $this->backend();
@@ -287,6 +307,7 @@ final class PrimaryAgentTest extends TestCase
 
     /**
      * @param list<string> $tools
+     * @param list<string> $disallowedTools
      */
     private function agent(
         string $prompt = 'Test prompt',
@@ -295,6 +316,7 @@ final class PrimaryAgentTest extends TestCase
         array $tools = [],
         PermissionMode $permissionMode = PermissionMode::Default,
         ?\SugarCraft\Code\Agents\Effort $effort = null,
+        array $disallowedTools = [],
     ): Agent {
         return new Agent(
             name: 'primary-under-test',
@@ -306,6 +328,7 @@ final class PrimaryAgentTest extends TestCase
             skillNames: [],
             hooks: [],
             isActive: true,
+            disallowedTools: $disallowedTools,
             permissionMode: $permissionMode,
             effort: $effort,
             inheritsModel: $inheritsModel,
