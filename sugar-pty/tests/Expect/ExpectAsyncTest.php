@@ -114,6 +114,28 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame('SLEUTH', $value);
     }
 
+    public function testOneReadinessEventDrainsEveryByteAlreadyBuffered(): void
+    {
+        // A loop that polls the fd (ext-uv, ext-ev) never reports bytes PHP's
+        // stream layer already pulled into its own buffer, so one readiness
+        // callback must read until the master answers nothing. The callback
+        // is fired by hand once: a listener that reads a single chunk leaves
+        // the needle unread.
+        [$master, $peer] = $this->socketMaster();
+        \fwrite($peer, \str_repeat('x', 3000) . 'PROMPT');
+        $loop = new ListenerCapturingLoop();
+
+        $promise = Expect::on($master, readChunk: 16, loop: $loop)->expectAsync('PROMPT', 1.0);
+        $this->assertCount(1, $loop->readListeners);
+        ($loop->readListeners[0])();
+        // The loop holds no read stream: only the drain's own continuation
+        // ticks can reach the needle, 188 chunks of 16 bytes in.
+        [$value, $error] = $this->settle($loop, $promise);
+
+        $this->assertNull($error, 'one readiness event must drain what is already buffered');
+        $this->assertSame('PROMPT', $value);
+    }
+
     public function testAMatchAlreadyInTheBufferResolvesWithoutReading(): void
     {
         [$master] = $this->socketMaster();
@@ -560,5 +582,78 @@ final class ChildWithoutOnExit implements Child
 
     public function kill(int $signal): void
     {
+    }
+}
+
+/** Records each read listener so a test can fire one readiness event by hand. */
+final class ListenerCapturingLoop implements LoopInterface
+{
+    private readonly StreamSelectLoop $inner;
+
+    /** @var list<callable> */
+    public array $readListeners = [];
+
+    public function __construct()
+    {
+        $this->inner = new StreamSelectLoop();
+    }
+
+    public function addReadStream($stream, $listener): void
+    {
+        $this->readListeners[] = $listener;
+    }
+
+    public function addWriteStream($stream, $listener): void
+    {
+        $this->inner->addWriteStream($stream, $listener);
+    }
+
+    public function removeReadStream($stream): void
+    {
+    }
+
+    public function removeWriteStream($stream): void
+    {
+        $this->inner->removeWriteStream($stream);
+    }
+
+    public function addTimer($interval, $callback): \React\EventLoop\TimerInterface
+    {
+        return $this->inner->addTimer($interval, $callback);
+    }
+
+    public function addPeriodicTimer($interval, $callback): \React\EventLoop\TimerInterface
+    {
+        return $this->inner->addPeriodicTimer($interval, $callback);
+    }
+
+    public function cancelTimer(\React\EventLoop\TimerInterface $timer): void
+    {
+        $this->inner->cancelTimer($timer);
+    }
+
+    public function futureTick($listener): void
+    {
+        $this->inner->futureTick($listener);
+    }
+
+    public function addSignal($signal, $listener): void
+    {
+        $this->inner->addSignal($signal, $listener);
+    }
+
+    public function removeSignal($signal, $listener): void
+    {
+        $this->inner->removeSignal($signal, $listener);
+    }
+
+    public function run(): void
+    {
+        $this->inner->run();
+    }
+
+    public function stop(): void
+    {
+        $this->inner->stop();
     }
 }

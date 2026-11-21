@@ -743,18 +743,23 @@ final class Expect
                 : ExpectEofException::forNeedles($needles, $buffer));
         };
 
-        // Reads what the master holds now: true once the promise has settled.
-        // Bounded by chunk count so a child still writing cannot pin the loop.
-        $pull = function (int $maxChunks) use (&$buffer, &$settled, $search, $disarm, $deferred, $eof, $fail): bool {
+        // Reads until the master answers nothing: a loop that polls the fd
+        // (ext-uv, ext-ev) never reports bytes PHP's stream layer already
+        // pulled into its own buffer, so one readiness event must drain them.
+        // A pass stops at DRAIN_MAX_CHUNKS so a child still writing cannot pin
+        // the loop, and a capped pass continues on the next tick. True once
+        // the promise has settled.
+        $pull = function () use (&$pull, &$buffer, &$settled, $loop, $search, $disarm, $deferred, $eof, $fail): bool {
             try {
-                for ($i = 0; $i < $maxChunks && !$settled; $i++) {
+                for ($i = 0; $i < self::DRAIN_MAX_CHUNKS && !$settled; $i++) {
                     $chunk = $this->master->read($this->readChunk, null);
                     if ($chunk === null) {
-                        break;
+                        return $settled;
                     }
                     if ($chunk === '') {
                         $eof();
-                        break;
+
+                        return true;
                     }
                     $this->recorder?->recordOutput($chunk);
                     $buffer .= $chunk;
@@ -766,12 +771,19 @@ final class Expect
             } catch (\Throwable $error) {
                 $fail($error);
             }
+            if (!$settled) {
+                $loop->futureTick(static function () use (&$pull, &$settled): void {
+                    if (!$settled) {
+                        $pull();
+                    }
+                });
+            }
 
             return $settled;
         };
 
         $loop->addReadStream($stream, static function () use ($pull): void {
-            $pull(1);
+            $pull();
         });
 
         $timeoutTimer = $loop->addTimer($timeoutSec, static function () use (&$timeoutTimer, &$buffer, $needles, $isPattern, $timeoutSec, $fail): void {
@@ -786,12 +798,12 @@ final class Expect
             // stream stays watched for EXIT_DRAIN_SECONDS before the verdict.
             $detachExit = $child->onExit($loop, static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
                 $detachExit = null;
-                if ($settled || $pull(self::DRAIN_MAX_CHUNKS)) {
+                if ($settled || $pull()) {
                     return;
                 }
                 $graceTimer = $loop->addTimer(self::EXIT_DRAIN_SECONDS, static function () use (&$graceTimer, &$buffer, $code, $pull, $needles, $isPattern, $fail): void {
                     $graceTimer = null;
-                    if ($pull(self::DRAIN_MAX_CHUNKS)) {
+                    if ($pull()) {
                         return;
                     }
                     $fail(ExpectEofException::forChildExit($needles, $code, $buffer, $isPattern));
