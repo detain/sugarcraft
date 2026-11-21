@@ -366,6 +366,11 @@ final class ChafaRendererChildTest extends TestCase
         $settle = new \ReflectionMethod(ChafaRenderer::class, 'settleLeave');
         $settle->setAccessible(true);
 
+        // The sleep never exits on its own, so the ladder's production
+        // natural-exit wait (five seconds) was pure test time; tearDown's
+        // reset() restores the defaults.
+        ChafaRenderer::setReapBudgetsForTesting(200, 150);
+
         $settle->invoke(null, $proc, $pipes, false);
 
         $this->assertFalse(is_resource($pipes[1]), 'the stdout pipe must be released by the settle');
