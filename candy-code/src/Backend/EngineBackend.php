@@ -929,8 +929,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * The model this backend's requests actually go to, when its provider
-     * talks to one other than {@see $model} and has learned which (audit
-     * 15b-35) - the SGLang server's served model on a default-id launch.
+     * talks to one other than {@see $model} and has learned which: the SGLang server's served model on a default-id launch.
      * Null otherwise, and for any provider that cannot say.
      *
      * The parent learns it in one of two ways: the provider's own discovery
@@ -947,7 +946,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * The model id this backend was BUILT with — the configured one, which
      * {@see servedModel()} overrides when the provider has learned it talks to
      * another. Read by `Renderer`'s status-bar model segment as the fallback,
-     * the same order `Tui\Renderer::modelLabel()` applies (audit 15b-35).
+     * the same order `Tui\Renderer::modelLabel()` applies.
      */
     public function model(): string
     {

@@ -58,9 +58,11 @@ final class DecodedAnimation
     }
 
     /**
-     * Seal a completed walk. @internal — {@see Decoder::decodeFile()} owns
-     * the only production call; the seam is public so tests can pin the
-     * reporting rules in isolation.
+     * Seal a completed walk.
+     *
+     * @internal {@see Decoder::decodeFile()} owns the only production call;
+     *           the seam is public so tests can pin the reporting rules in
+     *           isolation.
      *
      * @param list<Frame> $frames
      * @param int<1, max>|null $loopPlays

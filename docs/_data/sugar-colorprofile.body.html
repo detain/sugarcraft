@@ -106,6 +106,8 @@ $writer-&gt;write("\x1b[38;2;255;0;0mdisk low\x1b[0m\n");   // written with the 
 <tr><td>NearestColor</td><td>__construct(ColorDistance) / ansi256(Color) / ansi16(Color) / closest(Color, array) / withError(Color, ?&err) / metric() / static palette256() / palette256Lab() / palette16Lab()</td><td>Opt-in nearest-palette matcher over the cached Lab palettes</td></tr>
 <tr><td>PaletteIndex</td><td>static fromPalette(array, ColorDistance) / nearest(Color) / metric() / palette() / count()</td><td>Precomputed Lab index over any fixed palette</td></tr>
 </table>
+        <!-- api-reference:generated -->
+
     <h3 style="margin-top: 40px;">Configuration and options</h3>
     <p>Detection has no config file. The answer comes from the environment, and the host can pin it in code. The table lists the environment variables in ladder order. The first leg that matches wins.</p>
 <table class="api-table">

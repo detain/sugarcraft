@@ -105,7 +105,11 @@ foreach (SideBySideFormat::rows($diff) as $row) {
 </table>
     <p style="margin-top: 12px;">With the default options the hunk bodies and grouping match candy-code's <code>BuildsUnifiedDiff</code> byte for byte. The header lines follow GNU, so the two can differ there.</p>
 
-    <h3 style="margin-top: 40px;">Styling and markers</h3>
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum under <code>src/</code>, grouped by namespace, with its method table. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- api-reference:generated -->
+
+<h3 style="margin-top: 40px;">Styling and markers</h3>
     <p>The engine never colors anything. Color should never carry a change alone, so every row arrives with two non-color channels. The first is a <code>LineKind</code> with its column-0 marker: a space, <code>-</code> or <code>+</code>. The second is, for scanned patches, a <code>ScanRowKind</code> that separates hunk headers, annotations and out-of-hunk prose from content. A viewer that tints rows should keep the sign column as well, because a red-versus-green difference alone fails WCAG 1.4.1. The candy-code-web <code>DiffView</code> renders a visible sign column from the row kind, beside its background tint: <code>+</code> for additions and <code>−</code> (U+2212, not an ASCII hyphen) for deletions.</p>
 
     <h3 style="margin-top: 40px;">Examples</h3>

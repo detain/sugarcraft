@@ -129,6 +129,8 @@ $svg = $writer->result();</code></pre>
     <tr><td>OutputWriter, StringOutputWriter, FileOutputWriter</td><td>write(chunk), flush(), result() or close()</td><td>Chunked output helpers for library callers. The renderers return complete bytes, and the CLI writes them with <code>file_put_contents</code> or <code>echo</code>.</td></tr>
     </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Configuration</h2>
     <p>candy-codeshot reads no configuration file. Everything is a flag. Flag values are separate arguments: <code>--theme dracula</code>, not <code>--theme=dracula</code>, which is rejected as an unknown flag. A lone <code>-</code> names stdin, and a lone <code>--</code> ends option parsing, so every later token is an operand.</p>
     <table>

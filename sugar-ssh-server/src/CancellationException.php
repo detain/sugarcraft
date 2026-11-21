@@ -8,7 +8,7 @@ final class CancellationException extends \RuntimeException
 {
     /**
      * The optional reason rides the fixed text as
-     * `context cancelled: <reason>` (audit sugar-ssh-server-078) — a
+     * `context cancelled: <reason>` — a
      * bare throw used to be the only shape this channel could carry.
      * `Context::cancel()` hands a supplied Throwable through to `err()`
      * verbatim, so `cancel(new CancellationException('hangup received'))`

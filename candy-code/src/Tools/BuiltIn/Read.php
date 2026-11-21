@@ -320,7 +320,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         return 'Read';
     }
     /**
-     * Paging is the behaviour worth stating (audit 0.12): every line comes back
+     * Paging is the behaviour worth stating: every line comes back
      * numbered, a file longer than one page comes back as a window that SAYS so
      * and names the call that continues it, and a model told only "read a file"
      * has no reason to suspect the content it got was the head of a larger one.

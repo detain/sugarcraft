@@ -517,7 +517,7 @@ final class ProcessContainment
      * {@see env()} with the credentials removed — the environment for the
      * spawn paths whose output the MODEL reads: Bash and Grep (through
      * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput}) and
-     * script hooks ({@see \SugarCraft\Code\Hooks\ScriptHook}). Audit F-E1.
+     * script hooks ({@see \SugarCraft\Code\Hooks\ScriptHook}).
      *
      * A name is removed when it matches {@see SECRET_ENV_PATTERNS} or is one
      * of {@see PROVIDER_SECRET_ENV_NAMES}, unless {@see secretEnvAllowed()}
@@ -685,7 +685,7 @@ final class ProcessContainment
     /**
      * The `cd DIR || exit 1` guard line every `/bin/sh -c` script that must
      * run inside DIR starts with — ONE spelling for Bash and
-     * {@see interactiveSpawnCommand()} (audit F-E3, then F-E5 for the copy
+     * {@see interactiveSpawnCommand()} (the copy
      * that kept the old form).
      *
      * Never `cd DIR && COMMAND`: `&&` binds tighter than `;`, so
@@ -998,12 +998,11 @@ final class ProcessContainment
 
     /**
      * KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point
-     * for any site that tears down a forked child of this package (audit
-     * B2/F-E2: Runtime's parallel deadline, AgentWorkerPool, the custom-command
-     * `!` runner). A site that runs inside an event-loop callback —
+     * for any site that tears down a forked child of this package (Runtime's parallel
+     * deadline, AgentWorkerPool, the custom-command `!` runner). A site that runs inside an event-loop callback —
      * EngineBackend's turn teardown and Chat's cancel sites — calls
      * {@see killTreeAsync()} instead, which runs this same sequence one loop
-     * tick per pass (audit R3).
+     * tick per pass.
      *
      * WHY `posix_kill($pid, 9)` WAS NOT ENOUGH. Every command a tool runs is
      * detach-prefixed ({@see spawnSpec()} — a real `setsid -w` or the PHP
@@ -1128,7 +1127,7 @@ final class ProcessContainment
 
     /**
      * {@see killTree()} WITHOUT HOLDING THE CALLER'S THREAD — the spelling for
-     * a teardown that runs inside an event-loop callback (audit R3: the
+     * a teardown that runs inside an event-loop callback (the
      * Escape-Escape cancel of an engine turn, a Chat tool fan-out or a
      * forked hook chain). Resolves once signal 9 has gone out to the whole
      * tree; like killTree() it never reaps.

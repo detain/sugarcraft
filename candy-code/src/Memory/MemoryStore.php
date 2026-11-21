@@ -214,7 +214,7 @@ final class MemoryStore
     /**
      * The home store for one project: its `project` scope lives under
      * `project/<key>/`, keyed by $projectRoot's canonical path, so the notes
-     * of one repository never reach another's prompt (audit 15d-05).
+     * of one repository never reach another's prompt.
      */
     public static function forProject(string $memoryPath, string $projectRoot): self
     {
@@ -256,7 +256,7 @@ final class MemoryStore
     /**
      * Move the unkeyed notes an earlier build left directly in `project/` into
      * this store's keyed directory -- "the first project that reads them owns
-     * them" (audit 15d-05) -- and return the file names moved.
+     * them" -- and return the file names moved.
      *
      * Runs at most once per instance and is a no-op for an unkeyed store. Every
      * access to the project scope calls it first, so no path reads the scope
@@ -345,7 +345,7 @@ final class MemoryStore
     /**
      * The store over a repository's git-visible `.candy-code/memory/` tree:
      * every operation of the home store, but no index file is written --
-     * {@see loadIndex()} derives the index from the notes instead (audit N2).
+     * {@see loadIndex()} derives the index from the notes instead.
      */
     public static function forRepository(string $memoryPath): self
     {

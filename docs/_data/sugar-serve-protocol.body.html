@@ -83,6 +83,8 @@ $record = DiscoveryRecordReader::read($stateDir . '/' . LiveRecord::FILE); // ?a
 <tr><td>Support\PrivateDirCheck</td><td>static refusal(string $dir, string $label, ?int $uid = null): ?string; MODE</td><td>The refusal reason for a path that is not a private directory owned by the current user, or null when it is</td></tr>
 </table>
 
+    <!-- api-reference:generated -->
+
     <h3 style="margin-top: 40px;">Configuration</h3>
     <p>The package takes no options. Its fixed values are the wire constants in <code>Protocol</code>, the request path <code>WebsocketUrl::WS_PATH</code> (<code>/ws</code>), the directory mode <code>PrivateDirCheck::MODE</code> (<code>0700</code>), the JSON depth limit <code>DiscoveryRecordReader::MAX_DEPTH</code> (8), and the file names <code>TokenFile::FILE</code> (<code>token</code>) and <code>LiveRecord::FILE</code> (<code>server.json</code>). The state directory is passed in by the caller, so where it lives is the host's choice.</p>
 

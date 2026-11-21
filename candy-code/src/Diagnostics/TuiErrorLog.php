@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Diagnostics;
 
 /**
  * Points PHP's `error_log` ini at a private file for the life of an
- * interactive TUI session (audit C2a).
+ * interactive TUI session.
  *
  * WHY. With the stock ini (`error_log` unset, `log_errors=1`), every
  * `error_log()` call — {@see RuntimeNoticeSink::warn()}, the DSML and MiniMax
@@ -99,8 +99,8 @@ final class TuiErrorLog
 
     /**
      * Redirect `error_log` away from the tty: into `<$home>/{@see RELATIVE_PATH}`,
-     * else the private temp-dir fallback, else the null device (audit R16 —
-     * see this class's doc-block for the chain).
+     * else the private temp-dir fallback, else the null device
+     * (see this class's doc-block for the chain).
      *
      * @param string|null $home    an owned home directory, or null when none
      *                             can be established (the chain then starts
@@ -157,7 +157,7 @@ final class TuiErrorLog
      * How a user-facing row should name where the COMPLETE text of a
      * diagnostic went, given an `error_log` ini value: `stderr`, a path (the
      * home spelled `~`), `the system log`, or null when it went to the null
-     * device and nothing can be read back (audit C4).
+     * device and nothing can be read back.
      *
      * The value is bounded by {@see MAX_DESCRIBED_BYTES} and must be printable;
      * anything else is named generically, because the description lands in a

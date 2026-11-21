@@ -167,6 +167,8 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td>Messages</td><td><code>ZoneEnterMsg</code>, <code>ZoneExitMsg</code>, <code>ZoneDragStartMsg</code>, <code>ZoneDragMoveMsg</code>, <code>ZoneDragEndMsg</code>, <code>DoubleClickMsg</code>, <code>TripleClickMsg</code>, <code>MsgZoneInBounds</code></td><td>Enter, exit, double-click, triple-click and in-bounds messages carry the zone they concern as <code>zone</code>. Drag messages carry <code>originZone</code> and <code>currentZone</code> and have no <code>zone</code> property. A drag ends with the zone under the release cursor, or <code>null</code> outside every zone.</td></tr>
 </table>
 
+        <!-- api-reference:generated -->
+
     <h3 style="margin-top: 40px;">Configuration and options</h3>
     <p>There is no configuration file and no environment variable. The settings are constructor arguments, the manager's prefix and enabled state, and the terminal's mouse reporting mode, which the host must enable.</p>
 <table class="api-table">

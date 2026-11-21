@@ -179,6 +179,8 @@ composer install
 vendor/bin/phpunit</code></pre>
     <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test touches the event loop, because the async-suggestion tests arm debounce and timeout timers on it. <code>sugar-testing</code> is a <code>require-dev</code> dependency, and <code>tests/GoldenRenderTest.php</code> uses its golden-file helpers.</p>
 
+    <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 style="margin-top: 24px;"><code>values()</code> has no entry for a field</h3>

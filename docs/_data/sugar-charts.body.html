@@ -114,6 +114,8 @@ Structural channels carry the same meaning without color: <code>withDataLabels()
 Braille output is a <em>dot-grid</em> density mode, not screen-reader braille: assistive technology should read the data (<code>cells()</code>, source arrays, CSV), not the picture. For low vision, <code>Theme::ansi()</code> keeps the 16-color tier and <code>withMonoRamp(true)</code> gives the heatmap a background-safe density ramp. For reduced motion, skip animation sweeps and render the final frame at progress <code>1.0</code>.
 Full guidance: <a href="https://github.com/sugarcraft/sugar-charts#accessibility-note">README — Accessibility note</a>.</p>
     <p style="margin-top: 16px;"><strong>Untrusted labels.</strong> Every string the library can echo is sanitized through <code>SugarCraft\Charts\Support\UntrustedText</code>: static labels are swept at their setters, and formatter closures (<code>withXLabelFormatter()</code>, <code>withYLabelFormatter()</code>, BarChart's <code>withDataLabelFormatter()</code>) are swept at the resolve and render sites, so hostile data cannot bypass the boundary. The Canvas and Graph layers that compose the frame are trusted internals and stay unguarded by design. Full story: <a href="https://github.com/sugarcraft/sugar-charts/blob/master/README.md#untrusted-labels">README — Untrusted labels</a>.</p>
+        <!-- api-reference:generated -->
+
     <h3 style="margin-top: 40px;">Configuration and options</h3>
     <p>Every chart is configured through fluent setters, and each setter returns a new chart. The common ones are listed below. The full set is in the README component tables.</p>
 <table class="api-table">

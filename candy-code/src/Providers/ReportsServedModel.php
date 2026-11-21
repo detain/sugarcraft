@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 /**
  * A provider that may talk to a model OTHER than the id it was configured
- * with, and can say which (audit 15b-35).
+ * with, and can say which.
  *
  * {@see SglangProvider} built on its default id adopts whatever model the
  * server reports serving (audit A26), so the wire carries the served name

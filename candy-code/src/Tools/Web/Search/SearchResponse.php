@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tools\Web\Search;
 /**
  * What one {@see SearchBackend} call answers: either a refusal (`error`,
  * already an "Error: …" sentence, the loud-failure shape every WebSearch
- * result has carried since audit F-W3 — "no results" would read to the model
+ * result carries "no results" would read to the model
  * as a fact about the web) or the pieces of a digest.
  *
  * The digest pieces are positional on purpose. `leading` carries the lines

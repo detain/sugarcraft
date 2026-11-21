@@ -507,8 +507,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * The copy {@see \SugarCraft\Code\Runtime::executeConcurrently()} runs
      * as one member of a concurrent group: its delegated run records each step
-     * onto $ledger and counts its siblings' records in its spend-cap check
-     * (audit B4-rem). Only the engine path uses it; the pool path is never
+     * onto $ledger and counts its siblings' records in its spend-cap check.
+     * Only the engine path uses it; the pool path is never
      * parallel-safe, so it is never a group member.
      */
     public function withSiblingSpend(SiblingSpendLedger $ledger): self

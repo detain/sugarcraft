@@ -505,7 +505,7 @@ final class CommandSpec
 
     /**
      * Whether this body holds a `` !`…` `` form, i.e. whether expanding it may
-     * have to run a shell (audit 15b-20).
+     * have to run a shell.
      *
      * Asked BEFORE expanding, so {@see \SugarCraft\Code\Chat} can move exactly
      * the expansions that can block off its update path and leave every other

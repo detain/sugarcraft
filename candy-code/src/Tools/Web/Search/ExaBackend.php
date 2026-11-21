@@ -8,7 +8,7 @@ namespace SugarCraft\Code\Tools\Web\Search;
  * Exa's neural search API — a fixed https host, chosen by setting
  * `webSearchBackend` to `exa` and putting the key in `EXA_API_KEY`. POSTed
  * JSON, `x-api-key`; the query is the only user data that leaves, and the
- * service host is a constant (audit F-W3 by construction).
+ * service host is a constant.
  *
  * Exa answers neither safesearch nor a day/month/year window in WebSearch's
  * vocabulary, so both are ignored rather than approximated — the interface

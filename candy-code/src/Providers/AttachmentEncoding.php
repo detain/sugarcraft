@@ -11,7 +11,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Messages\UserMessage;
 
 /**
- * The per-wire shapes of a user turn that carries attachments (audit 15b-15).
+ * The per-wire shapes of a user turn that carries attachments.
  *
  * ONE definition per wire family, shared by every provider speaking it, so the
  * OpenAI-compatible three (OpenAI, SGLang, Custom) cannot drift apart on what a
@@ -400,9 +400,8 @@ final class AttachmentEncoding
 
     /**
      * Say, once per distinct payload, that a tool-result attachment was over
-     * the provider's byte budget and so travels as its text caption only
-     * (audit once-022). The wire rebuilds the request every step, so without
-     * the memo a screenshot would repeat the notice on each replay; without the
+     * the provider's byte budget and so travels as its text caption only. The wire rebuilds the request every step,
+     * so without the memo a screenshot would repeat the notice on each replay; without the
      * notice the user sees a model that "cannot see" an image it was handed.
      *
      * @param 'image'|'document' $kind

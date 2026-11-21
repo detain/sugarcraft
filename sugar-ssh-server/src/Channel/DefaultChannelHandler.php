@@ -231,7 +231,7 @@ final class DefaultChannelHandler implements ChannelHandler
      * sender declared nothing for it, and the current size is KEPT — the
      * pty-req leg already resolved the session/default fallback once, and
      * a mid-session non-declaration must not demote a known terminal to
-     * the 80×24 floor (audit 081).
+     * the 80×24 floor.
      */
     public function handleWindowChange(WindowChangeMsg $msg, Session $session): void
     {

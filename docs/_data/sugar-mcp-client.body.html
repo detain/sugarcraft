@@ -158,6 +158,8 @@ $server = new StdioMcpServer(
 <tr><td>ErrorCode</td><td>kind(): string / isRetryable(): bool</td><td>The <code>candy-code.v1</code> error codes (int-backed enum) with the stable <code>kind</code> string and whether a caller may retry</td></tr>
 </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Examples</h2>
     <p><code>examples/echo.php</code> is a self-contained round trip. Run plainly, the file is the client: it starts itself as a server, runs initialize, tools/list and tools/call, and prints the exchange. Run with <code>--serve</code>, it is the stdio server. It needs no Node.js, no download and no network.</p>
     <pre class="code"><code class="language-shell">php examples/echo.php</code></pre>

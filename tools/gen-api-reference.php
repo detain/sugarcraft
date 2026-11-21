@@ -20,8 +20,11 @@ declare(strict_types=1);
  * outside the tree has no source here, so its methods are not listed.
  *
  * WHAT IT WRITES. Namespace headings, then one entry per type with its first
- * PHPDoc paragraph and a method table (signature and summary). The output is
- * marked GENERATED in its first line and must never be hand-edited.
+ * PHPDoc paragraph and a method table (signature and summary). A lib named in
+ * ROWS_IN_NAMESPACE or TOP_TYPES_LISTED trims its page instead: a type outside
+ * those rows is replaced by a per-sub-namespace count line, so one entry per
+ * type holds only for a lib in neither list (see those constants' docblocks).
+ * The output is marked GENERATED in its first line and must never be hand-edited.
  *
  * TWO SOURCES FOR THE TYPE LIST. The token parser builds the entries, and a
  * line-anchored scan of the same files counts the declarations. collect()
@@ -35,10 +38,13 @@ declare(strict_types=1);
  * the fragment renders, so a heading the page drops still counts against the
  * target. depth-score ranks every first declaration, @internal
  * ones included, and counts names in the page body, so the two can grade
- * different sets. Target is at least 80 percent (plan section 5.3, item 6).
+ * different sets. Target is at least 80 percent (plan section 5.3, item 6). A lib
+ * with fewer than ten public types is measured over all of them.
  *
- * PILOT SCOPE. Only the libs in ApiReference::ENABLED are built. Phase 4 widens
- * that list as a reviewed edit; nothing else changes.
+ * SCOPE. Every lib in ApiReference::ENABLED gets a fragment. A skeleton with no
+ * public type yet, listed in ApiReference::NO_PUBLIC_CLASSES, gets none: its body
+ * states that instead. A lib moves between the two lists in the PR that changes
+ * whether it declares a public type.
  *
  * Usage:
  *   php tools/gen-api-reference.php sugar-core            writes docs/_data/sugar-core.api.html
@@ -54,10 +60,102 @@ declare(strict_types=1);
 final class ApiReference
 {
     /**
-     * Libs the generator may build. Pilot: sugar-core only (PD2 option A). A lib
-     * is added here in the same PR that adds its body marker and fragment.
+     * Libs the generator builds a fragment for: every slug with a docs/_data page
+     * and at least one public type. A lib is added here in the same PR that adds
+     * its body marker and fragment.
      */
-    public const ENABLED = ['sugar-core'];
+    public const ENABLED = [
+        'candy-ansi-inspect',
+        'candy-code',
+        'candy-codeshot',
+        'candy-codetime',
+        'candy-code-web',
+        'candy-files',
+        'candy-flappy',
+        'candy-gifview',
+        'candy-git',
+        'candy-git-server',
+        'candy-image',
+        'candy-kv',
+        'candy-mail',
+        'candy-mdview',
+        'candy-minesweeper',
+        'candy-scriptui',
+        'candy-sql',
+        'candy-ssh-launcher',
+        'candy-starter',
+        'candy-tetris',
+        'candy-top',
+        'candy-vcr',
+        'sugar-animation',
+        'sugar-ansi-parser',
+        'sugar-async',
+        'sugar-cellbuffer',
+        'sugar-charts',
+        'sugar-cli',
+        'sugar-colorprofile',
+        'sugar-constraints',
+        'sugar-core',
+        'sugar-dashboard',
+        'sugar-datepicker',
+        'sugar-diff',
+        'sugar-flexbox',
+        'sugar-focus',
+        'sugar-forms',
+        'sugar-fuzzy',
+        'sugar-gallery',
+        'sugar-ignore',
+        'sugar-image',
+        'sugar-input',
+        'sugar-log',
+        'sugar-markdown',
+        'sugar-mcp-client',
+        'sugar-metrics',
+        'sugar-mouse',
+        'sugar-navstack',
+        'sugar-overlay',
+        'sugar-panels',
+        'sugar-plugins',
+        'sugar-pty',
+        'sugar-quickpick',
+        'sugar-readline',
+        'sugar-releases',
+        'sugar-serve-protocol',
+        'sugar-spring',
+        'sugar-ssh-server',
+        'sugar-style',
+        'sugar-table',
+        'sugar-testing',
+        'sugar-toast',
+        'sugar-treelist',
+        'sugar-video',
+        'sugar-vterm',
+        'sugar-widgets',
+    ];
+
+    /**
+     * Slugs with a docs/_data page and no public type yet: skeletons whose src/ holds
+     * only a .gitkeep. No fragment is written for them; their body states that no
+     * classes are published, in place of the API listing. A slug moves from here to
+     * ENABLED in the PR that adds its first public type.
+     */
+    public const NO_PUBLIC_CLASSES = ['sugar-clipboard', 'sugar-codec', 'sugar-jwt', 'sugar-ws-rpc'];
+
+    /**
+     * Slugs whose page lists a row for each public type in one namespace only. A type in any other
+     * sub-namespace is left out unless TOP_TYPES_LISTED keeps its row, and the page carries one index
+     * line per sub-namespace that states its public type count. candy-code's full listing was 2.4 MB, over the 1 MiB page-weight budget; its
+     * top-level namespace alone is about 0.1 MB. A slug here is an owner-visible reduction of the
+     * page, so the omission is stated on the page itself rather than left silent.
+     */
+    public const ROWS_IN_NAMESPACE = ['candy-code' => 'SugarCraft\\Code'];
+
+    /**
+     * Slugs whose page also keeps a row for each of their N largest public types, wherever they sit,
+     * so the top-10 coverage figure is read from rows and not from the namespace index. The size is
+     * the one coverage() ranks by, so a type kept here is a type the figure counts.
+     */
+    public const TOP_TYPES_LISTED = ['candy-code' => 10];
 
     /** The placeholder tools/gen-docs.php replaces with the fragment. Exactly one per body. */
     public const MARKER = '<!-- api-reference:generated -->';
@@ -73,14 +171,28 @@ final class ApiReference
 
     /**
      * What a published summary must not contain: audit and tracker IDs (sc-23, DX-05,
-     * sugar-core-024, lib-reviews-1102, the audit 15b-28 form), and the ansicode.txt
+     * sugar-core-024, lib-reviews-1102, the audit 15b-28 and audit 032 or audit R2 forms), and the ansicode.txt
      * citation, a file this repo does not carry. See refuseInternalReferences().
      */
-    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b~';
+    private const INTERNAL_REFERENCE = '~\b(?:sc|DX|sugar-core)-\d+\b|\blib-reviews-\d+\b|\b\d+b-\d+\b|\bansicode\.txt\b|\b[Aa]udits?\s+(?:[A-Za-z][A-Za-z-]*-)?[A-Za-z]?\d+[a-z]?(?:-\d+)?\b~';
+
+    /**
+     * An `@internal` that reached a published summary. A summary is the first paragraph, and it
+     * ends at the first line that starts with a tag, so a tag left inside it is mid-sentence:
+     * the seam was meant to be hidden and is not, because isInternal() reads only line-leading
+     * tags. Refused rather than published as a public row.
+     */
+    private const BARE_INTERNAL_TAG = '~@internal\b~';
 
     public static function enabled(string $slug): bool
     {
         return in_array($slug, self::ENABLED, true);
+    }
+
+    /** Every slug the generator knows: a fragment-bearing lib or a no-public-classes skeleton. */
+    public static function known(string $slug): bool
+    {
+        return in_array($slug, self::ENABLED, true) || in_array($slug, self::NO_PUBLIC_CLASSES, true);
     }
 
     public static function fragmentPath(string $root, string $slug): string
@@ -97,6 +209,12 @@ final class ApiReference
      */
     public static function generate(string $root, string $slug): string
     {
+        if (in_array($slug, self::NO_PUBLIC_CLASSES, true)) {
+            throw new \InvalidArgumentException(
+                "gen-api-reference: $slug has no public classes, so it has no fragment; its body states that instead"
+            );
+        }
+
         return self::render($slug, self::collect($root, $slug));
     }
 
@@ -240,10 +358,8 @@ final class ApiReference
      */
     private static function sourceFiles(string $root, string $slug): array
     {
-        if (!self::enabled($slug)) {
-            throw new \InvalidArgumentException(
-                "gen-api-reference: $slug is not enabled (pilot scope is " . implode(', ', self::ENABLED) . ')'
-            );
+        if (!self::known($slug)) {
+            throw new \InvalidArgumentException("gen-api-reference: $slug is not a known lib (add it to ApiReference::ENABLED or NO_PUBLIC_CLASSES)");
         }
         $src = $root . '/' . $slug . '/src';
         if (!is_dir($src)) {
@@ -263,7 +379,7 @@ final class ApiReference
     }
 
     /**
-     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}>
+     * @return list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}>
      */
     public static function collect(string $root, string $slug): array
     {
@@ -286,6 +402,7 @@ final class ApiReference
                 'summary' => $type['summary'],
                 'cases' => $type['cases'],
                 'backed' => $type['backed'],
+                'undeclaredTraits' => self::undeclaredTraits($index, $type['fqn']),
                 'methods' => $methods,
             ];
         }
@@ -458,6 +575,12 @@ final class ApiReference
                     break;
 
                 case T_USE:
+                    // A method named `use` (`function use()`, `->use()`, `Type::use()`) is a name, not a statement.
+                    $prev = self::previousSignificant($tokens, $i - 1);
+                    if ($prev !== null && is_array($tokens[$prev])
+                        && in_array($tokens[$prev][0], [T_FUNCTION, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON], true)) {
+                        break;
+                    }
                     // Top level: an import, which a trait name in the same file resolves through.
                     // Inside a class body: a trait use, whose names are resolved now while the
                     // imports for this file are known.
@@ -467,9 +590,18 @@ final class ApiReference
                             $imports[$alias] = ltrim($name, '\\');
                         }
                     } elseif ($depth === 1 && $current !== null && $current['open']) {
-                        [$pairs, $i] = self::useStatement($tokens, $i + 1);
+                        [$pairs, $i, $adapts] = self::useStatement($tokens, $i + 1);
                         foreach ($pairs as [$name]) {
                             $current['traits'][] = self::resolveName($name, $imports, $namespace);
+                        }
+                        foreach ($adapts as $adapt) {
+                            $current['adapts'][] = [
+                                'trait' => $adapt['trait'] === null ? null : self::resolveName($adapt['trait'], $imports, $namespace),
+                                'method' => $adapt['method'],
+                                'insteadof' => array_map(static fn (string $n): string => self::resolveName($n, $imports, $namespace), $adapt['insteadof']),
+                                'visibility' => $adapt['visibility'],
+                                'alias' => $adapt['alias'],
+                            ];
                         }
                     }
                     $doc = null;
@@ -529,6 +661,7 @@ final class ApiReference
                         'methods' => [],
                         'cases' => [],
                         'traits' => [],
+                        'adapts' => [],
                         'parents' => self::parentsOf($tokens, $name, $imports, $namespace),
                     ];
                     $i = $name;
@@ -565,9 +698,14 @@ final class ApiReference
     }
 
     /**
-     * The `use` statement whose keyword precedes $from.
+     * The `use` statement whose keyword precedes $from. Three forms: an import (`use A\B;`),
+     * a group import (`use A\{B, C as D};`), and a trait use, which may carry an adaptation
+     * block (`use T { m as n; A::m insteadof B; }`). A group import's names are expanded
+     * under their prefix; a trait's names come back raw, for the caller to resolve while the
+     * file's imports are known.
      *
-     * @return array{0: list<array{0: string, 1: string}>, 1: int} [raw name, alias] pairs, and the index of the closing `;`
+     * @return array{0: list<array{0: string, 1: string}>, 1: int, 2: list<array{trait: ?string, method: string, insteadof: list<string>, visibility: ?string, alias: ?string}>}
+     *         [raw name, alias] pairs, the index of the closing `;` (or of the adaptation block's `}` when no `;` follows it), and the adaptations
      */
     private static function useStatement(array $tokens, int $from): array
     {
@@ -576,13 +714,37 @@ final class ApiReference
         for ($k = $from, $n = count($tokens); $k < $n; $k++) {
             $t = $tokens[$k];
             if ($t === '{') {
-                throw new \RuntimeException('gen-api-reference: group and trait-adaptation `use` blocks are not supported; write one name per statement');
+                $close = self::matchingBrace($tokens, $k);
+                $prefix = self::groupPrefix($words);
+                if ($prefix !== null) {
+                    foreach (self::splitBy($tokens, $k + 1, $close, ',') as $item) {
+                        foreach (self::useItem($item, []) as [$name, $alias]) {
+                            $pairs[] = [$prefix . '\\' . $name, $alias];
+                        }
+                    }
+                    $semi = self::nextSignificant($tokens, $close + 1);
+                    if ($semi === null || $tokens[$semi] !== ';') {
+                        throw new \RuntimeException('gen-api-reference: a group `use` must end with `;`');
+                    }
+
+                    return [$pairs, $semi, []];
+                }
+                $pairs = self::useItem($words, $pairs);
+                $adapts = [];
+                foreach (self::splitBy($tokens, $k + 1, $close, ';') as $entry) {
+                    if ($entry !== []) {
+                        $adapts[] = self::adaptation($entry);
+                    }
+                }
+                $after = self::nextSignificant($tokens, $close + 1);
+
+                return [$pairs, $after !== null && $tokens[$after] === ';' ? $after : $close, $adapts];
             }
             if ($t === ';' || $t === ',') {
                 $pairs = self::useItem($words, $pairs);
                 $words = [];
                 if ($t === ';') {
-                    return [$pairs, $k];
+                    return [$pairs, $k, []];
                 }
                 continue;
             }
@@ -593,6 +755,113 @@ final class ApiReference
         }
 
         throw new \RuntimeException('gen-api-reference: unterminated use statement');
+    }
+
+    /** The index of the `}` that closes the `{` at $open. */
+    private static function matchingBrace(array $tokens, int $open): int
+    {
+        $depth = 0;
+        for ($k = $open, $n = count($tokens); $k < $n; $k++) {
+            if ($tokens[$k] === '{') {
+                $depth++;
+            } elseif ($tokens[$k] === '}' && --$depth === 0) {
+                return $k;
+            }
+        }
+
+        throw new \RuntimeException('gen-api-reference: unterminated brace in a use statement');
+    }
+
+    /**
+     * The namespace prefix of a group import: the name written before `\{`, or null when the
+     * brace opens a trait adaptation block instead.
+     *
+     * @param list<mixed> $words
+     */
+    private static function groupPrefix(array $words): ?string
+    {
+        $last = $words[count($words) - 1] ?? null;
+        if (!is_array($last) || $last[0] !== T_NS_SEPARATOR) {
+            return null;
+        }
+        $name = self::firstName(array_slice($words, 0, -1));
+
+        return $name === null ? null : ltrim($name, '\\');
+    }
+
+    /**
+     * The tokens between $from and $to (exclusive) split at each plain `$sep`, with
+     * whitespace and comments dropped from every piece.
+     *
+     * @return list<list<mixed>>
+     */
+    private static function splitBy(array $tokens, int $from, int $to, string $sep): array
+    {
+        $pieces = [[]];
+        for ($k = $from; $k < $to; $k++) {
+            $t = $tokens[$k];
+            if ($t === $sep) {
+                $pieces[] = [];
+                continue;
+            }
+            if (is_array($t) && in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $pieces[count($pieces) - 1][] = $t;
+        }
+
+        return $pieces;
+    }
+
+    /**
+     * One adaptation entry: `[Trait::]method insteadof Other[, More]` or `[Trait::]method as [visibility] [alias]`.
+     *
+     * @param list<mixed> $words the significant tokens of the entry
+     * @return array{trait: ?string, method: string, insteadof: list<string>, visibility: ?string, alias: ?string}
+     */
+    private static function adaptation(array $words): array
+    {
+        $texts = array_map(static fn (mixed $w): string => is_array($w) ? $w[1] : $w, $words);
+        $trait = null;
+        $at = 0;
+        if (count($texts) > 2 && $texts[1] === '::') {
+            $trait = $texts[0];
+            $at = 2;
+        }
+        $method = $texts[$at] ?? '';
+        $keyword = strtolower($texts[$at + 1] ?? '');
+        if ($method === '' || !in_array($keyword, ['insteadof', 'as'], true)) {
+            throw new \RuntimeException('gen-api-reference: unsupported trait adaptation: ' . implode(' ', $texts));
+        }
+        if ($keyword === 'insteadof') {
+            $excluded = [];
+            foreach (array_slice($texts, $at + 2) as $text) {
+                if ($text !== ',') {
+                    $excluded[] = $text;
+                }
+            }
+
+            return ['trait' => $trait, 'method' => $method, 'insteadof' => $excluded, 'visibility' => null, 'alias' => null];
+        }
+        $rest = array_slice($texts, $at + 2);
+        $visibility = null;
+        if ($rest !== [] && in_array(strtolower($rest[0]), ['public', 'protected', 'private'], true)) {
+            $visibility = strtolower(array_shift($rest));
+        }
+
+        return ['trait' => $trait, 'method' => $method, 'insteadof' => [], 'visibility' => $visibility, 'alias' => $rest[0] ?? null];
+    }
+
+    /** The first name token in $words, or null when there is none. */
+    private static function firstName(array $words): ?string
+    {
+        foreach ($words as $word) {
+            if (is_array($word) && in_array($word[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_STRING], true)) {
+                return $word[1];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -662,6 +931,36 @@ final class ApiReference
     }
 
     /**
+     * The traits a type uses, directly or through an in-tree parent or trait, that have no
+     * declaration under src/. Their methods are not listed, and a method table alone would
+     * read as the type's whole API, so each type names them.
+     *
+     * @param array<string, array<string, mixed>> $index every parsed type, keyed by FQN
+     * @param list<string> $trail the types already on the path, a guard against an inheritance cycle
+     * @return list<string>
+     */
+    private static function undeclaredTraits(array $index, string $fqn, array $trail = []): array
+    {
+        $found = [];
+        foreach ($index[$fqn]['traits'] as $traitName) {
+            $traitFqn = self::declaredFqn($index, $traitName);
+            if ($traitFqn === null) {
+                $found[] = $traitName;
+            } elseif (!in_array($traitFqn, $trail, true)) {
+                $found = [...$found, ...self::undeclaredTraits($index, $traitFqn, [...$trail, $fqn])];
+            }
+        }
+        foreach ($index[$fqn]['parents'] as $parentName) {
+            $parentFqn = self::declaredFqn($index, $parentName);
+            if ($parentFqn !== null && !in_array($parentFqn, $trail, true)) {
+                $found = [...$found, ...self::undeclaredTraits($index, $parentFqn, [...$trail, $fqn])];
+            }
+        }
+
+        return array_values(array_unique($found));
+    }
+
+    /**
      * The public methods of one type, as PHP exposes them: its own, then those
      * of each trait it uses, then those of its parent class or extended
      * interfaces. A method earlier in that order wins over a later one of the
@@ -680,9 +979,14 @@ final class ApiReference
         // names the type declared as `Base`. Each name resolves to its declared FQN before any lookup.
         $traits = [];
         foreach ($index[$fqn]['traits'] as $traitName) {
+            // A trait declared outside src/ has no entry in the index and contributes no rows, as an
+            // out-of-tree parent does. A name that is declared here but is not a trait is a mistake.
             $traitFqn = self::declaredFqn($index, $traitName);
-            if ($traitFqn === null || $index[$traitFqn]['kind'] !== 'trait') {
-                throw new \RuntimeException("gen-api-reference: $fqn uses $traitName, which is not a trait declared under $slug/src");
+            if ($traitFqn === null) {
+                continue;
+            }
+            if ($index[$traitFqn]['kind'] !== 'trait') {
+                throw new \RuntimeException("gen-api-reference: $fqn uses $traitName, which is declared under $slug/src but is not a trait");
             }
             $traits[] = $traitFqn;
         }
@@ -697,12 +1001,17 @@ final class ApiReference
 
         // Each in-tree source is resolved before the merge, so an own method's {@inheritdoc}
         // can read the summary its nearest documented ancestor already resolved.
-        $sources = [];
-        foreach ([...$traits, ...$parents] as $sourceFqn) {
-            if (in_array($sourceFqn, $trail, true)) {
-                continue;
+        $traitLists = [];
+        foreach ($traits as $traitFqn) {
+            if (!in_array($traitFqn, $trail, true)) {
+                $traitLists[$traitFqn] = self::withInheritedMethods($index, $traitFqn, $slug, [...$trail, $fqn]);
             }
-            $sources[] = self::withInheritedMethods($index, $sourceFqn, $slug, [...$trail, $fqn]);
+        }
+        $sources = array_values(self::adaptTraits($traitLists, $index[$fqn]['adapts'], $index));
+        foreach ($parents as $parentFqn) {
+            if (!in_array($parentFqn, $trail, true)) {
+                $sources[] = self::withInheritedMethods($index, $parentFqn, $slug, [...$trail, $fqn]);
+            }
         }
 
         // Method names compare without case, as PHP matches an override to the method it replaces.
@@ -728,6 +1037,94 @@ final class ApiReference
         return $methods;
     }
 
+    /**
+     * Applies a class's trait adaptations to the public methods of each trait it uses, as PHP
+     * does before the merge: `T::m insteadof U` drops m from U, `m as alias` adds a copy named
+     * alias, and `m as private|protected` hides m. A copy under a non-public visibility is not
+     * listed, since every row is public.
+     *
+     * @param array<string, list<array{name: string, signature: string, summary: string}>> $lists keyed by trait FQN
+     * @param list<array{trait: ?string, method: string, insteadof: list<string>, visibility: ?string, alias: ?string}> $adapts
+     * @param array<string, array<string, mixed>> $index
+     * @return array<string, list<array{name: string, signature: string, summary: string}>>
+     */
+    private static function adaptTraits(array $lists, array $adapts, array $index): array
+    {
+        // Aliases are copied from the trait's methods as they were declared, and removals are applied
+        // after, so `B::m insteadof A` does not stop `A::m as n` from finding A's m.
+        $removals = [];
+        $copies = [];
+        foreach ($adapts as $adapt) {
+            if ($adapt['insteadof'] !== []) {
+                foreach ($adapt['insteadof'] as $excludedName) {
+                    $excluded = self::declaredFqn($index, $excludedName);
+                    if ($excluded !== null) {
+                        $removals[$excluded][] = $adapt['method'];
+                    }
+                }
+                continue;
+            }
+            $targets = $adapt['trait'] === null ? array_keys($lists) : [self::declaredFqn($index, $adapt['trait'])];
+            $hidden = in_array($adapt['visibility'], ['private', 'protected'], true);
+            foreach ($targets as $target) {
+                if ($target === null || !isset($lists[$target])) {
+                    continue;
+                }
+                foreach ($lists[$target] as $method) {
+                    if (strcasecmp($method['name'], $adapt['method']) !== 0) {
+                        continue;
+                    }
+                    if ($adapt['alias'] !== null) {
+                        if (!$hidden) {
+                            $copies[$target][] = self::renamed($method, $adapt['alias']);
+                        }
+                    } elseif ($hidden) {
+                        $removals[$target][] = $adapt['method'];
+                    }
+                }
+            }
+        }
+        foreach ($removals as $target => $names) {
+            if (isset($lists[$target])) {
+                foreach ($names as $name) {
+                    $lists[$target] = self::without($lists[$target], $name);
+                }
+            }
+        }
+        foreach ($copies as $target => $added) {
+            foreach ($added as $copy) {
+                $lists[$target][] = $copy;
+            }
+        }
+
+        return $lists;
+    }
+
+    /**
+     * @param list<array{name: string, signature: string, summary: string}> $methods
+     * @return list<array{name: string, signature: string, summary: string}>
+     */
+    private static function without(array $methods, string $name): array
+    {
+        return array_values(array_filter($methods, static fn (array $m): bool => strcasecmp($m['name'], $name) !== 0));
+    }
+
+    /**
+     * A copy of one method under another name: the name is replaced where it opens the
+     * signature's parameter list, and the summary carries over unchanged.
+     *
+     * @param array{name: string, signature: string, summary: string} $method
+     * @return array{name: string, signature: string, summary: string}
+     */
+    private static function renamed(array $method, string $alias): array
+    {
+        $at = strpos($method['signature'], $method['name'] . '(');
+        $signature = $at === false
+            ? $method['signature']
+            : substr_replace($method['signature'], $alias, $at, strlen($method['name']));
+
+        return ['name' => $alias, 'signature' => $signature, 'summary' => $method['summary']];
+    }
     /**
      * The key under which a type name is indexed: the name as written when it matches a declaration
      * exactly, otherwise the declaration it matches without regard to case, or null when none does.
@@ -886,6 +1283,7 @@ final class ApiReference
             'backed' => $type['backed'],
             'internal' => self::isInternal($type['doc']),
             'traits' => $type['traits'],
+            'adapts' => $type['adapts'],
             'parents' => $type['parents'],
             'methods' => $type['methods'],
         ];
@@ -935,7 +1333,9 @@ final class ApiReference
     /**
      * Refuses a published summary that carries an internal reference: a tracker or audit ID
      * (sc-23, DX-05, sugar-core-024) or a file outside the repo (ansicode.txt). Those IDs
-     * resolve for no reader, so the PHPDoc gets rewritten instead of published.
+     * resolve for no reader, so the PHPDoc gets rewritten instead of published. A bare
+     * `@internal` is refused too: it means the tag is not line-leading, so the type or method
+     * it marks would publish as a public row.
      *
      * @param list<array{name: string, signature: string, summary: string}> $methods
      */
@@ -952,13 +1352,20 @@ final class ApiReference
                     . 'rewrite that docblock so the page does not print it'
                 );
             }
+            if (preg_match(self::BARE_INTERNAL_TAG, $text, $hit) === 1) {
+                throw new \RuntimeException(
+                    "gen-api-reference: the published PHPDoc of $fqn carries a bare '{$hit[0]}' outside a line-leading tag; "
+                    . 'move the tag to the start of its own line, or reword the sentence so the page does not print it'
+                );
+            }
         }
     }
 
     /**
      * The first PHPDoc paragraph, as HTML. Tags (lines starting with @) end it.
-     * Backtick spans become code, and the inline {@see X} and {@link X} forms
-     * are reduced to X.
+     * Backtick spans become code, the inline {@code X} form becomes a backtick span,
+     * and the inline {@see X} and {@link X} forms are reduced to X. Tags match in any
+     * letter case, as PHPDoc readers do, so {@See X} is not printed as raw text.
      */
     private static function summary(?string $doc): string
     {
@@ -990,7 +1397,8 @@ final class ApiReference
         }
 
         $text = implode(' ', $para);
-        $text = (string) preg_replace('/\{@(?:see|link)\s+([^}]*)\}/', '$1', $text);
+        $text = (string) preg_replace('/\{@code\s+([^}]*)\}/i', '`$1`', $text);
+        $text = (string) preg_replace('/\{@(?:see|link)\s+([^}]*)\}/i', '$1', $text);
         $text = (string) preg_replace('/\{@inheritdoc\}/i', '', $text);
         $html = htmlspecialchars(trim((string) preg_replace('/\s+/', ' ', $text)), ENT_QUOTES, 'UTF-8');
 
@@ -1007,7 +1415,31 @@ final class ApiReference
     }
 
     /**
-     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>}> $types
+     * The fqns of the $n largest types, as keys, in coverage()'s order: size descending, then name.
+     *
+     * @param list<array{fqn: string, size: int}> $types
+     * @return array<string, true>
+     */
+    private static function largestTypes(array $types, int $n): array
+    {
+        if ($n <= 0) {
+            return [];
+        }
+        usort($types, static function (array $a, array $b): int {
+            $cmp = $b['size'] <=> $a['size'];
+
+            return $cmp !== 0 ? $cmp : strcmp($a['fqn'], $b['fqn']);
+        });
+        $largest = [];
+        foreach (array_slice($types, 0, $n) as $type) {
+            $largest[$type['fqn']] = true;
+        }
+
+        return $largest;
+    }
+
+    /**
+     * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}> $types
      */
     private static function render(string $slug, array $types): string
     {
@@ -1036,18 +1468,46 @@ final class ApiReference
         }
         ksort($byNamespace, SORT_STRING);
 
+        $listed = self::ROWS_IN_NAMESPACE[$slug] ?? null;
+        $pinned = self::largestTypes($types, self::TOP_TYPES_LISTED[$slug] ?? 0);
+        // namespace => [public types in it, types with a row on this page]
+        $omitted = [];
         foreach ($byNamespace as $namespace => $group) {
-            $out[] = '<h3>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</h3>';
+            $shown = [];
             foreach ($group as $type) {
-                $out[] = self::renderType($type);
+                if ($listed === null || $namespace === $listed || isset($pinned[$type['fqn']])) {
+                    $shown[] = $type;
+                }
             }
+            if ($shown !== []) {
+                $out[] = '<h3>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</h3>';
+                foreach ($shown as $type) {
+                    $out[] = self::renderType($type);
+                }
+            }
+            if (count($shown) < count($group)) {
+                $omitted[$namespace] = [count($group), count($shown)];
+            }
+        }
+
+        if ($omitted !== []) {
+            $out[] = '<h3>Sub-namespaces not listed row by row</h3>';
+            $out[] = '<p>A type named here has no row on this page. Each line states how many public types its '
+                . 'namespace holds in all, so a count here is the full count.</p>';
+            $out[] = '<ul>';
+            foreach ($omitted as $namespace => [$total, $shown]) {
+                $out[] = '<li><code>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</code>: ' . $total
+                    . ' public ' . ($total === 1 ? 'type' : 'types')
+                    . ($shown > 0 ? ", $shown of them with a row above" : '') . '</li>';
+            }
+            $out[] = '</ul>';
         }
 
         return implode("\n", $out) . "\n";
     }
 
     /**
-     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, methods: list<array{name: string, signature: string, summary: string}>} $type
+     * @param array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>} $type
      */
     private static function renderType(array $type): string
     {
@@ -1071,6 +1531,15 @@ final class ApiReference
                 $provided .= ', <code>from()</code> and <code>tryFrom()</code>';
             }
             $parts[] = '<p>PHP also provides ' . $provided . '.</p>';
+        }
+        if ($type['undeclaredTraits'] !== []) {
+            // The methods a trait adds are real API, so a missing table row must not read as a missing method.
+            $names = array_map(
+                static fn (string $t): string => '<code>' . htmlspecialchars($t, ENT_QUOTES, 'UTF-8') . '</code>',
+                $type['undeclaredTraits']
+            );
+            $parts[] = '<p>Not listed: the methods of ' . implode(', ', $names)
+                . (count($names) === 1 ? ', a trait' : ', traits') . ' declared outside src/.</p>';
         }
         if ($type['methods'] !== []) {
             $rows = [];
@@ -1119,7 +1588,7 @@ final class ApiReference
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === realpath(__FILE__)) {
     exit((static function (array $argv): int {
         $usage = "usage: gen-api-reference.php <slug> [--check|--report]\n"
-            . '  enabled slugs: ' . implode(', ', ApiReference::ENABLED) . "\n";
+            . "  <slug> is a lib in ApiReference::ENABLED (a fragment) or NO_PUBLIC_CLASSES (a note, no fragment)\n";
         if (in_array('--help', $argv, true) || in_array('-h', $argv, true)) {
             fwrite(STDOUT, $usage);
 
@@ -1141,6 +1610,44 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === realpath(__F
         $root = realpath(__DIR__ . '/..');
         if ($root === false) {
             fwrite(STDERR, "gen-api-reference: cannot resolve the monorepo root\n");
+
+            return 2;
+        }
+
+        if (in_array($slug, ApiReference::NO_PUBLIC_CLASSES, true)) {
+            // No fragment to write or compare: the body states the absence. A fragment left
+            // behind from a lib that once had classes would be spliced without being checked.
+            $stale = is_file(ApiReference::fragmentPath($root, $slug));
+            // The skeleton list is a claim about src/, so the claim is checked here: a public
+            // type added under a listed skeleton must fail the check, not pass it as "ok".
+            try {
+                $declared = ApiReference::declaredPublic($root, $slug);
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                fwrite(STDERR, $e->getMessage() . "\n");
+
+                return 2;
+            }
+            if ($declared !== []) {
+                fwrite(STDERR, "drift: $slug declares " . count($declared) . " public type(s) but is listed in ApiReference::NO_PUBLIC_CLASSES; move it to ENABLED and write its fragment and body marker\n");
+
+                return 1;
+            }
+            if ($report) {
+                fwrite(STDOUT, "$slug: no public classes, so no top-10 figure\n");
+
+                return 0;
+            }
+            if ($stale) {
+                fwrite(STDERR, "drift: " . ApiReference::fragmentPath($root, $slug) . " exists but $slug has no public classes; delete it\n");
+
+                return 1;
+            }
+            if ($check) {
+                fwrite(STDOUT, "ok: $slug has no public classes and no fragment\n");
+
+                return 0;
+            }
+            fwrite(STDERR, "gen-api-reference: $slug has no public classes, so it has no fragment to write\n");
 
             return 2;
         }

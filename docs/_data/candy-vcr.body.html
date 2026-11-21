@@ -218,6 +218,8 @@ php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
 </table>
     <p>The CLI verbs are command classes such as <code>RecordCommand</code>, <code>ReplayCommand</code> and <code>RenderBatchCommand</code>, and <code>DiffWriter</code> prints the output of <code>diff</code>. Each one wraps the library types listed above, so a script can call those types directly and skip the CLI.</p>
 
+        <!-- api-reference:generated -->
+
     <h3 style="margin-top: 40px;">Examples</h3>
     <ul>
       <li><code>examples/record.php</code>: records a tiny counter Program. Usage: <code>php examples/record.php /tmp/session.cas</code>. With no argument it writes to the system temporary directory, never into the checkout.</li>
