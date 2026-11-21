@@ -17,9 +17,10 @@
 #                 timing flakes come from. Without durations: nproc.
 #   --durations   per-file durations: a junit from an earlier run of this lib,
 #                 a "path<TAB>seconds" TSV, or `none` for plain alphabetical
-#                 order. Default: scripts/parallel-tests-durations.tsv for
-#                 candy-code; otherwise the junit this script left in --out
-#                 last time (kept as <out>/junit.prev.xml); otherwise none.
+#                 order. Default: the junit this script left in --out last
+#                 time (kept as <out>/junit.prev.xml); otherwise, for
+#                 candy-code, scripts/parallel-tests-durations.tsv; otherwise
+#                 none.
 #   --out         run directory (default: ${TMPDIR:-/tmp}/paratest-<slug>).
 #                 Gets phpunit-lpt.xml, lpt.log, paratest.log (all output,
 #                 with --verbose "Process N executing" lines for worker
@@ -138,11 +139,17 @@ mkdir -p "$OUT" || exit 1
 OUT=$(cd "$OUT" && pwd)
 
 if [ -z "$DURATIONS" ]; then
-	if [ "$LIB" = candy-code ] && [ -f "$REPO/scripts/parallel-tests-durations.tsv" ]; then
-		DURATIONS="$REPO/scripts/parallel-tests-durations.tsv"
-	elif [ -f "$OUT/junit.xml" ]; then
+	# The last run's junit outranks the committed TSV: it is this harness's
+	# own measurement and as fresh as the tree. The TSV moves only with the
+	# suite-figure refresh, so after a speed fix it can name a floor file that
+	# is no longer slow and suggest a K far too low.
+	if [ -f "$OUT/junit.xml" ]; then
 		mv -f "$OUT/junit.xml" "$OUT/junit.prev.xml"
+	fi
+	if [ -f "$OUT/junit.prev.xml" ]; then
 		DURATIONS="$OUT/junit.prev.xml"
+	elif [ "$LIB" = candy-code ] && [ -f "$REPO/scripts/parallel-tests-durations.tsv" ]; then
+		DURATIONS="$REPO/scripts/parallel-tests-durations.tsv"
 	else
 		DURATIONS=none
 	fi
