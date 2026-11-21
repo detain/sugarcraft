@@ -3114,8 +3114,7 @@ final class Manager implements Model
     }
 
     /**
-     * Open a new tab duplicating the CURRENT tab honestly (CF-23, closes
-     * audit 040): both pane cwds and the active side are carried over —
+     * Open a new tab duplicating the CURRENT tab honestly (CF-23): both pane cwds and the active side are carried over —
      * one accidental `t` must not collapse the dual-pane pair onto the
      * left cwd.
      */

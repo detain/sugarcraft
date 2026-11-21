@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -132,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-releases.png" alt="" aria-hidden="true">
@@ -153,18 +158,41 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#the-laws">The laws</a></li>
-            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#wire-self-update-into-an-app">Wire self-update into an app</a></li>
+            <li class="toc-h3"><a href="#check-without-installing">Check without installing</a></li>
+            <li class="toc-h3"><a href="#follow-the-rolling-channel">Follow the rolling channel</a></li>
+            <li class="toc-h3"><a href="#undo-the-last-upgrade">Undo the last upgrade</a></li>
+            <li class="toc-h3"><a href="#show-the-launch-notice-without-blocking">Show the launch notice without blocking</a></li>
+            <li class="toc-h3"><a href="#key-classes">Key classes</a></li>
+            <li class="toc-h3"><a href="#options">Options</a></li>
+            <li class="toc-h3"><a href="#output-and-styling">Output and styling</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-releases">SugarCraft\Releases</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#self-update-refuses-with-a-composer-message">Self-update refuses with a Composer message</a></li>
+            <li class="toc-h3"><a href="#every-update-is-refused-even-one-that-looks-right">Every update is refused, even one that looks right</a></li>
+            <li class="toc-h3"><a href="#a-dev-build-reports-cannot-compare">A dev build reports &quot;cannot compare&quot;</a></li>
+            <li class="toc-h3"><a href="#no-update-notice-appears-at-launch">No update notice appears at launch</a></li>
+            <li class="toc-h3"><a href="#allow-unsigned-still-refuses-a-release">--allow-unsigned still refuses a release</a></li>
+            <li class="toc-h3"><a href="#a-windows-upgrade-stays-pending">A Windows upgrade stays pending</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source">Source</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The self-update machinery a phar-shipped SugarCraft app needs, extracted from candy-code so every app rides the same laws: <strong>pick the right release from a shared GitHub release stream, verify the bytes BEFORE the rename, keep a one-shot <code>.old</code> undo copy, and tell the user at launch when a newer release exists</strong>. Everything app-specific — repository, tag prefix, asset names, pinned public key, Composer package, display name — is one <code>ReleaseSource</code> value; the host parses its own argv and supplies its running version. First-party — there is no upstream Go port.</p>
+<p class="lede" style="margin-top: 28px;">The self-update machinery a phar-shipped SugarCraft app needs, extracted from candy-code so every app follows the same laws. It picks the right release from a shared GitHub release stream, <strong>verifies the bytes before the rename</strong>, keeps a one-shot <code>.old</code> undo copy, and tells the user at launch when a newer release exists. Everything app-specific (repository, tag prefix, asset names, pinned public key, Composer package, display name) is one <code>ReleaseSource</code> value, and the host parses its own argv and supplies its running version. First-party: there is no upstream Go port.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-releases</code></pre>
+    <p style="margin-top: 12px;">The manifest requires PHP <code>^8.3</code>. <code>ext-sodium</code> is optional but needed for Ed25519 signature checks: with a key pinned and no sodium, every update is refused (fail-closed). The self-update verb only works in phar mode. A Composer install gets a loud refusal that names the command that fits its install shape.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Releases\ReleaseSource;
@@ -176,56 +204,270 @@ $source = ReleaseSource::new('acme/tools', 'widget')   // tags widget/v1.2.3, as
     ->withComposerPackage('acme/widget')
     ->withPublicKey($base64Ed25519PublicKey);          // '' = keyless state
 
-// `widget self-update --check` / bare / --rollback / --channel=latest
+// `widget self-update --check`, bare, --rollback, or --channel=latest
 $exit = SelfUpdate::new($source)->run(UpdateOptions::new()->withCheck(), $currentVersion);
 
-// at launch: refresh a 24 h cache over the event loop, paint the PREVIOUS check's answer
+// At launch: refresh a 24 h cache over the event loop, paint the PREVIOUS check's answer
 $check = UpdateCheck::new($source, $stateDir, $currentVersion);
 $check->refreshIfStale();
 echo $check->cachedNotice() ?? '';</code></pre>
-    <p style="margin-top: 12px;">Exit codes: 0 up to date / swapped / rolled back; 1 refusals and failures (and <code>--check</code> finding an update); 2 usage errors. Report lines go to STDERR through a translator seam.</p>
+    <p style="margin-top: 12px;">Exit codes: <code>0</code> up to date, swapped or rolled back; <code>1</code> refusals and failures, and <code>--check</code> finding an update; <code>2</code> usage errors, as reported by <code>UpdateOptions::validate()</code>.</p>
 
-    <h3 id="the-laws" style="margin-top: 32px;">The laws</h3>
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>The engine has two halves that never share state. <strong>Self-update</strong> (<code>SelfUpdate</code>) is a verb the user runs on purpose: it downloads, verifies and swaps, or refuses. <strong>The launch notice</strong> (<code>UpdateCheck</code>) runs in the background and only ever paints the answer from the previous check, so the notice never blocks the first frame. Both share one <code>ReleaseSource</code>, so a tag prefix or key set once applies to both halves.</p>
+
     <div class="feature-grid">
-      <div class="feature"><strong>Verify before rename</strong><span>The sha256 sidecar is fetched first and must be a lowercase 64-hex digest naming the phar; the phar streams to a temp file beside the target, is hashed with hash_equals(), and only then renamed. Every download leg judges HTTP status.</span></div>
-      <div class="feature"><strong>Pinned-key Ed25519</strong><span>With a key pinned, a release without a verifying signature is refused; the stream-safe signature over the sidecar body is preferred, the legacy raw-bytes asset is accepted behind a deprecation notice. <code>--allow-unsigned</code> never skips the sha256 gate.</span></div>
-      <div class="feature"><strong>Two channels</strong><span>Stable: newest non-draft <code>&lt;app&gt;/v*</code> release carrying both assets, ordered numerically. Dev: the rolling <code>&lt;app&gt;/dev</code> release judged by commit identity against a <code>dev-&lt;sha&gt;</code> stamp — indecidable is a refusal, never a guess.</span></div>
-      <div class="feature"><strong>One-shot rollback</strong><span>The running phar is copied to <code>.old</code> before the swap; <code>--rollback</code> renames it back, consuming it, with no network. The live file's mode is carried onto both halves.</span></div>
-      <div class="feature"><strong>Windows relaunch dance</strong><span>NT refuses to rename over a running image, so the verified bytes stage at <code>.new</code> and a detached helper retries the rename until the process exits, logging to <code>.swap.log</code>. The helper source is a fixed literal; paths travel as argv data.</span></div>
-      <div class="feature"><strong>Never blocks, never spams</strong><span>The launch notice reads only the previous check's cache (two-launch shape by design), re-validates the cached version at paint time, follows only same-origin release-list links, and degrades every failure to "no notice".</span></div>
+      <div class="feature"><strong>Verify before rename</strong><span>The sha256 sidecar is fetched first and must be a lowercase 64-hex digest that names the phar. The phar streams to a temp file beside the target, is hashed with <code>hash_equals()</code>, and only then is renamed. Every download leg judges HTTP status.</span></div>
+      <div class="feature"><strong>Pinned-key Ed25519</strong><span>With a key pinned, a release without a verifying signature is refused. The signature over the sidecar body is preferred. The legacy raw-bytes asset is accepted behind a deprecation notice. <code>--allow-unsigned</code> never skips the sha256 gate.</span></div>
+      <div class="feature"><strong>Two channels</strong><span>Stable: the newest non-draft, non-prerelease <code>&lt;app&gt;/v*</code> release carrying both assets, ordered numerically. Latest: the rolling <code>&lt;app&gt;/latest</code> release, judged by commit identity against a <code>dev-&lt;sha&gt;</code> build. An undecidable comparison is a refusal, never a guess.</span></div>
+      <div class="feature"><strong>One-shot rollback</strong><span>The running phar is copied to <code>.old</code> before the swap. <code>--rollback</code> renames it back, consuming it, with no network. The live file's mode is carried onto both halves.</span></div>
+      <div class="feature"><strong>Windows relaunch dance</strong><span>Windows refuses to rename over a running image, so the verified bytes stage at <code>.new</code> and a detached helper retries the rename every 200 ms for up to 60 s, logging to <code>.swap.log</code>. The helper source is a fixed literal, and paths travel as argv data.</span></div>
+      <div class="feature"><strong>Never blocks, never spams</strong><span>The launch notice reads only the previous check's cache, re-validates the cached version at paint time, follows only same-origin release-list links, and degrades every failure to "no notice".</span></div>
     </div>
 
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
-    <ul>
-      <li><strong>Phar apps in a shared release stream</strong> — per-app tag prefixes keep one tool's releases from being confused with a sibling's.</li>
-      <li><strong>Adopting the same laws in a second app</strong> — candy-code is the reference consumer, candy-top the second.</li>
-    </ul>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+
+    <h3 id="wire-self-update-into-an-app" style="margin-top: 24px;">Wire self-update into an app</h3>
+    <p>Describe the app once with <code>ReleaseSource::new($repo, $app)</code>. The defaults derive the tag prefix <code>&lt;app&gt;/</code>, the phar asset <code>&lt;app&gt;.phar</code>, the sidecar <code>&lt;app&gt;.phar.sha256</code>, and the signature names. Override only what differs, and keep the result immutable: each <code>with*()</code> returns a new source.</p>
+
+    <h3 id="check-without-installing" style="margin-top: 24px;">Check without installing</h3>
+    <pre class="code"><code class="language-shell">widget self-update --check</code></pre>
+    <p>The check reads the release list and reports the newer version, if any, with exit <code>1</code>. Nothing is downloaded or swapped.</p>
+
+    <h3 id="follow-the-rolling-channel" style="margin-top: 24px;">Follow the rolling channel</h3>
+    <pre class="code"><code class="language-shell">widget self-update --channel=latest</code></pre>
+    <p>The latest channel only answers for a dev build that embeds its commit as <code>dev-&lt;sha&gt;</code>. A release build (<code>v1.2.3</code>) cannot be compared against a commit, so the swap is refused with a cannot-compare message.</p>
+
+    <h3 id="undo-the-last-upgrade" style="margin-top: 24px;">Undo the last upgrade</h3>
+    <pre class="code"><code class="language-shell">widget self-update --rollback</code></pre>
+    <p>The rollback renames <code>&lt;phar&gt;.old</code> back over the live phar and consumes it. It needs no network, and a second rollback has nothing to restore.</p>
+
+    <h3 id="show-the-launch-notice-without-blocking" style="margin-top: 24px;">Show the launch notice without blocking</h3>
+    <p>Call <code>refreshIfStale()</code> once the event loop runs. It returns as soon as the request is handed to the loop, and the result lands in <code>&lt;stateDir&gt;/update-check.json</code>. Then paint <code>cachedNotice()</code>. The first launch after an install paints nothing, because there is no previous check yet.</p>
+
+    <h3 id="key-classes" style="margin-top: 40px;">Key classes</h3>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>ReleaseSource</td><td>static new(string $repo, string $app): self</td><td>Where an app publishes and what its artifacts are called. Derives the tag prefix <code>&lt;app&gt;/</code>, the asset <code>&lt;app&gt;.phar</code>, and the sidecar and signature names.</td></tr>
+<tr><td>ReleaseSource</td><td>withTagPrefix() / withPharAsset() / withPublicKey() / withComposerPackage() / withUserAgent()</td><td>Immutable overrides. An empty public key is the keyless state.</td></tr>
+<tr><td>SelfUpdate</td><td>static new(ReleaseSource $source): self / run(UpdateOptions $options, string $currentVersion): int</td><td>The verb: verify-before-rename swap, <code>--check</code>, <code>--rollback</code> and channel selection. Returns the exit code.</td></tr>
+<tr><td>SelfUpdate</td><td>withHttp() / withReleasesUrl() / withPharPath() / withPublicKey() / withWindows() / withErrorStream() / withTranslator() / withSwapLauncher()</td><td>Seams for the host and the test suite. Each one defaults to the production behavior.</td></tr>
+<tr><td>SelfUpdate</td><td>composerRefusal(?string $rootPackage = null): string</td><td>The loud composer-mode refusal, naming the command that fits the install shape.</td></tr>
+<tr><td>UpdateOptions</td><td>new() / withCheck() / withRollback() / withAllowUnsigned() / withChannel() / withOperands() / validate()</td><td>The parsed verb flags, free of any CLI framework. <code>validate()</code> names the first usage violation as a translation key.</td></tr>
+<tr><td>UpdateCheck</td><td>static new(ReleaseSource $source, string $stateDir, string $currentVersion): self / refreshIfStale(): void / cachedNotice(): ?string</td><td>The launch-time notice. An async 24 h refresh writes <code>&lt;stateDir&gt;/update-check.json</code> at mode 0600. The notice is read from the previous check's cache.</td></tr>
+<tr><td>ReleaseSelector</td><td>for(ReleaseSource $source) / selectRelease(array $releases) / selectLatestRelease(array $releases) / latestDecision(string $current, array $release) / parseSidecar(string $body) / sidecarName(string $body)</td><td>Pure selection over a decoded GitHub release list, independent of transport. <code>latestDecision()</code> returns <code>[0|1|null, label]</code>, where <code>null</code> means cannot compare.</td></tr>
+<tr><td>Version</td><td>parse() / compare() / isComparable() / isDev() / devShaOf()</td><td>Strict <code>v?X.Y.Z</code> ordering (<code>null</code> means cannot order) and the <code>dev-&lt;sha&gt;</code> classifier.</td></tr>
+<tr><td>Signature</td><td>verifyDetached(string $payload, string $signatureBody, string $publicKeyBase64): bool</td><td>Ed25519 detached verification. Every malformed shape answers <code>false</code>.</td></tr>
+<tr><td>WindowsSwap</td><td>launch(int $parentPid, string $new, string $phar, ?\Closure $spawnSpec = null, ?array $env = null): bool / launchCommand(int $parentPid, string $new, string $phar): array</td><td>Spawns the detached rename-retry helper, with a 60 s budget and a 200 ms cadence.</td></tr>
+</table>
+
+    <h3 id="options" style="margin-top: 40px;">Options</h3>
+    <p>Verb flags come from <code>UpdateOptions</code>. Mutual exclusion is enforced: <code>--check</code> cannot combine with <code>--rollback</code> or <code>--allow-unsigned</code>.</p>
+<table class="api-table">
+<caption>Verb flags and launch settings</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>--check</code></td><td>flag</td><td>off</td><td>Report whether a newer release exists, with exit 1 when one does. Nothing is swapped.</td></tr>
+<tr><td><code>--rollback</code></td><td>flag</td><td>off</td><td>Restore <code>&lt;phar&gt;.old</code> over the live phar. No network.</td></tr>
+<tr><td><code>--allow-unsigned</code></td><td>flag</td><td>off</td><td>Skip the Ed25519 leg when a key is pinned, with a notice printed. It never skips the sha256 gate.</td></tr>
+<tr><td><code>--channel</code></td><td><code>stable</code> or <code>latest</code></td><td><code>stable</code>, or <code>latest</code> for a dev build</td><td>Stable picks the newest tagged release. Latest follows the rolling release and needs a dev build. Without the flag, a <code>dev-&lt;sha&gt;</code> build defaults to latest.</td></tr>
+<tr><td><code>ReleaseSource::withPublicKey()</code></td><td>base64 Ed25519 key</td><td><code>''</code></td><td>Empty means keyless. A key that is set makes every release need a verifying signature.</td></tr>
+<tr><td><code>ReleaseSource::withTagPrefix()</code></td><td>string</td><td><code>&lt;app&gt;/</code></td><td>Lets one repository host several apps' release streams.</td></tr>
+<tr><td><code>&lt;APP&gt;_NO_UPDATE_CHECK</code></td><td>environment variable</td><td>unset</td><td>Opt-out for the launch notice. The name is the uppercased app name, and <code>UpdateCheck::withOptOutEnv()</code> overrides it.</td></tr>
+</table>
+    <p style="margin-top: 12px;">Fixed limits, pinned by the suite: the release list is walked through <code>Link: rel="next"</code> for at most 5 pages. The launch check reruns after 86 400 s. The cache file is written at mode <code>0600</code>. Connect time is capped at 5 s, a read at 60 s, and a stall below 1 KiB/s for 60 s is aborted.</p>
+
+    <h3 id="output-and-styling" style="margin-top: 40px;">Output and styling</h3>
+    <p>The engine paints no color and no layout. Report lines go to STDERR, or to the stream set with <code>withErrorStream()</code>. Messages come from the <code>selfupdate.*</code> keys in <code>lang/en.php</code>. Pass <code>withTranslator()</code> to map those keys onto the host's own catalog; the placeholders <code>{app}</code> and <code>{package}</code> are filled in before the translator sees the text.</p>
+
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum under <code>src/</code>, grouped by namespace, with its method table. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- GENERATED by tools/gen-api-reference.php from sugar-releases/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-releases -->
+<p>Only methods declared in <code>sugar-releases/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-releases">SugarCraft\Releases</h3>
+<h4 id="api-sugarcraft-releases-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-releases (namespace <code>releases</code>). Strings live in ../lang/en.php; hosts with their own catalog inject a translator through <code>SelfUpdate::withTranslator()</code> / <code>UpdateCheck::withTranslator()</code>.</p>
+<h4 id="api-sugarcraft-releases-releaseselector"><code>ReleaseSelector</code> <small>final class</small></h4>
+<p>Pure selection over a decoded GitHub release list: which entry is &quot;the latest&quot; for one ReleaseSource, on either channel, independent of any transport.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static for(ReleaseSource $source): self</code></td><td></td></tr>
+<tr><td><code>selectRelease(array $releases): ?array</code></td><td></td></tr>
+<tr><td><code>selectLatestRelease(array $releases): ?array</code></td><td>The target commit rides along lower-cased (&#039;&#039; when the entry names none) for latestDecision() to judge: selection stays decidable on assets alone, so a malformed target is the loud cannot-compare refusal, never a silent no-release. Tag names are unique per repository, so at most one entry can match; an asset-less latest entry is skipped.</td></tr>
+<tr><td><code>latestDecision(string $current, array $release): array</code></td><td>Is the running dev build already the commit the latest release names? [decision, label]: 0 up to date, 1 a newer commit is published, null INDECIDABLE — the current version carries no commit to match, or the release names a target that is missing or not a hex object name (a branch label). Indecidable is the fail-closed shape: --check reports cannot-compare, a swap refuses. A mismatch is never &quot;behind&quot;: the rolling channel answers now or not-yet.</td></tr>
+<tr><td><code>static parseSidecar(string $body): ?string</code></td><td>The lowercase 64-hex-digit digest a sidecar signs with, or null when it is not that shape. Fails closed on uppercase hex, a short digest, and anything the sha256sum spelling does not produce.</td></tr>
+<tr><td><code>static sidecarName(string $body): string</code></td><td>The file name a sidecar declares after its digest (&#039;&#039; when it names nothing).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-releasesource"><code>ReleaseSource</code> <small>final class</small></h4>
+<p>Where a phar-shipped tool publishes its releases, and what its artifacts are called. Every candy-code-specific literal the self-update engine used to carry (<code>candy-code/</code> tag prefix, <code>candy-code.phar</code> asset family, <code>detain/sugarcraft</code> repo, the Composer package named in the refusal) is an input here.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $repo, string $app): self</code></td><td></td></tr>
+<tr><td><code>withTagPrefix(string $tagPrefix): self</code></td><td></td></tr>
+<tr><td><code>withPharAsset(string $pharAsset): self</code></td><td></td></tr>
+<tr><td><code>withPublicKey(string $publicKey): self</code></td><td>Base64 of the raw 32-byte Ed25519 public key; &#039;&#039; is the keyless state.</td></tr>
+<tr><td><code>withComposerPackage(string $composerPackage): self</code></td><td>The Composer package the tool installs as (<code>vendor/name</code>), named in the composer-mode refusal.</td></tr>
+<tr><td><code>withUserAgent(string $userAgent): self</code></td><td></td></tr>
+<tr><td><code>releasesUrl(): string</code></td><td>First page of the release list (<code>?per_page=100</code>).</td></tr>
+<tr><td><code>releasesPath(): string</code></td><td>The only path a <code>Link: rel=&quot;next&quot;</code> hop may name on api.github.com.</td></tr>
+<tr><td><code>sidecarAsset(): string</code></td><td></td></tr>
+<tr><td><code>signatureAsset(): string</code></td><td>The LEGACY detached signature over the raw phar bytes.</td></tr>
+<tr><td><code>sidecarSignatureAsset(): string</code></td><td>The stream-safe detached signature over the sidecar body.</td></tr>
+<tr><td><code>latestTag(): string</code></td><td>The exact tag the rolling latest release is moved under.</td></tr>
+<tr><td><code>composerCommand(): string</code></td><td><code>composer update &lt;package&gt;</code> — printed verbatim in the composer-mode refusal.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-selfupdate"><code>SelfUpdate</code> <small>final class</small></h4>
+<p>Phar self-update engine: replace the running phar with the latest published one, verified before the swap, with the pre-swap copy kept for a one-shot rollback. Everything app-specific (repo, tag prefix, asset names, pinned key, Composer package, display name) is the ReleaseSource; the host parses its own argv into UpdateOptions and supplies the running version.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(ReleaseSource $source): self</code></td><td></td></tr>
+<tr><td><code>source(): ReleaseSource</code></td><td></td></tr>
+<tr><td><code>withHttp(?ClientInterface $http): self</code></td><td>The HTTP client (a test mounts a fake release server as a Guzzle handler).</td></tr>
+<tr><td><code>withReleasesUrl(?string $releasesUrl): self</code></td><td>Override the first release-list page URL (default: ReleaseSource::releasesUrl()).</td></tr>
+<tr><td><code>withPharPath(?string $pharPath): self</code></td><td>The phar to swap; null asks the runtime (<code>\Phar::running(false)</code>).</td></tr>
+<tr><td><code>withPublicKey(?string $publicKey): self</code></td><td>Override the pinned key for this run; &#039;&#039; is the keyless state, null reads the source.</td></tr>
+<tr><td><code>withWindows(?bool $windows): self</code></td><td>Force the Windows relaunch-dance leg on or off; null reads PHP_OS_FAMILY.</td></tr>
+<tr><td><code>withErrorStream(mixed $stream): self</code></td><td></td></tr>
+<tr><td><code>withTranslator(?\Closure $translator): self</code></td><td>Route wording through the host&#039;s catalog: <code>fn (string $key, array $params): string</code> receiving the <code>selfupdate.*</code> keys of lang/en.php with <code>{app}</code>/<code>{package}</code> filled.</td></tr>
+<tr><td><code>withSwapLauncher(?\Closure $swapLauncher): self</code></td><td>Replace the detached Windows swap helper launch (default WindowsSwap::launch()).</td></tr>
+<tr><td><code>run(UpdateOptions $options, string $currentVersion): int</code></td><td>Run the verb. <code>$currentVersion</code> is what the running install reports (<code>v1.2.3</code> or a <code>dev-&lt;sha&gt;</code> stamp); the host resolves it, the engine only orders it.</td></tr>
+<tr><td><code>composerRefusal(?string $rootPackage = null): string</code></td><td>The loud composer-mode refusal, verbatim: what to run instead, stated as the exact command — and the command fits the install shape: a consuming project is pointed at its dependency update, a clone where the tool IS the Composer root package at pulling the clone (<code>composer update &lt;pkg&gt;</code> there updates the package&#039;s dependencies, not the package). Public and pure so the wording is pinned without a non-phar &quot;phar&quot;; <code>$rootPackage</code> is the seam for the runtime&#039;s root-package answer.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-signature"><code>Signature</code> <small>final class</small></h4>
+<p>Pure Ed25519 detached-signature check for release assets.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static verifyDetached(string $payload, string $signatureBody, string $publicKeyBase64): bool</code></td><td>Is $signatureBody the base64 of a signature by $publicKeyBase64 over exactly $payload? Every malformed shape — empty payload, non-strict base64, wrong-length raw halves, a missing sodium extension — answers FALSE (refuse), never an exception and never a trust. Surrounding whitespace is tolerated in both base64 slots because release-asset bodies carry trailing newlines.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-updatecheck"><code>UpdateCheck</code> <small>final class</small></h4>
+<p>The launch-time &quot;update available&quot; notice for phar installs.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(ReleaseSource $source, string $stateDir, string $currentVersion): self</code></td><td></td></tr>
+<tr><td><code>withFetcher(?callable $fetcher): self</code></td><td>Test seam: <code>callable(string $url, array $headers): PromiseInterface&lt;PSR-7&gt;</code>.</td></tr>
+<tr><td><code>withPharPath(?string $pharPath): self</code></td><td>The phar the install runs from; null asks <code>\Phar::running(false)</code>.</td></tr>
+<tr><td><code>withNow(?int $now): self</code></td><td></td></tr>
+<tr><td><code>withOptOutEnv(?string $name): self</code></td><td>The flag-style opt-out env var name; default <code>&lt;APP&gt;_NO_UPDATE_CHECK</code>.</td></tr>
+<tr><td><code>withTranslator(?\Closure $translator): self</code></td><td></td></tr>
+<tr><td><code>withLogger(?\Closure $logger): self</code></td><td></td></tr>
+<tr><td><code>cachePath(): string</code></td><td></td></tr>
+<tr><td><code>optOutEnv(): string</code></td><td>The opt-out env var in force: <code>&lt;APP&gt;_NO_UPDATE_CHECK</code> unless overridden.</td></tr>
+<tr><td><code>refreshIfStale(): void</code></td><td>Fire the launch-time check. Returns as soon as the request walk is handed to the event loop; the cache write happens in its completion handler. Never throws, never blocks: every refusal path (composer install, opt-out, fresh cache, unbuildable transport) simply returns, and anything thrown by the wiring is swallowed into the once-per-process log line.</td></tr>
+<tr><td><code>cachedNotice(): ?string</code></td><td>The notice text, or null for &quot;no row&quot;. Reads ONLY the previous check&#039;s cache file — never the network — and memoises per process. The cached answer is re-validated against the running version before it is returned, so a manual upgrade (or a downgrade, or a dev rebuild onto the published commit) silences a stale notice without waiting for the next check.</td></tr>
+<tr><td><code>static resetForTesting(): void</code></td><td>Drop the per-process memo and the log-once latch (tests only).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-updateoptions"><code>UpdateOptions</code> <small>final class</small></h4>
+<p>The parsed shape of <code>self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]</code>, free of any CLI framework: the host parses its own argv and hands the engine this.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>withCheck(bool $check = true): self</code></td><td></td></tr>
+<tr><td><code>withRollback(bool $rollback = true): self</code></td><td></td></tr>
+<tr><td><code>withAllowUnsigned(bool $allowUnsigned = true): self</code></td><td></td></tr>
+<tr><td><code>withChannel(?string $channel): self</code></td><td>null = default channel from the current version. Validity is validate()&#039;s call.</td></tr>
+<tr><td><code>withOperands(array $operands): self</code></td><td></td></tr>
+<tr><td><code>validate(): ?array</code></td><td>The first usage violation as [translation key, params], or null when the options are runnable. Order is the original verb&#039;s: exclusivity, channel, operands.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-version"><code>Version</code> <small>final class</small></h4>
+<p>The strict <code>v?X.Y.Z</code> ordering the self-update engine runs on, plus the dev-stamp classifier. Anything outside the grammar compares as <code>null</code> (&quot;cannot order&quot;), which every caller treats as &quot;no swap&quot;: guessing the intent of an ordering it cannot express is how a dev checkout gets downgraded to the last stable tag.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(string $version): ?array</code></td><td></td></tr>
+<tr><td><code>static compare(string $left, string $right): ?int</code></td><td>-1, 0 or 1 as $left is older, equal or newer than $right; null when either side will not parse.</td></tr>
+<tr><td><code>static isComparable(string $version): bool</code></td><td></td></tr>
+<tr><td><code>static isDev(string $version): bool</code></td><td>The literal prefix rule and nothing more: <code>dev-master</code> IS dev, <code>v1.2.3</code> and <code>unknown</code> are not.</td></tr>
+<tr><td><code>static devShaOf(string $version): ?string</code></td><td>The lower-cased commit of a <code>dev-&lt;hex4-40&gt;</code> stamp, or null for every other shape.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-releases-windowsswap"><code>WindowsSwap</code> <small>final class</small></h4>
+<p>The relaunch dance SelfUpdate hands the phar swap to on Windows (C-TUI-6.e).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static launch(int $parentPid, string $new, string $phar, ?\Closure $spawnSpec = null, ?array $env = null): bool</code></td><td>Launch the detached swap helper for a staged <code>.new</code> waiting on <code>$phar</code>.</td></tr>
+<tr><td><code>static launchCommand(int $parentPid, string $new, string $phar): array</code></td><td>The exact argv the spawn carries, as data — paths never touch the code.</td></tr>
+</tbody>
+</table>
+
+<h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <p>Each example runs offline. None of them touches the network or the phar.</p>
+<ul>
+  <li><code>examples/select-release.php</code> feeds a decoded GitHub release list to <code>ReleaseSelector</code>. It shows the stable pick, which skips drafts, prereleases and entries without a sidecar, and the latest-channel decision for a dev build.</li>
+  <li><code>examples/verify-signature.php</code> generates a throwaway Ed25519 keypair. It then shows a genuine sidecar passing <code>Signature::verifyDetached()</code> and a tampered sidecar, a wrong key and malformed input all being refused. It needs <code>ext-sodium</code>.</li>
+  <li><code>examples/version-ordering.php</code> covers <code>Version::compare()</code>, the <code>dev-&lt;sha&gt;</code> helpers, and <code>ReleaseSelector::parseSidecar()</code> and <code>sidecarName()</code>.</li>
+</ul>
+    <pre class="code"><code class="language-shell">php examples/select-release.php
+php examples/verify-signature.php
+php examples/version-ordering.php</code></pre>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite mounts a fake release server as a Guzzle handler, so it opens no sockets, and it swaps in stub archives. A few pins spawn real child PHP processes: a memory-limit raise, a 48 MB sidecar-signed swap inside a 32 MB child, and the Windows helper. The Ed25519 positive legs skip when <code>ext-sodium</code> is absent.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="self-update-refuses-with-a-composer-message" style="margin-top: 24px;">Self-update refuses with a Composer message</h3>
+    <p>The verb runs only from a phar. A Composer install reads the refusal from <code>SelfUpdate::composerRefusal()</code> and exits <code>1</code>. Upgrade through Composer, using the command the message names.</p>
+
+    <h3 id="every-update-is-refused-even-one-that-looks-right" style="margin-top: 24px;">Every update is refused, even one that looks right</h3>
+    <p>A pinned key needs <code>ext-sodium</code>. Without it, <code>Signature::verifyDetached()</code> answers <code>false</code> for every release, which is the fail-closed design. Install the extension to verify releases.</p>
+
+    <h3 id="a-dev-build-reports-cannot-compare" style="margin-top: 24px;">A dev build reports "cannot compare"</h3>
+    <p>The latest channel needs the commit baked into the build as <code>dev-&lt;sha&gt;</code>, and the sha must be a prefix of the release's target commit. A build with no embedded sha, or a release that names a branch instead of a commit, gets a refusal. That is intended: the engine never guesses that a dev build is behind.</p>
+
+    <h3 id="no-update-notice-appears-at-launch" style="margin-top: 24px;">No update notice appears at launch</h3>
+    <p>The notice paints only the previous check's cache, so a fresh install shows nothing until a second launch. The notice is also silent when the opt-out variable is set, or when the process is not running from a phar.</p>
+
+    <h3 id="allow-unsigned-still-refuses-a-release" style="margin-top: 24px;">--allow-unsigned still refuses a release</h3>
+    <p>That flag only relaxes the signature leg. The sha256 gate still runs. A release whose sidecar is missing, malformed or does not match the downloaded bytes is refused in every mode.</p>
+
+    <h3 id="a-windows-upgrade-stays-pending" style="margin-top: 24px;">A Windows upgrade stays pending</h3>
+    <p>The helper retries the rename for up to 60 s after the parent process exits. Read <code>&lt;phar&gt;.swap.log</code> for its attempts. The verified bytes wait at <code>&lt;phar&gt;.new</code> until the swap succeeds.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>There is no Charmbracelet counterpart. The library is first-party and was extracted from candy-code. The table below maps each class to the candy-code code it replaced.</p>
+<table class="api-table">
+<tr><th scope="col">SugarCraft class</th><th scope="col">Origin</th><th scope="col">Responsibility</th></tr>
+<tr><td><code>SelfUpdate</code></td><td>candy-code's self-update code</td><td>Download, verify, swap, rollback</td></tr>
+<tr><td><code>UpdateCheck</code></td><td>candy-code's launch-time update check</td><td>Background refresh and the cached notice</td></tr>
+<tr><td><code>WindowsSwap</code></td><td>candy-code's Windows relaunch helper</td><td>Detached rename-retry after the parent exits</td></tr>
+<tr><td><code>ReleaseSelector</code>, <code>Version</code>, <code>Signature</code></td><td>Shared helpers that the classes above call</td><td>Selection, ordering and Ed25519 checks with no I/O</td></tr>
+</table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>Pure logic sits at the bottom. <code>Version</code>, <code>Signature</code>, <code>ReleaseSelector</code> and <code>UpdateOptions</code> do no I/O, so the examples and most of the suite run without a network. The middle layer is <code>SelfUpdate</code>, which owns the Guzzle client, the temp-file dance and the swap. <code>UpdateCheck</code> is the asynchronous half, which runs over the shared ReactPHP loop and writes the cache. <code>WindowsSwap</code> is the only code that spawns a detached process. Every network and process seam is injectable, so the host controls the process containment.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library is pre-1.0 and has no tagged releases yet, so consume <code>dev-master</code>. Each app ships its own phar versions, and the self-update verb moves between those tags. Check the release notes on <a href="https://github.com/sugarcraft/sugar-releases">the source repository</a>.</p>
 
     <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-releases">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-releases/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-releases/blob/master/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-releases/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><strong>candy-code</strong> is the reference consumer. It was the source of the extraction.</li>
+      <li><strong>candy-top</strong> is the next app to adopt the same laws.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<caption>API surface</caption>
-<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
-<tr><td>ReleaseSource</td><td>static new(string $repo, string $app): self</td><td>Where an app publishes and what its artifacts are called; derives tag prefix <code>&lt;app&gt;/</code>, asset <code>&lt;app&gt;.phar</code> and the sidecar/signature names</td></tr>
-<tr><td>ReleaseSource</td><td>withTagPrefix() / withPharAsset() / withPublicKey() / withComposerPackage() / withUserAgent()</td><td>Immutable overrides; an empty public key is the keyless state</td></tr>
-<tr><td>SelfUpdate</td><td>static new(ReleaseSource $source): self / run(UpdateOptions $options, string $currentVersion): int</td><td>The verb: verify-before-rename swap, <code>--check</code>, <code>--rollback</code>, channel selection; returns the exit code</td></tr>
-<tr><td>SelfUpdate</td><td>withHttp() / withReleasesUrl() / withPharPath() / withPublicKey() / withWindows() / withErrorStream() / withTranslator() / withSwapLauncher()</td><td>Seams for the host and the suite; every one defaults to the production behavior</td></tr>
-<tr><td>SelfUpdate</td><td>composerRefusal(?string $rootPackage = null): string</td><td>The loud composer-mode refusal naming the command that fits the install shape</td></tr>
-<tr><td>UpdateOptions</td><td>new() / withCheck() / withRollback() / withAllowUnsigned() / withChannel() / withOperands() / validate()</td><td>The parsed verb flags, free of any CLI framework; validate() names the first usage violation as a translation key</td></tr>
-<tr><td>UpdateCheck</td><td>static new(ReleaseSource $source, string $stateDir, string $currentVersion): self / refreshIfStale(): void / cachedNotice(): ?string</td><td>The launch-time notice: async 24 h refresh into <code>&lt;stateDir&gt;/update-check.json</code> (0600), notice read from the previous check's cache</td></tr>
-<tr><td>ReleaseSelector</td><td>for(ReleaseSource $source) / selectRelease() / selectDevRelease() / devDecision() / parseSidecar() / sidecarName()</td><td>Pure selection over a decoded GitHub release list, independent of transport</td></tr>
-<tr><td>Version</td><td>parse() / compare() / isComparable() / isDev() / devShaOf()</td><td>Strict <code>v?X.Y.Z</code> ordering (null = cannot order) and the <code>dev-&lt;sha&gt;</code> classifier</td></tr>
-<tr><td>Signature</td><td>verifyDetached(string $payload, string $signatureBody, string $publicKeyBase64): bool</td><td>Ed25519 detached verification; every malformed shape answers false</td></tr>
-<tr><td>WindowsSwap</td><td>launch(int $parentPid, string $new, string $phar, ?\Closure $spawnSpec = null, ?array $env = null): bool / launchCommand()</td><td>Spawns the detached rename-retry helper (60 s budget, 200 ms cadence)</td></tr>
-</table>
     </div>
   </div>
 </section>

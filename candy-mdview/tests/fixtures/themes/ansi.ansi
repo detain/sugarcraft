@@ -1,0 +1,24 @@
+[1m[38;2;255;95;135m# Heading one[0m
+
+[1m[96m## Heading two[0m
+
+[1m[93m### Heading three[0m
+
+Plain paragraph with [1mbold[0m, [3mitalic[0m, [9mstrike[0m and [38;2;255;95;135minline code[0m, plus a ]8;;https://example.com/docs\[4m[94mlink[0m]8;;\ (https://example.com/docs).
+
+▎ A block quote that carries
+▎ two lines of text.        
+
+[38;2;255;95;135m•[0m first item
+[38;2;255;95;135m•[0m second item with [3memphasis[0m
+[38;2;255;95;135m1.[0m ordered one
+[38;2;255;95;135m2.[0m ordered two
+[90m────────────────────────────────────────[0m
+
+[2m<?php[0m
+[2m     [0m[2;3m[90m// a comment about the value[0m[2m         [0m
+[2m$count = [0m[2m[93m42[0m[2m;        [0m
+[2m$label = [0m[2m[92m"text"[0m[2m;[0m
+[2m [0m[1;2m[95mfunction[0m[2m greet(string $name): string { [0m[1;2m[95mreturn[0m[2m [0m[2m[92m"hi {$name}"[0m[2m; }[0m
+
+[2mplain fenced block[0m

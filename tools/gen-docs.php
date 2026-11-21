@@ -56,6 +56,10 @@ declare(strict_types=1);
  *             prefixOverride for pages whose chrome legitimately diverges (sugar-core).
  *   BODY      (docs/_data/<slug>.body.html) — the hand-authored content fragment (lede →
  *             the Demos section close), stored verbatim so no content is ever lost.
+ *   API       (docs/_data/<slug>.api.html) — the generated API reference, present only for the
+ *             libs in ApiReference::ENABLED. Built from the source PHPDoc by
+ *             `php tools/gen-api-reference.php <slug>`, not by this file, and spliced in place of
+ *             the body's marker. A PHPDoc change needs that command AND this one.
  *
  * The generator applies these normalizations uniformly (they are the ONLY intended diffs
  * versus the previous hand-maintained pages):
@@ -118,6 +122,11 @@ const DOC_SEARCH_PAGES = [
     'TRUST-BOUNDARY.html',
     'cookbook/index.html',
 ];
+
+// The API reference fragment (docs/_data/<slug>.api.html) is built by
+// tools/gen-api-reference.php; this file only splices it in. ApiReference::MARKER
+// is the placeholder a body carries. {@see splice_api_reference()}
+require_once __DIR__ . '/gen-api-reference.php';
 
 const USAGE = <<<'TXT'
     usage: gen-docs.php [--extract|--check|--help]
@@ -230,10 +239,11 @@ foreach ($slugs as $slug) {
         continue;
     }
     $meta = readJsonData("$dataDir/$slug.json");
-    $body = (string) file_get_contents("$dataDir/$slug.body.html");
+    $body = splice_api_reference($slug, $dataDir, (string) file_get_contents("$dataDir/$slug.body.html"));
     // RT-34: the body is embedded VERBATIM into the published page, so the
     // deny-list runs before anything is generated or compared — check mode
     // and generate mode both refuse residue (exit 2, naming the file).
+    // The spliced fragment is checked here too, since it is embedded verbatim.
     $residue = html_residue_problems($body);
     if ($residue !== []) {
         fwrite(STDERR, "gen-docs: docs/_data/$slug.body.html carries disallowed raw-HTML residue: "
@@ -548,6 +558,41 @@ function stub_html(string $old, string $new): string
 // ---------------------------------------------------------------------------
 
 /**
+ * Puts docs/_data/<slug>.api.html in place of the body's API marker (PD2,
+ * plan_doc.md section 9). FAILS CLOSED in both directions: a fragment with no
+ * marker, or a marker with no fragment, exits 2. Otherwise a stale page could
+ * hide a splice that never happened.
+ */
+function splice_api_reference(string $slug, string $dataDir, string $body): string
+{
+    $fragmentPath = "$dataDir/$slug.api.html";
+    $markers = substr_count($body, ApiReference::MARKER);
+    if (!is_file($fragmentPath)) {
+        if ($markers !== 0) {
+            fwrite(STDERR, "gen-docs: docs/_data/$slug.body.html carries " . ApiReference::MARKER
+                . " but docs/_data/$slug.api.html does not exist; run php tools/gen-api-reference.php $slug\n");
+            exit(2);
+        }
+        return $body;
+    }
+    if ($markers !== 1) {
+        fwrite(STDERR, "gen-docs: docs/_data/$slug.api.html exists, so docs/_data/$slug.body.html must carry exactly one "
+            . ApiReference::MARKER . " (found $markers)\n");
+        exit(2);
+    }
+    // Only a slug the generator builds may publish a fragment. A hand-written or
+    // dropped-from-ENABLED fragment would be spliced but never regenerated or
+    // compared, so its page could go stale under a green gate.
+    if (!ApiReference::enabled($slug)) {
+        fwrite(STDERR, "gen-docs: docs/_data/$slug.api.html exists but $slug is not in ApiReference::ENABLED; remove the fragment or enable the lib in tools/gen-api-reference.php\n");
+        exit(2);
+    }
+    $fragment = rtrim((string) file_get_contents($fragmentPath));
+
+    return str_replace(ApiReference::MARKER, $fragment, $body);
+}
+
+/**
  * @param array<string,string> $types
  * @param array<string,string> $stubs old slug => final target; these pages are
  *                                    generated redirects, not extractable content —
@@ -567,6 +612,12 @@ function run_extract(string $libDir, string $dataDir, array $types, array $stubs
             continue;
         }
         $pages[] = $slug;
+        if (is_file("$dataDir/$slug.api.html")) {
+            // The body of a page with a generated API fragment is authored with a
+            // marker, and extracting the page would copy the fragment into it.
+            fwrite(STDOUT, "note: skipping '$slug' — its API reference is generated from docs/_data/$slug.api.html\n");
+            continue;
+        }
         $html = (string) file_get_contents($file);
         [$meta, $body] = extract_one($slug, $html);
         if (file_put_contents(
@@ -953,6 +1004,10 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
                             <a href="/lib/sugar-releases.html">sugar-releases</a>
                             <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                             <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                            <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                            <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                            <a href="/lib/sugar-codec.html">sugar-codec</a>
+                            <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                             <a href="/lib/sugar-testing.html">sugar-testing</a>
                         </div>
                     </li>
@@ -994,6 +1049,7 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
                             <a href="/GLOSSARY.html">Glossary</a>
                             <a href="/KEYMAPS.html">Keymaps</a>
                             <a href="/cookbook/index.html">Cookbook</a>
+                            <a href="/lib/candy-code.html">candy-code</a>
                         </div>
                     </li>
                     <li class="nav-item"><a href="/#demos">Demos</a></li>

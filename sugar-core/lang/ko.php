@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => '허가가 부여되기 전에 세마포가 닫혔습니다',
     'semaphore.closed' => '세마포가 닫혀 있어 더 이상 허가를 부여할 수 없습니다',
     'semaphore.derive_closed' => '닫힌 세마포에서 새 풀을 파생할 수 없습니다',
+    'semaphore.map_cancelled' => '모든 항목이 끝나기 전에 일괄 작업이 취소되었습니다',
     'lru_map.capacity_invalid' => 'LRU 용량은 최소 1이어야 합니다. 입력값: {capacity}',
     'lru_map.capacity_too_large' => 'LRU 용량 {capacity}이(가) 증가 가드 {max}를 초과합니다',
     'lru_map.evict_from_empty' => '빈 LRU 맵에서 내쫓을 수 없습니다',

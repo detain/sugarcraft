@@ -31,8 +31,7 @@ final class Theme
      * hundred is generous, and without a ceiling a 60-byte style file
      * multiplied into a 1.5 GB str_repeat and died rc 255 below any
      * consumer's own validation. Producers that parse user input SHOULD
-     * refuse over-limit values with a message (candy-mdview's GlamourTheme
-     * does); this belt makes every producer bounded at construction, so a
+     * refuse over-limit values with a message (StyleGuide does); this belt makes every producer bounded at construction, so a
      * forgetful one saturates instead of exhausting memory.
      */
     public const MAX_DOCUMENT_DECORATION = 256;

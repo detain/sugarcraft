@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Core\Util\AtomicJsonFile;
@@ -364,7 +363,7 @@ final class MarketplaceRegistry
 
         $dir = rtrim($this->checkoutsRoot, '/') . '/' . $name;
 
-        return ContainedPath::below($dir, $this->checkoutsRoot) ? $dir : null;
+        return \SugarCraft\Core\Util\PathJail::below($dir, $this->checkoutsRoot) ? $dir : null;
     }
 
     /** The parsed catalog of a registered marketplace, or null when it has no readable one. */

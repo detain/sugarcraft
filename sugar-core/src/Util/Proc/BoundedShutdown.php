@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util\Proc;
 
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 use SugarCraft\Core\Lang;
 
 /**
@@ -71,6 +72,14 @@ final class BoundedShutdown
      * prompt reap is not worth a 200Hz wakeup on a loop that is serving others.
      */
     public const REAP_POLL_SECONDS = 0.25;
+
+    /**
+     * `posix_get_last_error()` value for "no such process or group". EPERM (1)
+     * is the other failure a signal-0 probe can return, and it means a live
+     * process this uid cannot signal, never an empty slot. Both numbers are the
+     * same on Linux and the BSDs.
+     */
+    private const ERRNO_ESRCH = 3;
 
     /**
      * When each group last had a live member seen by a /proc walk, keyed by pgid.
@@ -209,7 +218,8 @@ final class BoundedShutdown
      * @param callable(int):void $signal delivers one rung signal (15 or 9)
      * @param callable():bool $isGone a cheap, non-blocking exited?-poll
      * @param callable():void|null $onEscalate fired once BETWEEN the rungs,
-     *        when SIGTERM did not land — for families that log the escalation
+     *        when SIGTERM did not land — for families that log the escalation.
+     *        A throw is logged with error_log() and does not stop the ladder.
      *
      * @return bool whether the child is gone by the end of the budgets. The
      *         result is reported, not acted on: after signal 9 the only way
@@ -230,7 +240,7 @@ final class BoundedShutdown
         }
 
         if ($onEscalate !== null) {
-            $onEscalate();
+            self::observe($onEscalate);
         }
 
         // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant — see
@@ -256,6 +266,10 @@ final class BoundedShutdown
      * @param callable():bool $isGone
      * @param callable(bool):void|null $done
      * @param callable():void|null $onEscalate
+     * @return TimerInterface the poll timer driving the ladder. A caller that settles
+     *                        before the ladder does must cancel it: the poll only stops
+     *                        itself once $isGone holds or the kill budget is spent, so
+     *                        an unchecked handle keeps the loop armed for up to one poll.
      */
     public static function escalateAsync(
         LoopInterface $loop,
@@ -265,7 +279,7 @@ final class BoundedShutdown
         float $terminateGrace = self::TERMINATE_GRACE_SECONDS,
         float $killGraceSeconds = self::KILL_GRACE_SECONDS,
         ?callable $onEscalate = null,
-    ): void {
+    ): TimerInterface {
         $signal(15);
         $killed = false;
         $deadline = self::now() + $terminateGrace;
@@ -276,7 +290,7 @@ final class BoundedShutdown
                 if ($isGone()) {
                     $loop->cancelTimer($timer);
                     if ($done !== null) {
-                        $done(true);
+                        self::observe($done, true);
                     }
 
                     return;
@@ -287,13 +301,13 @@ final class BoundedShutdown
                 if ($killed) {
                     $loop->cancelTimer($timer);
                     if ($done !== null) {
-                        $done($isGone());
+                        self::observe($done, $isGone());
                     }
 
                     return;
                 }
                 if ($onEscalate !== null) {
-                    $onEscalate();
+                    self::observe($onEscalate);
                 }
                 // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant — see
                 // the class doc-block's ext-pcntl rule.
@@ -302,6 +316,8 @@ final class BoundedShutdown
                 $deadline = self::now() + $killGraceSeconds;
             },
         );
+
+        return $timer;
     }
 
     /**
@@ -452,6 +468,27 @@ final class BoundedShutdown
     private static function now(): float
     {
         return \hrtime(true) / 1_000_000_000;
+    }
+
+    /**
+     * Runs a caller's observer hook (escalation log, completion callback) so a
+     * throwing one cannot cost the teardown. The rung that follows is the point
+     * of the ladder: an observer that throws must not leave the child running
+     * with no SIGKILL sent, nor escape a loop tick and stop the loop.
+     *
+     * The throw is not rethrown, but it is not silent either: it is written to
+     * error_log(), because a `$done` that throws before it resolves a caller's
+     * promise would otherwise leave that caller waiting with no trace.
+     *
+     * @param callable(mixed...):void $hook
+     */
+    private static function observe(callable $hook, mixed ...$args): void
+    {
+        try {
+            $hook(...$args);
+        } catch (\Throwable $e) {
+            \error_log('BoundedShutdown: an observer hook threw and was ignored: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -670,7 +707,13 @@ final class BoundedShutdown
             return false;
         }
 
-        return !@\posix_kill($pid, 0);
+        // EPERM is a live pid owned by another uid (a child that changed uid):
+        // alive, and not ours to signal. Only ESRCH is gone.
+        if (@\posix_kill($pid, 0)) {
+            return false;
+        }
+
+        return \posix_get_last_error() === self::ERRNO_ESRCH;
     }
 
     /**
@@ -734,7 +777,12 @@ final class BoundedShutdown
      */
     public static function groupEmpty(int $groupPid, bool $walkProc = true): bool
     {
-        if (!\function_exists('posix_kill') || !@\posix_kill(-$groupPid, 0)) {
+        // Only ESRCH means no member is left. EPERM means a live member this uid
+        // cannot signal (a root-owned descendant of a containment wrapper), so
+        // the group is not empty; the /proc walk below decides it.
+        if (!\function_exists('posix_kill')
+            || (!@\posix_kill(-$groupPid, 0) && \posix_get_last_error() === self::ERRNO_ESRCH)
+        ) {
             unset(self::$groupScannedAt[$groupPid]);
 
             return true;

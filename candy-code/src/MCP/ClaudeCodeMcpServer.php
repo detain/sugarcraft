@@ -28,7 +28,7 @@ use SugarCraft\McpClient\ArgumentShape;
  * tier rather than the trust ruling being amended.
  *
  * THE GATES THAT THE DORMANCY NOTE DEMANDED, and where each landed:
- *  - a path anchor: NOT {@see \SugarCraft\Code\Support\ContainedPath} —
+ *  - a path anchor: NOT {@see \SugarCraft\Core\Util\PathJail} —
  *    containment is the answer to repository-chosen paths, and this path is
  *    operator-authored in the user tier whose ownership
  *    {@see \SugarCraft\Code\Cli\Bootstrap::userConfigPath()} already

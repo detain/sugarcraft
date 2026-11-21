@@ -467,7 +467,7 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     }
 
     /**
-     * Every {@see PRICE_TABLE} model is sized here (audit A13: gpt-4o-mini
+     * Every {@see PRICE_TABLE} model is sized here (gpt-4o-mini
      * and the gpt-4.1 pair were priced but fell to an 8,192 default, so
      * Chat's context tiers fired after a few messages on 128k / 1M models).
      * An unknown model answers 0 — "unknown" per

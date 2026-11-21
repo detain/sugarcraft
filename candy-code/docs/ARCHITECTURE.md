@@ -1428,7 +1428,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
 2. **Absence is a no-op; present-but-unusable is a refusal.** Applied to
    `config.json`, `hooks.yaml`, `.mcp.json`, `--config`, `--root`, and every
    `CANDY_CODE_*` variable that carries policy.
-3. **One resolution per question.** `HomeDirectory` for `~`, `ContainedPath` for
+3. **One resolution per question.** `HomeDirectory` for `~`, sugar-core's `PathJail` for
    containment, `HookConfig::pattern()` for matcher delimiters,
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists

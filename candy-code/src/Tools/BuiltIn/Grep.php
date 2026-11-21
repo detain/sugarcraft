@@ -55,7 +55,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * have no ceiling of their own: a common identifier, or a pattern that happens to
      * match minified assets or a lockfile, returns tens of thousands of lines
      * that would otherwise be replayed into every following request of the
-     * turn. Zero or negative disables the cap.
+     * turn. Zero or negative disables the hit-list trim only; the capture itself
+     * stays bounded by {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES},
+     * and the returned result is held to that same ceiling.
      *
      * $rgAvailable is decided by the caller at boot — see
      * {@see \SugarCraft\Code\Tools\Concerns\DetectsCapabilities} for why the
@@ -474,7 +476,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // matched files returned 10,096 bytes against a 400-byte cap (25.2x)
         // before this reservation existed, because the bodies were appended
         // AFTER the clip and so were never inside the budget at all.
-        $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
+        // A non-positive cap is budgeted at the 8 MiB default, the same ceiling the
+        // final clip falls back to: an instruction section sized from the raw 0
+        // would have no room bound at all, and it is appended after the clip.
+        $budgetCap = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::DEFAULT_RETAINED_BYTES;
+        $ceiling = $this->instructionSectionCeiling($budgetCap);
 
         // COMPUTED BEFORE THE BODY IS CLIPPED, and that ordering is the whole
         // of the second half of E66. The nudge used to be built after the clip
@@ -571,9 +577,14 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // simply gives up the difference — and what keeps this probe no
         // tighter than the final clip below, which is the property the
         // announce-once mark depends on.
+        // A non-positive cap has no floor of its own, so the probe takes the
+        // budget the final clip falls back to (the 8 MiB ceiling less the
+        // nudges, see $finalCap below). Left at 0, the probe read the whole
+        // capture — up to 16 MiB across both streams — and a rule hit past the
+        // final cut was announced for the session but never shown.
         $floor = $this->maxOutputBytes > 0
             ? max(1, $bodyCap - $ceiling - 1)
-            : 0;
+            : max(1, $budgetCap - $nudgeCost - $ceiling - 1);
         // A probe SAVES nothing (saveSpill: false): the final clip below may be
         // a different cut, and a probe that saved left an orphaned spill file
         // whenever the output fell between the floor and $bodyCap.
@@ -597,7 +608,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // BEFORE any body is loaded, so a path whose rules do not fit is
             // not retired for the session — see
             // {@see \SugarCraft\Code\Tools\Concerns\TruncatesOutput::instructionSection()}.
-            $section = $this->instructionSection($hitFiles, $this->instructionLoader, $this->maxOutputBytes);
+            $section = $this->instructionSection($hitFiles, $this->instructionLoader, $budgetCap);
         }
 
         // Clipped at the FLOOR whenever a rule was surfaced, and NOT at what
@@ -621,7 +632,18 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // promises. Under announce-once that is the first touch of a
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
-        $content = $this->truncateMerged($merged, $section === '' ? $bodyCap : $floor);
+        // A non-positive cap turns the hit-list trim off, not the result's own
+        // ceiling: truncateMerged() treats 0 as "no clip", so the joined stdout
+        // and stderr would reach the model at twice the capture bound. The
+        // default is the one each stream is retained to, as in Bash. The
+        // nudges are appended after this clip, so their length is charged
+        // against that default here, as it is against a positive cap above;
+        // otherwise a zero cap returns the body at the full ceiling plus them.
+        $finalCap = $section === '' ? $bodyCap : $floor;
+        $content = $this->truncateMerged(
+            $merged,
+            $finalCap > 0 ? $finalCap : max(1, self::DEFAULT_RETAINED_BYTES - $nudgeCost),
+        );
 
         $skipped = self::presentExcludedDirs($path, $rules);
         if ($skipped !== []) {

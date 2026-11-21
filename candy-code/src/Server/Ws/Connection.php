@@ -36,7 +36,7 @@ use SugarCraft\Code\Server\ErrorLog;
  * `permessage-deflate` stays off (Appendix O §6.1): latency, CPU, and the
  * compression-oracle risk of secrets beside attacker-influenced text.
  */
-final class Connection
+final class Connection implements Peer
 {
     private readonly MessageBuffer $buffer;
 

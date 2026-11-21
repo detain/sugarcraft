@@ -10,7 +10,6 @@ use SugarCraft\Code\Channels\BundleChannelLoader;
 use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\ProjectRoot;
 
 /**
@@ -106,13 +105,16 @@ final class DoctorChannelsChecks
             return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.bundles_dark')];
         }
 
+        $shadowed = [];
         if ($bundles === null) {
             $paths = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
             // The launch and serve boot resolve the project tier through
             // ProjectRoot, so a subdirectory launch sees the repository's
             // bundles; doctor must read the same tree or it calls them stale.
             $projectRoot = ProjectRoot::lookup($root ?? (getcwd() ?: ''));
-            $bundles = (new BundleDiscovery($projectRoot, is_array($paths) ? $paths : []))->discover();
+            $discovery = new BundleDiscovery($projectRoot, is_array($paths) ? $paths : [], $trusted);
+            $bundles = $discovery->discover();
+            $shadowed = $discovery->shadowedTrustedCopies();
         }
         $store ??= ChannelsStore::new();
 
@@ -126,14 +128,24 @@ final class DoctorChannelsChecks
         $escaping = 0;
         $loose = [];
         $unarmed = 0;
+        $projectTier = [];
         foreach ($trusted as $name) {
             $bundle = $byName[$name] ?? null;
             if ($bundle === null) {
                 continue;
             }
+            // Name trust is user-tier only (ruling 2026-11-20): a project-tier copy
+            // of a trusted name is refused by the loader, so it is reported as such
+            // and never counted as armed or first-sight.
+            if ($bundle->tier !== 'user') {
+                if ($bundle->hasTrustGatedContent()) {
+                    $projectTier[] = $name;
+                }
+                continue;
+            }
             foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {
                 ++$entryPoints;
-                if (!ContainedPath::below($entry['path'], $bundle->dir)) {
+                if (!\SugarCraft\Core\Util\PathJail::below($entry['path'], $bundle->dir)) {
                     ++$escaping;
                     continue;
                 }
@@ -147,6 +159,15 @@ final class DoctorChannelsChecks
                 }
             }
         }
+        // A project copy that a user-tier twin shadowed never reaches $bundles, yet
+        // the launch refuses its channel and hook content just the same
+        // (Bootstrap::bundles() reads the same shadowedTrustedCopies()).
+        foreach ($shadowed as $copy) {
+            if ($copy->hasTrustGatedContent()) {
+                $projectTier[] = $copy->name;
+            }
+        }
+        $projectTier = array_values(array_unique($projectTier));
 
         $problems = [];
         if ($stale !== []) {
@@ -166,6 +187,12 @@ final class DoctorChannelsChecks
         }
         if ($unarmed > 0) {
             $problems[] = Lang::t($unarmed === 1 ? 'cli.doctor.bundles_first_sight_one' : 'cli.doctor.bundles_first_sight_other', ['count' => (string) $unarmed]);
+        }
+        if ($projectTier !== []) {
+            $problems[] = Lang::t('cli.doctor.bundles_project_tier', [
+                'count' => (string) count($projectTier),
+                'names' => implode(', ', $projectTier),
+            ]);
         }
         if ($problems !== []) {
             return ['status' => 'WARN', 'detail' => implode('; ', $problems)];

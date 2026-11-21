@@ -509,4 +509,72 @@ final class AsyncOpsTest extends TestCase
         self::assertTrue($resolved[$ok], 'the healthy leg keeps its bool true');
         self::assertSame('RuntimeException: kaboom on doomed', $resolved[$this->tmpDir . '/doomed']);
     }
+
+    public function testCopyManyAsyncNarrowWindowStillSettlesEveryLegKeyed(): void
+    {
+        $map = [];
+        for ($i = 0; $i < 5; $i++) {
+            $src = $this->tmpDir . '/n' . $i . '.txt';
+            file_put_contents($src, 'leg ' . $i);
+            $map[$src] = $this->tmpDir . '/narrow' . $i . '.txt';
+        }
+        $calls = 0;
+        $ops = new AsyncOps(static function (string $src, string $dst) use (&$calls): bool {
+            $calls++;
+            return copy($src, $dst);
+        });
+        $resolved = null;
+        $ops->copyManyAsync($map, 1)->then(static function (mixed $results) use (&$resolved): void {
+            $resolved = $results;
+            Loop::stop();
+        });
+        Loop::run();
+        self::assertIsArray($resolved);
+        self::assertSame(5, $calls, 'a window of one still runs every leg exactly once');
+        self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
+    }
+
+    public function testCopyManyAsyncLargeMapRunsEveryLegOnceWithSmallWindow(): void
+    {
+        // Legs are fed to the semaphore as predecessors settle, so a map much
+        // larger than the window must still run each leg exactly once and key
+        // every source, with nothing stranded in the dispatch queue.
+        $map = [];
+        for ($i = 0; $i < 300; $i++) {
+            $map['/virtual/src/' . $i] = '/virtual/dst/' . $i;
+        }
+        $seen = [];
+        $started = 0;
+        $startedAtProbe = null;
+        $ops = new AsyncOps(static function (string $src, string $dst) use (&$seen, &$started, &$startedAtProbe): bool {
+            $started++;
+            $seen[$src] = ($seen[$src] ?? 0) + 1;
+            if ($started === 1) {
+                // A tick queued from the first leg runs after the ticks already
+                // queued for the legs the window admitted. Under a window of 3
+                // only 3 engine calls can have started by then; an unbounded
+                // fan-out has queued all 300 and the probe sees 300.
+                Loop::futureTick(static function () use (&$started, &$startedAtProbe): void {
+                    $startedAtProbe = $started;
+                });
+            }
+            return true;
+        });
+        $resolved = null;
+        $ops->copyManyAsync($map, 3)->then(static function (mixed $results) use (&$resolved): void {
+            $resolved = $results;
+            Loop::stop();
+        });
+        Loop::run();
+        self::assertIsArray($resolved);
+        self::assertCount(300, $seen, 'every leg ran');
+        self::assertSame(array_fill(0, 300, 1), array_values($seen), 'each leg ran exactly once');
+        self::assertSame(array_fill_keys(array_keys($map), true), $resolved, 'every source keyed true');
+        self::assertNotNull($startedAtProbe, 'the in-flight probe ran while legs were still settling');
+        self::assertLessThanOrEqual(
+            3,
+            $startedAtProbe,
+            'the semaphore window of 3 bounds the legs started before the probe runs',
+        );
+    }
 }

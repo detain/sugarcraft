@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'SMTPホスト {host} は有効なホスト名またはアドレスではありません（文字、数字、ドット、ハイフンのみ）',
     'smtp.invalid_port' => 'SMTPポート {port} が範囲外です（1〜65535の間である必要があります）',
     'smtp.invalid_timeout' => 'SMTPタイムアウト {timeout} は 1 から 3600 の秒数ではありません',
-    'resend.cid_unsupported' => 'Resend APIペイロードにContent-IDフィールドはありません:添付ファイル{filename}はインラインです。インライン画像はSMTP経由のみ。',
+    'resend.cid_unsupported' => 'Resend APIペイロードにはContent-IDフィールドがないため、Resendはインラインの添付ファイル{filename}を拒否します。インライン画像はSMTPまたはMailgun経由で送信してください。',
     'smtp.incomplete_credentials' => 'SMTP 認証情報が不完全です。ユーザー名とパスワードを両方指定するか、匿名送信の場合はどちらも空にしてください',
     'email.non_ascii_address' => 'メール アドレス {addr} に非 ASCII 文字が含まれています: SMTPUTF8 は未対応です — ASCII のエンベロープ アドレスを使用してください',
     'smtp.openssl_missing' => 'SMTP 接続 (STARTTLS/SMTPS) を保護するには ext-openssl が必要です — 拡張機能をインストールしてください。チャネルを暗号化できるまで何も送信されません',

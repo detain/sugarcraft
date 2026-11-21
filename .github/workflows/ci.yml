@@ -223,6 +223,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          # DepthScoreDriftTest regenerates docs/DEPTH-SCORES.md from the commit its
+          # header names, which can predate a depth-1 checkout. The full history
+          # keeps that commit resolvable instead of letting the guard fail on a shallow clone.
+          fetch-depth: 0
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
@@ -561,13 +566,9 @@ jobs:
           MAT_LIB: ${{ matrix.lib }}
         run: cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n
 
-      # The channel bundles (candy-msteams, candy-discord) are tested against the
-      # host tree: tests/bootstrap.php loads ../candy-code/vendor/autoload.php
-      # directly, and CI only installs the lib's own vendor/. Install the host
-      # vendor first so those cells can boot.
-      - name: Install host vendor (channel bundle tests)
-        if: matrix.lib == 'candy-msteams' || matrix.lib == 'candy-discord'
-        run: cd candy-code && composer install --prefer-dist --no-progress -n
+      # The channel bundles (candy-msteams, candy-discord) run under their own
+      # vendor/ tree: tests/bootstrap.php requires only that vendor/autoload.php,
+      # so no host candy-code install is needed for their cells.
 
       # rv-sec-5 (crush-review-1014): dependency vulnerability audit for the
       # flagship app. FAILS ONLY ON HIGH/CRITICAL advisories — low/medium are
@@ -1102,18 +1103,8 @@ jobs:
             sleep 10
           done
 
-      # CI-CURE (2026-11-13): the channel-bundle coverage cells (candy-discord,
-      # candy-msteams) died at <bundle>/tests/bootstrap.php:18 with "bundle
-      # tests need the candy-code vendor tree present" — the test matrix
-      # installs the host vendor for exactly these libs (see "Install host
-      # vendor (channel bundle tests)" in the test job above) but the coverage
-      # job never mirrored that step, so the bootstrap's fail-closed guard
-      # fired before phpunit could load. Same gate, same command, same WHY as
-      # the test job — keep the two sites in step if the bundles ever grow
-      # their own manifests.
-      - name: Install host vendor (channel bundle tests)
-        if: matrix.lib == 'candy-msteams' || matrix.lib == 'candy-discord'
-        run: cd candy-code && composer install --prefer-dist --no-progress -n
+      # Channel bundles (candy-msteams, candy-discord) need no host vendor install:
+      # they boot from their own vendor/ tree, as in the test job above.
 
       - name: Run tests with coverage (serial)
         if: matrix.lib != 'candy-code'

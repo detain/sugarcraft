@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -156,136 +161,1339 @@
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#record">Record</a></li>
-            <li class="toc-h3"><a href="#replay">Replay</a></li>
-            <li class="toc-h3"><a href="#cassette-format">Cassette format</a></li>
-            <li class="toc-h3"><a href="#cli">CLI</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#timestamp-modes">Timestamp modes</a></li>
+            <li class="toc-h3"><a href="#gzip-and-asciinema">Gzip and asciinema</a></li>
+            <li class="toc-h3"><a href="#tasks-and-how-to">Tasks and how-to</a></li>
+            <li class="toc-h3"><a href="#record-a-real-program-from-the-command-line">Record a real program from the command line</a></li>
+            <li class="toc-h3"><a href="#replay-a-cassette-in-a-regression-test">Replay a cassette in a regression test</a></li>
+            <li class="toc-h3"><a href="#replay-with-a-time-budget">Replay with a time budget</a></li>
+            <li class="toc-h3"><a href="#compare-two-cassettes-and-migrate-an-old-one">Compare two cassettes and migrate an old one</a></li>
+            <li class="toc-h3"><a href="#render-a-tape-to-a-gif">Render a tape to a GIF</a></li>
+            <li class="toc-h3"><a href="#run-real-program-output-inside-a-gif">Run real program output inside a GIF</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theming-and-rendering">Theming and rendering</a></li>
+            <li class="toc-h3"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#record-options">record options</a></li>
+            <li class="toc-h3"><a href="#replay-options">replay options</a></li>
+            <li class="toc-h3"><a href="#render-tape-and-render-batch-options">render-tape and render-batch options</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr">SugarCraft\Vcr</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-assert">SugarCraft\Vcr\Assert</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-cli">SugarCraft\Vcr\Cli</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-diff">SugarCraft\Vcr\Diff</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-encode">SugarCraft\Vcr\Encode</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-format">SugarCraft\Vcr\Format</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-hook">SugarCraft\Vcr\Hook</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-input">SugarCraft\Vcr\Input</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-matcher">SugarCraft\Vcr\Matcher</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-migration">SugarCraft\Vcr\Migration</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-msg">SugarCraft\Vcr\Msg</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-raster">SugarCraft\Vcr\Raster</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-render">SugarCraft\Vcr\Render</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-support">SugarCraft\Vcr\Support</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-tape">SugarCraft\Vcr\Tape</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-vcr-tape-ast">SugarCraft\Vcr\Tape\Ast</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#limitations">Limitations</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#hooks-and-matchers">Hooks and matchers</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#versioning-and-changelog">Versioning and changelog</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a sugar-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>). The same frame pipeline also compiles <code>.tape</code> scripts into themed animated GIFs via <code>render-tape</code>/<code>render-batch</code>.</p>
+<p class="lede" style="margin-top: 28px;">candy-vcr records a terminal session as a <em>cassette</em> and plays it back. It tees every message and every byte a sugar-core <code>Program</code> emits into a cassette file, then drives a fresh <code>Program</code> through the same cassette and asserts the output matches, either byte for byte with <code>ByteAssertion</code> or cell by cell with <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">sugar-vterm</a>). The same frame pipeline also compiles <code>.tape</code> scripts, the terminal-recording DSL of <a href="https://github.com/charmbracelet/vhs">charmbracelet/vhs</a>, into themed animated GIFs. It is a PHP 8.3+ port, so you can record in CI and render demos with no Docker and no Go toolchain.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vcr</code></pre>
+    <p>The library requires <code>ext-mbstring</code>. Rendering a tape needs <code>ext-gd</code>, or <code>ext-imagick</code> with <code>--backend=imagick</code>. The default GIF encoder calls <code>ffmpeg</code> on your <code>PATH</code>, and <code>--encoder=php</code> is a pure-PHP fallback that needs no external binary. The YAML cassette format suggests <code>symfony/yaml</code>.</p>
+    <p>The binary is <code>vendor/bin/candy-vcr</code> after a project install. With a PHAR or a global Composer install it is simply <code>candy-vcr</code> on <code>PATH</code>. Every subcommand responds to <code>-h</code> with its own usage block, and <code>--version</code> prints the version.</p>
 
-    <h3 id="record" style="margin-top: 32px;">Record</h3>
+    <h3 id="quickstart" style="margin-top: 40px;">Quickstart</h3>
+    <p>Inspect, summarise and replay the cassette that ships in the repository. Nothing is recorded in this step.</p>
+    <pre class="code"><code class="language-shell">php bin/candy-vcr inspect examples/cassettes/counter.cas
+php bin/candy-vcr stats   examples/cassettes/counter.cas
+php bin/candy-vcr replay  examples/cassettes/counter.cas</code></pre>
+    <p>The <code>inspect</code> command prints one line per event. Its output on this cassette is:</p>
+    <pre class="code"><code class="language-text">cassette v1  80x24  runtime=sugarcraft/candy-vcr@dev  created=2026-05-09T03:55:02Z  duration=0.030s  events=6
+------------------------------------------------------------------------
+  t=0.001s  output   8 bytes  .[?2027h
+  t=0.001s  resize   80x24
+  t=0.002s  input    3 bytes  abc
+  t=0.003s  output   66 bytes  .[?2026h.[1;1H.[0Jcounter: 6..  press an...
+  t=0.030s  quit
+  t=0.030s  output   8 bytes  .[?2027l
+
+6 / 6 event(s) shown</code></pre>
+    <p>The <code>replay</code> command writes only the recorded bytes to stdout, so its output can be compared with <code>cmp</code>. It prints a one-line summary to stderr. On this cassette the stdout is <code>counter: 6</code> followed by <code>press any key, q to quit</code>, and the summary reads <code>candy-vcr replay: played 6 of 6 events (82 output bytes, 0.030 s of recorded time)</code>.</p>
+    <p>Now record your own session from PHP. The Recorder writes the cassette while the program runs:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Recorder;
 
+// $model is any sugar-core Model. examples/record.php ships a tiny CounterModel.
 $program = new Program($model);
-$program-&gt;setRecorder(Recorder::open('/tmp/session.cas'));
-$program-&gt;run();
-// cassette is closed automatically when the loop ends.</code></pre>
+$program->setRecorder(Recorder::open('/tmp/session.cas'));
+$program->run();
+// The cassette closes when the run loop ends. A crash still flushes it.</code></pre>
+    <p>Read the cassette back in PHP with a format reader:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Vcr\Format\JsonlFormat;
 
-    <h3 id="replay" style="margin-top: 32px;">Replay</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Core\{Program, ProgramOptions};
-use SugarCraft\Vcr\Player;
+$cassette = (new JsonlFormat())->read('/tmp/session.cas');
+foreach ($cassette->events as $event) {
+    echo $event->kind->value, ' @ ', $event->t, "\n";
+}</code></pre>
+
+    <h3 id="concepts" style="margin-top: 40px;">Concepts</h3>
+    <p>A <strong>cassette</strong> is a file with one header and a list of events. The header carries the terminal size, a runtime stamp, a theme, a timestamp mode and an optional environment capture. Each event has a time <code>t</code> and a kind from <code>EventKind</code>: <code>Resize</code>, <code>Input</code>, <code>Output</code>, <code>Quit</code>, <code>Snapshot</code>, <code>Hide</code> or <code>Show</code>. The default format is JSON Lines, one event per line, so a cassette can be diffed, grepped and edited by hand.</p>
+    <p>The <strong>Recorder</strong> sits inside the Program and tees four streams: the input bytes, the output bytes (renderer, raw, print and cursor, title and mode messages), resize events and the quit event. The <strong>Player</strong> reads a cassette and drives a fresh Program through it. Its <em>instant</em> mode is for fast tests, and its <em>realtime</em> mode follows the recorded cadence for demos.</p>
+    <p>An <strong>assertion</strong> decides whether a replay matched. <code>ByteAssertion</code> demands byte-equal output and prints a hex and printable diff from the first divergent offset. <code>ScreenAssertion</code> compares cell grids through sugar-vterm, so it tolerates reordered escape sequences, redundant SGR, equivalent cursor moves and partial repaints. Prefer <code>ScreenAssertion</code> for round-trip tests.</p>
+    <p>Recording is <strong>explicit</strong>. candy-vcr never watches a terminal by itself. A cassette holds exactly what the Program was given, and it can hold secrets, so the file is created with mode <code>0600</code>.</p>
+    <p>The <strong>tape pipeline</strong> is a separate path. A <code>.tape</code> file is compiled through <code>Lexer</code>, <code>Parser</code> and <code>Compiler</code>, played by a Player into a virtual terminal, sampled into frames by <code>Renderer</code> and <code>FrameStream</code>, thinned by <code>FrameDedup</code>, rasterised by the GD or imagick backend, and encoded into a GIF. A tape is a source file, not a cassette, so a recorded cassette cannot be exported to GIF today.</p>
+
+    <h3 id="timestamp-modes" style="margin-top: 24px;">Timestamp modes</h3>
+    <p>Cassettes use one of two timestamp modes. <em>Absolute</em> mode writes <code>t</code>, the time since the start of the run, on every event. <em>Relative</em> mode writes <code>dt</code>, the delay since the previous event, in the style asciinema casts use, which is easier to edit by hand. Choose relative mode by opening the recorder with a header that sets <code>timestampMode</code> to <code>CassetteHeader::TIMESTAMP_MODE_RELATIVE</code>. <code>Recorder::withFormat()</code> only confirms the encoding that the header already chose, and it throws on a mismatch rather than switching.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Format\RelativeFormat;
+use SugarCraft\Vcr\Recorder;
+
+$header = new CassetteHeader(
+    version: 1,
+    createdAt: '2026-05-07T10:00:00Z',
+    cols: 80,
+    rows: 24,
+    runtime: 'sugarcraft/candy-vcr@dev',
+    timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+);
+$recorder = Recorder::open('/tmp/session.cas', $header)->withFormat(new RelativeFormat());</code></pre>
+
+    <h3 id="gzip-and-asciinema" style="margin-top: 24px;">Gzip and asciinema</h3>
+    <p>A name ending in <code>.cas.gz</code> selects the gzip codec, <code>CompressedJsonlFormat</code>, without sniffing the content. <code>AsciinemaFormat</code> reads <code>.cast</code> files in asciinema v2 and v3 format, so a recording made with asciinema can be replayed. It is a read-only importer with no writer.</p>
+
+    <h3 id="tasks-and-how-to" style="margin-top: 40px;">Tasks and how-to</h3>
+    <h3 id="record-a-real-program-from-the-command-line" style="margin-top: 16px;">Record a real program from the command line</h3>
+    <p>The <code>record</code> subcommand spawns the command in a pseudo-terminal and captures all of its input and output. It refuses to overwrite an existing cassette unless you pass <code>--force</code>.</p>
+    <pre class="code"><code class="language-shell">candy-vcr record --output session.cas --cols 132 --rows 40 -- bash -l
+candy-vcr record --output hello.cas --no-ctty -- /bin/echo 'hello'
+candy-vcr record --output shell.cas --shell              # spawn $SHELL -l
+candy-vcr record --output demo.cas --idle-trim 1.0 -- bash demo.sh</code></pre>
+    <h3 id="replay-a-cassette-in-a-regression-test" style="margin-top: 16px;">Replay a cassette in a regression test</h3>
+    <p>Load the cassette, wire the three streams into the Program, and assert the frames. Any divergence is reported as a diff.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
+use SugarCraft\Vcr\Player;
+use App\MyModel;
 
-$player = Player::open('/tmp/session.cas');
-$result = $player-&gt;play(
-    // The Player owns the streams and the loop; wire all three into ProgramOptions.
-    programFactory: fn ($input, $output, $loop) =&gt; new Program(
+$result = Player::open('/tmp/session.cas')->play(
+    programFactory: fn ($input, $output, $loop) => new Program(
         new MyModel(),
         new ProgramOptions(input: $input, output: $output, loop: $loop),
     ),
     assertion: new ScreenAssertion(80, 24),
 );
-if (!$result-&gt;ok) {
-    echo $result-&gt;diffSummary();
+if (!$result->ok) {
+    echo $result->diffSummary();
     exit(1);
 }</code></pre>
+    <h3 id="replay-with-a-time-budget" style="margin-top: 16px;">Replay with a time budget</h3>
+    <p>Realtime replay follows the recorded pauses. Use <code>--idle-trim</code> to clamp any pause longer than N seconds, or <code>--no-trim</code> to keep the original timestamps.</p>
+    <pre class="code"><code class="language-shell">candy-vcr replay session.cas --speed=realtime
+candy-vcr replay session.cas --speed=realtime --idle-trim=1.0
+candy-vcr replay session.cas --no-trim</code></pre>
+    <h3 id="compare-two-cassettes-and-migrate-an-old-one" style="margin-top: 16px;">Compare two cassettes and migrate an old one</h3>
+    <p><code>diff</code> compares two cassettes event by event. It matches the header fields, then the event kinds, payloads and timestamps within 2 ms. <code>migrate</code> rewrites a cassette in the current format. Use <code>--dry-run</code> to validate first, and <code>--info</code> to list the registered migrators.</p>
+    <pre class="code"><code class="language-shell">candy-vcr diff a.cas b.cas
+candy-vcr migrate session.cas upgraded.cas --dry-run
+candy-vcr migrate session.cas upgraded.cas</code></pre>
+    <h3 id="render-a-tape-to-a-gif" style="margin-top: 16px;">Render a tape to a GIF</h3>
+    <p>A tape is a short script of directives. The <code>.vhs/smoke.tape</code> file in the repository types a command and waits two seconds. Its compiled event stream is the first thing to check, using <code>--dry-run</code>, which prints one JSON line per event and writes no GIF.</p>
+    <pre class="code"><code class="language-shell">php bin/candy-vcr render-tape --dry-run .vhs/smoke.tape
+php bin/candy-vcr render-tape -o smoke.gif -t Dracula --fps 24 .vhs/smoke.tape
+php bin/candy-vcr render-batch -r -j 4 -o out/ demos/</code></pre>
+    <p>The first command prints the header and the first events of the compiled tape, starting like this:</p>
+    <pre class="code"><code class="language-text">{"_header":{"v":1,"cols":66,"rows":5,"runtime":"SugarCraft/Vcr","theme":"TokyoNight","typingSpeed":50,"timestampMode":"absolute","env":[],"eventCount":56,"duration":4.749999999999998}}
+{"t":0,"kind":"input","payload":{"b":"p"}}
+{"t":0.05,"kind":"input","payload":{"b":"h"}}
+{"t":0.1,"kind":"input","payload":{"b":"p"}}</code></pre>
+    <h3 id="run-real-program-output-inside-a-gif" style="margin-top: 16px;">Run real program output inside a GIF</h3>
+    <p>By default a tape only replays its keystrokes. Add <code>Set Shell "bash"</code> to the tape, or pass <code>--shell=SHELL</code> or <code>--exec</code> on the command line, and the renderer runs the typed commands in a real pseudo-terminal and captures their output. The next section explains the risk.</p>
 
-    <h3 id="cassette-format" style="margin-top: 32px;">Cassette format</h3>
-    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Record delta-time cassettes by opening the recorder with a relative-timestamped header — <code>Recorder::open($path, new CassetteHeader(timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE))</code>; <code>withFormat()</code> only confirms the encoding the header already selected and throws on a mismatch — it never flips one.</p>
+    <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
+    <p>candy-vcr binds no keys of its own. A recording captures the keystrokes the user types and the bytes they produce, unchanged. Replay sends the recorded input back into the Program, and it never interprets key names.</p>
+    <p>Under <code>record</code>, the recorded child gets a controlling terminal by default, so <kbd>Ctrl+C</kbd> reaches the program inside the session. Pass <code>--no-ctty</code> for a non-interactive command, and <kbd>Ctrl+C</kbd> will not reach it. The host terminal settings are restored on every exit path, including a thrown exception.</p>
+    <p>In a tape, <code>Type</code>, <code>Enter</code>, <code>Sleep</code> and the other directives stand in for keys. The compiled events carry the same keystroke bytes that a live session would produce.</p>
 
-    <h3 id="cli" style="margin-top: 32px;">CLI</h3>
-    <pre class="code"><code class="language-shell">vendor/bin/candy-vcr record       --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
-vendor/bin/candy-vcr inspect      session.cas                                # list events
-vendor/bin/candy-vcr replay       session.cas --speed=realtime               # stream output to stdout
-vendor/bin/candy-vcr replay       session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
-vendor/bin/candy-vcr diff         a.cas b.cas                                # structural diff
-vendor/bin/candy-vcr stats        session.cas                                # show cassette statistics
-vendor/bin/candy-vcr migrate      session.cas upgraded.cas                   # rewrite a v1 cassette as v2 (--dry-run to validate)
-vendor/bin/candy-vcr render-tape  demo.tape                                  # render .tape to .gif
-vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory</code></pre>
+    <h3 id="theming-and-rendering" style="margin-top: 40px;">Theming and rendering</h3>
+    <p>GIF output takes a theme for its colours. The five shipped themes are <code>TokyoNight</code> (the default), <code>TokyoNightLight</code>, <code>TokyoNightStorm</code>, <code>Dracula</code> and <code>SolarizedDark</code>. A tape selects one with <code>Set Theme "TokyoNight"</code>, and the <code>--theme</code> flag overrides it.</p>
+    <p>The font is <code>JetBrainsMono</code>, which ships in the <code>fonts/</code> directory under the SIL Open Font License, and the DejaVu Sans Mono faces are bundled too. Pass <code>--font</code> to name a different installed family. The frame rate defaults to 30 frames per second, and <code>FrameDedup</code> collapses identical adjacent frames, which typically removes 80 to 95 per cent of a recording.</p>
+    <p>Replay itself is environment-blind. It streams the recorded bytes verbatim, so it does not read <code>NO_COLOR</code>, does not degrade on <code>TERM=dumb</code> and does not follow live resizes. The completion summary goes to stderr, so a stdout capture stays byte-clean.</p>
 
-    <h4 style="margin-top: 20px;"><code>record</code> subcommand</h4>
-    <p>The <code>record</code> subcommand spawns a PTY session and captures all I/O to a cassette file:</p>
-    <pre class="code"><code class="language-shell">vendor/bin/candy-vcr record --output session.cas --cols 132 --rows 40 -- bash -l
-vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello'   # non-interactive, no Ctrl+C wiring
-vendor/bin/candy-vcr record --shell                          # spawn $SHELL -l
-vendor/bin/candy-vcr record --env -- bash -c 'echo hi'         # capture filtered host env
-vendor/bin/candy-vcr record --env-regex='/(SECRET|TOKEN)/i' -- bash -c 'echo hi'  # custom filter
-vendor/bin/candy-vcr record --env-all -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering (--env-allow-secrets is the legacy alias)
-vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh  # compress idle gaps > 1s (asciinema-style)</code></pre>
-
-    <h4 style="margin-top: 20px;"><code>replay</code> subcommand</h4>
-    <p>Stream a cassette's recorded output to stdout with optional timing control:</p>
-    <pre class="code"><code class="language-shell">vendor/bin/candy-vcr replay  session.cas --speed=realtime          # honour recorded cadence
-vendor/bin/candy-vcr replay  session.cas --idle-trim=1.0              # clamp gaps > 1s during replay
-vendor/bin/candy-vcr replay  session.cas --no-trim                     # use original (uncompressed) timestamps</code></pre>
-    <p style="margin-top: 8px;"><strong>⚠️ <code>--env-all</code></strong> (legacy alias <code>--env-allow-secrets</code>) disables all secret-key filtering. The cassette will contain credentials verbatim — <code>record</code> prints a stderr warning naming every captured variable, and the cassette file is created <code>0600</code> (owner-only), but only use this in fully isolated, trusted environments and never share the resulting cassette.</p>
-
-    <h4 style="margin-top: 20px;">Frame renderer + GIF export</h4>
-    <p>candy-vcr ships a <code>Render</code> layer and a <code>TapeToGif</code> pipeline: <code>.tape</code> scripts compile through Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder into an animated GIF. <code>render-tape</code>/<code>render-batch</code> expose it from the CLI with <code>--theme</code> (TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark), <code>--fps</code>, <code>--backend gd|imagick</code> (GD default; imagick needs ext-imagick), and <code>--encoder ffmpeg|php</code> (ffmpeg with two-pass palette generation is the default; <code>PhpGifEncoder</code> is the pure-PHP fallback needing no external binaries). <code>.tape</code> is the only renderable input — a recorded cassette cannot be exported to GIF.</p>
-    <p style="margin-top: 8px;"><strong>⚠ A <code>.tape</code> file is a program:</strong> the <code>Set Shell</code> directive, <code>--shell=&lt;sh&gt;</code>, or <code>--exec</code> put the renderer into exec mode — every typed keystroke runs in a real PTY-hosted shell. Review third-party tapes before rendering them.</p>
-
-    <h4 style="margin-top: 20px;">Playback, the terminal, and assistive tech</h4>
-    <p>Replay is <strong>environment-blind</strong>: it streams the recorded bytes verbatim — it does not read <code>NO_COLOR</code>, does not degrade on <code>TERM=dumb</code>, and does not follow live resizes beyond the header's recorded size. Assistive tech therefore sees exactly what the original session emitted rather than a re-adapted stream; for a non-visual outcome signal, replay prints a completion summary to <em>stderr</em> (<code>candy-vcr replay: played N of M events (… output bytes, … s of recorded time)</code>) so a stdout capture stays byte-clean. Interactive replay also guards the host terminal — cursor and alternate-buffer state are saved and restored (CSI ? 1049) and signal dispositions are reinstated on exit — while <code>record</code> arms a raw-mode rescue net (a <code>/tmp/candy-vcr-rescue.&lt;pid&gt;.&lt;rand&gt;</code> marker naming the affected tty) so a crashed child leaves the user's shell recoverable with <code>stty sane</code>.</p>
-
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Cassette format</strong><span>Five shipped codecs — JSONL (absolute <code>t</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>), gzip JSONL (<code>.cas.gz</code>), RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML (<code>.yaml</code>/<code>.yml</code>, hand-written fixtures), and a read-only asciinema importer (<code>.cast</code>, v2/v3); <code>.tape</code> files compile into cassettes through the tape compiler. All decode into the same <code>Cassette</code> value object; <code>Player::open()</code> picks JSONL vs RelativeFormat by content-sniffing (a <code>.gz</code> name routes straight to the gzip codec), while <code>Player::loadAny()</code> dispatches by extension.</span></div>
-      <div class="feature"><strong>Recorder hook</strong><span><code>Program::setRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
-      <div class="feature"><strong>Tape renderer</strong><span><code>Render\Renderer</code> + <code>FrameDedup</code> + <code>TapeToGif</code> turn <code>.tape</code> scripts into themed animated GIFs — <code>render-tape</code>/<code>render-batch</code>, GD/imagick rasterizers, ffmpeg/pure-PHP encoders. Recorded cassettes are replay-assert only, not GIF-exportable.</span></div>
-      <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseClickMsg/MouseMotionMsg/MouseWheelMsg/MouseReleaseMsg, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
-      <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
-      <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
-      <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="sugar-vterm.html">SugarVterm</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
-    </div>
-
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
-    <ul>
-      <li><strong>Bug repro from user reports</strong> — user runs <code>candy-vcr record --output bug.cas -- &lt;cmd&gt;</code>, ships the cassette, maintainer replays locally.</li>
-      <li><strong>Regression tests in CI</strong> — record a known-good session, replay against the current build, fail the build on cell-grid divergence.</li>
-      <li><strong>Demos &amp; documentation</strong> — alternative to VHS for headless / scriptable recordings; runs in the PHP unit-test process, no Docker.</li>
-      <li><strong>Fuzzing seeds</strong> — record real sessions, mutate Msgs, replay to find edge cases.</li>
-    </ul>
-
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="configuration" style="margin-top: 40px;">Configuration</h3>
+    <p>The CLI has eight subcommands. Each takes its options after the verb, and each prints its own usage with <code>-h</code>.</p>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Recorder</td><td>open(path, header)</td><td>Open a cassette for recording (file created <code>0600</code>, owner-only)</td></tr>
-<tr><td>Recorder</td><td>withFormat(format)</td><td>Confirm the timestamp encoding the header already selected (e.g. <code>new RelativeFormat()</code> for delta-time) — throws on a mismatch, never flips</td></tr>
-<tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
-<tr><td>Player</td><td>open(path)</td><td>Open a cassette for replay — sniffs <code>t</code> vs <code>dt</code> on the first event line; a <code>.gz</code> name selects the gzip codec without sniffing</td></tr>
-<tr><td>Player</td><td>loadAny(path)</td><td>Load by extension: <code>.cast</code>, <code>.yaml</code>/<code>.yml</code>, <code>.tape</code>, <code>.gz</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>; unknown extensions content-sniff</td></tr>
-<tr><td>Player</td><td>withIdleTrim(?float $seconds)</td><td>Fluent idle-gap threshold for SPEED_REALTIME playback (clamp pauses > N seconds)</td></tr>
-<tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
-<tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
-<tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
-<tr><td>Render\Renderer</td><td>render(player, terminal, fps)</td><td>Produce a <code>FrameStream</code> of <code>Snapshot</code> frames at the given cadence</td></tr>
-<tr><td>Render\FrameDedup</td><td>dedup(stream)</td><td>Collapse identical adjacent frames (typical recordings run 80–95% duplicates)</td></tr>
-<tr><td>Encode\TapeToGif</td><td>create(options)</td><td>Full <code>.tape</code> → <code>.gif</code> pipeline — options select <code>theme</code>, <code>fps</code>, <code>backend</code> (<code>gd</code> default | <code>imagick</code>), <code>encoder</code> (<code>ffmpeg</code> default | <code>php</code>)</td></tr>
-<tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — the style asciinema casts use; easier manual editing</td></tr>
-<tr><td>Cassette</td><td>eventCount()</td><td>Number of recorded events; the events themselves ride the readonly <code>$events</code> property</td></tr>
+<thead>
+<tr><th scope="col">Subcommand</th><th scope="col">Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>record</code></td><td>Record a command's pseudo-terminal session into a cassette.</td></tr>
+<tr><td><code>inspect</code></td><td>List the events of a cassette. <code>--frames</code> lists frames instead.</td></tr>
+<tr><td><code>replay</code></td><td>Stream a cassette's recorded output to stdout.</td></tr>
+<tr><td><code>diff</code></td><td>Compare two cassettes event by event.</td></tr>
+<tr><td><code>stats</code></td><td>Summarise a cassette: event counts, duration and output bytes.</td></tr>
+<tr><td><code>migrate</code></td><td>Rewrite a cassette in the current format.</td></tr>
+<tr><td><code>render-tape</code></td><td>Render one <code>.tape</code> file to a GIF.</td></tr>
+<tr><td><code>render-batch</code></td><td>Render every <code>.tape</code> file in a directory.</td></tr>
+</tbody>
 </table>
+    <h3 id="record-options" style="margin-top: 24px;">record options</h3>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--output PATH</code></td><td><code>session-&lt;timestamp&gt;.cas</code></td><td>The cassette to write.</td></tr>
+<tr><td><code>--force</code></td><td>off</td><td>Replace an existing output file. Without it, record refuses with exit code 2.</td></tr>
+<tr><td><code>--cols N</code>, <code>--rows N</code></td><td>80 by 24</td><td>The initial terminal size.</td></tr>
+<tr><td><code>--no-ctty</code></td><td>off</td><td>Spawn without a controlling terminal, so Ctrl+C does not reach the program.</td></tr>
+<tr><td><code>--shell</code></td><td>off</td><td>Spawn <code>$SHELL -l</code>, or <code>/bin/sh -l</code>. It cannot be combined with a command.</td></tr>
+<tr><td><code>--env</code></td><td>off</td><td>Capture the host environment into the header, with secret-looking keys stripped.</td></tr>
+<tr><td><code>--env-regex=PATTERN</code></td><td>a conservative secret pattern</td><td>Replace the secret filter. An empty pattern is rejected. Implies <code>--env</code>.</td></tr>
+<tr><td><code>--env-all</code></td><td>off</td><td>Dangerous. Capture the full environment with no filtering, and print each variable name to stderr. The old name <code>--env-allow-secrets</code> is a legacy alias.</td></tr>
+<tr><td><code>--idle-trim N</code></td><td>off</td><td>Compress any gap longer than N seconds in the recording.</td></tr>
+</tbody>
+</table>
+    <h3 id="replay-options" style="margin-top: 24px;">replay options</h3>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--speed=instant|realtime</code></td><td><code>instant</code></td><td>Replay as fast as possible, or honour the recorded cadence.</td></tr>
+<tr><td><code>--idle-trim=N</code></td><td>off</td><td>Clamp any pause longer than N seconds during replay.</td></tr>
+<tr><td><code>--no-trim</code></td><td>off</td><td>Use the original timestamps, even if the header asks for trimming.</td></tr>
+</tbody>
+</table>
+    <h3 id="render-tape-and-render-batch-options" style="margin-top: 24px;">render-tape and render-batch options</h3>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>-o, --output</code></td><td>the input name with <code>.gif</code></td><td>The output GIF path. <code>render-batch</code> takes <code>--output-dir</code> for the directory instead.</td></tr>
+<tr><td><code>-f, --font</code></td><td>JetBrainsMono</td><td>The TTF font family.</td></tr>
+<tr><td><code>-t, --theme</code></td><td>TokyoNight</td><td>One of the five shipped themes.</td></tr>
+<tr><td><code>--fps</code></td><td>30</td><td>Frames per second.</td></tr>
+<tr><td><code>-b, --backend</code></td><td><code>gd</code></td><td><code>gd</code> or <code>imagick</code>.</td></tr>
+<tr><td><code>-e, --encoder</code></td><td><code>ffmpeg</code></td><td><code>ffmpeg</code> or the pure-PHP <code>php</code> encoder.</td></tr>
+<tr><td><code>--strict</code></td><td>off</td><td>Fail on an unknown directive instead of skipping it.</td></tr>
+<tr><td><code>--shell=SHELL</code>, <code>--exec</code></td><td>off</td><td><code>render-tape</code> only. Run typed commands in a real pseudo-terminal, with the given shell or the default one.</td></tr>
+<tr><td><code>--dry-run</code></td><td>off</td><td><code>render-tape</code> only. Print the compiled event stream and write no GIF.</td></tr>
+<tr><td><code>-r, --recursive</code>, <code>-j, --jobs</code></td><td>off, 1</td><td><code>render-batch</code> only. Search subdirectories, and render tapes in parallel.</td></tr>
+</tbody>
+</table>
+
+    <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>The public types live in the <code>SugarCraft\Vcr\</code> namespace. The table lists the methods a caller most often needs.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
+<tr><td>Recorder</td><td>open(path, header)</td><td>Opens a cassette for recording. The file is created with mode <code>0600</code>.</td></tr>
+<tr><td>Recorder</td><td>withFormat(format)</td><td>Confirms the timestamp encoding the header chose. It throws on a mismatch and never switches.</td></tr>
+<tr><td>Recorder</td><td>withHook(hook) / withIdleTrim(threshold)</td><td>Adds a recording hook, or compresses long idle gaps while recording.</td></tr>
+<tr><td>Recorder</td><td>close()</td><td>Closes and finalises the cassette.</td></tr>
+<tr><td>Player</td><td>open(path)</td><td>Opens a cassette for replay. It sniffs the first event for the timestamp mode, and a <code>.gz</code> name selects the gzip codec.</td></tr>
+<tr><td>Player</td><td>loadAny(path)</td><td>Loads by extension: <code>.cast</code>, <code>.yaml</code>, <code>.tape</code>, <code>.gz</code>, <code>.cas</code>, <code>.jsonl</code> or <code>.cassette</code>. Unknown extensions are content-sniffed.</td></tr>
+<tr><td>Player</td><td>withIdleTrim(?float)</td><td>Sets the idle-gap threshold for realtime playback.</td></tr>
+<tr><td>Player</td><td>play(factory, assertion)</td><td>Replays the session into a fresh Program and returns a <code>ReplayResult</code>.</td></tr>
+<tr><td>ReplayResult</td><td><code>$ok</code>, <code>$diff</code>, <code>diffSummary()</code></td><td>The verdict, the assertion diff, and a printable summary.</td></tr>
+<tr><td>ByteAssertion</td><td>new()</td><td>Strict byte equality with a hex and printable diff window.</td></tr>
+<tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality through sugar-vterm.</td></tr>
+<tr><td>Format\Format</td><td>read(path), write(cassette, path), encode(), decode()</td><td>The codec interface. Implementations are <code>JsonlFormat</code>, <code>CompressedJsonlFormat</code>, <code>RelativeFormat</code> and <code>YamlFormat</code>. <code>AsciinemaFormat</code> reads only.</td></tr>
+<tr><td>Format\CassetteLoader</td><td>load(path), isTape(path)</td><td>Loads a cassette or a tape source, and reports which.</td></tr>
+<tr><td>Cassette</td><td><code>$header</code>, <code>$events</code>, <code>eventCount()</code>, <code>duration()</code></td><td>The immutable cassette value object.</td></tr>
+<tr><td>Event</td><td><code>$t</code>, <code>$kind</code>, payload</td><td>One recorded line. The kind is an <code>EventKind</code> case.</td></tr>
+<tr><td>Render\Renderer</td><td>render(player, terminal, fps)</td><td>Produces a <code>FrameStream</code> of snapshots at a fixed cadence.</td></tr>
+<tr><td>Render\FrameDedup</td><td>dedup(stream)</td><td>Collapses identical adjacent frames.</td></tr>
+<tr><td>Encode\TapeToGif</td><td><code>new(options)</code>, then <code>render(tapePath, outputPath, options)</code></td><td>Runs the full tape-to-GIF pipeline with the theme, fps, backend and encoder options.</td></tr>
+<tr><td>RelativeFormat</td><td>new()</td><td>The delta-time format, used by asciinema casts.</td></tr>
+</tbody>
+</table>
+    <p>The CLI verbs are command classes such as <code>RecordCommand</code>, <code>ReplayCommand</code> and <code>RenderBatchCommand</code>, and <code>DiffWriter</code> prints the output of <code>diff</code>. Each one wraps the library types listed above, so a script can call those types directly and skip the CLI.</p>
+
+        <!-- GENERATED by tools/gen-api-reference.php from candy-vcr/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-vcr -->
+<p>Only methods declared in <code>candy-vcr/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-vcr">SugarCraft\Vcr</h3>
+<h4 id="api-sugarcraft-vcr-cassette"><code>Cassette</code> <small>final class</small></h4>
+<p>Header + ordered event list. Format-agnostic value object — JsonlFormat / YamlFormat read and write this same shape.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(CassetteHeader $header, iterable $events, ?float $endTime = null)</code></td><td></td></tr>
+<tr><td><code>eventCount(): int</code></td><td></td></tr>
+<tr><td><code>header(): CassetteHeader</code></td><td></td></tr>
+<tr><td><code>duration(): float</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cassetteheader"><code>CassetteHeader</code> <small>final readonly class</small></h4>
+<p>First line of a cassette. Carries the format version, recording dimensions, the runtime that produced the cassette, and the wall-clock creation time (informational — Player ignores it).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $version, public string $createdAt, public int $cols, public int $rows, public string $runtime, public string $timestampMode = self::TIMESTAMP_MODE_ABSOLUTE, public array $env = [], public ?float $typingSpeed = null, public ?string $theme = null, public ?float $playbackSpeed = null, public ?int $fontSize = null, public ?string $fontFamily = null, public ?int $widthPx = null, public ?int $heightPx = null)</code></td><td></td></tr>
+<tr><td><code>toWireArray(): array</code></td><td>Canonical wire representation of every header field, defaults omitted.</td></tr>
+<tr><td><code>withVersion(int $version): self</code></td><td>Derivation changing ONLY the version stamp; every other field (timestampMode, env, theme, typing speed, font and pixel geometry included) rides through untouched. Migration must not forget where a recording came from.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-event"><code>Event</code> <small>final readonly class</small></h4>
+<p>One row of a cassette: a kind, a payload, and a timestamp in seconds since cassette start.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public float $t, public EventKind $kind, public array $payload)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-eventkind"><code>EventKind</code> <small>enum</small></h4>
+<p>SugarCraft-original event vocabulary; only the cassette idea is inspired by charmbracelet/x/vcr (which records HTTP pairs, not keystrokes).</p>
+<p>Cases: <code>Resize</code> · <code>Input</code> · <code>Output</code> · <code>Quit</code> · <code>Snapshot</code> · <code>Hide</code> · <code>Show</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h4 id="api-sugarcraft-vcr-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-vcr.</p>
+<h4 id="api-sugarcraft-vcr-player"><code>Player</code> <small>final class</small></h4>
+<p>Drive a sugar-core Program through a recorded Cassette, then compare the program&#039;s actual output against the cassette&#039;s recorded output via an Assertion.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Cassette $cassette, private readonly ?float $idleTrimSeconds = null)</code></td><td></td></tr>
+<tr><td><code>static open(string $path): self</code></td><td></td></tr>
+<tr><td><code>static loadAny(string $path): self</code></td><td>Like open() but auto-detects the file kind in addition to the cassette serializer: a <code>.tape</code> file (VHS DSL) is compiled to a Cassette via Lexer → Parser → Compiler; a <code>.cas</code>/<code>.jsonl</code>/<code>.cast</code>/ <code>.yaml</code>/<code>.yml</code> file is read through the matching Format.</td></tr>
+<tr><td><code>withIdleTrim(?float $seconds): self</code></td><td>Fluent setter for idle-trim threshold. When set, delays between consecutive events that exceed <code>$seconds</code> are clamped to <code>$seconds</code> during SPEED_REALTIME playback. Has no effect in SPEED_INSTANT mode.</td></tr>
+<tr><td><code>play(\Closure $programFactory, ?Assertion $assertion = null, int $speed = self::SPEED_INSTANT, ?Registry $serializerRegistry = null, ?float $timeoutSeconds = null, bool $skipFirstResize = true, ?EventMatcher $matcher = null, ?float $idleThresholdSeconds = null, bool $useRawTimestamps = false, ?LoopInterface $loop = null): ReplayResult</code></td><td>Drive <code>programFactory</code> through the cassette and assert the output matches the recording.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-recorder"><code>Recorder</code> <small>final class</small></h4>
+<p>Streaming JSONL cassette writer. Events are encoded line-by-line and flushed through coalescing doors (finding 113): every FLUSH_EVENT_THRESHOLD events, once FLUSH_BYTE_THRESHOLD bytes have accumulated, or immediately after any event whose inter-event gap exceeded FLUSH_IDLE_GAP_SECONDS. A live interactive session is idle-bound, so the practically relevant crash window is one event; a process killed mid-burst may lose up to the last unflushed door window (fewer than the thresholds of events / bytes) — the bounded cost the per-keystroke-fflush ruling accepted. The header line and everything before close() are always flushed.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct($fh, CassetteHeader $header, ?float $startTime = null, ?HookRegistry $hooks = null)</code></td><td></td></tr>
+<tr><td><code>static open(string $path, ?CassetteHeader $header = null): self</code></td><td>Open a cassette file at the given path for writing. Convenience factory — fills in a sensible CassetteHeader (cols=80, rows=24, current UTC time, candy-vcr runtime tag) when omitted; an initial <code>recordResize</code> event will overwrite the placeholder dimensions.</td></tr>
+<tr><td><code>static defaultHeader(int $cols = 80, int $rows = 24, string $runtime = &#039;sugarcraft/candy-vcr@dev&#039;): CassetteHeader</code></td><td></td></tr>
+<tr><td><code>withHook(\SugarCraft\Vcr\Hook\Hook $hook): self</code></td><td>Add a hook to be called during recording.</td></tr>
+<tr><td><code>withIdleTrim(?float $thresholdSec, float $compressedMaxSec = 0.5): self</code></td><td>Enable idle-trim: gaps between consecutive events that exceed <code>$thresholdSec</code> are compressed to <code>$compressedMaxSec</code>, and every event from the first trim onward — not only the trimmed one — carries a <code>tRaw</code> payload with its original (uncompressed) wallclock-relative timestamp while the trim offset is in effect, so a replay can opt back into the real cadence via <code>--no-trim</code> (player flag). This restates the wire format exactly as the encoder gates it (finding 097).</td></tr>
+<tr><td><code>hooks(): HookRegistry</code></td><td>Get the hook registry for direct manipulation.</td></tr>
+<tr><td><code>withFormat(Format $f): self</code></td><td>Confirm the timestamp format against the cassette&#039;s header.</td></tr>
+<tr><td><code>recordResize(int $cols, int $rows): void</code></td><td></td></tr>
+<tr><td><code>recordInputBytes(string $bytes): void</code></td><td></td></tr>
+<tr><td><code>recordOutput(string $bytes): void</code></td><td></td></tr>
+<tr><td><code>recordQuit(): void</code></td><td></td></tr>
+<tr><td><code>close(): void</code></td><td></td></tr>
+<tr><td><code>hookErrors(): array</code></td><td>Hook failures swallowed during recording (finding 096): one entry per afterCapture death, naming the hook and its error. Empty means every registered hook ran clean; non-zero means the tape is fine but a hook (sanitizer, metadata fan-out, ...) silently skipped work the caller believes it did — callers (the record CLI) surface each entry as a warning after close(). Read after close() for the session-complete view.</td></tr>
+<tr><td><code>captureWriteErrors(): int</code></td><td>Total tape-writing failures this recorder has absorbed (C3): short or failed writes plus failed flushes, including the final close(). Zero means every event the recorder accepted reached the stream. Non-zero means the cassette at this path is INCOMPLETE — callers (the record CLI) must not report an unconditional success over it.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-replayresult"><code>ReplayResult</code> <small>final readonly class</small></h4>
+<p>Outcome of a Player::play() call.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public bool $ok, public string $diff, public int $eventCount, public int $inputCount, public int $resizeCount, public int $outputCount, public int $quitCount, public bool $programQuitCleanly, public int $undecodedInputCount = 0, public array $undecodedInputAt = [])</code></td><td></td></tr>
+<tr><td><code>diffSummary(): string</code></td><td>Human-readable summary suitable for failure messages.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-assert">SugarCraft\Vcr\Assert</h3>
+<h4 id="api-sugarcraft-vcr-assert-assertion"><code>Assertion</code> <small>interface</small></h4>
+<p>Strategy for comparing replay output against the cassette&#039;s recorded output. Implementations decide WHAT counts as &quot;equal&quot; — exact bytes (<code>ByteAssertion</code>), cell-grid screen state (<code>ScreenAssertion</code> via sugar-vterm), or anything else.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>compare(string $expected, string $actual): array</code></td><td>Compare the program&#039;s actual output to the cassette&#039;s expected output. Returns a result envelope:</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-assert-byteassertion"><code>ByteAssertion</code> <small>final class</small></h4>
+<p>Exact byte-equality check between expected and actual output.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>compare(string $expected, string $actual): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-assert-containsassertion"><code>ContainsAssertion</code> <small>final class</small></h4>
+<p>Partial output match assertion.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>compare(string $expected, string $actual): array</code></td><td>Compare the actual output to check it contains the expected substring.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-assert-regexassertion"><code>RegexAssertion</code> <small>final class</small></h4>
+<p>Pattern-match assertion on output.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly string $pattern, private readonly bool $multiline = false, private readonly bool $caseInsensitive = false, private readonly bool $dotAll = false)</code></td><td></td></tr>
+<tr><td><code>compare(string $expected, string $actual): array</code></td><td>Compare the actual output against the regex pattern.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-assert-screenassertion"><code>ScreenAssertion</code> <small>final class</small></h4>
+<p>Cell-grid screen-equality assertion.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $cols = 80, public readonly int $rows = 24)</code></td><td></td></tr>
+<tr><td><code>compare(string $expected, string $actual): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-cli">SugarCraft\Vcr\Cli</h3>
+<h4 id="api-sugarcraft-vcr-cli-application"><code>Application</code> <small>final class</small></h4>
+<p>Subcommand router for <code>bin/candy-vcr</code>. Dispatches to one of the registered DocumentedCommand (or Symfony) implementations based on the first positional arg.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?array $commands = null)</code></td><td>Every registered verb carries its own usage block, so <code>help &lt;sub&gt;</code> and <code>&lt;sub&gt; --help</code> have one source for every verb. A bare Command is refused here, not at the help door: without a usage() there is no sub-specific answer to give, and a silent global-listing fallback would hide the missing contract.</td></tr>
+<tr><td><code>run(array $argv, $stdout, $stderr): int</code></td><td></td></tr>
+<tr><td><code>static versionString(): string</code></td><td>The <code>--version</code> answer, phar-aware (the version-stamp lesson from candy-code).</td></tr>
+<tr><td><code>static hostArchive(): string</code></td><td>The real-filesystem path of the phar archive hosting this install, or &#039;&#039; when this code is not running from an archive.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-choiceoption"><code>ChoiceOption</code> <small>final class</small></h4>
+<p>Parses a flagged choice option against its closed set of known values.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(mixed $raw, string $flag, array $known, string $default): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-command"><code>Command</code> <small>interface</small></h4>
+<p>Base shape for <code>bin/candy-vcr</code> subcommands.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td>Execute the subcommand. Receives positional args (without the leading subcommand name). Writes user-facing output to $stdout and diagnostic / error messages to $stderr.</td></tr>
+<tr><td><code>summary(): string</code></td><td>One-line description for <code>bin/candy-vcr</code> usage output.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-diffcommand"><code>DiffCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr diff [--strict] &lt;a.cas&gt; &lt;b.cas&gt;</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>usage(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-documentedcommand"><code>DocumentedCommand</code> <small>interface</small></h4>
+<p>A subcommand that carries its own usage block.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>usage(): string</code></td><td>The verb&#039;s usage block, newline-terminated, ready to write.</td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td>Execute the subcommand. Receives positional args (without the leading subcommand name). Writes user-facing output to $stdout and diagnostic / error messages to $stderr.</td></tr>
+<tr><td><code>summary(): string</code></td><td>One-line description for <code>bin/candy-vcr</code> usage output.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-dualstreamoutput"><code>DualStreamOutput</code> <small>final class</small></h4>
+<p>The Application::run() door hands verbs a plain StreamOutput wrapping the caller&#039;s stdout — but the machine-readable paths (render-tape --dry-run&#039;s JSONL stream) write clean data to stdout and MUST route diagnostics to stderr, and they can only do that through ConsoleOutputInterface. Without a dual implementation the S09 warnings channel quietly died inside the library-embedded CLI (finding 024): the <code>instanceof ConsoleOutputInterface</code> gate in RenderTapeCommand simply never fired through Application::run().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct($stdout, $stderr, int $verbosity = self::VERBOSITY_NORMAL)</code></td><td></td></tr>
+<tr><td><code>getErrorOutput(): OutputInterface</code></td><td></td></tr>
+<tr><td><code>setErrorOutput(OutputInterface $error): void</code></td><td></td></tr>
+<tr><td><code>section(): ConsoleSectionOutput</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-fpsoption"><code>FpsOption</code> <small>final class</small></h4>
+<p>Parses the <code>--fps</code> option at the CLI boundary into a render cadence.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(mixed $raw): ?float</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-inspectcommand"><code>InspectCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr inspect &lt;cassette|.tape&gt; [--frames]</code> <code>[--since=&lt;seconds&gt;] [--until=&lt;seconds&gt;] [--fps=&lt;n&gt;|--fps &lt;n&gt;]</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>usage(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-migratecommand"><code>MigrateCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr migrate &lt;input.cas&gt; [output.cas] [--dry-run] [--force]</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>usage(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-recordcommand"><code>RecordCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty] -- &lt;cmd&gt; [args...]</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private $stdin = null)</code></td><td></td></tr>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+<tr><td><code>static filteredHostEnv(?string $regex = null, bool $captureAll = false): array</code></td><td>Snapshot the current process env, dropping any key that matches the configured secret regex and any value that embeds URL credentials (the CREDENTIAL_VALUE_REGEX second screen). Keys are sorted alphabetically so the cassette diff stays stable across runs.</td></tr>
+<tr><td><code>static envAllWarning(array $capturedEnv): string</code></td><td>Build the stderr warning emitted whenever <code>--env-all</code> captures the full host environment without secret filtering. Names every captured var so the operator can see exactly which (potentially sensitive) keys landed in the cassette. Pure/static so it can be unit-tested without a live PTY.</td></tr>
+<tr><td><code>usage(): string</code></td><td>The verb&#039;s own help text — also what <code>-h</code>/<code>--help</code> answers with.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-renderbatchcommand"><code>RenderBatchCommand</code> <small>final class</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>setProcessFactory(?callable $factory): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-rendertapecommand"><code>RenderTapeCommand</code> <small>final class</small></h4>
+<h4 id="api-sugarcraft-vcr-cli-replaycommand"><code>ReplayCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr replay &lt;cassette&gt; [--speed=instant|realtime|--speed instant|realtime] [--idle-trim=N|--idle-trim N]</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?callable $ttyProbe = null, ?callable $sleeper = null)</code></td><td></td></tr>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>usage(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-statscommand"><code>StatsCommand</code> <small>final class</small></h4>
+<p><code>candy-vcr stats &lt;cassette&gt;</code></p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>summary(): string</code></td><td></td></tr>
+<tr><td><code>usage(): string</code></td><td></td></tr>
+<tr><td><code>run(array $args, $stdout, $stderr): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-cli-windowsrecordloop"><code>WindowsRecordLoop</code> <small>final class</small></h4>
+<p>The <code>record</code> byte loop for native Windows, where the POSIX pump cannot run.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly \Closure $readInput, private readonly ?\Closure $hostSize = null, private readonly ?\Closure $clock = null)</code></td><td></td></tr>
+<tr><td><code>run(MasterPty $master, $stdout, Child $child, Recorder $recorder, int $cols, int $rows): int</code></td><td>Pump until the child exits; returns its exit code.</td></tr>
+<tr><td><code>static streamInput($stdin): \Closure</code></td><td>A non-blocking reader over a stdin STREAM (pipe or file): a pipe gives only what fstat() reports waiting (PeekNamedPipe on Windows), a file is read straight to EOF. A console stdin wants \SugarCraft\Core\Util\Tty\WindowsConsoleInput instead.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-diff">SugarCraft\Vcr\Diff</h3>
+<h4 id="api-sugarcraft-vcr-diff-diffwriter"><code>DiffWriter</code> <small>final class</small></h4>
+<p>Writes annotated diff output in unified diff format to a file.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>writeUnifiedDiff(string $path, string $expected, string $actual, int $context = 3): int|false</code></td><td>Write a unified diff to a file.</td></tr>
+<tr><td><code>buildUnifiedDiff(string $expected, string $actual, int $context = 3): string</code></td><td>Build a unified diff string from expected and actual output.</td></tr>
+<tr><td><code>writeAnsiDiff(string $expected, string $actual, $output = STDOUT): void</code></td><td>Write a colored ANSI diff suitable for terminal output.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-encode">SugarCraft\Vcr\Encode</h3>
+<h4 id="api-sugarcraft-vcr-encode-ffmpeggifencoder"><code>FfmpegGifEncoder</code> <small>final class</small></h4>
+<p>Default GIF encoder using ffmpeg.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $ffmpegBin = self::DEFAULT_FFMPEG_BIN)</code></td><td></td></tr>
+<tr><td><code>encode(array $pngPaths, string $outputPath, int $fps = 30, ?array $durations = null): bool</code></td><td></td></tr>
+<tr><td><code>isAvailable(): bool</code></td><td></td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-encode-gifencoder"><code>GifEncoder</code> <small>interface</small></h4>
+<p>Interface for GIF encoders.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>encode(array $pngPaths, string $outputPath, int $fps = 30, ?array $durations = null): bool</code></td><td>Encode a sequence of frames into an animated GIF.</td></tr>
+<tr><td><code>isAvailable(): bool</code></td><td>Check if this encoder is available in the current environment.</td></tr>
+<tr><td><code>name(): string</code></td><td>Encoder name for display and selection purposes.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-encode-phpgifencoder"><code>PhpGifEncoder</code> <small>final class</small></h4>
+<p>Pure-PHP GIF encoder fallback.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>encode(array $pngPaths, string $outputPath, int $fps = 30, ?array $durations = null): bool</code></td><td></td></tr>
+<tr><td><code>isAvailable(): bool</code></td><td></td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-encode-tapetogif"><code>TapeToGif</code> <small>final class</small></h4>
+<p>Canonical pipeline: .tape file → .gif file.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private Lexer $lexer, private Parser $parser, private Compiler $compiler, private Renderer $renderer, private Rasterizer $rasterizer, private GifEncoder $encoder)</code></td><td></td></tr>
+<tr><td><code>static resolveFps(?float $cliFps, ?float $tapeFramerate): float</code></td><td>The single fps precedence ladder (finding 008): explicit caller/CLI value → tape <code>Set Framerate</code> → the 30.0 house default. Public so the door is testable without rendering pixels, and any second render path that appears later can reuse the ladder instead of re-forking it.</td></tr>
+<tr><td><code>render(string $tapePath, ?string $outputPath = null, array $options = []): string</code></td><td>Render a .tape file to a .gif file.</td></tr>
+<tr><td><code>warnings(): array</code></td><td>Non-fatal compiler diagnostics from the most recent render() — currently unresolvable / out-of-base <code>Source</code> includes that were skipped under non-strict mode. The CLI surfaces these to stderr so a dropped include is never silent. Empty after a clean render or a strict run (strict mode throws on the first such problem instead).</td></tr>
+<tr><td><code>static assertBackendAvailable(string $backend, ?callable $extensionLoaded = null): void</code></td><td>Fail loud at the backend-resolution choke when the PHP extension a rasterizer backend needs is not loaded. Without this door a gd-less install reaches <code>new GdRasterizer(...)</code> and dies later inside the first imagecreate() with a plain &quot;Call to undefined function&quot; fatal that names neither the extension nor the remedy; the imagick leg would fatal as a class-not-found on ImagickRasterizer&#039;s ext-imagick types. Unknown backends fall through to the gd leg, so they are probed as gd (matching the match() arm they will take).</td></tr>
+<tr><td><code>static new(array $options = []): self</code></td><td>The default pipeline factory — the shape <code>candy-vcr render-tape</code> builds from. The factory seats agree with the render-time defaults: no <code>fontSize</code> here means Compiler::DEFAULT_FONT_SIZE, the same seat self::render() falls back to for tapes without a <code>Set FontSize</code>, so a bare factory never diverges from the CLI bytes. <code>fps</code> and <code>theme</code> are deliberately not factory options — they are resolved per render from the tape header and render options.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-format">SugarCraft\Vcr\Format</h3>
+<h4 id="api-sugarcraft-vcr-format-asciinemaformat"><code>AsciinemaFormat</code> <small>final class</small></h4>
+<p>Import asciinema cast files (<code>.cast</code>) as candy-vcr Cassette objects.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>read(string $path): Cassette</code></td><td>Read an asciinema cast file and return a Cassette.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-atomicfilewriter"><code>AtomicFileWriter</code> <small>final class</small></h4>
+<p>Atomic file placement shared by every cassette writer (finding 018).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static write(string $path, string $contents, string $subject = &#039;file&#039;): void</code></td><td>Write bytes into place atomically: temp, 0600, content, rename.</td></tr>
+<tr><td><code>static writeGzipped(string $path, string $contents, int $compressionLevel, string $subject = &#039;gzip cassette&#039;): void</code></td><td>Write gzip bytes into place atomically (finding 018: the <code>.cas.gz</code> path previously <code>gzopen()</code>ed the destination directly, so a stream that died mid-deflate left a corrupt archive where the last good recording lived).</td></tr>
+<tr><td><code>static writeStream(string $path, callable $emit, string $subject = &#039;file&#039;): void</code></td><td>Streaming variant of self::write(): reserve, restrict to 0600, then hand an open handle to $emit so writers can land one line at a time instead of materialising the whole body first (finding 081 — the same atomic placement and cleanup contract, bytes produced incrementally).</td></tr>
+<tr><td><code>static writeGzippedStream(string $path, callable $emit, int $compressionLevel, string $subject = &#039;gzip cassette&#039;): void</code></td><td>Streaming variant of self::writeGzipped(): $emit writes plain bytes into a gzip stream opened on the reserved temp; compression flushes as lines arrive instead of taking a whole string at once.</td></tr>
+<tr><td><code>static reserve(string $path, string $subject = &#039;file&#039;, ?string $forceSuffix = null): string</code></td><td>Reserve an exclusive temp path in the destination directory and return it — for callers whose bytes are produced by a third party (the GIF encoders) rather than a string in hand. The name keeps the destination&#039;s extension because encoders infer their muxer from it.</td></tr>
+<tr><td><code>static commit(string $tmp, string $dest, string $subject = &#039;file&#039;): void</code></td><td>Replace the destination ENTRY with the finished temp file, atomically within one filesystem.</td></tr>
+<tr><td><code>static discard(string $tmp): void</code></td><td>Remove a reserved temp after a failed attempt; a vanished temp is benign.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-cassetteloader"><code>CassetteLoader</code> <small>final class</small></h4>
+<p>Resolves a path to a Cassette by sniffing the file format.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>tapeWarnings(): array</code></td><td>Tape-compile warnings from prior load() calls (empty for pure cassette loads). The CLI verbs are obliged to surface these on stderr — a swallowed warning is how a half-compiled tape played &quot;clean&quot;.</td></tr>
+<tr><td><code>compiledTape(): bool</code></td><td>Whether the most recent load() compiled a tape instead of reading a cassette.</td></tr>
+<tr><td><code>static writeTapeWarnings(CassetteLoader $loader, $stderr, string $verb): void</code></td><td>Report accumulated tape warnings on a CLI stderr stream, verb-labelled.</td></tr>
+<tr><td><code>load(string $path): Cassette</code></td><td>Load a cassette from disk, sniffing the format automatically.</td></tr>
+<tr><td><code>isTape(string $path): bool</code></td><td>Return true when the given path resolves to a tape source rather than a cassette. Mirrors the sniff that load() performs but exposed so callers can pick the right downstream pipeline (e.g. dry-run mode).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-compressedjsonlformat"><code>CompressedJsonlFormat</code> <small>final class</small></h4>
+<p>Gzip-compressed JSONL cassette format. Wraps JsonlFormat with streaming gzip compression that flushes per-line to maintain streaming semantics.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly JsonlFormat $inner = new JsonlFormat(), private readonly int $compressionLevel = self::DEFAULT_COMPRESSION_LEVEL, private readonly int $maxExpandedBytes = self::MAX_EXPANDED_BYTES)</code></td><td></td></tr>
+<tr><td><code>write(Cassette $cassette, string $path): void</code></td><td></td></tr>
+<tr><td><code>read(string $path): Cassette</code></td><td></td></tr>
+<tr><td><code>encode(Cassette $cassette): string</code></td><td></td></tr>
+<tr><td><code>decode(string $contents): Cassette</code></td><td></td></tr>
+<tr><td><code>static isGzipPath(string $path): bool</code></td><td>Check if a path should be treated as gzip based on its extension.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-format"><code>Format</code> <small>interface</small></h4>
+<p>Cassette serializer. Format-specific implementations decide how the value-object tree is laid out on disk; the round-trip contract is that <code>read(write(c))</code> returns a value-object-equal cassette modulo <code>t</code> rounding documented per format.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>write(Cassette $cassette, string $path): void</code></td><td></td></tr>
+<tr><td><code>read(string $path): Cassette</code></td><td></td></tr>
+<tr><td><code>encode(Cassette $cassette): string</code></td><td>Encode a cassette to a string without writing to disk. Round-trips with <code>decode()</code>. Useful for tests, CLI piping, and in-memory inspection.</td></tr>
+<tr><td><code>decode(string $contents): Cassette</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-jsonlformat"><code>JsonlFormat</code> <small>final class</small></h4>
+<p>JSONL cassette serializer — one JSON document per line. The first line is the header (<code>{&quot;v&quot;:1,&quot;created&quot;:...,&quot;cols&quot;:...,&quot;rows&quot;:...,&quot;runtime&quot;:...}</code>); subsequent lines are events whose shape depends on <code>k</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>write(Cassette $cassette, string $path): void</code></td><td></td></tr>
+<tr><td><code>read(string $path): Cassette</code></td><td></td></tr>
+<tr><td><code>encode(Cassette $cassette): string</code></td><td></td></tr>
+<tr><td><code>encodeLines(Cassette $cassette): \Generator</code></td><td>One JSONL line per frame (header first), newline NOT included.</td></tr>
+<tr><td><code>decode(string $contents): Cassette</code></td><td></td></tr>
+<tr><td><code>decodeTuples(\Traversable $lines): Cassette</code></td><td>Assemble a Cassette from <code>[lineNumber, text, isTornLast]</code> tuples — the shared shape produced by LineIo (file stream) and self::tuplesFromString() (whole-buffer API).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-relativeformat"><code>RelativeFormat</code> <small>final class</small></h4>
+<p>JSONL cassette serializer that uses relative/delta timestamps (dt) instead of absolute timestamps (t). Each event&#039;s dt value is the interval in seconds since the previous event; the first event always has dt=0.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>write(Cassette $cassette, string $path): void</code></td><td></td></tr>
+<tr><td><code>read(string $path): Cassette</code></td><td></td></tr>
+<tr><td><code>encode(Cassette $cassette): string</code></td><td></td></tr>
+<tr><td><code>encodeLines(Cassette $cassette): \Generator</code></td><td>One dt line per frame (header first), newline NOT included.</td></tr>
+<tr><td><code>decode(string $contents): Cassette</code></td><td></td></tr>
+<tr><td><code>decodeTuples(\Traversable $lines): Cassette</code></td><td>Assemble a Cassette from <code>[lineNumber, text, isTornLast]</code> tuples.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-format-restrictscassettepermissions"><code>RestrictsCassettePermissions</code> <small>trait</small></h4>
+<p>Shared permission policy for cassette files.</p>
+<h4 id="api-sugarcraft-vcr-format-yamlformat"><code>YamlFormat</code> <small>final class</small></h4>
+<p>Human-readable YAML cassette format. JSONL is the primary on-disk format (<code>Recorder</code> writes JSONL); YAML is intended for hand-written test fixtures and edits where readability matters more than line-streaming.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>write(Cassette $cassette, string $path): void</code></td><td></td></tr>
+<tr><td><code>read(string $path): Cassette</code></td><td></td></tr>
+<tr><td><code>encode(Cassette $cassette): string</code></td><td></td></tr>
+<tr><td><code>decode(string $contents): Cassette</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-hook">SugarCraft\Vcr\Hook</h3>
+<h4 id="api-sugarcraft-vcr-hook-hook"><code>Hook</code> <small>interface</small></h4>
+<p>Callback invoked during cassette recording to inspect, modify, or annotate events before they are persisted.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>beforeSave(Event $event): ?Event</code></td><td>Called before an event is written to the cassette.</td></tr>
+<tr><td><code>afterCapture(Event $event): void</code></td><td>Called after an event has been written to the cassette.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-hook-hookregistry"><code>HookRegistry</code> <small>final class</small></h4>
+<p>Manages a collection of Hook instances and dispatches them in order.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>addHook(Hook $hook): void</code></td><td>Register a hook to be called during recording.</td></tr>
+<tr><td><code>beforeSave(\SugarCraft\Vcr\Event $event): ?\SugarCraft\Vcr\Event</code></td><td>Invoke all beforeSave hooks on an event, returning the final event.</td></tr>
+<tr><td><code>afterCapture(\SugarCraft\Vcr\Event $event): void</code></td><td>Invoke all afterCapture hooks for an event.</td></tr>
+<tr><td><code>hookErrors(): array</code></td><td></td></tr>
+<tr><td><code>clear(): void</code></td><td>Remove all registered hooks.</td></tr>
+<tr><td><code>count(): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-hook-metadatahook"><code>MetadataHook</code> <small>final class</small></h4>
+<p>Hook that injects metadata into the cassette header or adds annotations to events. Useful for CI tracking, test identification, or debugging context.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $metadata = [])</code></td><td></td></tr>
+<tr><td><code>beforeSave(Event $event): Event</code></td><td></td></tr>
+<tr><td><code>afterCapture(Event $event): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-hook-sanitizinghook"><code>SanitizingHook</code> <small>final class</small></h4>
+<p>Hook that sanitizes event payloads before they are written to the cassette. Useful for removing sensitive data (API keys, tokens) or normalizing content for sharing.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $removeKeys = [], array $replacePatterns = [])</code></td><td></td></tr>
+<tr><td><code>beforeSave(Event $event): Event</code></td><td></td></tr>
+<tr><td><code>afterCapture(Event $event): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-input">SugarCraft\Vcr\Input</h3>
+<h4 id="api-sugarcraft-vcr-input-mousemodetracker"><code>MouseModeTracker</code> <small>final class</small></h4>
+<p>Observes recorded program OUTPUT and tracks which DEC private mouse reporting modes are currently enabled.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>observe(string $outputBytes): bool</code></td><td>Feed recorded output bytes; updates mouse-mode state as DECSET/DECRST sequences complete. Safe to call with stream fragments — in-flight sequences carry across calls.</td></tr>
+<tr><td><code>reset(): void</code></td><td>Clear all recorded mode state (call at the start of each replay).</td></tr>
+<tr><td><code>enabled(int $mode): bool</code></td><td></td></tr>
+<tr><td><code>legacyReportingActive(): bool</code></td><td>True while any mode that reports mouse bytes in the legacy 3-byte form is on.</td></tr>
+<tr><td><code>printChar(string $rune): void</code></td><td></td></tr>
+<tr><td><code>execute(int $byte): void</code></td><td></td></tr>
+<tr><td><code>csiDispatch(int $final, array $params, int $prefix, int $intermediate): void</code></td><td></td></tr>
+<tr><td><code>escDispatch(int $final, int $intermediate): void</code></td><td></td></tr>
+<tr><td><code>oscDispatch(string $data): void</code></td><td></td></tr>
+<tr><td><code>dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void</code></td><td></td></tr>
+<tr><td><code>sosPmApcDispatch(string $kind, string $data): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-input-mousereplaydecoder"><code>MouseReplayDecoder</code> <small>final class</small></h4>
+<p>Decodes recorded raw mouse byte sequences into sugar-core mouse Msgs using the encoding the program actually enabled, as tracked by MouseModeTracker.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static decode(string $bytes, MouseModeTracker $modes): ?MouseMsg</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-matcher">SugarCraft\Vcr\Matcher</h3>
+<h4 id="api-sugarcraft-vcr-matcher-contentmatcher"><code>ContentMatcher</code> <small>final class</small></h4>
+<p>Strict matcher that requires exact payload equality for same-kind events.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>matches(Event $recorded, Event $actual): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-matcher-eventmatcher"><code>EventMatcher</code> <small>interface</small></h4>
+<p>Strategy interface for comparing a recorded Event against an actual Event during replay.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>matches(Event $recorded, Event $actual): bool</code></td><td>Decide whether <code>$recorded</code> and <code>$actual</code> are equivalent for replay purposes.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-matcher-passthroughmatcher"><code>PassthroughMatcher</code> <small>final class</small></h4>
+<p>Permissive matcher that only checks event kind.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>matches(Event $recorded, Event $actual): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-matcher-timingtolerantmatcher"><code>TimingTolerantMatcher</code> <small>final class</small></h4>
+<p>Matcher that accepts events of the same kind within a timing window.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly float $timingTolerance = 0.1)</code></td><td></td></tr>
+<tr><td><code>matches(Event $recorded, Event $actual): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-migration">SugarCraft\Vcr\Migration</h3>
+<h4 id="api-sugarcraft-vcr-migration-cassettemigrator"><code>CassetteMigrator</code> <small>interface</small></h4>
+<p>Strategy interface for migrating a Cassette from one format version to another. Implementations are discovered and wired by MigrationRunner.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>canMigrate(Cassette $cassette): bool</code></td><td>Returns true if this migrator can handle the given cassette. Typically checks the header version.</td></tr>
+<tr><td><code>migrate(Cassette $cassette, bool $dryRun = false): Cassette</code></td><td>Migrate the cassette to the next version.</td></tr>
+<tr><td><code>sourceVersion(): int</code></td><td>Source format version number this migrator reads (bare accessor, house no-<code>get</code> law). Returns e.g. 1 for V1ToV2Migrator.</td></tr>
+<tr><td><code>targetVersion(): int</code></td><td>Target format version number this migrator writes. Returns e.g. 2 for V1ToV2Migrator.</td></tr>
+<tr><td><code>describe(): string</code></td><td>Get a human-readable description of what this migrator does.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-migration-migrationresult"><code>MigrationResult</code> <small>final readonly class</small></h4>
+<p>Value object returned by CassetteMigrator::migrate() that carries the migrated cassette plus metadata about what happened.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public bool $dryRun, public int $sourceVersion, public int $targetVersion, public array $changes)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-migration-migrationrunner"><code>MigrationRunner</code> <small>final class</small></h4>
+<p>Orchestrates a chain of CassetteMigrator instances to bring a cassette to the current version or a specified target version.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?array $migrators = null)</code></td><td></td></tr>
+<tr><td><code>migrate(Cassette $cassette, bool $dryRun = false, ?int $maxVersion = null): Cassette</code></td><td>Migrate a cassette to the current version (highest target version registered) or up to (but not past) $maxVersion if specified.</td></tr>
+<tr><td><code>migrateWithStatus(Cassette $cassette, bool $dryRun = false, ?int $maxVersion = null): array</code></td><td>Migrate and report whether the chain actually reached its cap.</td></tr>
+<tr><td><code>highestTargetVersion(): int</code></td><td>Highest target version any registered migrator reaches — the cap this build can migrate TO (finding 093: callers must be able to say &quot;this build migrates up to v{max}&quot; instead of guessing &quot;latest&quot;).</td></tr>
+<tr><td><code>canMigrate(Cassette $cassette): bool</code></td><td>Returns true if the given cassette can be migrated further.</td></tr>
+<tr><td><code>describeMigrators(): array</code></td><td>Returns a description of all registered migrators.</td></tr>
+<tr><td><code>register(CassetteMigrator $migrator): void</code></td><td>Register a new migrator. Must be added in source-version order.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-migration-v1tov2migrator"><code>V1ToV2Migrator</code> <small>final class</small></h4>
+<p>Migrates cassette format v1 → v2.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>canMigrate(Cassette $cassette): bool</code></td><td></td></tr>
+<tr><td><code>migrate(Cassette $cassette, bool $dryRun = false): Cassette</code></td><td></td></tr>
+<tr><td><code>sourceVersion(): int</code></td><td></td></tr>
+<tr><td><code>targetVersion(): int</code></td><td></td></tr>
+<tr><td><code>describe(): string</code></td><td></td></tr>
+<tr><td><code>static reservedKeyCollisions(Cassette $cassette): int</code></td><td>How many events in $cassette already carry a payload key the v2 stamp reserves (<code>_id</code> on any event, <code>_enc</code> on output events) — i.e. how many pre-existing values migrate() will overwrite. Pure; the CLI consults it only for sub-target versions, where every hit is a real collision.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-msg">SugarCraft\Vcr\Msg</h3>
+<h4 id="api-sugarcraft-vcr-msg-builtinserializer"><code>BuiltinSerializer</code> <small>final class</small></h4>
+<p>Serializer for the sugar-core Msg classes commonly produced by the input parser. Coverage:</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>canEncode(Msg $msg): bool</code></td><td></td></tr>
+<tr><td><code>canDecode(array $envelope): bool</code></td><td></td></tr>
+<tr><td><code>encode(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>decode(array $envelope): Msg</code></td><td></td></tr>
+<tr><td><code>static tags(): array</code></td><td>The set of <code>@type</code> tags this serializer handles.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-msg-jsonableserializer"><code>JsonableSerializer</code> <small>final class</small></h4>
+<p>Catch-all serializer for user Msg classes that implement <code>\JsonSerializable</code>. Encodes the FQCN as <code>@type</code> and the <code>jsonSerialize()</code> result as <code>data</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>allow(string ...$classes): self</code></td><td>Permit one or more classes for decoding. Validated at the door: the class must exist, implement Msg AND \JsonSerializable — a typo or a wrong-shape class is refused with a named error rather than discovered mid-replay (or never, which is worse).</td></tr>
+<tr><td><code>allowedClasses(): array</code></td><td>The allow-listed FQCNs, sorted — inspection seam for hosts and tests.</td></tr>
+<tr><td><code>canEncode(Msg $msg): bool</code></td><td></td></tr>
+<tr><td><code>canDecode(array $envelope): bool</code></td><td></td></tr>
+<tr><td><code>encode(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>decode(array $envelope): Msg</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-msg-msgserializer"><code>MsgSerializer</code> <small>interface</small></h4>
+<p>Encode and decode sugar-core Msgs into the cassette <code>input</code> envelope. The envelope is a JSON-able associative array carrying an <code>@type</code> tag so the Registry can route on read.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>canEncode(Msg $msg): bool</code></td><td>True if this serializer can encode the given Msg.</td></tr>
+<tr><td><code>canDecode(array $envelope): bool</code></td><td>True if this serializer can decode the given envelope (typically a check on <code>@type</code>).</td></tr>
+<tr><td><code>encode(Msg $msg): array</code></td><td>Encode the Msg into an envelope. The result MUST include an <code>@type</code> key — that is the routing tag for decode().</td></tr>
+<tr><td><code>decode(array $envelope): Msg</code></td><td>Decode a previously-encoded envelope back into a Msg.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-msg-registry"><code>Registry</code> <small>final class</small></h4>
+<p>Ordered list of MsgSerializers. encode() and decode() walk the list and ask each serializer whether it handles the given Msg / envelope.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>register(MsgSerializer $serializer): self</code></td><td>Append a serializer to the list. Returns <code>$this</code> for chaining.</td></tr>
+<tr><td><code>registerFirst(MsgSerializer $serializer): self</code></td><td>Prepend a serializer to the list, so it is consulted before every already-registered one. Returns <code>$this</code> for chaining.</td></tr>
+<tr><td><code>encode(Msg $msg): ?array</code></td><td>Encode a Msg into a cassette envelope. Returns null if no registered serializer can handle the Msg.</td></tr>
+<tr><td><code>decode(array $envelope): ?Msg</code></td><td>Decode an envelope back into a Msg. Returns null if no registered serializer claims the envelope&#039;s <code>@type</code>.</td></tr>
+<tr><td><code>static new(): self</code></td><td>Default registry: <code>BuiltinSerializer</code> first (specific sugar-core Msgs), then <code>JsonableSerializer</code> (catch-all for user Msgs implementing <code>\JsonSerializable</code> — DECODE side allow-listed, see allow()). Order is priority, so anything register() appends lands after both — reach for registerFirst() to give a custom codec precedence over the catch-all.</td></tr>
+<tr><td><code>allow(string ...$classes): self</code></td><td>The host&#039;s opt-in door for user Msg classes: forwards to the registered JsonableSerializer&#039;s allow list (finding 034 — the catch-all decodes only what was named here). When no catch-all is registered, one configured for these classes is appended.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-raster">SugarCraft\Vcr\Raster</h3>
+<h4 id="api-sugarcraft-vcr-raster-cellcolor"><code>CellColor</code> <small>final class</small></h4>
+<p>The single palette-vs-truecolor decision every rasterizer shares.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static foreground(Cell $cell, Theme $theme): int</code></td><td>Exact 24-bit colour of the cell&#039;s own foreground channel: the packed SGR <code>38;2</code> value when present, otherwise the Theme palette slot.</td></tr>
+<tr><td><code>static background(Cell $cell, Theme $theme): int</code></td><td>Exact 24-bit colour of the cell&#039;s own background channel — the foreground() twin for SGR <code>48;2</code>/the <code>bg</code> palette slot.</td></tr>
+<tr><td><code>static pack(?array $rgb): ?int</code></td><td>Pack a <code>[r, g, b]</code> triple (the shape Cell::fgRgb() returns) into a <code>0xRRGGBB</code> int, passing a null triple straight through so callers can use <code>?? $paletteFallback</code> to layer the truecolor-over-palette decision.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-raster-fontloader"><code>FontLoader</code> <small>final class</small></h4>
+<p>Loads TTF font faces from bundled or system directories.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $fontDirs = [])</code></td><td></td></tr>
+<tr><td><code>load(string $family, float $size, string $style = &#039;regular&#039;): string</code></td><td>Load a TTF font file path for use with imagettftext().</td></tr>
+<tr><td><code>static materializeForGd(string $path): string</code></td><td>Turn a phar font path into a real filesystem path.</td></tr>
+<tr><td><code>resolve(string $family, string $style = &#039;regular&#039;): ?string</code></td><td>Resolve a font to its absolute path without throwing.</td></tr>
+<tr><td><code>lastResolvedPath(): ?string</code></td><td>Returns the path to the last successfully resolved font.</td></tr>
+<tr><td><code>static systemDirs(): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-raster-gdrasterizer"><code>GdRasterizer</code> <small>final class</small></h4>
+<p>Default rasterizer using ext-gd.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private int $fontSize = self::DEFAULT_FONT_SIZE, private string $fontFamily = self::DEFAULT_FONT_FAMILY, ?Theme $theme = null)</code></td><td></td></tr>
+<tr><td><code>withTheme(Theme $theme): self</code></td><td></td></tr>
+<tr><td><code>withFont(string $fontFamily, ?int $fontSize = null): self</code></td><td></td></tr>
+<tr><td><code>setCacheDisabled(bool $disabled): void</code></td><td>Toggle the persistent Glyphs cache for benchmarking. Not part of the public Rasterizer contract — callers use this to measure the cache&#039;s impact via scripts/bench-glyph-cache.php.</td></tr>
+<tr><td><code>cacheStats(): array</code></td><td></td></tr>
+<tr><td><code>rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \GdImage</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-raster-glyphs"><code>Glyphs</code> <small>final class</small></h4>
+<p>Pre-rendered character tile cache.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private int $cellW, private int $cellH, private FontLoader $fonts, private string $fontFamily = &#039;JetBrainsMono&#039;, int $fontSize = 14, ?Theme $theme = null)</code></td><td></td></tr>
+<tr><td><code>cacheStats(): array</code></td><td></td></tr>
+<tr><td><code>cacheSize(): int</code></td><td>Live tiles in the cache. Exposed so tests can assert the hard bound and eviction order without reaching into the store.</td></tr>
+<tr><td><code>cellWidth(): int</code></td><td></td></tr>
+<tr><td><code>cellHeight(): int</code></td><td></td></tr>
+<tr><td><code>fontFamily(): string</code></td><td></td></tr>
+<tr><td><code>fontSize(): int</code></td><td></td></tr>
+<tr><td><code>theme(): Theme</code></td><td></td></tr>
+<tr><td><code>tile(string $char, int $fg, int $bg, bool $bold, bool $italic, bool $underline, ?int $fgRgb = null, ?int $bgRgb = null): \GdImage</code></td><td>Get or create a cached tile for (char, fg, bg, bold, italic, underline).</td></tr>
+<tr><td><code>tileWide(string $char, int $fg, int $bg, bool $bold, bool $italic, bool $underline, ?int $fgRgb = null, ?int $bgRgb = null): \GdImage</code></td><td>Get or create a cached wide-character tile (2x cell width).</td></tr>
+<tr><td><code>measure(string $char): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-raster-imagickrasterizer"><code>ImagickRasterizer</code> <small>final class</small></h4>
+<p>Alternative rasterizer using ext-imagick.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private int $fontSize = 14, private string $fontFamily = &#039;JetBrainsMono&#039;, ?Theme $theme = null)</code></td><td></td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>withTheme(Theme $theme): self</code></td><td></td></tr>
+<tr><td><code>withFont(string $fontFamily, ?int $fontSize = null): self</code></td><td></td></tr>
+<tr><td><code>setCacheDisabled(bool $disabled): void</code></td><td>Toggle the persistent tile cache for benchmarking.</td></tr>
+<tr><td><code>cacheStats(): array</code></td><td></td></tr>
+<tr><td><code>rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \Imagick</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-raster-rasterizer"><code>Rasterizer</code> <small>interface</small></h4>
+<p>Interface for Snapshot-to-image rasterizers.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \GdImage|\Imagick</code></td><td>Rasterize a terminal Snapshot to an image.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-render">SugarCraft\Vcr\Render</h3>
+<h4 id="api-sugarcraft-vcr-render-framededup"><code>FrameDedup</code> <small>final class</small></h4>
+<p>Collapse identical adjacent frames in a FrameStream.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static dedup(\Traversable $stream, int $holdMax = 300): \Iterator</code></td><td>Wrap a FrameStream, collapsing duplicate adjacent frames.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-render-framestream"><code>FrameStream</code> <small>final class</small></h4>
+<p>Iterator of Snapshot frames at fps cadence.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private Player $player, private Terminal $terminal, private float $fps = 30.0, private ?string $shell = null, private int $maxFrames = self::DEFAULT_MAX_FRAMES, private ?float $maxRuntimeSeconds = null)</code></td><td></td></tr>
+<tr><td><code>getIterator(): \Traversable</code></td><td></td></tr>
+<tr><td><code>warnings(): array</code></td><td>Collected non-fatal render notices (VCR-COPY-05). The exec→echo fallback used to hit error_log() raw — mid-stream, unstyled, and invisible to a caller that swapped STDOUT for a memory stream. It now rides the warnings channel TapeToGif merges into its own <code>Warning:</code> voice for every consumer that reads them.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-render-renderer"><code>Renderer</code> <small>final class</small></h4>
+<p>Orchestrates Player + Terminal to produce a stream of Snapshots at the configured frames-per-second cadence.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>render(Player $player, Terminal $terminal, float $fps = 30.0, ?string $shell = null, ?int $maxFrames = null, ?float $maxRuntimeSeconds = null): FrameStream</code></td><td>Drive the player through the terminal, yielding snapshots at fps cadence.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-support">SugarCraft\Vcr\Support</h3>
+<h4 id="api-sugarcraft-vcr-support-hostshell"><code>HostShell</code> <small>final class</small></h4>
+<p>Where a shell lives and how to start it, on the host PHP actually runs on.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static onWindows(): bool</code></td><td></td></tr>
+<tr><td><code>static fallback(): string</code></td><td>The shell to use when none is configured: <code>%ComSpec%</code> on Windows, /bin/sh elsewhere.</td></tr>
+<tr><td><code>static isExecutable(string $path): bool</code></td><td>Whether $path names a file this host can execute (on Windows, by PATHEXT extension: PHP&#039;s is_executable() says false for .cmd/.bat).</td></tr>
+<tr><td><code>static isAbsolute(string $path): bool</code></td><td></td></tr>
+<tr><td><code>static locate(string $name): ?string</code></td><td>Resolve a bare name to an executable path: the conventional POSIX bin directories, then sugar-core&#039;s Locator (PATH, plus every PATHEXT suffix on Windows). Null when nothing is found.</td></tr>
+<tr><td><code>static interactiveArgs(string $shell, bool $login): array</code></td><td>The flags that start $shell interactive (or as a login shell). cmd.exe is interactive by default and rejects <code>-i</code>; PowerShell takes its own words; every POSIX-style shell (sh, bash, zsh, Git-for-Windows bash) gets <code>-l</code> or <code>-i</code>.</td></tr>
+<tr><td><code>static windowsSystemEnv(): array</code></td><td>The Windows system variables present in this process, to merge into a child&#039;s environment block (empty on other hosts).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-support-lineio"><code>LineIo</code> <small>final class</small></h4>
+<p>Streaming line reader for cassette-format decoders (finding 081).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static lines(string $path, string $failureMessage): \Generator</code></td><td>Stream the lines of a plain file.</td></tr>
+<tr><td><code>static gzLines(string $path, string $failureMessage, int $maxExpandedBytes): \Generator</code></td><td>Stream the lines of a gzip file, with a ceiling on the TOTAL DECOMPRESSED bytes (the amplification guard shared with the old whole-buffer reader: a few KB of gzip can expand to gigabytes, and the door must die with a named error, not with the process).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-support-objectmap"><code>ObjectMap</code> <small>final class</small></h4>
+<p>Boundary parser for decoded JSON/YAML mappings.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static of(array $data, string $where): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-support-scalars"><code>Scalars</code> <small>final class</small></h4>
+<p>Scalar coercion at the JSON trust boundary.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static int(mixed $value, string $where): int</code></td><td><code>(int)</code>-identical for every scalar and null; throws on array/object.</td></tr>
+<tr><td><code>static string(mixed $value, string $where): string</code></td><td><code>(string)</code>-identical for every scalar and null; throws on array/object.</td></tr>
+<tr><td><code>static float(mixed $value, string $where): float</code></td><td><code>(float)</code>-identical for every scalar and null; throws on array/object.</td></tr>
+<tr><td><code>static bool(mixed $value, string $where): bool</code></td><td><code>(bool)</code>-identical for every scalar and null; throws on array/object.</td></tr>
+<tr><td><code>static seconds(mixed $value, string $where): float</code></td><td>Timestamp/duration coercion for the trust doors (findings 001/002): numeric literals and numeric strings only — no silent PHP cast table behind a garbage value. <code>float(&quot;abc&quot;) === 0.0</code> would rewrite a corrupt timestamp into a valid frame at t=0, the exact laundering this door forbids; a non-numeric scalar is rejected by name instead.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-support-socketpair"><code>SocketPair</code> <small>final class</small></h4>
+<p>The address family for <code>stream_socket_pair()</code> on this host.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static domain(): int</code></td><td></td></tr>
+<tr><td><code>static open(): array|false</code></td><td>A connected stream pair, or false when the host refuses one.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-tape">SugarCraft\Vcr\Tape</h3>
+<h4 id="api-sugarcraft-vcr-tape-compiler"><code>Compiler</code> <small>final class</small></h4>
+<p>Compiles a directive AST into a Cassette with events. Mirrors charmbracelet/vhs command dispatch: the tape AST becomes the emitted keystroke stream, directive by directive.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>compile(array $ast, string $sourcePath, bool $strict = false): Cassette</code></td><td></td></tr>
+<tr><td><code>outputPath(): ?string</code></td><td>Destination path requested by the tape&#039;s <code>Output &lt;path&gt;</code> directive, resolved and confined to the tape&#039;s own directory. Null when the tape had no Output directive, or when the requested path escaped the tape&#039;s directory (in which case the caller should fall back to its own default rather than honor an attacker-controlled traversal path).</td></tr>
+<tr><td><code>shell(): ?string</code></td><td>Shell requested by the tape&#039;s <code>Set Shell &quot;&lt;shell&gt;&quot;</code> directive, or null when the tape sets none. A non-null value opts the render into exec mode (real PTY + captured program output); null keeps the byte-identical echo path. Reflects the most recent compile() call. Mirrors charmbracelet/vhs Set Shell, nine-name validation included — a tape cannot surface an arbitrary executable.</td></tr>
+<tr><td><code>static cellMetrics(int $fontSize): array</code></td><td>Glyph cell size in pixels for a given font size, used both here (to derive the terminal grid from the pixel image dimensions) and by \SugarCraft\Vcr\Encode\TapeToGif (to size the rasterizer canvas). Kept as the single source of truth so the compiled grid and the rendered canvas always agree — otherwise <code>cols * cellW</code> would not line up with the requested <code>Set Width</code> pixels.</td></tr>
+<tr><td><code>static parseSource(string $source): array</code></td><td></td></tr>
+<tr><td><code>warnings(): array</code></td><td>Non-fatal diagnostics from the most recent compile() — currently unresolvable / out-of-base Source includes skipped under non-strict mode. Empty when the tape compiled cleanly or ran under strict mode (which throws on the first such problem instead of collecting).</td></tr>
+<tr><td><code>droppedDiagnostics(): array</code></td><td>Content-losing diagnostics from the most recent compile() (see recordDropped()). Under strict mode the run aborts at the first one; a non-strict compile finishes and carries every drop here.</td></tr>
+<tr><td><code>framerate(): ?float</code></td><td>The tape&#039;s <code>Set Framerate</code> if it carried one (finding 008&#039;s honoured key), null when the tape stayed silent so the caller&#039;s own default keeps its seat.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-decompiler"><code>Decompiler</code> <small>final class</small></h4>
+<p>Reverse of Compiler::compile() — walks a Cassette&#039;s events back into tape source text that re-parses to an equivalent Cassette.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>decompile(Cassette $cassette): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-inlinetheme"><code>InlineTheme</code> <small>final class</small></h4>
+<p>Inline JSON themes for <code>Set Theme {…}</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static looksLikeJson(string $theme): bool</code></td><td></td></tr>
+<tr><td><code>static fromJson(string $json): Theme</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-lexer"><code>Lexer</code> <small>final readonly class</small></h4>
+<p>Line-oriented tape tokenizer.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static unescapeValue(string $value): string</code></td><td>Unescape the sequences matchDirective() consumed as escaped pairs: a backslash before a backslash or any quote character carries only the quote&#039;s meaning, never its own. Every other backslash run (<code>\t</code>, <code>\x1b</code>) stays two literal bytes — upstream&#039;s Go quoting does not expand those inside these strings either, and the old port didn&#039;t.</td></tr>
+<tr><td><code>tokenize(string $source): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-parser"><code>Parser</code> <small>final readonly class</small></h4>
+<p>Recursive-descent parser for tape tokens → AST directives. Mirrors charmbracelet/vhs tape parser.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>parse(array $tokens): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-token"><code>Token</code> <small>final readonly class</small></h4>
+<p>A single token from the lexer. Mirrors charmbracelet/vhs tape token kinds.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $type, public string $value, public int $line)</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-vcr-tape-ast">SugarCraft\Vcr\Tape\Ast</h3>
+<h4 id="api-sugarcraft-vcr-tape-ast-arrowdirective"><code>ArrowDirective</code> <small>final readonly class</small></h4>
+<p>Arrow direction directive — Up, Down, Left, or Right. Mirrors charmbracelet/vhs Up/Down/Left/Right commands.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $direction)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-backspacedirective"><code>BackspaceDirective</code> <small>final readonly class</small></h4>
+<p>Backspace directive — emits the DEL keystroke. Mirrors charmbracelet/vhs Backspace command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-copydirective"><code>CopyDirective</code> <small>final readonly class</small></h4>
+<p><code>Copy &quot;&lt;text&gt;&quot;</code> — upstream&#039;s clipboard-write command. Compiles to the terminal-native OSC 52 clipboard-set sequence, so the keystroke event is real (the same wire a hardware copy produces) and the payload travels base64-confined, never raw. Mirrors charmbracelet/vhs Copy command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $text)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-ctrldirective"><code>CtrlDirective</code> <small>final readonly class</small></h4>
+<p>Ctrl+&lt;letter&gt; directive — emits a control character (char code &amp; 0x1F). Mirrors charmbracelet/vhs Ctrl command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $letter)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-directive"><code>Directive</code> <small>interface</small></h4>
+<p>Base interface for all tape directive AST nodes.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-enterdirective"><code>EnterDirective</code> <small>final readonly class</small></h4>
+<p>Enter directive — emits CR. Mirrors charmbracelet/vhs Enter command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-envdirective"><code>EnvDirective</code> <small>final readonly class</small></h4>
+<p>Env KEY &quot;value&quot; directive — exports environment variables to the child process. Mirrors charmbracelet/vhs Env command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $key, public string $value)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-escapedirective"><code>EscapeDirective</code> <small>final readonly class</small></h4>
+<p>Escape directive — emits ESC. Mirrors charmbracelet/vhs Escape command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-hidedirective"><code>HideDirective</code> <small>final readonly class</small></h4>
+<p>Hide directive — hides the terminal cursor or frame capture. Deferred: v2 scope. Mirrors charmbracelet/vhs Hide command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-keydirective"><code>KeyDirective</code> <small>final readonly class</small></h4>
+<p>Named-key directive from upstream&#039;s measured command roster: Delete, Insert, PageUp, PageDown, End, ScrollUp, ScrollDown. The Compiler maps each to its xterm sequence (the same shapes sugar-core InputReader decodes back into KeyType cases). Mirrors charmbracelet/vhs Delete/Insert/PageUp/PageDown/End/ ScrollUp/ScrollDown commands.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $key)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-modifierdirective"><code>ModifierDirective</code> <small>final readonly class</small></h4>
+<p>Bare modifier keyword (Alt / Shift). Upstream&#039;s lexer carries these as first-class keywords; here they arm a pending modifier that merges into the NEXT keystroke directive&#039;s bytes (Alt = the ESC meta lead sugar-core documents, Shift = the xterm <code>;2</code> parameter). A tape that ends with a modifier never applied is reported, never silent (finding 005). Mirrors charmbracelet/vhs Alt and Shift keywords.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $modifier)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-outputdirective"><code>OutputDirective</code> <small>final readonly class</small></h4>
+<p>Output &lt;path&gt; directive — sets the output GIF path for rendering. Mirrors charmbracelet/vhs Output command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $path)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-parseerror"><code>ParseError</code> <small>final readonly class</small></h4>
+<p>Represents a parse error at a specific line.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $line, public string $message)</code></td><td></td></tr>
+<tr><td><code>line(): int</code></td><td></td></tr>
+<tr><td><code>message(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-pastedirective"><code>PasteDirective</code> <small>final readonly class</small></h4>
+<p>Bare <code>Paste</code> — upstream&#039;s clipboard-read command. The record-side compiler has no clipboard to read, so it reports the seam (warn/strict-abort via reportCompileProblem) instead of vanishing like the old UNKNOWN drop (finding 005). Mirrors charmbracelet/vhs Paste command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-requiredirective"><code>RequireDirective</code> <small>final readonly class</small></h4>
+<p><code>Require &lt;module&gt;</code> — upstream&#039;s tape-precondition loader (<code>Require git</code> asserts the toolchain dependency). candy-vcr compiles tapes with no package manager to consult, so the requirement is recorded as a loud diagnostic (warn / strict-abort) rather than the old silent drop (finding 005). Mirrors charmbracelet/vhs Require command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $module)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-screenshotdirective"><code>ScreenshotDirective</code> <small>final readonly class</small></h4>
+<p>Screenshot &lt;path&gt; directive — captures a single frame to disk. Deferred: v2 scope. Mirrors charmbracelet/vhs Screenshot command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $path)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-setdirective"><code>SetDirective</code> <small>final readonly class</small></h4>
+<p>Set &lt;key&gt; &lt;value&gt; directive — configures terminal settings. Allowed keys: Theme, FontSize, Width, Height, TypingSpeed, FontFamily, Padding, Margin. Mirrors charmbracelet/vhs Set command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $key, public string $value)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-showdirective"><code>ShowDirective</code> <small>final readonly class</small></h4>
+<p>Show directive — shows the terminal cursor or frame capture. Deferred: v2 scope. Mirrors charmbracelet/vhs Show command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-sleepdirective"><code>SleepDirective</code> <small>final readonly class</small></h4>
+<p>Sleep &lt;duration&gt; directive — advances virtual clock without emitting bytes. Duration suffixes: s (seconds), ms (milliseconds), m (minutes). Mirrors charmbracelet/vhs Sleep command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public float $seconds)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-sourcedirective"><code>SourceDirective</code> <small>final readonly class</small></h4>
+<p>Inlines and compiles another .tape file at this point. Mirrors charmbracelet/vhs Source command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $path)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-spacedirective"><code>SpaceDirective</code> <small>final readonly class</small></h4>
+<p>Space directive — emits a literal space. Mirrors charmbracelet/vhs Space command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-tabdirective"><code>TabDirective</code> <small>final readonly class</small></h4>
+<p>Tab directive — emits HT. Mirrors charmbracelet/vhs Tab command.</p>
+<h4 id="api-sugarcraft-vcr-tape-ast-typedirective"><code>TypeDirective</code> <small>final readonly class</small></h4>
+<p>Type &quot;...&quot; directive — types a string of characters. Mirrors charmbracelet/vhs Type command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $text)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-vcr-tape-ast-waitdirective"><code>WaitDirective</code> <small>final readonly class</small></h4>
+<p>Wait directive — a timeout or a condition.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public float $seconds, public string $pattern = &#039;&#039;)</code></td><td></td></tr>
+</tbody>
+</table>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/record.php</code>: records a tiny counter Program. Usage: <code>php examples/record.php /tmp/session.cas</code>. With no argument it writes to the system temporary directory, never into the checkout.</li>
+      <li><code>examples/replay.php</code>: replays a cassette into a fresh Program and asserts the 80 by 24 cell grid. Usage: <code>php examples/replay.php examples/cassettes/counter.cas</code>.</li>
+      <li><code>examples/inspect.php</code>: reads a cassette with <code>JsonlFormat</code> and prints each event: the size for a resize, the byte count for output and for input, and the decoded message class when an input event carries a <code>msg</code> envelope. The shipped cassette has no envelopes, so its input lines show byte counts. It runs no model. Usage: <code>php examples/inspect.php examples/cassettes/counter.cas</code>.</li>
+      <li><code>examples/cassettes/counter.cas</code>: a real six-event recording of the counter. Do not overwrite it.</li>
+    </ul>
+    <p>The tape <code>.vhs/smoke.tape</code> is the render example. It types <code>php examples/inspect.php examples/cassettes/counter.cas</code> and renders the result with the TokyoNight theme.</p>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit                    # the test suite
+vendor/bin/phpstan analyze            # static analysis at level max
+vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php</code></pre>
+    <p>Rendering output is covered by golden-file snapshot tests. Fixtures live in <code>tests/fixtures/</code> as <code>.golden</code> files, and <code>Assertions::assertGoldenAnsi()</code> compares them with the actual ANSI bytes. The assertion is create-only: a missing golden fails the test unless <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> (or the legacy <code>UPDATE_GOLDENS=1</code>) is set, and then it is written. An existing golden is only compared, and a mismatch fails the test. After an intentional change, delete the stale golden, regenerate it with the env var, and review the new file with <code>git diff</code>.</p>
+    <pre class="code"><code class="language-shell">rm tests/fixtures/renderer-frame.golden
+SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit --filter testRendererProducesFrameStream
+git diff tests/fixtures/renderer-frame.golden</code></pre>
+    <p>To use candy-vcr in your own tests, replay a recorded cassette through <code>Player::play()</code> and assert on the returned <code>ReplayResult</code>. This needs no terminal, so it runs in the normal PHP unit-test process.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong><code>record</code> exits with status 2 and will not write.</strong> The output file already exists. Pass <code>--force</code> to replace it, or choose a new <code>--output</code> path. This protects a cassette that is already on disk.</li>
+      <li><strong>The GIF render fails because <code>ffmpeg</code> is missing.</strong> The default encoder calls <code>ffmpeg</code> on the <code>PATH</code>. Install it, or pass <code>--encoder=php</code> to use the pure-PHP encoder, which needs no external binary.</li>
+      <li><strong>The render fails with an imagick error.</strong> The default backend is GD. Use <code>--backend=gd</code> or install <code>ext-imagick</code> before passing <code>--backend=imagick</code>.</li>
+      <li><strong>A freshly recorded replay fails with a diff.</strong> <code>examples/replay.php</code> asserts an 80 by 24 cell grid. Record at the same size as the assertion, or change the <code>ScreenAssertion</code> dimensions to match the session.</li>
+      <li><strong>A rendered tape runs unexpected commands.</strong> A tape that sets <code>Set Shell</code>, or is rendered with <code>--shell=SHELL</code> or <code>--exec</code>, runs every typed command in a real shell. Read a third-party tape before you render it. Use <code>--dry-run</code> to list the events without running anything.</li>
+      <li><strong>A cassette contains a secret.</strong> A cassette stores the exact keystrokes typed, and redaction is not wired into the record path. Do not record commands that print secrets, and never use <code>--env-all</code> outside an isolated environment. Share a cassette only after checking its contents.</li>
+      <li><strong>Replaying a large cassette uses a lot of memory.</strong> Reads load the whole cassette before the first event is returned, so peak memory is a small multiple of the file size. Split very long recordings with <code>--idle-trim</code> or record shorter sessions.</li>
+      <li><strong><code>migrate</code> refuses my file.</strong> Migration accepts only JSON Lines cassettes (<code>.cas</code> or <code>.jsonl</code>), and refuses <code>.cast</code>, <code>.yaml</code>, <code>.tape</code>, <code>.gz</code> and relative-mode input.</li>
+    </ul>
+
+    <h3 id="limitations" style="margin-top: 40px;">Limitations</h3>
+    <ul>
+      <li><strong>No seek or windowed export.</strong> Replay and render always start at <code>t=0</code>. <code>inspect --since</code> and <code>--until</code> view a slice, but nothing writes a trimmed cassette back.</li>
+      <li><strong>No cassette to GIF path.</strong> <code>render-tape</code> takes only hand-written tapes, and the asciinema importer has no writer.</li>
+      <li><strong>Exec timing scales with playback speed.</strong> Under <code>Set PlaybackSpeed</code>, each command's read window shrinks with the speed, so a faster tape gives each command less real time.</li>
+      <li><strong>Upstream operational modes are not ported.</strong> The <code>RecordOnly</code>, <code>ReplayOnly</code> and <code>Passthrough</code> modes of the Charm implementation are absent, because the Recorder and Player split covers them. The hooks, matchers and redaction filters did port.</li>
+    </ul>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>The cassette side is a set of streaming recorders and readers over one <code>Cassette</code> value object. Events pass through hooks on the record path and through matchers on the replay path. A matcher decides how strictly a replayed frame must agree with the recorded one.</p>
+    <pre class="code"><code class="language-text">record:  Program -&gt; Recorder -(hooks)-&gt; Format writer -&gt; cassette file
+replay:  cassette file -&gt; CassetteLoader -&gt; Player -&gt; Program -&gt; ReplayResult
+tape:    .tape -&gt; Lexer -&gt; Parser -&gt; Compiler -&gt; Player -&gt; Terminal -&gt; Renderer
+         -&gt; FrameStream -&gt; FrameDedup -&gt; Rasterizer (gd | imagick) -&gt; GIF encoder</code></pre>
+    <p>The tape side is a pipeline of stages joined by iterators, so one frame at a time moves through it. A rasteriser draws each deduplicated snapshot into an image, and an encoder writes the frames into a GIF with either ffmpeg or the pure-PHP encoder.</p>
+    <h3 id="hooks-and-matchers" style="margin-top: 16px;">Hooks and matchers</h3>
+    <p>A hook intercepts events while recording. <code>SanitizingHook</code> removes keys or replaces patterns by regular expression. <code>MetadataHook</code> injects metadata into the first output event. A custom hook implements <code>SugarCraft\Vcr\Hook\Hook</code>, with <code>beforeSave()</code> and <code>afterCapture()</code>. Returning <code>null</code> from <code>beforeSave()</code> drops the event. A throwing <code>afterCapture()</code> does not stop the session. The error is recorded, not rethrown, and the CLI <code>record</code> command prints each recorded hook error as a warning once the recording finishes. Embedders read the same list from <code>hookErrors()</code>.</p>
+    <p>Redaction is a call-site decision. Nothing attaches a hook automatically, so a recording stores exactly what the terminal sent. Attach <code>SanitizingHook</code> to the recorder yourself when a session can type a secret.</p>
+    <p>A matcher is used on replay and decides when a replayed event counts as matching. <code>PassthroughMatcher</code> matches every event, and pairs with <code>ByteAssertion</code>. <code>ContentMatcher</code> matches on the kind and payload and ignores <code>t</code>. <code>TimingTolerantMatcher</code> matches when the timestamps differ by no more than <code>timingTolerance</code> seconds, which defaults to 0.1. A custom matcher implements <code>EventMatcher::matches(Event $recorded, Event $actual)</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Vcr\Hook\SanitizingHook;
+use SugarCraft\Vcr\Matcher\TimingTolerantMatcher;
+use SugarCraft\Vcr\Recorder;
+
+$recorder = Recorder::open('/tmp/session.cas')
+    ->withHook(new SanitizingHook(removeKeys: ['API_KEY', 'SECRET_TOKEN']));
+$matcher = new TimingTolerantMatcher(timingTolerance: 0.05);   // plus or minus 50 ms</code></pre>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>candy-vcr mirrors two Charm projects. The tape DSL is the one from <a href="https://github.com/charmbracelet/vhs">charmbracelet/vhs</a>, and the cassette idea comes from the Go <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a>.</p>
+<table class="api-table">
+<thead>
+<tr><th scope="col">Upstream concept</th><th scope="col">candy-vcr</th></tr>
+</thead>
+<tbody>
+<tr><td>vhs <code>.tape</code> DSL</td><td><code>Lexer</code>, <code>Parser</code> and <code>Compiler</code> in the tape compiler</td></tr>
+<tr><td>vhs GIF rendering</td><td><code>Encode\TapeToGif</code>, with the GD or imagick rasteriser and an ffmpeg or PHP encoder</td></tr>
+<tr><td>vhs <code>Set Theme</code></td><td>The five shipped themes, selected by the tape or <code>--theme</code></td></tr>
+<tr><td>vcr cassette</td><td><code>Cassette</code>, read and written by the JSON Lines formats</td></tr>
+<tr><td>vcr record and replay modes</td><td>Not ported. <code>Recorder</code> and <code>Player</code> cover them</td></tr>
+<tr><td>asciinema <code>.cast</code></td><td><code>AsciinemaFormat</code> (read only) and <code>RelativeFormat</code></td></tr>
+</tbody>
+</table>
+
+    <h3 id="versioning-and-changelog" style="margin-top: 40px;">Versioning and changelog</h3>
+    <p>Cassettes carry a format version. The header writes <code>CassetteHeader::CURRENT_VERSION</code>, which is 1, and readers accept versions up to <code>MAX_READABLE_VERSION</code>, which is 2. A version 2 file is the migration target and is not written by default. The <code>migrate</code> command upgrades older files. The package status is v1 ready: recording, replay assertions, tape compilation, rendering, rasterisation and GIF encoding all ship.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-core.html">sugar-core</a>: the Program and Msg model that is recorded.</li>
+      <li><a href="sugar-vterm.html">sugar-vterm</a>: the terminal emulator behind <code>ScreenAssertion</code> and the frame renderer.</li>
+      <li><a href="sugar-testing.html">sugar-testing</a>: the golden-file helpers used by the snapshot tests.</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
     </div>
   </div>
 </section>

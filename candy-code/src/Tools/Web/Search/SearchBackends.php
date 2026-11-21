@@ -171,7 +171,7 @@ final class SearchBackends
 
     /**
      * The default transport: dial the vetted literal, never the hostname —
-     * the same resolve-once-then-dial shape as {@see WebFetch} (audit F-W3):
+     * the same resolve-once-then-dial shape as {@see WebFetch}:
      * handing the name to the stream layer resolved it a second time, so a
      * TTL≈0 record could answer public to the guard and private to the dial.
      * The name stays where the peer needs it, in `Host:` and in

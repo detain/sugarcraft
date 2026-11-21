@@ -114,8 +114,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * 5 tests, 13 assertions, rc 0. The identical spawn in a method with no
      * row reddened it. So the guard was live everywhere except behind its own
      * exemptions, which is where a new offender is most likely to be added:
-     * `Hooks/ScriptHook.php::executeStaged()` already holds two `proc_open()`
-     * sites in one function today.
+     * `Hooks/ScriptHook.php::executeStaged()` held two `proc_open()` sites in
+     * one function when this was written (a spawn and its env-fallback retry).
+     * It holds none now: the hook spawns through sugar-async's `ChildRun` in
+     * `runChild()`, which the retry calls again rather than spawning itself.
      *
      * WHY THIS STILL EARNS ITS PLACE: the reason text is unchanged and is
      * still the point of the row. The count is not a headcount of the tree -
@@ -152,11 +154,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
         ],
 
 
-        // E366 HIGH. Deliberately double-forks into a session daemon, and the
-        // only `proc_close()` is on the handshake-timeout branch - the happy
-        // path never reaps. The scanner reports `unclassified` for exactly
-        // that reason and is right to.
-        'Background/BackgroundSupervisor.php::spawnSession' => [
+        // E366 HIGH. Deliberately double-forks into a session daemon. The launch
+        // lives in spawnSessionAsync(); the only `proc_close()` is the
+        // handshake-timeout branch in failSpawn(), and the happy path reaps
+        // through reapIfExited() instead. The scanner reports `unclassified`
+        // for exactly that reason and is right to.
+        'Background/BackgroundSupervisor.php::spawnSessionAsync' => [
             'count' => 1,
             'reason' => 'double-forked session daemon whose happy path never reaps; E366 HIGH',
         ],
@@ -215,12 +218,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'the launch that created it',
         ],
 
-        // The handle is returned to a caller that drains it from a periodic
-        // timer on the event loop, so the child outlives `spawn()` by design.
-        'Backend/CommandBackend.php::spawn' => [
-            'count' => 1,
-            'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
-        ],
         // C-TUI-6.l: the take recorder. Handle stored in the class's live-take
         // registry (self::$live, keyed by WAV path) so stop() can SIGINT it;
         // the child carries its OWN cap (`-d`/`trim 0 <max>` from
@@ -230,10 +227,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
         'Media/Voice/AudioRecorder.php::spawn' => [
             'count' => 1,
             'reason' => 'take recorder handle stored for stop()/cancel(); self-capped child, bounded escalate ladder, shutdown-hook cancel',
-        ],
-        'Backend/StreamingCommandBackend.php::begin' => [
-            'count' => 1,
-            'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
         ],
 
         // Roadmap O-7. The workspace-host child of a multi-root `serve`, one
@@ -927,8 +920,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * A roster keyed `File.php::function` with boolean membership cannot
      * express "one of these is argued for and the next is not", and a function
      * is exactly the scope in which a second spawn quietly appears -
-     * `Hooks/ScriptHook.php::executeStaged()` has two today. This fixture is
-     * what proves the licence is spent rather than granted.
+     * `Hooks/ScriptHook.php::executeStaged()` had two (a spawn and its
+     * env-fallback retry) before the hook moved onto sugar-async's `ChildRun`,
+     * whose single spawn sits in `runChild()`. This fixture is what proves the
+     * licence is spent rather than granted.
      */
     private const KNOWN_POSITIVE_SECOND_SITE = <<<'PHP'
         <?php

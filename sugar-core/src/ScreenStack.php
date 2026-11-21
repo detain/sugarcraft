@@ -86,7 +86,7 @@ final class ScreenStack implements \Countable
 
     /**
      * Return a copy of the stack with the CURRENT (topmost) screen's model
-     * replaced — title and hooks preserved (audit lib-reviews-1102 C6).
+     * replaced — title and hooks preserved.
      *
      * This is how {@see Program} persists a pushed screen's next model:
      * without it, the update() result of every non-root screen was

@@ -46,8 +46,8 @@ use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
 use SugarCraft\Code\Protocol\Dispatcher;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 use function React\Promise\reject;
 use function React\Promise\resolve;

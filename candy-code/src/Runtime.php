@@ -3409,10 +3409,12 @@ final class Runtime
      * own (the frame channel, on a TUI turn) — and send each verdict back
      * down that member's relay exactly as it was settled (roadmap 1.C-5).
      *
-     * Blocks while a question is open, as a sequential turn's gate does: the
-     * parent pauses its idle ceiling for an open ask, the other members keep
-     * running, and their beats and questions wait on their own sockets until
-     * this one is answered — one modal at a time.
+     * Waits while a question is open, as a sequential turn's gate does: on a
+     * loop-driven turn the approver suspends this turn's fiber, so the loop
+     * keeps running, and a turn that is not loop-driven blocks on the socket.
+     * Either way the parent pauses its idle ceiling for an open ask, the other
+     * members keep running, and their beats and questions wait on their own
+     * sockets until this one is answered — one modal at a time.
      *
      * @param list<array<string, mixed>> $jobs
      */
@@ -5759,7 +5761,7 @@ final class Runtime
 
     /**
      * Which instruction documents one prompt build inlines and which it defers
-     * to a pointer line — audit 15d-09 / C3's budget, as one definition.
+     * to a pointer line — C3's budget, as one definition.
      *
      * The same budget-and-pointer design as the standing rules: one running
      * budget per build in loader order, the pointer fence's worst case reserved
@@ -5940,7 +5942,7 @@ final class Runtime
 
     /**
      * The enabled skills whose bodies the most recent prompt build deferred
-     * for budget, keyed by skill name, mapped to why (audit R1).
+     * for budget, keyed by skill name, mapped to why.
      *
      * Before this, a deferral existed only as the pointer line inside the
      * prompt it was missing from: nothing a caller, a doctor report or a test

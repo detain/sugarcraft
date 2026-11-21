@@ -6,7 +6,7 @@ namespace SugarCraft\Code\LSP;
 
 /**
  * What one {@see LspConnection} exchange leaves behind for the next one — in
- * whichever process that next one runs (audit B7).
+ * whichever process that next one runs.
  *
  * The two halves of a stdio connection fail differently when the process
  * driving an exchange dies, so they are tracked separately:

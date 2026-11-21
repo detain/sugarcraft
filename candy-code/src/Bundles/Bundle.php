@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * One installed Claude-format plugin bundle: a directory carrying a
@@ -146,15 +145,72 @@ final class Bundle
         return self::manifestPath($dir) !== null;
     }
 
+    /**
+     * The manifest $dir carries, or null. The first manifest shape that is a
+     * file decides: when its real path escapes the bundle directory, the whole
+     * bundle is refused (a real bare manifest beside a linked hidden one does not
+     * rescue it). A link that resolves inside the bundle loads like any file.
+     * discovery's guard() bounds the bundle DIRECTORY, and is_file() would
+     * otherwise follow a link planted at the manifest or at its `.claude-plugin`
+     * container out to a file nothing bounded.
+     */
     public static function manifestPath(string $dir): ?string
     {
-        foreach ([self::MANIFEST_RELATIVE_PATH, self::BARE_MANIFEST_RELATIVE_PATH] as $relative) {
-            if (is_file($dir . '/' . $relative)) {
-                return $dir . '/' . $relative;
+        foreach (self::manifestCandidates($dir) as $candidate) {
+            if (!is_file($candidate)) {
+                continue;
+            }
+
+            return self::escapesBundle($dir, $candidate) ? null : $candidate;
+        }
+
+        return null;
+    }
+
+    /**
+     * The bundle-relative path of the manifest $dir carries that
+     * {@see manifestPath()} refused for resolving outside the bundle, or null.
+     * Lets the installer and discovery name the link instead of reporting the
+     * manifest as absent.
+     */
+    public static function refusedManifest(string $dir): ?string
+    {
+        if (self::manifestPath($dir) !== null) {
+            return null;
+        }
+
+        foreach (self::manifestCandidates($dir) as $relative => $candidate) {
+            if (is_file($candidate) && self::escapesBundle($dir, $candidate)) {
+                return $relative;
             }
         }
 
         return null;
+    }
+
+    /** @return array<string, string> bundle-relative manifest path => absolute candidate, in precedence order */
+    private static function manifestCandidates(string $dir): array
+    {
+        $candidates = [];
+
+        foreach ([self::MANIFEST_RELATIVE_PATH, self::BARE_MANIFEST_RELATIVE_PATH] as $relative) {
+            $candidates[$relative] = $dir . '/' . $relative;
+        }
+
+        return $candidates;
+    }
+
+    /** True when the real path of $file is not strictly inside the real path of $dir, or either cannot be resolved. */
+    private static function escapesBundle(string $dir, string $file): bool
+    {
+        $realDir = realpath($dir);
+        $realFile = realpath($file);
+
+        if ($realDir === false || $realFile === false) {
+            return true;
+        }
+
+        return !\SugarCraft\Core\Util\PathJail::below($realFile, $realDir);
     }
 
     /** @return list<string> the `skills` directories this bundle contributes, existing only */
@@ -247,6 +303,31 @@ final class Bundle
         }
 
         return $paths;
+    }
+
+    /**
+     * Whether name trust gates anything this bundle carries: channel or
+     * subscriber entrypoints, or hook files. Commands, skills and agents load
+     * for every bundle, so a project-tier copy of a trusted name without this
+     * content withholds nothing, and no trust-refusal notice may name it.
+     */
+    public function hasTrustGatedContent(): bool
+    {
+        $entrypoints = $this->entrypoints();
+
+        if (($entrypoints['channel'] ?? []) !== [] || ($entrypoints['subscriber'] ?? []) !== []) {
+            return true;
+        }
+
+        // A bare hooks/ directory (say, holding only a README) registers nothing;
+        // only a file can be a hook, as TrustedBundleHooks already requires.
+        foreach ($this->hooksPaths() as $path) {
+            if (is_file($path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -351,7 +432,7 @@ final class Bundle
      * The existing, contained realpath of one entrypoint item's `file`, or
      * null when it names nothing loadable: an empty or non-string file, a
      * miss on disk, a directory, or a path escaping the bundle dir. The
-     * escape door is ContainedPath::below() comparing REALPATHS, so `..`
+     * escape door is \SugarCraft\Core\Util\PathJail::below() comparing REALPATHS, so `..`
      * hops, absolute paths outside the bundle, and a symlink planted inside
      * pointing out all answer null before any file is opened.
      *
@@ -372,7 +453,7 @@ final class Bundle
             return null;
         }
 
-        return ContainedPath::below($real, $this->dir) ? $real : null;
+        return \SugarCraft\Core\Util\PathJail::below($real, $this->dir) ? $real : null;
     }
 
     /**

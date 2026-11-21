@@ -27,6 +27,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Role;
+use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\App\TurnHooksResolvedMsg;
 
@@ -173,8 +174,12 @@ final class CustomCommandShellAsyncTest extends TestCase
         [$expanding, $cmd] = $this->type($chat, '/branch')->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame(0, $backend->calls);
 
+        // The expansion's shell (spawn, group-leader wait, run) is awaited BEFORE
+        // the clock starts: the bound measures update() alone, the step that must
+        // park the prompt behind the hook without running it.
+        $expanded = $this->await($this->promiseOf($cmd));
         $started = microtime(true);
-        [$judging, $hookCmd] = $expanding->update($this->await($this->promiseOf($cmd)));
+        [$judging, $hookCmd] = $expanding->update($expanded);
         $this->assertLessThan(0.1, microtime(true) - $started, 'the expanded prompt parks behind the hook, it does not run it');
         $this->assertTrue($judging->inFlight);
         $this->assertSame(0, $backend->calls, 'the hook has not judged the prompt yet');
@@ -300,6 +305,41 @@ final class CustomCommandShellAsyncTest extends TestCase
             'a grandchild of the shell' => ["bash -c 'exec -a %s sleep 38'; echo done"],
             'a background job holding stdout' => ['(exec -a %s sleep 37) & echo started'],
         ];
+    }
+
+    /**
+     * The spawn-time group read must outlast a wrapper that is slow to lead its
+     * group. A detached shell is only group-killable once setsid() has run, and
+     * under load the wrapper can spend well over the old 50 ms cap in exec
+     * before it gets there; a read that gave up first recorded no group, and a
+     * backgrounded job then survived the timeout kill. This child is a
+     * non-leader for 200 ms, then leads its own group.
+     */
+    public function testTheSpawnTimeGroupReadWaitsForAWrapperSlowToLeadItsGroup(): void
+    {
+        if (!\function_exists('posix_setsid') || !\function_exists('posix_getpgid')) {
+            self::markTestSkipped('needs ext-posix');
+        }
+
+        $pipes = [];
+        $proc = proc_open(
+            [\PHP_BINARY, '-r', 'usleep(200000); posix_setsid(); usleep(3000000);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        $pid = (int) proc_get_status($proc)['pid'];
+
+        try {
+            ProcessContainment::awaitGroupLeader($pid);
+            self::assertSame($pid, posix_getpgid($pid), 'the wait returned before the wrapper led its own group');
+        } finally {
+            foreach ($pipes as $pipe) {
+                fclose($pipe);
+            }
+            proc_terminate($proc, 9);
+            proc_close($proc);
+        }
     }
 
     // -------------------------------------------------------------------------

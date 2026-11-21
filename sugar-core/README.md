@@ -202,7 +202,7 @@ $opts = (new ProgramOptionsBuilder())
 
 ## Requirements
 
-- PHP 8.3+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
+- PHP 8.3+ (`ext-ffi` is required on Windows for raw console input)
 - `mbstring` — **required, and declared as `ext-mbstring` in `composer.json`.**
   Escape decoding and clipboard paths call `mb_*` functions on hot paths.
 - `intl` — **required, and declared as `ext-intl` in `composer.json`.** `Width`'s grapheme
@@ -465,7 +465,7 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Sanitize`, `Open` foundation utilities, shared with SugarStyle. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
 - **`KeyBindings`** (in `Keys/`) — immutable action→tokens key registry. Named actions each own a lowercase token set; `matches(KeyMsg, id)` answers "does this press actuate that action" (press-only, case-folded; both space wire shapes normalize to `space`), `withOverride(id, ...tokens)` returns a new registry, and `label(id)` renders the display column from the same map. The runtime does **not** consult it: `Program`/`Renderer` dispatch raw keys to the model, so the registry is consumer-side — an app that wants action indirection and remap-safe help builds its dispatch on it, and one map then serves both. (Wiring it into the runtime itself is an open design question, not a defect.) Modifier chords are a declared non-goal (bare letters match as they always did).
 - **`Writer`** — the ordered byte sink `Program`, its `Renderer` and each `WorkerPool` worker's stdin write through. Unattached it writes synchronously (bounded by a deadline). Attached to a loop (`Program` does this for the life of `run()`) it never blocks: bytes the stream refuses wait in one ordered backlog that drains on writability, and `isSaturated()` tells the producer to hold the next frame. A queued frame is never superseded. Non-frame output (`Cmd::raw()`, `Cmd::println()`) has no hold, so once the backlog reaches the 8 MiB threshold `Program` drops those bytes and surfaces one `ExceptionMsg`; the backlog therefore stays near the threshold instead of growing with output volume, and reporting re-arms once it drains. The backlog is discarded only on a dead stream, on `release()`, or when a `detach()`/`flush()` misses its deadline (teardown bytes can be lost then). The one blocking exception is `detach()`/`flush()` itself: they wait synchronously for up to 30 s when the reader has stalled, so `Program` runs them only on the exec, suspend and `releaseTerminal()` paths, where the terminal must change hands before the loop continues.
-- **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
+- **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. `map($items, $fn, $loop)` is the ordered, cancellable batch form on the same permits: results keep input order, and cancelling the batch stops further items. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
 - **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. `withTtl($seconds)` returns a snapshot whose entries expire that long after their last `put()`, except that entries already held when `withTtl()` is called are stamped as freshly written at that moment, so their lifetime restarts there; later `put()` calls restart it again. Expiry is not counted in `evictions()`.
 - **`Util\Proc\BoundedShutdown`** — the child teardown ladder (SIGTERM, bounded wait, literal signal 9, bounded wait, then the reap). `terminateBounded()` and `escalate()` run it on a blocking poll; `terminateBoundedAsync($loop, ...)` and `escalateAsync($loop, ...)` run the same rungs on loop timers, so a wedged child costs the loop nothing while it waits. The async reap reports the exit status captured from the poll that saw the exit. A child that survives signal 9 within its budget is never reaped with a blocking `proc_close()`: `reapWhenExited($loop, ...)` polls it on a loop timer and reaps it the tick it is gone, so the loop stays live for the whole wait.
 - **`LockFile`** (in `Util/`) — cross-process advisory lock with a bounded wait and a stale-holder sweep. `tryAcquire($s)` blocks, `tryAcquireAsync($loop, $s)` returns a promise for the same attempt on a ReactPHP loop timer, and `acquire($s)` throws on timeout.
@@ -474,6 +474,7 @@ line-end normalisation and renders bidi/zero-width characters as visible
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — pure enum: Tick (periodic timer, `seconds` required) / Key (polling timer, `interval` defaulting to 0.1 s — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
+- **`RevisionCapable`** — optional interface for view memoization (P1-16): `revision(): int|string|null`. It is a companion to `Model`, not a method on it, because PHP interfaces cannot carry a default and existing models must stay unchanged; a model that does not implement it behaves exactly as before. `Program` reads the revision on every frame. When it equals the revision the previous frame was rendered under, and the active model is the same class, `view()` is not called and the previous rendered value is painted again, so the bytes match a fresh `view()` with unchanged output. A `null` revision (or a model without the interface) calls `view()` every frame, and a throw from `view()` leaves no memo behind. Headless mode (`withoutRenderer`) honors the same memo, since no paint is needed to skip `view()`. A push or pop delivered as `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` clears the memo, so the newly active screen gets a fresh `view()`; a root that changes its stack through any other path (a `SuspendMsg` stash, a direct `withScreens()` route) gets no such clear, so it must bump its revision for the change to show. The model owns the invalidation: bump the revision whenever `view()` would produce different output, including when the view depends on terminal size. Distinct instances of one class in the same program must not report the same revision for different output.
 
 **Timing notes.** On a libuv-backed loop (`ExtUvLoop`, picked automatically when
 `ext-uv` is installed) a timer's deadline is computed against a clock refreshed
@@ -1069,6 +1070,21 @@ use SugarCraft\Core\Program;
 
 $program = (new Program(new Counter()))
     ->withExceptionHandler(fn (\Throwable $t) => error_log($t->getMessage()));
+```
+
+### withFrameDiffHook
+
+Register a per-frame diff hook: a read-only observer that runs after every frame the renderer paints. It receives the body the previous frame painted and the body this frame painted. The previous body is `null` before the first paint and after a reset such as `forceRepaint()`. Both bodies are the ones after image markers are resolved, which is what the text renderer diffed. Equal bodies mean the text grid did not change. The body does not include the cursor or the image layer, so a cursor move, or an image whose pixels change behind an unchanged marker, can alter the screen while the bodies stay equal. The hook is not called in headless mode (`withoutRenderer`). A throw goes to the exception handler. Do not write to the terminal from the hook.
+
+```php
+use SugarCraft\Core\Program;
+
+$program = (new Program(new Counter()))
+    ->withFrameDiffHook(function (?string $previous, string $current): void {
+        if ($previous !== $current) {
+            // the screen changed this frame
+        }
+    });
 ```
 
 ### lastFrameDuration

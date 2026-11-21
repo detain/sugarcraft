@@ -22,12 +22,30 @@ use SugarCraft\Plugins\Trust\TrustList;
  * 2. NOTHING LOADS THAT THE USER HAS NOT TRUSTED. A plugin's entrypoints load
  *    only when its name is on the trust list, matched exactly. An untrusted
  *    name never has its manifest read.
- * 3. FIRST SIGHT IS QUARANTINE. A trusted entrypoint is only LISTED on the
- *    launch that first reveals it. The file loads at the NEXT launch, so a
- *    manifest swap under a trusted name cannot smuggle code in silently.
+ * 3. FIRST SIGHT IS QUARANTINE, KEYED BY PATH. A trusted entrypoint PATH is
+ *    only LISTED on the launch that first reveals it, and the file loads at the
+ *    NEXT launch. So a manifest swap that introduces a new entrypoint under a
+ *    trusted name cannot run that file silently. The ledger records the path
+ *    alone, never the content: a path already on the ledger is not quarantined
+ *    again when its bytes change. So a rewrite of such a path loads between
+ *    launches without a quarantine stop, and who can make one depends on how it
+ *    is written. The private-bytes gate refuses world write and, whenever a uid
+ *    is known (an explicit processUid, or ext-posix), a foreign owner. An
+ *    in-place write by another account needs group write on the file itself,
+ *    since the owner stays the same. A replace-by-rename by another account
+ *    creates a file that account owns, which the owner check refuses when a uid
+ *    is known; it loads only when none is, and only from a directory another
+ *    account can write (group-writable, or owned by that account).
+ *    A rewrite by the file's own uid loads everywhere. This is an open gap,
+ *    carried over from the original loader and not closed here.
  * 4. THE BYTES THEMSELVES MUST BE PRIVATE. Before `require_once`, the file and
- *    its parent directory must be owned by this process and not writable by the
- *    world (the same gate candy-code applies; group write is accepted).
+ *    its parent directory must not be writable by the world (the same gate
+ *    candy-code applies; group write is accepted), and must be owned by the uid
+ *    the loader is given: its processUid, else this process's effective uid when
+ *    the posix extension is available. With neither there is no uid to compare
+ *    against, so the owner check is skipped and only the world-write check runs,
+ *    and a file owned by another account loads as long as it is not
+ *    world-writable. That policy gap is open.
  *
  * The loader ANSWERS; it never announces. Every entry lands in exactly one
  * bucket (see {@see LoadResult}). A file that throws at require time is refused
@@ -39,9 +57,9 @@ use SugarCraft\Plugins\Trust\TrustList;
  * for the file and the class, and the caller that owns the channel contract
  * (candy-code's ChannelRegistry) judges the type it is handed.
  *
- * Refusal reason words: manifest-refused, uncontained, contract-unsupported,
- * world-writable, foreign-owner, require-failed, class-collision, class-missing,
- * class-not-declared.
+ * Refusal reason words: manifest-refused, tier-refused, uncontained,
+ * contract-unsupported, world-writable, foreign-owner, require-failed,
+ * class-collision, class-missing, class-not-declared.
  */
 final class PluginLoader
 {
@@ -81,7 +99,7 @@ final class PluginLoader
      * @param array<string, class-string>      $kindInterfaces the interface each requested kind is mapped to; the
      *                                                         loader only requires that a mapping exists, and the
      *                                                         caller checks the type of what it is handed
-     * @param int                              $hostContract  the host's contract integer; a plugin declaring a higher one is refused
+     * @param int                              $hostContract  the host's contract integer; a declared contract must equal this integer exactly, so an unknown value is refused
      * @param ?int                             $processUid    the uid the bytes must belong to; null reads the process's own
      *
      * @throws \InvalidArgumentException when a requested kind has no interface mapped
@@ -130,6 +148,18 @@ final class PluginLoader
                 continue; // trust is by exact name, never case-folded
             }
 
+            // Refused before the manifest is read, as an untrusted name is. A
+            // trusted name inherits nothing from a tier the host marked
+            // non-trustable; the rows are owed only where a manifest exists.
+            if (!$candidate->trustable) {
+                if (PluginManifest::hasManifest($candidate->dir)) {
+                    foreach ($kinds as $kind) {
+                        $refusals[] = ['bundle' => $candidate->name, 'path' => $candidate->dir, 'class' => '', 'kind' => $kind, 'reason' => 'tier-refused'];
+                    }
+                }
+                continue;
+            }
+
             $manifest = $candidate->manifest();
             if ($manifest === null) {
                 // No manifest file at all is not a refusal: discovery never listed
@@ -147,7 +177,7 @@ final class PluginLoader
             }
 
             $contract = $manifest->contract();
-            $unsupported = $contract !== null && $contract > $hostContract;
+            $unsupported = $contract !== null && $contract !== $hostContract;
             $declared = $manifest->entrypoints();
 
             // Per candidate: one path, one row for this bundle, however many kinds

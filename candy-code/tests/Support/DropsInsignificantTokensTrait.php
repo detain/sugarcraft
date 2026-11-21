@@ -49,7 +49,7 @@ namespace SugarCraft\Code\Tests\Support;
  *
  * WHY COMMENTS AND DOC-BLOCKS GO WITH THE WHITESPACE, carried across from the
  * two inventories that each learned it the same way: a doc-comment
- * `{@see HomeDirectory::path()}` or `{@see ContainedPath::within()}` is a
+ * `{@see HomeDirectory::path()}` or `{@see \SugarCraft\Core\Util\PathJail::within()}` is a
  * CROSS-REFERENCE, not a call site. Counting those is precisely how
  * `WorkflowEngine` came to be listed as a caller of the home-directory
  * resolution, and it is what inflated an earlier hand count of the containment

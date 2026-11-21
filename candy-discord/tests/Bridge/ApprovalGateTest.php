@@ -20,7 +20,6 @@ namespace CandyCode\Bundles\Discord\Tests\Bridge;
 
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Discord\Buttons;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Support\OutboundChunker;
@@ -96,7 +95,7 @@ final class ApprovalGateTest extends TestCase
 
     private FakeServe $serve;
 
-    private ServeBridge $bridge;
+    private \SugarCraft\Plugins\Bridge\ServeClient $bridge;
 
     private SessionMap $map;
 
@@ -113,9 +112,8 @@ final class ApprovalGateTest extends TestCase
     protected function setUp(): void
     {
         $this->loop = new StreamSelectLoop();
-        $this->serve = new FakeServe($this->loop, 'tok-123456');
-        $port = $this->serve->listen();
-        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-123456', 'subprotocol', Log::silent(), $this->loop);
+        $this->serve = new FakeServe($this->loop);
+        $this->bridge = $this->serve->client();
 
         $this->tempDir = \sys_get_temp_dir() . '/f-c1-gate-' . \getmypid() . '-' . \uniqid('', true);
         $this->map = new SessionMap($this->tempDir . '/map/map.sqlite');
@@ -124,8 +122,7 @@ final class ApprovalGateTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->bridge->stop();
-        $this->serve->stop();
+        $this->serve->disconnect();
         if ($this->tempDir !== '') {
             $this->removeTree($this->tempDir);
         }
@@ -200,7 +197,7 @@ final class ApprovalGateTest extends TestCase
 
         self::assertSame(0, $this->serve->respondSeen, 'a persistent grant with no named approver must not reach the wire');
         $said = \implode("\n", $this->face->delivered);
-        self::assertStringContainsString(\SugarCraft\Code\Lang::t('channels.discord.approval.always_needs_approver'), $said);
+        self::assertStringContainsString(\CandyCode\Bundles\Discord\Lang::t('channels.discord.approval.always_needs_approver'), $said);
     }
 
     public function testAButtonAnswerWithoutANonceIsRefused(): void
@@ -333,7 +330,7 @@ final class ApprovalGateTest extends TestCase
         $this->router->addChannel($this->face, 'default');
 
         $started = false;
-        $this->bridge->start()->then(static function () use (&$started): void {
+        $this->serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {
@@ -376,7 +373,7 @@ final class ApprovalGateTest extends TestCase
     private function assertContainsRefusal(): void
     {
         foreach ($this->face->delivered as $chunk) {
-            if (\str_contains($chunk, \SugarCraft\Code\Lang::t('channels.discord.approval.refused'))) {
+            if (\str_contains($chunk, \CandyCode\Bundles\Discord\Lang::t('channels.discord.approval.refused'))) {
                 return;
             }
         }

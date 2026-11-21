@@ -94,8 +94,8 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
     {
         self::assertSame(
             1,
-            preg_match('#<table class="api-table">(.*?)</table>#s', self::body(), $table),
-            'the candy-code body no longer carries the Key Classes table'
+            preg_match('#<h3 id="key-classes"[^>]*>.*?<table class="api-table">(.*?)</table>#s', self::body(), $table),
+            'the candy-code body no longer carries the Key Classes table under its key-classes heading'
         );
 
         $rows = self::keyClassRows($table[1]);
@@ -163,7 +163,7 @@ final class CandyCodeBodyClaimDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('#<tr><td>PermissionGate</td><td>mode\(\)[^<]*</td><td>(.*?)</td></tr>#s', self::body(), $row),
+            preg_match('#<tr><td>(?:<code>)?[\w\\\\]*PermissionGate(?:</code>)?</td><td>(?:<code>)?mode\(\)[^<]*(?:</code>)?</td><td>(.*?)</td></tr>#s', self::body(), $row),
             'the Key Classes table no longer lists PermissionGate::mode() — re-pin the mode list leg'
         );
         preg_match_all('#<code>([^<]+)</code>#', $row[1], $listed);

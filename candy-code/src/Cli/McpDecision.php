@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpTrustPins;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
@@ -144,7 +143,7 @@ final class McpDecision
             return $decision + $tiers + ['status' => Bootstrap::MCP_ABSENT];
         }
 
-        if (!ContainedPath::within($path, $root)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($path, $root)) {
             // A REASON, NOT A SENTENCE, and it does not name the configured path:
             // the one notice that prints this composes `ignoring <path> — <reason>`
             // and already holds it, so naming it here put it in that line TWICE.
@@ -341,7 +340,7 @@ final class McpDecision
 
     /**
      * `candy-code mcp trust` — the user's explicit approval of a project's
-     * `.mcp.json` AS IT IS NOW (audit MCP-5): lists `trustedProjectMcp` for the
+     * `.mcp.json` AS IT IS NOW: lists `trustedProjectMcp` for the
      * canonical project root when it is not already there, and records every
      * enabled server's fingerprint ({@see McpTrustPins}), replacing the root's
      * previous record. Starts nothing.
@@ -472,8 +471,7 @@ final class McpDecision
 
     /**
      * C-SEC-5.a: the servers the memo client's admission check refused —
-     * command, args or env drifted from what `mcp trust` fingerprinted
-     * (audit MCP-5).
+     * command, args or env drifted from what `mcp trust` fingerprinted.
      *
      * MEMO ONLY, for exactly the reason {@see mcpLivenessSnapshot()} gives:
      * the only way to ask a client that is not in the memo is to BUILD one,

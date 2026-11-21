@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Providers;
 /**
  * A provider call that ended in an `isError` {@see CompleteResponse} which the
  * retry seam in {@see \SugarCraft\Code\Runtime} could not (or was not allowed
- * to) recover from (audit 15a A1).
+ * to) recover from.
  *
  * WHY THIS EXISTS
  * ---------------

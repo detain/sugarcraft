@@ -403,7 +403,7 @@ final readonly class ProtectFilesHook implements HookInterface
 
     /**
      * EVERY TOOL THAT CAN PUT A FILE'S BYTES INTO THE TRANSCRIPT, not just the
-     * four that used to be listed (audit F-J2). The matcher was
+     * four that used to be listed. The matcher was
      * `^(Bash|Edit|Write|Read)$`, so `Grep pattern="=" path="."
      * include_ignored=true` — classed read-only and allowed in every mode —
      * printed `.env:1:DB_PASSWORD=…` without this hook ever being asked.

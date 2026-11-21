@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Render;
 
+use SugarCraft\Image\Detect;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Video\Lang;
 use SugarCraft\Video\Player;
@@ -36,17 +37,23 @@ final class RendererFactory
      * WHY a memo: Mosaic::diagnose() does NOT negotiate with the terminal —
      * it delegates to sugar-colorprofile's TerminalProbe, a TERM_PROGRAM
      * lookup table over the environment and terminfo that (despite the
-     * historical name) issues no raw OSC query round-trips. A terminal's
+     * historical name) issues no raw OSC query round-trips. The one exception
+     * is a Kitty claim: kittyConfirmed() then runs sugar-image's Detect::probe(),
+     * which does tty I/O (see the P1-13b note on diagnose()). A terminal's
      * capabilities are fixed for the session, and the capability door below
      * runs on every renderer acquisition — which includes every `m`
      * keypress — so probing once per process keeps the auto() ladder, the
      * mode cycle list and the door permanently agreeing on what the seat
-     * can receive.
+     * can receive, and the Kitty probe runs once rather than on every
+     * acquisition.
      */
     private static ?ProbeReport $reportMemo = null;
 
     /** SV-L66/066: scripted ext-gd presence (null = live check). */
     private static ?\Closure $graphicsGate = null;
+
+    /** P1-13b: scripted Kitty APC confirmation (null = live sugar-image probe). */
+    private static ?\Closure $kittyGate = null;
 
     /**
      * The terminal's capability report — probed once, memoized thereafter.
@@ -56,10 +63,67 @@ final class RendererFactory
      * safety), never what the video file contains; source questions belong
      * over there. {@see supportedModes()} below filters only this transport
      * truth; the full build+seat+size verdict is {@see support()}.
+     *
+     * P1-13b: a Kitty claim from TERM alone is only a hypothesis. sugar-image
+     * keeps the same contract in Mosaic::auto() (the APC `a=q` reply confirms
+     * it, no reply drops it), so the report drops the claim here too. Without
+     * that, TERM=xterm-kitty on a terminal that never answers would still
+     * select Mode::Kitty and paint APC frames into it. Only a Kitty claim
+     * costs the confirming probe; every other seat keeps the report as-is.
+     * That probe runs on the first call, which can be mid-session inside a
+     * player's update loop, and keys typed in its window are not replayed; the
+     * README's Auto mode note records the accepted cost.
      */
     public static function diagnose(): ProbeReport
     {
-        return self::$reportMemo ??= Mosaic::diagnose();
+        if (self::$reportMemo === null) {
+            $report = Mosaic::diagnose();
+            self::$reportMemo = $report->has(Capability::KittyKeyboard)
+                ? self::withKittyConfirmation($report, self::kittyConfirmed())
+                : $report;
+        }
+
+        return self::$reportMemo;
+    }
+
+    /**
+     * The pure half of {@see diagnose()}: an unconfirmed Kitty claim is
+     * removed from the report; every other capability and the detection time
+     * are carried over unchanged (resolved facts in, report out, no probing).
+     */
+    public static function withKittyConfirmation(ProbeReport $report, bool $confirmed): ProbeReport
+    {
+        if ($confirmed || !$report->has(Capability::KittyKeyboard)) {
+            return $report;
+        }
+
+        $capabilities = $report->allWithSource();
+        unset($capabilities[Capability::KittyKeyboard->value]);
+
+        return new ProbeReport($capabilities, $report->detectedAt);
+    }
+
+    /**
+     * Whether the terminal answered the Kitty APC `a=q` query. The live answer
+     * is sugar-image's {@see Detect::probe()}, which needs a tty and is never
+     * asked for a seat without a Kitty claim.
+     */
+    private static function kittyConfirmed(): bool
+    {
+        if (self::$kittyGate !== null) {
+            return (bool) (self::$kittyGate)();
+        }
+
+        return Detect::probe()->kitty;
+    }
+
+    /**
+     * P1-13b test seam: script the Kitty APC confirmation (null = the live
+     * probe). Lets pins drive the TERM-only claim without a tty.
+     */
+    public static function setKittyGateForTesting(?\Closure $gate): void
+    {
+        self::$kittyGate = $gate;
     }
 
     /**

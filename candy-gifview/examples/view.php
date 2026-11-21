@@ -8,7 +8,13 @@ declare(strict_types=1);
  * uses). Keeps the demo self-contained — no binary GIFs in-repo. The
  * temporary file is removed again on shutdown.
  *
+ * Any extra arguments are passed to the CLI. The synthetic GIF has no loop
+ * count, so it repeats until something stops it. Stdin at end of file ends
+ * playback at once, and --duration times the run only when stdin is a
+ * terminal, so a timed run goes under a pseudo-terminal:
+ *
  *   php examples/view.php
+ *   COLUMNS=80 LINES=24 script -qfec 'php examples/view.php --duration=1' /dev/null
  */
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -24,8 +30,8 @@ register_shutdown_function(static function () use ($path): void {
     @unlink($path);
 });
 
-// A palette-stable 8×8 colour grid: every frame allocates the SAME 64
-// colours in the SAME order, so GD writes an identical global colour table
+// A palette-stable 8×8 color grid: every frame allocates the SAME 64
+// colors in the SAME order, so GD writes an identical global color table
 // per frame and the per-frame data blocks are interchangeable when spliced.
 $palette = static function (): array {
     $cols = [];
@@ -43,11 +49,11 @@ $palette = static function (): array {
 /**
  * Render one frame phase and return its bytes AFTER the GIF header
  * (descriptor + LZW data + block terminator), so the frames can be spliced
- * behind a single shared global colour table.
+ * behind a single shared global color table.
  */
 $frameBlock = static function (int $phase) use ($palette): string {
     $scratch = (string) tempnam(sys_get_temp_dir(), 'sc_gifview_frame_');
-    // Palette-native image: imagegif() writes the colour table in allocation
+    // Palette-native image: imagegif() writes the color table in allocation
     // order verbatim, so every frame shares one identical global table.
     $im = imagecreate(64, 64);
     $indices = [];
@@ -68,7 +74,7 @@ $frameBlock = static function (int $phase) use ($palette): string {
     $bytes = (string) file_get_contents($scratch);
     unlink($scratch);
 
-    // Header = signature + LSD (+ global colour table when present); the
+    // Header = signature + LSD (+ global color table when present); the
     // LSD flags byte lives at offset 10.
     $flags = ord($bytes[10]);
     $headerEnd = 13 + (($flags & 0x80) !== 0 ? 3 * (2 << ($flags & 7)) : 0);
@@ -108,4 +114,4 @@ foreach ($blocks as $block) {
 $gif .= "\x3B";
 file_put_contents($path, $gif);
 
-exit(Cli::main(['candy-gifview', $path], STDOUT, STDERR));
+exit(Cli::main(array_merge(['candy-gifview', $path], array_slice($argv, 1)), STDOUT, STDERR));

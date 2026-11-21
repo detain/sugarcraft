@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Media\Sd;
 
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Poll;
+use SugarCraft\Async\Retry;
+use SugarCraft\Async\SynchronousLoop;
+
 /**
  * Heartbeat progress loop (plan W1.5) — mystage fact (a) made executable.
  *
@@ -46,6 +51,8 @@ final class ProgressLoop
      * @param (callable(float):void)|null $sleeper pacing seam (sugar-readline E713 pattern): tests
      *        inject a zero-real-time fake; production defaults to usleep of the interval. This paces
      *        POLL CADENCE — it is not, and may never become, a request deadline (E646).
+     *
+     * @throws SdException when the interval is non-positive or above Retry::MAX_BACKOFF_SECONDS
      */
     public static function run(
         Client $c,
@@ -59,6 +66,14 @@ final class ProgressLoop
         if ($intervalSeconds <= 0.0) {
             throw SdException::protocol('progress-loop', 'poll interval must be positive');
         }
+        // Poll::until clamps every pause at Retry::MAX_BACKOFF_SECONDS, so a
+        // longer interval would silently sleep the ceiling instead; refuse it.
+        if ($intervalSeconds > Retry::MAX_BACKOFF_SECONDS) {
+            throw SdException::protocol(
+                'progress-loop',
+                'poll interval must not exceed ' . Retry::MAX_BACKOFF_SECONDS . ' seconds',
+            );
+        }
         $sleep = $sleeper ?? static function (float $seconds): void {
             usleep(max(1, (int) round($seconds * 1_000_000)));
         };
@@ -70,7 +85,23 @@ final class ProgressLoop
         $last = null;
         $wantsPreview = $onPreviewFrame !== null;
 
-        while (true) {
+        // One poll per attempt; Poll::until paces the attempts on the
+        // synchronous loop. Backoff holds whole milliseconds, so each pause is
+        // the interval rounded to the nearest ms (floored at 1 ms): a 0.2505 s
+        // interval reaches the sleeper as 0.251 s, not the exact float.
+        $attempt = static function () use (
+            $c,
+            $heartbeat,
+            $isCancelled,
+            $onPreviewFrame,
+            $onFrame,
+            $wantsPreview,
+            &$polls,
+            &$beats,
+            &$previews,
+            &$failures,
+            &$last,
+        ): ?ProgressSummary {
             try {
                 $payload = $c->progress($wantsPreview);
                 $failures = 0;
@@ -90,9 +121,8 @@ final class ProgressLoop
                 if ($isCancelled()) {
                     return ProgressSummary::new($polls, $beats, $previews, $last, ProgressSummary::TERMINATION_DONE);
                 }
-                $sleep($intervalSeconds);
 
-                continue;
+                return null;
             }
 
             $polls++;
@@ -116,8 +146,34 @@ final class ProgressLoop
                 return ProgressSummary::new($polls, $beats, $previews, $last, ProgressSummary::TERMINATION_SERVER_FINISHED);
             }
 
-            $sleep($intervalSeconds);
+            return null;
+        };
+
+        $loop = SynchronousLoop::new($sleep);
+        $summary = null;
+        $error = null;
+        Poll::until(
+            $attempt,
+            Backoff::new((float) max(1, (int) round($intervalSeconds * 1000)), 1.0),
+            null,
+            $loop,
+        )->then(
+            static function (ProgressSummary $settled) use (&$summary): void {
+                $summary = $settled;
+            },
+            static function (\Throwable $failure) use (&$error): void {
+                $error = $failure;
+            },
+        );
+
+        // Pauses run here, on the calling thread, one interval at a time.
+        $loop->run();
+
+        if ($error !== null) {
+            throw $error;
         }
+
+        return $summary ?? throw SdException::protocol('progress-loop', 'poll ended without a terminal summary');
     }
 
     /**

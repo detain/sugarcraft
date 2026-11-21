@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord;
 
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
+use CandyCode\Bundles\Discord\Candy\ServeError;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
 use CandyCode\Bundles\Discord\Discord\Gateway;
 use CandyCode\Bundles\Discord\Discord\Rest;
@@ -19,12 +19,12 @@ use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Channels\ChannelInterface;
-use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Server\Auth\TokenStore;
-use SugarCraft\Code\Server\DiscoveryFile;
-use SugarCraft\Code\Server\StateDir;
+use SugarCraft\Plugins\Bridge\HostServicesServeClient;
+use SugarCraft\Plugins\Host\HostServices;
+use SugarCraft\Plugins\PluginContext;
+use SugarCraft\Plugins\Channel\ChannelInterface;
+use SugarCraft\Plugins\Channel\CredentialWriter;
+use SugarCraft\Plugins\Channel\WritesCredentials;
 
 // Entrypoint self-bootstrap: the P1 loader require_once's THIS file and
 // nothing else, so the bundle's sibling classes need their autoloader
@@ -38,32 +38,31 @@ require_once __DIR__ . '/autoload.php';
  * The sugarcraft/candy-discord bundle's channel (docs/SPEC.md §11 P2 + docs/SPEC.md §7): Discord accounts
  * in, served candy-code sessions out, all inside the candy-code process.
  *
- * Shape law: the bundle dials the LOCAL serve over the same WebSocket the
- * CLI attach uses (ServeBridge, with its follow-cursor and re-hello
- * ladder) rather than subscribing to the in-process event feed — a channel
- * that shares the process still speaks the PUBLIC protocol, which keeps
- * the bundle portable, testable against the fixture serve, and honest
- * about what any external bridge would see. Zero protocol methods added.
+ * Shape law: the bundle calls the serve it runs inside through the
+ * HostServices the host injects (PL-5d). No socket is dialled and no
+ * discovery record is read: the host answers each call in process, and
+ * events arrive by subscription. The wire protocol stays for external
+ * clients, which are not bundles.
  *
  * Lifecycle per P1 (ChannelInterface): `start()` reads the settings tree
  * (never tokens — those live in the 0600 channels store per ruling D4=4b),
- * builds one DiscordAccount face per configured account, and arms two
- * loop timers: the serve-discovery poll (a serve that starts LATER is a
- * normal case, not an error — the reconnect ladder inside ServeBridge
- * covers the connection itself) and the optional thread idle sweep.
+ * builds one DiscordAccount face per configured account, connects the
+ * injected host, and arms the thread idle sweep and the dedupe prune.
  * `dispose()` cancels every timer and closes every socket — the
  * SharedLoopResidue law, pinned by tests.
  *
  * The disabled posture is absolute: `enabled:false` (the default) starts
  * ZERO timers, opens ZERO sockets, writes ZERO files.
  */
-final class DiscordChannel implements ChannelInterface
+final class DiscordChannel implements ChannelInterface, WritesCredentials
 {
     private ?LoopInterface $loop = null;
 
     private ?Log $log = null;
 
-    private ?ServeBridge $serve = null;
+    private ?HostServices $host = null;
+
+    private ?HostServicesServeClient $serve = null;
 
     private ?ConversationRouter $router = null;
 
@@ -72,37 +71,40 @@ final class DiscordChannel implements ChannelInterface
     /** @var list<DiscordAccount> */
     private array $faces = [];
 
-    private ?TimerInterface $pollTimer = null;
-
     private ?TimerInterface $sweepTimer = null;
 
     private ?TimerInterface $pruneTimer = null;
+
+    /**
+     * The boot hello's retry ladder. The pre-5d ServeBridge kept it (0.25 s doubling, 30 s cap,
+     * 60 attempts); a hello refused at boot must not leave the channel dead until a serve restart.
+     */
+    private const DIAL_BACKOFF_BASE_SECONDS = 0.25;
+    private const DIAL_BACKOFF_MAX_SECONDS = 30.0;
+    private const DIAL_MAX_ATTEMPTS = 60;
+
+    private int $dialAttempts = 0;
+
+    private ?TimerInterface $dialTimer = null;
 
     private ?SessionMap $map = null;
 
     private ?TextSafety $safety = null;
 
-    private string $dialIdentity = '';
-
-    private int $nextDialAt = 0;
-
     private bool $disposed = false;
+
+    /** The settings section the host froze at launch (plan 4.14). */
+    private array $cfg = [];
 
     public function name(): string
     {
         return 'discord';
     }
 
-    public function start(ChannelContext $context): void
+    public function start(PluginContext $context, ?CredentialWriter $writer = null): void
     {
-        // Version-skew guard: a bundle newer than its host candy-code must
-        // no-op loudly, not fatal the launch.
-        if (!method_exists(Bootstrap::class, 'channelsDiscordSettings')) {
-            ($context->log)('channels.discord: candy-code too old for this bundle — refusing to start');
-
-            return;
-        }
-        $cfg = Bootstrap::channelsDiscordSettings();
+        $cfg = $context->config;
+        $this->cfg = $cfg;
         if (($cfg['enabled'] ?? false) !== true) {
             ($context->log)('channels.discord: disabled posture, nothing started');
 
@@ -123,7 +125,18 @@ final class DiscordChannel implements ChannelInterface
             return;
         }
 
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        if ($context->stateDir === null || $context->stateDir === '') {
+            ($context->log)('channels.discord: no state directory, nothing started');
+
+            return;
+        }
+        if ($context->host === null) {
+            ($context->log)('channels.discord: no serve host wired in, nothing started');
+
+            return;
+        }
+        $this->host = $context->host;
+        $store = new CredentialStore(CredentialStore::pathIn($context->stateDir), $writer);
         $accounts = $this->accountNames($cfg, $store);
         if ($accounts === []) {
             $this->log->warn('channels.discord.no_accounts', ['why' => 'no token in the channels store and no DISCORD_BOT_TOKEN']);
@@ -173,162 +186,24 @@ final class DiscordChannel implements ChannelInterface
         // the router redact the same live roster. withSecrets() replaces —
         // build once with the tokens, then only add.
         $this->safety = (new TextSafety())->withSecrets($secrets);
-        // The serve token joins the roster on every dial (below).
+        // Every bot token is in the roster before the first Gateway dial below.
         $pairing = new PairingCodes($store, $this->safety);
         // (040) codes minted before this restart must rejoin the fresh
         // redactor the moment pairing exists, or the restart window leaks them.
         $pairing->registerLiveSecrets(array_keys($tokens));
 
-        $dir = Bootstrap::trustedConfigDirPath() . '/discord';
+        $dir = $context->stateDir . '/discord';
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
         $this->map = new SessionMap($dir . '/sessions.db');
 
-        $intents = (array) ($cfg['intents'] ?? []);
-        foreach ($tokens as $account => $token) {
-            $rest = new Rest($token, $this->log, $apiBase);
-            $gateway = new Gateway(
-                $token,
-                $this->log,
-                $this->loop,
-                $gatewayUrl === Endpoint::DEFAULT_GATEWAY ? null : $gatewayUrl,
-                (bool) ($intents['messageContent'] ?? true),
-            );
-            $faceCfg = $this->faceConfig($cfg, $account);
-            $this->faces[] = new DiscordAccount(
-                $account,
-                $rest,
-                $gateway,
-                // The router arrives with the serve; faces read it lazily.
-                $this->pendingRouter(),
-                $faceCfg,
-                $this->log,
-                $pairing,
-                $this->safety,
-                $this->loop,
-            );
-            $gateway->start();
-        }
-
-        $this->pollTimer = $this->loop->addPeriodicTimer(5.0, function (): void {
-            $this->pollServe();
-        });
-        $this->pollServe();
-
-        $threads = (array) ($cfg['threads'] ?? []);
-        if (($threads['enabled'] ?? false) === true) {
-            $idleHours = (int) ($threads['idleHours'] ?? 24);
-            $this->sweepTimer = $this->loop->addPeriodicTimer(600.0, function () use ($idleHours): void {
-                $this->sweepIdleThreads($idleHours);
-            });
-        }
-
-        // The dedupe ledger stays bounded without a platform-side sweep — the
-        // same contract the Teams face meets (docs/SPEC.md §9.5). claimInbound()
-        // wrote a seen_inbound row per delivery while pruneSeen() had no
-        // caller here, so the ledger grew forever; 6 h is amply frequent for
-        // the 7-day keep. (m09)
-        $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
-            $this->map?->pruneSeen(7);
-            // (042) the bindings/reply-refs sweep rides the same cadence.
-            $this->map?->sweepStaleBindings();
-        });
-    }
-
-    public function dispose(): void
-    {
-        if ($this->disposed) {
-            return;
-        }
-        $this->disposed = true;
-
-        foreach ([$this->pollTimer, $this->sweepTimer, $this->pruneTimer] as $timer) {
-            if ($timer !== null && $this->loop !== null) {
-                $this->loop->cancelTimer($timer);
-            }
-        }
-        $this->pollTimer = null;
-        $this->sweepTimer = null;
-        $this->pruneTimer = null;
-
-        $this->queueGate?->cancelAll();
-        foreach ($this->faces as $face) {
-            $face->cancelAllTimers();
-            $face->stop();
-        }
-        $this->serve?->stop();
-        $this->serve = null;
-        $this->router = null;
-        // Faces hold a reference to the (possibly placeholder) router; the
-        // placeholder refuses everything once disposed.
-        $this->faces = [];
-    }
-
-    // ── serve discovery (boot-before-serve is the NORMAL case) ──────────
-
-    /**
-     * Read the same discovery record `candy-code serve` writes, validated
-     * the product's own way (pid + process start time — a stale file is a
-     * corpse, not a door). An endpoint+token CHANGE rebuilds the router:
-     * the faces ride the same objects, only the serve leg is swapped, and
-     * every bound session re-follows from its stored cursor.
-     */
-    private function pollServe(): void
-    {
-        if ($this->loop === null || $this->map === null || $this->safety === null) {
-            return;
-        }
-        if (time() < $this->nextDialAt) {
-            return;
-        }
-        $stateDirPath = (string) (getenv('CANDY_CODE_SERVER_DIR')
-            ?: ( rtrim((string) (getenv('HOME') ?: ''), '/') . '/.candy-code/server'));
-        try {
-            $dir = StateDir::existing($stateDirPath);
-        } catch (\Throwable $e) {
-            $this->log?->warn('channels.discord.state_dir_refused', ['error' => $e->getMessage()]);
-            $this->nextDialAt = time() + 30;
-
-            return;
-        }
-        if ($dir === null) {
-            return; // no serve yet — the 5s poll keeps trying (this is the boot order, not an error)
-        }
-        $record = DiscoveryFile::read($dir);
-        if ($record === null || !$record->isLive()) {
-            return;
-        }
-        $wsUrl = ServeBridge::wsUrlFrom((string) ($record->toArray()['url'] ?? ''));
-        if ($wsUrl === null) {
-            $this->log?->warn('channels.discord.discovery_url_untranslatable');
-
-            return;
-        }
-        $tokenFile = $dir->path . '/' . TokenStore::FILE;
-        $stat = @lstat($tokenFile);
-        $serveToken = $stat !== false && (($stat['mode'] & 0170000) === 0100000)
-            ? trim((string) @file_get_contents($tokenFile))
-            : '';
-        if ($serveToken === '') {
-            return; // never-mints posture: only read a token an authorized serve wrote
-        }
-
-        $identity = $wsUrl . '|' . sha1($serveToken);
-        if ($identity === $this->dialIdentity) {
-            return;
-        }
-        $this->rebuildRouter($wsUrl, $serveToken);
-    }
-
-    private function rebuildRouter(string $wsUrl, string $serveToken): void
-    {
-        $cfg = method_exists(Bootstrap::class, 'channelsDiscordSettings') ? Bootstrap::channelsDiscordSettings() : [];
-        $this->serve?->stop();
-        $this->queueGate?->cancelAll();
-
-        $this->serve = new ServeBridge($wsUrl, $serveToken, 'subprotocol', $this->log, $this->loop);
-        $this->safety?->addSecret($serveToken);
+        // The serve client and the router exist before any face: a face takes its router at
+        // construction, so there is no placeholder to swap later.
+        $this->serve = new HostServicesServeClient(
+            $this->host,
+            static fn (string $method, \Throwable $e): \Throwable => ServeError::fromHost($method, $e),
+        );
         $this->router = new ConversationRouter(
             $this->serve,
             $this->map,
@@ -358,31 +233,121 @@ final class DiscordChannel implements ChannelInterface
                 }
             }
         });
+
+        $intents = (array) ($cfg['intents'] ?? []);
+        foreach ($tokens as $account => $token) {
+            $rest = new Rest($token, $this->log, $apiBase);
+            $gateway = new Gateway(
+                $token,
+                $this->log,
+                $this->loop,
+                $gatewayUrl === Endpoint::DEFAULT_GATEWAY ? null : $gatewayUrl,
+                (bool) ($intents['messageContent'] ?? true),
+            );
+            $faceCfg = $this->faceConfig($cfg, $account);
+            $this->faces[] = new DiscordAccount(
+                $account,
+                $rest,
+                $gateway,
+                $this->router,
+                $faceCfg,
+                $this->log,
+                $pairing,
+                $this->safety,
+                $this->loop,
+            );
+            $gateway->start();
+        }
         foreach ($this->faces as $face) {
-            $face->rebindRouter($this->router);
             $this->router->addChannel($face, $face->accountName());
         }
 
-        $dial = $this->dialIdentity;
-        $this->dialIdentity = ''; // any failure below re-dials fresh
-        $this->serve->start(
-            function (string $why): void {
-                $this->log?->warn('channels.discord.serve_down', ['why' => $why]);
-            },
-            function () use ($dial): void {
-                // The ladder gave up (gone serve / dead host): back off the
-                // discovery poll itself, keep the channel alive.
-                $this->nextDialAt = time() + 30;
-                $this->dialIdentity = '';
-                $this->log?->warn('channels.discord.serve_giveup', ['retry' => 'in 30s']);
-            },
-        )->then(function () use ($dial): void {
-            $this->dialIdentity = $dial !== '' ? $dial : $this->dialIdentity;
+        // The host is in process, so connecting is the hello and nothing more. A refused
+        // hello leaves the faces up with no serve: the router answers nothing it cannot route,
+        // until the retry ladder gets a hello through.
+        $this->dialServe();
+
+        $threads = (array) ($cfg['threads'] ?? []);
+        if (($threads['enabled'] ?? false) === true) {
+            $idleHours = (int) ($threads['idleHours'] ?? 24);
+            $this->sweepTimer = $this->loop->addPeriodicTimer(600.0, function () use ($idleHours): void {
+                $this->sweepIdleThreads($idleHours);
+            });
+        }
+
+        // The dedupe ledger stays bounded without a platform-side sweep — the
+        // same contract the Teams face meets (docs/SPEC.md §9.5). claimInbound()
+        // wrote a seen_inbound row per delivery while pruneSeen() had no
+        // caller here, so the ledger grew forever; 6 h is amply frequent for
+        // the 7-day keep. (m09)
+        $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
+            $this->map?->pruneSeen(7);
+            // (042) the bindings/reply-refs sweep rides the same cadence.
+            $this->map?->sweepStaleBindings();
+        });
+    }
+
+    /**
+     * One boot hello, and on refusal the next one after the ladder's delay, up to DIAL_MAX_ATTEMPTS.
+     * The router adopts its bindings on the first hello that lands.
+     */
+    private function dialServe(): void
+    {
+        if ($this->disposed || $this->host === null) {
+            return;
+        }
+        $this->dialAttempts++;
+        $this->host->connect()->then(function (): void {
+            $this->dialTimer = null;
             $this->router?->adoptBindings();
             $this->log?->info('channels.discord.serve_connected');
         }, function (\Throwable $e): void {
-            $this->log?->warn('channels.discord.serve_dial_failed', ['error' => $e->getMessage()]);
+            $this->dialTimer = null;
+            $this->log?->warn('channels.discord.serve_dial_failed', ['error' => $e->getMessage(), 'attempt' => $this->dialAttempts]);
+            if ($this->disposed) {
+                return;
+            }
+            if ($this->dialAttempts >= self::DIAL_MAX_ATTEMPTS) {
+                $this->log?->warn('channels.discord.serve_giveup', ['attempts' => $this->dialAttempts]);
+
+                return;
+            }
+            $delay = \min(
+                self::DIAL_BACKOFF_MAX_SECONDS,
+                self::DIAL_BACKOFF_BASE_SECONDS * (2 ** \min(8, $this->dialAttempts - 1)),
+            );
+            $this->dialTimer = $this->loop?->addTimer($delay, fn () => $this->dialServe());
         });
+    }
+
+    public function dispose(): void
+    {
+        if ($this->disposed) {
+            return;
+        }
+        $this->disposed = true;
+
+        foreach ([$this->sweepTimer, $this->pruneTimer, $this->dialTimer] as $timer) {
+            if ($timer !== null && $this->loop !== null) {
+                $this->loop->cancelTimer($timer);
+            }
+        }
+        $this->sweepTimer = null;
+        $this->pruneTimer = null;
+        $this->dialTimer = null;
+
+        $this->queueGate?->cancelAll();
+        foreach ($this->faces as $face) {
+            $face->cancelAllTimers();
+            $face->stop();
+        }
+        $this->host?->disconnect();
+        $this->host = null;
+        $this->serve = null;
+        $this->router = null;
+        // Faces keep the router they were built with. Stopping them above is
+        // what ends their work; nulling $this->router only drops this channel's own handle.
+        $this->faces = [];
     }
 
     // ── threads (docs/SPEC.md §7.5) ──────────────────────────────────────────────────
@@ -487,23 +452,6 @@ final class DiscordChannel implements ChannelInterface
     public function sweepNow(int $idleHours): void
     {
         $this->sweepIdleThreads($idleHours);
-    }
-
-    /**
-     * Faces are built before the first serve exists; they take a
-     * placeholder router that refuses politely until rebind. Constructing
-     * the real router needs the ServeBridge, which needs discovery — which
-     * may be a minute away.
-     */
-    private function pendingRouter(): ConversationRouter
-    {
-        if ($this->router !== null) {
-            return $this->router;
-        }
-        $serve = new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', $this->log, $this->loop);
-        // Never started, never dials: start() is only called on the
-        // rebuilt instance; this one exists to satisfy the constructor.
-        return new ConversationRouter($serve, $this->map, $this->log, $this->safety, $this->loop, []);
     }
 
     private static function nonEmptyString(mixed $value): ?string

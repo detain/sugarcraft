@@ -507,8 +507,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * The copy {@see \SugarCraft\Code\Runtime::executeConcurrently()} runs
      * as one member of a concurrent group: its delegated run records each step
-     * onto $ledger and counts its siblings' records in its spend-cap check
-     * (audit B4-rem). Only the engine path uses it; the pool path is never
+     * onto $ledger and counts its siblings' records in its spend-cap check.
+     * Only the engine path uses it; the pool path is never
      * parallel-safe, so it is never a group member.
      */
     public function withSiblingSpend(SiblingSpendLedger $ledger): self
@@ -1269,6 +1269,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             'scope' => $this->delegationScope ?? $engine->sessionId() ?? '',
         ], static fn (string $value): bool => $value !== '');
 
+        // No-fork exception (P4-12 CC-1, verdict cc1-ss). This is the one
+        // synchronous spawnSession() caller a loop can reach, and it is kept
+        // on purpose: the tool contract returns a ToolResult, so it cannot
+        // hand back a promise. It runs on the loop thread only when the turn
+        // fell back to EngineBackend::completeAsyncBlocking() (no pcntl_fork
+        // or no socket pair), and that path already runs the whole turn on the
+        // loop, so the handshake wait (bounded by SPAWN_AUTH_TIMEOUT_SECS) adds
+        // no new freeze class. In a forked turn child there is no loop and the
+        // wait is the intended behavior. Moving this call to spawnSessionAsync()
+        // needs a promise-returning tool execute first.
         return $supervisor->spawnSession(
             name: ($description !== '' ? $description : self::snippet($prompt, 60)) . ' (@' . $agentName . ')',
             // The daemon starts on the model this session is on now; the

@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -153,14 +158,42 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#keyboard-color">Keyboard &amp; color</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui">SugarCraft\ScriptUi</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-attribute">SugarCraft\ScriptUi\Attribute</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-command">SugarCraft\ScriptUi\Command</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-completion">SugarCraft\ScriptUi\Completion</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-discovery">SugarCraft\ScriptUi\Discovery</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-help">SugarCraft\ScriptUi\Help</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-log">SugarCraft\ScriptUi\Log</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-model">SugarCraft\ScriptUi\Model</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-process">SugarCraft\ScriptUi\Process</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-runtime">SugarCraft\ScriptUi\Runtime</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-scriptui-style">SugarCraft\ScriptUi\Style</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
             <li class="toc-h3"><a href="#auto-discovery">Auto-discovery</a></li>
-            <li class="toc-h3"><a href="#new-attribute-types">New attribute types</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#api-reference-attributes-and-discovery">API reference: attributes and discovery</a></li>
             <li class="toc-h3"><a href="#enhanced-help">Enhanced help</a></li>
             <li class="toc-h3"><a href="#output-channels-environment">Output channels &amp; environment</a></li>
             <li class="toc-h3"><a href="#shell-completions-version">Shell completions + version</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#an-interactive-command-exits-1-with-a-notice-on-stderr">An interactive command exits 1 with a notice on STDERR</a></li>
+            <li class="toc-h3"><a href="#the-captured-output-contains-the-interactive-frame">The captured output contains the interactive frame</a></li>
+            <li class="toc-h3"><a href="#a-script-cannot-tell-a-timeout-from-the-child-s-own-exit-code">A script cannot tell a timeout from the child&#039;s own exit code</a></li>
+            <li class="toc-h3"><a href="#a-discovered-command-is-not-found">A discovered command is not found</a></li>
+            <li class="toc-h3"><a href="#an-environment-fallback-has-no-effect">An environment fallback has no effect</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#choose">choose</a></li>
             <li class="toc-h3"><a href="#confirm">confirm</a></li>
@@ -179,10 +212,11 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">13 presentation subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write — plus completion and version utilities. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
+<p class="lede" style="margin-top: 28px;">13 presentation subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write — plus completion and version utilities. Drop into a shell script and instantly get a Charm-quality interactive UX. Its command set and exit-code conventions follow <a href="https://github.com/charmbracelet/gum">charmbracelet/gum</a>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-scriptui</code></pre>
+    <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so require it as <code>sugarcraft/candy-scriptui:dev-master</code>; on a default-<code>stable</code> project a bare <code>sugarcraft/candy-scriptui</code> request does not resolve.</p>
     <p>Or grab the rolling latest phar — rebuilt and published for every commit that
     touches this app (verify against the published <code>.phar.sha256</code> sidecar
     before making it executable):</p>
@@ -210,6 +244,9 @@ candy-scriptui spin --title "Building..." -- make build
 # Filter a list (substring by default; --fuzzy for fuzzy matching).
 git branch | candy-scriptui filter</code></pre>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>The binary is one entry point with one subcommand per job. Each subcommand reads its input from argv or stdin, prints its result to stdout, and reports the outcome through its exit code, so the parts compose in a shell pipeline. <code>style</code>, <code>format</code>, <code>table</code> and <code>join</code> print and exit. The interactive commands draw their frame on the terminal, and when stdout is redirected the frame goes to STDERR, so the selection on stdout stays clean. Keys always come from the terminal, never from a pipe. The exit codes are the contract: 0 on success, 1 when the user aborts with Esc (2 in <code>confirm</code>, so an abort stays apart from a no; <code>pager</code> finishes with 0 instead), 130 on Ctrl+C, 124 on a <code>--timeout</code> deadline, and 128 plus the signal number on an OS signal.</p>
+
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>style</strong><span>Apply ANSI styling to argv (or stdin) and print.</span></div>
@@ -228,12 +265,642 @@ git branch | candy-scriptui filter</code></pre>
       <div class="feature"><strong>version</strong><span>Print the version — phar metadata first, then the composer.json ladder, then a dev fallback.</span></div>
     </div>
 
-    <h3 id="keyboard-color" style="margin-top: 32px;">Keyboard &amp; color</h3>
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum under <code>src/</code>, grouped by namespace, with its method table. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- GENERATED by tools/gen-api-reference.php from candy-scriptui/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-scriptui -->
+<p>Only methods declared in <code>candy-scriptui/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-scriptui">SugarCraft\ScriptUi</h3>
+<h4 id="api-sugarcraft-scriptui-application"><code>Application</code> <small>final class</small></h4>
+<p>Top-level Symfony Console application registering each subcommand.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>versionFromComposer(): string</code></td><td>Reads the version from this PACKAGE&#039;s composer.json manifest.</td></tr>
+<tr><td><code>static versionString(): string</code></td><td>The version this install reports, phar-aware (archive metadata first).</td></tr>
+<tr><td><code>static hostArchive(): string</code></td><td>The real-filesystem path of the phar archive hosting this install, or &#039;&#039; when this code is not running from an archive (same measured 3-arm law as the bin guards: Phar::running() inside the archive, a <code>phar://</code> __FILE__ prefix, a self-naming <code>.phar</code> __FILE__; composer mode is always &#039;&#039;).</td></tr>
+<tr><td><code>run(?InputInterface $input = null, ?OutputInterface $output = null): int</code></td><td></td></tr>
+<tr><td><code>doRun(InputInterface $input, OutputInterface $output): int</code></td><td></td></tr>
+<tr><td><code>static gumEnvVar(string $commandName, InputOption $option): string</code></td><td>gum&#039;s variable shape: GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;, upper-cased, <code>-</code> as <code>_</code>.</td></tr>
+<tr><td><code>scan(string $namespace): array</code></td><td>Scan a namespace for classes bearing the #[Command] attribute and register them into this application.</td></tr>
+<tr><td><code>find(string $name): Command</code></td><td>Resolve a command by EXACT name only. Symfony&#039;s inherited find() additionally accepts unique prefixes, which made typo&#039;d invocations silently EXECUTE a different command — <code>choos Pizza Burger</code> ran choose, <code>confir</code> ran confirm. On an exit-code-gating CLI that is a safety defect, not a convenience. Unknown names now fail closed with a did-you-mean that lists every plausible candidate (prefix matches first), so the suggestion also stops misdirecting.</td></tr>
+<tr><td><code>addEnumConstraint(string $commandName, string $option, string $enumClass): void</code></td><td>Register a value constraint discovered by the CommandScanner from <code>#[Flag(enum: SomeType::class)]</code>. The seam existed as documentation only at first, and <code>--format=pineapple</code> sailed right through it.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-completioncommand"><code>CompletionCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.completion. Built-in command that emits shell completion scripts for bash, zsh, and fish.</p>
+<h4 id="api-sugarcraft-scriptui-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-scriptui.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static t(string $key, array $params = []): string</code></td><td>Interpolated parameters are attacker-shaped argv on most refusal paths: a crafted option value must never paint the terminal with live SGR bytes or forge extra diagnostic lines with embedded newlines. Folding every string param through the shared control-byte stand-in mapper at THIS chokepoint keeps every Lang::t site honest without repeating the sanitize by hand.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-attribute">SugarCraft\ScriptUi\Attribute</h3>
+<h4 id="api-sugarcraft-scriptui-attribute-alias"><code>Alias</code> <small>final class</small></h4>
+<p>Registers an alias for a CLI command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $name)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-attribute-command"><code>Command</code> <small>final class</small></h4>
+<p>Marks a class as a CLI command for auto-discovery.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $name, public readonly string $description = &#039;&#039;, public readonly string $descriptionSection = &#039;&#039;)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-attribute-example"><code>Example</code> <small>final class</small></h4>
+<p>Marks a command with an example usage string shown in help output.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $usage, public readonly string $description = &#039;&#039;)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-attribute-flag"><code>Flag</code> <small>final class</small></h4>
+<p>Declarative CLI option for a command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $name, public readonly string $short = &#039;&#039;, public readonly string $description = &#039;&#039;, public readonly bool $required = false, public readonly bool $isFlag = false, public readonly ?string $enum = null, public readonly mixed $default = null)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-attribute-valueenum"><code>ValueEnum</code> <small>final class</small></h4>
+<p>Marks a backed enum as a constrained-value set for CLI options.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly array $values)</code></td><td></td></tr>
+<tr><td><code>static validate(mixed $value, self $attribute, string $optionName): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-command">SugarCraft\ScriptUi\Command</h3>
+<h4 id="api-sugarcraft-scriptui-command-choosecommand"><code>ChooseCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.choose. Pick a single item from an interactive list. Prints the chosen text on stdout; exits 1 when the user aborts.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static renderResult(ChooseModel $final, OutputInterface $output, string $delim, ?string $noSelectedMessage): int</code></td><td>Map the finished model to process output + exit code. Static and separate from execute() so the contract is unit-testable without the live TTY that Program::run() needs.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-confirmcommand"><code>ConfirmCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.confirm. Confirmation prompt. Exit code reflects the answer: 0 for yes, 1 for no, 2 for an Esc abort, 130 for a Ctrl+C cancellation (typed or kill -INT), 124 when a --timeout deadline elapses, and 128+signum for an OS signal that stopped the loop (e.g. SIGTERM -&gt; 143).</p>
+<h4 id="api-sugarcraft-scriptui-command-filecommand"><code>FileCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.file. Browse the filesystem and print the chosen file path. ↑/↓ navigate; Enter descends into directories or selects files; Backspace ascends to the parent. Esc aborts with exit 1; Ctrl-C exits 130 and a <code>--timeout</code> deadline exits 124.</p>
+<h4 id="api-sugarcraft-scriptui-command-filtercommand"><code>FilterCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.filter. Pick one line from stdin via incremental fuzzy filter. Designed for pipelines:</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static renderResult(FilterModel $final, OutputInterface $output, string $delim, bool $printQuery): int</code></td><td>Map the finished model to process output + exit code. Static and separate from execute() so the contract is unit-testable without the live TTY that Program::run() needs.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-formatcommand"><code>FormatCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.format. Render a Markdown file (or stdin) as styled ANSI text using \SugarCraft\Markdown\Renderer. Non-interactive — produces output straight to stdout so it pipelines naturally:</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static pickTheme(string $name): Theme</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-inputcommand"><code>InputCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.input. Read a single line from the user. Prints the entered value on stdout; exits 1 when aborted (Esc), 130 on Ctrl+C cancellation, 124 when a --timeout deadline elapses, and 128+signum on an OS signal.</p>
+<h4 id="api-sugarcraft-scriptui-command-joincommand"><code>JoinCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.join. Concatenate every argument with a separator, optionally with horizontal (per-line) joining. Lipgloss&#039;s <code>JoinHorizontal</code> / <code>JoinVertical</code> ship here as <code>--horizontal</code> / <code>--vertical</code> modes. Reads from stdin when no positional arguments are given.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static joinHorizontal(array $parts, string $separator = &#039;&#039;, string $valign = &#039;top&#039;): string</code></td><td>Stitch each $parts string into the same row layout, padding shorter blocks to the tallest one and joining each row with $separator.</td></tr>
+<tr><td><code>static joinVertical(array $parts, string $separator = &quot;\n&quot;, string $halign = &#039;left&#039;): string</code></td><td>Vertical join with optional horizontal alignment of each block&#039;s lines against the widest line across all blocks.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-logcommand"><code>LogCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.log. Print a styled log line. The level badge (DEBUG / INFO / WARN / ERROR / FATAL) is rendered in a colour matching the level; the message text follows verbatim. Useful for shell scripts that want consistent log output without pulling in a logging framework.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static format(LogLevel $level, string $message): string</code></td><td>Render <code>BADGE message</code> with the level&#039;s style applied to the badge.</td></tr>
+<tr><td><code>static formatLine(LogLevel $level, string $message, string $prefix = &#039;&#039;, string $timeFormat = &#039;&#039;, string $formatter = &#039;text&#039;): string</code></td><td>Format a line with optional prefix / timestamp / structured shape. Mirrors the gum log surface: text (default), json, logfmt.</td></tr>
+<tr><td><code>static resolveTimeFormat(string $alias): string</code></td><td>Resolve a Go-style time-constant alias (<code>rfc822</code>, <code>rfc3339</code>, <code>kitchen</code>, <code>stamp</code>, <code>datetime</code>, <code>dateonly</code>, <code>timeonly</code>, <code>ansic</code>, <code>unixdate</code>) to its corresponding PHP <code>date()</code> format string. Anything else is treated as an explicit <code>date()</code> format and passed through.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-pagercommand"><code>PagerCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.pager. Scroll long input. Reads from stdin or <code>--file</code> and lets the user navigate with the standard pager keys (↑/↓ / PgUp / PgDn / Home / End / <code>q</code> to quit). Quitting with q or Esc exits 0; Ctrl+C exits 130, a --timeout deadline exits 124, and an OS signal exits 128+signum.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static prewrapSoftWrap(string $raw, int $width): string</code></td><td>scriptui-21: --soft-wrap must only change line breaks, never styling. Width::wrap begins with Ansi::strip, so colourised input (ls --color, git diff) arrived at the viewport unstyled while the non-wrap clip path is ANSI-aware. Width::wrapAnsi keeps every CSI sequence intact and holds the visible width contract; an active SGR simply continues across the break.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-spincommand"><code>SpinCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.spin. Run a command while showing a spinner.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?\Closure $processFactory = null, ?\Closure $programFactory = null)</code></td><td>The class is <code>final</code>, so the child-process spawn and the Program construction are injected as optional factory closures rather than exposed as overridable methods. Production leaves both null (real RealProcess + a TTY Program); tests pass a \SugarCraft\ScriptUi\Process\FakeProcess that never exits plus a headless Program so the <code>--timeout</code> path can be driven deterministically. The zero-arg default keeps <code>new SpinCommand()</code> working for \SugarCraft\ScriptUi\Application auto-registration.</td></tr>
+<tr><td><code>static pickStyle(string $name): SpinStyle</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-stylecommand"><code>StyleCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.style. Apply ANSI styling to its argument text (or stdin when no arguments are given) and print the result.</p>
+<h4 id="api-sugarcraft-scriptui-command-tablecommand"><code>TableCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.table. Render CSV / TSV from a file or stdin as a styled \SugarCraft\Style\Table\Table.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parseRows(string $raw, string $separator): array</code></td><td>Parse a CSV/TSV blob into rows.</td></tr>
+<tr><td><code>static parseBorder(string $name): ?Border</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-command-versioncommand"><code>VersionCommand</code> <small>final class</small></h4>
+<p>Prints the version of this tool as its own subcommand.</p>
+<h4 id="api-sugarcraft-scriptui-command-writecommand"><code>WriteCommand</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.write. Multi-line text editor. Press Ctrl+D to submit; Esc aborts (exit 1), Ctrl+C cancels (exit 130), a --timeout deadline exits 124, and an OS signal exits 128+signum. Submitted text is printed verbatim on stdout.</p>
+<h3 id="sugarcraft-scriptui-completion">SugarCraft\ScriptUi\Completion</h3>
+<h4 id="api-sugarcraft-scriptui-completion-bashcompletion"><code>BashCompletion</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.completion (the bash emitter). Generates Bash completion script for a Symfony Console application. Dynamically inspects the application to produce completions for all registered commands and their flags.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static isSupportedShell(string $shell): bool</code></td><td></td></tr>
+<tr><td><code>static validShells(): array</code></td><td></td></tr>
+<tr><td><code>generate(Application $application): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-completion-completionescaper"><code>CompletionEscaper</code> <small>final class</small></h4>
+<p>Escapes names intended for shell completion scripts, preventing injection of arbitrary shell code via malicious command/option names registered through \SugarCraft\ScriptUi\Discovery\CommandScanner.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static safeName(string $name): ?string</code></td><td>Returns the name unchanged if it is safe for shell interpolation; returns null if the name could contain shell metacharacters and must not be emitted into a completion script.</td></tr>
+<tr><td><code>static filterSafeList(array $names): array</code></td><td>Like safeName() but filters an entire list, returning only the safe elements in their original order.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-completion-fishcompletion"><code>FishCompletion</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.completion (the fish emitter). Generates Fish completion script for a Symfony Console application. Dynamically inspects the application to produce completions for all registered commands and their flags.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static isSupportedShell(string $shell): bool</code></td><td></td></tr>
+<tr><td><code>static validShells(): array</code></td><td></td></tr>
+<tr><td><code>generate(Application $application): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-completion-zshcompletion"><code>ZshCompletion</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.completion (the zsh emitter). Generates Zsh completion script for a Symfony Console application. Dynamically inspects the application to produce completions for all registered commands and their flags.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static isSupportedShell(string $shell): bool</code></td><td></td></tr>
+<tr><td><code>static validShells(): array</code></td><td></td></tr>
+<tr><td><code>generate(Application $application): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-discovery">SugarCraft\ScriptUi\Discovery</h3>
+<h4 id="api-sugarcraft-scriptui-discovery-commandscanner"><code>CommandScanner</code> <small>final class</small></h4>
+<p>Scans a namespace for classes bearing the Command attribute and registers them into a Symfony Console Application.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>skipped(): array</code></td><td>Commands that were discovered but could NOT be registered (their constructors require a dependency the scanner cannot inject). Call it right after scan(); scan() resets it on each run.</td></tr>
+<tr><td><code>scan(string $namespace, Application $application): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-help">SugarCraft\ScriptUi\Help</h3>
+<h4 id="api-sugarcraft-scriptui-help-helpcatalog"><code>HelpCatalog</code> <small>final class</small></h4>
+<p>The help surface&#039;s i18n plumbing (scriptui-59): command descriptions, option / argument texts, <code>#[Example]</code> captions and the Aliases / Examples / Help labels resolve through <code>lang/&lt;locale&gt;.php</code> like every other user-facing string.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static derive(\Symfony\Component\Console\Application $app): array</code></td><td>The catalog rows the current command classes call for, as key =&gt; English. Source of both <code>tools/gen-help-catalog.php</code> and <code>HelpDriftTest</code>. A text shared by several commands for the same option becomes ONE <code>help.opt.&lt;option&gt;</code> row; commands that word it differently get their own <code>help.opt.&lt;command&gt;.&lt;option&gt;</code> row.</td></tr>
+<tr><td><code>static lookup(string $key): ?string</code></td><td>Resolve <code>$key</code>, or null when the active catalogs carry no row for it.</td></tr>
+<tr><td><code>static owns(Command $command): bool</code></td><td>True for commands this package ships (scanned third-party ones have no rows).</td></tr>
+<tr><td><code>static optionKeys(string $command, string $option): array</code></td><td>Candidate keys for an option, most specific first.</td></tr>
+<tr><td><code>static localize(Command $command): void</code></td><td>Swap every translatable string on <code>$command</code> for its catalog row, leaving anything without one on the English literal.</td></tr>
+<tr><td><code>static exampleCaption(Command $command, int $index, Example $example): string</code></td><td>Localized caption of the n-th example of <code>$command</code> (English fallback).</td></tr>
+<tr><td><code>static label(string $name, string $english): string</code></td><td>Section label with an English fallback.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-help-helpformatter"><code>HelpFormatter</code> <small>final class</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>format(SymfonyCommand $command): string</code></td><td></td></tr>
+<tr><td><code>write(OutputInterface $output, SymfonyCommand $command): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-help-typosuggester"><code>TypoSuggester</code> <small>final class</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly array $commandNames)</code></td><td></td></tr>
+<tr><td><code>suggestAll(string $input): array</code></td><td>Return every plausible command for a mistyped name: truncated prefixes first (the common fat-finger class), then close spellings within Levenshtein distance 2. Sorted by distance, then name; capped.</td></tr>
+<tr><td><code>suggest(string $input): ?string</code></td><td>Return a suggested command name if Levenshtein distance to any known command is ≤ 2, otherwise null.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-log">SugarCraft\ScriptUi\Log</h3>
+<h4 id="api-sugarcraft-scriptui-log-loglevel"><code>LogLevel</code> <small>enum</small></h4>
+<p>Severity levels for \SugarCraft\ScriptUi\Command\LogCommand, with the styled badge each one emits.</p>
+<p>Cases: <code>Debug</code> · <code>Info</code> · <code>Warn</code> · <code>Error</code> · <code>Fatal</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromString(string $name): self</code></td><td></td></tr>
+<tr><td><code>badge(): string</code></td><td></td></tr>
+<tr><td><code>order(): int</code></td><td>Numeric ordering used by the <code>--min-level</code> filter: Debug=0, Info=1, Warn=2, Error=3, Fatal=4.</td></tr>
+<tr><td><code>style(): Style</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-model">SugarCraft\ScriptUi\Model</h3>
+<h4 id="api-sugarcraft-scriptui-model-choosemodel"><code>ChooseModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.choose (the interactive list). Selection chooser used by \SugarCraft\ScriptUi\Command\ChooseCommand.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromOptions(array $options, int $height = 10, int $limit = 1, bool $noLimit = false, string $header = &#039;&#039;, array $preselected = [], bool $ordered = false, ?string $cursorPrefix = null, ?string $unselectedPrefix = null, int $width = 0, bool $typeToFilter = true, array $cursorCycle = [], string $selectedPrefix = &#039;&#039;): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>selected(): ?string</code></td><td>Selected option&#039;s title once submitted (single mode).</td></tr>
+<tr><td><code>selectedAll(): array</code></td><td>Multi-select payload — every ticked option&#039;s title in original (input) order, or in selection order when <code>--ordered</code> is set.</td></tr>
+<tr><td><code>selectedCount(): int</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>isMulti(): bool</code></td><td></td></tr>
+<tr><td><code>isRefusedEmpty(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-confirmmodel"><code>ConfirmModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.confirm (the answer model). Yes/no prompt used by \SugarCraft\ScriptUi\Command\ConfirmCommand. Wraps Confirm; Enter / <code>y</code> / <code>n</code> commit, Esc/Ctrl-C aborts.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static newPrompt(string $title = &#039;&#039;, bool $default = false, string $affirmative = &#039;Yes&#039;, string $negative = &#039;No&#039;, string $pointer = &#039;&#039;): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>answer(): bool</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-filemodel"><code>FileModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.file (the directory browser). Filesystem picker used by \SugarCraft\ScriptUi\Command\FileCommand. Wraps FilePicker; the picker handles Enter/Backspace internally for navigation; we add Esc/Ctrl-C abort and short-circuit when a path is selected.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static newPrompt(?string $cwd = null, int $height = 10, bool $allowDirs = false, bool $allowFiles = true, bool $showHidden = false, bool $showSize = false, array $allowedExtensions = []): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>selected(): ?string</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-filtermodel"><code>FilterModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.filter (the query-over-lines view). Variant of ChooseModel that opens directly in filter mode and sends every keystroke to the inner ItemList&#039;s filter buffer. Enter on the highlighted result submits; Esc / Ctrl-C aborts.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromOptions(array $options, int $height = 10, int $limit = 1, bool $noLimit = false, string $header = &#039;&#039;, array $preselected = [], bool $reverse = false, string $value = &#039;&#039;, ?string $cursorPrefix = null, ?string $unselectedPrefix = null, bool $fuzzy = false, ?FuzzyMatcher $matcher = null, int $width = 0, string $placeholder = &#039;&#039;, string $prompt = &#039;&#039;, int $tail = 0): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>fuzzyVisibleItems(): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>selected(): ?string</code></td><td></td></tr>
+<tr><td><code>selectedAll(): array</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>isMulti(): bool</code></td><td></td></tr>
+<tr><td><code>highlightIndices(): array</code></td><td>Returns the highlight indices for the currently selected item.</td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-inputmodel"><code>InputModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.input (the single-line editor). Single-line prompt used by \SugarCraft\ScriptUi\Command\InputCommand. Wraps TextInput; Enter submits, Esc/Ctrl-C aborts.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static newPrompt(string $placeholder = &#039;&#039;, bool $password = false, string $prompt = &#039;&gt; &#039;, string $value = &#039;&#039;, int $charLimit = 0, int $width = 0, string $header = &#039;&#039;): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>value(): string</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-pagermodel"><code>PagerModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.pager (the scrollback model). Read-only pager used by \SugarCraft\ScriptUi\Command\PagerCommand. Wraps a Viewport; Esc / <code>q</code> / Ctrl-C exit. Standard navigation keys (↑/↓/jk, PgUp/PgDn/space/b/f, Home/g/End/G, Ctrl-U/D) come from Viewport&#039;s own update().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromContent(string $content, int $width = 0, int $height = 0, bool $showLineNumbers = false, string $match = &#039;&#039;, int $frameRows = 0, int $fade = 0): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>static hardWrap(string $raw, int $width): string</code></td><td>Break every line at exactly <code>$width</code> cells, mid-word if need be (the strict sibling of \SugarCraft\ScriptUi\Command\PagerCommand::prewrapSoftWrap(), which breaks on word boundaries). ANSI-aware: escape bytes never count toward the width.</td></tr>
+<tr><td><code>isExited(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-spinmodel"><code>SpinModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.spin (the spinner view). Run a child Process while a Spinner animates beside an optional status title. Each spinner tick polls the process; when the child exits, the model captures its code and stops the loop. Pressing <code>Esc</code> or <code>Ctrl+C</code> terminates the child early; the run then reports SignalExit::EXIT_INTERRUPTED (130), the conventional cancellation code — never a negative value, which <code>exit()</code> would wrap to 255.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static spawn(Process $process, string $title = &#039;&#039;, ?SpinStyle $style = null, string $align = &#039;left&#039;): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>isDone(): bool</code></td><td></td></tr>
+<tr><td><code>exitCode(): ?int</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-model-writemodel"><code>WriteModel</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/gum.write (the multi-line editor). Multi-line editor used by \SugarCraft\ScriptUi\Command\WriteCommand. Wraps TextArea; **Ctrl+D** submits (Enter inserts a newline, matching most multi-line editors), **Esc / Ctrl+C** abort.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static newPrompt(string $placeholder = &#039;&#039;, int $width = 0, int $height = 0, string $value = &#039;&#039;, int $charLimit = 0, int $maxLines = 0, string $prompt = &#039;&#039;, bool $showLineNumbers = false, string $header = &#039;&#039;, ?string $endOfBufferCharacter = null): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>value(): string</code></td><td></td></tr>
+<tr><td><code>isSubmitted(): bool</code></td><td></td></tr>
+<tr><td><code>isAborted(): bool</code></td><td></td></tr>
+<tr><td><code>isInterrupted(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-process">SugarCraft\ScriptUi\Process</h3>
+<h4 id="api-sugarcraft-scriptui-process-fakeprocess"><code>FakeProcess</code> <small>final class</small></h4>
+<p>Test double for Process. Holds a mutable <code>$exitCode</code> (null while running) plus flags recording whether terminate() or close() have been called.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>recordSpawn(array $argv, bool $captureStdout, bool $captureStderr): void</code></td><td>Test harnesses register this from their processFactory so a command building the WRONG argv (or dropping the capture flags) goes red — the factory previously discarded its arguments, which made every spawn-shape assertion vacuous.</td></tr>
+<tr><td><code>drain(): void</code></td><td></td></tr>
+<tr><td><code>attachPump(\React\EventLoop\LoopInterface $loop): void</code></td><td></td></tr>
+<tr><td><code>detachPump(): void</code></td><td></td></tr>
+<tr><td><code>pid(): int</code></td><td></td></tr>
+<tr><td><code>exited(): bool</code></td><td></td></tr>
+<tr><td><code>wait(): int</code></td><td></td></tr>
+<tr><td><code>kill(int $signal): void</code></td><td></td></tr>
+<tr><td><code>exitCode(): ?int</code></td><td></td></tr>
+<tr><td><code>terminate(): void</code></td><td></td></tr>
+<tr><td><code>close(): int</code></td><td></td></tr>
+<tr><td><code>stdout(): string</code></td><td></td></tr>
+<tr><td><code>stderr(): string</code></td><td></td></tr>
+<tr><td><code>stdoutBytes(): string</code></td><td></td></tr>
+<tr><td><code>stderrBytes(): string</code></td><td></td></tr>
+<tr><td><code>stdoutDropped(): int</code></td><td></td></tr>
+<tr><td><code>stderrDropped(): int</code></td><td></td></tr>
+<tr><td><code>finish(int $code = 0): void</code></td><td>Convenience: simulate the child finishing with the given code.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-process-process"><code>Process</code> <small>interface</small></h4>
+<p>candy-scriptui re-export of the sugar-pty process contract, widened with the lifecycle surface the spin chain actually calls, so \SugarCraft\ScriptUi\Model\SpinModel, \SugarCraft\ScriptUi\Command\SpinCommand and every test double type against ONE pinned interface.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>drain(): void</code></td><td>Pump both capture pipes right now, bounded and non-blocking. Cheap to call per tick: appends new bytes only.</td></tr>
+<tr><td><code>attachPump(\React\EventLoop\LoopInterface $loop): void</code></td><td>Register the capture pipes on <code>$loop</code> so bytes move while the run loop is alive (scriptui-02: the cure for a child blocking at the ~64KiB OS pipe buffer with nobody reading). Idempotent per loop.</td></tr>
+<tr><td><code>detachPump(): void</code></td><td>Unregister the read-stream pump. No-op when not attached; every settle path calls it so watchers never outlive the loop.</td></tr>
+<tr><td><code>terminate(): void</code></td><td>Signal the child (SIGTERM); does NOT reap. close() reaps.</td></tr>
+<tr><td><code>close(): int</code></td><td>Reap the child, bounded (TERM→grace→KILL ladder). Idempotent: every call after the first returns the same code.</td></tr>
+<tr><td><code>stdout(): string</code></td><td>Captured stdout bytes (drains first).</td></tr>
+<tr><td><code>stderr(): string</code></td><td>Captured stderr bytes (drains first).</td></tr>
+<tr><td><code>stdoutDropped(): int</code></td><td>scriptui-03: bytes seen past the capture cap for stdout (0 when every drained byte was retained). Non-zero means the post-run print shows the head only.</td></tr>
+<tr><td><code>stderrDropped(): int</code></td><td>scriptui-03: bytes seen past the capture cap for stderr.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-process-realprocess"><code>RealProcess</code> <small>final class</small></h4>
+<p>The canonical non-PTY child handle for candy-scriptui: one copy owns the whole lifecycle (spawn → drain → signal → reap) so every fix in the spin process chain lands exactly once.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static spawn(array $command, bool $captureStdout = false, bool $captureStderr = false): self</code></td><td>Spawn a non-PTY child. <code>$captureStdout</code>/<code>$captureStderr</code> decide whether stdout/stderr land in our capture pipes (drained by drain()/stdoutBytes()) or are inherited from the parent&#039;s STDOUT/STDERR.</td></tr>
+<tr><td><code>groupManaged(): bool</code></td><td>Whether the tracked pid leads the child&#039;s process group (the detach wrapper was armed). True ⇒ signals go to the whole tree; false ⇒ direct-child only (the pre-scriptui-04 shape, still correct when no wrapper exists — signalling our own group would be self-harm).</td></tr>
+<tr><td><code>pid(): int</code></td><td></td></tr>
+<tr><td><code>drain(): void</code></td><td>Bounded non-blocking pump of both capture pipes. This is the run-loop drain vocabulary: call it per tick (or per read-stream event) and a child writing past the ~64KiB OS pipe buffer never blocks waiting for a reader that only shows up after the loop ends.</td></tr>
+<tr><td><code>stdoutDropped(): int</code></td><td>Bytes of captured stdout dropped past the capture cap (scriptui-03).</td></tr>
+<tr><td><code>stderrDropped(): int</code></td><td>Bytes of captured stderr dropped past the capture cap (scriptui-03).</td></tr>
+<tr><td><code>attachPump(LoopInterface $loop): void</code></td><td>Register both open capture pipes on the event loop (scriptui-02, the 64KiB cure). The run loop used to poll only the exit verdict, so a child writing past the ~64KiB OS pipe buffer blocked forever while the spinner painted: nobody drained until after the loop ended. With the pump attached, every loop wakeup that sees readable pipe bytes runs drain() — the child never stalls, the parents poll keeps ticking, and EOF retires the watcher.</td></tr>
+<tr><td><code>detachPump(): void</code></td><td>Unregister the read-stream pump (no-op when not attached). Called by the command right after the run loop returns and by every wait() settle path, so capture fds never outlive the loop watching them.</td></tr>
+<tr><td><code>exited(): bool</code></td><td>Non-blocking exit probe: reads live status while the handle is open, caches the verdict once the child is gone. Never drains or reaps — that is drain()/wait()/close()&#039;s job.</td></tr>
+<tr><td><code>exitCode(): ?int</code></td><td></td></tr>
+<tr><td><code>kill(int $signal): void</code></td><td>Signal the child — its whole process GROUP when the detach wrapper armed the tree (scriptui-04), the bare pid otherwise. Libc::kill() (sugar-pty&#039;s FFI route), not bare posix_kill(): ext-posix is optional on this fleet. The exited() guard before AND after the failed call is the pid-reuse guard — signalling a reaped (possibly recycled) PID risks an unrelated process, so a post-exit kill is silently dropped instead. While the group leader (our tracked pid) lives, the group exists, so a running handle never ESRCHs.</td></tr>
+<tr><td><code>terminate(): void</code></td><td>Signal the child with SIGTERM. Lifecycle split: terminate() only *signals*; close() is the sole *reaping* path and it bounds the wait (grace + SIGKILL escalation), so close-after-terminate neither double-kills nor hangs. Idempotence guards: skip when the handle was already reaped ($closed), when a SIGTERM was already sent ($terminated), or when the child already exited on its own.</td></tr>
+<tr><td><code>close(): int</code></td><td>Reap the child, bounded. If terminate() asked the child to stop and it is still running, give it TERM_GRACE_SECONDS to honour SIGTERM, then escalate to SIGKILL — the fleet-standard TERM→grace→ KILL ladder. The grace poll drains the capture pipes as it goes: a dying child that is still writing must not wedge the window.</td></tr>
+<tr><td><code>wait(): int</code></td><td>Block until the child exits, pumping the capture pipes every poll iteration, then settle the handles: final drain, close pipes, proc_close. A cached or already-reaped verdict still settles (bytes produced before the reap stay readable); a handle the closer never saw returns the cached code or -1 — NEVER a fabricated success.</td></tr>
+<tr><td><code>stdout(): string</code></td><td>Captured stdout bytes (drains first).</td></tr>
+<tr><td><code>stderr(): string</code></td><td>Captured stderr bytes (drains first).</td></tr>
+<tr><td><code>stdoutBytes(): string</code></td><td></td></tr>
+<tr><td><code>bufferedPeek(): string</code></td><td>Zero-IO view of the buffered stdout — for pump-proof instrumentation that must observe bytes WITHOUT draining (a peek that drains would hide a broken pump behind its own polling).</td></tr>
+<tr><td><code>stderrBytes(): string</code></td><td></td></tr>
+<tr><td><code>descendantPids(): array</code></td><td>The process tree rooted at the tracked pid (direct+transient children, breadth-first), EXCLUDING the tracked pid itself and this runner. Linux reads /proc/&lt;pid&gt;/task/&lt;pid&gt;/children per level; elsewhere one <code>ps -A -o ppid=,pid=</code> helper per level does the job. A process that raced away between levels simply contributes no children — the walk must never signal pids it did not verify.</td></tr>
+<tr><td><code>__destruct()</code></td><td>scriptui-05 (candy-scriptui-035): the zombie-reaper safety net, mirroring sugar-pty&#039;s PosixChild::pollDestruct policy — an already exited child gets its zombie reaped and its handles let go when the object dies without close(); a still-running child is NOT signalled from a destructor (destructors must not throw, and killing a live tree during GC could fire long after the owner stopped intending it). The command-level finally ladder is the real guarantee; this only cleans the process-table residue of abandoned handles.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-runtime">SugarCraft\ScriptUi\Runtime</h3>
+<h4 id="api-sugarcraft-scriptui-runtime-colourgate"><code>ColourGate</code> <small>final class</small></h4>
+<p>Resolves the colour capability for non-interactive output from the standard negotiation family (NO_COLOR / CLICOLOR / CLICOLOR_FORCE / FORCE_COLOR / TERM=dumb) plus the global <code>--ansi</code> / <code>--no-ansi</code> flags, and pins it as sugar-style&#039;s ambient profile so every <code>Style</code> minted afterwards — flag-built styles, log badges, and the sugar-markdown theme styles used by <code>format</code> — renders inside the resolved tier instead of emitting escapes the terminal would ignore.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static cap(?InputInterface $input = null): ColorProfile</code></td><td>The narrowest colour capability in force for this invocation. <code>ColorProfile::TrueColor</code> means &quot;no restriction&quot;.</td></tr>
+<tr><td><code>static ladder(): ColorProfile</code></td><td>scriptui-35 (finding 055): when no gate variable decides, believe the terminal&#039;s own advertisement instead of assuming TrueColor — <code>TERM=screen</code> / <code>vt100</code> used to receive <code>CSI 38;2;…</code> they ignore. Delegates to sugar-core&#039;s TERM/COLORTERM ladder with NO tty probe: a pipe still carries styled bytes (see the class note), it is only the terminal FAMILY that narrows the tier.</td></tr>
+<tr><td><code>static termIsDumb(): bool</code></td><td>scriptui-36 (finding 111): ONE shared dumb-terminal predicate over TERM — unset, set-but-empty, or literally <code>dumb</code>. termenv treats all three as dumb-equivalent; the old two sites each eyeballed <code>=== &#039;dumb&#039;</code>, so a <code>TERM=&#039;&#039;</code> session skipped both the colour route and the MODE posture and shipped DEC-private bytes into an environment that never advertised them. Both the colour ladder above and InteractiveRuntime::programOptions() now consume this.</td></tr>
+<tr><td><code>static install(?InputInterface $input = null): ColorProfile</code></td><td>Resolve the capability and pin it as the process-ambient profile for every <code>Style::new()</code> created afterwards. Returns the resolved cap so callers (tests) can assert it.</td></tr>
+<tr><td><code>static clamp(ColorProfile $requested, ?ColorProfile $ambient = null): ColorProfile</code></td><td>Clamp a requested profile to the ambient capability: styles that pin their own (higher) tier — e.g. a parsed 0-15 index claiming <code>Ansi</code> — must not re-widen colour past a gate that says <code>Ascii</code>.</td></tr>
+<tr><td><code>static resetAmbient(): void</code></td><td>Restore the unrestricted ambient (test isolation helper).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-cursormode"><code>CursorMode</code> <small>final class</small></h4>
+<p>The <code>--cursor-mode</code> vocabulary shared by the interactive text commands (<code>input</code>, <code>write</code>). gum accepts exactly blink | static | hidden and distinguishes all three: the two visible arms set the DECSCUSR cursor style (blink = blinking block <code>ESC[1 q</code>, static = steady block <code>ESC[2 q</code>, mirroring charmbracelet&#039;s cursor.Blink/cursor.Steady which program the same pair), while <code>hidden</code> asks the Program to hide the cursor via \SugarCraft\Core\ProgramOptions::$hideCursor (DEC private ?25l — a different mechanism, so the arms never collide). scriptui-73 (finding 099): before this row blink and static painted byte-identical frames and the documented distinction was hollow. Emission and the <code>ESC[0 q</code> exit reset live in InteractiveRuntime::emitCursorStyle(), gated on dumb TERM like every other DEC byte this app paints.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static isKnown(string $mode): bool</code></td><td></td></tr>
+<tr><td><code>static hidesCursor(string $mode): bool</code></td><td></td></tr>
+<tr><td><code>static styleSequence(string $mode): ?string</code></td><td>The DECSCUSR start-up sequence that gives the mode its visible meaning, or null when the arm needs no style byte: <code>hidden</code> is owned by the hide mechanism, and an unknown mode must not paint.</td></tr>
+<tr><td><code>static resetSequence(): string</code></td><td>Terminal-default restore, emitted on exit whenever a style sequence was painted: a scripted blink/steady cursor must not outlive the program into the user&#039;s shell.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-diagnostics"><code>Diagnostics</code> <small>final class</small></h4>
+<p>Single funnel for library diagnostics on the error stream.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static emit(string $bytes): void</code></td><td>Write bytes verbatim to the error stream — no newline is added.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-emphasis"><code>Emphasis</code> <small>final class</small></h4>
+<p>The single decoration door for hand-composed SGR inside interactive frames.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static sgr(int ...$codes): string</code></td><td>The SGR sequence for the requested codes, or &#039;&#039; when decoration is suppressed. <code>Ascii</code> keeps decoration (it drops COLOUR only — same contract sugar-style&#039;s tier docs state); <code>NoTty</code> strips to plain bytes so a frame painted under it is escape-free.</td></tr>
+<tr><td><code>static reset(): string</code></td><td>The reset terminator matching sgr()&#039;s opener.</td></tr>
+<tr><td><code>static stripDecor(string $text): string</code></td><td>Under a <code>NoTty</code> capability, remove SGR sequences a delegate rendered — sugar-forms&#039; ItemList forges its own cursor reverse-video with raw escapes (foreign rider: the gate belongs there too), while the README&#039;s <code>--no-ansi</code> promise covers the WHOLE frame, not just the parts candy-scriptui paints itself. Every non-NoTty tier passes the text through byte-identical.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-geometry"><code>Geometry</code> <small>final class</small></h4>
+<p>Best-effort terminal geometry for start-up sizing decisions.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static override(?array $size): void</code></td><td>Pin the reported size for the current process (null clears it).</td></tr>
+<tr><td><code>static columnsOrNull(): ?int</code></td><td></td></tr>
+<tr><td><code>static rowsOrNull(): ?int</code></td><td></td></tr>
+<tr><td><code>static size(): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-intakereader"><code>IntakeReader</code> <small>final class</small></h4>
+<p>Reads a piped data channel under the same wall-clock deadline TimeoutGuard arms around a prompt.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static read($stream, float $seconds): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-intaketimedout"><code>IntakeTimedOut</code> <small>final class</small></h4>
+<p>Raised by IntakeReader when the data channel stayed silent past the caller&#039;s <code>--timeout</code>; commands map it to TimeoutGuard::EXIT_TIMEOUT.</p>
+<h4 id="api-sugarcraft-scriptui-runtime-interactiveruntime"><code>InteractiveRuntime</code> <small>final class</small></h4>
+<p>Single launch chokepoint for every interactive \SugarCraft\Core\Program run in this CLI. It owns the two pipeline contract halves gum upholds:</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static programOptions(bool $useAltScreen, bool $hideCursor, LoopInterface $loop): ?ProgramOptions</code></td><td>Program options for an interactive run, or null when NO usable input terminal exists (pipes on both ends and no /dev/tty) — callers must then refuse with a diagnostic on stderr rather than start a Program that can only deadlock or consume piped bytes as keystrokes.</td></tr>
+<tr><td><code>static emitCursorStyle(string $cursorMode, ProgramOptions $options): bool</code></td><td>scriptui-73 (finding 099): paint the DECSCUSR style the chosen <code>--cursor-mode</code> word actually promises (blink <code>ESC[1 q</code>, static <code>ESC[2 q</code>) onto the same stream the Program will render to. Dumb TERM suppresses it — DECSCUSR is a CSI sequence a dumb terminal echoes instead of obeying, so it rides the same posture as the DEC-private modes above. <code>hidden</code> answers null here: the cursor hiding is ProgramOptions::$hideCursor&#039;s own DEC-private arm.</td></tr>
+<tr><td><code>static emitCursorReset(ProgramOptions $options): void</code></td><td>Restore the terminal&#039;s own cursor style on exit (scriptui-73). Called unconditionally when emitCursorStyle() painted — a scripted blinking/steady cursor must not outlive the program.</td></tr>
+<tr><td><code>static signalNotice(?bool $pcntlLoaded = null): ?string</code></td><td>scriptui-07 (candy-scriptui-036): the options above request signal-mapped cancellation (<code>catchInterrupts: true</code>), but sugar-core can only install the handler when ext-pcntl is loaded — without it SIGINT/SIGTERM take the default disposition (instant death: no 130/143 mapping, no teardown unwind). Surface that once on the diagnostic channel instead of letting the documented promise silently vanish. The returned sentence is the notice to print, or null when there is nothing to say (pcntl present, or already warned this run).</td></tr>
+<tr><td><code>static resetPcntlWarningLatch(): void</code></td><td>F13-W (CI-watch 2026-11-13): reopen the once-per-process pcntl warning latch. The latch is deliberate in production — one notice per run — but it is PROCESS-wide state: on a pcntl-less host (the Windows CI arms) any earlier in-process call through warnIfPcntlAbsent() consumes it before the honesty test runs, so the test can no longer observe its own first-notice contract. This seam lets the suite start from a known latch state without weakening production: callers in src/ are held to the once-per-run guarantee exactly as before.</td></tr>
+<tr><td><code>static isHeadless(): bool</code></td><td>scriptui-06 (candy-scriptui-002/-005): true exactly when programOptions() would refuse — no stdout terminal, no /dev/tty, no stdin terminal — i.e. the only honest spin shape is the direct-run arm (no key reader, no renderer, no DEC-mode writer). Callers must not paper over this null with a raw-STDIN Program fallback: that is how one 0x1B byte in the child&#039;s DATA stream once became a forged ESC cancellation, and how 38 bytes of <code>?25l/?2027h</code> chrome once corrupted a redirected data channel.</td></tr>
+<tr><td><code>static paintsToStderr(): bool</code></td><td>True when the UI frame will be painted somewhere OTHER than stdout — used to route pre-launch chrome (headers, prompts) onto the same stream the Program paints to.</td></tr>
+<tr><td><code>static paint(string $text): void</code></td><td>Write UI text (never result data) to the stream the interactive frame belongs on, per the paintStream() ladder. When nothing can display (every stream redirected, no /dev/tty) the text is dropped — corrupting a captured data file with chrome is worse than silence, and callers refuse the whole run in that shape anyway.</td></tr>
+<tr><td><code>static setTerminalProbesForTesting(?array $probes): void</code></td><td>Test seam (scriptui-34): fabricate the terminal-shape census without a real controlling terminal — keys setTerminalProbesForTesting() to null restores the honest probes.</td></tr>
+<tr><td><code>static stdoutIsTerminal(): bool</code></td><td></td></tr>
+<tr><td><code>static stderrIsTerminal(): bool</code></td><td></td></tr>
+<tr><td><code>static stdinIsTerminal(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-itemsource"><code>ItemSource</code> <small>final class</small></h4>
+<p>Shared item-source intake for choose and filter (scriptui-46, finding 064).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static collect(array $positionals, array $itemFlags, ?callable $stdinReader): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-optionlist"><code>OptionList</code> <small>final class</small></h4>
+<p>Expands repeatable list options: each occurrence may itself carry a comma-separated list, mirroring how scripts pass --selected=&quot;a,b&quot;. Items keep their exact bytes — no trimming, so a name with a leading space stays addressable via a repeated flag.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static expand(array $raw): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-positiveint"><code>PositiveInt</code> <small>final class</small></h4>
+<p>The strict numeric door for every int-ish flag.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(string $flag, mixed $raw): int</code></td><td>Parse a numeric flag value, refusing anything that is not a non-negative whole number with a localized diagnostic.</td></tr>
+<tr><td><code>static optional(string $flag, mixed $raw): ?int</code></td><td>Door for optional numeric flags: an unset/null value means &quot;not specified&quot; and passes through as null; anything present must still be a non-negative whole number.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-signalexit"><code>SignalExit</code> <small>final class</small></h4>
+<p>POSIX exit-code mapping for a Program run that ended because the OS delivered a signal to the process (Ctrl-C / SIGINT, SIGTERM, …).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static code(?int $stopSignal): ?int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-styleoptions"><code>StyleOptions</code> <small>final class</small></h4>
+<p>The lipgloss style surface gum embeds in EVERY interactive command.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static register(Command $command, array $skip = []): void</code></td><td>Register the shared style options on a command. Callers that already own one of these names for other semantics must opt out via $skip.</td></tr>
+<tr><td><code>static flags(InputInterface $input): array</code></td><td>Collect the registered flags into the StyleBuilder vocabulary.</td></tr>
+<tr><td><code>static active(array $flags): bool</code></td><td></td></tr>
+<tr><td><code>static frame(array $flags): ?Style</code></td><td>The frame style for a run, or null when no style flag was given — the untouched legacy path (byte-identical frames, zero overhead).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-styledframe"><code>StyledFrame</code> <small>final class</small></h4>
+<p>A model decorator that paints the lipgloss frame around an inner model.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Model $inner, private readonly Style $frame)</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string|View</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-runtime-timeoutguard"><code>TimeoutGuard</code> <small>final class</small></h4>
+<p>Wall-clock deadline for an interactive \SugarCraft\Core\Program run.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static arm(LoopInterface $loop, float $seconds, \Closure $onFire): self</code></td><td>Schedule a one-shot deadline on $loop. When $seconds &gt; 0 the timer flips fired() and invokes $onFire (typically <code>fn () =&gt; $program-&gt;kill()</code>) exactly once. When $seconds &lt;= 0 the guard is inert — no timer is registered and the run is never interrupted.</td></tr>
+<tr><td><code>fired(): bool</code></td><td>True once the deadline elapsed and $onFire ran.</td></tr>
+<tr><td><code>static tryParseSeconds(mixed $raw, float &amp;$seconds): bool</code></td><td>Strict parse of a <code>--timeout</code> option value into armable seconds.</td></tr>
+<tr><td><code>disarm(): void</code></td><td>Cancel a still-pending deadline. Safe (and cheap) to call after the timer already fired, when the guard was never armed, or more than once — the guard forgets its timer either way, so this is idempotent.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-scriptui-style">SugarCraft\ScriptUi\Style</h3>
+<h4 id="api-sugarcraft-scriptui-style-stylebuilder"><code>StyleBuilder</code> <small>final class</small></h4>
+<p>Builds a \SugarCraft\Style\Style from CLI flag values. Pure (no IO) so commands can unit-test the mapping.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromFlags(array $flags): Style</code></td><td></td></tr>
+<tr><td><code>static parseColor(string $v): Color</code></td><td>Accept hex (<code>#ff8000</code> / <code>#f80</code>), 0-15 ANSI palette indices, 0-255 256-colour palette indices, or the 16 canonical palette names (<code>red</code>, <code>bright-blue</code>, …).</td></tr>
+<tr><td><code>static parseColorWithProfile(string $v): array</code></td><td>Like parseColor() but also returns the narrowest ColorProfile the input requires: - hex / 6-digit / 3-digit → TrueColor - palette index 16-255 → Ansi256 - palette index 0-15 or a name → Ansi</td></tr>
+<tr><td><code>static parseHexColor(string $v): Color</code></td><td>Parse a hex colour (<code>#ff8000</code>, <code>ff8000</code>, <code>#f80</code>, <code>f80</code>), expanding the 3-digit CSS shorthand to 6 digits. Any other digit count is rejected with a message naming the offending value — before this existed, inputs like <code>#1234</code> fell through to a generic &quot;unrecognised color&quot; error.</td></tr>
+<tr><td><code>static frameRows(array $flags): int</code></td><td>Vertical chrome rows a flag-set adds OUTSIDE the content: border top+bottom (a configured border occupies rows even when <code>hidden</code> — that vocabulary is a placeholder posture, not an absence), plus the vertical margin and padding sides. scriptui-26: the pager subtracts this from its auto height so a themed frame never grows past the screen (the --height/--width contract stays CONTENT dimensions).</td></tr>
+<tr><td><code>static parseSides(string $raw): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-scriptui-style-substyleparser"><code>SubStyleParser</code> <small>final class</small></h4>
+<p>Parses gum-style per-element style sub-flags into a map of element name → Style.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(array $flags): array</code></td><td>Parse the array of <code>&lt;elem&gt;.&lt;prop&gt;=&lt;value&gt;</code> strings (or <code>&lt;prop&gt;=&lt;value&gt;</code> for the global element) into element-keyed styles.</td></tr>
+<tr><td><code>static get(array $map, string $element): Style</code></td><td>Look up the style for <code>$element</code>, falling back to the global <code>*</code> style and finally an empty Style if neither was set.</td></tr>
+</tbody>
+</table>
+
+<h3 id="keys-and-input" style="margin-top: 32px;">Keys and input</h3>
     <p>Every interactive command is keyboard-driven — the README carries the full
     key map (arrows and Enter navigate; <code>j</code>/<code>k</code> and
     <code>g</code>/<code>G</code> move and jump in lists, the vim style applies
     except in <code>filter</code> where they are typed into the query; Esc aborts
-    with exit <code>1</code> except in <code>pager</code>, where it finishes like
+    with exit <code>1</code> (exit <code>2</code> in <code>confirm</code>, so an abort stays apart from a no) except in <code>pager</code>, where it finishes like
     <code>q</code>; Ctrl+C aborts with <code>130</code>). There is no mouse.
     Color follows one contract everywhere: <code>--no-ansi</code> is final,
     <code>--ansi</code> outranks every environment rule, and
@@ -270,7 +937,24 @@ $app = new Application();
 $app-&gt;scan('My\Commands');
 $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code></pre>
 
-    <h3 id="new-attribute-types" style="margin-top: 40px;">New attribute types</h3>
+    <h3 id="tasks" style="margin-top: 40px;">Tasks</h3>
+    <p><strong>Branch on an abort.</strong> A cancelled <code>choose</code> exits 1, so the script can tell a pick from a cancel.</p>
+    <pre class="code"><code class="language-shell">if ! choice=$(candy-scriptui choose Pizza Burger Salad); then
+  echo "nothing selected" &gt;&amp;2
+  exit 1
+fi</code></pre>
+
+    <p><strong>Bound a pipeline with a timeout.</strong> <code>--timeout</code> aborts after N seconds with exit 124, so an unattended run cannot wait forever.</p>
+    <pre class="code"><code class="language-shell">git branch | candy-scriptui filter --fuzzy --timeout 30</code></pre>
+
+    <p><strong>Run a build under a spinner and keep its exit code.</strong> <code>spin</code> forwards the child's own exit code.</p>
+    <pre class="code"><code class="language-shell">candy-scriptui spin --title "Building..." -- make build
+echo "make exited $?"</code></pre>
+
+    <p><strong>Render a CSV report as a bordered table.</strong> <code>--has-header</code> treats the first row as the header.</p>
+    <pre class="code"><code class="language-shell">candy-scriptui table --has-header &lt; report.csv</code></pre>
+
+    <h3 id="api-reference-attributes-and-discovery" style="margin-top: 40px;">API reference: attributes and discovery</h3>
     <table class="api-table">
     <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
     <tr><td><code>Command</code></td><td><code>SugarCraft\ScriptUi\Attribute\Command</code></td><td>#[Attribute] for auto-registering commands</td></tr>
@@ -278,6 +962,15 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
     <tr><td><code>ValueEnum</code></td><td><code>SugarCraft\ScriptUi\Attribute\ValueEnum</code></td><td>Constrained enum for flag values</td></tr>
     <tr><td><code>CommandScanner</code></td><td><code>SugarCraft\ScriptUi\Discovery\CommandScanner</code></td><td>Namespace scanner for #[Command] classes</td></tr>
     <tr><td><code>Application::scan()</code></td><td><code>SugarCraft\ScriptUi\Application</code></td><td>Opt-in discovery method</td></tr>
+    <tr><td><code>ChooseCommand</code></td><td><code>SugarCraft\ScriptUi\Command\ChooseCommand</code></td><td>The <code>choose</code> subcommand; prints the pick and exits 1 on abort</td></tr>
+    <tr><td><code>ChooseModel</code></td><td><code>SugarCraft\ScriptUi\Model\ChooseModel</code></td><td>Single and multi-select list state behind <code>choose</code></td></tr>
+    <tr><td><code>FilterCommand</code></td><td><code>SugarCraft\ScriptUi\Command\FilterCommand</code></td><td>The <code>filter</code> subcommand; reads stdin lines and submits the highlighted match</td></tr>
+    <tr><td><code>FilterModel</code></td><td><code>SugarCraft\ScriptUi\Model\FilterModel</code></td><td>Filter-mode state; substring matching, or Smith-Waterman scoring with <code>--fuzzy</code></td></tr>
+    <tr><td><code>SpinCommand</code></td><td><code>SugarCraft\ScriptUi\Command\SpinCommand</code></td><td>The <code>spin</code> subcommand; runs a child under a spinner and forwards its exit code</td></tr>
+    <tr><td><code>FormatCommand</code></td><td><code>SugarCraft\ScriptUi\Command\FormatCommand</code></td><td>The <code>format</code> subcommand; renders Markdown through SugarMarkdown</td></tr>
+    <tr><td><code>TableCommand</code></td><td><code>SugarCraft\ScriptUi\Command\TableCommand</code></td><td>The <code>table</code> subcommand; renders CSV or TSV with a border</td></tr>
+    <tr><td><code>RealProcess</code></td><td><code>SugarCraft\ScriptUi\Process\RealProcess</code></td><td>Non-PTY child handle; owns spawn, drain, signal and reap</td></tr>
+    <tr><td><code>InteractiveRuntime</code></td><td><code>SugarCraft\ScriptUi\Runtime\InteractiveRuntime</code></td><td>Single launch point for every interactive run; keys stay on the terminal</td></tr>
     </table>
 
     <h3 id="enhanced-help" style="margin-top: 40px;">Enhanced help</h3>
@@ -304,12 +997,82 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
     </table>
     <p>candy-scriptui also reads <code>CANDY_SCRIPTUI_*</code> env fallbacks through a fail-closed allow-list of eighteen presentation option names — <code>CANDY_SCRIPTUI_&lt;OPTION&gt;</code> in uppercase arms that option when no explicit CLI flag is given, and names outside the list are ignored. Every option that answers for the user, grants capability, or redirects data is excluded by construction — <code>allow-env</code>, <code>default</code>, <code>file</code>, <code>out</code>, <code>value</code>, <code>selected</code>, <code>type</code>, <code>shell</code>, <code>password</code> — so a hostile environment can never retarget a sink or weaken a fail-closed flag. The roster is pinned in <code>EnvVarFallbackTest</code>. That exclusion is the lesson of the old universal option↔env mapping, where <code>CANDY_SCRIPTUI_ALLOW_ENV='*'</code> could arm <code>format --type template</code> to exfiltrate the whole environment and <code>CANDY_SCRIPTUI_DEFAULT=yes</code> silently answered <code>confirm</code>; both names now sit outside the allow-list and are ignored with no notice.</p>
 
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>Each subcommand takes its own flags, and <code>candy-scriptui &lt;command&gt; --help</code> lists them. These are the options that shape every command.</p>
+<table class="api-table">
+<tr><th>Option or variable</th><th>Scope</th><th>Effect</th></tr>
+<tr><td><code>--ansi</code> / <code>--no-ansi</code></td><td>Every command</td><td><code>--no-ansi</code> is final. <code>--ansi</code> outranks every environment rule.</td></tr>
+<tr><td><code>--timeout</code></td><td>Interactive commands, <code>spin</code></td><td>Gives up after the deadline and exits <code>124</code>. A malformed value exits <code>1</code>; it is never read as "no deadline".</td></tr>
+<tr><td><code>--show-output</code> / <code>--show-error</code></td><td><code>spin</code></td><td>Flushes the child's captured output, including after a timeout.</td></tr>
+<tr><td><code>FORCE_COLOR</code>, <code>CLICOLOR_FORCE</code>, <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>TERM=dumb</code></td><td>Every command</td><td>Color ladder, resolved in that order. The README's Environment section has the full table.</td></tr>
+<tr><td><code>CANDY_SCRIPTUI_&lt;OPTION&gt;</code></td><td>Presentation options</td><td>Fallback for one of eighteen allow-listed options. It applies only when no CLI flag is given. Names outside the list are ignored, and options that grant capability or redirect data are never read from the environment.</td></tr>
+<tr><td><code>CANDY_SCRIPTUI_NO_DECORATION</code></td><td>Every command</td><td>Strips decoration from the output.</td></tr>
+<tr><td><code>GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;</code></td><td>Mirror for gum scripts</td><td>A read-only, allow-listed mirror that lets an existing <code>gum</code> script keep its theming.</td></tr>
+</table>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p><code>style</code> applies ANSI attributes to its arguments or to stdin, and takes <code>--foreground</code>, <code>--background</code> and <code>--bold</code>. <code>format</code> accepts the same color flags, and also <code>--code</code>. The color tier is derived from <code>TERM</code>, so the palette follows the depth the terminal advertises. <code>CANDY_SCRIPTUI_NO_DECORATION</code> strips the decoration when a script needs plain output. The color contract above applies to every command.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/cli.php</code> builds an <code>Application</code> in-process, adds one custom <code>status</code> command, and runs the argv through it. <code>php examples/cli.php status</code> prints <code>OK</code> and exits <code>0</code>. <code>php examples/cli.php stat</code> exits <code>1</code> with the typo suggestion <code>Did you mean "status"?</code>.</li>
+      <li><code>examples/setup-script.sh</code> is an interactive shell script. It chooses a shell flavor, confirms it, and branches on the confirm exit code. It uses a <code>candy-scriptui</code> on the <code>PATH</code> when one is present, and otherwise this checkout's <code>bin/</code>. Run it from a terminal.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/cli.php status
+./examples/setup-script.sh</code></pre>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite covers the commands, the model logic and the runtime. <code>BinExitCodeTest</code> pins the exit codes through the real binary, and <code>GumEnvMirrorTest</code> covers the <code>GUM_*</code> mirror. <code>EnvVarFallbackTest</code> covers the <code>CANDY_SCRIPTUI_*</code> allow-list. <code>PharBuildScriptTest</code> checks the phar build, and <code>LocaleParityTest</code> checks the catalogs.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="an-interactive-command-exits-1-with-a-notice-on-stderr" style="margin-top: 24px;">An interactive command exits 1 with a notice on STDERR</h3>
+    <p>It has no usable controlling terminal. <code>choose</code>, <code>confirm</code>, <code>filter</code>, <code>input</code>, <code>write</code>, <code>file</code> and <code>pager</code> refuse up front rather than paint a fake session. Run them from a terminal, or give them input and output that a terminal can reach.</p>
+
+    <h3 id="the-captured-output-contains-the-interactive-frame" style="margin-top: 24px;">The captured output contains the interactive frame</h3>
+    <p>It should not. When stdout is redirected, painting goes to STDERR, and only the answer goes to stdout. Quote every capture, and never <code>eval</code> the output of a third-party script.</p>
+
+    <h3 id="a-script-cannot-tell-a-timeout-from-the-child-s-own-exit-code" style="margin-top: 24px;">A script cannot tell a timeout from the child's own exit code</h3>
+    <p><code>spin</code> forwards the child's exit code verbatim, the same as <code>gum</code>. A child that exits <code>2</code>, <code>124</code>, <code>130</code> or <code>143</code> looks the same as a timeout or an interrupt. Gate on the child's success (<code>0</code>) rather than on a specific non-zero code.</p>
+
+    <h3 id="a-discovered-command-is-not-found" style="margin-top: 24px;">A discovered command is not found</h3>
+    <p><code>Application::scan()</code> registers only the classes that are already loaded. Call <code>class_exists()</code> on each class first, as the auto-discovery example does.</p>
+
+    <h3 id="an-environment-fallback-has-no-effect" style="margin-top: 24px;">An environment fallback has no effect</h3>
+    <p>The fallback applies only to allow-listed options, and only when no CLI flag is given for that option. Check the name against the eighteen-option list, and check that the flag is absent from the command line.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>candy-scriptui follows the command set and the exit-code conventions of <a href="https://github.com/charmbracelet/gum">gum</a>. SugarCraft is developed as a native PHP project, so the mapping is a port of behavior, not of Go code.</p>
+<table class="api-table">
+<tr><th scope="col">gum</th><th scope="col">candy-scriptui</th><th scope="col">Notes</th></tr>
+<tr><td>choose, confirm, file, filter, input, write</td><td>Same subcommands</td><td>Interactive. They refuse without a terminal, and they keep keys off the data stream.</td></tr>
+<tr><td>format, join, log, pager, style, table</td><td>Same subcommands</td><td>Format adds <code>--code</code>. Pager adds <code>--hard-wrap</code> and <code>--fade</code>.</td></tr>
+<tr><td>spin</td><td><code>spin</code></td><td>Forwards the child's exit code. Runs the child through the <code>RealProcess</code> wrapper.</td></tr>
+<tr><td><code>GUM_*</code> environment</td><td><code>GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;</code> mirror</td><td>Read-only and allow-listed.</td></tr>
+<tr><td>Exit code <code>124</code> on <code>--timeout</code></td><td>Same</td><td>Matches GNU <code>timeout(1)</code>.</td></tr>
+</table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p><code>Application</code> is the Symfony Console shell. It adds <code>scan()</code>, <code>add()</code> and the version ladder. Each subcommand is one class in <code>Command/</code>. The interactive commands build a model from <code>Model/</code>, which holds the state of one screen, and they hand it to <code>Runtime/InteractiveRuntime</code>. That class is the single launch point for every interactive run. It keeps keys on the terminal and sends the frame to STDERR when stdout is redirected. <code>Process/RealProcess</code> runs the child for <code>spin</code>. <code>Discovery/CommandScanner</code> finds the <code>#[Command]</code> classes, and <code>Style/StyleBuilder</code> builds the styles. <code>Help/</code> and <code>Completion/</code> hold the help and completion generators, and <code>Lang</code> is the i18n facade.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The version comes from the phar metadata first, then from the nearest <code>composer.json</code> with a version, and finally from a dev fallback. The rolling phar is rebuilt for every commit that touches the app, so pin a sha256 sidecar if a script must stay on one build. The README's compatibility section covers the <code>gum</code> invocations.</p>
+
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-scriptui">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-scriptui/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-scriptui/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/gum">gum</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    </ul>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-forms.html">sugar-forms</a> is the form-primitives base the interactive subcommands are built on.</li>
+      <li><a href="sugar-core.html">sugar-core</a> supplies the Model, Msg and Cmd runtime types the interactive screens run on.</li>
+      <li><a href="sugar-style.html">sugar-style</a> supplies the <code>Style</code> type behind the styled output.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

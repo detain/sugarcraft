@@ -742,10 +742,10 @@ final class EngineExecutor implements ForksAskFreeAgents
      * Nothing to do here: this executor runs INSIDE the child
      * {@see AgentWorkerPool} forks, so this process's own state is not where a
      * cancel can land. The pool's kill site is the cancel, and it reaches
-     * everything this executor's run started (audit F-E2-rem): the pool kills
+     * everything this executor's run started: the pool kills
      * the forked child with {@see \SugarCraft\Code\Support\ProcessContainment::killTree()}
      * (or, when the TUI's event loop is driving the run, its loop-tick twin
-     * killTreeAsync() — audit R3), whose walk takes the engine's own turn
+     * killTreeAsync()), whose walk takes the engine's own turn
      * forks below it and every Bash command they run in its own `setsid`
      * session — a lone signal to the child would leave those running for
      * nobody.

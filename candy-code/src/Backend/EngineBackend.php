@@ -6,8 +6,10 @@ namespace SugarCraft\Code\Backend;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\StreamSelectLoop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\RateGate;
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Agents\PathJailConfig;
 use SugarCraft\Code\App\App;
@@ -927,8 +929,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * The model this backend's requests actually go to, when its provider
-     * talks to one other than {@see $model} and has learned which (audit
-     * 15b-35) - the SGLang server's served model on a default-id launch.
+     * talks to one other than {@see $model} and has learned which: the SGLang server's served model on a default-id launch.
      * Null otherwise, and for any provider that cannot say.
      *
      * The parent learns it in one of two ways: the provider's own discovery
@@ -945,7 +946,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * The model id this backend was BUILT with — the configured one, which
      * {@see servedModel()} overrides when the provider has learned it talks to
      * another. Read by `Renderer`'s status-bar model segment as the fallback,
-     * the same order `Tui\Renderer::modelLabel()` applies (audit 15b-35).
+     * the same order `Tui\Renderer::modelLabel()` applies.
      */
     public function model(): string
     {
@@ -3470,17 +3471,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             return null;
         }
         $pid = getmypid();
-        $lastBeat = 0.0;
+        $gate = RateGate::new(1.0, static fn (): float => microtime(true));
 
-        return static function () use ($pid, $onHeartbeat, $onReasoning, &$lastBeat): void {
+        return static function () use ($pid, $onHeartbeat, $onReasoning, $gate): void {
             if (getmypid() !== $pid) {
                 return;
             }
-            $now = microtime(true);
-            if ($now - $lastBeat < 1.0) {
+            if (!$gate->allow()) {
                 return;
             }
-            $lastBeat = $now;
             $onHeartbeat !== null ? $onHeartbeat() : $onReasoning('');
         };
     }
@@ -5538,7 +5537,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * 1.C-1: on an INTERACTIVE turn the socket also carries questions. The
      * turn runs on a copy of this backend whose approver is a
      * {@see ChildChannel}: each ASK goes up as an `ask` frame and the child
-     * blocks for the parent's `ask_reply`. Built here, in the child, so the
+     * waits for the parent's `ask_reply`. A loop-driven turn suspends its
+     * fiber on that reply's promise and the child's loop resumes it, so
+     * nothing blocks; only a turn that is not loop-driven blocks on the
+     * socket. Built here, in the child, so the
      * channel's owner pid is the turn child's own — a parallel Task
      * grandchild that inherits the approver is refused rather than allowed
      * to interleave frames on this stream (see {@see ChildChannel}).
@@ -5554,6 +5556,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
+            // P4-12 CC-1 e0: the fork copied the parent's loop, timers, and
+            // read streams. The turn runs on the loop (LoopDrivenTurn), so
+            // it must not drive the parent's copy, which would fire the
+            // parent's render and signal callbacks and read the parent's
+            // keystrokes. A fresh loop belongs to this child alone.
+            Loop::set(new StreamSelectLoop());
             // C-PRV-4.a: the child's provider copy carries the gate's mode
             // for THIS turn (the fork inherited the same PermissionGate
             // object the parent had at fork time — the ChildChannel below
@@ -5625,7 +5633,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // batch is exactly what made a multi-tool turn look like a silent
             // "thinking" spinner (and what made the parent's single
             // wall-clock timer kill turns that were in fact making progress).
-            $message = $engine->runTurn(
+            // P4-12 CC-1 e0: the turn runs inside a fiber on the loop, so an
+            // approver or client answer suspends it rather than blocking the
+            // socket (see LoopDrivenTurn). A turn that never asks returns
+            // straight from the fiber's first run, as it did before.
+            $message = LoopDrivenTurn::run(static fn (): Message => $engine->runTurn(
                 $typed,
                 // Assistant text crosses the fork on the SAME channel and by
                 // the same rule as the tool events: a plain in-process
@@ -5693,7 +5705,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     $engine->mainMailbox(),
                     McpBackgroundInbox::forTurn(),
                 ),
-            )->withAttachmentNotice($attachmentNotice);
+            ), $channel)->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {
                 $transcriptRows[] = ['usage' => $row->usage?->toArray()] + $row->jsonSerialize();
@@ -5865,21 +5877,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private static function drainFrames(string &$buffer, bool &$corrupt = false): array
     {
         $frames = [];
+        // An integer cursor walks the buffer in place. Re-slicing the tail
+        // after every frame copies what is left each time, which is quadratic
+        // when one read carries many frames (rank 8). The buffer is cut once,
+        // after the walk, and only when a whole frame was consumed.
+        $cursor = 0;
+        $size = strlen($buffer);
 
-        while (strlen($buffer) >= 4) {
-            $header = unpack('N', substr($buffer, 0, 4));
+        while ($size - $cursor >= 4) {
+            $header = unpack('N', $buffer, $cursor);
             $length = is_array($header) ? (int) ($header[1] ?? 0) : 0;
             if ($length <= 0 || $length > self::MAX_FRAME_BYTES) {
                 $buffer = '';
                 $corrupt = true;
-                break;
+
+                return $frames;
             }
-            if (strlen($buffer) < 4 + $length) {
+            if ($size - $cursor < 4 + $length) {
                 break;
             }
 
-            $body = substr($buffer, 4, $length);
-            $buffer = substr($buffer, 4 + $length);
+            $body = substr($buffer, $cursor + 4, $length);
+            $cursor += 4 + $length;
 
             // allowed_classes => false: a hostile/corrupt payload must never
             // be able to instantiate anything (see encodeEvent()).
@@ -5889,9 +5908,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // and the bytes disagree, so the offset is no longer trusted.
                 $buffer = '';
                 $corrupt = true;
-                break;
+
+                return $frames;
             }
             $frames[] = $decoded;
+        }
+
+        if ($cursor > 0) {
+            $buffer = (string) substr($buffer, $cursor);
         }
 
         return $frames;
@@ -6326,6 +6350,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
     {
         try {
+            // Accepted residual (AUD 12.1 A4, rows 47 and 49): this no-fork path
+            // (pcntl_fork or the socket pair missing, e.g. Windows) has no child
+            // and no channel. Subagents and ShellSend waits run on the TUI loop
+            // here and cannot see a parent stop until they end. The Retry-based
+            // ShellSend waits (ShellSend::relayReady and sendBounded, both
+            // Retry::bounded usleep loops) are named in the same exception. The
+            // whole turn already blocks this loop, so moving only those waits
+            // would not change that.
+            //
+            // A second no-fork route reaches the same waits without passing
+            // through this method: AgentWorkerPool::startAgent's sequential arm
+            // (no pcntl_fork and no injected executor) runs executeInline() in
+            // the parent with the forkedExecutor, an EngineExecutor. A /workflow
+            // stage's agent turn therefore runs inside driveWorkflowFiber() on
+            // the TUI loop, and any ShellSend wait or SubagentsTool::wait that
+            // agent calls blocks that loop too. The verdict is unchanged: the
+            // whole agent turn already blocks the loop on that route.
             $engine = $this;
             // ISS-072: this path has no child, so the ranking is primed here
             // — still never in the parent of a fork.

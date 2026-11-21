@@ -9,7 +9,6 @@ use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
 use SugarCraft\Code\Hooks\HookConfig;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The P1 channel-plugin-core wiring for bundles the user has trusted BY NAME:
@@ -120,6 +119,13 @@ trait TrustedBundleHooks
                 continue;
             }
 
+            // Name trust is user-tier only (ruling 2026-11-20): a project-tier
+            // copy of a trusted name registers no hooks. Its own refusal notice
+            // is raised in {@see Bootstrap::bundles()}, not in this aggregate.
+            if ($bundle->tier !== 'user') {
+                continue;
+            }
+
             foreach ($bundle->hooksPaths() as $path) {
                 if (!\is_file($path)) {
                     // The bare `/hooks` directory candidate is not a loadable
@@ -129,7 +135,7 @@ trait TrustedBundleHooks
                     continue;
                 }
 
-                if (!ContainedPath::below($path, $bundle->dir)) {
+                if (!\SugarCraft\Core\Util\PathJail::below($path, $bundle->dir)) {
                     $declined[] = Lang::t('bundles.hooks.uncontained', [
                         'bundle' => $bundle->name,
                         'file' => $path,

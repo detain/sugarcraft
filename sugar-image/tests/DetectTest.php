@@ -7,6 +7,7 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\Capability;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 final class DetectTest extends TestCase
 {
@@ -66,6 +67,7 @@ final class DetectTest extends TestCase
     public function testKittyViaKittyWindowId(): void
     {
         putenv('KITTY_WINDOW_ID=12345');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty);
         $this->assertFalse($cap->iterm2);
@@ -76,6 +78,7 @@ final class DetectTest extends TestCase
     public function testKittyViaTermProgramGhostty(): void
     {
         putenv('TERM_PROGRAM=ghostty');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty);
     }
@@ -83,6 +86,7 @@ final class DetectTest extends TestCase
     public function testKittyViaTermProgramWezTerm(): void
     {
         putenv('TERM_PROGRAM=WezTerm');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty);
     }
@@ -90,6 +94,7 @@ final class DetectTest extends TestCase
     public function testKittyViaXtermKittyTerm(): void
     {
         putenv('TERM=xterm-kitty');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty);
     }
@@ -107,6 +112,7 @@ final class DetectTest extends TestCase
         // WezTerm supports both Kitty and iTerm2 protocols; per our precedence
         // Kitty wins, so TERM_PROGRAM=WezTerm returns kitty capability.
         putenv('TERM_PROGRAM=WezTerm');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty);
         $this->assertFalse($cap->iterm2);
@@ -133,6 +139,7 @@ final class DetectTest extends TestCase
     public function testWezTermIsKittyOnlyNotIterm2(): void
     {
         putenv('TERM_PROGRAM=WezTerm');
+        KittyTerminal::answer();
         $cap = Detect::probe();
         $this->assertTrue($cap->kitty, 'WezTerm must be detected as Kitty');
         $this->assertFalse($cap->iterm2, 'WezTerm must NOT be detected as iTerm2');
@@ -278,6 +285,7 @@ final class DetectTest extends TestCase
         putenv('TERM=mlterm');
         putenv('KITTY_WINDOW_ID=7');
 
+        KittyTerminal::answer();
         $cap = Detect::probe();
 
         $this->assertTrue($cap->kitty);
@@ -401,15 +409,18 @@ final class DetectTest extends TestCase
 
     public function testKittyEnvVarPreventsDa1Query(): void
     {
-        // When Kitty is detected via env vars, DA1 should not be called.
-        // We verify this by checking that lastDa1Reply() is null.
+        // A Kitty claim the APC reply confirms skips the DA1 round-trip: the
+        // reply window closes on the DA1 answer the query already read, and
+        // that answer is kept as the last DA1 reply.
         putenv('KITTY_WINDOW_ID=99');
         Detect::reset();
 
+        KittyTerminal::answer();
         $cap = Detect::probe();
 
         $this->assertTrue($cap->kitty);
-        $this->assertNull(Detect::lastDa1Reply());
+        $this->assertNotNull(Detect::lastDa1Reply());
+        $this->assertStringContainsString("\x1b[?62;4c", (string) Detect::lastDa1Reply());
     }
 
     public function testLastDa1ReplyRecordsRawResponse(): void
@@ -629,7 +640,7 @@ final class DetectTest extends TestCase
         Detect::reset();
         putenv('KITTY_WINDOW_ID=1');
 
-        @fwrite($pair['write'], "\x1b[6;16;8t");
+        @fwrite($pair['write'], KittyTerminal::OK_REPLY . KittyTerminal::DA1_REPLY . "\x1b[6;16;8t");
         @fflush($pair['write']);
 
         $cap = Detect::probe();

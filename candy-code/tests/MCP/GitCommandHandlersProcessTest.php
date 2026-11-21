@@ -182,6 +182,42 @@ final class GitCommandHandlersProcessTest extends TestCase
     }
 
     /**
+     * A hook that exits on its own but leaves a backgrounded child holding git's
+     * pipes: git is gone well before the 5 s bound, yet the held pipe keeps the
+     * call open, so the call is bounded by its timeout. At that deadline the
+     * process group is killed, the backgrounded child dies with it, and the
+     * result reports the timeout. The commit itself may already exist, because
+     * git finished when the hook exited; the call still reports the timeout.
+     */
+    public function testABackgroundedHookChildDoesNotStallTheCommitToItsTimeout(): void
+    {
+        $pidFile = $this->tempDir . '/background.pid';
+        $this->installPreCommitHook("sleep 20 &\necho \$! > " . escapeshellarg($pidFile) . "\nexit 0");
+        $handlers = new GitCommandHandlers($this->repoPath, timeoutSeconds: 5.0);
+
+        $started = microtime(true);
+        $result = $handlers->gitCommit('background hook commit');
+        $elapsed = microtime(true) - $started;
+
+        $this->assertTrue($result->isFailure(), 'the held pipe must keep the call to its timeout');
+        $this->assertStringContainsString('timed out after 5s', (string) $result->error);
+        $this->assertGreaterThanOrEqual(4.0, $elapsed, 'the call waits for the deadline while the pipe is held');
+        $this->assertLessThan(9.0, $elapsed, 'a five-second bound plus the TERM/KILL ladder must stay bounded');
+
+        if (ProcessContainment::detachedSpawnBinary() === '' || !function_exists('posix_kill')) {
+            $this->markTestIncomplete('no usable setsid(1)/posix here: git does not lead its own group to kill');
+        }
+
+        $this->assertFileExists($pidFile, 'the hook never recorded its backgrounded child');
+        $grandchild = (int) trim((string) file_get_contents($pidFile));
+        $this->assertGreaterThan(0, $grandchild);
+        $this->assertTrue(
+            $this->awaitGone($grandchild, 3.0),
+            "the hook's backgrounded child (pid {$grandchild}) survived the timeout",
+        );
+    }
+
+    /**
      * Audit R18: the bound is configurable from `.mcp.json`. A `git` entry's
      * `timeout` reaches the handlers McpClient builds, so a hook that sleeps
      * well past it is killed at the configured second — before the fix the

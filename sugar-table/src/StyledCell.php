@@ -20,7 +20,7 @@ final class StyledCell
         $this->style = $ansiStyle;
     }
 
-    /** Sole construction door (audit ST-49, finding 060): value objects are built via ::new(). */
+    /** Sole construction door: value objects are built via ::new(). */
     public static function new(mixed $value, string $ansiStyle = ''): self
     {
         return new self(value: $value, ansiStyle: $ansiStyle);

@@ -402,7 +402,7 @@ trait AnthropicMessagesWire
         return $rate >= 0.0 && is_finite($rate) ? $rate : null;
     }
     /**
-     * USD per 1K CACHE tokens for `$model` (audit A15, the cache half): `read`
+     * USD per 1K CACHE tokens for `$model` (the cache half): `read`
      * prices `cache_read_input_tokens` / Gemini's `cachedContentTokenCount`,
      * `write` prices `cache_creation_input_tokens`. Null only when the rate it
      * resolves to is unknown or fails validation - the same loud unpriced road

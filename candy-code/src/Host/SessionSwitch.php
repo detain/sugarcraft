@@ -43,8 +43,7 @@ final class SessionSwitch
      * {@see \SugarCraft\Code\Chat::switchToSession()} (picker Enter, tab
      * click, Ctrl+Tab), its palette New session, the lock re-take and a
      * background handoff landing. Shared so the routes cannot drift apart
-     * again - the breaker reset was once present on `/clear` alone
-     * (audit 15b-06).
+     * again - the breaker reset was once present on `/clear` alone.
      *
      * - `pendingCompactionId`: a `/compact` issued against the old transcript
      *   must not rewrite the new one when its summary lands.

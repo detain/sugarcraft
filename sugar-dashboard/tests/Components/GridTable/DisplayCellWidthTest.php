@@ -282,9 +282,8 @@ final class DisplayCellWidthTest extends TestCase
         // the column reaches 15 either way (4 + 11 on master, 6 + 9 here). The frozen cell
         // 日本 is four cells and six bytes: str_pad pads by bytes, so on master
         // it reaches 13 cells, two short of the 15-cell column. The frozen half must reach
-        // 15 cells, then the extra right wall that renderFrozenRow writes before the
-        // divider. That wall makes the frozen data row 34 cells wide, one more than
-        // the 33-cell frame, and the pin below records it as a defect. The row is
+        // 15 cells. The freeze divider ║ takes the seat of the wall after the frozen
+        // half, so the data row is 33 cells wide, the same as the frame. The row is
         // split at the freeze divider ║ so only the frozen half is measured.
         $columns = [Column::new('name', 'Name'), Column::new('city', 'City')];
         $rows = [
@@ -295,33 +294,23 @@ final class DisplayCellWidthTest extends TestCase
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
         $frozenHalf = explode('║', explode("\n", $rendered)[4])[0];
 
-        // Pinned as it is, not as correct. The frozen data row is 34 cells wide
-        // because renderFrozenRow writes an extra right wall before the divider,
-        // one more than the 33-cell frame. The defect is
-        // tracked as P0-A14, which depends on P0-A11: the extra wall in
-        // renderFrozenRow is removed there and this pin is re-pinned. The
-        // literals below stay as they are.
-        self::assertSame('┃日本' . str_repeat(' ', 11) . '┃', $frozenHalf);
-        self::assertSame(17, Width::string($frozenHalf));
+        self::assertSame('┃日本' . str_repeat(' ', 11), $frozenHalf);
+        self::assertSame(16, Width::string($frozenHalf));
 
-        // Whole-row pins. assertFrameIsRectangular cannot hold here: the frame is
-        // 33 cells, and the two frozen data rows (lines 3 and 4) are the 34-cell
-        // defect. Every other line must stay at the frame width.
+        // Whole-row pins: every line of the frame, frozen data rows included,
+        // is the 33-cell frame width (P0-A14).
         $lines = explode("\n", $rendered);
-        foreach ([0, 1, 2, 5, 6] as $frameLine) {
+        foreach ([0, 1, 2, 3, 4, 5, 6] as $frameLine) {
             self::assertSame(33, Width::string($lines[$frameLine]), "frame line {$frameLine}");
         }
         self::assertSame(
-            '┃日本語' . str_repeat(' ', 9) . '┃║東京都' . str_repeat(' ', 9) . '┃',
+            '┃日本語' . str_repeat(' ', 9) . '║東京都' . str_repeat(' ', 9) . '┃',
             $lines[3],
         );
         self::assertSame(
-            '┃日本' . str_repeat(' ', 11) . '┃║東京' . str_repeat(' ', 11) . '┃',
+            '┃日本' . str_repeat(' ', 11) . '║東京' . str_repeat(' ', 11) . '┃',
             $lines[4],
         );
-        // Pinned as it is: tracked as P0-A14, which depends on P0-A11.
-        self::assertSame(34, Width::string($lines[3]));
-        self::assertSame(34, Width::string($lines[4]));
     }
 
     public function testScrollingHalfOfAFrozenRowPadsCjkCellsByDisplayWidth(): void
@@ -338,11 +327,8 @@ final class DisplayCellWidthTest extends TestCase
         $rendered = GridTable::new($columns, $rows)->freezeColumns(1)->setSize(30, 10)->render();
         $scrollHalf = explode('║', explode("\n", $rendered)[4])[1];
 
-        // Pinned as it is, not as correct: this half is part of the same 34-cell frozen
-        // row. renderFrozenRow writes an extra right wall before the divider, one more
-        // than the 33-cell frame (see the frozen-half test). The same defect is
-        // tracked as P0-A14, which depends on P0-A11. The literals stay until P0-A14
-        // re-pins them.
+        // The frozen row is 33 cells wide, so this half runs from the divider to the
+        // closing wall (see the frozen-half test).
         self::assertSame('東京' . str_repeat(' ', 11) . '┃', $scrollHalf);
         self::assertSame(16, Width::string($scrollHalf));
     }

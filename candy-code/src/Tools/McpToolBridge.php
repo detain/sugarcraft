@@ -18,6 +18,7 @@ use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\ToolResult as BootProbe;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
 /**
@@ -147,7 +148,10 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * tools take, clipped with the trait's announced marker. Before it, an
      * MCP result was the one tool output nothing capped — a server returning
      * a whole database dump went into every later request of the turn
-     * verbatim. Zero or negative disables the cap.
+     * verbatim. Zero or negative takes the 8 MiB retention ceiling instead
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\Bash::DEFAULT_RETAINED_BYTES}),
+     * the same ruling Bash and Grep apply to their own bounds: no output bound
+     * in the tool layer is unbounded.
      *
      * $backgroundAfterSeconds is the C-MCP-3.d hand-off: after that many
      * seconds of an interactive call still running, the TURN releases with a
@@ -717,7 +721,13 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
             $start,
             $this->descriptor->serverName,
             $this->descriptor->name,
-            fn (string $text): string => $this->truncateOutput($text, $this->maxOutputBytes),
+            // A non-positive bound takes the 8 MiB ceiling, not the trait's "no
+            // clip" sentinel: an unbounded answer would be replayed into every
+            // later request of the turn, the failure this cap exists to stop.
+            fn (string $text): string => $this->truncateOutput(
+                $text,
+                $this->maxOutputBytes > 0 ? $this->maxOutputBytes : Bash::DEFAULT_RETAINED_BYTES,
+            ),
         );
     }
 

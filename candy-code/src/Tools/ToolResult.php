@@ -170,7 +170,7 @@ final readonly class ToolResult
     /**
      * Which of the three ways this call was stopped before it ran, or null
      * when it was not stopped — including when it ran and failed with text
-     * that merely LOOKS like a refusal (audit F-P8).
+     * that merely LOOKS like a refusal.
      */
     public function denial(): ?DenialKind
     {
@@ -222,7 +222,7 @@ final readonly class ToolResult
      * is absent for the same reason: it is accounting, not something the
      * model reads. So is $denial: the model reads the refusal in the text,
      * which still opens with the kind's prefix, and the structural kind is
-     * for the parties that must not trust that text (audit F-P8).
+     * for the parties that must not trust that text.
      */
     public function toArray(): array
     {

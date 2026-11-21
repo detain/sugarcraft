@@ -18,7 +18,7 @@ namespace CandyCode\Bundles\Discord\Support;
  * Level filtering stays here (debug lines cost a sink call otherwise); the
  * host decides where lines land.
  */
-final class Log
+final class Log implements \SugarCraft\Plugins\Bridge\BridgeLog
 {
     private const LEVELS = ['debug' => 0, 'info' => 1, 'warn' => 2, 'error' => 3];
 

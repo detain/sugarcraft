@@ -8,7 +8,7 @@ use SugarCraft\Code\Support\SiblingSpendLedger;
 
 /**
  * A {@see Tool} that bills a provider itself and so must share its spend with
- * the other members of a concurrent group (audit B4-rem) — today only
+ * the other members of a concurrent group — today only
  * {@see BuiltIn\TaskTool}, whose body is a whole delegated agentic run.
  *
  * {@see \SugarCraft\Code\Runtime::executeConcurrently()} creates one

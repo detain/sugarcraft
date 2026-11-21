@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Context;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PublicUrlGuard;
 use SugarCraft\Code\Util\PathGlob;
@@ -29,7 +28,7 @@ use SugarCraft\Code\Util\PathGlob;
  * The forced tier joined the expansion last, and silently lacked it until
  * ISS-067 — a forced file's own imports were dead text.
  *
- * EVERY read here is bounded through {@see ContainedPath}, and the count is
+ * EVERY read here is bounded through {@see \SugarCraft\Core\Util\PathJail}, and the count is
  * deliberate rather than incidental: NINE call sites, one per read decision this
  * class makes — `loadPersonal()`'s personal-directory gate (one site shared by
  * the `AGENTS.md` head and its persona candidates) and its `~/.claude`
@@ -547,7 +546,7 @@ final class InstructionFileLoader
             // rather than asserted; see {@see \SugarCraft\Code\Tests\Context\InstructionFileLoaderContainmentTest}'s
             // predicate-swap note for the four sites where the two agree and
             // the one place in this package where they do not.
-            if (!ContainedPath::within($path, $this->repoRoot)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($path, $this->repoRoot)) {
                 $this->refusedPaths[$path] = 'resolves outside the checkout (' . $this->repoRoot . ')';
 
                 continue;
@@ -567,7 +566,7 @@ final class InstructionFileLoader
             // which re-resolves the whole chain a second time and widens the
             // window between the verdict and the read for every symlinked
             // component, not just the last one. Narrower, not closed — see the
-            // TOCTOU paragraph on {@see ContainedPath}. The import base
+            // TOCTOU paragraph on {@see \SugarCraft\Core\Util\PathJail}. The import base
             // directory stays the SPELLED `dirname($path)`: an `@./x.md` in a
             // CLAUDE.md that a repository vendored through a link means "next
             // to where the repository put it", and resolving that too would
@@ -644,7 +643,7 @@ final class InstructionFileLoader
      *
      * BOUNDED BY THE CANDIDATE'S OWN DIRECTORY, not by `$repoRoot`: these files
      * are by construction outside every checkout. The head and the persona loop
-     * share ONE {@see ContainedPath::within()} site against the `personalDir()`
+     * share ONE {@see \SugarCraft\Core\Util\PathJail::within()} site against the `personalDir()`
      * anchor; the fallback keeps its own compare against ITS OWN anchor, the
      * sibling `~/.claude` — the same kind of hold RuleLoader keeps on
      * `~/.candy-code/rules/*.md`, so any candidate symlinked out of its
@@ -683,7 +682,7 @@ final class InstructionFileLoader
             if (!is_file($path)) {
                 continue;
             }
-            if (!ContainedPath::within($path, $dir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($path, $dir)) {
                 // INT-M2: record the refusal loudly, then let the fallback
                 // below stand in exactly as it would when no primary exists —
                 // refusing the escaped symlink is the whole gate's job;
@@ -717,7 +716,7 @@ final class InstructionFileLoader
             $anchor = \dirname($dir) . '/.claude';
             $path = $anchor . '/CLAUDE.md';
             if (is_file($path)) {
-                if (!ContainedPath::within($path, $anchor)) {
+                if (!\SugarCraft\Core\Util\PathJail::within($path, $anchor)) {
                     $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
                 } else {
                     $entry = $this->readPersonalEntry($path, $anchor);
@@ -780,7 +779,7 @@ final class InstructionFileLoader
      *
      * ONE ENFORCEMENT POINT, consulted by every repository-tier read loop
      * (root, ancestors, forced, on-touch) AFTER `is_file()` and BEFORE the
-     * {@see ContainedPath} gate — ordered that way on purpose: containment is
+     * {@see \SugarCraft\Core\Util\PathJail} gate — ordered that way on purpose: containment is
      * one compare per READ DECISION and its routed-call-site inventory is the
      * audit surface, so a second gate folded into the same decision would make
      * the count unexplainable. The personal tier is deliberately NOT consulted
@@ -1058,7 +1057,7 @@ final class InstructionFileLoader
         $realHome = \is_string($home) ? realpath($home) : false;
 
         if ($this->walkToRoot && $realHome !== false
-            && $root !== $realHome && ContainedPath::within($root, $realHome)) {
+            && $root !== $realHome && \SugarCraft\Core\Util\PathJail::within($root, $realHome)) {
             // instructions.walkToRoot (C-CTX-4.c): keep climbing ABOVE the
             // nearest `.git` instead of stopping at it, but only inside the
             // user's own home subtree — $HOME itself and everything above it
@@ -1131,7 +1130,7 @@ final class InstructionFileLoader
      *
      * CONTAINMENT is judged against the ancestor root, which is the boundary the
      * walk established. Every candidate is an ENTRY question — may this file be
-     * read — so {@see ContainedPath::within()}, matching the other four entry
+     * read — so {@see \SugarCraft\Core\Util\PathJail::within()}, matching the other four entry
      * gates in this class; a file cannot resolve onto a directory boundary, so
      * the predicate choice is not observable here either. A candidate resolving
      * outside the ancestor root (a `packages/web/CLAUDE.md` symlinked to
@@ -1180,7 +1179,7 @@ final class InstructionFileLoader
                     continue;
                 }
 
-                if (!ContainedPath::within($path, $ancestorRoot)) {
+                if (!\SugarCraft\Core\Util\PathJail::within($path, $ancestorRoot)) {
                     $this->refusedPaths[$path] = 'an ancestor instruction file resolving outside the '
                         . 'enclosing checkout (' . $ancestorRoot . ')';
 
@@ -1411,12 +1410,12 @@ final class InstructionFileLoader
                     // resolved match — not the pattern — is what must be contained,
                     // against ITS OWN base: the checkout for relative patterns,
                     // the user home for the accepted absolute/`~` spellings. Routed
-                    // through {@see ContainedPath} rather than spelled here: this
+                    // through {@see \SugarCraft\Core\Util\PathJail} rather than spelled here: this
                     // file's two hand-spelled compares are precisely why six rounds
                     // read it as audited while its other two read paths had NO
                     // compare to find. One extra `realpath()` per glob match (a
                     // cached stat) buys the file zero local containment idiom.
-                    if (!ContainedPath::within($path, $boundary)) {
+                    if (!\SugarCraft\Core\Util\PathJail::within($path, $boundary)) {
                         $this->refusedPaths[$path] = $anchored
                             ? 'a forced-instruction match resolving outside the user home directory ('
                                 . $boundary . ')'
@@ -1526,7 +1525,7 @@ final class InstructionFileLoader
      *
      * CONTAINED, and it was not: both the walk's starting directory and every
      * candidate file are checked against repoRoot through
-     * {@see ContainedPath::within()}. A refused candidate is SKIPPED and the
+     * {@see \SugarCraft\Core\Util\PathJail::within()}. A refused candidate is SKIPPED and the
      * walk continues, matching {@see loadForced()}. The model is not told
      * (its callers are tool results); the user is, since audit R1's last
      * residual — one transcript notice per refused or deferred instruction
@@ -1627,7 +1626,7 @@ final class InstructionFileLoader
             unset($this->refusedPaths[$touchedPath]);
 
             $dir = realpath(dirname($touchedPath));
-            if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
+            if ($dir === false || !\SugarCraft\Core\Util\PathJail::within($dir, $repoRoot)) {
                 $this->refusedPaths[$touchedPath] = $dir === false
                     ? 'the directory holding it does not resolve, so no walk was started'
                     : 'the directory holding it (' . $dir . ') is outside the checkout (' . $repoRoot . ')';
@@ -1670,7 +1669,7 @@ final class InstructionFileLoader
                     // first hit was a refusal that never existed; it is announced
                     // mid-session like any other, which is the point of ISS-069's
                     // "put in front of the model".
-                    if (!ContainedPath::within($fullPath, $repoRoot)) {
+                    if (!\SugarCraft\Core\Util\PathJail::within($fullPath, $repoRoot)) {
                         $this->refusedPaths[$fullPath] = 'resolves outside the checkout (' . $repoRoot . ')';
 
                         continue;
@@ -2263,7 +2262,7 @@ final class InstructionFileLoader
             // this, so $realPath is always a resolvable existing path and
             // within()'s re-resolution of it cannot change the verdict — it
             // costs one cached stat to keep this file free of a local idiom.
-            if (!ContainedPath::within($realPath, $boundary)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($realPath, $boundary)) {
                 // Recorded as well as noted inline: this is the ONE refusal in
                 // this class that was never silent, and leaving it out of the
                 // map would make `refusedPaths()` an incomplete picture of the

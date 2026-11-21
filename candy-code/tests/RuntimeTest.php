@@ -4360,6 +4360,65 @@ DOC;
     ];
 
     /**
+     * The `SugarCraft\Async\ChildRun` factories, each of which builds a child
+     * that `run()`/`launch()` then spawns with `proc_open()` inside sugar-async.
+     *
+     * A SPAWN THE DIRECT-CALL SCAN CANNOT SEE, and the inventory below would go
+     * quiet without this. `CapturesProcessOutput::runCaptured()` (the spawn
+     * `Grep` and `Read` reach through the trait) moved onto ChildRun, so the
+     * trait no longer calls `proc_open()` itself — the same gap a static call
+     * into `AtomicFileWriter` opens for the write verdict. A spawn is still a
+     * spawn, so a ChildRun factory call is inventoried as `ChildRun` beside the
+     * subprocess primitives rather than read as "this tool spawns nothing".
+     *
+     * @var list<string>
+     */
+    private const CHILD_RUN_FACTORIES = ['new', 'commandline'];
+
+    /**
+     * The lines in $file that call a {@see CHILD_RUN_FACTORIES} factory on
+     * `ChildRun`, in any spelling of the class name (bare, qualified or fully
+     * qualified). An import, a `ChildRun::class` constant and a call on some
+     * other class are not spawns and are not reported.
+     *
+     * @return list<int>
+     */
+    private static function childRunSpawnsIn(string $file): array
+    {
+        if (!is_file($file) || !is_readable($file)) {
+            throw new \RuntimeException('ChildRun spawn scan could not read ' . $file);
+        }
+        $source = file_get_contents($file);
+        if ($source === false) {
+            throw new \RuntimeException('ChildRun spawn scan could not read ' . $file);
+        }
+
+        $tokens = self::significantTokens($source);
+        $lines = [];
+        $count = \count($tokens);
+        for ($i = 0; $i + 3 < $count; $i++) {
+            $name = $tokens[$i];
+            if (!\is_array($name) || !\in_array($name[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+            $segments = explode('\\', $name[1]);
+            if (strcasecmp((string) end($segments), 'ChildRun') !== 0) {
+                continue;
+            }
+            $colon = $tokens[$i + 1];
+            $method = $tokens[$i + 2];
+            if (!\is_array($colon) || $colon[0] !== T_DOUBLE_COLON || !\is_array($method)
+                || !\in_array(strtolower($method[1]), self::CHILD_RUN_FACTORIES, true)
+                || $tokens[$i + 3] !== '(') {
+                continue;
+            }
+            $lines[] = $name[2];
+        }
+
+        return $lines;
+    }
+
+    /**
      * Every write primitive CALLED in $file, mapped to the lines it is called
      * on.
      *
@@ -6694,6 +6753,11 @@ DOC;
                     }
                     $offenders[] = $name . ' calls ' . $primitive . '() at ' . basename($file) . ':' . implode(',', $lines);
                 }
+                // A ChildRun factory is a spawn the direct-call scan above
+                // cannot see; see CHILD_RUN_FACTORIES.
+                if (self::childRunSpawnsIn($file) !== []) {
+                    $subprocess[$name][] = 'ChildRun';
+                }
             }
         }
         sort($offenders);
@@ -6721,10 +6785,14 @@ DOC;
         // its author has to say why, while a correct one does not red at all.
         $this->assertSame(
             [
-                'Grep' => ['proc_open'],
+                // Grep runs a fixed `rg` argv through CapturesProcessOutput::
+                // runCaptured(), which spawns on sugar-async's ChildRun rather
+                // than calling proc_open() itself (CC-1). Still a fixed program,
+                // so still read-only; the spelling of the spawn is what moved.
+                'Grep' => ['ChildRun'],
                 // Read's PDF text leg shells to a fixed pdftotext through the same
                 // trait-spawn shape as Grep, added by C-TOOL-2.d (weld eadec1a44).
-                'Read' => ['proc_open'],
+                'Read' => ['ChildRun'],
             ],
             $subprocess,
             'the set of read-only tools that reach a subprocess changed. Spawning is not itself a write, '
@@ -8193,7 +8261,8 @@ DOC;
      *
      * THE CONTROL FOR {@see sourceFilesOf()}, built because the widening it
      * performs is invisible in every green run: on today's tree only `Grep`'s
-     * `proc_open` comes from a trait, and that one lands in the subprocess
+     * spawn comes from a trait (a ChildRun factory in `CapturesProcessOutput`
+     * since CC-1, a `proc_open` before it), and that one lands in the subprocess
      * inventory rather than in the verdict, so nothing would fail if the walk
      * quietly stopped following traits tomorrow (§16.8 rule 16 - an unfired
      * instrument and a dead one produce identical silence).
@@ -8223,10 +8292,25 @@ DOC;
             $tools['Grep'],
             'the walk stopped following traits - the verdict is back to reading declaring files only',
         );
+        // The trait spawns through ChildRun now (CC-1), so what it calls is a
+        // ChildRun factory, not proc_open(), and no write primitive at all. The
+        // declaring file spawns nothing itself, so Grep's subprocess inventory
+        // entry can only come from following the trait.
+        $concern = dirname(__DIR__) . '/src/Tools/Concerns/CapturesProcessOutput.php';
         $this->assertSame(
-            ['proc_open'],
-            array_keys(self::writePrimitivesCalledIn(dirname(__DIR__) . '/src/Tools/Concerns/CapturesProcessOutput.php')),
+            [],
+            array_keys(self::writePrimitivesCalledIn($concern)),
             'the trait that makes the trait-following observable no longer calls what it used to',
+        );
+        $this->assertNotSame(
+            [],
+            self::childRunSpawnsIn($concern),
+            'the trait that makes the trait-following observable no longer spawns through ChildRun',
+        );
+        $this->assertSame(
+            [],
+            self::childRunSpawnsIn(dirname(__DIR__) . '/src/Tools/BuiltIn/Grep.php'),
+            'Grep spawns in its own file now, so its inventory entry no longer proves the walk follows traits',
         );
 
         // NEGATIVE, on the real tree: a tool with no traits and no parent

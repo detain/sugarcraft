@@ -100,6 +100,16 @@ final class Program
     private array $lastImageRows = [];
     /** The resolved body rendered last frame; `null` until the first render. */
     private ?string $lastRenderedBody = null;
+    /**
+     * The view() result memoized for a {@see RevisionCapable} model: the
+     * revision it was produced under, the model class that produced it, and
+     * the value view() returned. `null` when nothing is memoized.
+     *
+     * @var array{revision: int|string, model: class-string, rendered: string|View}|null
+     */
+    private ?array $viewMemo = null;
+    /** Per-frame diff hook installed by withFrameDiffHook(); `null` when unset. */
+    private ?\Closure $frameDiffHook = null;
     private ?Util\Color $lastForegroundColor = null;
     private ?Util\Color $lastBackgroundColor = null;
     private ?MouseMode $activeMouseMode = null;
@@ -383,6 +393,31 @@ final class Program
     {
         $next = clone $this;
         $next->exceptionHandler = $handler;
+        return $next;
+    }
+
+    /**
+     * Install a per-frame diff hook. After every frame the renderer paints,
+     * the hook receives the body the previous frame painted (`null` before
+     * the first paint, and after a reset such as forceRepaint()) and the body
+     * this frame painted. Both are the bodies after image markers are
+     * resolved, so the hook sees what the text renderer diffed. Equal bodies
+     * mean the text grid did not change; the cursor and the image layer are
+     * not part of the body, so they can change the screen while the bodies
+     * stay equal. The hook is not called in headless mode
+     * (`ProgramOptions::withoutRenderer`). A throw from the hook goes to the
+     * exception handler, like any other user-code seat.
+     *
+     * Apps use it to learn which lines changed without rebuilding the grid
+     * themselves; it is a read-only observer and must not write to the
+     * terminal.
+     *
+     * @param \Closure(?string $previous, string $current): void $hook
+     */
+    public function withFrameDiffHook(\Closure $hook): self
+    {
+        $next = clone $this;
+        $next->frameDiffHook = $hook;
         return $next;
     }
 
@@ -1120,6 +1155,39 @@ final class Program
     }
 
     /**
+     * View seat with the revision memo (P1-16). When the model is a
+     * {@see RevisionCapable} whose revision equals the one the memoized
+     * frame was rendered under (same model class), view() is skipped and the
+     * memoized value is returned, so the frame pipeline repaints the same
+     * bytes a fresh view() would. A null revision always calls view().
+     *
+     * @return string|View|null
+     */
+    private function renderedFrame(Model $model): string|View|null
+    {
+        $revision = null;
+        if ($model instanceof RevisionCapable) {
+            try {
+                $revision = $model->revision();
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                return null;
+            }
+        }
+        $class = $model::class;
+        if ($revision !== null && $this->viewMemo !== null
+            && $this->viewMemo['revision'] === $revision
+            && $this->viewMemo['model'] === $class) {
+            return $this->viewMemo['rendered'];
+        }
+        $rendered = $this->userView($model);
+        $this->viewMemo = ($revision !== null && $rendered !== null)
+            ? ['revision' => $revision, 'model' => $class, 'rendered' => $rendered]
+            : null;
+        return $rendered;
+    }
+
+    /**
      * User-code seat: a subscription/TickRequest produce closure
      * (sugar-core-003). Returns null when the handler absorbed a throw —
      * that tick/signal is skipped, the subscription stays armed.
@@ -1340,6 +1408,11 @@ final class Program
                 }
                 [$nextModel, $cmd] = $updated;
                 $this->model = $nextModel;
+                // A push or pop swaps the active screen, which can be the same
+                // class at the same revision. The memo keys on neither the
+                // instance nor the stack position, so it must not survive the
+                // transition or the new screen would paint the old screen's view.
+                $this->viewMemo = null;
                 $this->markDirty();
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
@@ -2512,14 +2585,15 @@ final class Program
         $this->lastRenderAt = hrtime(true);
 
         if ($this->options->withoutRenderer) {
-            // Headless mode: still call view() so the model's
+            // Headless mode: still run the view seat so the model's
             // computation runs (and any errors surface) but skip
-            // emitting any output.
-            $this->userView($this->activeModel());
+            // emitting any output. The revision memo applies here too:
+            // no paint is needed, so an unchanged revision skips view().
+            $this->renderedFrame($this->activeModel());
             $this->lastFrameDuration = microtime(true) - $frameStart;
             return;
         }
-        $rendered = $this->userView($this->activeModel());
+        $rendered = $this->renderedFrame($this->activeModel());
         if ($rendered === null) {
             // handler absorbed the view() throw: skip this frame. The
             // caller clears dirty for this pass, so the screen keeps the
@@ -2556,6 +2630,7 @@ final class Program
         $bodyChanged = $body !== $this->lastRenderedBody;
 
         // Paint the text frame first (a normal diff — repaints only changed lines).
+        $previousBody = $this->lastRenderedBody;
         $this->renderer->render($body);
 
         // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
@@ -2580,6 +2655,14 @@ final class Program
         $this->lastRenderedBody = $body;
         $this->lastImageSignature = $signature;
         $this->lastImageRows = ImageOverlay::coveredRows($paints);
+
+        if ($this->frameDiffHook !== null) {
+            try {
+                ($this->frameDiffHook)($previousBody, $body);
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+            }
+        }
 
         $this->lastFrameDuration = microtime(true) - $frameStart;
     }

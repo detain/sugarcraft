@@ -18,8 +18,9 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
+use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
-use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Discord\DiscordAccount;
 use CandyCode\Bundles\Discord\Discord\Gateway;
 use CandyCode\Bundles\Discord\Discord\Rest;
@@ -57,7 +58,7 @@ final class ApprovalInteractionGateTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeDiscordApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->pairing = new PairingCodes($this->store, new TextSafety());
     }
 
@@ -240,7 +241,7 @@ final class ApprovalInteractionGateTest extends TestCase
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort());
         $gateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
         $router = new ConversationRouter(
-            new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            (new FakeServe($this->loop))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             new TextSafety(),

@@ -7,6 +7,7 @@ namespace SugarCraft\Core\Tests\Util\Proc;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
+use React\EventLoop\TimerInterface;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
@@ -156,6 +157,28 @@ final class BoundedShutdownTest extends TestCase
         self::assertTrue($gone);
         self::assertSame([15, 9], $sent, 'rung order and pcntl-free literal numbers are the contract');
         self::assertSame(1, $hookCalls, 'the between-rungs hook fires once, only when TERM missed');
+    }
+
+    public function testEscalateStillSendsNineWhenTheHookThrows(): void
+    {
+        $sent = [];
+
+        $gone = BoundedShutdown::escalate(
+            static function (int $signal) use (&$sent): void {
+                $sent[] = $signal;
+            },
+            static function () use (&$sent): bool {
+                return \in_array(9, $sent, true);
+            },
+            0.05,
+            0.05,
+            static function (): void {
+                throw new \RuntimeException('log sink closed');
+            },
+        );
+
+        self::assertTrue($gone, 'a failing advisory hook must not cost the SIGKILL rung');
+        self::assertSame([15, 9], $sent);
     }
 
     public function testEscalateReportsFalseForAChildNoRungCanMove(): void
@@ -309,6 +332,40 @@ final class BoundedShutdownTest extends TestCase
         self::assertTrue(BoundedShutdown::pidExited($pid));
     }
 
+    public function testPidExitedTreatsAPidThisUidCannotSignalAsStillAlive(): void
+    {
+        $this->requirePosix();
+
+        // pid 1 is alive on every Linux host. A non-root uid gets EPERM from the
+        // signal-0 probe, which means alive; reading it as gone is the bug that
+        // ended a ladder early against a child that had changed uid. A root runner
+        // (or a container whose pid 1 shares this uid) signals pid 1 and never
+        // reaches the EPERM branch, so the test only means something when the
+        // probe really fails with EPERM here.
+        if (@\posix_kill(1, 0) || \posix_get_last_error() !== 1) {
+            self::markTestSkipped('pid 1 is signalable by this uid, so the EPERM case is not reachable on this host');
+        }
+        self::assertFalse(BoundedShutdown::pidExited(1));
+    }
+
+    public function testPidExitedStillReportsAReapedChildAsGone(): void
+    {
+        $this->requirePcntlAndPosix();
+
+        $pid = \pcntl_fork();
+        self::assertNotSame(-1, $pid, 'pcntl_fork() failed on a host that advertises the extension');
+        if ($pid === 0) {
+            // SIGKILL the child in place so it never runs PHPUnit's shutdown path.
+            \posix_kill(\getmypid(), 9);
+            exit(0);
+        }
+
+        $status = 0;
+        \pcntl_waitpid($pid, $status);
+
+        self::assertTrue(BoundedShutdown::pidExited($pid), 'ESRCH is the one answer that means gone');
+    }
+
     public function testPidHelpersRefuseNonPositivePidsLoudly(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -328,6 +385,41 @@ final class BoundedShutdownTest extends TestCase
         // assertion count.
         self::assertFalse(BoundedShutdown::terminatePid(0, 15));
         self::assertFalse(BoundedShutdown::terminatePid(-5, 15));
+    }
+
+    /**
+     * A process group whose every member this uid cannot signal, so
+     * `kill(-pgid, 0)` answers EPERM. Null when the host shows none (a root
+     * test runner signals everything, so it never has one).
+     */
+    private function unsignalableGroup(): ?int
+    {
+        foreach (\glob('/proc/[0-9]*', \GLOB_ONLYDIR) ?: [] as $dir) {
+            $pgid = @\posix_getpgid((int) \basename($dir));
+            if ($pgid === false || $pgid <= 1) {
+                continue;
+            }
+            if (@\posix_kill(-$pgid, 0)) {
+                continue;
+            }
+            if (\posix_get_last_error() === 1) {
+                return $pgid;
+            }
+        }
+
+        return null;
+    }
+
+    public function testGroupEmptyTreatsAGroupWithAnUnsignalableLiveMemberAsNotEmpty(): void
+    {
+        $this->requirePosix();
+        $group = $this->unsignalableGroup();
+        if ($group === null) {
+            self::markTestSkipped('no live process group that this uid cannot signal is visible on this host');
+        }
+
+        self::assertFalse(BoundedShutdown::groupEmpty($group), 'EPERM is a live member, never an empty group');
+        self::assertFalse(BoundedShutdown::groupEmpty($group, false), 'the loop-driven probe agrees');
     }
 
     /**
@@ -420,6 +512,61 @@ final class BoundedShutdownTest extends TestCase
         return $value;
     }
 
+    public function testEscalateAsyncStillSendsNineWhenTheHookThrows(): void
+    {
+        $sent = [];
+
+        $gone = $this->settleAsync(static function (LoopInterface $loop, callable $done) use (&$sent): void {
+            BoundedShutdown::escalateAsync(
+                $loop,
+                static function (int $signal) use (&$sent): void {
+                    $sent[] = $signal;
+                },
+                static function () use (&$sent): bool {
+                    return \in_array(9, $sent, true);
+                },
+                static fn (bool $isGone) => $done($isGone),
+                0.05,
+                0.5,
+                static function (): void {
+                    throw new \RuntimeException('log sink closed');
+                },
+            );
+        });
+
+        self::assertTrue($gone, 'a failing advisory hook must not cost the SIGKILL rung');
+        self::assertSame([15, 9], $sent);
+    }
+
+    public function testEscalateAsyncDoesNotEscapeTheLoopWhenTheDoneCallbackThrows(): void
+    {
+        $loop = new StreamSelectLoop();
+        $doneCalls = 0;
+
+        BoundedShutdown::escalateAsync(
+            $loop,
+            static function (int $signal): void {
+            },
+            static fn (): bool => true,
+            static function (bool $gone) use (&$doneCalls, $loop): void {
+                ++$doneCalls;
+                // Stop first, so the loop ends on its own even though the callback throws.
+                $loop->stop();
+                throw new \RuntimeException('done sink closed');
+            },
+            0.05,
+            0.5,
+        );
+        $bound = $loop->addTimer(5.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $loop->run();
+        $loop->cancelTimer($bound);
+
+        self::assertSame(1, $doneCalls, 'the completion callback runs once and its throw stays inside the tick');
+    }
+
     public function testEscalateAsyncSendsFifteenThenNineAndReportsGoneWhenNineLands(): void
     {
         $sent = [];
@@ -446,6 +593,32 @@ final class BoundedShutdownTest extends TestCase
         self::assertTrue($gone);
         self::assertSame([15, 9], $sent, 'the rung order is TERM then the integer-literal 9');
         self::assertSame(1, $hookCalls, 'the escalation hook fires once between the rungs');
+    }
+
+    public function testEscalateAsyncReturnsItsPollTimerSoACallerCanCancelTheLadder(): void
+    {
+        $loop = new StreamSelectLoop();
+        $sent = [];
+
+        $timer = BoundedShutdown::escalateAsync(
+            $loop,
+            static function (int $signal) use (&$sent): void {
+                $sent[] = $signal;
+            },
+            static fn (): bool => false,
+            null,
+            0.05,
+            0.05,
+        );
+        self::assertInstanceOf(TimerInterface::class, $timer);
+
+        $loop->cancelTimer($timer);
+        $loop->addTimer(0.2, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        self::assertSame([15], $sent, 'a cancelled ladder sends its TERM rung and never escalates to 9');
     }
 
     public function testEscalateAsyncReportsStillRunningWhenTheKillBudgetRunsOut(): void

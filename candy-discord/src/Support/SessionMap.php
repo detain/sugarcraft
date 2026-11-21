@@ -23,7 +23,7 @@ namespace CandyCode\Bundles\Discord\Support;
  *
  * MUTABLE ON PURPOSE: one open SQLite connection of the daemon.
  */
-final class SessionMap
+final class SessionMap implements \SugarCraft\Plugins\Bridge\SessionStore
 {
     /**
      * The schema's own version (041), gated the way CredentialStore gates

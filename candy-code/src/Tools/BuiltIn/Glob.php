@@ -492,7 +492,12 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             );
         }
 
-        $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
+        // A non-positive cap is budgeted at the 8 MiB default, the ceiling owner
+        // ruling A (2026-11-20) gives every output bound in the tool layer. Left
+        // at 0, the nudges, the instruction section and the clip below would have
+        // no bound at all, since truncateOutput() reads 0 as "no clip".
+        $budgetCap = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : Bash::DEFAULT_RETAINED_BYTES;
+        $ceiling = $this->instructionSectionCeiling($budgetCap);
 
         // COMPUTED BEFORE THE LIST IS CLIPPED, and that ordering is the second
         // half of E66. The nudge used to be built after the clip and appended
@@ -513,9 +518,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // repeated here, in Grep and in Read (E87).
         $nudge = $this->skillNudge?->forPaths(
             $files,
-            $this->maxOutputBytes > 0
-                ? intdiv($this->maxOutputBytes, SkillPathNudge::CALLER_BUDGET_DIVISOR)
-                : null,
+            intdiv($budgetCap, SkillPathNudge::CALLER_BUDGET_DIVISOR),
         );
 
         // P6.S5b: the rule channel, over the SAME matched-path list and on the
@@ -527,9 +530,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // cannot answer differently.
         $ruleNudge = $this->ruleNudge?->forPaths(
             $files,
-            $this->maxOutputBytes > 0
-                ? intdiv($this->maxOutputBytes, RulePathNudge::CALLER_BUDGET_DIVISOR)
-                : null,
+            intdiv($budgetCap, RulePathNudge::CALLER_BUDGET_DIVISOR),
         );
 
         // +1 for the newline the nudge is appended behind at the foot of
@@ -595,9 +596,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // before P6.S5b is unchanged on those launches.
         $nudgeCost = ($nudge === null ? 0 : strlen($nudge) + 1)
             + ($ruleNudge === null ? 0 : strlen($ruleNudge) + 1);
-        $bodyCap = $this->maxOutputBytes > 0
-            ? max(1, $this->maxOutputBytes - $nudgeCost)
-            : 0;
+        $bodyCap = max(1, $budgetCap - $nudgeCost);
 
         // Probed at the FLOOR — the smallest budget the final list can be
         // given — so every path whose instruction file is loaded below is
@@ -621,9 +620,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // simply gives up the difference — and what keeps this probe no
         // tighter than the final clip below, which is the property the
         // announce-once mark depends on.
-        $floor = $this->maxOutputBytes > 0
-            ? max(1, $bodyCap - $ceiling - 1)
-            : 0;
+        $floor = max(1, $bodyCap - $ceiling - 1);
         // Saves nothing — see the same probe in {@see Grep::execute()}.
         $probe = $this->truncateOutput($output, $floor, saveSpill: false);
         $shown = self::pathsIn($probe, $files);
@@ -635,7 +632,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // hundreds of directories, and one floor-priced entry per directory
         // is a section that grows without limit however the byte share is
         // divided.
-        $section = $this->instructionSection($shown, $this->instructionLoader, $this->maxOutputBytes);
+        $section = $this->instructionSection($shown, $this->instructionLoader, $budgetCap);
 
         // Clipped at the FLOOR whenever a rule was surfaced, and NOT at what
         // the section happened to leave over. Spending the leftover would show

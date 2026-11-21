@@ -10,7 +10,7 @@ use SugarCraft\Code\Chat;
 /**
  * The prompt typed on the command line after the flags (`candy-code fix the
  * login bug`), delivered by {@see Chat::init()} so it is submitted as the
- * session's first prompt once the TUI is up (audit CLI-2(b)).
+ * session's first prompt once the TUI is up.
  *
  * A Msg rather than a submit inside the constructor: the turn has to start
  * from `update()`, where its Cmd reaches the Program, exactly like a prompt

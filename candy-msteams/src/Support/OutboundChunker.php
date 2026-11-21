@@ -21,8 +21,19 @@ namespace CandyCode\Bundles\MsTeams\Support;
  *
  * Pure: same text + same limits, same chunks.
  */
-final class OutboundChunker
+final class OutboundChunker implements \SugarCraft\Plugins\Bridge\ChunkSplitter
 {
+    /**
+     * The instance door the router reaches through {@see \SugarCraft\Plugins\Bridge\ChunkSplitter}:
+     * the same chunks as {@see split()}, with the face's own limits passed in.
+     *
+     * @return list<string>
+     */
+    public function chunk(string $text, int $limit, int $maxLines): array
+    {
+        return self::split($text, $limit, $maxLines);
+    }
+
     /** The bytes PHP's ltrim/rtrim strip by default. All are ASCII, so each is one byte and one codepoint. */
     private const TRIM_BYTES = " \t\n\r\0\x0B";
 

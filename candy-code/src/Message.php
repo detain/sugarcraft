@@ -872,7 +872,7 @@ final class Message implements \JsonSerializable
 
     /**
      * Attach (or clear, via null) the attachment-degradation report - see
-     * $attachmentNotice's docblock (audit 15b-15). Written by
+     * $attachmentNotice's docblock. Written by
      * {@see \SugarCraft\Code\Backend\EngineBackend::complete()} and
      * carried across the fork result frame beside $loopGuardStoppedBy.
      */

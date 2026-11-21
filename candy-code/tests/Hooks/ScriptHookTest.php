@@ -587,43 +587,36 @@ final class ScriptHookTest extends TestCase
      * ISS-090(d): THE DRAIN ITSELF IS BOUNDED.
      *
      * {@see testALargeStderrMessageSurvivesTheDrainAndIsThenClipped} proves the
-     * downstream clip counts what the drain delivered; nothing bounded what the
-     * drain would deliver. 130 × 8 KiB on stdout: the buffer stops at exactly
-     * MAX_DRAIN_BYTES — a whole number of reads, so the refused figure is the
-     * two chunks never let in — and the stamp names both. The reflection is
-     * deliberate: every downstream clip would hide the raw cap behind its own
-     * marker, and the whole point of this cap is the RAW volume that reaches
-     * those clips.
+     * downstream clip counts what the run delivered; nothing bounded what the
+     * run would deliver. 1,026 × 8 KiB on stdout: ChildRun keeps exactly
+     * MAX_DRAIN_BYTES (8 MiB, its own default ceiling) — a whole number of
+     * reads, so the refused figure is the two chunks never let in — and the
+     * stamp names both. The reflection is deliberate: every downstream clip
+     * would hide the raw cap behind its own marker, and the whole point of this
+     * cap is the RAW volume that reaches those clips.
      */
     public function testTheDrainStopsAtTheByteCapAndStampsWhatItRefused(): void
     {
         $hook = new ScriptHook('cap_hook', HookEvent::PreToolUse, '.*', 'true', '');
-        $drain = new \ReflectionMethod($hook, 'drain');
-
-        $pipes = [];
-        $proc = proc_open(
-            [PHP_BINARY, '-r', 'for ($i = 0; $i < 130; ++$i) { echo str_repeat("A", 8192); }'],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
+        $run = (new \ReflectionMethod($hook, 'runChild'))->invoke(
+            $hook,
+            [PHP_BINARY, '-r', '$s = str_repeat("A", 8192); for ($i = 0; $i < 1026; ++$i) { echo $s; }'],
+            null,
+            \SugarCraft\Code\Support\ProcessContainment::scrubbedEnv(),
+            '',
+            15.0,
         );
-        $this->assertIsResource($proc);
-        fclose($pipes[0]);
+        $this->assertInstanceOf(\SugarCraft\Async\ChildResult::class, $run);
+        $stdout = (new \ReflectionMethod(ScriptHook::class, 'capped'))
+            ->invoke(null, $run->stdout, $run->droppedBytes - $run->droppedStderrBytes);
 
-        try {
-            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 15.0);
-        } finally {
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
-        }
-
-        $this->assertFalse($timedOut, 'the cap is not a deadline and must not report one');
-        $this->assertSame('', $stderr);
-        $marker = ' … [hook output capped at 1048576 bytes; 16384 further bytes dropped]';
+        $this->assertFalse($run->timedOut(), 'the cap is not a deadline and must not report one');
+        $this->assertSame('', $run->stderr);
+        $marker = ' … [hook output capped at 8388608 bytes; 16384 further bytes dropped]';
         $this->assertStringStartsWith(str_repeat('A', 4096), $stdout);
         $this->assertStringEndsWith($marker, $stdout);
         $this->assertSame(
-            1048576 + \strlen($marker),
+            8388608 + \strlen($marker),
             \strlen($stdout),
             'the kept window plus one constant-size stamp — the stamp itself must not reopen the cap',
         );
@@ -704,18 +697,18 @@ final class ScriptHookTest extends TestCase
     /**
      * THE DRAIN MUST NOT BUSY-WAIT while it waits out a silent hook.
      *
-     * This is the assertion `DRAIN_SLICE_SECONDS` did not have, and without it
-     * the constant survives being mutated to `0.0`: every deadline assertion in
-     * this file still passes, because a zero slice expires ON TIME — it just
-     * spends the entire budget in a `stream_select()` that returns instantly,
-     * at 100% of a core, on the TUI's own thread, for up to sixty seconds.
-     * "Bounded" and "not spinning" are two properties and only one of them was
-     * being tested.
+     * Without it a zero select slice survives: every deadline assertion in this
+     * file still passes, because a zero slice expires ON TIME — it just spends
+     * the entire budget in a `stream_select()` that returns instantly, at 100%
+     * of a core, on the TUI's own thread, for up to sixty seconds. "Bounded" and
+     * "not spinning" are two properties and only one of them was being tested.
+     * The slice is ChildRun's pump's now (CC-1); the property is still this
+     * hook's to pin.
      *
-     * Measured in the CHILD, around `execute()` itself, so the figure is this
-     * drain's CPU and not the harness's: the hook sleeps for two seconds and
-     * writes nothing, so at the shipped 200ms slice the parent wakes about ten
-     * times and does nothing else at all.
+     * Measured in the CHILD, around `execute()` itself, so the figure is the
+     * run's CPU and not the harness's: the hook sleeps for two seconds and
+     * writes nothing, so the parent wakes a few times a second and does nothing
+     * else at all.
      */
     public function testTheDrainWaitsWithoutSpinning(): void
     {
@@ -940,6 +933,21 @@ final class ScriptHookTest extends TestCase
 
         $this->assertTrue($result->isDenied());
         $this->assertSame('blocked', $result->message);
+    }
+
+    public function testExitTwoWithNoOutputStillHardDenies(): void
+    {
+        $hook = new ScriptHook(
+            name: 'silent_block_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit 2',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $this->assertTrue($result->isDenied(), 'a silent hard exit must deny, not fall through to allow');
     }
 
     public function testFromConfigHonoursAnExplicitName(): void
@@ -2062,6 +2070,194 @@ final class ScriptHookTest extends TestCase
             $result->additionalContext,
             'the CRUSH_* env channel survives the new stdin channel',
         );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: string}>
+     */
+    public static function overCeilingStreams(): array
+    {
+        return [
+            // exit 3 asks with stdout as the question; exit 2 denies with stderr as the reason.
+            'stdout' => ['STDOUT', 3, 'ask'],
+            'stderr' => ['STDERR', 2, 'deny'],
+        ];
+    }
+
+    /**
+     * CC-1 (ChildRun): A HOOK PRINTING PAST THE 8 MiB CEILING IS CLIPPED TO IT,
+     * through the public path. 1,026 × 8 KiB (8 MiB plus two reads) on one
+     * stream: the verdict's own clip names the byte count it was handed, and
+     * that count is exactly the ceiling plus the constant-size stamp — so the
+     * run retained the ceiling and not one read more, whichever stream it was.
+     *
+     * @dataProvider overCeilingStreams
+     */
+    public function testAHookPrintingPastTheCeilingIsClippedToItOnEitherStream(string $stream, int $exit, string $action): void
+    {
+        $source = '$s = str_repeat("A", 8192); for ($i = 0; $i < 1026; ++$i) { fwrite(' . $stream . ', $s); }';
+        $hook = new ScriptHook(
+            name: 'loud_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: \escapeshellarg(PHP_BINARY) . ' -r ' . \escapeshellarg($source) . '; exit ' . $exit,
+            description: '',
+            timeoutSeconds: 30.0,
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $retained = 8388608 + \strlen(' … [hook output capped at 8388608 bytes; 16384 further bytes dropped]');
+        $this->assertSame($action, $result->action);
+        $this->assertStringStartsWith(str_repeat('A', 16384) . ' … [hook output truncated: 16384 of ' . $retained . ' bytes shown', $result->message);
+    }
+
+    /**
+     * CC-1 (ChildRun): A STREAMED HOOK is delivered whole and in order. The
+     * hook writes six pieces with a pause between each, so they reach the
+     * parent as separate reads; the verdict must carry every piece, in the
+     * order written, on both the stdout (allow note) and stderr (deny reason)
+     * paths.
+     */
+    public function testAStreamedHookIsDeliveredWholeAndInOrder(): void
+    {
+        $note = (new ScriptHook(
+            name: 'streamed_note',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'for i in 1 2 3 4 5 6; do printf "piece$i;"; sleep 0.05; done',
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame('allow', $note->action);
+        $this->assertSame('piece1;piece2;piece3;piece4;piece5;piece6;', $note->additionalContext);
+
+        $reason = (new ScriptHook(
+            name: 'streamed_reason',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'for i in 1 2 3 4 5 6; do printf "why$i;" >&2; sleep 0.05; done; exit 2',
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame('deny', $reason->action);
+        $this->assertSame('why1;why2;why3;why4;why5;why6;', $reason->message);
+    }
+
+    /**
+     * @return array<string, array{0: int, 1: string, 2: string}>
+     */
+    public static function silentExits(): array
+    {
+        return [
+            'exit 0 allows with nothing to carry' => [0, 'allow', ''],
+            'exit 1 denies naming its code' => [1, 'deny', 'Hook exited with code 1'],
+            'exit 2 denies naming its code' => [2, 'deny', 'Hook exited with code 2'],
+            'exit 3 asks the fallback question' => [3, 'ask', 'Hook silent_hook requires your approval'],
+            'exit 7 denies naming its code' => [7, 'deny', 'Hook exited with code 7'],
+        ];
+    }
+
+    /**
+     * CC-1 (ChildRun): A HOOK THAT EXITS WITHOUT OUTPUT gets an empty result,
+     * and its exit code is still the verdict — nothing on either stream is not
+     * a reason to read the code as anything else.
+     *
+     * @dataProvider silentExits
+     */
+    public function testAHookThatExitsWithoutOutputIsAnsweredByItsExitCode(int $exit, string $action, string $message): void
+    {
+        $result = (new ScriptHook(
+            name: 'silent_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit ' . $exit,
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame($action, $result->action);
+        if ($exit === 0) {
+            $this->assertSame('', $result->message);
+            $this->assertSame('', (string) $result->additionalContext, 'a silent allow carries no note');
+
+            return;
+        }
+        $this->assertStringStartsWith($message, $result->message);
+    }
+
+    /**
+     * CC-1 (ChildRun): NO EXIT GRACE. The hook exits 0 at once but leaves a
+     * backgrounded `sleep` holding its output pipes open. With an exit grace
+     * ChildRun would cut those pipes shortly after the exit and the exit 0
+     * would allow; the hook runs with none, so its output is not done until
+     * the pipes close, the run is held to its two-second deadline, and the
+     * verdict is the timeout deny. The elapsed bound proves the deadline (plus
+     * the two 0.5 s kill rungs) ended it, not the thirty-second sleep.
+     */
+    public function testABackgroundedChildHoldingThePipesIsDeniedAtTheDeadlineNotAllowedAfterAGrace(): void
+    {
+        $result = $this->runHookBounded('sleep 30 & echo ok; exit 0', seconds: 15.0, hookTimeoutSeconds: 2.0);
+
+        $this->assertSame('deny', $result['action'], 'an exit 0 whose output is not done must not allow');
+        $this->assertStringContainsString('did not finish within 2 seconds', $result['message']);
+        $this->assertStringContainsString('ok', $result['message'], 'what the hook said before the deadline is carried');
+        $this->assertGreaterThanOrEqual(1.9, $result['elapsed'], 'the run ended before its deadline — an exit grace cut it short');
+        $this->assertLessThan(5.0, $result['elapsed'], 'the run outlived its deadline plus the kill ladder');
+    }
+
+    /**
+     * CC-1 (ChildRun): A PIPE FAILURE DENIES, whatever exit code the kill left.
+     * No portable way makes `stream_select()` fail on a live child's pipes
+     * again and again, so this pins the mapping one level down, through the
+     * same reflection seam the ceiling tests use: {@see ScriptHook::unanswered()}
+     * is the branch executeStaged() takes on every finished run. A PIPE_FAILED
+     * result reporting exit 0 still denies, carrying what the hook said; an
+     * EXITED result is left to the exit-code table.
+     */
+    public function testAPipeFailureDeniesEvenWhenTheKillLeftExitZero(): void
+    {
+        $hook = new ScriptHook('pipe_hook', HookEvent::PreToolUse, '.*', 'true', '');
+        $unanswered = new \ReflectionMethod($hook, 'unanswered');
+
+        $failed = new \SugarCraft\Async\ChildResult('', 'half a reason', 0, \SugarCraft\Async\ChildResult::PIPE_FAILED, 0);
+        $verdict = $unanswered->invoke($hook, $failed, '', 'half a reason', 5.0);
+
+        $this->assertInstanceOf(HookResult::class, $verdict);
+        $this->assertSame('deny', $verdict->action);
+        $this->assertStringStartsWith('Hook pipe_hook could not be read to the end (its output pipes kept failing) and was killed;', $verdict->message);
+        $this->assertStringEndsWith('half a reason', $verdict->message);
+
+        $exited = new \SugarCraft\Async\ChildResult('', 'half a reason', 0, \SugarCraft\Async\ChildResult::EXITED, 0);
+        $this->assertNull($unanswered->invoke($hook, $exited, '', 'half a reason', 5.0), 'an exited run is answered by its exit code');
+    }
+
+    /**
+     * CC-1 (ChildRun): A STDIN PAYLOAD THAT CANNOT BE STAGED DENIES, naming the
+     * temp directory. Only the Windows runtime stages the payload, so no Linux
+     * run reaches the catch in executeStaged(); this pins the deny it maps the
+     * exception to, through {@see ScriptHook::stagingRefused()}, with and
+     * without a directory on the exception.
+     */
+    public function testAStdinPayloadThatCannotBeStagedDeniesNamingTheTempDirectory(): void
+    {
+        $hook = new ScriptHook('staging_hook', HookEvent::PreToolUse, '.*', 'true', '');
+        $refused = new \ReflectionMethod($hook, 'stagingRefused');
+
+        $named = $refused->invoke($hook, new \SugarCraft\Async\StdinStagingException('refused', tempDir: '/no/such/tmp'));
+        $this->assertInstanceOf(HookResult::class, $named);
+        $this->assertSame('deny', $named->action);
+        $this->assertSame(
+            'Hook staging_hook could not be executed: its stdin payload could not be staged to a temporary file in /no/such/tmp. '
+            . 'A hook that has not seen the call has not allowed it.',
+            $named->message,
+        );
+
+        $unnamed = $refused->invoke($hook, new \SugarCraft\Async\StdinStagingException('refused'));
+        $this->assertSame('deny', $unnamed->action);
+        $this->assertStringContainsString('temporary file in ' . sys_get_temp_dir() . '.', $unnamed->message);
     }
 
     private function createContext(string $projectRoot = '/tmp'): HookContext

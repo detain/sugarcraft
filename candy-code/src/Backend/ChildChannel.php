@@ -10,6 +10,11 @@ use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * The turn child's half of the two-way frame channel (roadmap 1.C-1 =
@@ -68,13 +73,43 @@ use SugarCraft\Code\Tools\ToolResult;
  *
  * ## No deadline in the child
  *
- * {@see ask()} blocks on the socket for as long as it takes. The parent owns
- * the policy — it pauses its idle ceiling while a question is open, and tears
- * the turn down on cancel — and the parent going away shows up here as EOF,
- * which settles the question as unanswered (`Permission required:`), never as
- * a grant. {@see callClient()} obeys the same law for a client's answer: the
- * deadline rides the parent's timer, and EOF settles as an error result,
- * never as content.
+ * {@see ask()} waits for as long as it takes, with no deadline of its own. The
+ * parent owns the policy — it pauses its idle ceiling while a question is open,
+ * and tears the turn down on cancel — and the parent going away shows up here
+ * as EOF, which settles the question as unanswered (`Permission required:`),
+ * never as a grant. {@see callClient()} obeys the same law for a client's
+ * answer: the deadline rides the parent's timer, and EOF settles as an error
+ * result, never as content.
+ *
+ * ## Promise form (P4-12 CC-1 e)
+ *
+ * {@see ask()} and {@see callClient()} return a promise. On the turn's own
+ * fiber of a loop-driven turn ({@see LoopDrivenTurn}, CC-1 e0) the promise is
+ * pending until the reply frame arrives: the loop resolves it, and nothing
+ * blocks on the socket. A cancelled question (the parent went away) rejects
+ * with {@see ChildRequestCancelled}, never with a grant.
+ *
+ * The synchronous callers that the turn's tool batches use ({@see approver()},
+ * {@see clientCaller()}) keep their return types and suspend the turn's fiber
+ * on the promise through {@see awaitTurn()}, so the loop does the waiting.
+ *
+ * ### Named exceptions: paths that block by design
+ *
+ * Three paths still block while a question is open. Each is deliberate, and
+ * none of them is the loop-driven turn's own fiber.
+ *
+ * - An ask or client call raised inside a NESTED fiber of the turn (a
+ *   workflow's, say) keeps the blocking socket wait. Suspending the nested
+ *   fiber would hand its own driver a promise it never asked for, so the wait
+ *   stays on the socket, and the promise {@see ask()} or {@see callClient()}
+ *   returns is already settled when it comes back. It is documented here and
+ *   covered by its own follow-up row, not by CC-1 e.
+ * - A turn that is not loop-driven (no {@see attachLoop()}) has no loop to
+ *   resume a suspended fiber, so its ask or client call blocks on the socket.
+ * - A grandchild member's question goes over its own
+ *   {@see \SugarCraft\Code\Support\PermissionAskRelay}, and the member blocks
+ *   there until its reply arrives. That wait is on the relay socket, never the
+ *   turn socket.
  *
  * ## Owned by one process
  *
@@ -181,6 +216,33 @@ final class ChildChannel
     private array $heldResults = [];
 
     /**
+     * The loop and the turn's fiber, set by {@see attachLoop()} for the turn
+     * {@see LoopDrivenTurn} runs. Both null means the turn is not loop-driven,
+     * and an ask or client call blocks on the socket as it always did.
+     */
+    private ?LoopInterface $loop = null;
+
+    private ?\Fiber $turnFiber = null;
+
+    /** True once the socket is registered on {@see $loop} (registered lazily, at the first suspension). */
+    private bool $watched = false;
+
+    /** @var array<string, Deferred> asks suspended on their `ask_reply`, by askId */
+    private array $pendingAsks = [];
+
+    /** @var array<string, Deferred> client calls suspended on their `client_result`, by callId */
+    private array $pendingCalls = [];
+
+    /**
+     * Settlements routed during a read pass, delivered once the pass has ended:
+     * a settled fiber can run and call back into this channel, so nothing
+     * resumes while the socket is still being read.
+     *
+     * @var list<array{0: Deferred, 1: array<string, mixed>|null}>
+     */
+    private array $settled = [];
+
+    /**
      * @param resource                                              $socket      the child's end
      * @param \Closure(array<string, mixed>): void                  $writeFrame  writes one frame (and ends the
      *                                                                           process on a dead stream, as
@@ -272,55 +334,118 @@ final class ChildChannel
      */
     public function approver(): \Closure
     {
-        return fn (ToolCall $call, HookResult $ask): ApprovalVerdict => ApprovalVerdict::fromResolution($this->ask($call, $ask));
+        return fn (ToolCall $call, HookResult $ask): ApprovalVerdict => ApprovalVerdict::fromResolution(self::awaitTurn(
+            $this->ask($call, $ask),
+            static fn (ChildRequestCancelled $cancelled): PermissionResolved => PermissionResolved::cancelled($cancelled->requestId, $cancelled->getMessage()),
+        ));
     }
 
     /**
-     * Put one ASK to the parent and block until it is answered or the parent
-     * is gone.
+     * Put one ASK to the parent and return its answer as a promise.
+     *
+     * On the turn's own fiber of a loop-driven turn the promise stays pending
+     * until the `ask_reply` arrives, and the loop resolves it. Anywhere else
+     * (a nested fiber, a turn that is not loop-driven) the wait blocks on the
+     * socket and the promise comes back already settled; see the class
+     * docblock's named exception.
+     *
+     * A question nobody answered (the parent went away) rejects with
+     * {@see ChildRequestCancelled}: it is never a grant.
      *
      * $call is the call that will RUN — {@see \SugarCraft\Code\Runtime::settleAsk()}
      * applies the question's rewrite before it reaches an approver.
+     *
+     * @return PromiseInterface<PermissionResolved>
      */
-    public function ask(ToolCall $call, HookResult $ask): PermissionResolved
+    public function ask(ToolCall $call, HookResult $ask): PromiseInterface
     {
         $frame = PendingAsk::describe($call, $ask, $this->mode, $this->projectRoot === '' ? null : $this->projectRoot);
         $askId = (string) $frame['askId'];
 
         if ((int) getmypid() !== $this->ownerPid) {
-            return PermissionResolved::replied($askId, PermissionReply::Reject, self::GRANDCHILD_REFUSAL);
+            return resolve(PermissionResolved::replied($askId, PermissionReply::Reject, self::GRANDCHILD_REFUSAL));
         }
 
         $root = $this->projectRoot === '' ? null : $this->projectRoot;
         $rememberable = $ask->isRememberable();
         if ($rememberable && $this->grants->allows($call->name(), $call->arguments(), $root)) {
-            return PermissionResolved::replied($askId, PermissionReply::Always);
+            return resolve(PermissionResolved::replied($askId, PermissionReply::Always));
         }
 
         if ($this->closed) {
-            return PermissionResolved::cancelled($askId, self::PARENT_GONE);
+            return reject(new ChildRequestCancelled($askId, self::PARENT_GONE));
         }
 
         ($this->writeFrame)($frame);
 
-        $reply = $this->heldReplies[$askId] ?? null;
-        unset($this->heldReplies[$askId]);
-        while ($reply === null) {
-            if (!$this->readInbound(true, $askId, $reply)) {
-                return PermissionResolved::cancelled($askId, self::PARENT_GONE);
-            }
+        return $this->awaitReply($askId)->then(
+            function (?array $reply) use ($askId, $call, $rememberable, $root): PermissionResolved {
+                if ($reply === null) {
+                    throw new ChildRequestCancelled($askId, self::PARENT_GONE);
+                }
+
+                $parsed = PermissionReply::tryFrom(is_string($reply['reply'] ?? null) ? $reply['reply'] : '');
+                $note = self::clipNote(is_string($reply['note'] ?? null) ? $reply['note'] : '');
+                // An answer this build cannot read is not consent.
+                $resolution = PermissionResolved::replied($askId, $parsed ?? PermissionReply::Reject, $note);
+
+                if ($parsed === PermissionReply::Always && $rememberable) {
+                    $this->grants = $this->grants->withGrant($call->name(), $call->arguments(), $root);
+                }
+
+                return $resolution;
+            },
+        );
+    }
+
+    /**
+     * The outcome of an ask or client call, for a caller that must have it
+     * now: the turn's tool batches, which call an approver or a client caller
+     * and expect the answer back.
+     *
+     * A promise that is already settled is read at once. A pending one exists
+     * only on a loop-driven turn's own fiber (see {@see ask()}), so the fiber
+     * suspends on it and {@see LoopDrivenTurn} resumes it with the outcome
+     * when the frame arrives. A cancellation goes to $onCancelled rather than
+     * being thrown, so a hang-up never fails the turn.
+     *
+     * @template T
+     *
+     * @param PromiseInterface<T>                         $promise
+     * @param \Closure(ChildRequestCancelled): T          $onCancelled
+     *
+     * @return T
+     */
+    public static function awaitTurn(PromiseInterface $promise, \Closure $onCancelled): mixed
+    {
+        $outcome = null;
+        $promise->then(
+            static function (mixed $value) use (&$outcome): void {
+                $outcome = [true, $value];
+            },
+            static function (\Throwable $error) use (&$outcome): void {
+                $outcome = [false, $error];
+            },
+        );
+
+        if ($outcome === null) {
+            // Pending: the loop resumes this fiber with the outcome. The
+            // suspended promise never rejects, so the loop never fails the turn.
+            $outcome = \Fiber::suspend($promise->then(
+                static fn (mixed $value): array => [true, $value],
+                static fn (\Throwable $error): array => [false, $error],
+            ));
         }
 
-        $parsed = PermissionReply::tryFrom(is_string($reply['reply'] ?? null) ? $reply['reply'] : '');
-        $note = self::clipNote(is_string($reply['note'] ?? null) ? $reply['note'] : '');
-        // An answer this build cannot read is not consent.
-        $resolution = PermissionResolved::replied($askId, $parsed ?? PermissionReply::Reject, $note);
-
-        if ($parsed === PermissionReply::Always && $rememberable) {
-            $this->grants = $this->grants->withGrant($call->name(), $call->arguments(), $root);
+        [$resolved, $value] = $outcome;
+        if ($resolved) {
+            return $value;
+        }
+        if ($value instanceof ChildRequestCancelled) {
+            return $onCancelled($value);
         }
 
-        return $resolution;
+        throw $value;
     }
 
     /**
@@ -332,12 +457,17 @@ final class ChildChannel
      */
     public function clientCaller(): \Closure
     {
-        return fn (string $toolCallId, string $name, array $arguments, int $deadlineSeconds): ToolResult => $this->callClient($toolCallId, $name, $arguments, $deadlineSeconds);
+        return fn (string $toolCallId, string $name, array $arguments, int $deadlineSeconds): ToolResult => self::awaitTurn(
+            $this->callClient($toolCallId, $name, $arguments, $deadlineSeconds),
+            static fn (ChildRequestCancelled $cancelled): ToolResult => self::clientCallGone($toolCallId),
+        );
     }
 
     /**
-     * Put one client-hosted call to the parent and block until the answer
-     * arrives or the parent is gone (C-TOOL-6.h).
+     * Put one client-hosted call to the parent and return its answer as a
+     * promise (C-TOOL-6.h). The same two shapes as {@see ask()}: pending on
+     * the turn's own fiber, settled on a nested fiber's blocking wait, and a
+     * call the parent never answers rejects with {@see ChildRequestCancelled}.
      *
      * The child waits without a deadline exactly like {@see ask()}: the
      * parent owns the policy (it pauses the idle ceiling while a call is
@@ -349,8 +479,10 @@ final class ChildChannel
      * in depth, same as {@see GRANDCHILD_REFUSAL} is for asks.
      *
      * @param array<string, mixed> $arguments
+     *
+     * @return PromiseInterface<ToolResult>
      */
-    public function callClient(string $toolCallId, string $name, array $arguments, int $deadlineSeconds): ToolResult
+    public function callClient(string $toolCallId, string $name, array $arguments, int $deadlineSeconds): PromiseInterface
     {
         $frame = PendingClientCall::describe(
             PendingClientCall::callId($toolCallId, $name, $arguments),
@@ -362,39 +494,38 @@ final class ChildChannel
         $callId = (string) $frame['callId'];
 
         if ((int) getmypid() !== $this->ownerPid) {
-            return new ToolResult(
+            return resolve(new ToolResult(
                 toolCallId: $toolCallId,
                 content: 'a client-hosted tool cannot be called from a parallel sub-agent; the client channel belongs to the turn',
                 isError: true,
-            );
+            ));
         }
 
         if ($this->closed) {
-            return self::clientCallGone($toolCallId);
+            return reject(new ChildRequestCancelled($callId, self::PARENT_GONE));
         }
 
         ($this->writeFrame)($frame);
 
-        $answer = $this->heldResults[$callId] ?? null;
-        unset($this->heldResults[$callId]);
-        $reply = null;
-        while ($answer === null) {
-            if (!$this->readInbound(true, null, $reply, $callId, $answer)) {
-                return self::clientCallGone($toolCallId);
-            }
-        }
+        return $this->awaitResult($callId)->then(
+            static function (?array $answer) use ($toolCallId, $callId): ToolResult {
+                if ($answer === null) {
+                    throw new ChildRequestCancelled($callId, self::PARENT_GONE);
+                }
 
-        $content = $answer['content'] ?? null;
-        if (!is_string($content)) {
-            // An answer this build cannot read is not an answer: fail closed,
-            // the same judgement an unreadable permission reply gets.
-            return new ToolResult(toolCallId: $toolCallId, content: 'the client answer could not be read', isError: true);
-        }
+                $content = $answer['content'] ?? null;
+                if (!is_string($content)) {
+                    // An answer this build cannot read is not an answer: fail closed,
+                    // the same judgement an unreadable permission reply gets.
+                    return new ToolResult(toolCallId: $toolCallId, content: 'the client answer could not be read', isError: true);
+                }
 
-        return new ToolResult(
-            toolCallId: $toolCallId,
-            content: $content,
-            isError: ($answer['isError'] ?? false) === true,
+                return new ToolResult(
+                    toolCallId: $toolCallId,
+                    content: $content,
+                    isError: ($answer['isError'] ?? false) === true,
+                );
+            },
         );
     }
 
@@ -587,6 +718,177 @@ final class ChildChannel
         }
         $reply = null;
         $this->readInbound(false, null, $reply);
+        $this->settle();
+    }
+
+    /**
+     * Hand this channel to the loop its turn runs on. Called by
+     * {@see LoopDrivenTurn} before the turn's fiber starts; the socket is only
+     * registered with the loop once an ask or client call first suspends.
+     */
+    public function attachLoop(LoopInterface $loop, \Fiber $turn): void
+    {
+        $this->loop = $loop;
+        $this->turnFiber = $turn;
+    }
+
+    /** Undo {@see attachLoop()} and stop watching the socket. Idempotent. */
+    public function detachLoop(): void
+    {
+        $this->unwatch();
+        $this->loop = null;
+        $this->turnFiber = null;
+    }
+
+    /**
+     * The reply frame for one ask, or null when the parent is gone, as a
+     * promise. On a loop-driven turn's own fiber the promise is pending until
+     * the `ask_reply` arrives and the loop resolves it. Otherwise the socket is
+     * read here, blocking, and the promise comes back already settled.
+     *
+     * @return PromiseInterface<array<string, mixed>|null>
+     */
+    private function awaitReply(string $askId): PromiseInterface
+    {
+        $reply = $this->heldReplies[$askId] ?? null;
+        unset($this->heldReplies[$askId]);
+        if ($reply !== null) {
+            return resolve($reply);
+        }
+
+        if ($this->suspendable()) {
+            $deferred = new Deferred();
+            $this->pendingAsks[$askId] = $deferred;
+            $this->watch();
+
+            return $deferred->promise()->then(function (mixed $answer) use ($askId): ?array {
+                unset($this->pendingAsks[$askId]);
+
+                return is_array($answer) ? $answer : null;
+            });
+        }
+
+        while (true) {
+            if (!$this->readInbound(true, $askId, $reply)) {
+                return resolve(null);
+            }
+            if ($reply !== null) {
+                return resolve($reply);
+            }
+        }
+    }
+
+    /**
+     * The result frame for one client call, or null when the parent is gone.
+     * The same two shapes as {@see awaitReply()}.
+     *
+     * @return PromiseInterface<array<string, mixed>|null>
+     */
+    private function awaitResult(string $callId): PromiseInterface
+    {
+        $answer = $this->heldResults[$callId] ?? null;
+        unset($this->heldResults[$callId]);
+        if ($answer !== null) {
+            return resolve($answer);
+        }
+
+        if ($this->suspendable()) {
+            $deferred = new Deferred();
+            $this->pendingCalls[$callId] = $deferred;
+            $this->watch();
+
+            return $deferred->promise()->then(function (mixed $result) use ($callId): ?array {
+                unset($this->pendingCalls[$callId]);
+
+                return is_array($result) ? $result : null;
+            });
+        }
+
+        $reply = null;
+        while (true) {
+            if (!$this->readInbound(true, null, $reply, $callId, $answer)) {
+                return resolve(null);
+            }
+            if ($answer !== null) {
+                return resolve($answer);
+            }
+        }
+    }
+
+    /**
+     * Whether an ask or client call may suspend the current fiber: this turn
+     * is loop-driven, the caller runs in the turn's own fiber (not a nested
+     * one that would swallow the suspension), and the caller is the process
+     * that owns the socket.
+     */
+    private function suspendable(): bool
+    {
+        return $this->loop !== null
+            && $this->turnFiber !== null
+            && $this->turnFiber === \Fiber::getCurrent()
+            && !$this->closed
+            && (int) getmypid() === $this->ownerPid;
+    }
+
+    private function watch(): void
+    {
+        if ($this->watched || $this->loop === null) {
+            return;
+        }
+        $this->loop->addReadStream($this->socket, function (): void {
+            $this->onReadable();
+        });
+        $this->watched = true;
+    }
+
+    /** Stop watching the socket. Idempotent; the next suspension registers it again. */
+    private function unwatch(): void
+    {
+        if ($this->watched && $this->loop !== null) {
+            $this->loop->removeReadStream($this->socket);
+        }
+        $this->watched = false;
+    }
+
+    /**
+     * The socket is readable on the loop: read once and settle what it answered.
+     *
+     * WHY THE SOCKET LEAVES THE LOOP AT EOF. Once the parent hangs up the
+     * socket reads as EOF on every poll. A turn that is still running (a
+     * bare suspension, say) would then have the loop wake on it each turn
+     * and never sleep, so the watch is dropped on the first EOF.
+     */
+    private function onReadable(): void
+    {
+        $reply = null;
+        $result = null;
+        if (!$this->readInbound(false, null, $reply, null, $result)) {
+            $this->unwatch();
+            $this->failPending();
+        }
+        $this->settle();
+    }
+
+    /** The parent is gone: every suspended ask and client call settles unanswered. */
+    private function failPending(): void
+    {
+        foreach ($this->pendingAsks as $deferred) {
+            $this->settled[] = [$deferred, null];
+        }
+        foreach ($this->pendingCalls as $deferred) {
+            $this->settled[] = [$deferred, null];
+        }
+        $this->pendingAsks = [];
+        $this->pendingCalls = [];
+    }
+
+    private function settle(): void
+    {
+        $settled = $this->settled;
+        $this->settled = [];
+        foreach ($settled as [$deferred, $frame]) {
+            $deferred->resolve($frame);
+        }
     }
 
     /**
@@ -668,6 +970,12 @@ final class ChildChannel
 
                 return;
             }
+            if (isset($this->pendingAsks[$askId])) {
+                $this->settled[] = [$this->pendingAsks[$askId], $frame];
+                unset($this->pendingAsks[$askId]);
+
+                return;
+            }
             // The parent settles each question once, so a reply for another
             // id is held for the ask that will want it rather than dropped.
             if (!isset($this->heldReplies[$askId]) && count($this->heldReplies) < self::MAX_HELD_REPLIES) {
@@ -684,6 +992,12 @@ final class ChildChannel
             }
             if ($awaitingCall !== null && $result === null && $callId === $awaitingCall) {
                 $result = $frame;
+
+                return;
+            }
+            if (isset($this->pendingCalls[$callId])) {
+                $this->settled[] = [$this->pendingCalls[$callId], $frame];
+                unset($this->pendingCalls[$callId]);
 
                 return;
             }

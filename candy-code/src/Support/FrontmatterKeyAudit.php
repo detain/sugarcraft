@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Which frontmatter keys a markdown-plus-YAML file declares that candy-code
@@ -167,8 +168,6 @@ final class FrontmatterKeyAudit
     /** Characters one key, value or name may contribute to a row. */
     private const MAX_TOKEN_CHARS = 48;
 
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * The ignored keys $meta declares, as display labels — "`allowed-tools`
      * is not acted on", "`permisionMode` is not an agent preset field (did you
@@ -311,12 +310,13 @@ final class FrontmatterKeyAudit
      */
     public static function metaOf(string $content): array
     {
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) !== 1) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split === null) {
             return [];
         }
 
         try {
-            $parsed = Frontmatter::parse($matches[1]);
+            $parsed = Frontmatter::parse($split->meta);
         } catch (\Throwable) {
             return [];
         }

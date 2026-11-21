@@ -11,6 +11,7 @@ use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
 use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\ServeProtocol\Protocol;
 
 /**
  * The reply handle for one open ASK raised inside a running turn (Appendix O
@@ -62,7 +63,7 @@ final class PendingAsk
      * honored silently: {@see \SugarCraft\Code\Protocol\Methods\PermissionMethods::respond()}
      * refuses it loudly, and `permission.pending` never presents it.
      */
-    public const EXPIRY_SECONDS = 1800;
+    public const EXPIRY_SECONDS = Protocol::ASK_EXPIRY_SECONDS;
 
     private ?PermissionResolved $resolution = null;
 

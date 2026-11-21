@@ -203,7 +203,18 @@ final class UserStore
         $this->publish();
     }
 
-    /** Encode + atomic rename publish of the current snapshot. */
+    /**
+     * Encode + atomic rename publish of the current snapshot.
+     *
+     * Hand-rolled rather than routed through Support\AtomicWriter, on purpose:
+     * the fsync failure here is fatal (AtomicTextFile silences it). The
+     * fsync-before-rename order is pinned by
+     * UserStoreControlPlaneTest::testSaveSettlesThePayloadWithFsyncBeforeThePublishRename,
+     * and the fatal branch by
+     * UserStoreControlPlaneTest::testSettleFailureIsFatalAndUnsuppressed.
+     * Stay inline if AtomicWriter is ever retired; this chain does not depend
+     * on it.
+     */
     private function publish(): void
     {
         $dir = \dirname($this->filePath);
@@ -230,22 +241,35 @@ final class UserStore
         if ($handle === false) {
             throw new \RuntimeException("cannot open temp user store: {$tmp}");
         }
+        $published = false;
         try {
-            \chmod($tmp, 0600);
-            if (\fwrite($handle, $payload) === false) {
-                throw new \RuntimeException('cannot write user store payload');
+            try {
+                \chmod($tmp, 0600);
+                // A short write returns a byte count, not false: comparing only
+                // against false would let a truncated payload reach the rename.
+                $written = \fwrite($handle, $payload);
+                if ($written === false || $written !== \strlen($payload)) {
+                    throw new \RuntimeException('cannot write user store payload');
+                }
+                \fflush($handle);
+                if (\fsync($handle) === false) {
+                    throw new \RuntimeException('cannot sync user store payload to disk');
+                }
+            } finally {
+                \fclose($handle);
             }
-            \fflush($handle);
-            if (\fsync($handle) === false) {
-                throw new \RuntimeException('cannot sync user store payload to disk');
-            }
-        } finally {
-            \fclose($handle);
-        }
 
-        if (!@\rename($tmp, $this->filePath)) {
-            @\unlink($tmp);
-            throw new \RuntimeException("cannot publish user store: {$this->filePath}");
+            if (!@\rename($tmp, $this->filePath)) {
+                throw new \RuntimeException("cannot publish user store: {$this->filePath}");
+            }
+            $published = true;
+        } finally {
+            // Every failure before the rename strands a 0600 temp holding the
+            // bcrypt hashes and keys; the unlink covers all of them, as
+            // AtomicWriter::write does, instead of only the rename branch.
+            if (!$published) {
+                @\unlink($tmp);
+            }
         }
         $this->dirty = false;
     }

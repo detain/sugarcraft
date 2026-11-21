@@ -140,7 +140,7 @@ $events = $decoder->flushDeferredEscape();
 
 // Observability counters (all zeroed by reset())
 $decoder->drainedReplyCount();    // replies surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount();  // complete sequences consumed with no event
+$decoder->droppedUnknownCount();  // sequences consumed or refused with no event
 $decoder->discardedPasteBytes();  // bytes dropped past the paste cap
 
 // Clear every buffer, flag and counter — the documented recovery lever
@@ -226,7 +226,9 @@ suitable for showing the user why their paste looks short (`lang/en.php`;
 locale resolution follows sugar-core's `I18n\Lang` — English-only today: the
 key resolves through sugar-core's fallback and lands on `en`). The remaining body is
 **then discarded** — counted by `discardedPasteBytes()` — until the real
-`CSI 201 ~` terminator arrives. Overflow bytes are never re-decoded as
+`CSI 201 ~` terminator arrives. The overshoot past the cap in the read that crosses
+it is counted too, except when that same read carries the terminator: such a paste
+is truncated with no overshoot count. Overflow bytes are never re-decoded as
 keystrokes: an injected 1 MiB+ paste can end up commanding your input loop,
 so the cap's force-close must consume, not reinterpret. If the terminator
 never comes (an aborted or forged paste), the open episode simply stays
@@ -383,10 +385,11 @@ open OSC/DCS until its terminator (even a terminator split across the chunk
 boundary) rather than resuming key decoding mid-string, which would leak the
 tail as keystrokes. That swallowing is bounded by the **abandon budget** — 64 KiB
 of swallowed payload: a stream that never terminates the string is abandoned
-when the budget is spent, so keystrokes resume. The abandon folds the
-still-in-hand body past the boundary into **one** counted drop rather than
-replaying it as a flood of printable keys. Which noise bytes that drop covers
-depends on where the reads fell; what cannot shift with chunk size is the
+when the budget is spent, so keystrokes resume. The abandon counts
+the still-in-hand body past the boundary as **one** drop rather than replaying
+it as a flood of printable keys. A single read that carries more than the budget
+can still surface part of that residue as keys in the same call, so the key count
+depends on where the reads fell. What cannot shift with chunk size is the
 control behavior: one drain, one counted abandon, keystrokes resuming
 afterwards. Between the announce and the real terminator, up to one abandon
 budget of further traffic — including genuine keystrokes — is silently
@@ -405,14 +408,14 @@ Three counters on `EscapeDecoder` tell the silent paths apart:
 
 ```php
 $decoder->drainedReplyCount();    // replies recognized and surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount();  // complete sequences consumed with no event (including overflowed CSI)
-$decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
+$decoder->droppedUnknownCount();  // sequences consumed or refused with no event (including overflowed CSI)
+$decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap (same-read overshoot excepted)
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
-`droppedUnknownCount()` means bytes were consumed but produced no event. That
-includes genuinely unrecognized sequences — private CSIs whose lead parameter
-byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
+`droppedUnknownCount()` means sequences were consumed or refused without producing
+an event. That includes genuinely unrecognized sequences — private CSIs whose lead
+parameter byte routes nowhere (`<` with mouse reporting off, `=` with a final that is not a recognized reply, such as `=1A`, `=1q`, `=5~`, or `=1u` with kitty off, `!`), unmapped SS3
 finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
 unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
 It **also** covers recognized-but-filtered frames — a Kitty event frame when the
@@ -420,7 +423,22 @@ progressive protocol is disabled, a disabled family's mouse report, or a stray
 `CSI 201~` paste-end marker with no paste open. What never lands in this counter
 is a complete `?`- or `>`-prefixed private report: those drain as
 `TerminalReplyEvent`s. So a non-zero count does not necessarily mean this
-terminal sends frames the decoder fails to model. `reset()` zeroes all
+terminal sends frames the decoder fails to model. An incomplete sequence whose
+buffered tail passes the 128-byte cap is refused and counted once in
+`droppedUnknownCount()`; its trailing bytes are swallowed up to the final byte, or
+up to a fresh ESC, which starts a new sequence and is decoded as normal. Those bytes
+are never counted again. An unterminated OSC/DCS string that exhausts its 64 KiB
+abandon budget is also counted once in `droppedUnknownCount()`, at the abandon.
+That count covers the abandon itself, not every byte of the body: a single read
+that carries more than the budget can still decode part of its tail as keystrokes
+in that same call, and how many bytes those are depends on where the reads fell.
+A complete sequence longer
+than the cap that arrives in a single read is parsed whole and is not refused for
+its length: a recognized one drains or decodes as usual, while an unrecognized final
+is still counted once in `droppedUnknownCount()`.
+`discardedPasteBytes()` is the paste-only counter and never moves for a
+sequence. It leaves out the overshoot of a paste that crosses the cap and ends in
+the same read, so its total can differ with read chunking. `reset()` zeroes all
 counters along with the buffers.
 
 ### Deferred trailing escape (opt-in)
@@ -489,9 +507,12 @@ field as hostile bytes:
 - **Caps never reinterpret.** A sequence that overflows its cap is refused
   with one counted drop (`droppedUnknownCount()`); paste bytes past the cap
   are discarded and counted by `discardedPasteBytes()` — the paste-only
-  counter. Neither is ever pushed back into the stream for a second parse:
-  an oversized frame cannot surface as synthesized keys, and an oversized
-  paste body cannot masquerade as keystrokes after its announce.
+  counter, with the same-read overshoot excepted (see Observability). Neither
+  is ever pushed back into the stream for a second parse: an oversized CSI
+  cannot surface as synthesized keys, and an oversized paste body cannot
+  masquerade as keystrokes after its announce. The exception is an
+  unterminated OSC/DCS past its abandon budget: a single read that carries
+  more than the budget can still decode part of its tail as keys.
 - The fleet's private-use-area arena (zone sentinels U+E000/U+E001 and the
   image-marker block from U+E002) passes through decoding byte-identical — a
   hostile paste can forge marker bytes. Frame-marked composites should sweep

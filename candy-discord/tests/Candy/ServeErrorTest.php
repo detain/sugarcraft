@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Candy;
 
 use CandyCode\Bundles\Discord\Candy\ServeError;
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeRefusal;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,11 +17,7 @@ final class ServeErrorTest extends TestCase
 {
     public function testAKnownKindRendersItsOwnSentenceNotTheWireText(): void
     {
-        $error = ServeError::fromRpc('session.create', [
-            'code' => -32000,
-            'message' => 'connect timed out',
-            'data' => ['kind' => 'timeout'],
-        ]);
+        $error = new ServeError('timeout', 'channel-bridge: session.create: connect timed out', ['kind' => 'timeout']);
 
         self::assertStringContainsString('channel-bridge: session.create', $error->getMessage(), 'the log line keeps its attribution');
         self::assertSame('candy-code took too long to answer', $error->userReason());
@@ -42,5 +39,64 @@ final class ServeErrorTest extends TestCase
 
         self::assertSame('candy-code refused the request', (new ServeError('rpc_-32601', 'log only'))->userReason());
         self::assertSame('candy-code refused the request', (new ServeError('image_mime_mismatch', 'log only'))->userReason());
+    }
+
+    public function testAnInProcessNotInitializedRefusalReadsAsNotConnected(): void
+    {
+        $error = ServeError::fromHost('session.create', new FakeRefusal('not_initialized', 'send server.hello first'));
+
+        self::assertSame('not_initialized', $error->kind);
+        self::assertSame('not connected to candy-code', $error->userReason(), 'the chat line says not connected, not a generic failure');
+    }
+
+    public function testAHostRefusalKeepsItsKindDataAndMethodAttribution(): void
+    {
+        $error = ServeError::fromHost('session.send', new FakeRefusal('image_mime_mismatch', 'invalid params'));
+
+        self::assertSame('image_mime_mismatch', $error->kind);
+        self::assertSame(['kind' => 'image_mime_mismatch'], $error->data);
+        self::assertSame('channel-bridge: session.send: invalid params', $error->getMessage());
+    }
+
+    public function testAServeErrorPassesThroughFromHostUnchanged(): void
+    {
+        $original = new ServeError('timeout', 'channel-bridge: session.get: connect timed out');
+
+        self::assertSame($original, ServeError::fromHost('session.get', $original));
+    }
+
+    public function testANonRefusalFailureIsTheInternalKindWithItsCause(): void
+    {
+        $cause = new \RuntimeException('dispatcher exploded');
+        $error = ServeError::fromHost('command.exec', $cause);
+
+        self::assertSame('internal', $error->kind);
+        self::assertSame([], $error->data);
+        self::assertSame('channel-bridge: command.exec: dispatcher exploded', $error->getMessage());
+        self::assertSame($cause, $error->getPrevious());
+        self::assertSame('candy-code refused the request', $error->userReason());
+    }
+
+    public function testALibraryRefusalKeepsItsKindAndRetryHint(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::of(
+            \SugarCraft\McpClient\Protocol\ErrorCode::Busy,
+            'session is busy',
+            null,
+            ['retryAfterMs' => 500],
+        );
+        $error = ServeError::fromHost('session.send', $refusal);
+
+        self::assertSame('busy', $error->kind);
+        self::assertSame(['kind' => 'busy', 'retryAfterMs' => 500, 'retryable' => true], $error->data);
+    }
+
+    public function testALibraryNotFoundRefusalKeepsItsKind(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::notFound('gone', 'session_not_found');
+        $error = ServeError::fromHost('session.get', $refusal);
+
+        self::assertSame('session_not_found', $error->kind);
+        self::assertSame(['kind' => 'session_not_found'], $error->data);
     }
 }
