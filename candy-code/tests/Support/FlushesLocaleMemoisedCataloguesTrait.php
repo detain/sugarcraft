@@ -44,6 +44,7 @@ trait FlushesLocaleMemoisedCataloguesTrait
         self::clearStaticMemo(SettingsSchema::class, 'all');
         self::clearStaticMemo(BuiltInCommands::class, 'all');
         self::clearStaticMemo(BuiltInCommands::class, 'bySpelling');
+        self::clearStaticMemo(BuiltInCommands::class, 'byPaletteAction');
     }
 
     private static function clearStaticMemo(string $class, string $property): void

@@ -211,13 +211,7 @@ final class CommandRegistry
      */
     public static function forPaletteAction(PaletteAction $action): ?CommandSpec
     {
-        foreach (self::all() as $spec) {
-            if ($spec->paletteAction === $action) {
-                return $spec;
-            }
-        }
-
-        return null;
+        return BuiltInCommands::forPaletteAction($action);
     }
 
     /**
