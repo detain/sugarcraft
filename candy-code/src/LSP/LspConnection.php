@@ -136,6 +136,19 @@ final class LspConnection implements LspConnectionInterface
     private const MAX_STDERR_BYTES = 65536;
 
     /**
+     * How long {@see disconnect()} lets a server that answered `shutdown` leave
+     * on its own after `exit` before the SIGTERM ladder starts.
+     *
+     * Without it the ladder signalled within microseconds of writing `exit`, so
+     * a server that had not yet been scheduled to read the notification (or was
+     * flushing on its way out) was killed by SIGTERM instead of leaving through
+     * the protocol. Seen as a red in a loaded sharded run of
+     * LspConnectionShutdownTest. Paid in full only by a server that answers
+     * `shutdown` and then ignores `exit`.
+     */
+    private const EXIT_GRACE_SECONDS = 1.0;
+
+    /**
      * Upper bound on ONE `Content-Length` frame — the declared length AND the
      * persistent buffer accumulating towards it.
      *
@@ -484,9 +497,15 @@ final class LspConnection implements LspConnectionInterface
             return;
         }
 
+        $exitGrace = 0.0;
         if (is_resource($this->process)) {
             try {
-                $this->sendRequest('shutdown', null);
+                // Only a server that ANSWERED `shutdown` is speaking the
+                // protocol and earns the exit grace below; one that timed out
+                // goes straight to the ladder, so its bound is unchanged.
+                if (!$this->sendRequest('shutdown', null)->isError) {
+                    $exitGrace = self::EXIT_GRACE_SECONDS;
+                }
             } catch (\Throwable) {
                 // Server may have already terminated — ignore.
             }
@@ -494,7 +513,7 @@ final class LspConnection implements LspConnectionInterface
             $this->sendNotification('exit', null);
         }
 
-        $this->stopProcess();
+        $this->stopProcess($exitGrace);
         $this->initialized = false;
         $this->capabilities = null;
     }
@@ -1179,7 +1198,7 @@ final class LspConnection implements LspConnectionInterface
      * process's control group and are a property of the server's own process
      * handling.
      */
-    private function stopProcess(): void
+    private function stopProcess(float $exitGrace = 0.0): void
     {
         // A forked process holds COPIES of the pipes; the server belongs to the
         // owner, which may still be serving it while siblings are mid-exchange
@@ -1230,8 +1249,14 @@ final class LspConnection implements LspConnectionInterface
         }
 
         // E673: read the group WHILE alive — servers that fork helpers die
-        // whole instead of orphaning them past disconnect().
-        ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
+        // whole instead of orphaning them past disconnect(). Read BEFORE the
+        // exit grace too: the grace's proc_get_status() reaps an exited leader,
+        // after which the group would read as absent (ISS-014).
+        $group = ProcessContainment::groupId($this->process);
+        if ($exitGrace > 0.0 && is_resource($this->process)) {
+            ProcessReaper::waitForExit($this->process, $exitGrace);
+        }
+        ProcessReaper::terminateAndClose($this->process, $group);
         $this->lock?->destroy();
         $this->lock = null;
 

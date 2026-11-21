@@ -172,6 +172,40 @@ final class LspConnectionShutdownTest extends TestCase
     }
 
     /**
+     * THE RACE THE ROW ABOVE HIT UNDER LOAD, made deterministic. `disconnect()`
+     * used to start the SIGTERM ladder microseconds after writing `exit`, so a
+     * cooperative server that had not yet been scheduled to read it was killed
+     * at SIGTERM's default disposition. That row went red once in a loaded
+     * sharded run and passed alone.
+     *
+     * This fixture is the well-behaved one with a 200ms pause between reading
+     * `exit` and leaving (a server flushing state on its way out). It does not
+     * touch SIGTERM, so without an exit grace the marker is never written,
+     * whatever the load.
+     */
+    public function testDisconnectGivesAServerThatAnsweredShutdownTimeToLeaveOnExit(): void
+    {
+        $slowExit = str_replace(
+            "file_put_contents(\$argv[1] . '.exit', 'exit');",
+            "usleep(200000);\n        file_put_contents(\$argv[1] . '.exit', 'exit');",
+            self::WELL_BEHAVED_SERVER,
+        );
+        $this->assertNotSame(self::WELL_BEHAVED_SERVER, $slowExit, 'the slow-exit fixture was not derived');
+
+        $connection = $this->connectedOver($slowExit);
+        $pid = $this->selfReportedPid();
+
+        $connection->disconnect();
+
+        $this->assertFileExists(
+            $this->pidFile() . self::EXIT_MARKER_SUFFIX,
+            'a server that answered `shutdown` was signalled before it could act on `exit`; '
+            . 'disconnect() must give it a grace to leave through the protocol',
+        );
+        $this->assertFalse($this->isAlive($pid), "pid {$pid} survived disconnect()");
+    }
+
+    /**
      * Bounded is not enough: the server must be GONE. A `disconnect()` that
      * returned quickly by abandoning the process would satisfy the timing
      * assertion above and leave precisely the orphan this change exists to
