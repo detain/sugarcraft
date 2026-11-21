@@ -2188,6 +2188,78 @@ final class ScriptHookTest extends TestCase
         $this->assertStringStartsWith($message, $result->message);
     }
 
+    /**
+     * CC-1 (ChildRun): NO EXIT GRACE. The hook exits 0 at once but leaves a
+     * backgrounded `sleep` holding its output pipes open. With an exit grace
+     * ChildRun would cut those pipes shortly after the exit and the exit 0
+     * would allow; the hook runs with none, so its output is not done until
+     * the pipes close, the run is held to its two-second deadline, and the
+     * verdict is the timeout deny. The elapsed bound proves the deadline (plus
+     * the two 0.5 s kill rungs) ended it, not the thirty-second sleep.
+     */
+    public function testABackgroundedChildHoldingThePipesIsDeniedAtTheDeadlineNotAllowedAfterAGrace(): void
+    {
+        $result = $this->runHookBounded('sleep 30 & echo ok; exit 0', seconds: 15.0, hookTimeoutSeconds: 2.0);
+
+        $this->assertSame('deny', $result['action'], 'an exit 0 whose output is not done must not allow');
+        $this->assertStringContainsString('did not finish within 2 seconds', $result['message']);
+        $this->assertStringContainsString('ok', $result['message'], 'what the hook said before the deadline is carried');
+        $this->assertGreaterThanOrEqual(1.9, $result['elapsed'], 'the run ended before its deadline — an exit grace cut it short');
+        $this->assertLessThan(5.0, $result['elapsed'], 'the run outlived its deadline plus the kill ladder');
+    }
+
+    /**
+     * CC-1 (ChildRun): A PIPE FAILURE DENIES, whatever exit code the kill left.
+     * No portable way makes `stream_select()` fail on a live child's pipes
+     * again and again, so this pins the mapping one level down, through the
+     * same reflection seam the ceiling tests use: {@see ScriptHook::unanswered()}
+     * is the branch executeStaged() takes on every finished run. A PIPE_FAILED
+     * result reporting exit 0 still denies, carrying what the hook said; an
+     * EXITED result is left to the exit-code table.
+     */
+    public function testAPipeFailureDeniesEvenWhenTheKillLeftExitZero(): void
+    {
+        $hook = new ScriptHook('pipe_hook', HookEvent::PreToolUse, '.*', 'true', '');
+        $unanswered = new \ReflectionMethod($hook, 'unanswered');
+
+        $failed = new \SugarCraft\Async\ChildResult('', 'half a reason', 0, \SugarCraft\Async\ChildResult::PIPE_FAILED, 0);
+        $verdict = $unanswered->invoke($hook, $failed, '', 'half a reason', 5.0);
+
+        $this->assertInstanceOf(HookResult::class, $verdict);
+        $this->assertSame('deny', $verdict->action);
+        $this->assertStringStartsWith('Hook pipe_hook could not be read to the end (its output pipes kept failing) and was killed;', $verdict->message);
+        $this->assertStringEndsWith('half a reason', $verdict->message);
+
+        $exited = new \SugarCraft\Async\ChildResult('', 'half a reason', 0, \SugarCraft\Async\ChildResult::EXITED, 0);
+        $this->assertNull($unanswered->invoke($hook, $exited, '', 'half a reason', 5.0), 'an exited run is answered by its exit code');
+    }
+
+    /**
+     * CC-1 (ChildRun): A STDIN PAYLOAD THAT CANNOT BE STAGED DENIES, naming the
+     * temp directory. Only the Windows runtime stages the payload, so no Linux
+     * run reaches the catch in executeStaged(); this pins the deny it maps the
+     * exception to, through {@see ScriptHook::stagingRefused()}, with and
+     * without a directory on the exception.
+     */
+    public function testAStdinPayloadThatCannotBeStagedDeniesNamingTheTempDirectory(): void
+    {
+        $hook = new ScriptHook('staging_hook', HookEvent::PreToolUse, '.*', 'true', '');
+        $refused = new \ReflectionMethod($hook, 'stagingRefused');
+
+        $named = $refused->invoke($hook, new \SugarCraft\Async\StdinStagingException('refused', tempDir: '/no/such/tmp'));
+        $this->assertInstanceOf(HookResult::class, $named);
+        $this->assertSame('deny', $named->action);
+        $this->assertSame(
+            'Hook staging_hook could not be executed: its stdin payload could not be staged to a temporary file in /no/such/tmp. '
+            . 'A hook that has not seen the call has not allowed it.',
+            $named->message,
+        );
+
+        $unnamed = $refused->invoke($hook, new \SugarCraft\Async\StdinStagingException('refused'));
+        $this->assertSame('deny', $unnamed->action);
+        $this->assertStringContainsString('temporary file in ' . sys_get_temp_dir() . '.', $unnamed->message);
+    }
+
     private function createContext(string $projectRoot = '/tmp'): HookContext
     {
         return new HookContext(

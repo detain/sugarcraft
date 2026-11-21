@@ -863,14 +863,7 @@ final readonly class ScriptHook implements BoundedHookInterface
                 $run = $this->runChild($spec, $cwd, ProcessContainment::scrubbedEnv($fixed + $payload['fallback']), $stdin, $budget);
             }
         } catch (StdinStagingException $staging) {
-            // Windows only: the stdin payload could not be staged to a temp
-            // file. Nothing ran, so the hook has allowed nothing.
-            return HookResult::deny(sprintf(
-                'Hook %s could not be executed: its stdin payload could not be staged to a temporary file in %s. '
-                . 'A hook that has not seen the call has not allowed it.',
-                $this->name,
-                $staging->tempDir() ?? sys_get_temp_dir(),
-            ));
+            return $this->stagingRefused($staging);
         }
 
         if ($run === null) {
@@ -888,37 +881,9 @@ final readonly class ScriptHook implements BoundedHookInterface
         $output = self::capped($run->stdout, $run->droppedBytes - $run->droppedStderrBytes);
         $errors = self::capped($run->stderr, $run->droppedStderrBytes);
 
-        if ($run->timedOut()) {
-            // The exit code from a killed child says "signalled", never what
-            // the hook meant, so it is not consulted — the verdict is the
-            // timeout itself. Whatever the hook managed to say before it
-            // wedged is carried through, since a half-written deny reason is
-            // still the most useful thing on offer.
-            return HookResult::deny(rtrim(sprintf(
-                'Hook %s did not finish within %s seconds and was killed; a hook that '
-                . 'has not answered has not allowed anything. %s',
-                $this->name,
-                rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
-                self::clip(
-                    trim($errors) !== '' ? trim($errors) : trim($output),
-                    self::MAX_DENY_REASON_BYTES,
-                ),
-            )));
-        }
-
-        if ($run->status === ChildResult::PIPE_FAILED) {
-            // The pipes kept failing, so ChildRun stopped reading and killed the
-            // child: its exit code is the kill's, not the hook's answer. Fail
-            // closed, carrying whatever it said before the read failed.
-            return HookResult::deny(rtrim(sprintf(
-                'Hook %s could not be read to the end (its output pipes kept failing) and was killed; '
-                . 'a hook that has not answered has not allowed anything. %s',
-                $this->name,
-                self::clip(
-                    trim($errors) !== '' ? trim($errors) : trim($output),
-                    self::MAX_DENY_REASON_BYTES,
-                ),
-            )));
+        $unanswered = $this->unanswered($run, $output, $errors, $budget);
+        if ($unanswered !== null) {
+            return $unanswered;
         }
 
         // A signal death reads -1 from ChildRun, which every table below sends
@@ -969,6 +934,67 @@ final readonly class ScriptHook implements BoundedHookInterface
                 self::clip($errors, self::MAX_DENY_REASON_BYTES) ?: "Hook exited with code $exitCode",
             ),
         };
+    }
+
+    /**
+     * The deny for a run that ended without the hook answering, or null when
+     * the hook exited on its own and its exit code is the verdict.
+     *
+     * Both cases ignore the exit code: a deadline kill and a pipe-failure kill
+     * each leave the kill's status, never what the hook meant, so even a
+     * reported 0 must not read as an allow.
+     */
+    private function unanswered(ChildResult $run, string $output, string $errors, float $budget): ?HookResult
+    {
+        if ($run->timedOut()) {
+            // The exit code from a killed child says "signalled", never what
+            // the hook meant, so it is not consulted — the verdict is the
+            // timeout itself. Whatever the hook managed to say before it
+            // wedged is carried through, since a half-written deny reason is
+            // still the most useful thing on offer.
+            return HookResult::deny(rtrim(sprintf(
+                'Hook %s did not finish within %s seconds and was killed; a hook that '
+                . 'has not answered has not allowed anything. %s',
+                $this->name,
+                rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
+                self::clip(
+                    trim($errors) !== '' ? trim($errors) : trim($output),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
+            )));
+        }
+
+        if ($run->status === ChildResult::PIPE_FAILED) {
+            // The pipes kept failing, so ChildRun stopped reading and killed the
+            // child: its exit code is the kill's, not the hook's answer. Fail
+            // closed, carrying whatever it said before the read failed.
+            return HookResult::deny(rtrim(sprintf(
+                'Hook %s could not be read to the end (its output pipes kept failing) and was killed; '
+                . 'a hook that has not answered has not allowed anything. %s',
+                $this->name,
+                self::clip(
+                    trim($errors) !== '' ? trim($errors) : trim($output),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
+            )));
+        }
+
+        return null;
+    }
+
+    /**
+     * The deny for a stdin payload ChildRun could not stage to a temp file.
+     * Windows only: no other runtime stages the payload. Nothing ran, so the
+     * hook has allowed nothing.
+     */
+    private function stagingRefused(StdinStagingException $staging): HookResult
+    {
+        return HookResult::deny(sprintf(
+            'Hook %s could not be executed: its stdin payload could not be staged to a temporary file in %s. '
+            . 'A hook that has not seen the call has not allowed it.',
+            $this->name,
+            $staging->tempDir() ?? sys_get_temp_dir(),
+        ));
     }
 
     /**
