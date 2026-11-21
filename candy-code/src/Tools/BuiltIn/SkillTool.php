@@ -540,7 +540,7 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog, \SugarCraft\C
     }
 
     /**
-     * Fill the body's `$ARGUMENTS` with the model's `args` (audit F-H4: the
+     * Fill the body's `$ARGUMENTS` with the model's `args` (the
      * schema advertised `args` and execute() dropped it, so a skill written
      * around its input ran without it and the model was never told).
      *

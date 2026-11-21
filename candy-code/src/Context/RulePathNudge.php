@@ -406,7 +406,7 @@ final class RulePathNudge
     /**
      * Build a tracker that re-reads the rule list on every consult — the shape the
      * boot path ships, so a rule added, edited or demoted mid-session is judged by
-     * the same walk the splice makes (audit 15d-20; see the class doc-block).
+     * the same walk the splice makes (see the class doc-block).
      *
      * Nothing is loaded here: the first {@see forPaths()} call walks, and so does
      * every later one, which is what makes a construction-time walk redundant.

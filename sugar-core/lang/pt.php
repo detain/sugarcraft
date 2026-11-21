@@ -32,6 +32,7 @@ return [
     'semaphore.shutdown' => 'o semáforo foi fechado antes de conceder uma permissão',
     'semaphore.closed' => 'o semáforo está fechado e não pode conceder outra permissão',
     'semaphore.derive_closed' => 'não é possível derivar um novo pool de um semáforo fechado',
+    'semaphore.map_cancelled' => 'lote cancelado antes de concluir todos os itens',
     'lru_map.capacity_invalid' => 'a capacidade LRU deve ser pelo menos 1, obtida {capacity}',
     'lru_map.capacity_too_large' => 'a capacidade LRU {capacity} excede o limite de crescimento {max}',
     'lru_map.evict_from_empty' => 'não é possível remover de um mapa LRU vazio',

@@ -136,7 +136,7 @@ final class Renderer
 
     /**
      * The column budget art and overlays are clipped to, or null when this
-     * renderer is unconstrained (SA-P1, audit 013: the Player clamps its
+     * renderer is unconstrained (the Player clamps its
      * status overlay against exactly this budget — one source of truth per
      * surface, so the overlay can never lie about the width the art got).
      */

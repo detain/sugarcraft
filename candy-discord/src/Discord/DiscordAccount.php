@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Discord;
 
 use CandyCode\Bundles\Discord\Lang;
-use SugarCraft\ServeProtocol\Protocol;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
 use CandyCode\Bundles\Discord\Support\Keys;
@@ -229,7 +229,7 @@ final class DiscordAccount implements PlatformFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at Protocol::ASK_EXPIRY_SECONDS no matter what this
+     * refuses the ask at AskExpiry::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -242,7 +242,7 @@ final class DiscordAccount implements PlatformFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = Protocol::ASK_EXPIRY_SECONDS;
+        $ceiling = AskExpiry::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,
@@ -265,7 +265,7 @@ final class DiscordAccount implements PlatformFace
     public function approvalExpiryNotice(): string
     {
         $line = Lang::t('channels.discord.approval.expired');
-        $expiredEarly = $this->approvalTtlSeconds() < Protocol::ASK_EXPIRY_SECONDS;
+        $expiredEarly = $this->approvalTtlSeconds() < AskExpiry::ASK_EXPIRY_SECONDS;
 
         return $expiredEarly ? $line . ' ' . Lang::t('channels.discord.approve.usage') : $line;
     }
@@ -555,7 +555,7 @@ final class DiscordAccount implements PlatformFace
             if (!\is_array($attachment)) {
                 continue;
             }
-            $name = (string) ($attachment['filename'] ?? 'attachment');
+            $name = (string) ($attachment['filename'] ?? Lang::t('channels.discord.attachments.unnamed'));
             $mime = (string) ($attachment['content_type'] ?? '');
             $url = (string) ($attachment['url'] ?? '');
             if ($url === '') {
@@ -563,23 +563,25 @@ final class DiscordAccount implements PlatformFace
             }
             $slot = \str_starts_with($mime, 'image/') ? 'images' : ($mime === 'application/pdf' ? 'documents' : '');
             if ($slot === '') {
-                $notes[] = "{$name} (unsupported type)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.unsupported', ['name' => $name]);
 
                 continue;
             }
             if ($accepted[$slot] >= $caps[$slot]) {
-                $notes[] = "{$name} (past the " . ($slot === 'images' ? 'image' : 'document') . ' limit of ' . $caps[$slot] . ')';
+                $notes[] = $slot === 'images'
+                    ? Lang::t('channels.discord.attachments.reason.past_image_limit', ['name' => $name, 'limit' => (string) $caps[$slot]])
+                    : Lang::t('channels.discord.attachments.reason.past_document_limit', ['name' => $name, 'limit' => (string) $caps[$slot]]);
 
                 continue;
             }
             $declared = (int) ($attachment['size'] ?? 0);
             if ($declared > $maxBytes) {
-                $notes[] = "{$name} (over the {$maxMb} MB cap)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.over_cap', ['name' => $name, 'mb' => (string) $maxMb]);
 
                 continue;
             }
             if ($this->mediaInFlightBytes + $declared > $totalCapBytes) {
-                $notes[] = "{$name} (past the {$maxTotalMb} MB batch budget)";
+                $notes[] = Lang::t('channels.discord.attachments.reason.batch_budget', ['name' => $name, 'mb' => (string) $maxTotalMb]);
 
                 continue;
             }
@@ -614,18 +616,18 @@ final class DiscordAccount implements PlatformFace
             foreach ($settled as $i => $result) {
                 $job = $jobs[(int) $i];
                 if (!\is_array($result) || isset($result['error'])) {
-                    $notes[] = "{$job['name']} (download failed)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.download_failed', ['name' => $job['name']]);
 
                     continue;
                 }
                 $bytes = (string) $result['bytes'];
                 if (\strlen($bytes) > $maxBytes) {
-                    $notes[] = "{$job['name']} (over the size cap after download)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.over_cap_after_download', ['name' => $job['name']]);
 
                     continue;
                 }
                 if ($batchTotal + \strlen($bytes) > $totalCapBytes) {
-                    $notes[] = "{$job['name']} (past the {$maxTotalMb} MB batch budget)";
+                    $notes[] = Lang::t('channels.discord.attachments.reason.batch_budget', ['name' => $job['name'], 'mb' => (string) $maxTotalMb]);
 
                     continue;
                 }
@@ -652,7 +654,7 @@ final class DiscordAccount implements PlatformFace
      */
     private function finishMedia(string $key, array $ref, string $text, bool $isMention, string $inboundId, array $images, array $documents, array $notes): void
     {
-        $caption = $text !== '' ? $text : '(no caption)';
+        $caption = $text !== '' ? $text : Lang::t('channels.discord.attachments.no_caption');
         $this->router->inbound('discord', $key, $ref, $caption, $isMention, $inboundId, $images, $documents);
         if ($notes === []) {
             return;
@@ -974,16 +976,6 @@ final class DiscordAccount implements PlatformFace
                 $notice,
             );
         }
-    }
-
-    /**
-     * The serve-dial state machine rebuilds the router whenever the local
-     * serve endpoint (re)appears; the faces outlive the dial, so they take
-     * the new router here instead of being re-constructed.
-     */
-    public function rebindRouter(ConversationRouter $router): void
-    {
-        $this->router = $router;
     }
 
     public function accountName(): string

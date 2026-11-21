@@ -22,7 +22,7 @@ use SugarCraft\Plugins\Support\PromptFence;
  * token, app passwords, client secrets — anything the operator named)
  * never echo back into a transcript or channel, in either direction.
  */
-final class TextSafety
+final class TextSafety implements \SugarCraft\Plugins\Bridge\TextGuard
 {
     /** @param list<string> $secrets */
     public function __construct(

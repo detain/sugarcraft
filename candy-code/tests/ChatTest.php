@@ -39,6 +39,7 @@ use SugarCraft\Code\Theme;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -4233,10 +4234,37 @@ final class ChatTest extends TestCase
         };
     }
 
+    /**
+     * resolveAsyncCmd() for an off-loop effect whose promise settles only as the
+     * supervisor's loop advances (the daemon's handshake is accepted from tick()).
+     */
+    private function resolveAsyncCmdPumping(\Closure $cmd, BackgroundSupervisor $supervisor): mixed
+    {
+        $asyncCmd = $cmd();
+        if ($asyncCmd instanceof BatchMsg) {
+            // A background spawn batches its launch with the tick that arms the poll;
+            // the launch is the first member.
+            $asyncCmd = ($asyncCmd->cmds[0])();
+        }
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        SupervisorPump::until($supervisor, static function () use (&$resolved): bool {
+            return $resolved !== null;
+        });
+
+        return $resolved;
+    }
+
     /** Drive a Cmd built by Cmd::promise() and return the Msg it resolves to. */
     private function resolveAsyncCmd(\Closure $cmd): mixed
     {
         $asyncCmd = $cmd();
+        if ($asyncCmd instanceof BatchMsg) {
+            $asyncCmd = ($asyncCmd->cmds[0])();
+        }
         $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
         $resolved = null;
         $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
@@ -5465,10 +5493,10 @@ final class ChatTest extends TestCase
         $supervisor = new BackgroundSupervisor();
         $chat = new Chat(backgroundSupervisor: $supervisor);
 
-        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat, $supervisor): array {
             [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
 
-            return [$next, $this->resolveAsyncCmd($cmd)];
+            return [$next, $this->resolveAsyncCmdPumping($cmd, $supervisor)];
         });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
@@ -5529,10 +5557,10 @@ final class ChatTest extends TestCase
             ]),
         );
 
-        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat, $supervisor): array {
             [$next, $cmd] = $this->submitLine($chat, '/bg port the renderer');
 
-            return [$next, $this->resolveAsyncCmd($cmd)];
+            return [$next, $this->resolveAsyncCmdPumping($cmd, $supervisor)];
         });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);

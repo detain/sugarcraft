@@ -39,12 +39,19 @@ Three roots are scanned, and each bundle carries the tier its root implies:
 | Root | Tier | Trust |
 |---|---|---|
 | `<project>/.candy-code/bundles/` | `project` | confined to the checkout, exactly like a cloned `.claude/skills` tree |
-| `~/.candy-code/bundles/` | `user` | the destination `candy-code bundles install` writes to; a symlink inside it may point anywhere in home and nowhere outside it |
+| `~/.candy-code/bundles/` | `user` | the destination `candy-code bundles install` writes to; a bundle directory may be a symlink into home, but its manifest must resolve inside that bundle (see below) |
 | every `pluginPaths` entry | `user` | the operator's explicit word: a listed path is trusted as given, and may be either one bundle or a container of bundles |
 
 A bundle whose path resolves outside the tree it was found in (a project
 symlink pointing at someone else's home, say) is refused, named, and reported
 through the same launch-refusal channel as every other project-tier escape.
+
+A bundle's manifest is held to the same rule wherever the bundle sits. A
+`.claude-plugin/plugin.json` (or bare `plugin.json`) that is a symbolic link
+resolving outside its bundle directory refuses that bundle: discovery skips it
+and reports a launch warning naming the link, and `candy-code bundles install`
+names the same link and installs nothing. A link inside a bundle that points
+back into the bundle is still fine.
 
 `pluginPaths` lives in your user config and is user-tier only — a checked-out
 repository cannot add to it. See [SETTINGS.md](SETTINGS.md).
@@ -115,15 +122,34 @@ file is read at all, so `--safe-mode` loads zero plugin code by construction.
 
 Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
 
-1. **First sight is quarantine.** An entrypoint never seen before is *listed*
-   at launch and loaded only at the **next** launch, so a manifest swapped
-   under a trusted name cannot smuggle new code in silently. The seen-ledger
-   lives in `~/.candy-code/channels.json`, mode 0600.
-2. **The bytes must be private.** The file and its directory must be owned by
-   your account and not world-writable, or the entry is refused. A trusted
-   name records who consented; it says nothing about the file being intact.
+1. **First sight is quarantine, keyed by path.** An entrypoint *path* never
+   seen before is *listed* at launch and loaded only at the **next** launch,
+   so a manifest that adds a new entrypoint under a trusted name cannot smuggle
+   new code in silently. The seen-ledger lives in `~/.candy-code/channels.json`,
+   mode 0600, and records paths only, never bytes. A rewrite of a file at a path
+   already on the ledger is not listed again and loads without a quarantine
+   stop. Who can make one depends on how it is written. An in-place write by
+   another account needs group write on the file itself. A replace-by-rename by
+   another account is refused by the owner check (item 2) when the posix
+   extension is available, and loads only without it, from a directory another
+   account can write (group-writable, or owned by that account). A rewrite by
+   your own account loads everywhere. That gap is open.
+2. **The bytes must be private.** The file and its directory must be
+   not world-writable and, when the posix extension is available, owned by
+   your account, or the entry is refused. A trusted name records who consented;
+   it says nothing about the file being intact.
+3. **Only a user-tier copy can use the name.** Trust is never inherited by a
+   project-tier bundle (one under `<repo>/.candy-code/bundles`). A project copy
+   that carries a trusted name has its channel and hook content refused, and
+   the launch says so; its commands, skills and agents still load, as they do
+   for any project bundle. When a user-tier and a project-tier bundle share a
+   name, the user-tier copy is the one that loads and the project copy is
+   skipped with a warning, trusted or not. The skipped copy's commands, skills,
+   agents and hooks do not load either, so a user-tier copy that lacks one of
+   them hides it; to keep the project copy's content, move that copy under a
+   different name.
 
-**Bundle hooks ride the same gate.** A bundle named in
+**Bundle hooks ride the same gate.** A user-tier bundle named in
 `trustedBundleChannels` gets its `hooks/` files registered through the
 ordinary hook pipeline — same containment and private-bytes checks, and a
 broken hook file refuses *itself* with a notice while the launch continues.
@@ -155,12 +181,13 @@ entrypoint. Installing it exercises every rule above:
    mode 0600, with `DISCORD_BOT_TOKEN` honored for the default account only.
     Guild traffic is gated by `guilds.groupPolicy` — default `allowlist`:
     nothing is served in a guild until a row names that guild. Endpoint env
-    overrides (`DISCORD_API_URL`, `DISCORD_GATEWAY_URL`, `CANDY_CODE_SERVER_DIR`)
-    are documented in the bundle README.
-3. It dials the local serve process over the ordinary WebSocket protocol —
-   no new server surface, and `gen-protocol-schema --check` stays clean by
-   construction. Chunking, redaction, and prompt-fencing happen in the
-   bundle, never in a model loop.
+    overrides (`DISCORD_API_URL`, `DISCORD_GATEWAY_URL`) are documented in the
+    bundle README.
+3. It calls the serve it runs inside through the host services the host
+   injects, in process. No socket is dialled to the serve and no discovery
+   record is read, so there is no new server surface, and
+   `gen-protocol-schema --check` stays clean by construction. Chunking,
+   redaction, and prompt-fencing happen in the bundle, never in a model loop.
 4. Unpaired DM senders receive an expiring pairing code (8 glyphs, one
    hour, at most three pending); an approver answers `/pair grant <code>`
    (or the text spelling; `/pair approve` is a deprecated alias), which writes the allowlist into the same 0600
@@ -232,8 +259,8 @@ system rows in the transcript:
   the manifest, nor an **inline `hooks` object** inside `plugin.json` (the
   declined-surface reader answers with the manifest path — `hooksPaths()`
   names where the hooks ride inside it — while the decline notice names the
-  affected bundles). A bundle named in `trustedBundleChannels` reverses this
-  for its `hooks/` files, through the gate described above; inline
+  affected bundles). A user-tier bundle named in `trustedBundleChannels` reverses
+  this for its `hooks/` files, through the gate described above; inline
   `plugin.json` hook manifests remain refused on every path, as their shape
   is not the accepted one yet. Lifecycle hooks execute arbitrary programs at
   every session event; the hooks that do run are declared in the project's
@@ -284,9 +311,9 @@ What matters from the plugin side:
   repository is never read, which is the same law that keeps a bundle's
   `.mcp.json` from auto-starting;
 - bundles run their commands, skills and agents always; their hooks and
-  channel/subscriber entrypoints only when the bundle is named in
-  `trustedBundleChannels`; and MCP servers only through a declaration you
-  imported deliberately.
+  channel/subscriber entrypoints only when a user-tier bundle is named in
+  `trustedBundleChannels` (a project-tier copy of that name is refused); and
+  MCP servers only through a declaration you imported deliberately.
 
 ## Installing and listing
 

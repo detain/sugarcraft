@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => '信号量在授予许可前已关闭',
     'semaphore.closed' => '信号量已关闭，无法再授予许可',
     'semaphore.derive_closed' => '无法从已关闭的信号量派生新池',
+    'semaphore.map_cancelled' => '批处理在所有条目完成前已取消',
     'lru_map.capacity_invalid' => 'LRU 容量至少为 1，实际为 {capacity}',
     'lru_map.capacity_too_large' => 'LRU 容量 {capacity} 超出增长上限 {max}',
     'lru_map.evict_from_empty' => '无法从空 LRU 映射中逐出',

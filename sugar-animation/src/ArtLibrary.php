@@ -137,8 +137,7 @@ final class ArtLibrary
      * Attach per-slug description/tags from a `logos.jsonl` manifest.
      * Tolerant by design: a missing/unreadable file or malformed rows is a
      * no-op, because the manifest is optional human metadata shipped
-     * alongside the corpus, never a load-bearing dependency. SA-X2 (audit
-     * 032): the tolerance is paid with a bound — the read is capped at
+     * alongside the corpus, never a load-bearing dependency. The tolerance is paid with a bound — the read is capped at
      * MAX_MANIFEST_BYTES, and a manifest beyond the gate is skipped exactly
      * like an absent one (no throw, no partial enrichment, no unbounded
      * slurp of a file we were going to distrust anyway).

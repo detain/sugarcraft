@@ -1,0 +1,24 @@
+[1m# Heading one[0m
+
+[1m## Heading two[0m
+
+[1m### Heading three[0m
+
+Plain paragraph with [1mbold[0m, [3mitalic[0m, [9mstrike[0m and inline code, plus a ]8;;https://example.com/docs\[4mlink[0m]8;;\ (https://example.com/docs).
+
+▎ A block quote that carries
+▎ two lines of text.        
+
+• first item
+• second item with [3memphasis[0m
+1. ordered one
+2. ordered two
+────────────────────────────────────────
+
+<?php
+     [3m// a comment about the value[0m         
+$count = 42;        
+$label = "text";
+ [1mfunction[0m greet(string $name): string { [1mreturn[0m "hi {$name}"; }
+
+plain fenced block

@@ -54,7 +54,6 @@ final class MutateDriftGuardTest extends TestCase
         \SugarCraft\Code\Providers\GeminiProvider::class => 'httpClient is derived from the http* inputs; named mutate()',
         \SugarCraft\Code\Tools\BuiltIn\WebFetch::class => 'closures are stored, not promoted; named mutate()',
         \SugarCraft\Code\Hooks\HttpHook::class => 'closures are stored, not promoted; named mutate()',
-        \SugarCraft\Code\Hooks\ScriptHook::class => 'clock is stored as a closure; named mutate()',
     ];
 
     public function testNoWitherHandCarriesSevenOrMoreConstructorInputs(): void

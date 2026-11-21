@@ -17,7 +17,7 @@ final readonly class UndoAction
     }
 
     /**
-     * Fleet-convention factory (lib-reviews-1102 M37): docs and siblings
+     * Fleet-convention factory: docs and siblings
      * teach `UndoAction::new(...)`; the constructor-only shape violated
      * the ::new() law every other SugarCraft value object follows.
      *

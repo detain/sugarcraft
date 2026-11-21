@@ -7,7 +7,7 @@ namespace SugarCraft\Files\Support;
 use SugarCraft\Files\Lang;
 
 /**
- * CF-22 (closes audit 031, bin leg): the launcher's door check on each
+ * CF-22 (bin leg): the launcher's door check on each
  * argv directory. CF-16 (closes 060) moved locale detection to
  * right-after-autoload in the bin, so the reason prose is translated
  * here — under the default 'en' registry the strings are byte-identical

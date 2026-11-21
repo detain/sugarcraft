@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\MCP;
 
-use SugarCraft\Code\Support\WindowsPipes;
-use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\WindowsShell;
@@ -54,16 +53,8 @@ final readonly class GitCommandHandlers
      */
     public const STDERR_TAIL_BYTES = 65536;
 
-    /**
-     * After git itself has exited, how long the drain still waits for EOF.
-     * A hook can background a child that inherits git's stdout/stderr and
-     * holds them open long after git is gone; waiting for that EOF would
-     * stretch every such call to the full timeout.
-     */
-    private const POST_EXIT_DRAIN_SECONDS = 0.5;
-
-    /** Longest single `stream_select()` wait, so exit and deadline are re-checked. */
-    private const DRAIN_SLICE_SECONDS = 0.2;
+    /** Per-stream read cap: git output is kept whole, so this only bounds a runaway child. */
+    private const OUTPUT_CAP_BYTES = 1 << 30;
 
     /**
      * Inherited variables that tell git WHICH repository to operate on —
@@ -111,7 +102,7 @@ final readonly class GitCommandHandlers
 
     /**
      * The per-call bound a `.mcp.json` `"type": "git"` entry's `timeout` key
-     * asks for, in seconds (audit R18, residual of GIT-2).
+     * asks for, in seconds.
      *
      * WHY it is configurable: {@see DEFAULT_TIMEOUT_SECONDS} is sized for a
      * pre-commit hook that runs a linter or a test suite, but a repository
@@ -1413,27 +1404,28 @@ final readonly class GitCommandHandlers
             );
         }
 
-        $descriptorSpec = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
         // The command stays an argv array (no shell: `sh -c` would mangle the
         // % in git format strings). spawnSpec() wraps it in `setsid -w` where
         // the host has one, so git and every hook it runs share a NEW process
-        // group with no controlling terminal — that group is what the timeout
-        // path below kills, and the missing tty makes credential/pinentry
-        // prompts refuse on stderr instead of hanging.
-        $process = @proc_open(
-            ProcessContainment::spawnSpec($command),
-            $descriptorSpec,
-            $pipes,
-            $workDir,
-            self::childEnv(),
-        );
-
-        if (!is_resource($process)) {
+        // group with no controlling terminal: the timeout kill reaches that
+        // group, and the missing tty makes credential/pinentry prompts refuse
+        // on stderr instead of hanging. The spawn seam waits for the wrapper to
+        // lead its group, so ChildRun measures the group at spawn: once git has
+        // exited, the wrapper is reaped and the group cannot be read at the
+        // deadline. No exit grace: a hook that backgrounds a child holding git's
+        // pipes is bounded by the timeout, and the group kill there reaches it.
+        /** @var list<string> $argv */
+        $argv = array_values((array) ProcessContainment::spawnSpec($command));
+        try {
+            $result = ChildRun::new($argv)
+                ->withCwd($workDir)
+                ->withEnv(self::childEnv())
+                ->withTimeout($this->timeoutSeconds)
+                ->withMaxBytes(self::OUTPUT_CAP_BYTES)
+                ->withExitGrace(null)
+                ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : ProcessContainment::awaitGroupLeader(...))
+                ->run();
+        } catch (\RuntimeException) {
             return GitOperationResult::failure(
                 error: "Failed to execute git command",
                 operation: $operation,
@@ -1442,41 +1434,14 @@ final readonly class GitCommandHandlers
             );
         }
 
-        fclose($pipes[0]);
-
-        $run = self::drain(
-            $process,
-            $pipes[1],
-            $pipes[2],
-            hrtime(true) / 1_000_000_000 + $this->timeoutSeconds,
-        );
-
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        if ($run['timedOut']) {
-            // TERM, bounded grace, 9 — to the whole group, so a hook's
-            // children die with git instead of being orphaned. The group is
-            // measured HERE, not right after proc_open(): MEASURED, a
-            // groupId() taken immediately after the spawn answers null
-            // because the wrapper has not reached setsid() yet, and the kill
-            // then reaches git alone. At expiry git is alive by definition
-            // (the drain saw it running), so the kernel's answer is current.
-            // The reap stays with the unconditional proc_close() below.
-            BoundedShutdown::terminateAndAwaitExit(
-                $process,
-                groupPid: ProcessContainment::groupId($process),
-            );
+        // Git's stdout is kept whole (callers parse it); stderr keeps its tail.
+        $stderrDropped = max(0, strlen($result->stderr) - self::STDERR_TAIL_BYTES);
+        $stderr = trim(substr($result->stderr, $stderrDropped));
+        if ($stderrDropped > 0) {
+            $stderr = "[{$stderrDropped} earlier bytes of stderr omitted]\n" . $stderr;
         }
 
-        proc_close($process);
-
-        $stderr = trim($run['stderr']);
-        if ($run['stderrDropped'] > 0) {
-            $stderr = "[{$run['stderrDropped']} earlier bytes of stderr omitted]\n" . $stderr;
-        }
-
-        if ($run['timedOut']) {
+        if ($result->timedOut()) {
             $seconds = rtrim(rtrim(sprintf('%.3F', $this->timeoutSeconds), '0'), '.');
             $errorMessage = "Git command timed out after {$seconds}s and was killed with its process group";
             return GitOperationResult::failure(
@@ -1487,19 +1452,16 @@ final readonly class GitCommandHandlers
             );
         }
 
-        if ($run['exitCode'] !== 0) {
-            $fallback = $run['signal'] !== null
-                ? "Git command was killed by signal {$run['signal']}"
-                : "Git command failed with exit code {$run['exitCode']}";
+        if ($result->exitCode !== 0) {
             return GitOperationResult::failure(
-                error: $stderr !== '' ? $stderr : $fallback,
+                error: $stderr !== '' ? $stderr : "Git command failed with exit code {$result->exitCode}",
                 operation: $operation,
                 group: $group,
                 executionTimeMs: $this->elapsed($start),
             );
         }
 
-        $stdout = $run['stdout'];
+        $stdout = $result->stdout;
 
         return GitOperationResult::success(
             output: $stdout,
@@ -1705,164 +1667,6 @@ final readonly class GitCommandHandlers
         }
 
         return $env;
-    }
-
-    /**
-     * Read stdout and stderr CONCURRENTLY until git is done or $deadline (an
-     * `hrtime()` second count) passes.
-     *
-     * WHY (audit GIT-2): reading stdout to EOF and only then stderr is the
-     * classic pipe deadlock — git (or a hook it runs) blocks writing stderr
-     * once the 64 KiB pipe buffer is full, never exits, and stdout never
-     * reaches EOF. A chatty pre-commit hook hung `gitCommit` forever. So:
-     * non-blocking pipes under one `stream_select()`, sliced so the exit and
-     * the deadline are re-checked even while git is silent.
-     *
-     * "Done" is git's own exit plus EOF on both pipes — or, when a hook
-     * backgrounded something that still holds the pipes, git's exit plus
-     * {@see POST_EXIT_DRAIN_SECONDS}. The exit status is read here, from the
-     * poll that first observes the exit, because `proc_close()` reports -1
-     * once `proc_get_status()` has seen it.
-     *
-     * stdout is kept whole (callers parse it); stderr keeps its last
-     * {@see STDERR_TAIL_BYTES} and counts what it dropped.
-     *
-     * @param resource $process
-     * @param resource $stdout
-     * @param resource $stderr
-     * @return array{stdout: string, stderr: string, stderrDropped: int, exitCode: int|null, signal: int|null, timedOut: bool}
-     */
-    private static function drain($process, $stdout, $stderr, float $deadline): array
-    {
-        stream_set_blocking($stdout, false);
-        stream_set_blocking($stderr, false);
-
-        $open = [1 => $stdout, 2 => $stderr];
-        $out = '';
-        $err = '';
-        $dropped = 0;
-        $exitCode = null;
-        $signal = null;
-        $exitedAt = 0.0;
-        $timedOut = false;
-
-        $append = static function (int $slot, string $chunk) use (&$out, &$err, &$dropped): void {
-            if ($slot === 1) {
-                $out .= $chunk;
-
-                return;
-            }
-            $err .= $chunk;
-            $excess = strlen($err) - self::STDERR_TAIL_BYTES;
-            if ($excess > 0) {
-                $dropped += $excess;
-                $err = substr($err, $excess);
-            }
-        };
-
-        while (true) {
-            $now = hrtime(true) / 1_000_000_000;
-
-            if ($exitCode === null) {
-                $status = proc_get_status($process);
-                if ($status['running'] !== true) {
-                    $exitCode = (int) $status['exitcode'];
-                    $signal = $status['signaled'] ? (int) $status['termsig'] : null;
-                    $exitedAt = $now;
-                }
-            }
-
-            if ($exitCode !== null && ($open === [] || $now - $exitedAt >= self::POST_EXIT_DRAIN_SECONDS)) {
-                break;
-            }
-            if ($exitCode === null && $now >= $deadline) {
-                $timedOut = true;
-                break;
-            }
-
-            if ($open === []) {
-                // Both pipes closed but git has not exited yet: poll the exit.
-                usleep(5000);
-                continue;
-            }
-
-            $limit = $exitCode !== null ? $exitedAt + self::POST_EXIT_DRAIN_SECONDS : $deadline;
-            $slice = max(0.0, min(self::DRAIN_SLICE_SECONDS, $limit - $now));
-
-            if (WindowsPipes::runtimeNeedsIt()) {
-                // Windows: the pipes stay blocking and select() calls them
-                // ready while empty, so the fread below parked until git wrote
-                // or exited, and reading an empty stderr while git filled
-                // stdout deadlocked (a git diff over 4 KiB never returned).
-                // Read only what fstat reports waiting; the exit sampled above
-                // stands in for the EOF a Windows pipe never shows.
-                $got = false;
-                foreach ($open as $slot => $pipe) {
-                    $chunk = WindowsPipes::readAvailable($pipe, 65536);
-                    if ($chunk !== '') {
-                        $append($slot, $chunk);
-                        $got = true;
-                    } elseif ($exitCode !== null) {
-                        unset($open[$slot]);
-                    }
-                }
-                if (!$got) {
-                    usleep((int) max(1000, min(WindowsPipes::POLL_MICROSECONDS, $slice * 1_000_000)));
-                }
-
-                continue;
-            }
-            $seconds = (int) $slice;
-            $micros = (int) round(($slice - $seconds) * 1_000_000);
-
-            $read = array_values($open);
-            $write = null;
-            $except = null;
-            // false is an EINTR (a SIGWINCH under the TUI), not end of output:
-            // the loop re-checks exit and deadline and selects again.
-            if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
-                continue;
-            }
-
-            foreach ($open as $slot => $pipe) {
-                if (!in_array($pipe, $read, true)) {
-                    continue;
-                }
-                $chunk = fread($pipe, 65536);
-                if ($chunk === false || $chunk === '') {
-                    // An empty non-blocking read is "nothing yet"; feof() is
-                    // the EOF test.
-                    if (feof($pipe)) {
-                        unset($open[$slot]);
-                    }
-                    continue;
-                }
-                $append($slot, $chunk);
-            }
-        }
-
-        // Whatever git wrote just before exiting may still sit in the pipe
-        // buffer when the post-exit grace ends; one bounded sweep collects
-        // it without waiting on a writer that is still alive.
-        foreach ($open as $slot => $pipe) {
-            for ($budget = 64; $budget > 0; $budget--) {
-                // (Windows: never a blocking fread on a pipe a survivor holds.)
-                $chunk = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::readAvailable($pipe, 65536) : fread($pipe, 65536);
-                if ($chunk === false || $chunk === '') {
-                    break;
-                }
-                $append($slot, $chunk);
-            }
-        }
-
-        return [
-            'stdout' => $out,
-            'stderr' => $err,
-            'stderrDropped' => $dropped,
-            'exitCode' => $exitCode,
-            'signal' => $signal,
-            'timedOut' => $timedOut,
-        ];
     }
 
     /**

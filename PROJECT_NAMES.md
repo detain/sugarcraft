@@ -342,7 +342,13 @@ table above is generated from `tools/renames.json` and is never hand-edited.
 
 | Package | Prefix | Role | Decision |
 |---|---|---|---|
+| `sugar-plugins` (`SugarCraft\Plugins\`) | `sugar-` | library: the generic plugin core (plugin and channel contracts, launch context, prompt-fence escape, loader, quarantine ledger, registry, manifest reader) | Original work. The suffix names the plugin layer, and the namespace follows the suffix rule. |
 | `sugar-serve-protocol` (`SugarCraft\ServeProtocol\`) | `sugar-` | library: the `candy-code.v1` serve wire contract (subprotocol names, frame cap, discovery and token readers, WebSocket URL normalisation) | Original work. The suffix names the contract, and the namespace follows the suffix rule. The slug is 20 characters, past the ~16-character guideline; kept because the plugin plan fixes the package name and the bundles import it by that name. |
+| `sugar-ws-rpc` (`SugarCraft\WsRpc\`) | `sugar-` | library: the WebSocket RPC transport (the channel bundles' ServeBridge socket layer was deleted in PL-5d rather than moved here, so P4-10d has nothing to relocate) | Original work. Created as a skeleton under owner decision D9 (2026-11-19). The suffix names the transport, and the namespace follows the suffix rule. |
+| `sugar-jwt` (`SugarCraft\Jwt\`) | `sugar-` | library: JWT and JWK verification (the Teams token and key-set code of the channel bundles, moved here in P4-10d) | Original work. Created as a skeleton under owner decision D9 (2026-11-19). The suffix names the token format, and the namespace follows the suffix rule. |
+| `sugar-codec` (`SugarCraft\Codec\`) | `sugar-` | library: YAML codec (the hand YAML subset of candy-ssh-launcher and the YamlDialect engine of candy-kv, moved here in a later step) | Original work. Created as a skeleton under owner decision D9 (2026-11-19). The suffix names the format family, and the namespace follows the suffix rule. |
+| `sugar-clipboard` (`SugarCraft\Clipboard\`) | `sugar-` | library: clipboard access with an OSC 52 terminal backend (the OSC 52 writer of candy-git-server, moved here in a later step) | Original work. Created as a skeleton under owner decision D9 (2026-11-19). The suffix names the capability, and the namespace follows the suffix rule. |
+| `sugar-plugin-installer` (`SugarCraft\PluginInstaller\`) | `sugar-` | composer-plugin (`type: composer-plugin`): stages each `sugar-plugin` package to the user or project bundle tree the root project's `extra` selects | Original work. A composer-plugin cannot also be a library, so the installer ships as its own package (plan_plugin.md O6). The namespace follows the suffix rule. |
 
 ## Naming conventions (cheat sheet — two prefixes, since 2026-10)
 

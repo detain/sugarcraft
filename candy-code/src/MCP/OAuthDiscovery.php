@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\MCP;
 
 /**
- * Audit MCP-6: locate an MCP server's OAuth authorization-server metadata the
+ * Locate an MCP server's OAuth authorization-server metadata the
  * way RFC 9728 and RFC 8414 place it — the ONE discovery path both
  * `mcp auth add` ({@see \SugarCraft\Code\Commands\McpAuthCommand}) and
  * `candy-code mcp auth login` ({@see OAuthLoopbackFlow}) use, so the two can

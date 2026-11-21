@@ -15,7 +15,6 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\MethodRegistry;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Params;
@@ -30,6 +29,7 @@ use SugarCraft\Code\Session\Import\ImportRefusedException;
 use SugarCraft\Code\Session\Import\SessionImportLedger;
 use SugarCraft\Code\Session\Import\SessionImporter;
 use SugarCraft\Code\Util\Exporter;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * `session.*` lifecycle (Appendix O §6.3): list, create, open and follow,

@@ -790,7 +790,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
     }
 
     /**
-     * Audit A17: a transport failure or a 2xx body that is not an embeddings
+     * A transport failure or a 2xx body that is not an embeddings
      * payload THROWS instead of returning an empty list. The old silent `[]`
      * made an outage look exactly like "no results", so a semantic-search
      * consumer degraded without ever telling the user why. The message

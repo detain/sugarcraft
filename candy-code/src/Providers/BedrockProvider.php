@@ -421,7 +421,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     }
 
     /**
-     * Audit 15b-15: whether Converse may be sent this model an `image` block
+     * Whether Converse may be sent this model an `image` block
      * ({@see AttachmentEncoding::bedrockBlocks()}). Every Claude from the 3
      * generation on reads images, as do Nova Lite/Pro/Premier; Claude 2,
      * Instant, Nova Micro and the text-only families do not, and a Converse
@@ -446,7 +446,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
 
     /**
      * The configured model's window, looked up by its normalised family
-     * (audit A20: an exact match on the raw id sized every real versioned or
+     * (an exact match on the raw id sized every real versioned or
      * inference-profile id at 8,192). 0 when the family is unknown.
      *
      * ISS-073 review fix: the operator's `contextWindow` override outranks
@@ -543,7 +543,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     }
 
     /**
-     * USD per 1K CACHE tokens (audit A15, the cache half): `read` prices
+     * USD per 1K CACHE tokens (the cache half): `read` prices
      * `cacheReadInputTokens`, `write` prices `cacheWriteInputTokens`. Null
      * only when the rate it resolves to is unknown or fails validation.
      *

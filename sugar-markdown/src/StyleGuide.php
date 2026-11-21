@@ -19,18 +19,10 @@ use SugarCraft\Style\Style;
  * `chroma` block mapping chroma token names (`Keyword`, `LiteralString`,
  * `Comment`, `LiteralNumber`, …) to their own primitives.
  *
- * DIVERGENCE, stated honestly: candy-mdview ships the same vocabulary as the
- * adapter {@see \SugarCraft\MdView\GlamourTheme} (it converts parsed
- * primitives into a sugar-markdown Theme on the consumer side). This class is NOT a
- * re-export of it and cannot be — candy-mdview REQUIRES sugar-markdown, so a
- * sugar-markdown→glow dependency would mint a sibling require-cycle: the
- * producer never depends on its consumer. The
- * decode vocabulary is therefore duplicated locally; the two families share
- * the schema contract, not the code. Glow's adapter can in time delegate
- * here (consumer→producer is the lawful direction).
- *
- * Being the producer's own decoder, {@see theme()} lands values directly
- * in their native {@see Theme} slots; nothing needs an adapter hop.
+ * candy-mdview's --theme-config door is this loader. It was once a separate
+ * adapter (`GlamourTheme`) that duplicated the decode vocabulary; since the
+ * P1-12c-mdview move the decode lives here once, and {@see theme()} lands values
+ * directly in their native {@see Theme} slots.
  *
  * WHAT DECODES: colours and attribute flags, the document's
  * `block_prefix` / `block_suffix` / `indent` / `margin`, `paragraph` block
@@ -60,23 +52,21 @@ use SugarCraft\Style\Style;
  * (0-255; out-of-range numbers are ignored rather than guessed), and
  * `"auto"` / named colours (no target representation) resolve to no colour.
  *
- * DIVERGENCE, deliberate (dated 2026-11-18, review of P1-12): candy-mdview's
- * GlamourTheme refuses any document or paragraph affix that is not inert
- * whitespace (`glamour.decoration_unsafe`). This loader does NOT. Its affixes
- * are visible glyphs by design (`«` / `»`, `P> `, pinned by StyleGuideTest),
- * and the SEC-02 sweep below is what keeps a payload from reaching the render
- * raw. A consumer that migrates onto this loader and needs the refusal must
- * apply its own whitespace gate before calling in. The over-ceiling refusal of
- * indent and margin IS ported here (`glamour.value_too_large`).
+ * DIVERGENCE, deliberate: this loader does NOT refuse a document or paragraph
+ * affix that is not inert whitespace. Its affixes are visible glyphs by design
+ * (`«` / `»`, `P> `, pinned by StyleGuideTest), and the SEC-02 sweep below is
+ * what keeps a payload from reaching the render raw. candy-mdview's
+ * GlamourDecorationGate applies the whitespace-only refusal
+ * (`glamour.decoration_unsafe`) in front of this loader. The over-ceiling
+ * refusal of indent and margin IS here (`glamour.value_too_large`).
  *
  * Mirrors charmbracelet/glamour's styles.JSON style-file reader.
  */
 final class StyleGuide
 {
     /**
-     * Hard ceiling on style-file bytes {@see fromFile()} will read. Matches
-     * candy-mdview's GlamourTheme::MAX_CONFIG_BYTES, which this loader replaced
-     * on the consumer side, so the ceiling survives the move.
+     * Hard ceiling on style-file bytes {@see fromFile()} will read. candy-mdview's
+     * --theme-config door reads against the same constant.
      */
     public const MAX_CONFIG_BYTES = 1_000_000;
 
@@ -133,7 +123,7 @@ final class StyleGuide
      *
      * A file over {@see MAX_CONFIG_BYTES} refuses by name after a stat and before
      * any read, so a hostile or mistaken multi-gigabyte path cannot exhaust
-     * memory. The ceiling is the one candy-mdview's GlamourTheme door enforces.
+     * memory. The ceiling is the one candy-mdview's --theme-config door enforces.
      *
      * @throws \RuntimeException        when the file cannot be read or exceeds
      *                                   {@see MAX_CONFIG_BYTES}
@@ -444,8 +434,8 @@ final class StyleGuide
      * A decoration integer under the shared ceiling. An over-cap value refuses
      * by name instead of saturating: a style file asking for a 1.5-billion-cell
      * indent is broken, and the loader is the door that speaks to the user.
-     * Mirrors candy-mdview's GlamourTheme::boundedDecoration(), which this
-     * loader replaces as the ceiling's refusal point.
+     * Mirrors the refusal candy-mdview's former GlamourTheme made before the
+     * loader move; this loader is the ceiling's refusal point now.
      */
     private static function boundedDecoration(mixed $value, string $key): int
     {

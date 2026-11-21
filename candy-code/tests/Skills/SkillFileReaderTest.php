@@ -188,6 +188,152 @@ final class SkillFileReaderTest extends TestCase
         (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
     }
 
+    /**
+     * The head is cut at a byte, so a line that runs past the window can end
+     * the head as a bare `---`. Here the real line is `----`, so the fence
+     * never closes: the window ends on `\n---` with no line break after it,
+     * and the manifest must refuse rather than read that fragment as a closer.
+     */
+    public function testAFenceFragmentCutAtTheWindowEdgeIsNotAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/fragment';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "----\nBody.\n");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('frontmatter does not close within its first 65,536 bytes');
+
+        (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+    }
+
+    /**
+     * The mirror of the fragment case: the closing `---` ends exactly at the
+     * window edge and its line break is the byte just past the window. That is
+     * a whole closer, so the manifest must load rather than refuse a file the
+     * frontmatter does close.
+     */
+    public function testAClosingFenceEndingExactlyAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-closer';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    /**
+     * The closer's trailing blanks lie past the window: `---` ends exactly at
+     * the edge and ` \t` follows before the line break. Master accepted this
+     * file, and the fence grammar allows the blanks, so it must still load.
+     */
+    public function testAClosingFenceWithTrailingBlanksEndingAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-blanks';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: x\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 1) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "--- \t\nBody.\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    /**
+     * A CRLF closer cut the same way: the `---` ends at the window edge and the
+     * CR and LF are past it. Master accepted this file; it must still load.
+     */
+    public function testACrlfClosingFenceEndingAtTheWindowEdgeIsAClosingFence(): void
+    {
+        $dir = $this->tempDir . '/edge-crlf';
+        mkdir($dir, 0777, true);
+        $pre = "---\r\ndescription: x\r\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre) - 2) . "\r\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\r\nBody.\r\n");
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('x', $manifest['description']);
+    }
+
+    /**
+     * The key audit reads the same bounded text as the manifest parse, so a
+     * closer straddling the window edge keeps its keys in the audit too: the
+     * skill loads, and `allowed-tools` must still be reported as ignored.
+     */
+    public function testTheKeyAuditReadsAClosingFenceStraddlingTheWindowEdge(): void
+    {
+        $dir = $this->tempDir . '/straddle-audit';
+        mkdir($dir, 0777, true);
+        $pre = "---\ndescription: from frontmatter\nallowed-tools: Bash\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($dir . '/SKILL.md', 'SKILL.md', $after);
+        $keys = array_keys(\SugarCraft\Code\Support\FrontmatterKeyAudit::metaOf(SkillFileReader::frontmatterText($head, $truncated, $after)));
+
+        $this->assertSame(['description', 'allowed-tools'], $keys);
+    }
+
+    public function testFrontmatterTextIsTheWholeHeadWhenTheFileFitsTheWindow(): void
+    {
+        $this->assertSame("---\ndescription: x\n---\nBody.", SkillFileReader::frontmatterText("---\ndescription: x\n---\nBody.", false, ''));
+    }
+
+    public function testHeadHandsBackTheRestOfTheLineTheWindowCut(): void
+    {
+        $path = $this->tempDir . '/after-line.md';
+        file_put_contents($path, str_repeat('a', SkillFileReader::MAX_FRONTMATTER_BYTES - 3) . "---  \r\nZ");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($path, 'SKILL.md', $after);
+
+        $this->assertTrue($truncated);
+        $this->assertSame("---", substr($head, -3));
+        $this->assertSame("  \r\n", $after);
+    }
+
+    /**
+     * The closer's `---` starts at byte 65,534, so only `--` lies inside the
+     * window and the last dash and line break are the tail. The closer guard
+     * judges the tail, so the parse must read it too: name and description
+     * must survive rather than the frontmatter silently dropping.
+     */
+    public function testAClosingFenceStraddlingTheWindowEdgeKeepsItsFrontmatter(): void
+    {
+        $dir = $this->tempDir . '/straddle';
+        mkdir($dir, 0777, true);
+        $pre = "---\nname: probe-skill\ndescription: from frontmatter\n";
+        $pad = str_repeat('#', SkillFileReader::MAX_FRONTMATTER_BYTES - 3 - strlen($pre)) . "\n";
+        file_put_contents($dir . '/SKILL.md', $pre . $pad . "---\nBody.\n");
+        $this->assertSame('-', substr(file_get_contents($dir . '/SKILL.md'), SkillFileReader::MAX_FRONTMATTER_BYTES, 1));
+
+        $manifest = (new SkillLoader(reportSkips: false))->loadSkillManifest($dir);
+
+        $this->assertSame('straddle', $manifest['name']);
+        $this->assertSame('from frontmatter', $manifest['description']);
+    }
+
+    public function testHeadHandsBackTheByteJustPastTheWindow(): void
+    {
+        $path = $this->tempDir . '/after.md';
+        file_put_contents($path, str_repeat('a', SkillFileReader::MAX_FRONTMATTER_BYTES) . "\nZ");
+
+        $after = '';
+        [$head, $truncated] = SkillFileReader::head($path, 'SKILL.md', $after);
+
+        $this->assertTrue($truncated);
+        $this->assertSame("\n", $after);
+        $this->assertSame(SkillFileReader::MAX_FRONTMATTER_BYTES, strlen($head));
+    }
+
     public function testTheBodyStageRefusesAFileOverTheCeiling(): void
     {
         $file = $this->sparseSkill($this->tempDir . '/body', SkillFileReader::MAX_FILE_BYTES + 1) . '/SKILL.md';

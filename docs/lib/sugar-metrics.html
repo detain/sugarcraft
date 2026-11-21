@@ -79,6 +79,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -134,7 +138,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-metrics.png" alt="" aria-hidden="true">
@@ -154,123 +158,521 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
-            <li class="toc-h2"><a href="#demos">Demos.</a></li>
-            <li class="toc-h3"><a href="#counters-gauges-histograms">Counters / gauges / histograms</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts and how it works</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks and recipes</a></li>
+            <li class="toc-h3"><a href="#expose-a-prometheus-textfile">Expose a Prometheus textfile</a></li>
+            <li class="toc-h3"><a href="#stream-newline-delimited-json">Stream newline-delimited JSON</a></li>
+            <li class="toc-h3"><a href="#fan-out-to-two-backends">Fan out to two backends</a></li>
+            <li class="toc-h3"><a href="#bound-label-cardinality">Bound label cardinality</a></li>
+            <li class="toc-h3"><a href="#tag-every-emit-from-one-request">Tag every emit from one request</a></li>
+            <li class="toc-h3"><a href="#record-ssh-session-telemetry">Record SSH session telemetry</a></li>
+            <li class="toc-h2"><a href="#api">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-metrics">SugarCraft\Metrics</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-metrics-backend">SugarCraft\Metrics\Backend</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-metrics-instrument">SugarCraft\Metrics\Instrument</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-metrics-middleware">SugarCraft\Metrics\Middleware</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration and options</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#runtimeexception-a-metric-name-is-registered-twice-with-different-metadata">RuntimeException: a metric name is registered twice with different metadata</a></li>
+            <li class="toc-h3"><a href="#invalidargumentexception-for-a-descriptor-name-containing-a-dot">InvalidArgumentException for a descriptor name containing a dot</a></li>
+            <li class="toc-h3"><a href="#runtimeexception-on-a-negative-counter-or-histogram-sample">RuntimeException on a negative counter or histogram sample</a></li>
+            <li class="toc-h3"><a href="#runtimeexception-about-two-series-that-fold-to-the-same-prometheus-name">RuntimeException about two series that fold to the same Prometheus name</a></li>
+            <li class="toc-h3"><a href="#the-textfile-shows-no-samples-for-a-family">The textfile shows no samples for a family</a></li>
+            <li class="toc-h3"><a href="#memory-keeps-growing-on-statsd-or-json-output">Memory keeps growing on StatsD or JSON output</a></li>
+            <li class="toc-h2"><a href="#upstream">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#changelog">Changelog and versioning</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges with pluggable backends — drop-in middleware for SSH session metrics. Six instrument kinds + five backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out. Built-in cardinality tracking with FIFO eviction.</p>
+<p class="lede" style="margin-top: 28px;">SugarMetrics is a telemetry library for PHP 8.3+ services and terminal apps. It provides counters, gauges, histograms, up-down counters and two callback-driven async instruments, collected by a <code>Registry</code> and sent to one of five backends: in-memory, JSON stream, StatsD, a Prometheus textfile, or a fan-out over several of them. A drop-in middleware records per-session telemetry for <code>sugarcraft/sugar-ssh-server</code>. The instrument model follows the OpenTelemetry metrics API, and the SSH middleware follows <a href="https://github.com/charmbracelet/promwish">charmbracelet/promwish</a>.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-metrics</code></pre>
+    <p>Requires PHP 8.3 or newer. The package depends on <code>sugarcraft/sugar-ssh-server</code>, which is needed only by the optional <code>SessionMetrics</code> middleware, and that dependency brings in the <code>ext-ffi</code> requirement. The sibling packages track <code>dev-master</code>, so a project on the default <code>stable</code> minimum stability must set <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code>. Check the platform requirements before wiring metrics into a minimal container image.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
-use SugarCraft\Metrics\Backend\StatsdBackend;
 
-$reg = new Registry(new StatsdBackend('127.0.0.1', 8125));
+$reg = Registry::inMemory();   // accumulates in memory; good for tests and boot probes
 
 $reg-&gt;counter('http.requests', 1, ['route' =&gt; '/api/foo', 'status' =&gt; '200']);
-$reg-&gt;gauge  ('queue.depth',  42);
+$reg-&gt;gauge('queue.depth', 42);
 
 $stop = $reg-&gt;time('http.duration', ['route' =&gt; '/api/foo']);
-// ...do the work being timed (SessionMetrics::handle() wraps exactly this
-//     start/stop pattern around the SSH session pipeline, per session)...
-$stop();
+// ... do the work ...
+$stop();                       // records the elapsed seconds as a histogram sample</code></pre>
+    <p>The same work through instrument objects, which keep their name next to the code that emits them. The help text is published only when the family is also registered with a <code>Descriptor</code>, as described under Troubleshooting:</p>
+    <pre class="code"><code class="language-php">$requests = $reg-&gt;newCounter('http_requests', 'Requests served');
+$requests-&gt;inc(1.0, ['route' =&gt; '/api/foo']);</code></pre>
+    <p><img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="Terminal recording of php examples/showcase.php: session counters, gauges and latency samples are recorded, then the collected InMemory totals are printed" onerror="this.parentElement.style.display='none'"></p>
 
-// Pre-tag every emit:
-$req = $reg-&gt;withTags(['request_id' =&gt; $rid, 'user' =&gt; $userId]);
+    <h2 id="concepts" style="margin-top: 40px;">Concepts and how it works</h2>
+    <table class="api-table">
+    <tr><th>Primitive</th><th>Behavior</th></tr>
+    <tr><td>Counter</td><td>Monotonic total, such as connects or errors. Negative samples are refused.</td></tr>
+    <tr><td>Gauge</td><td>Instantaneous value that replaces the previous one on each set, such as queue depth.</td></tr>
+    <tr><td>Histogram</td><td>Distribution of samples, such as latency. Negative samples are refused. The Prometheus backend emits 14 cumulative <code>le</code> buckets plus <code>+Inf</code>.</td></tr>
+    <tr><td>UpDownCounter</td><td>Synchronous counter that accepts positive and negative increments, such as active connections.</td></tr>
+    <tr><td>AsyncCounter</td><td>Counter read through a callback. Call <code>observe()</code> to emit the current external reading.</td></tr>
+    <tr><td>AsyncGauge</td><td>Gauge read through a callback, such as memory use or pool size.</td></tr>
+    </table>
+    <p>A <code>Registry</code> is the application-facing facade. It forwards each emit to one <code>Backend</code>, and the backend decides how to store or forward the data. A <em>tag</em> is a key/value pair attached to one emit. The Prometheus text format calls the same thing a <em>label</em>, and <code>PrometheusFileBackend</code> translates between the two.</p>
+    <p>Each unique tag combination is a separate time series. The registry caps the combinations per metric name and evicts the oldest one when the cap is reached. It also asks the backend to release that series, and only storing backends can do that.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks and recipes</h2>
+    <h3 id="expose-a-prometheus-textfile">Expose a Prometheus textfile</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
+use SugarCraft\Metrics\Backend\PrometheusFileBackend;
+
+$reg = Registry::new(PrometheusFileBackend::new('/var/lib/app/metrics.prom'));
+$reg-&gt;counter('jobs_done', 1, ['queue' =&gt; 'bake']);
+$reg-&gt;flush();                      // writes the textfile atomically, fsync before rename</code></pre>
+
+    <h3 id="stream-newline-delimited-json">Stream newline-delimited JSON</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
+
+$audit = Registry::to('/var/log/app/metrics.json');   // a path, a resource, or php://stderr when null
+$audit-&gt;gauge('queue.depth', 42);</code></pre>
+
+    <h3 id="fan-out-to-two-backends">Fan out to two backends</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
+use SugarCraft\Metrics\Backend\InMemoryBackend;
+use SugarCraft\Metrics\Backend\MultiBackend;
+use SugarCraft\Metrics\Backend\StatsdBackend;
+
+$memory = new InMemoryBackend();
+$reg    = Registry::new(MultiBackend::new($memory, StatsdBackend::new('127.0.0.1', 8125)));
+$reg-&gt;counter('http.requests', 1);
+echo $memory-&gt;counterValue('http.requests');   // prints 1 (PHP echoes the float 1.0 without a decimal point)</code></pre>
+
+    <h3 id="bound-label-cardinality">Bound label cardinality</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
+
+$reg = Registry::new($backend, [], 500);   // 500 label combinations per metric name
+$reg-&gt;cardinality('http.requests');         // current count for this name
+$reg-&gt;remove('http.requests', ['route' =&gt; '/logout']);   // drop one series and its backend data</code></pre>
+
+    <h3 id="tag-every-emit-from-one-request">Tag every emit from one request</h3>
+    <pre class="code"><code class="language-php">$req = $reg-&gt;withTags(['request_id' =&gt; $rid, 'user' =&gt; $userId]);
 $req-&gt;counter('events');</code></pre>
+    <p>Values from callers you do not trust should be hashed or bucketed before tagging. The backends sweep wire-framing characters, but every distinct value still creates a new series.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Counter</strong><span>Monotonic value that accumulates (connect counts, errors).</span></div>
-      <div class="feature"><strong>Gauge</strong><span>Instantaneous value that replaces on set (queue depth, RSS).</span></div>
-      <div class="feature"><strong>Histogram</strong><span>Distribution of samples (latency, payload size).</span></div>
-      <div class="feature"><strong>UpDownCounter</strong><span>Synchronous counter supporting positive and negative increments (active connections, queue depth delta).</span></div>
-      <div class="feature"><strong>AsyncCounter</strong><span>Asynchronous counter observed at collection time via callback. External monotonic values (GC counts, bytes served).</span></div>
-      <div class="feature"><strong>AsyncGauge</strong><span>Asynchronous gauge observed at collection time via callback. External instantaneous readings (memory, queue depth).</span></div>
-      <div class="feature"><strong>Tagged metrics</strong><span><code>->withTags(['user' => $u])</code> returns a registry that pre-tags every emit.</span></div>
-      <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
-      <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
-      <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) plus +Inf — the 11 classic client_golang boundaries extended with 25/50/100.</span></div>
-      <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded — reclaiming the series on storing backends (InMemory, Prometheus textfile), tracker-only against push-only StatsD/JSON stream arms. Inspect with <code>cardinality()</code>.</span></div>
-      <div class="feature"><strong>Descriptor registration</strong><span>Pre-emit <code># TYPE</code> / <code># HELP</code> lines before first sample (Prometheus textfile collector metadata).</span></div>
-      <div class="feature"><strong>Untrusted-value trust boundary</strong><span>SSH username/term tags are sanitized to <code>[A-Za-z0-9._:@/-]</code> and clamped to 64 bytes; every backend wire-sweep folds hostile framing tokens (<code>:</code> <code>|</code> <code>,</code>, space, control/DEL/C1) and the Prometheus writer throws loudly on fold-collisions and two-kind families. Treat untrusted strings as label <em>values</em>, never as metric names.</span></div>
-    </div>
+    <h3 id="record-ssh-session-telemetry">Record SSH session telemetry</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
+use SugarCraft\Metrics\Registry;
+use SugarCraft\Metrics\Backend\PrometheusFileBackend;
+use SugarCraft\Metrics\Middleware\SessionMetrics;
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-metrics">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-metrics/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-metrics/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/promwish">promwish</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+// The library arms no timers and the textfile is written only on flush() or at
+// exit, so a long-lived server must flush after each session itself.
+final class FlushMetrics implements Middleware
+{
+    public function __construct(private readonly Registry $registry)
+    {
+    }
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        // finally: a session that throws is the one whose error sample must reach the textfile.
+        $completed = false;
+        try {
+            $next($ctx, $session);
+            $completed = true;
+        } finally {
+            try {
+                $this->registry->flush();
+            } catch (\Throwable $flushError) {
+                // A flush failure must not replace the session's own exception;
+                // on a clean session there is none to protect, so it surfaces.
+                if ($completed) {
+                    throw $flushError;
+                }
+            }
+        }
+    }
+}
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+$reg = Registry::new(PrometheusFileBackend::new('/var/lib/ssh/metrics.prom'));
+
+// FlushMetrics is registered first so it wraps SessionMetrics and flushes after
+// SessionMetrics has recorded the session's duration and error samples.
+Server::new()
+    -&gt;use(new FlushMetrics($reg))
+    -&gt;use(SessionMetrics::new($reg))
+    -&gt;serve();</code></pre>
+    <p>Long-lived servers must call <code>flush()</code> themselves: the metrics library never does it on a timer, so without a flush per session the textfile shows no <code>ssh_session_*</code> series until the process exits. The shipped <code>examples/ssh-server-with-metrics.php</code> follows the same pattern.</p>
+
+    <h2 id="api" style="margin-top: 40px;">API reference</h2>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Purpose</th></tr>
+    <tr><td><code>Registry</code></td><td><code>new()</code>, <code>inMemory()</code>, <code>to()</code></td><td>Build a registry over a backend, over an <code>InMemoryBackend</code>, or over a <code>JsonStreamBackend</code>.</td></tr>
+    <tr><td><code>Registry</code></td><td><code>counter()</code>, <code>gauge()</code>, <code>histogram()</code>, <code>upDownCounter()</code>, <code>asyncCounter()</code>, <code>asyncGauge()</code></td><td>Emit one sample directly.</td></tr>
+    <tr><td><code>Registry</code></td><td><code>newCounter()</code>, <code>newGauge()</code>, <code>newHistogram()</code>, <code>newUpDownCounter()</code>, <code>newAsyncCounter()</code>, <code>newAsyncGauge()</code></td><td>Create a bound instrument.</td></tr>
+    <tr><td><code>Registry</code></td><td><code>register()</code>, <code>time()</code>, <code>withTags()</code>, <code>flush()</code></td><td>Publish metadata, time a block, derive a tagged child, and push state to the backend.</td></tr>
+    <tr><td><code>Registry</code></td><td><code>cardinality()</code>, <code>cardinalityLimit()</code>, <code>deleteLabelValues()</code>, <code>remove()</code>, <code>backend()</code></td><td>Inspect and reclaim series.</td></tr>
+    <tr><td><code>Counter</code>, <code>Gauge</code>, <code>Histogram</code>, <code>UpDownCounter</code></td><td><code>new()</code>, <code>name()</code>, <code>help()</code>, and <code>inc()</code>, <code>set()</code>, <code>observe()</code> or <code>add()</code></td><td>Instrument objects in the <code>Instrument</code> namespace.</td></tr>
+    <tr><td><code>AsyncCounter</code>, <code>AsyncGauge</code></td><td><code>new()</code>, <code>observe()</code></td><td>Callback-backed instruments in the <code>Instrument</code> namespace.</td></tr>
+    <tr><td><code>Backend</code></td><td>counter, gauge, histogram, upDownCounter, asyncCounter, asyncGauge, describe, flush, remove, clear</td><td>Contract every backend implements.</td></tr>
+    <tr><td><code>InMemoryBackend</code></td><td><code>new()</code>, <code>snapshot()</code>, <code>counterValue()</code>, <code>gaugeValue()</code>, <code>histogramSummary()</code>, <code>histogramValues()</code>, <code>seriesCount()</code></td><td>Holds state in memory for tests and fan-out.</td></tr>
+    <tr><td><code>JsonStreamBackend</code></td><td><code>new()</code></td><td>Writes one JSON object per emit.</td></tr>
+    <tr><td><code>StatsdBackend</code></td><td><code>new()</code></td><td>Sends StatsD or DogStatsD datagrams over UDP.</td></tr>
+    <tr><td><code>PrometheusFileBackend</code></td><td><code>new()</code>, <code>maxSeriesPerFamily()</code></td><td>Writes a Prometheus textfile, with fsync before the atomic rename.</td></tr>
+    <tr><td><code>MultiBackend</code></td><td><code>new()</code>, <code>withContinueOnError()</code></td><td>Fans each call out to child backends.</td></tr>
+    <tr><td><code>MultiBackendException</code></td><td><code>errors()</code></td><td>Carries the child failures from a fan-out.</td></tr>
+    <tr><td><code>Descriptor</code></td><td><code>new()</code></td><td>Name, help text, type and label keys for one metric family.</td></tr>
+    <tr><td><code>SessionMetrics</code></td><td><code>new()</code>, <code>handle()</code></td><td>SSH middleware that records session connect, duration and error metrics.</td></tr>
+    <tr><td><code>Util</code></td><td><code>tagKey()</code>, <code>nameToken()</code>, <code>displaySafe()</code>, <code>needsExponentForm()</code></td><td>Helpers for tag keys and wire-safe text.</td></tr>
+    </table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-metrics/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-metrics -->
+<p>Only methods declared in <code>sugar-metrics/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-metrics">SugarCraft\Metrics</h3>
+<h4 id="api-sugarcraft-metrics-backend"><code>Backend</code> <small>interface</small></h4>
+<p>Pluggable metrics emit target.</p>
 <table class="api-table">
-<caption>API surface — classes, constructors, and instrument methods.</caption>
-<thead>
-<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
-</thead>
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td>Descriptor</td><td>new(name, help, type, labelKeys)</td><td>Metric registration DTO (type: counter|gauge|histogram|summary). Names are checked raw — dots are rejected, use underscores</td></tr>
-<tr><td>Registry</td><td>new(backend, defaultTags, cardinalityLimit)</td><td>Create a registry from a backend, with default tags merged into every emit and a per-metric cardinality limit (default 10 000)</td></tr>
-<tr><td>Registry</td><td>register(Descriptor)</td><td>Register metric descriptor for early TYPE/HELP emission</td></tr>
-<tr><td>Registry</td><td>counter(name, value, tags)</td><td>Increment counter</td></tr>
-<tr><td>Registry</td><td>gauge(name, value, tags)</td><td>Set gauge value</td></tr>
-<tr><td>Registry</td><td>histogram(name, value, tags)</td><td>Record a histogram sample (Prometheus backend default: 11 classic client_golang boundaries extended with 25/50/100, plus +Inf)</td></tr>
-<tr><td>Registry</td><td>upDownCounter(name, amount, tags)</td><td>Add positive or negative increment to a synchronous up-down counter</td></tr>
-<tr><td>Registry</td><td>asyncCounter(name, value, tags)</td><td>Record an observation from an asynchronous counter callback</td></tr>
-<tr><td>Registry</td><td>asyncGauge(name, value, tags)</td><td>Record an observation from an asynchronous gauge callback</td></tr>
-<tr><td>Registry</td><td>time(name, tags)</td><td>Time a block on the monotonic clock; returns a closer callable</td></tr>
-<tr><td>Registry</td><td>withTags(tags)</td><td>Pre-tag every emit</td></tr>
-<tr><td>Registry</td><td>backend()</td><td>Returns the current backend</td></tr>
-<tr><td>Registry</td><td>cardinalityLimit()</td><td>The per-metric label-combination budget (constructor argument)</td></tr>
-<tr><td>Registry</td><td>cardinality(name)</td><td>Number of unique label-value combinations currently tracked for a metric</td></tr>
-<tr><td>Registry</td><td>flush()</td><td>Publish the backend's state. Stream/socket backends emit as you record and no-op here; a textfile collector is only rewritten inside flush() and nothing in the library arms a timer — always call flush() explicitly from your own schedule</td></tr>
-<tr><td>Registry</td><td>remove(name, tags)</td><td>Reclaim the tracker entry and — on storing backends — the series (StatsD/JSON-stream remove() is a deliberate no-op; default tags are merged once, exactly as the emit path does)</td></tr>
-<tr><td>Registry</td><td>deleteLabelValues(name, tags)</td><td>Drop a label combination from the cardinality tracker only — backend series are NOT touched; use remove() for a full reclaim (FIFO eviction also runs automatically when the limit is exceeded)</td></tr>
-<tr><td>Registry</td><td>newUpDownCounter(name, help, tags)</td><td>Create a bound UpDownCounter instrument (preferred over constructing the instrument directly)</td></tr>
-<tr><td>Registry</td><td>newAsyncCounter(name, help, callback, tags)</td><td>Create an AsyncCounter observed via callback at collection time</td></tr>
-<tr><td>Registry</td><td>newAsyncGauge(name, help, callback, tags)</td><td>Create an AsyncGauge observed via callback at collection time</td></tr>
-<tr><td>UpDownCounter</td><td>add(amount, tags)</td><td>Add positive or negative increment</td></tr>
-<tr><td>AsyncCounter</td><td>observe(tags)</td><td>Invoke the callback and record the sum it returned</td></tr>
-<tr><td>AsyncGauge</td><td>observe(tags)</td><td>Invoke the callback and record the instantaneous value it returned</td></tr>
-<tr><td>InMemoryBackend</td><td>new(maxSamplesPerKey, maxSeries)</td><td>In-memory storage: per-key histogram reservoir cap (default 4096) and a global series ceiling evicted oldest-first (0 = unbounded)</td></tr>
-<tr><td>JsonStreamBackend</td><td>new(target, throwOnError)</td><td>One JSON object per line to a stream or path (default php://stderr); throwOnError = false drops partial-write failures silently</td></tr>
-<tr><td>StatsdBackend</td><td>new(host, port, dogstatsd, failSilently, timeout, existingSocket)</td><td>UDP StatsD/DogStatsD; defaults 127.0.0.1:8125, dogstatsd on, failSilently on, 1.0 s open timeout, or pass a pre-made existingSocket</td></tr>
-<tr><td>PrometheusFileBackend</td><td>new(path, buckets, maxSeriesPerFamily)</td><td>Prometheus textfile (atomic write; default 14 bucket boundaries — the 11 classic client_golang ones extended with 25/50/100 — plus +Inf; per-family FIFO ceiling, default 10 000)</td></tr>
-<tr><td>MultiBackend</td><td>new(...backends)</td><td>Fan out to two or more backends in order; a child failure propagates immediately (fail-fast). Zero children is refused at the door</td></tr>
-<tr><td>MultiBackend</td><td>withContinueOnError(...backends)</td><td>Static factory with error isolation: every child gets the emit even if others throw, and the collected failures are rethrown together as one MultiBackendException</td></tr>
-<tr><td>MultiBackendException</td><td>errors()</td><td>The array of Throwables collected during a continue-on-error fanout</td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td>Increment a monotonic counter.</td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td>Set an instantaneous gauge value.</td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td>Record a single sample for a histogram / timer.</td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td>Add a positive or negative increment to a synchronous up-down counter.</td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td>Record an observation from an asynchronous counter callback.</td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td>Record an observation from an asynchronous gauge callback.</td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td>Receive a metric descriptor for dialects that support pre-emitted TYPE/HELP metadata (e.g. Prometheus textfile collector). Backends that do not support this may implement as a no-op.</td></tr>
+<tr><td><code>flush(): void</code></td><td>Flush all pending metric samples to the persistent backend.</td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>Remove a specific metric series by name and tags. No-op for backends that do not support removal.</td></tr>
+<tr><td><code>clear(): void</code></td><td>Reset all accumulated metrics to zero / empty state. No-op for backends that do not support clearing.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-metrics-descriptor"><code>Descriptor</code> <small>final class</small></h4>
+<p>Registration DTO for metric descriptors.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $name, string $help, string $type, array $labelKeys = []): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>Descriptor::new(name:, help:, type:)</code>.</td></tr>
+<tr><td><code>__construct(public readonly string $name, public readonly string $help, public readonly string $type, public readonly array $labelKeys = [])</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-metrics.</p>
+<h4 id="api-sugarcraft-metrics-registry"><code>Registry</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/promwish Registry (NewRegistry / MustRegister family) — descriptor registration and emit forwarding.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Backend $backend, array $defaultTags = [], int $cardinalityLimit = 10000): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>Registry::new($backend)</code>. The constructor stays public and unchanged — this is the additive front door every other SugarCraft class ships.</td></tr>
+<tr><td><code>static inMemory(array $defaultTags = [], int $cardinalityLimit = 10000): self</code></td><td>One-line default-backend construction (sugar-metrics-045): the test/boot pattern &quot;a registry that just accumulates&quot; used to cost two constructors — <code>Registry::new(InMemoryBackend::new())</code>. Pure sugar over the same front door; every argument forwards unchanged.</td></tr>
+<tr><td><code>static to($target = null, bool $throwOnError = true, array $defaultTags = [], int $cardinalityLimit = 10000): self</code></td><td>One-line JSON-stream construction (sugar-metrics-045): &quot;a registry writing to stderr/a file&quot; was <code>Registry::new(new JsonStreamBackend( $target))</code>. The target accepts a path string, a stream resource, or null for php://stderr — exactly the JsonStreamBackend front door (<code>resource</code> is not expressible in a signature union, hence the untyped parameter mirroring that class); every argument forwards unchanged.</td></tr>
+<tr><td><code>__construct(private readonly Backend $backend, array $defaultTags = [], int $cardinalityLimit = 10000, array $descriptors = [])</code></td><td></td></tr>
+<tr><td><code>cardinalityLimit(): int</code></td><td>The per-metric label-combination budget (constructor argument).</td></tr>
+<tr><td><code>flush(): void</code></td><td>Publish the backend&#039;s current state (no-op for stream/socket backends that emit as you record). Long-lived servers driving a textfile backend MUST call this on a schedule — the file is only rewritten inside flush(), and nothing in the library arms a timer on the host&#039;s event loop.</td></tr>
+<tr><td><code>register(Descriptor $descriptor): void</code></td><td>Register a metric descriptor for early TYPE/HELP emission. Re-registering the identical (name, type, help, labelKeys) is a no-op; a SECOND, DIFFERENT descriptor for the same name throws — silently keeping the first would let a copy-pasted registration pin stale TYPE/HELP onto an evolving metric. labelKeys are compared in order (the DTO stores the list as given): a reordering is a different declaration and conflicts like any other change.</td></tr>
+<tr><td><code>counter(string $name, float $value = 1.0, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td>Add a positive or negative increment to a synchronous up-down counter.</td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td>Record an observation from an asynchronous counter callback.</td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td>Record an observation from an asynchronous gauge callback.</td></tr>
+<tr><td><code>newCounter(string $name, string $help = &#039;&#039;, array $tags = []): Instrument\Counter</code></td><td>Factory: create a new Counter instrument for repeated inc() calls. sugar-metrics-021 symmetry: the three most-used kinds are now as holdable as UpDownCounter/AsyncCounter/AsyncGauge.</td></tr>
+<tr><td><code>newGauge(string $name, string $help = &#039;&#039;, array $tags = []): Instrument\Gauge</code></td><td>Factory: create a new Gauge instrument for repeated set() calls.</td></tr>
+<tr><td><code>newHistogram(string $name, string $help = &#039;&#039;, array $tags = []): Instrument\Histogram</code></td><td>Factory: create a new Histogram instrument for repeated observe() calls.</td></tr>
+<tr><td><code>newUpDownCounter(string $name, string $help = &#039;&#039;, array $tags = []): Instrument\UpDownCounter</code></td><td>Factory: create a new UpDownCounter instrument for repeated add() calls.</td></tr>
+<tr><td><code>newAsyncCounter(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncCounter</code></td><td>Factory: create a new AsyncCounter instrument. Nothing collects on a schedule — call $instrument-&gt;observe() yourself (typically from your own periodic tick or a shutdown hook) to sample the callback now.</td></tr>
+<tr><td><code>newAsyncGauge(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncGauge</code></td><td>Factory: create a new AsyncGauge instrument. Nothing collects on a schedule — call $instrument-&gt;observe() yourself to sample the callback (an exporter&#039;s scrape cadence lives in the host, not here).</td></tr>
+<tr><td><code>time(string $name, array $tags = []): callable</code></td><td>Start an elapsed-time timer. Returns a closure — when invoked, it records the elapsed seconds as a histogram under <code>$name</code>. The pair reads the monotonic clock (<code>hrtime()</code>), not wall time: a system clock step (NTP correction, manual set) can never turn a duration negative in a <code>finally</code> arm that rethrows.</td></tr>
+<tr><td><code>withTags(array $tags): self</code></td><td>Returns a child registry whose every emit is pre-tagged with <code>$tags</code> (merged on top of the existing defaults).</td></tr>
+<tr><td><code>backend(): Backend</code></td><td></td></tr>
+<tr><td><code>cardinality(string $name): int</code></td><td>Number of unique label-value combinations currently tracked for <code>$name</code>.</td></tr>
+<tr><td><code>deleteLabelValues(string $name, array $tags = []): void</code></td><td>Drop one label-combination entry from the cardinality tracker.</td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>Remove a specific metric series from the backend and the cardinality cache. Useful for long-running processes or testing cleanup. Backends that keep no retained state (StatsD, JSON stream) treat the removal as a no-op; the tracker entry is always dropped.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-util"><code>Util</code> <small>final class</small></h4>
+<p>Shared utility functions for the metrics library.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static tagKey(array $tags): string</code></td><td>Sort tags by key and build a stable, collision-free <code>k=v|k2=v2</code> string. Every key and value is backslash-escaped first (<code>\</code> → <code>\\</code>, <code>|</code> → <code>\|</code>, <code>=</code> → <code>\=</code>), so a separator that appears inside a tag payload cannot impersonate the pair delimiter: without it, <code>[&#039;x&#039; =&gt; &#039;a|y=b&#039;]</code> and <code>[&#039;x&#039; =&gt; &#039;a&#039;, &#039;y&#039; =&gt; &#039;b&#039;]</code> would serialize identically and collapse two distinct series into one cardinality slot.</td></tr>
+<tr><td><code>static nameToken(string $name): string</code></td><td>The storage-key NAME segment gets the identical escape a tag token gets (see self::escapeTagToken()). In-memory accumulation accepts arbitrary raw names — there is no sanitize-name gate on that path — so without this the name &#039;x|y=1&#039; would land in exactly the bucket &#039;x&#039; + tags [&#039;y&#039; =&gt; &#039;1&#039;] folds into (finding 013). One escaper for every segment makes the separator unforgeable from both sides, and the map stays readable: a clean name escapes to itself, so the storage key of every well-behaved series is unchanged.</td></tr>
+<tr><td><code>static nonFiniteToken(float $value): ?string</code></td><td>Canonical exposition spellings for non-finite readings.</td></tr>
+<tr><td><code>static needsExponentForm(float $value): bool</code></td><td>True when the fixed six-decimal rendering would lie: magnitudes beyond the integer-precision band print noise, and non-zero values below 1e-6 collapse to &quot;0.000000&quot; (a sub-microsecond timed() span reporting a zero sum). Exponent form keeps both honest.</td></tr>
+<tr><td><code>static displaySafe(string $text): string</code></td><td>Sweep terminal-control bytes out of a string that is about to be interpolated into an exception message. TUI hosts print throwable messages verbatim, and metric names/paths are operator- (or in the SSH middleware, attacker-) controlled — delegating to the shared sugar-core display sanitizer keeps the sweep consistent fleet-wide.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-metrics-backend">SugarCraft\Metrics\Backend</h3>
+<h4 id="api-sugarcraft-metrics-backend-inmemorybackend"><code>InMemoryBackend</code> <small>final class</small></h4>
+<p>In-memory accumulator. Counters add up, gauges hold the latest value, histograms keep a bounded reservoir of samples. Mostly used for tests and for fanning out to multiple &quot;live&quot; backends via MultiBackend.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(int $maxSamplesPerKey = 4096, int $maxSeries = 0): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>InMemoryBackend::new()</code>.</td></tr>
+<tr><td><code>__construct(private readonly int $maxSamplesPerKey = 4096, private readonly int $maxSeries = 0)</code></td><td></td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td></td></tr>
+<tr><td><code>flush(): void</code></td><td></td></tr>
+<tr><td><code>counters(): array</code></td><td></td></tr>
+<tr><td><code>gauges(): array</code></td><td></td></tr>
+<tr><td><code>histograms(): array</code></td><td></td></tr>
+<tr><td><code>upDownCounters(): array</code></td><td></td></tr>
+<tr><td><code>asyncCounters(): array</code></td><td></td></tr>
+<tr><td><code>asyncGauges(): array</code></td><td></td></tr>
+<tr><td><code>snapshot(): array</code></td><td>Structured read surface (sugar-metrics-022): every accumulated series as its own row, with the internal storage key decoded back into the faithful name + tags the caller emitted. The raw maps above stay for zero-copy access, but they are keyed by the self::key() grammar — consumers parsing <code>name|k=v</code> by hand re-implement the escaper wrong exactly when a payload carries a separator (an adversar- ial name like &#039;x|y=1&#039; is indistinguishable from a fold once you split naively), and histogram consumers re-implement the reservoir aggre- gation. Additive: no existing behavior moves.</td></tr>
+<tr><td><code>histogramSummary(string $name, array $tags = []): ?array</code></td><td>Aggregate view of one histogram series, or null when the series is absent. count/sum/mean describe the RETAINED RESERVOIR (bounded at maxSamplesPerKey); observed is the total number of samples ever seen for the series, so post-cap the two axes are honestly distinct — a reservoir mean is not a stream mean, and pretending otherwise would just move the consumer-boilerplate problem inside the library.</td></tr>
+<tr><td><code>counterValue(string $name, array $tags = []): float</code></td><td></td></tr>
+<tr><td><code>gaugeValue(string $name, array $tags = []): ?float</code></td><td></td></tr>
+<tr><td><code>histogramValues(string $name, array $tags = []): array</code></td><td></td></tr>
+<tr><td><code>upDownCounterValue(string $name, array $tags = []): float</code></td><td></td></tr>
+<tr><td><code>asyncCounterValue(string $name, array $tags = []): float</code></td><td></td></tr>
+<tr><td><code>asyncGaugeValue(string $name, array $tags = []): ?float</code></td><td></td></tr>
+<tr><td><code>clear(): void</code></td><td>Reset all accumulated metrics to zero. Useful for long-running processes or test cleanup.</td></tr>
+<tr><td><code>maxSamplesPerKey(): int</code></td><td>Configured upper bound on retained histogram samples per series.</td></tr>
+<tr><td><code>maxSeries(): int</code></td><td>Configured upper bound on distinct series (0 = unbounded).</td></tr>
+<tr><td><code>seriesCount(): int</code></td><td>Current number of distinct series held.</td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>Remove a specific metric series by name and tags. Removes from whichever accumulator(s) hold a value for that key.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-backend-jsonstreambackend"><code>JsonStreamBackend</code> <small>final class</small></h4>
+<p>Newline-delimited JSON emitter. Every metric event gets a fresh line on the underlying stream (file, php://stderr, a socket). The simplest and most diagnostic-friendly backend — <code>tail -f</code> / <code>jq</code> away.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new($target = null, bool $throwOnError = true): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>JsonStreamBackend::new($target)</code>.</td></tr>
+<tr><td><code>__construct($target = null, bool $throwOnError = true)</code></td><td></td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td></td></tr>
+<tr><td><code>flush(): void</code></td><td></td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>JSON stream backend has no in-memory accumulation; metrics are already written to the stream and cannot be retracted.</td></tr>
+<tr><td><code>clear(): void</code></td><td>JSON stream backend has no in-memory accumulation to clear.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-backend-multibackend"><code>MultiBackend</code> <small>final class</small></h4>
+<p>Fanout to multiple backends. Useful for emitting to the live StatsD/Prometheus pipeline AND keeping a JSON audit trail at the same time, or for combining an in-memory tally with a production sink in tests.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Backend ...$children): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>MultiBackend::new($a, $b)</code>. The continue-on-error posture is still flipped with the immutable <code>withContinueOnError()</code> — <code>new()</code> builds, <code>with*()</code> adjusts.</td></tr>
+<tr><td><code>__construct(Backend ...$children)</code></td><td></td></tr>
+<tr><td><code>static withContinueOnError(Backend ...$children): self</code></td><td>Factory: create a new MultiBackend with error isolation enabled. When enabled, every child receives the emit call even if a prior child throws; all failures are collected and rethrown as one RuntimeException after the fanout completes.</td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td></td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>clear(): void</code></td><td></td></tr>
+<tr><td><code>flush(): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-backend-multibackendexception"><code>MultiBackendException</code> <small>final class</small></h4>
+<p>Thrown by MultiBackend when multiple child backends fail during a fanout operation in continue-on-error mode.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $errors, string $message = &#039;&#039;): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>MultiBackendException::new($errors)</code>.</td></tr>
+<tr><td><code>__construct(private readonly array $errors, string $message = &#039;&#039;)</code></td><td></td></tr>
+<tr><td><code>errors(): array</code></td><td>Returns all errors collected during the fanout.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-backend-prometheusfilebackend"><code>PrometheusFileBackend</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/promwish textfile collector output path (the node_exporter --collector.textfile.directory pattern).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $path, ?array $buckets = null, int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY, ?int $fileMode = null): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>PrometheusFileBackend::new($path)</code>.</td></tr>
+<tr><td><code>__construct(private readonly string $path, ?array $buckets = null, private readonly int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY, ?int $fileMode = null)</code></td><td></td></tr>
+<tr><td><code>maxSeriesPerFamily(): int</code></td><td>The per-family series budget this backend enforces (constructor argument).</td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td></td></tr>
+<tr><td><code>flush(): void</code></td><td></td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>Drop one accumulated series (name + label set) from the backend&#039;s in-memory state, plus its collision-detector records and family index entry. The storage key is derived exactly like the write path, so this reclaims what counter()/gauge()/histogram()/... stored — including the Registry&#039;s cardinality-eviction forward, which arrives with the merged tag set. The next flush() simply no longer emits the removed series; the textfile itself is rewritten whole on every flush, so no stale line survives. remove() consults the same collision record the write path keeps: a call whose raw (name, tags) is NOT the identity recorded under that folded key would reach through the fold and silently wipe an innocent twin, so it is refused exactly like a colliding write; the honest reclaim drops the record with the series, freeing the fold for the twin to claim later.</td></tr>
+<tr><td><code>clear(): void</code></td><td>Reset the backend: forget every accumulated series, dirty flag, collision record, family index entry, and registered descriptor. The next flush() writes an empty textfile (the file itself is not unlinked — deleting the target from under a watching node_exporter is a deployment decision, not a metrics-library one).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-backend-statsdbackend"><code>StatsdBackend</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/promwish statsd reporter family (the WithStatsd option and its wire formatter).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $host = &#039;127.0.0.1&#039;, int $port = 8125, bool $dogstatsd = true, bool $failSilently = true, float $timeout = 1.0, mixed $existingSocket = null): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>StatsdBackend::new()</code>.</td></tr>
+<tr><td><code>__construct(string $host = &#039;127.0.0.1&#039;, int $port = 8125, private readonly bool $dogstatsd = true, private readonly bool $failSilently = true, float $timeout = 1.0, mixed $existingSocket = null)</code></td><td></td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>counter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>gauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>histogram(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>upDownCounter(string $name, float $amount, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncCounter(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>asyncGauge(string $name, float $value, array $tags = []): void</code></td><td></td></tr>
+<tr><td><code>describe(Descriptor $descriptor): void</code></td><td></td></tr>
+<tr><td><code>flush(): void</code></td><td></td></tr>
+<tr><td><code>remove(string $name, array $tags = []): void</code></td><td>StatsD is fire-and-forget; metrics cannot be removed once sent.</td></tr>
+<tr><td><code>clear(): void</code></td><td>StatsD is fire-and-forget; the only retained state is the bounded per-token fold cache (sugar-metrics-015), dropped here with the call.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-metrics-instrument">SugarCraft\Metrics\Instrument</h3>
+<h4 id="api-sugarcraft-metrics-instrument-asynccounter"><code>AsyncCounter</code> <small>final class</small></h4>
+<p>An asynchronous instrument that reports a monotonically increasing sum. The supplied callback is invoked when you call observe() — the library arms no collection timer of its own, so a periodic tick (or your scrape/mirror loop) is what samples the external value.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help, \Closure $callback, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help, private readonly \Closure $callback, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>observe(array $tags = []): void</code></td><td>Sample the callback once and record the returned sum.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-instrument-asyncgauge"><code>AsyncGauge</code> <small>final class</small></h4>
+<p>An asynchronous instrument that reports a non-monotonic instantaneous value. The supplied callback is invoked when you call observe() — the library arms no collection timer of its own, so a periodic tick (or your scrape/mirror loop) is what samples the external value.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help, \Closure $callback, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help, private readonly \Closure $callback, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>observe(array $tags = []): void</code></td><td>Sample the callback once and record the returned gauge reading.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-instrument-counter"><code>Counter</code> <small>final class</small></h4>
+<p>A monotonic counter — a value that only ever goes up (requests served, jobs completed). Symmetry for the most-used kind (sugar-metrics-021): hold it once with its static tags and call inc() everywhere instead of restating the tag array per call site.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help = &#039;&#039;, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help = &#039;&#039;, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>inc(float $by = 1.0, array $tags = []): void</code></td><td>Add <code>$by</code> to the counter. The verb-level monotonic guard (Registry::counter) refuses negative amounts at the door; the instrument does not fork a second check.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-instrument-gauge"><code>Gauge</code> <small>final class</small></h4>
+<p>A gauge — a value that can go up and down freely (queue depth, temperature, memory in use). Symmetry for the most-used kinds (sugar-metrics-021): hold it once with its static tags and call set() everywhere instead of restating the tag array per call site.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help = &#039;&#039;, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help = &#039;&#039;, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>set(float $value, array $tags = []): void</code></td><td>Set the gauge to <code>$value</code> (last write wins). Negative values are legitimate for gauges — no monotonic guard applies.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-instrument-histogram"><code>Histogram</code> <small>final class</small></h4>
+<p>A histogram — a distribution of observed values (latencies, body sizes) recorded into buckets. Symmetry for the most-used kinds (sugar-metrics-021): hold it once with its static tags and call observe() everywhere instead of restating the tag array per call site.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help = &#039;&#039;, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help = &#039;&#039;, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>observe(float $value, array $tags = []): void</code></td><td>Record one observation. The verb-level negative guard (Registry::histogram) refuses samples below every bucket boundary; the instrument does not fork a second check.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-metrics-instrument-updowncounter"><code>UpDownCounter</code> <small>final class</small></h4>
+<p>A synchronous instrument that adds positive and negative increments — used when a value can go up or down (e.g., active connections, item counts in a queue).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, string $name, string $help = &#039;&#039;, array $tags = []): self</code></td><td>House-idiom factory (sugar-metrics-014): forward-to-ctor while the constructor stays public (privatization is the gated MET-PRIVATECTOR).</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, private readonly string $name, private readonly string $help = &#039;&#039;, private readonly array $tags = [])</code></td><td></td></tr>
+<tr><td><code>add(float $amount, array $tags = []): void</code></td><td>Add <code>$amount</code> to the current value. Positive increments increase the sum; negative increments decrease it.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>help(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-metrics-middleware">SugarCraft\Metrics\Middleware</h3>
+<h4 id="api-sugarcraft-metrics-middleware-sessionmetrics"><code>SessionMetrics</code> <small>final class</small></h4>
+<p>Mirrors charmbracelet/promwish middleware option (the InstrumentHandler pattern): wraps a handler to emit telemetry around each invocation.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Registry $registry, ?callable $extraTags = null, bool $fullExceptionClass = false): self</code></td><td>House-idiom factory (sugar-metrics-014): <code>SessionMetrics::new($registry)</code>.</td></tr>
+<tr><td><code>__construct(private readonly Registry $registry, ?callable $extraTags = null, private readonly bool $fullExceptionClass = false)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next)</code></td><td></td></tr>
+</tbody>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration and options</h2>
+    <table class="api-table">
+    <tr><th>Constructor</th><th>Option</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>Registry::new()</code></td><td><code>$defaultTags</code></td><td><code>[]</code></td><td>Tags merged into every emit.</td></tr>
+    <tr><td><code>Registry::new()</code></td><td><code>$cardinalityLimit</code></td><td>10 000</td><td>Series per metric name. Values below 1 throw <code>InvalidArgumentException</code>.</td></tr>
+    <tr><td><code>InMemoryBackend::new()</code></td><td><code>$maxSamplesPerKey</code></td><td>4 096</td><td>Histogram reservoir size per series.</td></tr>
+    <tr><td><code>InMemoryBackend::new()</code></td><td><code>$maxSeries</code></td><td>0 (uncapped)</td><td>Total series. When set, the oldest is dropped first.</td></tr>
+    <tr><td><code>PrometheusFileBackend::new()</code></td><td><code>$buckets</code></td><td>14 default buckets</td><td>Histogram bucket boundaries.</td></tr>
+    <tr><td><code>PrometheusFileBackend::new()</code></td><td><code>$maxSeriesPerFamily</code></td><td>10 000</td><td>Series per family. The oldest is dropped first.</td></tr>
+    <tr><td><code>PrometheusFileBackend::new()</code></td><td><code>$fileMode</code></td><td>0600</td><td>Permissions on the textfile.</td></tr>
+    <tr><td><code>StatsdBackend::new()</code></td><td><code>$host</code>, <code>$port</code></td><td>127.0.0.1, 8125</td><td>Destination of the datagrams.</td></tr>
+    <tr><td><code>StatsdBackend::new()</code></td><td><code>$dogstatsd</code>, <code>$failSilently</code>, <code>$timeout</code></td><td>true, true, 1.0</td><td>DogStatsD framing, whether send errors are swallowed, and the socket timeout in seconds.</td></tr>
+    <tr><td><code>JsonStreamBackend::new()</code></td><td><code>$target</code>, <code>$throwOnError</code></td><td>null, true</td><td>Output stream, and whether write failures throw.</td></tr>
+    <tr><td><code>SessionMetrics::new()</code></td><td><code>$extraTags</code>, <code>$fullExceptionClass</code></td><td>null, false</td><td>A callable adding tags per session, and whether the exception tag carries the full class name.</td></tr>
+    </table>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-metrics/blob/master/examples/showcase.php"><code>examples/showcase.php</code></a> records counters, gauges and histogram samples into an in-memory backend, so it runs with no StatsD or Prometheus setup. It prints the counter and gauge values and the histogram summaries.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-metrics/blob/master/examples/ssh-server-with-metrics.php"><code>examples/ssh-server-with-metrics.php</code></a> runs a SugarSshServer with <code>SessionMetrics</code>, sending session telemetry to a Prometheus textfile and to an in-memory backend.</li>
+    </ul>
+    <p>Run an example from the package root with <code>php examples/showcase.php</code>.</p>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>Run the suite from the package root with <code>vendor/bin/phpunit</code>. The suite covers the registry and its cardinality tracking, each instrument, each backend, the middleware, the descriptor rules and the locale catalogs. <code>ExampleSmokeTest</code> lints both examples and runs the showcase to completion.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 id="runtimeexception-a-metric-name-is-registered-twice-with-different-metadata">RuntimeException: a metric name is registered twice with different metadata</h3>
+    <p><code>Registry::register()</code> accepts a re-registration only when the type, help text and label keys all match. Any difference throws a <code>RuntimeException</code>. Give the metric one <code>Descriptor</code> and reuse it.</p>
+    <h3 id="invalidargumentexception-for-a-descriptor-name-containing-a-dot">InvalidArgumentException for a descriptor name containing a dot</h3>
+    <p>A <code>Descriptor</code> name must match <code>[a-zA-Z_:][a-zA-Z0-9_:]*</code>, so <code>http.requests</code> is refused. The emit path can keep the dotted name, but on the Prometheus wire it becomes <code>http_requests</code>. Register the underscore form with a descriptor, as in <code>$reg-&gt;register(Descriptor::new('http_requests', 'Requests served', 'counter'))</code>, to publish <code># TYPE</code> and <code># HELP</code> lines before the first emit. The instrument returned by <code>newCounter()</code> keeps its help text but does not register it, so <code>newCounter('http_requests', 'Requests served')</code> alone never publishes the <code># HELP</code> line.</p>
+    <h3 id="runtimeexception-on-a-negative-counter-or-histogram-sample">RuntimeException on a negative counter or histogram sample</h3>
+    <p>Counters and histograms are monotonic in the sense that they refuse negative samples. Use <code>upDownCounter()</code> for a value that rises and falls, such as active connections, or a gauge for an instantaneous reading.</p>
+    <h3 id="runtimeexception-about-two-series-that-fold-to-the-same-prometheus-name">RuntimeException about two series that fold to the same Prometheus name</h3>
+    <p>Prometheus names cannot contain most punctuation, so <code>PrometheusFileBackend</code> folds names and label keys. When two distinct raw names fold to the same key, it throws rather than merging them. Rename one of the metrics so the folded names differ.</p>
+    <h3 id="the-textfile-shows-no-samples-for-a-family">The textfile shows no samples for a family</h3>
+    <p>The file shows a family only after its first sample, unless it was registered with a <code>Descriptor</code>. Register the descriptor on the registry to publish the <code># TYPE</code> and <code># HELP</code> lines before the first sample arrives.</p>
+    <h3 id="memory-keeps-growing-on-statsd-or-json-output">Memory keeps growing on StatsD or JSON output</h3>
+    <p>Eviction releases series from storing backends such as <code>InMemoryBackend</code> and <code>PrometheusFileBackend</code>. <code>StatsdBackend</code> and <code>JsonStreamBackend</code> have already sent what they emitted, so their <code>remove()</code> is a no-op. Against those backends the cardinality limit bounds only the registry's own tracker.</p>
+
+    <h2 id="upstream" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream</th><th>SugarMetrics</th><th>Notes</th></tr>
+    <tr><td>OpenTelemetry metrics API (opentelemetry.io/api/metrics)</td><td><code>Instrument\Counter</code>, <code>Gauge</code>, <code>Histogram</code>, <code>UpDownCounter</code>, <code>AsyncCounter</code>, <code>AsyncGauge</code></td><td>The instrument docblocks cite this API.</td></tr>
+    <tr><td>charmbracelet/promwish (Go)</td><td><code>Middleware\SessionMetrics</code>, <code>Backend\PrometheusFileBackend</code>, <code>Backend\StatsdBackend</code></td><td>The SSH middleware and the textfile and StatsD reporters mirror promwish's option and output shapes.</td></tr>
+    </table>
+
+    <h2 id="changelog" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>. Breaking changes are recorded in the README under <em>Breaking changes</em>. For example, the multi-backend exception's error accessor is now the bare <code>errors()</code> method, following the bare-accessor convention; code that still calls the earlier <code>get</code>-prefixed accessor must switch.</p>
+
+    <p style="margin-top: 48px;"><a href="https://github.com/sugarcraft/sugar-metrics" class="btn btn-primary">Source on GitHub →</a></p>
     </div>
   </div>
-</section>
-
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIF of the flagship <code>showcase.php</code> example, regenerated by CI on every push that touches the library source. The remaining examples are plain <code>php examples/&lt;name&gt;.php</code> runs — see the <a href="https://github.com/sugarcraft/sugar-metrics/tree/master/examples">examples directory</a>.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="Terminal recording of php examples/showcase.php: session counters, gauges and latency samples are recorded, then the collected InMemory totals print." onerror="this.parentElement.style.display='none'">
-                <h3 id="counters-gauges-histograms">Counters / gauges / histograms</h3>
-                <span class="demo-caption">Registry → InMemoryBackend totals after a tally pass.</span>
-            </div>
-        </div>
-    </div>
 </section>
 </main>
 

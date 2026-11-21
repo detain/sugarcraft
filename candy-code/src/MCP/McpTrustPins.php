@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * What the user consented to when they trusted a project's `.mcp.json`: one
- * fingerprint per server, per project root (audit MCP-5).
+ * fingerprint per server, per project root.
  *
  * THE GAP. `trustedProjectMcp` names a ROOT, and used to be the whole
  * decision: once a root was listed, whatever `.mcp.json` said at the next

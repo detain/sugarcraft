@@ -8,7 +8,7 @@ use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 
 /**
  * The one implementation of {@see \SugarCraft\Code\Tools\AcceptsWorktreeJail}
- * every path-resolving built-in shares (audit F-J5).
+ * every path-resolving built-in shares.
  *
  * The tools using it are `final readonly` and every one of their properties is
  * constructor-promoted, with a promoted `$worktreeJail` among them. So

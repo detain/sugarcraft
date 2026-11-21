@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -133,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-quickpick.png" alt="" aria-hidden="true">
@@ -153,14 +157,28 @@
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart-plain-strings">Quickstart — plain strings</a></li>
             <li class="toc-h3"><a href="#quickstart-numbered-items-history">Quickstart — numbered items + history</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#keyboard-contract-condensed">Keyboard contract (condensed)</a></li>
-            <li class="toc-h3"><a href="#accessibility-color-policy">Accessibility &amp; color policy</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#theme-style-and-color-policy">Theme, style and color policy</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-quickpick">SugarCraft\QuickPick</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-quickpick-concerns">SugarCraft\QuickPick\Concerns</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-quickpick-history">SugarCraft\QuickPick\History</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-quickpick-support">SugarCraft\QuickPick\Support</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#background-overlay">Background + overlay</a></li>
             <li class="toc-h3"><a href="#filter-interaction">Filter interaction</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
@@ -203,7 +221,19 @@ if ($choice = $quickpick->selected()) {
 }
 $allItems = $history->all(); // renumbered 1..N by current load position — archived write-time ordinals are display-ignored</code></pre>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
+        <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>QuickPick is a render-and-state component. It owns the filter text, the item list, the cursor and the window offset. Your event loop owns the keys: it decodes them and forwards calls such as <code>type()</code>, <code>cursorDown()</code> and <code>backspace()</code>, then renders <code>view()</code> over the background string the host already has.</p>
+    <p>Items are plain strings or <code>Item</code> objects. Strings are coerced by <code>ItemFactory</code>, and each coerced string takes its input position as its ordinal. <code>FilteredItem</code> is the numbered <code>Item</code> implementation. The default filter is a case-folded substring match. <code>withRanker()</code> swaps in subsequence scoring, and <code>withFilterFn()</code> adds a predicate that decides which items are candidates at all.</p>
+    <p>Accepting is two calls, and the convention is to read in this order. Read <code>selected()</code> first, which returns the highlighted item or <code>null</code> when nothing matches. Then call <code>hide()</code>. <code>hide()</code> is the lifecycle call, not an accept. It clears visibility and keeps the filter and cursor, so <code>selected()</code> still answers after it. Read it first anyway, so the accept reads in the order the lifecycle implies.</p>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Pick one value from a fixed list.</strong> Build <code>QuickPick::new(['Ruby', 'PHP', 'Go'])-&gt;withPrompt('Choose language: ')</code>, forward keys to <code>type()</code>, <code>cursorUp()</code> and <code>cursorDown()</code>, and on Enter read <code>selected()</code> before calling <code>hide()</code>.</li>
+      <li><strong>Remember recent choices.</strong> After an accept, call <code>FileHistory::append()</code> with the choice. On the next run, <code>all()</code> returns the saved entries, renumbered by their current load position. <code>appendDistinct()</code> is last-wins: older copies of the same value are dropped, the newest occurrence moves to the end, and the file is rewritten whole. The optional entry cap bounds growth.</li>
+      <li><strong>Restrict the candidates.</strong> Pass a predicate such as <code>fn(Item $item): bool =&gt; ...</code> to <code>withFilterFn()</code>. Only items the predicate accepts reach the text match.</li>
+      <li><strong>Place the overlay over a background.</strong> Render the host's own view string, then position the picker with <code>withOffset($x, $y)</code>, cap it with <code>withWindowHeight()</code>, and add a border with <code>withBorder()</code>. Positioning is manual, so centering stays with the host.</li>
+      <li><strong>Follow terminal resizes.</strong> Call <code>withOnResize()</code> to receive resize events. Call <code>attachSigwinch()</code> to forward <code>SIGWINCH</code> automatically when <code>ext-pcntl</code> or sugar-pty is available. Otherwise call <code>invalidateAutoWidth()</code> once per resize, or supply your own size source with <code>withTtySizeProvider()</code>.</li>
+    </ul>
+<h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). withRanker() swaps in true subsequence scoring; a rejected-by-bias count surfaces as “N hidden by anchor bias”.</span></div>
             <div class="feature"><strong>Composition wrapper</strong><span>QuickPickHost contract: update() answers [host, picker] — the updated QuickPick rides the tuple, the host needs no mutable state.</span></div>
@@ -229,10 +259,58 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
     <tr><td>Esc (cancel)</td><td><code>hide()</code></td></tr>
     </table>
 
-    <h3 id="accessibility-color-policy" style="margin-top: 40px;">Accessibility &amp; color policy</h3>
+        <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>items</code></td><td><code>array</code> of <code>string</code> or <code>Item</code></td><td><code>[]</code></td><td>Seed list, set in <code>new()</code> or replaced with <code>withItems()</code>. The filter text is kept and re-applied.</td></tr>
+    <tr><td><code>QuickPick::withPrompt()</code></td><td><code>string</code></td><td><code>'&gt; '</code></td><td>Label in front of the filter line.</td></tr>
+    <tr><td><code>QuickPick::withFilterFn()</code></td><td><code>Closure(Item): bool</code></td><td>accepts every item</td><td>Predicate that decides which items are candidates.</td></tr>
+    <tr><td><code>QuickPick::withRanker()</code></td><td><code>?FuzzyMatcher</code></td><td><code>null</code></td><td>Null keeps the case-folded substring match. A matcher from sugar-fuzzy adds subsequence scoring.</td></tr>
+    <tr><td><code>QuickPick::withItemFormatter()</code></td><td><code>Closure(string, bool, int): string</code></td><td>a <code>●</code> or two spaces, then the ordinal, then the item</td><td>Renders one row. The third argument is the printed ordinal, or <code>0</code> when numbering is off.</td></tr>
+    <tr><td><code>QuickPick::withNumbered()</code></td><td><code>bool</code></td><td><code>true</code></td><td><code>false</code> hands the formatter <code>0</code> for every row, so the row shows only the cursor dot.</td></tr>
+    <tr><td><code>QuickPick::withWindowHeight()</code></td><td><code>int</code></td><td><code>10</code></td><td>Overlay height maximum in rows, header and separator included. Visible items are the height minus 2, and one fewer while the overflow marker shows. Values below 2 are raised to 2, and the window is clamped to the terminal's row budget on short screens.</td></tr>
+    <tr><td><code>QuickPick::withWindowWidth()</code></td><td><code>int</code></td><td><code>0</code></td><td><code>0</code> sizes the overlay automatically. A positive value caps the outer width in cells.</td></tr>
+    <tr><td><code>QuickPick::withOffset()</code></td><td><code>int, int</code></td><td><code>0, 0</code></td><td>Top-left position over the background. Negative values clamp to <code>0</code>, and the column is clamped so the overlay never starts past the right edge.</td></tr>
+    <tr><td><code>QuickPick::withMatchStyle()</code></td><td><code>string</code> (ANSI)</td><td><code>''</code></td><td>SGR applied to the matched characters. Empty means no color.</td></tr>
+    <tr><td><code>QuickPick::withBorder()</code></td><td><code>?Border</code></td><td><code>null</code></td><td>Frames every row with a T-junction separator. Off by default.</td></tr>
+    <tr><td><code>QuickPick::withStyle()</code></td><td><code>?Style</code></td><td><code>null</code></td><td>Paints each rendered row through sugar-style. Off by default.</td></tr>
+    <tr><td><code>QuickPick::withOnResize()</code></td><td><code>?Closure</code></td><td><code>null</code></td><td>Callback run on terminal resize, used with <code>attachSigwinch()</code>.</td></tr>
+    </table>
+<h3 id="theme-style-and-color-policy" style="margin-top: 40px;">Theme, style and color policy</h3>
     <p><strong>Colorless by default.</strong> The frame emits no SGR at all; emphasis reaches the cursor row through text channels a screen reader can speak — the <code>●</code> bullet and ordinal (both your <code>withItemFormatter</code>'s bytes, substitutable to plain ASCII; <code>withNumbered(false)</code> drops the ordinals and keeps the dot) and plain-language chrome rows rendered from the <code>Lang</code> catalog (<code>“↕ showing 1-10 of 40”</code>, <code>“no matches”</code>, <code>“no items”</code>, <code>“N hidden by anchor bias”</code>). Every printed ordinal is a POSITION: coerced strings take their input position across the whole list, replayed history renumbers 1..N at load, and <code>cursor()</code> is the accessor for the selected row's position in what is on screen. SGR appears only where the host opts in (<code>withMatchStyle()</code>, <code>withStyle()</code>, the formatter); honoring <code>NO_COLOR</code>/<code>CLICOLOR</code> is host-side — skip the opt-ins on dumb terminals (the default already needs no color).</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+        <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>The examples are package-internal demo drivers. They run from a clone with <code>composer install</code> in the lib root, and they drive the VHS tapes.</p>
+    <ul>
+      <li><code>examples/basic.php</code>: a fuzzy finder over ten fruit names, drawn over a background view. Run it with <code>php examples/basic.php</code>.</li>
+      <li><code>examples/interaction.php</code>: scripted keystrokes against a list of command names. It prints the overlay after the initial state, after <code>type('p')</code> and after <code>type('ph')</code>, and it shows the anchor-bias count when some candidates are hidden. Run it with <code>php examples/interaction.php</code>.</li>
+    </ul>
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the lib's suite from its root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite covers the filter and ranker, the geometry and anchor-bias rules, UTF-8 filtering, the SIGWINCH attach, the history store and the help and status bars. <code>ReadmeExampleTest</code> keeps the README's examples executable.</p>
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The chrome shows question marks or mojibake.</strong> The built-in chrome draws <code>↕ ─ ▏ ⋯</code>. A legacy non-UTF-8 terminal cannot show them, so run the picker in a UTF-8 terminal.</li>
+      <li><strong><code>attachSigwinch()</code> returns <code>false</code>.</strong> Automatic resize needs <code>ext-pcntl</code> or sugar-pty. Without either, call <code>invalidateAutoWidth()</code> once per resize, or pass a size source with <code>withTtySizeProvider()</code>.</li>
+      <li><strong>Composer refuses to resolve the <code>sugarcraft/*</code> siblings.</strong> The siblings require <code>dev-master</code>. Add <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code> to the consuming root, or pin released tags once they are cut.</li>
+      <li><strong>Enter returns nothing.</strong> <code>selected()</code> returns <code>null</code> when the filter matches nothing or the cursor is out of bounds. Check for <code>null</code> before using the value.</li>
+      <li><strong>The history file is never created.</strong> <code>FileHistory</code> creates the file but never its parent directory. Create the directory first, and expect files to be written with mode <code>0600</code>.</li>
+      <li><strong>Ordinals look wrong after a reload.</strong> Ordinals are positions in the list on screen. Replayed history renumbers <code>1..N</code> at load, and the archived write-time ordinals are ignored for display.</li>
+    </ul>
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The lib is inspired by the quick-pick overlay in <a href="https://github.com/Genekkion/theHermit">Genekkion/theHermit</a> (Go). It is a native PHP port, and three upstream behaviors were deliberately not carried over.</p>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>SugarCraft</th><th>Divergence</th></tr>
+    <tr><td>Framed title row above the list</td><td>The header is the prompt and filter line</td><td>No <code>title</code> channel. <code>withPrompt()</code> covers the in-frame label, and hosts render titles in the background view or a <code>StatusBar</code>.</td></tr>
+    <tr><td>Auto-centering on each resize</td><td><code>withOffset(x, y)</code></td><td>Positioning stays manual, because the frame is composed over the host's own string and automatic padding would fight non-full-screen layouts.</td></tr>
+    <tr><td>Bordered, colored lipgloss styling by default</td><td>Frameless, colorless by default</td><td><code>withBorder()</code>, <code>withStyle()</code> and <code>withMatchStyle()</code> are opt-in.</td></tr>
+    </table>
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>The package is one main class and a few helpers. <code>QuickPick</code> is the fuzzy finder overlay. <code>QuickPickHost</code> is the <code>update()</code> and <code>view()</code> composition contract, which carries its state in the return tuple. <code>Item</code> and <code>FilteredItem</code> model the candidates. <code>HelpBar</code> and <code>StatusBar</code> render the lines below the overlay, and both use the <code>Visible</code> concern. <code>ItemFactory</code> coerces string and <code>Item</code> lists. <code>Lang</code> is the chrome text catalog, loaded from <code>lang/en.php</code>. <code>History\FileHistory</code> is the JSONL-backed store. <code>Support\AnsiWalk</code> walks escape sequences by codepoint when highlighting, and <code>Support\UntrustedText</code> guards rendered strings at the trust boundary.</p>
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-quickpick/</code> in the monorepo is the record of changes. Its siblings resolve at <code>dev-master</code>, as the Install section notes.</p>
+<h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick/blob/master/README.md">Full README</a></li>
@@ -242,7 +320,7 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter, ?Closure $filterFn)</td><td>Create fuzzy finder (items: string[] or Item[]; coerced strings take their input position as ordinal; all three seeds factory-reachable)</td></tr>
@@ -291,6 +369,206 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
 <tr><td>QuickPickHost</td><td>interface update(QuickPick, string): array, view(QuickPick): string</td><td>Model–Update–View embedding contract — update() answers the [host, picker] tuple, so the updated QuickPick never needs mutable host state</td></tr>
 <tr><td>Model</td><td>@deprecated alias of QuickPickHost</td><td>Declares no members of its own; old type-hints and instanceof keep resolving (implementors must adopt the tuple)</td></tr>
 </table>
+    <!-- GENERATED by tools/gen-api-reference.php from sugar-quickpick/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-quickpick -->
+<p>Only methods declared in <code>sugar-quickpick/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-quickpick">SugarCraft\QuickPick</h3>
+<h4 id="api-sugarcraft-quickpick-filtereditem"><code>FilteredItem</code> <small>final readonly class</small></h4>
+<p>A numbered item for use in QuickPick filter lists.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private int $number, private string $value)</code></td><td></td></tr>
+<tr><td><code>static new(int $number, string $value): self</code></td><td>House factory (<code>::new()</code>), mirroring QuickPick::new(): same signature as the constructor, which stays public (the docs promise a bare construction site).</td></tr>
+<tr><td><code>number(): int</code></td><td></td></tr>
+<tr><td><code>value(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-helpbar"><code>HelpBar</code> <small>final class</small></h4>
+<p>HelpBar — renders a single-line keyboard shortcut summary for the QuickPick overlay.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $shortcuts = [], bool $visible = true)</code></td><td></td></tr>
+<tr><td><code>static new(array $shortcuts = [], bool $visible = true): self</code></td><td>House factory (<code>::new()</code>), mirroring QuickPick::new(): same signature as the constructor, which stays public (the docs promise a bare construction site).</td></tr>
+<tr><td><code>withShortcut(string $key, string $description): self</code></td><td>Add a keyboard shortcut entry.</td></tr>
+<tr><td><code>withoutShortcut(string $key): self</code></td><td>Remove a keyboard shortcut entry by key.</td></tr>
+<tr><td><code>shortcuts(): array</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td>Render the help bar as a single line of text. Format: &quot;key: description │ key: description │ ...&quot;</td></tr>
+<tr><td><code>show(): self</code></td><td></td></tr>
+<tr><td><code>hide(): self</code></td><td></td></tr>
+<tr><td><code>isVisible(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-item"><code>Item</code> <small>interface</small></h4>
+<p>Contract for items displayed in the QuickPick filter list.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>number(): int</code></td><td>Returns the ordinal number of this item (1-based for display).</td></tr>
+<tr><td><code>value(): string</code></td><td>Returns the display text of this item.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-itemfactory"><code>ItemFactory</code> <small>final class</small></h4>
+<p>Factory for converting raw input into Item instances.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>coerce(array $items): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-quickpick.</p>
+<h4 id="api-sugarcraft-quickpick-model"><code>Model</code> <small>interface</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>update(QuickPick $model, string $msg): array</code></td><td>Handle a message and return the updated pair.</td></tr>
+<tr><td><code>view(QuickPick $model): string</code></td><td>Render the view given the current QuickPick state.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-quickpick"><code>QuickPick</code> <small>final class</small></h4>
+<p>The QuickPick — fuzzy finder / quick-pick overlay component.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $items = [], ?\Closure $itemFormatter = null, ?\Closure $filterFn = null)</code></td><td>All three seeds are factory-reachable through new() as well (S-28/-056); the fluent path is the filterFn builder — withFilterFn() today, canonically withFilterFn() after the naming sweep (S-24).</td></tr>
+<tr><td><code>static new(array $items = [], ?\Closure $itemFormatter = null, ?\Closure $filterFn = null): self</code></td><td></td></tr>
+<tr><td><code>withItems(array $items): self</code></td><td>Replace the item list.</td></tr>
+<tr><td><code>withPrompt(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>withMatchStyle(string $ansiStyle): self</code></td><td></td></tr>
+<tr><td><code>withWindowHeight(int $h): self</code></td><td>Set the overlay window height in ROWS of the frame — header and separator included, so the visible item count is $h - 2, minus one more row when the overflow marker is needed. The marker shows only when it fits inside the window: if reserving its row would empty the list band, the marker is suppressed rather than growing the frame (-002).</td></tr>
+<tr><td><code>withWindowWidth(int $w): self</code></td><td>Set the overlay width in cells.</td></tr>
+<tr><td><code>withOffset(int $x, int $y): self</code></td><td>Position the overlay at (x, y) cells into the background. Pure placement: it does NOT show or hide the overlay (M4).</td></tr>
+<tr><td><code>withItemFormatter(\Closure $fn): self</code></td><td>Set the formatter for item display lines.</td></tr>
+<tr><td><code>withNumbered(bool $numbered = true): self</code></td><td>Turn the printed ordinals on or off (-073).</td></tr>
+<tr><td><code>withFilterFn(\Closure $fn): self</code></td><td></td></tr>
+<tr><td><code>withRanker(?FuzzyMatcher $matcher): self</code></td><td>Set (or clear, with null) a sugar-fuzzy ranker. When set, a non-empty filter text ranks items by descending fuzzy score (true subsequence match) instead of the default contiguous-substring/anchor filter, and match highlighting follows the scored indices. The custom filterFn still applies as a predicate. Pass null to restore the default substring behaviour.</td></tr>
+<tr><td><code>setPrompt(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>setMatchStyle(string $ansiStyle): self</code></td><td></td></tr>
+<tr><td><code>setWindowHeight(int $h): self</code></td><td></td></tr>
+<tr><td><code>setWindowWidth(int $w): self</code></td><td></td></tr>
+<tr><td><code>setOffset(int $x, int $y): self</code></td><td></td></tr>
+<tr><td><code>setItemFormatter(\Closure $fn): self</code></td><td></td></tr>
+<tr><td><code>setFilterFn(\Closure $fn): self</code></td><td></td></tr>
+<tr><td><code>setRanker(?FuzzyMatcher $matcher): self</code></td><td></td></tr>
+<tr><td><code>withBorder(?Border $border): self</code></td><td>Apply a border from sugar-style.</td></tr>
+<tr><td><code>withStyle(?Style $style): self</code></td><td>Apply a style from sugar-style.</td></tr>
+<tr><td><code>withHelpBar(?HelpBar $helpBar): self</code></td><td>Attach a help bar below the filter list.</td></tr>
+<tr><td><code>withStatusBar(?StatusBar $statusBar): self</code></td><td>Attach a status bar at the bottom of the overlay.</td></tr>
+<tr><td><code>withOnResize(?\Closure $callback): self</code></td><td>Register a callback to invoke after SIGWINCH resize events. The callback receives (cols: int, rows: int). Pass null to detach a previously registered callback (attachSigwinch() then returns false).</td></tr>
+<tr><td><code>attachSigwinch(?callable $installer = null): bool</code></td><td>Attach a SIGWINCH handler via SignalForwarder that queries the live TTY dimensions and forwards (cols, rows) to the stored $onResize callback.</td></tr>
+<tr><td><code>invalidateAutoWidth(): void</code></td><td>Drop the memoized auto width so the next view() re-measures.</td></tr>
+<tr><td><code>withTtySizeProvider(?\Closure $provider): self</code></td><td>Install a geometry provider for ttySize() (see the property for the semantics). Clone-returning like every other builder; the provider is shared state for the clone family only in the sense that every fluent clone carries the same closure handle.</td></tr>
+<tr><td><code>show(): self</code></td><td></td></tr>
+<tr><td><code>hide(): self</code></td><td></td></tr>
+<tr><td><code>type(string $chars): self</code></td><td>Append one or more characters to the filter text.</td></tr>
+<tr><td><code>backspace(): self</code></td><td>Drop the last codepoint from the filter text.</td></tr>
+<tr><td><code>clear(): self</code></td><td></td></tr>
+<tr><td><code>cursorUp(int $n = 1): self</code></td><td></td></tr>
+<tr><td><code>cursorDown(int $n = 1): self</code></td><td></td></tr>
+<tr><td><code>cursorTop(): self</code></td><td></td></tr>
+<tr><td><code>cursorBottom(): self</code></td><td></td></tr>
+<tr><td><code>isShown(): bool</code></td><td></td></tr>
+<tr><td><code>cursor(): int</code></td><td></td></tr>
+<tr><td><code>filterText(): string</code></td><td></td></tr>
+<tr><td><code>numbered(): bool</code></td><td>Whether rows carry printed ordinals (see withNumbered()).</td></tr>
+<tr><td><code>filterAtCap(): bool</code></td><td>True once the filter holds MAX_FILTER_LENGTH codepoints: appended input is then refused and the header edge shows the overflow indicator (filterChrome()).</td></tr>
+<tr><td><code>selected(): ?Item</code></td><td>Returns the currently selected item, or null if the cursor is out of bounds (e.g., empty filtered list).</td></tr>
+<tr><td><code>items(): array</code></td><td></td></tr>
+<tr><td><code>itemCount(): int</code></td><td></td></tr>
+<tr><td><code>allCount(): int</code></td><td></td></tr>
+<tr><td><code>border(): ?Border</code></td><td></td></tr>
+<tr><td><code>style(): ?Style</code></td><td></td></tr>
+<tr><td><code>helpBar(): ?HelpBar</code></td><td></td></tr>
+<tr><td><code>statusBar(): ?StatusBar</code></td><td></td></tr>
+<tr><td><code>onResize(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>view(string $backgroundView): string</code></td><td>Render the QuickPick overlay and composite it over $backgroundView.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-quickpickhost"><code>QuickPickHost</code> <small>interface</small></h4>
+<p>Package-local composition contract for embedding QuickPick in a Model–Update–View application.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>update(QuickPick $model, string $msg): array</code></td><td>Handle a message and return the updated pair.</td></tr>
+<tr><td><code>view(QuickPick $model): string</code></td><td>Render the view given the current QuickPick state.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-statusbar"><code>StatusBar</code> <small>final class</small></h4>
+<p>StatusBar — renders a single-line status message for the QuickPick overlay.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $message = &#039;&#039;, bool $visible = true)</code></td><td></td></tr>
+<tr><td><code>static new(string $message = &#039;&#039;, bool $visible = true): self</code></td><td>House factory (<code>::new()</code>), mirroring QuickPick::new(): same signature as the constructor, which stays public (the docs promise a bare construction site).</td></tr>
+<tr><td><code>withMessage(string $message): self</code></td><td>Set the primary status message.</td></tr>
+<tr><td><code>withNoMessage(): self</code></td><td>Clear the primary status message.</td></tr>
+<tr><td><code>message(): string</code></td><td></td></tr>
+<tr><td><code>withSegment(string $name, string $value): self</code></td><td>Add a named segment that can be rendered alongside the primary message.</td></tr>
+<tr><td><code>withoutSegment(string $name): self</code></td><td>Remove a named segment by name.</td></tr>
+<tr><td><code>segments(): array</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td>Render the status bar as a single line of text. Format: &quot;[segment1: value] message&quot; When no message and no segments: returns empty string.</td></tr>
+<tr><td><code>show(): self</code></td><td></td></tr>
+<tr><td><code>hide(): self</code></td><td></td></tr>
+<tr><td><code>isVisible(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-quickpick-concerns">SugarCraft\QuickPick\Concerns</h3>
+<h4 id="api-sugarcraft-quickpick-concerns-visible"><code>Visible</code> <small>trait</small></h4>
+<p>Provides show/hide/isVisible state for UI components that can be toggled.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>show(): self</code></td><td></td></tr>
+<tr><td><code>hide(): self</code></td><td></td></tr>
+<tr><td><code>isVisible(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-quickpick-history">SugarCraft\QuickPick\History</h3>
+<h4 id="api-sugarcraft-quickpick-history-filehistory"><code>FileHistory</code> <small>class</small></h4>
+<p>File-backed persistent history for QuickPick items.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $path, ?string $baseDir = null, ?int $maxEntries = null)</code></td><td></td></tr>
+<tr><td><code>static new(string $path, ?string $baseDir = null, ?int $maxEntries = null): self</code></td><td>House factory (<code>::new()</code>), mirroring \SugarCraft\QuickPick\QuickPick::new(): same signature as the constructor, which stays public (the docs promise a bare construction site).</td></tr>
+<tr><td><code>append(Item $item): void</code></td><td>Append an item to the history file.</td></tr>
+<tr><td><code>appendDistinct(Item $item): void</code></td><td>Append with last-wins dedupe, then trim to the newest cap: the managed row set for hosts that treat history as a MRU list (-030).</td></tr>
+<tr><td><code>all(): array</code></td><td>Read all items from the history file.</td></tr>
+<tr><td><code>droppedOversizedLines(): int</code></td><td>How many rows the last read pass (all() or appendDistinct()) dropped as oversized.</td></tr>
+<tr><td><code>clear(): void</code></td><td>Clear the history file.</td></tr>
+<tr><td><code>path(): string</code></td><td>Get the path to the history file.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-quickpick-support">SugarCraft\QuickPick\Support</h3>
+<h4 id="api-sugarcraft-quickpick-support-ansiwalk"><code>AnsiWalk</code> <small>final class</small></h4>
+<p>Escape-aware walk over a terminal string.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static pieces(string $text): array</code></td><td>Split a string into escape pieces and single-codepoint text pieces.</td></tr>
+<tr><td><code>static chars(string $text): array</code></td><td>The display codepoints of $text, control sequences excluded.</td></tr>
+<tr><td><code>static plain(string $text): string</code></td><td>The display text of $string with all control sequences stripped.</td></tr>
+<tr><td><code>static paint(string $text, array $matchedSet, string $style): string</code></td><td>Re-emit $text with $style ... Ansi::reset() wrapped around the matched display codepoints.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-support-untrustedtext"><code>UntrustedText</code> <small>final class</small></h4>
+<p>Trust boundary for every string this component can echo to a terminal.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static guard(string $value): string</code></td><td>Make <code>$value</code> safe to render inside the fixed-width overlay frame.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-quickpick-support-widthmemo"><code>WidthMemo</code> <small>final class</small></h4>
+<p>Shared auto-width cache for one QuickPick clone family.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>invalidate(): void</code></td><td>Discard the composed width so the next render re-derives it. Cheap: every ingredient (prompt, filter, cached per-item widths) is still warm.</td></tr>
+<tr><td><code>invalidateItems(): void</code></td><td>Discard the per-item measurements too — required when the corpus or the formatter closure itself changes, the only two events that make a stored item width wrong rather than merely unused.</td></tr>
+</tbody>
+</table>
     </div>
   </div>
 </section>
@@ -298,7 +576,8 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2 id="demos">Demos.</h2>
+
+    <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of the package-internal demo drivers (present in the repository clone, not shipped as a starter template). Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
@@ -312,6 +591,15 @@ $allItems = $history->all(); // renumbered 1..N by current load position — arc
                 <span class="demo-caption">Filter narrowing the candidate list as you type.</span>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="related">Related</h2>
+        <ul>
+            <li><a href="sugar-fuzzy.html">SugarFuzzy</a>: fuzzy matching with matched indices and scores, the matcher QuickPick filters with.</li>
+        </ul>
     </div>
 </section>
 </main>

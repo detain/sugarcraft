@@ -427,8 +427,48 @@ per-stream byte cap, and returns a `ChildResult`:
 A child past its deadline is killed (SIGTERM, a grace period, SIGKILL) and reported
 as `TIMED_OUT`. `run()` uses the sugar-core `BoundedShutdown` ladder; `launch()` runs
 the same rungs on loop timers with the same budgets. Defaults: ten seconds, 8 MiB per stream.
-`withStdin()` feeds a payload; on Windows a non-empty payload is refused, because
-the Windows runtime cannot give a non-blocking stdin pipe.
+
+`withIdleTimeout($seconds)` is an opt-in silence budget. A child that writes nothing to
+either stream for that long is killed through the same ladder and reported as
+`TIMED_OUT`, the same status as the deadline. It is off by default, and a closed-output
+child that lingers is cut at the budget too.
+
+`withCancellation($token)` takes the `CancellationToken` of a `CancellationSource`.
+Cancelling the source kills the child through the same ladder, reaps it, and reports
+`CANCELLED`. A token that is already cancelled spawns nothing. `run()` is blocking, so it
+only observes a cancel raised from its own callbacks (`withOnChunk()`, `withOnSpawn()`,
+or a signal handler); `launch()` observes a cancel from anywhere on the loop.
+
+`withStdin()` feeds a payload. On POSIX it goes through a non-blocking pipe. On the
+Windows runtime, which cannot give a non-blocking stdin pipe, a non-empty payload is
+staged to a private temp file that the child reads as its stdin; the file is removed
+once the child is reaped. A null or empty payload gives the child an immediate EOF on
+every runtime.
+
+`withHeartbeat($seconds, $onBeat)` is a liveness hook, not a budget. `$onBeat` runs at
+most every `$seconds` for as long as the child runs, so a watchdog can be fed through a
+silent child. Unlike `withIdleTimeout()`, a beat that returns never ends the run. A beat
+that throws does: the child is killed through the same ladder and reaped, then `run()`
+rethrows the exception and `launch()` rejects its promise with it. `run()` beats while
+it reads the pipes and while it waits for an exit after the output closes; `launch()`
+beats on a loop timer until the run settles. `ChildPump::withHeartbeat()` is the same
+knob on the builder.
+
+`withSetsidWrapped(true)` and `withGroupLeader(true)` are for a child started behind a
+containment wrapper, a `setsid` prefix the caller adds to the argv. The first declares
+the wrapper, so the launch path falls back to the child's pid as its process group when
+the group was never read while the child lived. The second takes the group id from the
+pid at spawn, while the child is certainly alive, so the kill rungs signal the right
+group. Leave both false for an unwrapped child: it shares this process's group, and a
+group kill would signal this process.
+
+`withKillGrace($terminateSeconds, $killSeconds)` sets the kill ladder's two graces: the
+wait after SIGTERM before SIGKILL, and the wait after SIGKILL. The defaults are
+`BoundedShutdown`'s, one second each; `run()` and `launch()` both use them.
+`withOnKill($fn)` is a `run()`-only seam: `$fn` is told the child's pid once, before the
+ladder's first signal, so a caller can reach what the ladder cannot (on Windows, a
+`taskkill /T` walk of the child's tree). The ladder still runs after it, and still runs
+when it throws.
 
 `ChildPump::new($pipes)` is the builder under `ChildRun`, usable on its own over pipes
 you opened: `withDeadline()`, `withCap()`, `withOnChunk()` (live feed),
@@ -524,6 +564,7 @@ The loop-side primitives that used to be hand-rolled in each app:
 | `AsyncOps::deferred(\Closure $fn)` | Run a step on the next loop tick, off the caller's stack; a throw rejects the promise. |
 | `Await::until($promise, $seconds)` | Drive the loop until a promise settles: returns its value, rethrows its rejection, or throws `TimeoutException` (never a silent `null`). Refuses to nest inside another `Await`. |
 | `Poll::until($fn, $backoff, $token)` | Call `$fn` until it answers non-null, spacing attempts by the `Backoff` ladder; the attempt cap of the backoff bounds it. |
+| `SynchronousLoop::new($sleeper)` | A blocking `LoopInterface` for synchronous callers: `run()` pauses on the calling thread through `$sleeper` for each timer `Poll::until` arms, so a plain loop can wait on a poll. Only the timer surface is implemented; the other `LoopInterface` methods throw. |
 | `Notifier::new($loop)` | `wait($seconds)` resolves on the next `notify()`. A notify with no waiter is kept as one pending signal, so a wake-up between two waits is not lost. |
 | `RateGate::new($seconds, $clock)` | Loop-free `allow(): bool`, true at most once per interval; denied calls do not move the window. |
 | `LoopDeadline::arm($loop, $seconds, $onFire)` | One-shot deadline on the loop; `fired()` and `disarm()`. |

@@ -8,7 +8,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 
 /**
- * Coalesces {@see \SugarCraft\Code\Chat}'s transcript saves (audit R2).
+ * Coalesces {@see \SugarCraft\Code\Chat}'s transcript saves.
  *
  * Chat used to call {@see EnhancedSessionStore::saveTranscript()} inside
  * `update()` on EVERY history change: each tool row, each placeholder swap,

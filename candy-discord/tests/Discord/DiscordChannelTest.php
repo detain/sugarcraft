@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
+use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
 use CandyCode\Bundles\Discord\DiscordChannel;
+use CandyCode\Bundles\Discord\Support\CredentialStore;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
@@ -278,9 +280,9 @@ final class DiscordChannelTest extends TestCase
         $channel->start($this->ctx('candy-discord', 'discord', $this->homeRoot, $loop, static function (string $line): void {
         }));
 
-        // Sanity: the tree genuinely booted (poll timer armed, state dir live)
-        // — the dark path would arm nothing, so this leg passes before the fix.
-        self::assertTrue($loop->armedPeriodic(5.0), 'a bottled tree must arm the serve poll');
+        // Sanity: the tree genuinely booted (state dir live). The serve is in process
+        // (PL-5d), so no discovery poll is armed.
+        self::assertFalse($loop->armedPeriodic(5.0), 'an in-process serve arms no discovery poll');
         $db = $this->configDir() . '/discord/sessions.db';
         self::assertFileExists($db);
 
@@ -306,6 +308,72 @@ final class DiscordChannelTest extends TestCase
         // Dispose releases the sweep beside its siblings.
         $channel->dispose();
         self::assertContains(21600.0, $loop->cancelledIntervals(), 'dispose must cancel the prune timer');
+    }
+
+    /**
+     * A hello refused at boot is dialled again on the retry ladder, so the channel is not dead
+     * until a serve restart (the pre-5d ServeBridge kept that ladder). The refusal lifts after the
+     * first attempt; the second hello, 0.25 s later, lands and the channel says so. The gateway is
+     * pointed at a closed loopback port, so the account's socket fails locally and nothing dials out.
+     */
+    public function testARefusedBootHelloIsRetriedUntilTheServeAnswers(): void
+    {
+        putenv(CredentialStore::TOKEN_ENV . '=xoxb-retry-for-test');
+        file_put_contents(
+            $this->configDir() . '/config.json',
+            (string) json_encode(['channels.discord' => [
+                'enabled' => true,
+                'transport' => ['insecureLoopbackProxy' => true, 'gatewayUrl' => 'ws://127.0.0.1:1/'],
+            ]]),
+        );
+        $host = new FakeServe($this->loop);
+        $host->refuseHello = true;
+        $lines = [];
+        $channel = new DiscordChannel();
+        $channel->start(PluginContext::for(
+            'candy-discord',
+            'discord',
+            $this->homeRoot,
+            $this->loop,
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+            $this->userSection('channels.discord'),
+            $this->configDir(),
+            $host,
+        ));
+
+        try {
+            $this->loop->addTimer(0.1, static function () use ($host): void {
+                $host->refuseHello = false;
+            });
+            $this->pump(1500);
+
+            self::assertGreaterThanOrEqual(2, $host->helloSeen, 'the refused hello is dialled again');
+            $connected = false;
+            $host->isConnected()->then(static function (bool $answer) use (&$connected): void {
+                $connected = $answer;
+            });
+            self::assertTrue($connected, 'the retried hello lands');
+            $log = implode("\n", $lines);
+            self::assertStringContainsString('channels.discord.serve_dial_failed', $log);
+            self::assertStringContainsString('channels.discord.serve_connected', $log);
+            self::assertStringNotContainsString('channels.discord.serve_giveup', $log);
+        } finally {
+            $channel->dispose();
+            putenv(CredentialStore::TOKEN_ENV);
+        }
+    }
+
+    /** Run the shared loop for $ms of wall time (a timer stops it). */
+    private function pump(int $ms): void
+    {
+        $loop = $this->loop;
+        $timer = $loop->addTimer($ms / 1000.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($timer);
     }
 
     /** The candy-code configuration directory the sandbox HOME carries. */
@@ -338,6 +406,6 @@ final class DiscordChannelTest extends TestCase
     /** @param \Closure(string):void $sink */
     private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink): PluginContext
     {
-        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir());
+        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir(), new FakeServe($loop));
     }
 }

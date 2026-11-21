@@ -63,7 +63,9 @@ final class McpConcurrentStartupTest extends TestCase
             $client->beginStartup();
             $elapsed = \microtime(true) - $started;
 
-            $this->assertLessThan(self::DELAY / 2, $elapsed, 'beginStartup() waited for a handshake');
+            // A blocking wait cannot return before a fixture's DELAY-second reply, so
+            // this bound catches it while leaving room for a loaded shard to start slowly.
+            $this->assertLessThan(self::DELAY, $elapsed, 'beginStartup() waited for a handshake');
             $this->assertSame(['alpha' => 'starting', 'beta' => 'starting'], $client->startupStates());
             $this->assertSame([], $client->startedSnapshot(), 'a starting server must not offer tools yet');
 

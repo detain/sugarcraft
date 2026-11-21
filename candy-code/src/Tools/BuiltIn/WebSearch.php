@@ -59,7 +59,7 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
     private SearchBackend $backend;
 
     /**
-     * THERE IS NO DEFAULT ENDPOINT (audit F-W3(b)). The constructor argument
+     * THERE IS NO DEFAULT ENDPOINT. The constructor argument
      * wins, then `CANDY_CODE_SEARCH_ENDPOINT`, then the `webSearchEndpoint`
      * setting (roadmap N-P4e: user tier only, since it decides where every
      * model-composed query is sent); an empty value counts as unset, and a

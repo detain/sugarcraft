@@ -59,6 +59,13 @@ pane build one on top of `Store::list()`.
 composer require sugarcraft/candy-kv
 ```
 
+Sibling `sugarcraft/sugar-core` and `sugarcraft/sugar-fuzzy` requirements track
+`dev-master`, so the plain command above only resolves when dev stability is allowed.
+Pin the package with `composer require sugarcraft/candy-kv:@dev`, or set
+`minimum-stability` to `dev` with `prefer-stable` set to `true` in your consuming
+manifest. The pin covers the whole sibling closure, so allowing dev for candy-kv alone
+is not enough.
+
 candy-kv needs PHP 8.3+ and the SQLite3 extension (`ext-sqlite3`, declared in
 `composer.json`): the store is a plain SQLite file and there is no fallback
 engine. The CLI lands at `vendor/bin/candy-kv`; add `vendor/bin` to your

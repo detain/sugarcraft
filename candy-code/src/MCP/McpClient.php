@@ -727,7 +727,7 @@ final class McpClient
 
     /**
      * The entries the admission check refused in the last {@see startServers()}
-     * run (audit MCP-5).
+     * run.
      *
      * @return list<string>
      */

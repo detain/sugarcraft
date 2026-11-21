@@ -11,6 +11,7 @@ use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProjectRoot;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Loads skills in three stages:
@@ -22,7 +23,6 @@ use SugarCraft\Code\Support\ProjectRoot;
  */
 final class SkillLoader
 {
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
     private const ASSET_SUBDIRS = ['scripts', 'references', 'assets'];
 
     /**
@@ -717,9 +717,19 @@ final class SkillLoader
         // over the whole-file ceiling is refused here rather than listed: its
         // body could never be loaded, so offering it to the model as a skill
         // would only promise something the Skill tool must then refuse.
-        [$content, $truncated] = SkillFileReader::head($skillPath, 'SKILL.md');
-        if ($truncated && str_starts_with($content, '---')
-            && preg_match(self::FRONTMATTER_PATTERN, $content) !== 1) {
+        $next = '';
+        [$content, $truncated] = SkillFileReader::head($skillPath, 'SKILL.md', $next);
+        // The head is cut at a byte, so its last line may be a fragment of a
+        // longer line: a `---` cut from `----` would read as a closing fence
+        // with no line break after it. Only a closer ended by a line break
+        // counts as closed. The reader keeps the rest of the cut line, so the
+        // probe holds that line whole: a `---` that ends at the window edge
+        // with trailing blanks or a CR after it is still judged as a whole line.
+        $probe = $content . $next;
+        $lastBreak = strrpos($probe, "\n");
+        $closedInHead = $lastBreak !== false
+            && MarkdownFrontmatter::split(substr($probe, 0, $lastBreak + 1)) !== null;
+        if ($truncated && str_starts_with($content, '---') && !$closedInHead) {
             throw new \RuntimeException(sprintf(
                 'SKILL.md frontmatter does not close within its first %s bytes; not read further: %s',
                 number_format(SkillFileReader::MAX_FRONTMATTER_BYTES),
@@ -732,12 +742,15 @@ final class SkillLoader
         // whole skill or, past the parse, fail every request's JSON encode
         // (audit 15d-08). Too small a field for a note; the body read carries
         // one ({@see loadSkillBody()}).
-        $content = Utf8Scrub::clean($content);
+        // The parse reads the same bounded text the closer guard judged: a
+        // closer whose `---` straddles the window edge is in the tail, not in
+        // $content, so splitting $content alone dropped the whole frontmatter
+        // while the guard passed.
+        $parsable = Utf8Scrub::clean(SkillFileReader::frontmatterText($content, $truncated, $next));
 
         // Parse frontmatter only (stage 1 - don't load body)
-        $parsed = preg_match(self::FRONTMATTER_PATTERN, $content, $matches)
-            ? Frontmatter::parse($matches[1])
-            : null;
+        $split = MarkdownFrontmatter::split($parsable);
+        $parsed = $split !== null ? Frontmatter::parse($split->meta) : null;
 
         $name = basename($skillDir);
 
@@ -1055,11 +1068,8 @@ final class SkillLoader
         $content = Utf8Scrub::announced($content, "the SKILL.md of skill \"" . basename(dirname($skillPath)) . '"');
 
         // Strip frontmatter to get body
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {
-            $body = substr($content, strlen($matches[0]));
-        } else {
-            $body = $content;
-        }
+        $split = MarkdownFrontmatter::split($content);
+        $body = $split !== null ? $split->body : $content;
 
         return trim($body);
     }

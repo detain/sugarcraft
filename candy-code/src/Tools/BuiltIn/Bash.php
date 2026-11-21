@@ -66,8 +66,9 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * Shell output is the least predictable of any tool's — `find /`, a `cat`
      * of a build artefact or a verbose test run all produce megabytes with no
      * warning — so the bound applies during capture as well as after it (see
-     * {@see CapturesProcessOutput::runCaptured()}). Zero or negative disables
-     * the cap for a caller that has arranged its own containment.
+     * {@see CapturesProcessOutput::runCaptured()}). Zero or negative no longer
+     * means unbounded: capture falls back to {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}
+     * per stream, and the returned result is clipped to that same 8 MiB ceiling.
      *
      * $includeGitInstructions, $commitAttribution and $prAttribution are the
      * `includeGitInstructions` and `attribution` layered settings (step 0.3),
@@ -270,8 +271,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * exactly such lines.
      *
      * The byte figure is READ OFF $maxOutputBytes rather than written out,
-     * because a caller that raised or disabled the cap would otherwise be
-     * advertising a number that is not its own.
+     * because a caller that raised the cap, or set a zero one (which takes the
+     * 8 MiB ceiling), would otherwise be advertising a number that is not its own.
      */
     public function description(): string
     {
@@ -280,7 +281,10 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'The result is clipped at %s bytes, with a marker naming what was dropped.',
                 number_format($this->maxOutputBytes),
             )
-            : 'There is no size cap on this instance.';
+            : sprintf(
+                'This instance sets no output cap of its own: each stream is retained up to %s bytes (8 MiB), and the returned result is held to that same total, with anything past it dropped with a PARTIAL marker.',
+                number_format(self::DEFAULT_RETAINED_BYTES),
+            );
 
         return 'Execute a bash command. Each call is a fresh `bash -c`, so nothing carries '
             . 'over from the previous one — not the working directory (a `cd` here has no '
@@ -761,11 +765,14 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // the merge knows whether the stderr the capture clipped is even part
         // of this answer, and whether the failure explanation still has to be
         // fitted in alongside a large stdout.
+        // A non-positive cap leaves truncateMerged() nothing to clip to, so the
+        // joined stdout and stderr would reach the model at twice the ceiling.
+        // The default is the same one the capture retained each stream to.
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $this->truncateMerged(
                 $this->mergeCapturedOutput($run),
-                $this->maxOutputBytes,
+                $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::DEFAULT_RETAINED_BYTES,
             ),
             isError: $run['exitCode'] !== 0,
             // Structure for the transcript row only: the text above is what

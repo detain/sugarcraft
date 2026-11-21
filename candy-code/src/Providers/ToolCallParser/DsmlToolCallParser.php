@@ -127,7 +127,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
     }
 
     /**
-     * Forwards the request's tool schemas to the DELEGATE only (audit 15a A9).
+     * Forwards the request's tool schemas to the DELEGATE only.
      *
      * This class's own values need no schema: the model types every one with
      * its `string=` flag ({@see coerceValue()}). But it is a decorator, and a
@@ -156,7 +156,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
     }
 
     /**
-     * This parser's envelope opener, then the delegate chain's (audit 15a A8).
+     * This parser's envelope opener, then the delegate chain's.
      *
      * @return list<string>
      */
@@ -170,7 +170,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
 
     /**
      * {@see parse()}'s decision tree, carrying the spans of the envelopes the
-     * calls came from (audit 15a A8) so the provider can cut exactly those
+     * calls came from so the provider can cut exactly those
      * out of the assistant's text. Whichever parser in the chain produced the
      * calls is the one whose spans come back.
      *

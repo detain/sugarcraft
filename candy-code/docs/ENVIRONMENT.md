@@ -401,6 +401,8 @@ Read for their standard meanings, not as CandyCode settings:
 | `NUMBER_OF_PROCESSORS` | The CPU count `Workflows\CpuCount` uses when it detects one. Windows publishes it; a positive integer here is read before the Linux `/sys` and `/proc` probes. Nothing answering falls back to the built-in default. |
 | `COLUMNS` | Width of the `--help` text (`Cli\Help`). An exported integer from 1 to 10,000 wins over the live terminal width, which is only asked when nothing is exported; the result is clamped to the help layout's minimum and maximum. |
 
+`COMSPEC` is not read by CandyCode and so has no row above. On Windows a string command backend hands its line to `proc_open()` unescaped, and PHP runs that line through `COMSPEC`, falling back to `cmd.exe` when it is unset or empty. POSIX hosts never read it; `/bin/sh -c` is used there.
+
 ## Build-time image arguments
 
 `CANDY_CODE_REF` is the exception this page's opening sentence cannot cover: it

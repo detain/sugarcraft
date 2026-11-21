@@ -132,7 +132,7 @@ describe('contextSources debounce across a session switch (m52)', () => {
 
     // The user switches to sB, and that measurement completes, BEFORE the
     // debounce window closes.
-    const switching = store.load('sB')
+    store.load('sB')
     await flushPromises()
     await wire.answer('context.sources', sourcesFor('sB'))
     expect(store.sessionId).toBe('sB')

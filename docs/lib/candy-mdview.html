@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -152,13 +156,41 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#see-also">See also</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
-            <li class="toc-h3"><a href="#exit-codes-trust">Exit codes &amp; trust</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#input-doors-and-their-limits">Input doors and their limits</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#read-a-file-in-the-pager-and-let-it-reload-on-save">Read a file in the pager and let it reload on save</a></li>
+            <li class="toc-h3"><a href="#pin-the-column-width">Pin the column width</a></li>
+            <li class="toc-h3"><a href="#load-a-custom-theme-file">Load a custom theme file</a></li>
+            <li class="toc-h3"><a href="#persist-preferences-and-remap-pager-keys">Persist preferences and remap pager keys</a></li>
+            <li class="toc-h3"><a href="#render-a-url">Render a URL</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#mdviewmodel-and-the-pager">MdViewModel and the pager</a></li>
+            <li class="toc-h3"><a href="#input-watching-and-configuration">Input, watching and configuration</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-mdview">SugarCraft\MdView</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#environment-variables">Environment variables</a></li>
+            <li class="toc-h3"><a href="#preferences-file-keys">Preferences file keys</a></li>
+            <li class="toc-h2"><a href="#keys-and-keybindings">Keys and keybindings</a></li>
+            <li class="toc-h2"><a href="#theming">Theming</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#needs-a-terminal-error-with-p">&quot;needs a terminal&quot; error with -p</a></li>
+            <li class="toc-h3"><a href="#no-color-in-a-pipe-or-redirect">No color in a pipe or redirect</a></li>
+            <li class="toc-h3"><a href="#edits-to-the-file-do-not-appear-in-the-pager">Edits to the file do not appear in the pager</a></li>
+            <li class="toc-h3"><a href="#exit-2-when-theme-config-is-refused">Exit 2 when --theme-config is refused</a></li>
+            <li class="toc-h3"><a href="#a-directory-argument-refuses">A directory argument refuses</a></li>
+            <li class="toc-h3"><a href="#leading-block-is-missing-from-the-output">Leading --- block is missing from the output</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#render-before-the-view">Render before the view</a></li>
+            <li class="toc-h3"><a href="#refuse-before-painting">Refuse before painting</a></li>
+            <li class="toc-h3"><a href="#fixed-cadence-reload">Fixed-cadence reload</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#render">Render</a></li>
             <li class="toc-h3"><a href="#fullscreen-pager">Fullscreen pager</a></li>
@@ -166,72 +198,325 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Composes SugarMarkdown (rendering) and the SugarForms Viewport (scrolling). Render to stdout or open in a fullscreen pager. Twelve built-in themes (ansi, ascii, plain, notty, dark, light, dracula, tokyo-night, pink, solarized, monokai, github) plus custom JSON.</p>
+<p class="lede" style="margin-top: 28px;">candy-mdview is a Markdown viewer for the terminal. It renders a file, a directory's README, an <code>http(s)://</code> URL or stdin to ANSI text, or opens the result in a fullscreen pager that reflows on resize and reloads when the file changes on disk. Rendering comes from <a href="sugar-markdown.html">SugarMarkdown</a>, scrolling from the SugarForms <code>Viewport</code>. The tool is the native-PHP counterpart of <a href="https://github.com/charmbracelet/glow">charmbracelet/glow</a>: rendering, paging, themes and live reload are ported, while glow's directory browser, search, config UI and presentation modes are left out.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview
-wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar   # standalone latest phar</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview</code></pre>
+    <p>Requires PHP 8.3 or newer. For a single file, the rolling latest phar is rebuilt on every push to master that changes the library. Verify it against the <code>.sha256</code> sidecar before running it:</p>
+    <pre class="code"><code class="language-shell">wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar
+wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar.sha256
+sha256sum -c candy-mdview.phar.sha256
+php candy-mdview.phar README.md</code></pre>
+    <p>The <code>.phar.commit</code> sidecar names the exact tested commit each dev build was cut from. Both sidecars are published only from CI-green pushes to master. A monorepo checkout needs no install step for a quick look: <code>cd candy-mdview &amp;&amp; php bin/candy-mdview README.md</code> runs straight from the tree.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">vendor/bin/candy-mdview README.md                   # render to stdout (default)
-vendor/bin/candy-mdview -p README.md                # open in a fullscreen pager
-git log -1 --pretty=%B | vendor/bin/candy-mdview -p # pipe stdin
-php candy-mdview.phar README.md                     # the phar takes the same flags
-# with vendor/bin (or the phar) on PATH, drop the prefix:
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-shell">candy-mdview README.md                        # render to stdout (the default)
+candy-mdview -p README.md                     # open in a fullscreen pager
+git log -1 --pretty=%B | candy-mdview -p      # pipe stdin; the pager keys still work
 candy-mdview --theme dracula README.md
-candy-mdview --width 80 --no-hyperlinks README.md
-candy-mdview --theme-config ./my-theme.json README.md</code></pre>
+candy-mdview --width 80 --no-hyperlinks README.md</code></pre>
+    <p>Stdout mode is pipe-friendly and exits cleanly. Pager mode arms the alternate screen and mouse tracking, so it needs a real terminal. Stdin can feed the pager because the keyboard is read from <code>/dev/tty</code>.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Stdout mode</strong><span><code>candy-mdview README.md</code> — pipe-friendly, exits cleanly.</span></div>
-      <div class="feature"><strong>Pager mode</strong><span><code>-p / --pager</code> — fullscreen scrollable Viewport that reflows live on terminal resize. A header row shows the file, scroll position, and an auto-reload marker. Esc, q, or Ctrl+C to exit.</span></div>
-      <div class="feature"><strong>Theme picker</strong><span><code>--theme {ansi|ascii|plain|notty|dark|light|dracula|tokyo-night|pink|solarized|monokai|github}</code> (aliases: <code>no</code>, <code>auto-no</code>, <code>tokyonight</code>), <code>--theme-config ./my.json</code>, <code>-s</code> alias for <code>--theme</code>. Three themes (solarized/monokai/github) load from JSON in <code>themes/</code>. With no <code>--theme</code>: ansi on a color-capable terminal, ascii when color is off, plain when the output is undecorated (<code>--no-ansi</code> or a non-terminal without forced decoration).</span></div>
-      <div class="feature"><strong>Word-wrap</strong><span><code>-w 80</code> — column width control (1-9999). <code>0</code> disables wrapping.</span></div>
-      <div class="feature"><strong>OSC 8 toggle</strong><span>Hyperlinks are emitted on terminal output — and into redirected output only when decoration is forced. Labeled links always show the visible <code>text (url)</code> tail; autolinks render the URL itself. <code>--no-hyperlinks</code> strips the OSC 8 envelope.</span></div>
-      <div class="feature"><strong>Stdin support</strong><span><code>git log -1 --pretty=%B | candy-mdview -p</code> — the pager keyboard opens <code>/dev/tty</code>, so piped input stays scrollable.</span></div>
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>Every input is a document. A file path, a directory (resolved to one README), an <code>http(s)://</code> URL and stdin all pass the same gate: <code>DocumentGate</code> refuses non-text (binary) input and anything over 64 MiB, and a leading YAML front-matter block is removed before Markdown parsing, whichever door the bytes came through. A URL is fetched with a 10 second transfer deadline, at most 5 redirects, TLS verification on, and a 2xx final answer. Its remote origin earns no special trust.</p>
+    <p>The rendered text then goes one of two ways. Stdout mode writes it and exits. Pager mode hands it to <code>MdViewModel</code>, a Model whose body is a SugarForms <code>Viewport</code>, so the view is a window onto the text rather than a copy of it. Resizing re-wraps the document when no <code>--width</code> is pinned.</p>
+    <p>Output is always sanitized. SugarMarkdown strips escape, control and OSC bytes from the rendered output, and this tool never turns that default off. A hostile Markdown file therefore renders as data: it cannot move the cursor or restyle the stream.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="input-doors-and-their-limits" style="margin-top: 24px;">Input doors and their limits</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-mdview">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-mdview/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-mdview/tree/master/examples">Runnable example</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/glow">glow</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><strong>File</strong>: a regular file. A directory, FIFO or device is refused with exit 2.</li>
+      <li><strong>Directory</strong>: resolves to <code>README.md</code>, then <code>README.markdown</code>, then <code>index.md</code>, then a single unambiguous <code>*.md</code>. Recursive trees are not walked, and several competing candidates refuse with exit 2.</li>
+      <li><strong>URL</strong>: fetched as above. Auto-reload and the <code>file · scroll%</code> header are local-file features, so a pager opened on a URL watches nothing.</li>
+      <li><strong>Stdin</strong>: the default when no file argument is given. The pager reads keys from <code>/dev/tty</code> and has no header row.</li>
     </ul>
 
-    <h3 id="see-also" style="margin-top: 32px;">See also</h3>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="read-a-file-in-the-pager-and-let-it-reload-on-save" style="margin-top: 24px;">Read a file in the pager and let it reload on save</h3>
+    <pre class="code"><code class="language-shell">candy-mdview -p docs/guide.md</code></pre>
+    <p>A fixed 0.5 second tick (<code>MdViewModel::RELOAD_POLL_SECONDS</code>) compares the file's (mtime, size) pair against the last one seen. A change queues one re-read and re-render for the following tick, so a burst of saves coalesces into one render of the newest bytes. A rewrite that keeps both the second-granularity mtime and the byte size is invisible to that check. Press <kbd>r</kbd> to force a reload in that case.</p>
+
+    <h3 id="pin-the-column-width" style="margin-top: 24px;">Pin the column width</h3>
+    <pre class="code"><code class="language-shell">candy-mdview --width 72 CHANGELOG.md   # wrap at 72 columns, resizing moves only the clip window
+candy-mdview --width 0 table-heavy.md  # no wrap: long lines are cut, and the pager scrolls them sideways</code></pre>
+    <p>Without <code>--width</code>, stdout wraps at <code>min(terminal width − 2, 80)</code> and the pager wraps at the live column count. <code>--width</code> accepts 1 to 9999; <code>0</code> disables wrapping, and anything non-numeric is a usage error.</p>
+
+    <h3 id="load-a-custom-theme-file" style="margin-top: 24px;">Load a custom theme file</h3>
+    <pre class="code"><code class="language-shell">candy-mdview --theme-config ./my-theme.json README.md</code></pre>
+    <p>A theme file is read as a regular file of at most 1 MB. Two shapes are detected automatically: a Glamour-style document with a top-level <code>"document"</code> block, which <code>GlamourDecorationGate</code> admits and sugar-markdown's <code>StyleGuide</code> maps onto a SugarMarkdown theme, and the flat shape, one style object per element slot, which <code>Theme::fromJsonString()</code> reads. <code>themes/solarized.json</code> in the repository is a worked flat starting point. A payload that matches neither shape refuses with exit 2 instead of quietly rendering the stock theme.</p>
+
+    <h3 id="persist-preferences-and-remap-pager-keys" style="margin-top: 24px;">Persist preferences and remap pager keys</h3>
+    <pre class="code"><code class="language-text">{
+  "theme": "dracula",
+  "width": 80,
+  "pager": false,
+  "keymap": { "reload": "ctrl-r", "help": "h" }
+}</code></pre>
+    <p>Save that as <code>$XDG_CONFIG_HOME/mdview/mdview.json</code> (or <code>~/.config/mdview/mdview.json</code>), or point <code>MDVIEW_CONFIG</code> at it. Flags beat environment variables, and environment variables beat the file. The keymap block maps the actions <code>quit</code>, <code>reload</code> and <code>help</code> to a chord written <code>x</code>, <code>ctrl-x</code> or <code>alt-x</code>. The Escape and Ctrl+C quit paths are fixed and stay available whatever the map says.</p>
+
+    <h3 id="render-a-url" style="margin-top: 24px;">Render a URL</h3>
+    <pre class="code"><code class="language-shell">candy-mdview https://example.com/README.md
+candy-mdview -p https://example.com/README.md   # pager on a fetched URL: no auto-reload</code></pre>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\MdView\</code>. The pager is a SugarCraft Model, so <code>MdViewModel</code> follows the usual <code>init()</code>, <code>update(Msg)</code> and <code>view()</code> contract, and the tests drive it that way. The other classes are static helpers or value objects.</p>
+
+    <h3 id="mdviewmodel-and-the-pager" style="margin-top: 24px;">MdViewModel and the pager</h3>
+    <table class="api-table">
+    <tr><th>Method</th><th>Description</th></tr>
+    <tr><td><code>MdViewModel::fromContent(string $content, int $width = 80, int $height = 24)</code></td><td>Build the pager Model from already-rendered text. Sole genesis site for the Model.</td></tr>
+    <tr><td><code>withDocument(string $name)</code></td><td>Enter document mode: a one-row status header shows the file name, scroll percent and reload marker.</td></tr>
+    <tr><td><code>withWatch(string $path, \Closure $reRender)</code></td><td>Arm auto-reload for a local file. The closure turns the new Markdown into rendered text.</td></tr>
+    <tr><td><code>isWatching()</code></td><td>Whether a file watch is armed on this model.</td></tr>
+    <tr><td><code>withReflow(\Closure $reflowAt)</code></td><td>Re-wrap the document when the terminal width changes.</td></tr>
+    <tr><td><code>withKeymap(array $overrides)</code></td><td>Merge action-to-chord overrides onto the default <code>quit</code>, <code>reload</code> and <code>help</code> map.</td></tr>
+    <tr><td><code>init()</code>, <code>update(Msg $msg)</code>, <code>view()</code>, <code>subscriptions()</code></td><td>The Model contract. <code>update()</code> returns <code>[Model, ?Cmd]</code>, and <code>isExited()</code> reports whether a quit key ended the run.</td></tr>
+    </table>
+
+    <h3 id="input-watching-and-configuration" style="margin-top: 24px;">Input, watching and configuration</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>DocumentGate</td><td><code>readFile(string $path)</code>, <code>readStream($stream, string $label)</code></td><td>Read a document under the 64 MiB cap, refusing directories and binary input.</td></tr>
+    <tr><td>DocumentGate</td><td><code>refuseBinary(string $raw, string $label)</code></td><td>Throw for input that is not text.</td></tr>
+    <tr><td>FrontMatter</td><td><code>split(string $raw)</code>, <code>has(string $raw)</code>, <code>strip(string $raw)</code></td><td>Separate, detect or remove a leading YAML front-matter block.</td></tr>
+    <tr><td>HttpFetch</td><td><code>isRemote(string $arg)</code>, <code>fetch(string $url)</code></td><td>Recognize an <code>http(s)://</code> argument and fetch it under the timeout, redirect and TLS rules.</td></tr>
+    <tr><td>FileWatcher</td><td><code>__construct(string $path)</code>, <code>hasChangedSince(int $mtime)</code></td><td>Instance check against a remembered mtime for one path.</td></tr>
+    <tr><td>FileWatcher</td><td><code>snapshot(string $path)</code>, <code>pollTuple(string $path, int $lastMtime, int $lastSize)</code></td><td>Static (mtime, size) fingerprint, and the one non-blocking sweep that returns a new fingerprint only when it differs from the baseline.</td></tr>
+    <tr><td>Config</td><td><code>load(?string $path = null)</code>, <code>defaultPath()</code>, <code>empty()</code></td><td>Read the preferences file (at most 64 KiB, known keys only), find its default location, or get the empty config.</td></tr>
+    <tr><td>GlamourDecorationGate</td><td><code>admit(array $decoded)</code></td><td>The one refusal in front of the Glamour loader. A document or paragraph <code>block_prefix</code> / <code>block_suffix</code> that is not inert whitespace throws <code>glamour.decoration_unsafe</code>, and a non-string affix reads as empty. The admitted document then goes to sugar-markdown's <code>StyleGuide::fromDecoded()</code>, and <code>theme()</code> returns the SugarMarkdown <code>Theme</code>.</td></tr>
+    <tr><td>RenderCommand</td><td><code>pickTheme(string $name)</code></td><td>Resolve a built-in theme name (<code>dracula</code>, <code>tokyo-night</code>, …) to a SugarMarkdown <code>Theme</code>.</td></tr>
+    <tr><td>ReloadTickMsg</td><td><code>__construct(string $id = self::ID)</code></td><td>The tick message the pager's reload timer delivers. <code>ID</code> is <code>mdview.reload</code>.</td></tr>
+    <tr><td>Application</td><td><code>versionString()</code>, <code>hostArchive()</code></td><td>The version string shown by <code>--version</code>, and the path of the running phar (an empty string outside a phar).</td></tr>
+    </table>
+    <p>Visual width measuring is delegated to <code>SugarCraft\Core\Util\Width</code> in sugar-core. This package ships no local width helpers.</p>
+
+        <!-- GENERATED by tools/gen-api-reference.php from candy-mdview/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-mdview -->
+<p>Only methods declared in <code>candy-mdview/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-mdview">SugarCraft\MdView</h3>
+<h4 id="api-sugarcraft-mdview-application"><code>Application</code> <small>final class</small></h4>
+<p><code>candy-mdview</code> entry point. Registers a single default command so users can invoke <code>candy-mdview &lt;file&gt;</code> without a subcommand name.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>static versionString(): string</code></td><td>The version Symfony&#039;s <code>--version</code> will print, phar-aware: inside an archive the build manifest wins — the hardcoded literal would otherwise freeze a number no release process produced, while the manifest names the exact tag the artifact was cut from. A bare <code>dev-build</code> stamp is working-tree noise, not a version, and falls through. Outside an archive nothing is consulted and the historical <code>0.1.0</code> answers byte-true (pinned by ApplicationTest and by the precedence test here).</td></tr>
+<tr><td><code>static hostArchive(): string</code></td><td>The real-filesystem path of the phar archive hosting this install, or &#039;&#039; when this code is not running from an archive. Three identities, first answer wins (measured on PHP 8.3.6 while porting the archive-version guard): Phar::running() names the archive for code executing inside it; in the stub region running() answers &#039;&#039; and <code>__FILE__</code> names the self-naming archive; a <code>phar://</code> prefix on this file&#039;s own <code>__FILE__</code> covers shapes where a class was loaded from the archive but running() stayed empty.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-config"><code>Config</code> <small>final class</small></h4>
+<p>The persisted-preferences file: <code>mdview.json</code> under the XDG config home (glow keeps <code>~/.config/glow/glow.yml</code>; this port uses JSON to avoid a YAML dependency). Every setting the CLI takes as a flag or environment fact can live here instead — theme, style, width, pager, keymap — and the resolution precedence is flag &gt; environment &gt; file &gt; default.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static empty(): self</code></td><td>The empty config — every lookup answers &quot;no position&quot;.</td></tr>
+<tr><td><code>static defaultPath(): ?string</code></td><td>Resolve the file location: MDVIEW_CONFIG names it directly (the test seam and the <code>--config</code>-equivalent door); an explicitly EMPTY value disables file lookup entirely — the hermetic escape the suite uses. Otherwise $XDG_CONFIG_HOME or ~/.config, under <code>mdview/mdview.json</code>. Returns null when even HOME is unknown — there is simply no file to consult.</td></tr>
+<tr><td><code>static load(?string $path = null): self</code></td><td>Load the file at $path (or the default location when null). Absent files and absent directories yield the empty config; a present file is held to the door law (regular file, capped, JSON object, known keys, typed values) or the run refuses with exit code 2.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-documentgate"><code>DocumentGate</code> <small>final class</small></h4>
+<p>The ONE document door: <code>is_file</code> → regular-file re-check on the opened handle → size cap → capped read → binary refusal, in that order, used by every path bytes take to enter a render — the file argument, piped stdin, and the pager&#039;s reload sweep alike. Before this consolidation the sweep bypassed all of it (a 20 MB replacement grew past the &quot;64 MiB contract&quot; into an OOM of the live pager, and an ELF swapped onto the watched path rendered as a success frame), and stdin was an unbounded slurp while the file lane refused the same bytes cleanly.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static readFile(string $path): string</code></td><td>Read a local document path under the full gate.</td></tr>
+<tr><td><code>static readStream($stream, string $label): string</code></td><td>Read a piped document stream under the same size and binary contract. The read itself is bounded (MAX+1 bytes), so an endless producer is refused, not slurped.</td></tr>
+<tr><td><code>static refuseBinary(string $raw, string $label): void</code></td><td>Refuse to render binary payloads. Mistyping onto a PNG/PDF/ELF must not spray escape sequences (possible cursor/color-state changes) at the terminal with a success code. Probe: a NUL byte ANYWHERE in the document is conclusive (the cap already holds it whole and str_contains is a memchr-class scan — the old head-only probe let 9000 printable bytes hide an ELF tail); beyond that, a control-character ratio above 5% of the 8 KiB head window is refusal-grade for anything a human would call a text file (UTF-8 text and its multi-byte sequences contain no C0 bytes).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-filewatcher"><code>FileWatcher</code> <small>final class</small></h4>
+<p>File watching utility for auto-reload on change.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly string $path)</code></td><td></td></tr>
+<tr><td><code>hasChangedSince(int $mtime): bool</code></td><td>Check if the file&#039;s mtime differs from the given baseline.</td></tr>
+<tr><td><code>static snapshot(string $path): ?array</code></td><td>Current (mtime, size) fingerprint of a file, or null when the path is not a readable regular file. Baseline for pollTuple().</td></tr>
+<tr><td><code>static pollTuple(string $path, int $lastMtime, int $lastSize): ?array</code></td><td>One non-blocking change check against a (mtime, size) baseline.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-frontmatter"><code>FrontMatter</code> <small>final class</small></h4>
+<p>Leading YAML front matter detector (glow parity, finding 007).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static split(string $raw): array</code></td><td>Split a document into its renderable body and (optional) raw front-matter block.</td></tr>
+<tr><td><code>static has(string $raw): bool</code></td><td>Whether a document opens with a front-matter block.</td></tr>
+<tr><td><code>static strip(string $raw): string</code></td><td>The document with any leading front-matter block removed.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-glamourdecorationgate"><code>GlamourDecorationGate</code> <small>final class</small></h4>
+<p>The one refusal candy-mdview keeps in front of sugar-markdown&#039;s \SugarCraft\Markdown\StyleGuide loader (P1-12c-mdview, owner option b).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static admit(array $decoded): array</code></td><td>Refuse or normalize the affix slots of a decoded glamour document.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-httpfetch"><code>HttpFetch</code> <small>final class</small></h4>
+<p>The URL input door (finding 008): glow&#039;s second documented invocation is <code>glow https://example.com/README.md</code>; the port used to answer &quot;no such file&quot; because nothing in src/ knew what a scheme was.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static isRemote(string $arg): bool</code></td><td>Whether a file argument names a remote document (glow&#039;s parity door).</td></tr>
+<tr><td><code>static fetch(string $url): string</code></td><td>Fetch $url under the transport caps and hand the bytes to the shared document gate. Refusals leave through the usage channel: every one of them is an InvalidArgumentException naming the URL (credentials from its userinfo part never echoed) and the reason.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-mdview.</p>
+<h4 id="api-sugarcraft-mdview-mdviewmodel"><code>MdViewModel</code> <small>final class</small></h4>
+<p>Pager Model used by RenderCommand when <code>-p</code> / <code>--pager</code> is set. Wraps a Viewport containing the already-rendered (styled) text. Standard reader keys are forwarded to the Viewport; plain <code>q</code> / <code>Esc</code> / <code>Ctrl+C</code> exit the loop (modified runes like Alt+q belong to the reader, never to the exit gate).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromContent(string $content, int $width = 80, int $height = 24): self</code></td><td></td></tr>
+<tr><td><code>withDocument(string $name): self</code></td><td>Enter document mode: paint a status header and reserve its row. The viewport height shrinks by one so header + body never exceed the terminal, and every later resize recomputes with the same accounting.</td></tr>
+<tr><td><code>withWatch(string $path, \Closure $reRender): self</code></td><td>Arm the auto-reload watch on $path. Every returned instance carries the closure forward (immutability), so later key handling cannot silently drop the watch state.</td></tr>
+<tr><td><code>isWatching(): bool</code></td><td></td></tr>
+<tr><td><code>withReflow(\Closure $reflowAt): self</code></td><td>Arm the resize-reflow path (finding 014). The closure receives the live column count on every geometry-changing WindowSizeMsg and returns the fully re-rendered document text; the viewport re-clips scroll offsets against it. Armed ONLY for an unpinned width — an explicit --width is a user decision the resize leg must never override.</td></tr>
+<tr><td><code>withKeymap(array $overrides): self</code></td><td>Replace the default chords for this model&#039;s own keys (the config file&#039;s keymap door, finding 036). Overrides merge onto the current map, so a partial keymap keeps every untouched binding; the Escape and Ctrl+C quit legs are structural and stay whatever the map says.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>isExited(): bool</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-reloadtickmsg"><code>ReloadTickMsg</code> <small>final class</small></h4>
+<p>Timer tick that drives the pager&#039;s file-watch pump.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $id = self::ID)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mdview-rendercommand"><code>RenderCommand</code> <small>final class</small></h4>
+<p>Default <code>candy-mdview</code> command. Reads Markdown from a file argument or stdin, renders it via Renderer, and either prints it to the terminal (default) or opens a fullscreen pager via MdViewModel when <code>-p</code> / <code>--pager</code> is set.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static setColorProbeCallback(?callable $callback): void</code></td><td></td></tr>
+<tr><td><code>static setTerminalCheckCallback(?callable $callback): void</code></td><td></td></tr>
+<tr><td><code>static setStdinTtyCallback(?callable $callback): void</code></td><td></td></tr>
+<tr><td><code>static setPagerDevTtyCallback(?callable $callback): void</code></td><td></td></tr>
+<tr><td><code>static pickTheme(string $name): Theme</code></td><td>Resolve a theme name. The lookup lives in sugar-markdown&#039;s Theme (P1-12c-mdview): stock names through Theme::byName(), the bundled JSON slugs through Theme::catalogByName(). The roster and the two aliases remain this CLI&#039;s contract.</td></tr>
+</tbody>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+
+    <h3 id="environment-variables" style="margin-top: 24px;">Environment variables</h3>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>MDVIEW_THEME</code></td><td>Theme name, used when no flag is given. It sits above the config file.</td></tr>
+    <tr><td><code>MDVIEW_WIDTH</code></td><td>Column width, an integer from 0 to 9999. A flag wins over it; it wins over the config file.</td></tr>
+    <tr><td><code>MDVIEW_PAGER</code></td><td>Pager mode: <code>1</code>, <code>true</code> or <code>yes</code> turns it on, <code>0</code>, <code>false</code> or <code>no</code> turns it off. Any other value is a usage error.</td></tr>
+    <tr><td><code>MDVIEW_CONFIG</code></td><td>Path to the preferences file. Set it to an empty value to skip file lookup entirely.</td></tr>
+    <tr><td><code>XDG_CONFIG_HOME</code>, <code>HOME</code></td><td>Locate the default <code>mdview/mdview.json</code> when <code>MDVIEW_CONFIG</code> is unset.</td></tr>
+    <tr><td><code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code>, <code>FORCE_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>Color decisions. See Theming.</td></tr>
+    </table>
+
+    <h3 id="preferences-file-keys" style="margin-top: 24px;">Preferences file keys</h3>
+    <table class="api-table">
+    <tr><th>Key</th><th>Type</th><th>Effect</th></tr>
+    <tr><td><code>theme</code></td><td>string</td><td>A built-in theme name, as <code>--theme</code>.</td></tr>
+    <tr><td><code>style</code></td><td>string</td><td>A theme name, as the <code>--style</code> alias.</td></tr>
+    <tr><td><code>width</code></td><td>integer</td><td>Column width, as <code>--width</code>.</td></tr>
+    <tr><td><code>pager</code></td><td>boolean</td><td>Default pager mode; a flag can still turn it on for one run.</td></tr>
+    <tr><td><code>keymap</code></td><td>object</td><td>Action-to-chord overrides for <code>quit</code>, <code>reload</code> and <code>help</code>.</td></tr>
+    </table>
+    <p>Any other top-level key is refused with exit 2, and the message lists the unknown keys. The file is held to the same door rules as a document: a regular file, at most 64 KiB, a JSON object.</p>
+
+    <h2 id="keys-and-keybindings" style="margin-top: 40px;">Keys and keybindings</h2>
+    <p>The pager reads the keyboard from <code>/dev/tty</code>, so piped input stays scrollable. The table lists the default bindings.</p>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>↑</kbd> / <kbd>k</kbd></td><td>Line up</td></tr>
+    <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Line down (<kbd>Alt+j</kbd> too)</td></tr>
+    <tr><td>Mouse wheel</td><td>Three lines per notch in either direction</td></tr>
+    <tr><td><kbd>PgUp</kbd> / <kbd>b</kbd></td><td>Page up (<kbd>Ctrl+B</kbd> too)</td></tr>
+    <tr><td><kbd>PgDn</kbd> / <kbd>space</kbd> / <kbd>f</kbd></td><td>Page down</td></tr>
+    <tr><td><kbd>Ctrl+U</kbd> / <kbd>Ctrl+D</kbd></td><td>Half page up or down</td></tr>
+    <tr><td><kbd>Home</kbd> / <kbd>g</kbd>, <kbd>End</kbd> / <kbd>G</kbd></td><td>Top, bottom</td></tr>
+    <tr><td><kbd>←</kbd> / <kbd>h</kbd>, <kbd>→</kbd> / <kbd>l</kbd></td><td>Scroll horizontally in no-wrap mode</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Force a reload of the watched file (unmodified only)</td></tr>
+    <tr><td><kbd>?</kbd></td><td>Show or hide a one-row strip that condenses these keys (unmodified only)</td></tr>
+    <tr><td><kbd>q</kbd> / <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd></td><td>Exit. <kbd>Shift+q</kbd>, <kbd>Alt+q</kbd> and <kbd>Ctrl+Q</kbd> do not.</td></tr>
+    </table>
+    <p>The scroll letters match on their rune alone, so <kbd>Ctrl+B</kbd> and <kbd>Alt+j</kbd> work as their plain counterparts. A document taller than the screen grows a scrollbar along the right edge, and the header row reads <code>file · scroll%</code> plus <code>↻N</code> after N auto-reloads. A <code>↻!</code> means the last change was refused and the frame is stale.</p>
+
+    <h2 id="theming" style="margin-top: 40px;">Theming</h2>
+    <p>Twelve stock themes ship: <code>ansi</code>, <code>ascii</code>, <code>plain</code>, <code>notty</code>, <code>dark</code>, <code>light</code>, <code>dracula</code>, <code>tokyo-night</code>, <code>pink</code>, <code>solarized</code>, <code>monokai</code> and <code>github</code>. The aliases <code>no</code>, <code>auto-no</code> and <code>tokyonight</code> resolve to <code>plain</code>, <code>notty</code> and <code>tokyo-night</code>. Names match case-insensitively, and <code>_</code> is accepted for <code>-</code>. <code>solarized</code>, <code>monokai</code> and <code>github</code> load JSON files from <code>themes/</code>. Each built-in name maps to the SugarMarkdown preset of the same name.</p>
+    <pre class="code"><code class="language-shell">candy-mdview --theme solarized README.md
+candy-mdview --style github README.md          # --style is the Glamour-style alias for --theme
+candy-mdview --theme dark --width 80 README.md</code></pre>
+    <p>Three tiers exist for color. <strong>ansi</strong> is the terminal-native palette. <strong>ascii</strong> keeps structure, so bold and italic survive while color does not. <strong>plain</strong> is undecorated bytes. With no theme named, the implicit walk picks ansi on a decorated, color-capable stream, ascii on a decorated stream without color, and plain on an undecorated one.</p>
+    <pre class="code"><code class="language-shell">./examples/render-readme.sh README.md         # the same README in several themes, side by side</code></pre>
+    <p>The gate that says whether a stream is decorated has three inputs. <code>--ansi</code> opens it and <code>--no-ansi</code> closes it. Otherwise <code>CLICOLOR_FORCE</code> or <code>FORCE_COLOR</code> open it at any value other than <code>0</code>, even on a pipe. <code>NO_COLOR</code> and <code>CLICOLOR=0</code> do not close the gate. They only answer the color-capability question. An explicit theme names its palette everywhere, so <code>--theme dark</code> piped into a file still writes SGR bytes.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds four runnable programs. The three PHP examples load the Composer autoloader, so run them from a checkout or a project that has run <code>composer install</code>.</p>
     <ul>
-      <li><a href="sugar-markdown.html">SugarMarkdown</a> — markdown renderer that powers CandyMdview</li>
-      <li><a href="sugar-forms.html">SugarForms</a> — Viewport component used for scrolling</li>
+      <li><code>examples/render-string.php</code> renders a Markdown string with <code>Renderer::dark()</code> and <code>withWordWrap(60)</code>, and prints the ANSI output. Run it with <code>php examples/render-string.php</code>.</li>
+      <li><code>examples/pager-model.php</code> builds <code>MdViewModel::fromContent()</code> from rendered text, sends two <code>j</code> key messages and a <code>q</code>, and prints each frame. It runs with no terminal.</li>
+      <li><code>examples/theme-json.php</code> builds a theme from the flat JSON shape with <code>Theme::fromJsonString()</code> and renders a sample through it.</li>
+      <li><code>examples/render-readme.sh</code> renders a README through several themes with the bundled binary. It needs bash and <code>bin/candy-mdview</code> or a global install.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/render-string.php
+php examples/pager-model.php
+php examples/theme-json.php</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite lives in <code>tests/</code> and runs under PHPUnit 10. Run it once from the package root, with stdin redirected so a stray read cannot hang the run:</p>
+    <pre class="code"><code class="language-shell">cd candy-mdview &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests cover the pieces named above. <code>MdViewModelTest</code> and <code>MdViewModelReloadTest</code> drive the pager Model through <code>update()</code>. <code>FileWatcherTest</code> covers the (mtime, size) tuple law. <code>GoldenRenderTest</code> pins rendered output, <code>GlamourDecorationGateTest</code> and <code>ThemeLoadTest</code> cover theme loading, <code>HttpFetchTest</code> covers the URL door, and <code>LocaleParityTest</code> checks that all sixteen <code>lang/</code> catalogs carry the English key set.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="needs-a-terminal-error-with-p" style="margin-top: 24px;">"needs a terminal" error with <code>-p</code></h3>
+    <p>The pager needs a real terminal, either stdout or <code>/dev/tty</code>. When neither is available the run exits 2. Drop <code>-p</code> to render to a pipe or file, which is what a CI job or a redirect wants.</p>
+
+    <h3 id="no-color-in-a-pipe-or-redirect" style="margin-top: 24px;">No color in a pipe or redirect</h3>
+    <p>Without a flag, a piped stream is undecorated, so the output is plain. Force decoration with <code>--ansi</code>, or set <code>CLICOLOR_FORCE=1</code> or <code>FORCE_COLOR=1</code>. Forced decoration also writes the OSC 8 hyperlink envelopes into the file. Add <code>--no-hyperlinks</code> to drop them.</p>
+
+    <h3 id="edits-to-the-file-do-not-appear-in-the-pager" style="margin-top: 24px;">Edits to the file do not appear in the pager</h3>
+    <p>Auto-reload runs only when the pager was opened on a local file, not on stdin or a URL. A rewrite that keeps the same mtime and byte size does not trigger a reload, so press <kbd>r</kbd>. If the header shows <code>↻!</code>, the last change was refused and the frame is stale. Fix the file, then press <kbd>r</kbd>.</p>
+
+    <h3 id="exit-2-when-theme-config-is-refused" style="margin-top: 24px;">Exit 2 when <code>--theme-config</code> is refused</h3>
+    <p>The path must be a regular file no larger than 1 MB, and its JSON must be an object that matches one of the two accepted shapes. A directory, a FIFO, a scalar, a JSON list, or an object that matches neither schema refuses with exit 2. The refusal is deliberate: the stock theme is never rendered in its place.</p>
+
+    <h3 id="a-directory-argument-refuses" style="margin-top: 24px;">A directory argument refuses</h3>
+    <p>A directory resolves only when it holds one of <code>README.md</code>, <code>README.markdown</code>, <code>index.md</code>, or exactly one <code>*.md</code> file. Several competing candidates refuse with exit 2, and the message names what was searched. Pass the file itself instead.</p>
+
+    <h3 id="leading-block-is-missing-from-the-output" style="margin-top: 24px;">Leading <code>---</code> block is missing from the output</h3>
+    <p>That is the front-matter rule. The YAML block is stripped before rendering so it does not become a heading. Pass <code>--show-front-matter</code> to print the block verbatim above the rendered document.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>candy-mdview (PHP)</th></tr>
+    <tr><td><code>charmbracelet/glow</code>, the Markdown viewer and pager</td><td><code>bin/candy-mdview</code>, <code>RenderCommand</code>, <code>MdViewModel</code></td></tr>
+    <tr><td><code>charmbracelet/glamour</code>, style files for rendering</td><td><code>GlamourDecorationGate</code>, which admits the <code>document</code> and chroma shapes, and sugar-markdown's <code>StyleGuide</code>, which maps them onto a SugarMarkdown <code>Theme</code></td></tr>
+        </table>
+    <p>Deliberately absent from the port: glow's directory browser, search, config UI, presentation modes, and glow 3.0's <code>-a/--all</code>, <code>-l/--line-numbers</code>, <code>-n/--preserve-new-lines</code>, <code>-t/--tui</code> and <code>--config</code>.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <h3 id="render-before-the-view" style="margin-top: 24px;">Render before the view</h3>
+    <p>Rendering happens once per document load, and the pager scrolls the finished string. The view never re-parses Markdown on a keystroke. A resize is the one exception that repeats the work: when no width is pinned, the Model re-wraps through the reflow closure it was given.</p>
+    <h3 id="refuse-before-painting" style="margin-top: 24px;">Refuse before painting</h3>
+    <p>A usage error, an oversized document or a binary input stops the run before the alternate screen is armed. A pager that has already painted cannot print a usage message cleanly, so every refusal happens while the terminal is still a plain stream.</p>
+    <h3 id="fixed-cadence-reload" style="margin-top: 24px;">Fixed-cadence reload</h3>
+    <p>The reload tick is fixed at 0.5 seconds. Each tick does one non-blocking <code>pollTuple()</code> probe, so the pager never waits on the filesystem and keystrokes keep flowing during a save burst.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The rolling <code>candy-mdview.phar</code> is the version that tracks master. Its <code>.sha256</code> and <code>.phar.commit</code> sidecars name the exact build. A tagged phar reports its release stamp through <code>--version</code>, and a rolling phar reports <code>dev-</code> followed by its short commit, so <code>--version</code> tells two dev builds apart by commit. A bare checkout or a vendor install reports the fallback <code>0.1.0</code>, and so does a phar stamped only with the <code>dev-build</code> sentinel.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-markdown.html">SugarMarkdown</a>: the renderer behind every document, the Theme and Renderer classes used here.</li>
+      <li><a href="sugar-forms.html">SugarForms</a>: the <code>Viewport</code> the pager scrolls with.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the Model, Msg and Program runtime the pager runs on.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>MdViewModel</td><td>fromContent(content, width, height)</td><td>Build the pager Model from already-rendered text</td></tr>
-<tr><td>MdViewModel</td><td>withDocument(name)</td><td>Enter document mode: prepend a status header (file name, scroll percent, reload marker)</td></tr>
-<tr><td>MdViewModel</td><td>withWatch(path, reRender)</td><td>Auto-reload from disk when the (mtime, size) tuple changes</td></tr>
-<tr><td>MdViewModel</td><td>isWatching()</td><td>Whether a file watch is armed on this model</td></tr>
-<tr><td>FileWatcher</td><td>snapshot(path)</td><td>Current (mtime, size) tuple for a file, or null when unreadable</td></tr>
-<tr><td>FileWatcher</td><td>pollTuple(path, lastMtime, lastSize)</td><td>Sweep one file against the last-seen tuple</td></tr>
-<tr><td>FileWatcher</td><td>hasChangedSince(lastMtime)</td><td>Instance check against a remembered mtime</td></tr>
-<tr><td>FileWatcher</td><td>idlePollDelayMicroseconds(idle, cap)</td><td>Bounded exponential backoff for idle poll sweeps</td></tr>
-<tr><td>FileWatcher</td><td>watch(path)</td><td>Generator yielding on tuple changes (consumed by tests today)</td></tr>
-<tr><td>GlamourTheme</td><td>isGlamourSchema(decoded)</td><td>Detect a Glamour-style theme document from decoded JSON</td></tr>
-<tr><td>GlamourTheme</td><td>fromJsonString(json)</td><td>Parse a Glamour theme JSON string</td></tr>
-<tr><td>GlamourTheme</td><td>fromFile(path)</td><td>Load a size-capped Glamour theme JSON file</td></tr>
-<tr><td>GlamourTheme</td><td>fromDecoded(array)</td><td>Build from already-decoded JSON — the entry the CLI --theme-config path takes</td></tr>
-<tr><td>GlamourTheme</td><td>element(name) / chroma(kind) / indentToken(token)</td><td>Verbatim access to unmapped style fields — no silent loss</td></tr>
-<tr><td>GlamourTheme</td><td>toMarkdownTheme()</td><td>Convert to a SugarMarkdown Theme</td></tr>
-</table>
-      <p>Visual width measuring is delegated to <code>SugarCraft\Core\Util\Width</code> in sugar-core; this package ships no local width helpers.</p>
-
-    <h3 id="exit-codes-trust" style="margin-top: 32px;">Exit codes &amp; trust</h3>
-    <p>Exit codes: <code>0</code> rendered successfully (an empty <em>file</em> renders blank), <code>1</code> runtime failure, <code>2</code> usage error — bad theme, unreadable or oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, invalid <code>--width</code>, or no input.</p>
-    <p>Hostile documents render as data. sugar-markdown strips escape, control, and OSC bytes on output, per element (sanitization is default-on and this tool never opts out), so a document cannot move the cursor or restyle the stream. OSC 8 URLs face a refused-scheme denylist: <code>javascript:</code>, <code>data:</code>, and <code>vbscript:</code> never reach a clickable envelope; other schemes pass to the terminal's opener unfiltered. Usage errors go to stderr with argv paths and option values sanitized before display, and the rendered document is written raw — the output formatter never interprets <code>&lt;tags&gt;</code> inside your Markdown.</p>
     </div>
   </div>
 </section>

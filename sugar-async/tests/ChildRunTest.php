@@ -6,6 +6,7 @@ namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ChildPump;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
@@ -49,6 +50,196 @@ final class ChildRunTest extends TestCase
         $this->assertTrue($r->succeeded());
         $this->assertSame(0, $r->exitCode);
         $this->assertFalse($r->truncated());
+    }
+
+    /**
+     * A hook backgrounds a child that inherits the output pipes and outlives the
+     * process that started it. The run ends one exit grace after the parent exits
+     * and reports its status; it must not wait out the deadline and report a timeout.
+     */
+    public function testABackgroundedChildHoldingThePipesDoesNotStretchTheRunToItsDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])->withTimeout(4.0)->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertFalse($r->timedOut());
+        $this->assertTrue($r->succeeded());
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the silence budget');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the silence budget before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'the run must end after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * The grace counts silence, not time from the exit: a grandchild that writes
+     * every half second for two seconds after the parent exits keeps the pipes
+     * read, so every line is kept. A fixed one-second window from the exit would
+     * cut the output after the third line. The pipe reaches EOF when the writer
+     * ends, so nothing is abandoned.
+     */
+    public function testExitGraceCountsSilenceNotTimeFromTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', '(for i in 1 2 3 4 5; do echo $i; sleep 0.5; done) & exit 0'])
+            ->withTimeout(10.0)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("1\n2\n3\n4\n5\n", $r->stdout, 'output that keeps coming inside the silence budget is kept');
+        $this->assertFalse($r->abandonedPipes(), 'a pipe read to EOF is not abandoned');
+        $this->assertLessThan(6.0, $elapsed, 'the walk must end at EOF, not at the deadline');
+    }
+
+    /** Abandonment is an exit-time cut: a deadline kill of a held pipe is a timeout, not an abandonment. */
+    public function testADeadlineKillOfAHeldPipeIsNotReportedAsAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & sleep 6'])->withTimeout(1.0)->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertFalse($r->abandonedPipes(), 'the parent never exited, so no pipe was abandoned after an exit');
+    }
+
+    /**
+     * The run() counterpart of the launch case: an idle budget shorter than the exit
+     * grace does not cut a child that has already exited. The grace governs its held
+     * pipe, so the run is EXITED with the pipe reported abandoned, not TIMED_OUT.
+     */
+    public function testRunExitGraceGovernsAHeldPipeWhenAnIdleBudgetIsSet(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withIdleTimeout(0.5)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'an exited child is not idle-killed');
+        $this->assertSame(0, $r->exitCode);
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the exit grace');
+        $this->assertLessThan(3.0, $elapsed, 'run settles after the exit grace, not at the idle budget or deadline');
+    }
+
+    /** A pipe that is read to EOF with its child is not abandoned, and neither is a child that never held one. */
+    public function testPipesClosedByTheChildAreNotAbandoned(): void
+    {
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "done");'))->run();
+
+        $this->assertSame('done', $r->stdout);
+        $this->assertFalse($r->abandonedPipes());
+    }
+
+    /**
+     * With the grace removed, a backgrounded child that holds the pipes holds the
+     * run to its deadline: the run reads until EOF or the deadline, the group is
+     * killed there, and the result is TIMED_OUT. This is the shape a caller that
+     * bounds a whole command by its budget needs.
+     */
+    public function testWithoutAnExitGraceAHeldPipeHoldsTheRunToItsDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(2.0)
+            ->withExitGrace(null)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertTrue($r->timedOut(), 'the held pipe must not end the run before the deadline');
+        $this->assertGreaterThanOrEqual(1.5, $elapsed, 'the run waits for the deadline while the pipe is held');
+        $this->assertLessThan(5.0, $elapsed, 'the deadline and the kill ladder bound the run');
+    }
+
+    /**
+     * Pins the exit grace's cut-off: a line a backgrounded grandchild writes inside
+     * the grace is kept, and one written after the pipes have been silent for the
+     * whole grace is not. The 'early' line restarts the silence count, so the cut
+     * lands one grace after it, well before 'late' is due. The grace length is a
+     * policy call, so this test fixes the shape, not the number.
+     */
+    public function testOutputWrittenAfterTheExitGraceIsCutOff(): void
+    {
+        $this->requirePosixPipes();
+        $started = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', '(sleep 0.3; echo early; sleep 3; echo late) & exit 0'])
+            ->withTimeout(10.0)
+            ->run();
+        $elapsed = $this->now() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("early\n", $r->stdout);
+        $this->assertLessThan(3.0, $elapsed, 'the run must end at the grace cut-off, before the late line is due');
+    }
+
+    /** The exit grace keeps the status the probe reads: a nonzero exit is still reported as itself. */
+    public function testABackgroundedChildDoesNotCostTheParentItsExitCode(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 3'])->withTimeout(4.0)->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(3, $r->exitCode);
+        $this->assertFalse($r->succeeded());
+    }
+
+    /**
+     * A signal death keeps exitCode -1, the sentinel launch() also reports, and the
+     * number moves to signal(). PHP's status poll reads the number only in termsig,
+     * and the poll is what reaps the child, so the number is taken from that poll.
+     */
+    public function testASignalDeathCarriesTheSignalNumberBesideTheSentinel(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])->withTimeout(5.0)->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
+    public function testAnExitCodeCarriesNoSignal(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'exit 3'])->withTimeout(5.0)->run();
+
+        $this->assertSame(3, $r->exitCode);
+        $this->assertNull($r->signal);
+    }
+
+    /** @return iterable<string, array{0: bool}> */
+    public static function groupLeaderModes(): iterable
+    {
+        yield 'unwrapped' => [false];
+        yield 'group leader' => [true];
+    }
+
+    /**
+     * Regression: a child that kills itself at once dies during the spawn's own
+     * status reads (the group read, onSpawn's pid read). Whichever read reaped it
+     * used to throw the status away, and the run's later read saw signaled=false, so
+     * the signal read null. The first read that sees the exit now keeps it for the run.
+     */
+    #[DataProvider('groupLeaderModes')]
+    public function testASignalDeathDuringTheSpawnReadsKeepsItsSignalNumber(bool $groupLeader): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])
+            ->withTimeout(5.0)
+            ->withGroupLeader($groupLeader)
+            ->withOnSpawn(static function (): void {
+                usleep(150_000);
+            })
+            ->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
     }
 
     public function testStdinPayloadIsDeliveredToTheChild(): void
@@ -169,6 +360,35 @@ final class ChildRunTest extends TestCase
         ChildRun::new(['/nonexistent/sugar-async-probe-' . getmypid()])->run();
     }
 
+    /**
+     * A refused spawn is a plain RuntimeException, never the staging type: a caller
+     * that tells the two apart must not read a proc_open() refusal as a temp-file one.
+     */
+    public function testAProgramThatCannotStartIsNotAStdinStagingFailure(): void
+    {
+        try {
+            ChildRun::new(['/nonexistent/sugar-async-probe-' . getmypid()])->withStdin('payload')->run();
+            $this->fail('a program that cannot start must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertNotInstanceOf(\SugarCraft\Async\StdinStagingException::class, $e);
+        }
+    }
+
+    /**
+     * The staging failure stays a RuntimeException, so a caller that treats every
+     * refused start alike keeps working, and it names the temp directory. Staging runs
+     * only on the Windows runtime, with no seam to force it elsewhere, so the type is
+     * pinned directly.
+     */
+    public function testAStdinStagingFailureIsARuntimeExceptionThatNamesTheTempDirectory(): void
+    {
+        $e = new \SugarCraft\Async\StdinStagingException('could not stage', tempDir: '/no/such/tmp');
+
+        $this->assertInstanceOf(\RuntimeException::class, $e);
+        $this->assertSame('/no/such/tmp', $e->tempDir());
+        $this->assertNull((new \SugarCraft\Async\StdinStagingException('x'))->tempDir());
+    }
+
     public function testTheDefaultsArePinnedToThePumpDefaults(): void
     {
         $this->assertSame(ChildPump::DEFAULT_TIMEOUT_SECONDS, ChildRun::DEFAULT_TIMEOUT_SECONDS);
@@ -182,6 +402,11 @@ final class ChildRunTest extends TestCase
         yield 'zero timeout' => [static fn (ChildRun $r): ChildRun => $r->withTimeout(0.0)];
         yield 'infinite timeout' => [static fn (ChildRun $r): ChildRun => $r->withTimeout(INF)];
         yield 'negative cap' => [static fn (ChildRun $r): ChildRun => $r->withMaxBytes(-1)];
+        yield 'zero group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(0)];
+        yield 'negative group pid' => [static fn (ChildRun $r): ChildRun => $r->withGroupPid(-4)];
+        yield 'negative exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(-0.5)];
+        yield 'infinite exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(INF)];
+        yield 'zero exit grace' => [static fn (ChildRun $r): ChildRun => $r->withExitGrace(0.0)];
     }
 
     #[DataProvider('badBuilders')]
@@ -189,6 +414,36 @@ final class ChildRunTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $apply(ChildRun::new(['true']));
+    }
+
+    public function testACommandLineIsHandedToTheShellAsOneString(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('The POSIX shell line is pinned here; the Windows cmd.exe line runs on a Windows runtime.');
+        }
+
+        $r = ChildRun::commandLine('printf "%s" "a b"; exit 4')->run();
+
+        $this->assertSame('a b', $r->stdout);
+        $this->assertSame(4, $r->exitCode);
+    }
+
+    public function testACommandLineKeepsItsFormThroughTheBuilder(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('The POSIX shell line is pinned here; the Windows cmd.exe line runs on a Windows runtime.');
+        }
+
+        $r = ChildRun::commandLine('printf hi')->withTimeout(5.0)->run();
+
+        $this->assertSame('hi', $r->stdout);
+        $this->assertTrue($r->succeeded());
+    }
+
+    public function testAnEmptyCommandLineIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::commandLine('');
     }
 
     public function testRejectsAnEmptyOrNonStringArgv(): void
@@ -230,5 +485,584 @@ final class ChildRunTest extends TestCase
         $this->assertNotSame($base, $tuned);
         $this->assertSame(ChildRun::DEFAULT_MAX_BYTES, (new \ReflectionProperty($base, 'maxBytes'))->getValue($base));
         $this->assertSame(10, (new \ReflectionProperty($tuned, 'maxBytes'))->getValue($tuned));
+    }
+
+    public function testOnChunkSeesEveryChunkOfBothStreamsAsItArrives(): void
+    {
+        $seen = ['1' => '', '2' => ''];
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "out-a"); fwrite(STDERR, "err-b"); fwrite(STDOUT, "out-c");'))
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$seen): void {
+                $seen[(string) $slot] .= $chunk;
+            })
+            ->run();
+
+        $this->assertSame('out-aout-c', $r->stdout);
+        $this->assertSame('err-b', $r->stderr);
+        $this->assertSame('out-aout-c', $seen['1']);
+        $this->assertSame('err-b', $seen['2']);
+    }
+
+    public function testWithOnChunkNullRemovesTheFeed(): void
+    {
+        $calls = 0;
+        $r = ChildRun::new($this->php('fwrite(STDOUT, "quiet");'))
+            ->withOnChunk(static function () use (&$calls): void {
+                $calls++;
+            })
+            ->withOnChunk(null)
+            ->run();
+
+        $this->assertSame('quiet', $r->stdout);
+        $this->assertSame(0, $calls);
+    }
+
+    public function testTheGroupPidAndOnChunkCarryThroughTheBuilder(): void
+    {
+        $base = ChildRun::new(['true']);
+        $tuned = $base->withGroupPid(4242)->withOnChunk(static fn () => null);
+
+        $this->assertNotSame($base, $tuned);
+        $this->assertNull((new \ReflectionProperty($base, 'groupPid'))->getValue($base));
+        $this->assertSame(4242, (new \ReflectionProperty($tuned, 'groupPid'))->getValue($tuned));
+        $this->assertNotNull((new \ReflectionProperty($tuned, 'onChunk'))->getValue($tuned));
+        $this->assertSame(4242, (new \ReflectionProperty($tuned->withTimeout(2.0), 'groupPid'))->getValue($tuned->withTimeout(2.0)));
+    }
+
+    public function testOnSpawnReportsTheChildPidBeforeTheResultIsAssembled(): void
+    {
+        $this->requirePosixPipes();
+        $reported = [];
+        $r = ChildRun::new($this->php('fwrite(STDOUT, (string) getmypid());'))
+            ->withOnSpawn(static function (int $pid) use (&$reported): void {
+                $reported[] = $pid;
+            })
+            ->run();
+
+        $this->assertCount(1, $reported);
+        $this->assertGreaterThan(0, $reported[0]);
+        $this->assertSame((string) $reported[0], $r->stdout);
+    }
+
+    public function testAnOnSpawnThrowKillsTheStartedChildAndRethrows(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the throw.');
+        }
+        $pid = 0;
+
+        try {
+            ChildRun::new($this->php('sleep(30);'))
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->run();
+            self::fail('an onSpawn throw must escape run()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
+
+    /**
+     * A throwing onSpawn on a wrapped child must take the wrapper's process group
+     * down, not only the wrapper pid: the descendant it started is still alive when
+     * the throw happens, and the abandon path has to reach it.
+     */
+    public function testAnOnSpawnThrowKillsTheWrappedChildsGroupDescendants(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || trim((string) shell_exec('command -v setsid')) === '') {
+            $this->markTestSkipped('Needs setsid and ext-posix to lead a process group.');
+        }
+        $marker = \tempnam(\sys_get_temp_dir(), 'cr-abandon-grandchild-');
+        self::assertIsString($marker);
+        $code = '$p = proc_open(["sleep", "30"], [], $pipes); $s = proc_get_status($p); '
+            . 'file_put_contents(' . \var_export($marker, true) . ', (string) $s["pid"]); sleep(30);';
+        $grandchild = 0;
+        $wrapper = 0;
+        try {
+            ChildRun::new(['setsid', '-w', '--', PHP_BINARY, '-r', $code])
+                ->withOnSpawn(static function (int $spawned) use (&$grandchild, &$wrapper, $marker): void {
+                    $wrapper = $spawned;
+                    // Hold the throw until the descendant exists, so the group has a live member.
+                    $until = \microtime(true) + 5.0;
+                    while (\microtime(true) < $until) {
+                        $written = (string) @\file_get_contents($marker);
+                        if (\ctype_digit($written)) {
+                            $grandchild = (int) $written;
+
+                            break;
+                        }
+                        \usleep(20_000);
+                    }
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->run();
+            self::fail('an onSpawn throw must escape run()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        } finally {
+            @\unlink($marker);
+        }
+
+        $this->assertGreaterThan(0, $grandchild, 'the grandchild must have started before the throw');
+        $this->assertFalse(\posix_kill($wrapper, 0), 'the wrapper must be killed and reaped');
+        $until = \microtime(true) + 2.0;
+        while (\posix_kill($grandchild, 0) && \microtime(true) < $until) {
+            \usleep(20_000);
+        }
+        $this->assertFalse(\posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+    }
+
+    public function testAnAbandonedSpawnRemovesTheStagedPayloadAndReapsTheChild(): void
+    {
+        // Runs on every platform: the staged file is a plain temp file here, the
+        // child is a plain proc_open, so the cleanup is exercised without Windows.
+        $staged = \tempnam(\sys_get_temp_dir(), 'staged-abandon-');
+        self::assertIsString($staged);
+        \file_put_contents($staged, 'payload');
+
+        $pipes = [];
+        $proc = \proc_open($this->php('sleep(30);'), [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($proc);
+
+        try {
+            $abandon = new \ReflectionMethod(ChildRun::class, 'abandonSpawn');
+            $abandon->setAccessible(true);
+            $abandon->invoke(null, $proc, $pipes, $staged);
+
+            self::assertFileDoesNotExist($staged);
+            self::assertFalse(\is_resource($proc), 'proc_close must have reaped the child');
+        } finally {
+            @\unlink($staged);
+            if (\is_resource($proc)) {
+                \proc_terminate($proc, 9);
+                \proc_close($proc);
+            }
+        }
+    }
+
+    public function testTheSpawnCallbackCarriesThroughTheBuilderAndNullRemovesIt(): void
+    {
+        $base = ChildRun::new(['true']);
+        $tuned = $base->withOnSpawn(static fn (int $pid) => null);
+
+        $this->assertNotSame($base, $tuned);
+        $this->assertNull((new \ReflectionProperty($base, 'onSpawn'))->getValue($base));
+        $this->assertNotNull((new \ReflectionProperty($tuned, 'onSpawn'))->getValue($tuned));
+        $this->assertNull((new \ReflectionProperty($tuned->withOnSpawn(null), 'onSpawn'))->getValue($tuned->withOnSpawn(null)));
+    }
+
+    /**
+     * An unnamed group is measured while the child lives: a wrapped child that
+     * leads its own group takes its descendants down with it on timeout, the
+     * same as a caller that passed the group id explicitly.
+     */
+    public function testATimedOutWrappedChildTakesItsDescendantsDown(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || trim((string) shell_exec('command -v setsid')) === '') {
+            $this->markTestSkipped('Needs setsid and ext-posix to lead a process group.');
+        }
+        $marker = tempnam(sys_get_temp_dir(), 'cr-grandchild-');
+        $code = '$p = proc_open(["sleep", "30"], [], $pipes); $s = proc_get_status($p); '
+            . 'file_put_contents(' . var_export($marker, true) . ', (string) $s["pid"]); sleep(30);';
+        try {
+            $r = ChildRun::new(['setsid', '-w', '--', PHP_BINARY, '-r', $code])
+                ->withTimeout(1.5)
+                ->run();
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+
+            $grandchild = (int) @file_get_contents($marker);
+            $this->assertGreaterThan(0, $grandchild, 'the grandchild must have started');
+            $until = microtime(true) + 2.0;
+            while (posix_kill($grandchild, 0) && microtime(true) < $until) {
+                usleep(20_000);
+            }
+            $this->assertFalse(posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+        } finally {
+            @unlink($marker);
+        }
+    }
+
+    /**
+     * withHeartbeat() beats while a silent child runs, so a watchdog keyed on the beat
+     * is not starved by a child that writes nothing for its whole run.
+     */
+    public function testRunBeatsWhileASilentChildRuns(): void
+    {
+        $this->requirePosixPipes();
+        $beats = 0;
+        $r = ChildRun::new($this->php('usleep(400000); fwrite(STDOUT, "done");'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->run();
+
+        $this->assertSame('done', $r->stdout);
+        $this->assertTrue($r->succeeded());
+        $this->assertGreaterThanOrEqual(2, $beats, 'a 0.4 s silent run at a 0.05 s heartbeat must beat several times');
+    }
+
+    /**
+     * A child that closes both pipes and then lingers still needs its beats: the
+     * post-close wait for the exit is where it spends its time.
+     */
+    public function testRunBeatsWhileAChildThatClosedItsPipesStillRuns(): void
+    {
+        $this->requirePosixPipes();
+        $beats = 0;
+        $r = ChildRun::new($this->php('fclose(STDOUT); fclose(STDERR); usleep(400000);'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->run();
+
+        $this->assertTrue($r->succeeded());
+        $this->assertGreaterThanOrEqual(2, $beats, 'the post-close exit wait must beat too');
+    }
+
+    /**
+     * Regression: a beat that throws while run() waits for the exit after the output
+     * has closed. The throw used to leave with no kill and no proc_close(), so the
+     * child outlived the run. It must be killed and reaped before the throw leaves.
+     */
+    public function testAHeartbeatThatThrowsAfterTheOutputClosedKillsTheChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to see whether the child survived');
+        }
+        $pid = 0;
+        $start = $this->now();
+        try {
+            ChildRun::new($this->php('fclose(STDOUT); fclose(STDERR); sleep(30);'))
+                ->withTimeout(20.0)
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+                })
+                ->withHeartbeat(0.2, static function (): void {
+                    throw new \LogicException('beat failed');
+                })
+                ->run();
+            $this->fail('the heartbeat throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('beat failed', $e->getMessage());
+        } finally {
+            $alive = $pid > 0 && \posix_kill($pid, 0);
+            if ($alive) {
+                \posix_kill($pid, 9);
+            }
+        }
+
+        $this->assertGreaterThan(0, $pid, 'onSpawn never saw the child');
+        $this->assertFalse($alive, 'the child outlived a heartbeat throw in the post-close wait');
+        $this->assertLessThan(10.0, $this->now() - $start, 'the run waited on the child instead of killing it');
+    }
+
+    /** The kill seam is told the pid while the child is still alive, and the ladder still kills it. */
+    public function testOnKillSeesTheLiveChildBeforeTheLadder(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to probe the child');
+        }
+        $spawned = 0;
+        $told = [];
+        $r = ChildRun::new(['sleep', '30'])
+            ->withTimeout(0.3)
+            ->withOnSpawn(static function (int $pid) use (&$spawned): void {
+                $spawned = $pid;
+            })
+            ->withOnKill(static function (int $pid) use (&$told): void {
+                $told[] = [$pid, \posix_kill($pid, 0)];
+            })
+            ->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertSame([[$spawned, true]], $told, 'onKill runs once, with the spawned pid, before any signal');
+        $this->assertFalse(\posix_kill($spawned, 0), 'the ladder still killed the child');
+    }
+
+    /** A throwing kill seam does not stop the ladder: the child dies, then the throw propagates. */
+    public function testAThrowingOnKillStillKillsTheChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to probe the child');
+        }
+        $spawned = 0;
+        try {
+            ChildRun::new(['sleep', '30'])
+                ->withTimeout(0.3)
+                ->withOnSpawn(static function (int $pid) use (&$spawned): void {
+                    $spawned = $pid;
+                })
+                ->withOnKill(static function (int $pid): void {
+                    throw new \LogicException('seam failed');
+                })
+                ->run();
+            $this->fail('the seam throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('seam failed', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $spawned);
+        $alive = \posix_kill($spawned, 0);
+        if ($alive) {
+            \posix_kill($spawned, 9);
+        }
+        $this->assertFalse($alive, 'a throwing seam left the child alive');
+    }
+
+    /**
+     * withKillGrace() shortens the ladder. The child ignores SIGTERM, so it lives
+     * through the whole TERM grace and dies only to SIGKILL: at the 1 s default the
+     * run takes at least 1.3 s, at a 0.2 s grace well under that.
+     */
+    public function testWithKillGraceShortensTheTermRung(): void
+    {
+        $this->requirePosixPipes();
+        $start = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'trap "" TERM; exec sleep 30'])
+            ->withTimeout(0.3)
+            ->withKillGrace(0.2, 0.5)
+            ->run();
+        $elapsed = $this->now() - $start;
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertGreaterThanOrEqual(0.45, $elapsed, 'the TERM grace was skipped');
+        $this->assertLessThan(1.2, $elapsed, 'the run took the default TERM grace, not the one set');
+    }
+
+    public function testWithKillGraceRejectsANonPositiveGrace(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::new(['true'])->withKillGrace(0.5, 0.0);
+    }
+
+    /**
+     * The heartbeat is a liveness signal and never a verdict: beating does not end a run.
+     */
+    public function testAHeartbeatDoesNotEndTheRun(): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new($this->php('usleep(200000); fwrite(STDOUT, "still here");'))
+            ->withHeartbeat(0.02, static fn () => null)
+            ->run();
+
+        $this->assertSame('still here', $r->stdout);
+        $this->assertSame(ChildResult::EXITED, $r->status);
+    }
+
+    public function testWithHeartbeatRejectsANonPositiveInterval(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::new(['true'])->withHeartbeat(0.0, static fn () => null);
+    }
+
+    /**
+     * A wrapped child whose leader exits at once while a backgrounded grandchild
+     * holds the pipes: the group must be taken from the pid at spawn, so the
+     * deadline kill still reaches the grandchild after the leader is gone.
+     */
+    public function testWithGroupLeaderKillsTheGroupAfterTheLeaderExited(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $pidFile = tempnam(sys_get_temp_dir(), 'childrun-leader-');
+        try {
+            $r = ChildRun::new(['/usr/bin/setsid', '-w', '/bin/sh', '-c', 'sleep 30 & echo $! > ' . escapeshellarg((string) $pidFile) . '; exit 0'])
+                ->withGroupLeader(true)
+                ->withExitGrace(null)
+                ->withTimeout(0.5)
+                ->run();
+
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $grandchild = (int) trim((string) file_get_contents((string) $pidFile));
+            $this->assertGreaterThan(0, $grandchild, 'the fixture never started its backgrounded part');
+            $deadline = microtime(true) + 2.0;
+            while (\posix_kill($grandchild, 0) && microtime(true) < $deadline) {
+                usleep(20000);
+            }
+            $this->assertFalse(\posix_kill($grandchild, 0), 'the group kill must reach the grandchild');
+        } finally {
+            @unlink((string) $pidFile);
+        }
+    }
+
+    /**
+     * Regression: a group that is only readable after onSpawn's wait. The wrapper is
+     * not declared with withGroupLeader() or withSetsidWrapped(), so the group comes
+     * from the kernel read. A read taken before onSpawn runs sees the group still
+     * unset, and the leader exits at once, so the timeout kill must take the group
+     * the spawn measured after onSpawn returned, not a pre-onSpawn read.
+     */
+    public function testAGroupMeasuredAfterOnSpawnSurvivesTheLeaderExiting(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !\function_exists('posix_getpgid') || PHP_OS_FAMILY === 'Windows' || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, posix_getpgid, /usr/bin/setsid and a POSIX host');
+        }
+        $pidFile = tempnam(sys_get_temp_dir(), 'childrun-after-spawn-');
+        try {
+            $r = ChildRun::new(['/usr/bin/setsid', '-w', '/bin/sh', '-c', 'sleep 30 & echo $! > ' . escapeshellarg((string) $pidFile) . '; exit 0'])
+                ->withOnSpawn(static function (int $pid): void {
+                    $until = microtime(true) + 2.0;
+                    while (($group = @\posix_getpgid($pid)) !== false && $group !== $pid && microtime(true) < $until) {
+                        usleep(500);
+                    }
+                })
+                ->withExitGrace(null)
+                ->withTimeout(0.5)
+                ->run();
+
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $grandchild = (int) trim((string) file_get_contents((string) $pidFile));
+            $this->assertGreaterThan(0, $grandchild, 'the fixture never started its backgrounded part');
+            $deadline = microtime(true) + 2.0;
+            while (\posix_kill($grandchild, 0) && microtime(true) < $deadline) {
+                usleep(20000);
+            }
+            $this->assertFalse(\posix_kill($grandchild, 0), 'the group measured after onSpawn must reach the grandchild');
+        } finally {
+            @unlink((string) $pidFile);
+        }
+    }
+
+    /**
+     * Regression: a cancel that lands after the probe has reaped a setsid-wrapped shell.
+     * The shell exits at once and leaves a subshell and a sleep holding stdout, both in
+     * its group. The subshell's line arrives a second later and cancels the run, so the
+     * running probe has already reaped the shell and the live group read can no longer
+     * name it. The kill must still reach the background job through the wrapper's pid.
+     */
+    public function testACancelAfterTheWrappedShellWasReapedStillKillsItsJob(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || PHP_OS_FAMILY === 'Windows' || !\is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, /usr/bin/setsid and a POSIX host');
+        }
+
+        $source = CancellationSource::new();
+        $grandchild = null;
+        $run = ChildRun::new(['/usr/bin/setsid', 'sh', '-c', 'sleep 31 & echo $!; (sleep 1; echo tick) & exit 0'])
+            ->withTimeout(10.0)
+            ->withExitGrace(3.0)
+            ->withSetsidWrapped(true)
+            ->withCancellation($source->token())
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$grandchild, $source): void {
+                if ((string) $slot !== '1') {
+                    return;
+                }
+                if ($grandchild === null) {
+                    $grandchild = (int) trim($chunk);
+                    return;
+                }
+                if (trim($chunk) === 'tick') {
+                    $source->cancel();
+                }
+            });
+
+        $result = $run->run();
+
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $until = microtime(true) + 3.0;
+        while (!self::grandchildGone($grandchild) && microtime(true) < $until) {
+            usleep(20_000);
+        }
+        $this->assertTrue(self::grandchildGone($grandchild), 'the cancel must reach the job of the reaped shell');
+    }
+
+    /**
+     * Regression: the wrapper dies after the probe's last read, so the kill rung's own
+     * live group read is the one that reaps it. That exit is recorded, and the run must
+     * use it: the wrapper's pid still names its job's group, and the signal is reported.
+     *
+     * Made deterministic with gates instead of timing: the shell makes itself a group
+     * leader only once the heartbeat opens the gate, after the spawn-time group read,
+     * and the kill seam kills it and waits for the zombie before the rung reads the group.
+     */
+    public function testAWrapperReapedByTheKillRungsGroupReadStillNamesItsGroup(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !\function_exists('posix_getpgid') || PHP_OS_FAMILY !== 'Linux' || !\is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, posix_getpgid, /usr/bin/setsid and /proc');
+        }
+
+        $gate = sys_get_temp_dir() . '/childrun-gate-' . bin2hex(random_bytes(6));
+        $pidFile = (string) tempnam(sys_get_temp_dir(), 'childrun-rung-');
+        $inner = 'sleep 31 & echo $! > "$1"; wait';
+        $outer = 'while [ ! -e "$1" ]; do sleep 0.01; done; exec /usr/bin/setsid /bin/sh -c ' . escapeshellarg($inner) . ' sh "$2"';
+        $grandchild = 0;
+        $prepared = false;
+        try {
+            $r = ChildRun::new(['/bin/sh', '-c', $outer, 'sh', $gate, $pidFile])
+                ->withTimeout(0.5)
+                ->withSetsidWrapped(true)
+                ->withHeartbeat(0.05, static function () use ($gate): void {
+                    @touch($gate);
+                })
+                ->withOnKill(static function (int $pid) use ($pidFile, &$grandchild, &$prepared): void {
+                    $until = microtime(true) + 5.0;
+                    while (microtime(true) < $until) {
+                        $grandchild = (int) trim((string) @file_get_contents($pidFile));
+                        if ($grandchild > 0 && @\posix_getpgid($pid) === $pid) {
+                            break;
+                        }
+                        usleep(5_000);
+                    }
+                    \posix_kill($pid, 9);
+                    while (microtime(true) < $until && !self::grandchildGone($pid)) {
+                        usleep(5_000);
+                    }
+                    $prepared = $grandchild > 0 && self::grandchildGone($pid);
+                })
+                ->run();
+
+            $this->assertTrue($prepared, 'the fixture never reached a killed wrapper leading its job');
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $this->assertSame(9, $r->signal, 'the signal the rung read recorded must be reported');
+            $until = microtime(true) + 3.0;
+            while (!self::grandchildGone($grandchild) && microtime(true) < $until) {
+                usleep(20_000);
+            }
+            $this->assertTrue(self::grandchildGone($grandchild), 'the kill must reach the job through the wrapper pid');
+        } finally {
+            if ($grandchild > 0 && !self::grandchildGone($grandchild)) {
+                \posix_kill($grandchild, 9);
+            }
+            @unlink($gate);
+            @unlink($pidFile);
+        }
+    }
+
+    /**
+     * Gone means signal-refused or a zombie: a PID 1 that does not reap leaves a killed
+     * grandchild a zombie, which a bare posix_kill($pid, 0) would count as alive.
+     */
+    private static function grandchildGone(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return true;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat === false) {
+            return false;
+        }
+        $after = strrpos($stat, ')');
+        $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+        return $state === 'Z' || $state === 'X';
     }
 }

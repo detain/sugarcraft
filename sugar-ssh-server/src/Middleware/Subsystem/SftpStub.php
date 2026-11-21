@@ -45,10 +45,10 @@ final class SftpStub implements SubsystemHandler
     }
 
     /**
-     * {@internal Test-only visibility accessor — exists only so the
-     * suite can observe invocation; production callers must not wire
-     * against a quarantined stub (audit 050). Delete it when a real
-     * subsystem lands, per the class's QUARANTINED note.}
+     * Test-only visibility accessor: exists only so the suite can observe invocation.
+     *
+     * @internal Production callers must not wire against a quarantined stub.
+     * Delete it when a real subsystem lands, per the class's QUARANTINED note.
      */
     public function wasCalled(): bool
     {

@@ -853,7 +853,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 37;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 38;
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1575,7 +1575,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // THIRTY-SEVEN call sites now routed onto the transcript seam. This said
+        // THIRTY-EIGHT call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -2544,10 +2544,14 @@ final class Bootstrap
             return LaunchContext::bundlesMemo($key);
         }
 
+        // Name trust is user-tier only (ruling 2026-11-20): discovery dedupes a
+        // trusted name to its user-tier copy, so it needs the trusted names too.
+        $trustedNames = self::trustedBundleChannelNames();
+
         // The project tier is the repository the launch resolves its settings
         // from, not the raw working directory, so a launch from a subdirectory
         // sees the bundles `bundles install --project` placed at the root.
-        $discovery = new BundleDiscovery(ProjectRoot::resolve($root ?? ''), $paths);
+        $discovery = new BundleDiscovery(ProjectRoot::resolve($root ?? ''), $paths, $trustedNames);
         $bundles = $discovery->discover();
 
         foreach ($discovery->warnings() as $warning) {
@@ -2558,18 +2562,37 @@ final class Bootstrap
 
         $hooked = [];
         $mcped = [];
+        $projectTrusted = [];
 
         // D1 reversal (owner ruling, code-chat §10): declined survives only for
-        // untrusted bundles; one user-tier list consents both surfaces.
-        $trustedNames = self::trustedBundleChannelNames();
+        // untrusted bundles; one user-tier list consents both surfaces. Name
+        // trust is user-tier only (ruling 2026-11-20), so a project-tier bundle
+        // carrying a trusted name is refused with its own notice, not declined.
 
         foreach ($bundles as $bundle) {
-            if ($bundle->hooksPaths() !== [] && !\in_array($bundle->name, $trustedNames, true)) {
+            $named = \in_array($bundle->name, $trustedNames, true);
+
+            // Only channel and hook content is refused for a project copy of a
+            // trusted name; its commands, skills and agents still load, so a copy
+            // carrying none of that content has nothing to announce.
+            if ($named && $bundle->tier !== 'user') {
+                if ($bundle->hasTrustGatedContent()) {
+                    $projectTrusted[] = $bundle->name;
+                }
+            } elseif ($bundle->hooksPaths() !== [] && !$named) {
                 $hooked[] = $bundle->name;
             }
 
             if ($bundle->mcpFile() !== null) {
                 $mcped[] = $bundle->name;
+            }
+        }
+
+        // A project copy shadowed by its user-tier twin never reaches $bundles,
+        // yet its channel and hook content is refused just the same.
+        foreach ($discovery->shadowedTrustedCopies() as $shadowed) {
+            if ($shadowed->hasTrustGatedContent()) {
+                $projectTrusted[] = $shadowed->name;
             }
         }
 
@@ -2580,6 +2603,13 @@ final class Bootstrap
             self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks_declined', [
                 'count' => (string) \count($hooked),
                 'names' => implode(', ', $hooked),
+            ]));
+        }
+
+        if ($projectTrusted !== []) {
+            self::warnPermissionConfigInTranscript(Lang::t('bundles.project_tier_trust_refused', [
+                'count' => (string) \count($projectTrusted),
+                'names' => implode(', ', $projectTrusted),
             ]));
         }
 
@@ -5451,11 +5481,14 @@ public static function useMaxCost(?string $maxCost): void
                 continue;
             }
 
+            $after = '';
             try {
-                [$head] = \SugarCraft\Code\Skills\SkillFileReader::head($skill->sourcePath, 'SKILL.md');
+                [$head, $truncated] = \SugarCraft\Code\Skills\SkillFileReader::head($skill->sourcePath, 'SKILL.md', $after);
             } catch (\Throwable) {
                 continue;
             }
+            // The text the manifest parse judged, so a closer straddling the window edge is audited too.
+            $head = \SugarCraft\Code\Skills\SkillFileReader::frontmatterText($head, $truncated, $after);
 
             LaunchContext::putIgnoredFrontmatter($audit::SKILL, $identity, [
                 $skill->name,
@@ -5658,7 +5691,7 @@ public static function useMaxCost(?string $maxCost): void
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // thirty-six other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty-seven other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -5765,7 +5798,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user, at launch, which instruction files and enabled skill
-     * bodies the system prompt leaves out (audit 15d-09 / C3 residual R1).
+     * bodies the system prompt leaves out.
      *
      * Since C3 an instruction document over its budget — or one refused for
      * resolving outside the checkout, or an `@import` that does not fit — is a
@@ -5922,7 +5955,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user, at launch, that `maxToolSteps` or `maxOutputTokens` holds
-     * a value the resolvers will not use (audit 15d-16 residual R12).
+     * a value the resolvers will not use.
      *
      * Both resolvers answer null for nonsense — a fraction of a step, zero, a
      * negative, a non-number, a value too large for an integer — and null is
@@ -5979,7 +6012,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user when this TUI session's diagnostics are not going to the
-     * home log (audit R16 follow-up, raised by w9-diag-usage).
+     * home log.
      *
      * Since R16 the redirect never leaves `error_log()` on the tty: it walks
      * `~/.candy-code/logs/candy-code.log`, then a private temp-dir log, then
@@ -9233,7 +9266,7 @@ public static function useMaxCost(?string $maxCost): void
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // thirty-six call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty-seven call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is
@@ -9735,7 +9768,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Install the operator's `secretEnvAllowlist` on
-     * {@see ProcessContainment::useSecretEnvAllowlist()} — audit F-E1.
+     * {@see ProcessContainment::useSecretEnvAllowlist()}.
      *
      * Called from {@see tools()} and {@see hooks()}, the two builders of the
      * spawn sites the scrub covers (Bash/Grep and script hooks), so whichever

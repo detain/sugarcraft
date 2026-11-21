@@ -20,7 +20,7 @@ use SugarCraft\Plugins\Support\PromptFence;
  * token, bot tokens, app passwords — anything the operator named) never
  * echo back into a transcript or channel, in either direction.
  */
-final class TextSafety
+final class TextSafety implements \SugarCraft\Plugins\Bridge\TextGuard
 {
     /** @var list<string> */
     private array $secrets = [];
@@ -73,7 +73,7 @@ final class TextSafety
      * every one-way fold added to match more would silently rewrite
      * legitimate text too. The compensating bounds carry the rest: pairing
      * codes sit behind TTL 3600 + the 3-pending cap + DM/approver-only
-     * delivery, and the serve token's exposure is host-side.
+     * delivery, and the bot tokens are registered before any face starts.
      */
     private function redact(string $text): string
     {

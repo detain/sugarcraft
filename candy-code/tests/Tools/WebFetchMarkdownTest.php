@@ -137,6 +137,50 @@ final class WebFetchMarkdownTest extends TestCase
         $this->assertSame("(HTML could not be converted to Markdown; the raw bytes follow.)\n" . $body, $content);
     }
 
+    public function testAHiddenOnlyPageFallsBackToRawBytesWithOneLeadingNote(): void
+    {
+        // Every element here is hidden from the page's own view, so the
+        // conversion renders nothing. The raw bytes are the page that was
+        // asked for, so they come back rather than an empty result.
+        $body = '<div hidden>only hidden text</div><p style="display:none">also hidden</p>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/hidden-only"])->content();
+
+        $this->assertSame("(HTML could not be converted to Markdown; the raw bytes follow.)\n" . $body, $content);
+    }
+
+    public function testATemplateOnlyPageFallsBackToRawBytesWithOneLeadingNote(): void
+    {
+        // A template holds markup a browser never shows; with nothing else on
+        // the page the conversion renders nothing, so the raw bytes follow.
+        $body = '<template>tpl text</template><noembed>embed text</noembed>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/template-only"])->content();
+
+        $this->assertSame("(HTML could not be converted to Markdown; the raw bytes follow.)\n" . $body, $content);
+    }
+
+    public function testABomOnlyPageFallsBackToRawBytesWithOneLeadingNote(): void
+    {
+        // A byte-order mark is stripped before parsing; with no content left
+        // the conversion renders nothing. The raw bytes, mark included, are
+        // handed back as text rather than an empty result.
+        $body = "\xEF\xBB\xBF";
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/bom-only"])->content();
+
+        $this->assertSame("(HTML could not be converted to Markdown; the raw bytes follow.)\n" . $body, $content);
+    }
+
     public function testAnUnknownFormatIsRefusedBeforeAnythingIsDialed(): void
     {
         // No fake resolver, no fixture: the default wiring would fail with a
@@ -259,6 +303,40 @@ final class WebFetchMarkdownTest extends TestCase
             $content,
             'a wire-truncated body was converted and shipped as complete with no disclosure',
         );
+    }
+
+    public function testBracketsAndBackslashesInPageProseReachTheModelEscaped(): void
+    {
+        // The converter escapes page text so a bracket cannot forge a link;
+        // WebFetch passes that Markdown source on unchanged, so the escapes
+        // are part of what the model reads and copies.
+        $body = '<p>Use arr[0] and see [citation needed]</p><p>C:\temp\new</p>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/escapes"])->content();
+
+        $this->assertSame("Use arr\\[0\\] and see \\[citation needed\\]\n\nC:\\\\temp\\\\new\n", $content);
+    }
+
+    public function testHiddenAndTemplateLikeTextIsDroppedFromTheWebFetchMarkdown(): void
+    {
+        // Text the page hides from its own view, or markup a browser never
+        // shows, is not the page's content and does not reach the model.
+        $body = '<p>Visible</p>'
+            . '<div hidden>secret</div>'
+            . '<p style="display:none">gone</p>'
+            . '<template>tpl text</template>'
+            . '<noembed>embed text</noembed>'
+            . '<noframes>frame text</noframes>';
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(['url' => "http://md.test:$port/hidden"])->content();
+
+        $this->assertSame("Visible\n", $content);
     }
 
     /**

@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'semafor zamknięty przed przydziałem pozwolenia',
     'semaphore.closed' => 'semafor jest zamknięty i nie może przydzielić kolejnego pozwolenia',
     'semaphore.derive_closed' => 'nie można wyprowadzić nowej puli z zamkniętego semafora',
+    'semaphore.map_cancelled' => 'partia anulowana przed zakończeniem wszystkich elementów',
     'lru_map.capacity_invalid' => 'pojemność LRU musi wynosić co najmniej 1, otrzymano {capacity}',
     'lru_map.capacity_too_large' => 'pojemność LRU {capacity} przekracza strażnika wzrostu {max}',
     'lru_map.evict_from_empty' => 'nie można usunąć z pustej mapy LRU',

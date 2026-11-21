@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'تم إغلاق السيمافور قبل منح التصريح',
     'semaphore.closed' => 'السيمافور مغلق ولا يمكنه منح تصريح آخر',
     'semaphore.derive_closed' => 'لا يمكن اشتقاق مجموعة جديدة من سيمافور مغلق',
+    'semaphore.map_cancelled' => 'أُلغيت الدفعة قبل إنهاء جميع العناصر',
     'lru_map.capacity_invalid' => 'سعة LRU يجب أن تكون 1 على الأقل، تم تلقي {capacity}',
     'lru_map.capacity_too_large' => 'سعة LRU {capacity} تتجاوز حاجز النمو {max}',
     'lru_map.evict_from_empty' => 'لا يمكن الإخراج من خريطة LRU فارغة',

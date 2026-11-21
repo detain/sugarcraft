@@ -16,7 +16,7 @@ namespace CandyCode\Bundles\Discord\Bridge;
  * the OutboundChunker under the adapter's own declared limits; the
  * adapter still owns platform dialect (markdown flavor, link handling).
  */
-interface PlatformFace
+interface PlatformFace extends \SugarCraft\Plugins\Bridge\PlatformFace
 {
     public function name(): string;
 

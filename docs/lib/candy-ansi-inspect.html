@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -152,24 +156,63 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#reports-are-live-and-byte-stable">Reports are live and byte-stable</a></li>
+            <li class="toc-h3"><a href="#exec-mode-runs-a-program">Exec mode runs a program</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#inspect-a-saved-capture">Inspect a saved capture</a></li>
+            <li class="toc-h3"><a href="#get-the-report-as-json">Get the report as JSON</a></li>
+            <li class="toc-h3"><a href="#run-a-program-and-label-what-it-prints">Run a program and label what it prints</a></li>
+            <li class="toc-h3"><a href="#label-sequences-from-php">Label sequences from PHP</a></li>
+            <li class="toc-h3"><a href="#read-a-hostile-capture-safely">Read a hostile capture safely</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#inspector-and-reports">Inspector and reports</a></li>
+            <li class="toc-h3"><a href="#segments">Segments</a></li>
+            <li class="toc-h3"><a href="#streaming-exec-and-version">Streaming, exec and version</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-ansiinspect">SugarCraft\AnsiInspect</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-ansiinspect-exec">SugarCraft\AnsiInspect\Exec</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-ansiinspect-support">SugarCraft\AnsiInspect\Support</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#flags">Flags</a></li>
+            <li class="toc-h3"><a href="#exit-status">Exit status</a></li>
+            <li class="toc-h3"><a href="#locale">Locale</a></li>
+            <li class="toc-h2"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h2"><a href="#theming">Theming</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#exit-1-with-cannot-read">Exit 1 with &quot;cannot read&quot;</a></li>
+            <li class="toc-h3"><a href="#exit-1-with-a-usage-message-and-nothing-to-read">Exit 1 with a usage message and nothing to read</a></li>
+            <li class="toc-h3"><a href="#a-sequence-is-missing-from-the-report">A sequence is missing from the report</a></li>
+            <li class="toc-h3"><a href="#output-appears-late-under-json">Output appears late under --json</a></li>
+            <li class="toc-h3"><a href="#exec-mode-exits-1-and-says-no-pseudo-terminal-is-available">Exec mode exits 1 and says no pseudo-terminal is available</a></li>
+            <li class="toc-h3"><a href="#offsets-look-wrong-after-a-multi-byte-character">Offsets look wrong after a multi-byte character</a></li>
+            <li class="toc-h2"><a href="#byte-fidelity-contract">Byte-fidelity contract</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#one-parser-three-front-doors">One parser, three front doors</a></li>
+            <li class="toc-h3"><a href="#sanitized-labels">Sanitized labels</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#inspect">Inspect</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Pipe styled output through CandyAnsiInspect and each escape becomes a labeled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
+<p class="lede" style="margin-top: 28px;">candy-ansi-inspect decodes terminal escape sequences into labeled lines. Pipe styled output through it, or name a saved capture, and each SGR, CSI, OSC, DCS, APC and SS3 sequence becomes one line that says what it does, next to the raw bytes it was sent as. It is a PHP port of <a href="https://github.com/charmbracelet/sequin">charmbracelet/sequin</a>, reimplemented for PHP 8.3 with the sequin core behavior and a narrower flag surface. The tool and the library share one parser, so the CLI report and <code>Inspector::report()</code> produce the same text.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi-inspect</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi-inspect   # binary lands in vendor/bin/candy-ansi-inspect</code></pre>
+    <p>Requires PHP 8.3 or newer. From a project root the examples below type the bare command, so either prefix it with <code>vendor/bin/</code> or put <code>vendor/bin</code> on your <code>PATH</code>. <code>composer global require</code> installs it the same way.</p>
+    <p>A self-contained phar is the other option. The build seals the app with its published <code>vendor/</code> into one file, and refuses a linked-mode vendor or a dirty tree:</p>
+    <pre class="code"><code class="language-shell">php -d phar.readonly=0 tools/build-phar.php --out=dist/candy-ansi-inspect.phar</code></pre>
+    <p>A downloaded archive, even one renamed to drop the suffix, boots through its own frozen autoload and answers <code>--version</code> with the stamp it was built under. A source checkout reports <code>dev-master</code> rather than an invented semver.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-text">$ printf '\e[31mhello\e[0m world\n' | candy-ansi-inspect
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-shell">$ printf '\e[31mhello\e[0m world\n' | candy-ansi-inspect
 ESC[31m  SGR foreground red
 hello
 ESC[0m  SGR reset
@@ -181,44 +224,311 @@ ESC]0;new titleBEL  set window title to "new title"
 
 $ printf '\e[?2026h' | candy-ansi-inspect
 ESC[?2026h  enable synchronized output</code></pre>
+    <p>The display column prints named tokens (<code>BEL</code>, <code>LF</code>, <code>ESC</code>) wherever a raw control byte was sent. A captured sequence therefore cannot beep, retitle your window or move the cursor while you read the report, and the transcript diffs cleanly against <code>od</code> output.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>SGR</strong><span>Foreground / background / underline (58/59) color (16 / 256 / 24-bit truecolor) + bold / italic / underline (all <code>4:N</code> styles) / blink / reverse / conceal / strike / faint / overline / super- and subscript, plus matching off codes.</span></div>
-      <div class="feature"><strong>CSI</strong><span>Cursor moves, erase (including ECH), scroll region (DECSTBM), insert/delete line/char, tab set + backtab (<code>g</code>), repeat SGR (<code>b</code>), save/restore cursor (<code>s</code>/<code>u</code>), CR/LF/NEL (<code>E</code>/<code>F</code>), HVP/VPR/HPR positioning, Insert (<code>2~</code>), DSR + device-attributes reports, XTWINOPS, mouse reports (SGR / 1015 / X10), DECSCUSR cursor shape, DECRQM/DECRPM mode query.</span></div>
-      <div class="feature"><strong>OSC</strong><span>Title (0/2), icon (1), palette (4), cwd (7), hyperlink (8, params and URI split), color set/query (10/11/12 with <code>?</code>), palette reset (104), shell prompt markers (133/1337).</span></div>
-      <div class="feature"><strong>DEC private</strong><span>Cursor visibility, autowrap (7), blinking cursor (12), cursor-key application (1), origin mode (6), mouse modes (1000/1002/1003/1005/1006/1015), focused output (2031), alt screen (1047/1048/1049), bracketed paste (2004), sync output (2026).</span></div>
-      <div class="feature"><strong>Kitty keyboard</strong><span>Query / push / pop progressive enhancement levels, flags via <code>=</code>…u, layer pop by count.</span></div>
-      <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse($bytes)</code> yields <code>Segment</code> values, <code>Inspector::report($bytes)</code> renders the CLI's one-shot text, <code>StreamingInspector</code> drives live pipes, <code>ExecRunner::run()</code> reports a PTY child.</span></div>
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The tool is a parser with a label table. Input is split into <em>segments</em>. A <code>TextSegment</code> holds visible text between escapes, and a <code>SequenceSegment</code> holds one escape sequence, its raw bytes and its decoded label. Each segment records the byte offset where it started in the source stream, so a report can point at the exact position of a sequence in a multi-megabyte capture.</p>
+    <p>Anything the decoder does not recognize falls back to a generic <code>CSI/OSC/...</code> descriptor. No sequence that reaches the segmenter is dropped without a report. Bytes can still disappear upstream, inside the parser's state table. The byte-fidelity contract below lists exactly where that happens.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="reports-are-live-and-byte-stable" style="margin-top: 24px;">Reports are live and byte-stable</h3>
+    <p>A pipe is reported as it arrives. Stdin is read chunk by chunk, and each segment's line is written as soon as its sequence completes, so <code>tail -f log | candy-ansi-inspect</code> emits per sequence instead of waiting for the writer to close. The live report and the file report produce the same bytes.</p>
+
+    <h3 id="exec-mode-runs-a-program" style="margin-top: 24px;">Exec mode runs a program</h3>
+    <p>Exec mode starts a command on a fresh pseudo-terminal and reports every sequence it prints the instant it completes, then exits with the child's status. Everything after <code>--</code> belongs to the command, including its own flags. The PTY work is done by <a href="sugar-pty.html">sugar-pty</a>.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="inspect-a-saved-capture" style="margin-top: 24px;">Inspect a saved capture</h3>
+    <pre class="code"><code class="language-shell">printf '\e[31merror: disk full\e[0m\n' &gt; capture.ansi
+candy-ansi-inspect capture.ansi
+candy-ansi-inspect --show-offsets capture.ansi   # prefix each line with its byte position as @hex</code></pre>
+    <p>A saved capture works exactly like a pipe: the file argument produces the same report. <code>--show-offsets</code> adds the position column. Offsets count from zero across the whole source, and a normal segment's offset plus its reported bytes lands exactly on the next segment's offset.</p>
+
+    <h3 id="get-the-report-as-json" style="margin-top: 24px;">Get the report as JSON</h3>
+    <pre class="code"><code class="language-shell">candy-ansi-inspect --json capture.ansi | jq '.[] | select(.type == "sequence") | .description'</code></pre>
+    <p><code>--json</code> prints a JSON array with one object per segment. Each object carries <code>type</code> (<code>text</code> or <code>sequence</code>), the raw <code>content</code> bytes, the human <code>description</code> and the <code>byteOffset</code>. JSON is never live. A partial array is not parseable, so <code>--json</code> on a pipe collects every segment and prints the array when the source ends. The flag works before or after the file operand.</p>
+
+    <h3 id="run-a-program-and-label-what-it-prints" style="margin-top: 24px;">Run a program and label what it prints</h3>
+    <pre class="code"><code class="language-shell">candy-ansi-inspect -- ls --color=always
+candy-ansi-inspect -- git -c color.ui=always status</code></pre>
+    <p>The child runs on a PTY, so it sees a terminal and writes the sequences a real session would. The tool's exit status is the child's.</p>
+
+    <h3 id="label-sequences-from-php" style="margin-top: 24px;">Label sequences from PHP</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\AnsiInspect\Inspector;
+
+echo Inspector::report("\e[1;31mboom\e[0m");   // the three report lines, as the CLI prints them</code></pre>
+    <p>For a chunked source such as a log file or a live process, use <code>StreamingInspector</code>. See the Examples section for a worked chunk split.</p>
+
+    <h3 id="read-a-hostile-capture-safely" style="margin-top: 24px;">Read a hostile capture safely</h3>
+    <p>The report never replays a control byte. Control bytes are printed as named tokens, so a capture that contains a title change or a clipboard write shows only its label and cannot move your cursor or retitle your window.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The library lives in <code>SugarCraft\AnsiInspect\</code>. The tables below list the classes a caller uses directly. <code>AnsiHandler</code>, the parser callback behind both entry points, is described in the Architecture section, and <code>Lang</code>, the message catalog, under Configuration, in the Locale subsection. Neither is repeated here. The CLI is a thin layer over these.</p>
+
+    <h3 id="inspector-and-reports" style="margin-top: 24px;">Inspector and reports</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>Inspector</td><td><code>parse(string $input)</code></td><td>Parse ANSI bytes into a list of <code>Segment</code> values.</td></tr>
+    <tr><td>Inspector</td><td><code>report(string $input, bool $showOffsets = false)</code></td><td>One-shot labeled report text, the exact lines the CLI prints. Pass <code>true</code> for the offset column.</td></tr>
+    <tr><td>Inspector</td><td><code>reportAsJson(string $input)</code></td><td>The JSON array the <code>--json</code> flag prints.</td></tr>
+    <tr><td>Inspector</td><td><code>encodeSegmentsJson(iterable $segments)</code></td><td>Render any segment list as that JSON array.</td></tr>
+    <tr><td>Inspector</td><td><code>formatSegment(Segment $seg, bool $showOffsets = false)</code></td><td>Format one segment as a single report line.</td></tr>
+    <tr><td>Inspector</td><td><code>describeCsi(string $params, string $final)</code>, <code>describeOsc(string $payload)</code>, <code>describeDcs(string $payload, int $final = 0)</code>, <code>describeSs3(string $final)</code>, <code>describeEsc(string $byte, string $intermediate = '')</code></td><td>Label one sequence family. Each returns the human description for that payload.</td></tr>
+    <tr><td>Inspector</td><td><code>sanitizeLabelBytes(string $s)</code></td><td>Tokenize control bytes so a label can be shown without replaying them.</td></tr>
+    <tr><td>C0C1</td><td><code>c0Name(int $byte)</code>, <code>c1Name(int $byte)</code></td><td>The name of a C0 or C1 control byte, such as <code>BEL</code> or <code>LF</code>.</td></tr>
+    </table>
+
+    <h3 id="segments" style="margin-top: 24px;">Segments</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>Segment</td><td><code>raw()</code>, <code>describe()</code>, <code>byteOffset()</code></td><td>The abstract base. <code>raw()</code> returns the bytes, <code>describe()</code> the report text, <code>byteOffset()</code> the source offset or <code>null</code>.</td></tr>
+    <tr><td>TextSegment</td><td><code>__construct(string $value, ?int $offset = null)</code></td><td>Visible text between escape sequences. The text is <code>$value</code>.</td></tr>
+    <tr><td>SequenceSegment</td><td><code>__construct(string $bytes, string $label, ?int $offset = null)</code>, <code>printable(string $bytes)</code></td><td>One escape sequence. <code>$bytes</code> is the raw sequence and <code>$label</code> the decoded label, such as <code>SGR reset</code>.</td></tr>
+    </table>
+
+    <h3 id="streaming-exec-and-version" style="margin-top: 24px;">Streaming, exec and version</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+    <tr><td>StreamingInspector</td><td><code>feed(string $data)</code></td><td>Consume a chunk and return the segments it completed. A half sequence is held until its next bytes arrive.</td></tr>
+    <tr><td>StreamingInspector</td><td><code>finish()</code></td><td>Flush the held text and any unterminated sequence, so a dangling <code>ESC</code> arrives as its own segment.</td></tr>
+    <tr><td>Exec\ExecRunner</td><td><code>run(array $cmd, callable $emitLine, ...)</code></td><td>Run a command on a PTY, stream its report lines to <code>$emitLine</code>, and return the child's exit status. Returns <code>ExecRunner::EXIT_UNAVAILABLE</code> (1) when no PTY can be opened.</td></tr>
+    <tr><td>Support\Version</td><td><code>line()</code>, <code>current()</code>, <code>fromPharMetadata(string $path)</code></td><td>The <code>--version</code> line, the version this build reports, and the version stamped into a phar.</td></tr>
+    </table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from candy-ansi-inspect/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-ansi-inspect -->
+<p>Only methods declared in <code>candy-ansi-inspect/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-ansiinspect">SugarCraft\AnsiInspect</h3>
+<h4 id="api-sugarcraft-ansiinspect-ansihandler"><code>AnsiHandler</code> <small>final class</small></h4>
+<p>Collects ANSI parse events into a flat list of Segments.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>parse(string $input): array</code></td><td>Parse a complete input in one shot: feed every byte, then finalise.</td></tr>
+<tr><td><code>feed(string $input): void</code></td><td>Feed bytes through the state machine, accumulating segments.</td></tr>
+<tr><td><code>finish(): void</code></td><td>End of stream: force any in-flight string sequence to dispatch and finalise the dangling tail.</td></tr>
+<tr><td><code>reset(): void</code></td><td>Reset all accumulated state (segments, text buffer, flags). Used by StreamingInspector between sessions.</td></tr>
+<tr><td><code>drainSegments(): array</code></td><td>Return all segments produced since the last drain (or since reset). Does NOT call flushText() — pending text is only flushed when a sequence dispatch auto-flushes (csiDispatch / oscDispatch / etc.) or when finish() is called. This preserves the streaming invariant that text is returned only when a sequence is completed or the stream ends.</td></tr>
+<tr><td><code>flushText(): void</code></td><td></td></tr>
+<tr><td><code>printChar(string $rune): void</code></td><td></td></tr>
+<tr><td><code>execute(int $byte): void</code></td><td></td></tr>
+<tr><td><code>csiDispatch(int $final, array $params, int $prefix, int $intermediate): void</code></td><td></td></tr>
+<tr><td><code>escDispatch(int $final, int $intermediate): void</code></td><td></td></tr>
+<tr><td><code>oscDispatch(string $data): void</code></td><td></td></tr>
+<tr><td><code>dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void</code></td><td></td></tr>
+<tr><td><code>sosPmApcDispatch(string $kind, string $data): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-c0c1"><code>C0C1</code> <small>final class</small></h4>
+<p>Lookup tables for C0 (0x00–0x1F) and C1 (0x80–0x9F) control codes. Descriptions follow ANSI/ISO standards and common terminal conventions.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static c0Name(int $byte): string</code></td><td></td></tr>
+<tr><td><code>static c1Name(int $byte): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-inspector"><code>Inspector</code> <small>final class</small></h4>
+<p>Walk a string of mixed text + ANSI escape sequences and split it into Segments. The decoder labels SGR codes (foreground, background, attributes), CSI cursor moves, CSI erase/mode toggles, OSC titles, and bracketed-paste / focus / mouse mode sequences. Anything it doesn&#039;t recognise still gets a Segment with a generic <code>&quot;CSI&quot;</code> / <code>&quot;OSC&quot;</code> / <code>&quot;SS3&quot;</code> label, so no sequence that reaches the segmenter is dropped without a report. Bytes can still vanish further upstream, inside sugar-ansi-parser, before this code ever sees a dispatch — <code>README.md</code> keeps the closed list of every known case and <code>ByteFidelityTest</code> pins each one.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(string $input): array</code></td><td>Parse $input into a list of segments. Plain text becomes TextSegment; escape sequences become SequenceSegment.</td></tr>
+<tr><td><code>static report(string $input, bool $showOffsets = false): string</code></td><td>Render parsed segments as a sequin-style report (one per line).</td></tr>
+<tr><td><code>static formatSegment(Segment $seg, bool $showOffsets = false): string</code></td><td>One report line for a segment: its <code>describe()</code> rendering, prefixed with the hex byte offset when $showOffsets is set and the segment carries a stream position (segments hand-constructed outside a parse are untracked and render without a prefix).</td></tr>
+<tr><td><code>static reportAsJson(string $input): string</code></td><td>Render parsed segments as a machine-readable JSON array.</td></tr>
+<tr><td><code>static encodeSegmentsJson(iterable $segments): string</code></td><td>JSON projection of an already-parsed segment list — the shared body of reportAsJson() and the bin&#039;s <code>--json</code> streaming arm (finding 005: a pipe under --json collects segments and encodes the same array shape).</td></tr>
+<tr><td><code>static describeCsi(string $params, string $final): string</code></td><td></td></tr>
+<tr><td><code>static describeMouseX10(string $payload): string</code></td><td>X10 mouse event (finding 006): the three raw bytes that trail <code>ESC[M</code>, each offset by 32. Low bits 0-2 select button (3 = release), bit 4 shift, bit 8 meta, bit 16 ctrl, bit 5 drag, the 64 band wheels; coordinates are byte-minus-31 (1-based).</td></tr>
+<tr><td><code>static describeOsc(string $payload): string</code></td><td></td></tr>
+<tr><td><code>static describeDcs(string $payload, int $final = 0): string</code></td><td>Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel, tmux passthrough.</td></tr>
+<tr><td><code>static describeDcsParts(int $final, array $params, int $prefix, int $intermediate, string $data, string $rawPayload = &#039;&#039;): string</code></td><td>Classify a DCS body from the parser&#039;s true dispatch fields using the shared Dcs decoder, rendering the label in this inspector&#039;s house spelling: attacker-controlled payload bytes go through sanitizeLabelBytes() (named C0/C1 tokens), the same discipline as the OSC/APC labels, so a captured reply can&#039;t inject control bytes into the inspector&#039;s own output.</td></tr>
+<tr><td><code>static describeApc(string $payload): string</code></td><td>Decode APC payloads — CandyZone markers, kitty graphics.</td></tr>
+<tr><td><code>static describeSs3(string $final): string</code></td><td></td></tr>
+<tr><td><code>static describeEsc(string $byte, string $intermediate = &#039;&#039;): string</code></td><td>Names a two- or three-byte ESC sequence. The intermediate byte (the 0x20–0x2F the EscapeIntermediate state collects, finding 014) changes the final byte&#039;s meaning entirely — <code>ESC 8</code> is DECRC while <code>ESC # 8</code> is DECALN — so the bare-ESC arms are gated on its absence and an unexpected intermediate never borrows a bare label.</td></tr>
+<tr><td><code>static describeTruncated(string $bytes): string</code></td><td>Label a sequence the stream never terminated (ECMA-48 §5.6 escape sequences run introducer → parameters → intermediates → final byte, and the final byte is what completes them).</td></tr>
+<tr><td><code>static sanitizeLabelBytes(string $s): string</code></td><td>Replace C0, DEL and C1 control bytes in a label interpolation with visible tokens.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-ansi-inspect.</p>
+<h4 id="api-sugarcraft-ansiinspect-segment"><code>Segment</code> <small>abstract class</small></h4>
+<p>Base class for the chunks produced by Inspector::parse(). Every segment can both render itself verbatim (raw()) and produce a human-readable description (describe()).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>abstract raw(): string</code></td><td></td></tr>
+<tr><td><code>abstract describe(): string</code></td><td></td></tr>
+<tr><td><code>abstract byteOffset(): ?int</code></td><td>Absolute byte offset where this segment starts in the parsed input, or null for a segment that was hand-constructed and therefore carries no stream position (finding 019 — the location sequin prints beside every decoded entry).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-sequencesegment"><code>SequenceSegment</code> <small>final class</small></h4>
+<p>One ANSI escape sequence — its raw bytes paired with a decoded label (e.g. <code>&quot;SGR foreground red&quot;</code>). The label is what makes CandyAnsiInspect useful as a debugging tool: you can pipe styled output in and see exactly which sequence produced what effect.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $bytes, public readonly string $label, public readonly ?int $offset = null)</code></td><td>The raw bytes are stored verbatim; the report renders them through printable(), which tokenizes every control byte.</td></tr>
+<tr><td><code>raw(): string</code></td><td></td></tr>
+<tr><td><code>byteOffset(): ?int</code></td><td></td></tr>
+<tr><td><code>describe(): string</code></td><td></td></tr>
+<tr><td><code>static printable(string $bytes): string</code></td><td>Render bytes with control bytes replaced by visible tokens: <code>\x1b</code> becomes <code>ESC</code>, every C0/DEL/C1 byte becomes its named token (<code>CR</code>, <code>BEL</code>, <code>RI</code>, …), and printable ASCII plus well-formed UTF-8 runes survive verbatim.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-streaminginspector"><code>StreamingInspector</code> <small>final class</small></h4>
+<p>Streaming incremental parser for ANSI escape sequences.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>feed(string $data): array</code></td><td>Feed a chunk of input. Segments completed by this chunk are returned; incomplete sequences are held in the parser state for the next chunk.</td></tr>
+<tr><td><code>finish(): array</code></td><td>Flush any remaining buffered text and finalise pending sequences.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-ansiinspect-textsegment"><code>TextSegment</code> <small>final class</small></h4>
+<p>Visible text between escape sequences. describe() returns the payload verbatim so it shows up unmodified in inspector reports.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $value, public readonly ?int $offset = null)</code></td><td></td></tr>
+<tr><td><code>raw(): string</code></td><td></td></tr>
+<tr><td><code>describe(): string</code></td><td></td></tr>
+<tr><td><code>byteOffset(): ?int</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-ansiinspect-exec">SugarCraft\AnsiInspect\Exec</h3>
+<h4 id="api-sugarcraft-ansiinspect-exec-execrunner"><code>ExecRunner</code> <small>final class</small></h4>
+<p>Executes a command on a fresh pseudo-terminal and reports the raw bytes it prints, segment by segment, as they dispatch.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static run(array $cmd, callable $emitLine, ?callable $sessionFactory = null, $errorStream = STDERR, bool $showOffsets = false): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-ansiinspect-support">SugarCraft\AnsiInspect\Support</h3>
+<h4 id="api-sugarcraft-ansiinspect-support-version"><code>Version</code> <small>final class</small></h4>
+<p>The version string this tool reports on <code>--version</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static line(): string</code></td><td>The <code>--version</code> line: plain text, newline-terminated, produced by no state and no host probe — the flag must answer anywhere.</td></tr>
+<tr><td><code>static current(): string</code></td><td>The version this process reports: the archive stamp when running from a stamped phar, self::CURRENT everywhere else.</td></tr>
+<tr><td><code>static fromPharMetadata(string $path): ?string</code></td><td>The <code>version</code> a phar archive at $path was built to carry, or null when it names none (unreadable archive, wrong metadata shape, the <code>dev-build</code> sentinel, or an empty stamp). Every refusal is a null, never an exception — <code>--version</code> must answer on a machine whose phar cannot be opened.</td></tr>
+<tr><td><code>static versionFromMetadata(mixed $metadata): ?string</code></td><td>The judgement on the stamp itself, split out because the archive-open leg is unreachable from a suite that must not build phars: the release namespace strip, the <code>dev-build</code> refusal, and the wrong-type nulls are a pure function over what <code>getMetadata()</code> answers.</td></tr>
+<tr><td><code>static hostArchive(): string</code></td><td>The filesystem path of the phar this process was launched from, or &#039;&#039; when it was not launched from one — the two-identity law measured on candy-code&#039;s real builds and pinned by the bin autoload guard: inside archive-loaded code <code>Phar::running(false)</code> answers the archive path, while the stub context answers &#039;&#039; and there a &#039;.phar&#039;-suffixed <code>__DIR__</code> is the enclosing archive.</td></tr>
+</tbody>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>The tool has no configuration file. Its behavior is set by flags and by the locale of the environment.</p>
+    <h3 id="flags" style="margin-top: 24px;">Flags</h3>
+    <table class="api-table">
+    <tr><th>Flag</th><th>Effect</th></tr>
+    <tr><td><code>--json</code></td><td>Print the report as a JSON array. Collects segments, so it is not live.</td></tr>
+    <tr><td><code>--show-offsets</code></td><td>Prefix every line-mode report line with its segment's byte position as <code>@hex</code>. Off by default, so the default transcript stays byte-stable for diffs.</td></tr>
+    <tr><td><code>-- cmd [args…]</code></td><td>Exec mode. Everything after <code>--</code> is the command and its arguments.</td></tr>
+    <tr><td><code>-h</code>, <code>--help</code></td><td>Print usage on stdout and exit 0. Checked before any path is considered.</td></tr>
+    <tr><td><code>--version</code></td><td>Print the version line and exit 0.</td></tr>
+    </table>
+
+    <h3 id="exit-status" style="margin-top: 24px;">Exit status</h3>
+    <table class="api-table">
+    <tr><th>Situation</th><th>Prints</th><th>Stream</th><th>Exit status</th></tr>
+    <tr><td>Readable file argument or piped stdin</td><td>report</td><td>stdout</td><td><strong>0</strong></td></tr>
+    <tr><td><code>--help</code> or <code>-h</code></td><td>usage</td><td>stdout</td><td><strong>0</strong></td></tr>
+    <tr><td><code>--version</code></td><td>version line</td><td>stdout</td><td><strong>0</strong></td></tr>
+    <tr><td>Exec mode (<code>-- cmd [args…]</code>)</td><td>report</td><td>stdout</td><td>the child's exit status</td></tr>
+    <tr><td>No source: no operand and stdin is a terminal</td><td>usage</td><td>stderr</td><td><strong>1</strong></td></tr>
+    <tr><td>More than one source named</td><td>usage</td><td>stderr</td><td><strong>1</strong></td></tr>
+    <tr><td>Operand is not a readable regular file</td><td>refusal</td><td>stderr</td><td><strong>1</strong></td></tr>
+    </table>
+
+    <h3 id="locale" style="margin-top: 24px;">Locale</h3>
+    <p>Messages the tool prints itself, such as usage and refusals, are translated. The locale is read from <code>LC_ALL</code>, then <code>LC_MESSAGES</code>, then <code>LANG</code>, and the first usable value wins. <code>fr_FR.UTF-8</code> resolves to <code>fr</code>, and an unknown locale falls back to English. The labels inside a report are always English, so report bytes never depend on the caller's locale. Seventeen locale catalogs ship in <code>lang/</code>.</p>
+
+    <h2 id="keys-and-input" style="margin-top: 40px;">Keys and input</h2>
+    <p>The tool has no keyboard handling and no key bindings. Its input is bytes: a file operand, a pipe on stdin, or the output of a command after <code>--</code>. Pass exactly one source. Naming two files is refused with usage, rather than reporting the first and silently dropping the other.</p>
+    <p>A path that carries a scheme such as <code>php://</code> or <code>data://</code> is refused as a stream wrapper. Pipe those bytes on stdin instead. Process substitution (<code>&lt;(cmd)</code>), FIFOs and other special files are not readable regular files either, so pipe them as well.</p>
+
+    <h2 id="theming" style="margin-top: 40px;">Theming</h2>
+    <p>There is no theme. The report is intentionally uncolored: an ANSI-colored inspector would have to escape its own output, and the point of this tool is a byte-trustworthy transcript. Vocabulary lives in the labels themselves. The sequin option that reads <code>SEQUIN_THEME</code> has no counterpart here.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds one shell script and three PHP programs. The PHP examples load the Composer autoloader, so run them from a checkout after <code>composer install</code>.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-ansi-inspect">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-ansi-inspect/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-ansi-inspect/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/sequin">sequin</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/inspect.sh</code> is a guided tour of common sequences through the CLI: SGR colors, DEC private modes, OSC clipboard writes and OSC 8 hyperlinks. It is the program behind the demo GIF below.</li>
+      <li><code>examples/inspect-string.php</code> labels a byte string with <code>Inspector::parse()</code>, printing each segment's kind, offset and description, and then the full <code>Inspector::report()</code> text.</li>
+      <li><code>examples/streaming-chunks.php</code> feeds <code>StreamingInspector</code> three chunks, one of which ends inside <code>ESC[31m</code>. The held half sequence arrives only with the chunk that completes it, and <code>finish()</code> reports the dangling <code>ESC[</code> as truncated.</li>
+      <li><code>examples/json-report.php</code> prints <code>Inspector::reportAsJson()</code> and reads it back with <code>json_decode()</code> to show the fields a script would use.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">./examples/inspect.sh
+php examples/inspect-string.php
+php examples/streaming-chunks.php
+php examples/json-report.php</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected so a test that reads stdin cannot hang:</p>
+    <pre class="code"><code class="language-shell">cd candy-ansi-inspect &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The suite pins the behavior in several ways. <code>ReadmeTranscriptGoldenTest</code> checks that the transcripts in this README still come out byte for byte. <code>ByteFidelityTest</code> and <code>ByteOffsetTest</code> check the byte-fidelity contract. <code>C1ClassificationSweepTest</code> pins the C1 control roster byte for byte. <code>StreamingInspectorTest</code> covers chunk boundaries, and <code>CliTest</code> and <code>ExecRunnerTest</code> cover the command line and exec mode. <code>LangParityTest</code> checks that the locale catalogs match. <code>PerfGuardTest</code> keeps the report's cost growing no faster than its input, so a large capture cannot turn into a stall.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="exit-1-with-cannot-read" style="margin-top: 24px;">Exit 1 with "cannot read"</h3>
+    <p>The operand is not a readable regular file. A directory, a FIFO, a process substitution and a stream wrapper all refuse the same way. For a wrapper such as <code>data://</code> the message adds a hint line. Pipe the bytes on stdin instead: <code>cmd | candy-ansi-inspect</code>.</p>
+
+    <h3 id="exit-1-with-a-usage-message-and-nothing-to-read" style="margin-top: 24px;">Exit 1 with a usage message and nothing to read</h3>
+    <p>With no operand and a terminal on stdin, there is no source. Name a file or pipe something in. A pipe is always a source, even an empty one, and an empty source prints an empty report and exits 0.</p>
+
+    <h3 id="a-sequence-is-missing-from-the-report" style="margin-top: 24px;">A sequence is missing from the report</h3>
+    <p>Most such cases are documented byte-fidelity deviations, pinned by named tests. A cancel byte (CAN or SUB) inside a string such as an OSC is consumed as the terminator, so it appears nowhere in the report. An invalid UTF-8 byte in the middle of text is dropped with its position. An OSC closed by <code>ESC \</code> is re-emitted with a BEL terminator, because terminals accept that spelling everywhere. The full list is in the byte-fidelity section below.</p>
+
+    <h3 id="output-appears-late-under-json" style="margin-top: 24px;">Output appears late under <code>--json</code></h3>
+    <p>That is by design. A partial JSON array cannot be parsed, so <code>--json</code> collects every segment and prints the array when the source ends. For a live feed, drop <code>--json</code> and read the line-mode report, which prints each sequence as it completes.</p>
+
+    <h3 id="exec-mode-exits-1-and-says-no-pseudo-terminal-is-available" style="margin-top: 24px;">Exec mode exits 1 and says no pseudo-terminal is available</h3>
+    <p>Exec mode needs a PTY. When one cannot be opened, the run exits with <code>ExecRunner::EXIT_UNAVAILABLE</code> (1) and names the reason on stderr. Use a pipe or a file in that environment.</p>
+
+    <h3 id="offsets-look-wrong-after-a-multi-byte-character" style="margin-top: 24px;">Offsets look wrong after a multi-byte character</h3>
+    <p>Offsets are positions in the input bytes, not in characters. A text segment's offset is the byte where its first character starts. Use <code>byteOffset()</code> with <code>raw()</code> when you need exact positions, and not the length of a decoded string.</p>
+
+    <h2 id="byte-fidelity-contract" style="margin-top: 40px;">Byte-fidelity contract</h2>
+    <p>Reported bytes are the bytes that were sent, in four respects. Parameters keep the separator the sender used, so <code>ESC[4;3m</code> is never reported as <code>ESC[4:3m</code>. A dispatched CSI replays its own bytes verbatim, including stacked private markers and the 8-bit <code>0x9B</code> spelling. A string's <code>ESC \</code> terminator is reported once, inside the sequence it closed. A truncated sequence still arrives, as a <code>truncated …</code> segment carrying its raw bytes.</p>
+    <p>Every known deviation is pinned by a named test rather than hidden. Anything else that loses a byte is a bug. The deviations are these:</p>
+    <ul>
+      <li>An OSC closed by <code>ESC \</code> is re-emitted with a BEL terminator.</li>
+      <li>A DCS prelude rebuilt through the parser fields is lossy. Its final byte is dropped and an intermediate byte comes back ahead of the parameters. A BEL-terminated DCS replays verbatim.</li>
+      <li>A sequence is capped at 32 parameters, and a parameter value accumulates only up to 65535, both inside the parser. A dispatched CSI still replays its bytes as sent.</li>
+      <li>A string payload stops at 64 KiB, so a longer OSC arrives cut at that length with its terminator attached.</li>
+      <li>Some C0 bytes are ignored inside an OSC payload and never reach the buffer.</li>
+      <li>An illegal parameter byte, or a CAN or SUB inside a control sequence, cancels the sequence in flight. The cancelled bytes appear only when a later byte observes them.</li>
+      <li>A truncated UTF-8 rune at end of stream is dropped. Invalid UTF-8 bytes in the middle of text are dropped with their position.</li>
+      <li>An 8-bit string introducer such as <code>0x9D</code> (OSC) is re-emitted in its 7-bit spelling with a normalized terminator.</li>
+      <li>A CAN or SUB inside a string payload terminates it. The payload so far is reported as a truncated segment, and the cancel byte is consumed.</li>
+    </ul>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream (Go, charmbracelet/sequin)</th><th>candy-ansi-inspect (PHP)</th></tr>
+    <tr><td>The inspector's report and its per-sequence labels</td><td><code>Inspector::report()</code>, <code>Inspector::describe*()</code></td></tr>
+    <tr><td>The byte position column, which sequin prints by default</td><td><code>--show-offsets</code>, opt-in</td></tr>
+    <tr><td>Running a child command for its output (<code>-cmd</code>)</td><td><code>-- cmd [args…]</code> exec mode</td></tr>
+    </table>
+    <p>Divergences, by design. <code>-- cmd</code> replaces sequin's <code>-cmd</code>. The offset column is opt-in. There is no <code>--raw</code> inline-highlight mode, because the report's first column always shows the sent bytes tokenized, and there is nothing to switch off. There is no theming and no <code>--list</code>, since the cheat sheet is the README's decode section. There is no <code>listen</code> mode, because accepting network connections on a tool that renders untrusted byte streams is a security-review-sized feature the fleet has no precedent for.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <h3 id="one-parser-three-front-doors" style="margin-top: 24px;">One parser, three front doors</h3>
+    <p><code>Inspector::parse()</code> and <code>StreamingInspector</code> both drive the same <code>AnsiHandler</code>, which implements the <code>Handler</code> interface of the sugar-ansi-parser state machine. The handler collects segments as the parser dispatches them. The file, pipe and exec doors all reach it through one of those two entry points, so they produce the same labels.</p>
+    <h3 id="sanitized-labels" style="margin-top: 24px;">Sanitized labels</h3>
+    <p>Labels are built from the decoded fields. The raw bytes are kept only in the segment's <code>raw()</code>, and the report displays them through <code>SequenceSegment::printable()</code>, which tokenizes control bytes. A payload therefore cannot forge a report line or replay a control at the terminal.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The version a build reports comes from its packaging. A tagged phar reports its build stamp through <code>--version</code>. A downloaded archive reports the stamp it was built under. A source checkout reports <code>dev-master</code>, and the library never invents a semver for unreleased code. The phar build refuses a linked vendor tree or a dirty working tree, so release artifacts ship tested bytes.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-pty.html">sugar-pty</a>: the pseudo-terminal layer that exec mode runs a child on.</li>
+      <li><a href="sugar-ansi-parser.html">sugar-ansi-parser</a>: the escape-sequence state machine the handler implements.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Inspector</td><td>parse(bytes)</td><td>Parse ANSI bytes into segments</td></tr>
-<tr><td>Inspector</td><td>report(bytes)</td><td>One-shot labeled report text — the exact lines the CLI prints</td></tr>
-<tr><td>Inspector</td><td>reportAsJson(bytes)</td><td>Machine-readable JSON array of {type, content, description}</td></tr>
-<tr><td>Inspector</td><td>encodeSegmentsJson(segments)</td><td>Render any segment list as that JSON array</td></tr>
-<tr><td>Inspector</td><td>sanitizeLabelBytes(text)</td><td>Tokenize control bytes for safe display labels</td></tr>
-<tr><td>Segment</td><td>raw()</td><td>Abstract — the segment's bytes verbatim (sequences in normalized form)</td></tr>
-<tr><td>Segment</td><td>describe()</td><td>Abstract — printable bytes + decoded label, or the text payload verbatim</td></tr>
-<tr><td>TextSegment</td><td>$value</td><td>Readonly property — visible text between escape sequences</td></tr>
-<tr><td>SequenceSegment</td><td>$bytes</td><td>Readonly property — the escape sequence's raw bytes</td></tr>
-<tr><td>SequenceSegment</td><td>$label</td><td>Readonly property — the decoded label (e.g. "SGR reset")</td></tr>
-<tr><td>StreamingInspector</td><td>feed(chunk)</td><td>Incremental parse — returns the segments this chunk completed</td></tr>
-<tr><td>StreamingInspector</td><td>finish()</td><td>Flush buffered text and report any dangling tail</td></tr>
-<tr><td>Exec\ExecRunner</td><td>run(cmd, emitLine)</td><td>Spawn a PTY child and stream its report lines; returns the child's exit status</td></tr>
-</table>
     </div>
   </div>
 </section>
@@ -226,7 +536,7 @@ ESC[?2026h  enable synchronized output</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">A VHS-recorded GIF of the inspect demo, the one demo the library ships. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ansi-inspect/.vhs/inspect.gif" alt="Inspect" onerror="this.parentElement.style.display='none'">

@@ -159,6 +159,7 @@ use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
 use SugarCraft\Code\Chat\Handlers\HandlesSessionSurface;
 use SugarCraft\Code\Chat\Handlers\HandlesKeys;
+use SugarCraft\Code\Chat\Handlers\HandlesScheduledPumps;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -200,6 +201,8 @@ final class Chat implements Model
     use HandlesRunControl;
 
     use HandlesPointer;
+
+    use HandlesScheduledPumps;
 
     /**
      * The key types {@see update()} hands straight to the draft editor when no
@@ -1928,6 +1931,13 @@ final class Chat implements Model
          * In memory only; `/compact --undo` refuses it once a turn has run.
          */
         private readonly ?array $compactionRecord = null,
+        /**
+         * The transcript generation: `/clear` moves it on. A `/shells send`
+         * answer carries the generation it was typed under, so a row whose
+         * wait outlived a clear is dropped rather than landing in the emptied
+         * transcript. Appended at the TAIL, like the parameters above it.
+         */
+        private readonly int $transcriptEpoch = 0,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2333,7 +2343,7 @@ final class Chat implements Model
     }
 
     /**
-     * Turn on the single-writer session lock (audit SES-3(b)) and take it for
+     * Turn on the single-writer session lock and take it for
      * the session this Chat has open.
      *
      * When another TUI already holds that session, the Chat comes back
@@ -2360,7 +2370,7 @@ final class Chat implements Model
 
     /**
      * Submit $prompt as this session's first prompt once {@see init()} runs —
-     * the leftover command-line words (audit CLI-2(b)). Null or blank clears it.
+     * the leftover command-line words. Null or blank clears it.
      */
     public function withInitialPrompt(?string $prompt): self
     {
@@ -8404,8 +8414,7 @@ final class Chat implements Model
      * turn (double-Escape). The row is otherwise the restart row
      * {@see reviveCheckpointMessage()} builds; only the reason differs,
      * because "by restart" was false for a session that never restarted and
-     * the model reads this text on the next request (audit R15, the 15b-02
-     * residual). {@see isInterruptedResult()} matches it too, so it draws the
+     * the model reads this text on the next request. {@see isInterruptedResult()} matches it too, so it draws the
      * same struck-through `⊘ interrupted` state.
      */
     public const CANCELLED_TOOL_CALL = 'Tool call interrupted: the user cancelled the turn';
@@ -8746,6 +8755,7 @@ final class Chat implements Model
             // breaker un-trippable — every keystroke would hand the tier a clean
             // slate. Same reason 'tokenTracker' above is carried by identity.
             'consecutiveRefillCompactions' => $this->consecutiveRefillCompactions,
+            'transcriptEpoch' => $this->transcriptEpoch,
             'queuedPrompts' => $this->queuedPrompts,
             'pendingTurnHooks' => $this->pendingTurnHooks,
             'resolvedTurnHooks' => $this->resolvedTurnHooks,
@@ -9034,7 +9044,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * THIRTY-SEVEN OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * THIRTY-EIGHT OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
@@ -10645,7 +10655,7 @@ final class Chat implements Model
 
     /**
      * Run a command line on the user's behalf — a menu-bar row, Ctrl+N,
-     * the shell's provider picker — WITHOUT touching the draft (audit 15b-05).
+     * the shell's provider picker — WITHOUT touching the draft.
      *
      * WHY THIS EXISTS. The shell used to run these by feeding synthetic
      * keystrokes into {@see update()}: Backspace/Delete until the box was
@@ -11824,6 +11834,7 @@ final class Chat implements Model
             scheduleRegistry: $this->scheduleRegistry,
             lastCompaction: $this->compactionRecord['source'] ?? null,
             windowAssumed: $this->contextWindowAssumed(),
+            transcriptEpoch: $this->transcriptEpoch,
         );
     }
 
@@ -11893,6 +11904,10 @@ final class Chat implements Model
                         'pendingIdleCompaction' => null,
                         // Unarm the breaker with the transcript that tripped it.
                         'consecutiveRefillCompactions' => 0,
+                        // A shell-send answer still waiting on its relay belongs
+                        // to the transcript this clear emptied; the new epoch
+                        // makes its settled arm drop the row.
+                        'transcriptEpoch' => $this->transcriptEpoch + 1,
                     ];
                     break;
 
@@ -11958,7 +11973,7 @@ final class Chat implements Model
                     break;
 
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::Async:
-                    $cmds[] = Cmd::promise($effect->run());
+                    array_push($cmds, ...$effect->asyncCmds());
                     break;
 
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::OccupyTurn:
@@ -17859,7 +17874,7 @@ final class Chat implements Model
 
     /**
      * Whether a bare Tab completes an `@file` mention — or a `$skill` one
-     * (roadmap 5.14l) — rather than cycling panes (audit 15b-15): the caret
+     * (roadmap 5.14l) — rather than cycling panes: the caret
      * ends such a token in the draft and no modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
      * the reason its docblock gives - a shell that yields Tab on a condition
      * update() does not answer turns Tab into a dead key.
@@ -20243,8 +20258,8 @@ final class Chat implements Model
             // No daemons to poll; the clock still runs, and `/loop` rows fire
             // through the queue (persisted rows cannot: there is no supervisor
             // here to spawn them on, so their due stamps simply wait).
-            [$notices, $queued] = $this->pumpSchedules(time());
-            if ($notices === [] && $queued === []) {
+            [$notices, $queued, $fireCmd] = $this->pumpSchedules(time());
+            if ($notices === [] && $queued === [] && $fireCmd === null) {
                 return [$this, null];
             }
             $idle = $this->mutate([
@@ -20252,15 +20267,15 @@ final class Chat implements Model
                 'queuedPrompts' => [...$this->queuedPrompts, ...$queued],
             ]);
             if ($queued === [] || $idle->inFlight) {
-                return [$idle, null];
+                return [$idle, $fireCmd];
             }
 
-            return self::releaseQueuedPrompts([$idle, null]);
+            return self::releaseQueuedPrompts([$idle, $fireCmd]);
         }
 
         $supervisor->tick();
 
-        [$scheduleNotices, $scheduleQueued] = $this->pumpSchedules(time());
+        [$scheduleNotices, $scheduleQueued, $scheduleFire] = $this->pumpSchedules(time());
 
         $statuses = [];
         foreach ($supervisor->activeSessions() as $id => $session) {
@@ -20346,7 +20361,7 @@ final class Chat implements Model
         if ($notices === [] && $statuses === $this->backgroundStatuses) {
             // Nothing moved - returning $this keeps the renderer's diff empty
             // instead of repainting the transcript twice a second.
-            return [$this, null];
+            return [$this, $scheduleFire];
         }
 
         if ($announcements !== [] && $this->inFlight) {
@@ -20381,94 +20396,12 @@ final class Chat implements Model
             : $polled->terminalNotification('candy-code: ' . Lang::t('chat.schedule.heartbeat.alert', [
                 'name' => implode(', ', $heartbeatAlerts),
             ]));
-
+        // Late schedule verdicts ride the bell's return channel; batch drops the absent one.
+        $cmd = $scheduleFire === null ? $ring : Cmd::batch($ring, $scheduleFire);
         if ($queuedEntries === [] || $polled->inFlight) {
-            return [$polled, $ring];
+            return [$polled, $cmd];
         }
-
-        return self::releaseQueuedPrompts([$polled, $ring]);
-    }
-
-    /**
-     * AUT-1's clock, run by the pumps (both hosts share the shape): reload if
-     * the file moved, fire PERSISTED due rows as supervised daemons — behind
-     * per-row file locks, so a second TUI or `serve` claiming the same row
-     * skips instead of double-firing — retire the fired markers whose sessions
-     * settled, and turn EPHEMERAL `/loop` due rows into queued prompts.
-     *
-     * Bounds here are due-COUNTS, never timeouts (E646): a row missed a week
-     * of slots fires once and re-arms for the next live one
-     * ({@see Schedule::nextDueAfter()}), and a row whose previous run is still
-     * up is skipped-but-advanced rather than stacked.
-     *
-     * @return array{0: list<Message>, 1: list<string>} notice rows, queued prompts
-     */
-    private function pumpSchedules(int $now): array
-    {
-        $registry = $this->scheduleRegistry;
-        if ($registry === null) {
-            return [[], []];
-        }
-        $registry->reloadIfChanged();
-        $notices = [];
-        $supervisor = $this->backgroundSupervisor;
-        if ($supervisor !== null) {
-            foreach ($registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
-                $supervisor,
-                $this->agentManager,
-                $this->projectRoot,
-            )) as $result) {
-                $notice = match ($result['action']) {
-                    'fired' => Lang::t('chat.schedule.fired', ['name' => $result['name']]),
-                    'error' => Lang::t('chat.schedule.spawn_failed', [
-                        'name' => $result['name'],
-                        'error' => $result['error'] ?? '',
-                    ]),
-                    default => null,
-                };
-                if ($notice !== null) {
-                    $notices[] = Message::notice($notice);
-                }
-                // C-AGT-5.f: the same verdict, announced to outbound webhook
-                // subscribers as `schedule.fired`. Only the two decision rows
-                // the operator hears about ride out — a skip stays quiet
-                // because the TUI itself does not notice it either, and the
-                // `outcome` word is the transcript's own verdict vocabulary
-                // (`launched` / `spawn_failed`), not the raw action name.
-                if ($result['action'] === 'fired' || $result['action'] === 'error') {
-                    $this->dispatchOutboundWebhook(WebhookEvent::scheduleFired(
-                        (string) ($result['sessionId'] ?? ''),
-                        (string) $result['name'],
-                        $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
-                    ));
-                }
-            }
-            // A fired row's daemon settled (or vanished): the row may claim
-            // its next slot. This runs on the NEXT tick's fireDue, so a row
-            // settling and becoming due in the same second fires once, not
-            // twice, per pump.
-            foreach ($registry->firedNames() as $name) {
-                $sessionId = $registry->busySession($name);
-                $session = $sessionId === null ? null : $supervisor->session($sessionId);
-                if ($session === null || $session->isSettled()) {
-                    $registry->clearFired($name);
-                }
-            }
-        }
-        $queued = [];
-        foreach ($registry->due($now) as $row) {
-            if ($row->persisted) {
-                continue;
-            }
-            // Ephemeral rows live in this process only: no lock to claim, no
-            // file to advance, the prompt rides the queue like a settled
-            // announcement.
-            $registry->noteNextDue($row->name, $row->nextDueAfter($now));
-            $queued[] = $row->prompt;
-            $notices[] = Message::notice(Lang::t('chat.schedule.loop_queued', ['name' => $row->name]));
-        }
-
-        return [$notices, $queued];
+        return self::releaseQueuedPrompts([$polled, $cmd]);
     }
 
     /**

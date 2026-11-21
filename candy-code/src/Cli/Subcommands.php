@@ -4066,7 +4066,11 @@ final class Subcommands
         // working directory, resolved to its project root): without it `list`
         // scans `/.candy-code/bundles` and cannot see the bundle the install
         // just placed.
-        $discovery = new BundleDiscovery(ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))), $paths);
+        $discovery = new BundleDiscovery(
+            ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))),
+            $paths,
+            Bootstrap::trustedBundleChannelNames(),
+        );
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4138,6 +4142,31 @@ final class Subcommands
     private static function bundlesLine(string $message): void
     {
         \fwrite(\STDERR, 'candy-code: ' . $message . "\n");
+    }
+
+    /**
+     * The refusal for a staged tree that carries no usable manifest. A manifest
+     * that links outside the tree is named as the link it is, not reported as
+     * absent: "carries no plugin.json" would send the operator looking for a
+     * file that is present.
+     */
+    private static function bundlesNotBundle(string $staged, string $source): void
+    {
+        self::bundlesLine(self::bundlesNotBundleMessage($staged, $source));
+    }
+
+    /**
+     * The words {@see bundlesNotBundle()} prints. Split out so the choice
+     * between "absent" and "linked" is pinned without capturing STDERR, which
+     * an in-process `ob_start()` cannot see.
+     */
+    private static function bundlesNotBundleMessage(string $staged, string $source): string
+    {
+        $link = Bundle::refusedManifest($staged);
+
+        return $link === null
+            ? Lang::t('cli.bundles.install.not_bundle', ['source' => $source])
+            : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $link]);
     }
 
     /**
@@ -4284,7 +4313,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $source]));
+            self::bundlesNotBundle($staged, $source);
             self::removeTree($scratch);
 
             return NonInteractive::EXIT_FAILURE;
@@ -5059,7 +5088,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $entryName . '@' . $marketplaceName]));
+            self::bundlesNotBundle($staged, $entryName . '@' . $marketplaceName);
             self::removeTree($staged);
 
             return NonInteractive::EXIT_FAILURE;
@@ -5115,7 +5144,7 @@ final class Subcommands
             self::removeTree($staged);
         }
 
-        $recordRefusal = BundleSource::fromEntry($entry, $marketplaceName)->write($dest);
+        $recordRefusal = BundleSource::write(BundleSource::fromEntry($entry, $marketplaceName), $dest);
 
         if ($recordRefusal !== null) {
             self::bundlesLine($recordRefusal);
@@ -5357,7 +5386,7 @@ final class Subcommands
             }
 
             if (!Bundle::hasManifest($staged)) {
-                self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $name]));
+                self::bundlesNotBundle($staged, $name);
                 self::removeTree($staged);
                 $status = NonInteractive::EXIT_FAILURE;
 
@@ -5398,7 +5427,7 @@ final class Subcommands
                 continue;
             }
 
-            $write = BundleSource::fromEntry($fresh, $record->marketplace)->write($dir);
+            $write = BundleSource::write(BundleSource::fromEntry($fresh, $record->marketplace), $dir);
 
             if ($write !== null) {
                 self::bundlesLine($write);

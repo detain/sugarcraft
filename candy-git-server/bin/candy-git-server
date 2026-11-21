@@ -903,6 +903,13 @@ function cmdUserAdd(array $args): int
     }
 
     $username = $args[0];
+    // A dash-shaped first word ('--help', '-h', '-x') is a mistyped flag, never
+    // an account name: refuse it as a usage error before anything is written.
+    // Wider than repo create, which only refuses '--'-prefixed words, so a
+    // single-dash word is a data path there.
+    if (\str_starts_with($username, '-')) {
+        return error(Lang::t('cli.usage_user_add') . "\n");
+    }
     $password = null;
     // 096: an argv-carried password (any of the three spellings below)
     // is cleartext in ps /proc/pid/cmdline for the whole bcrypt window;

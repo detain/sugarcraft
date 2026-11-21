@@ -296,7 +296,9 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         $executor = new EngineExecutor($engine, heartbeat: $this->heartbeat, forkAskFree: true);
         $workflows = new WorkflowEngine(
             $registry,
-            new AgentWorkerPool(executor: $executor),
+            // probeLoop off (P4-12 CC-1 e0 continuation): this turn's loop
+            // ends with the turn, so a teardown must not arm its kills on it.
+            new AgentWorkerPool(executor: $executor, probeLoop: false),
             model: $engine->model(),
             provider: $engine->provider()->name(),
             permissionGate: $engine->permissionGate(),

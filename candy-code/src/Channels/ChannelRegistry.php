@@ -107,6 +107,7 @@ final class ChannelRegistry
         ?ChannelInboundLog $inbound = null,
         ?\Closure $settingsFor = null,
         ?string $stateDir = null,
+        ?\Closure $hostFor = null,
     ): array {
         if ($this->booted) {
             throw new \LogicException('ChannelRegistry::boot() runs once per launch.');
@@ -163,6 +164,7 @@ final class ChannelRegistry
                     $inbound,
                     $settingsFor === null ? [] : $settingsFor($entry['bundle']),
                     $stateDir,
+                    host: $hostFor === null ? null : $hostFor($entry['bundle']),
                 );
                 // Only an implementer of WritesCredentials receives the single credential writer (O9).
                 if ($instance instanceof WritesCredentials) {

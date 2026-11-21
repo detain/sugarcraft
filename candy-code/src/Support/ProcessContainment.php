@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Containment;
 use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 
@@ -516,7 +517,7 @@ final class ProcessContainment
      * {@see env()} with the credentials removed — the environment for the
      * spawn paths whose output the MODEL reads: Bash and Grep (through
      * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput}) and
-     * script hooks ({@see \SugarCraft\Code\Hooks\ScriptHook}). Audit F-E1.
+     * script hooks ({@see \SugarCraft\Code\Hooks\ScriptHook}).
      *
      * A name is removed when it matches {@see SECRET_ENV_PATTERNS} or is one
      * of {@see PROVIDER_SECRET_ENV_NAMES}, unless {@see secretEnvAllowed()}
@@ -684,7 +685,7 @@ final class ProcessContainment
     /**
      * The `cd DIR || exit 1` guard line every `/bin/sh -c` script that must
      * run inside DIR starts with — ONE spelling for Bash and
-     * {@see interactiveSpawnCommand()} (audit F-E3, then F-E5 for the copy
+     * {@see interactiveSpawnCommand()} (the copy
      * that kept the old form).
      *
      * Never `cd DIR && COMMAND`: `&&` binds tighter than `;`, so
@@ -706,6 +707,39 @@ final class ProcessContainment
     public static function cdGuard(string $dir): string
     {
         return 'cd ' . PosixShellQuote::quote($dir) . " || exit 1\n";
+    }
+
+    /**
+     * Longest wait for a detached shell to become its own process-group leader
+     * before the timeout kill reads that group ({@see awaitGroupLeader()}). The
+     * wrapper leads within a millisecond or two on an idle host, but the exec
+     * of `setsid` before its setsid() call can take hundreds of milliseconds
+     * under load, and a cap that expires first leaves the spawn-time group
+     * unrecorded: a backgrounded job then survives its timeout kill. The wait
+     * ends at once on leadership, so this cap is paid by a wrapper that never
+     * leads, including one that exited before it did.
+     */
+    public const GROUP_LEADER_WAIT_SECONDS = 1.0;
+
+    /**
+     * The detached wrapper makes the child its own process-group leader a moment
+     * after proc_open() returns, and the timeout's group kill needs that group
+     * id. Read it with a bounded wait so a fast spawn cannot be measured before
+     * the wrapper has run. Only leadership ends the wait early: a wrapper that
+     * exits before it leads stays a zombie until reaped, and posix_getpgid()
+     * still answers for it with its parent's group, so that case pays the cap.
+     *
+     * Run from a ChildRun spawn seam (withOnSpawn), before the group is measured.
+     */
+    public static function awaitGroupLeader(int $pid): void
+    {
+        if (!\function_exists('posix_getpgid')) {
+            return;
+        }
+        $deadline = microtime(true) + self::GROUP_LEADER_WAIT_SECONDS;
+        while (($group = @posix_getpgid($pid)) !== false && $group !== $pid && microtime(true) < $deadline) {
+            usleep(500);
+        }
     }
 
     /**
@@ -731,17 +765,7 @@ final class ProcessContainment
      */
     public static function groupId(mixed $process): ?int
     {
-        if (!\is_resource($process) || !\function_exists('posix_getpgid')) {
-            return null;
-        }
-
-        $status = \proc_get_status($process);
-        $pid = (int) ($status['pid'] ?? 0);
-        if ($pid <= 0) {
-            return null;
-        }
-
-        return \posix_getpgid($pid) === $pid ? $pid : null;
+        return Containment::groupId($process);
     }
 
     /**
@@ -776,12 +800,7 @@ final class ProcessContainment
             return \proc_terminate($process, $signal);
         }
 
-        $groupId = self::groupId($process);
-        if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
-            return true;
-        }
-
-        return \proc_terminate($process, $signal);
+        return Containment::terminate($process, $signal);
     }
 
     /**
@@ -979,12 +998,11 @@ final class ProcessContainment
 
     /**
      * KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point
-     * for any site that tears down a forked child of this package (audit
-     * B2/F-E2: Runtime's parallel deadline, AgentWorkerPool, the custom-command
-     * `!` runner). A site that runs inside an event-loop callback —
+     * for any site that tears down a forked child of this package (Runtime's parallel
+     * deadline, AgentWorkerPool, the custom-command `!` runner). A site that runs inside an event-loop callback —
      * EngineBackend's turn teardown and Chat's cancel sites — calls
      * {@see killTreeAsync()} instead, which runs this same sequence one loop
-     * tick per pass (audit R3).
+     * tick per pass.
      *
      * WHY `posix_kill($pid, 9)` WAS NOT ENOUGH. Every command a tool runs is
      * detach-prefixed ({@see spawnSpec()} — a real `setsid -w` or the PHP
@@ -1109,7 +1127,7 @@ final class ProcessContainment
 
     /**
      * {@see killTree()} WITHOUT HOLDING THE CALLER'S THREAD — the spelling for
-     * a teardown that runs inside an event-loop callback (audit R3: the
+     * a teardown that runs inside an event-loop callback (the
      * Escape-Escape cancel of an engine turn, a Chat tool fan-out or a
      * forked hook chain). Resolves once signal 9 has gone out to the whole
      * tree; like killTree() it never reaps.

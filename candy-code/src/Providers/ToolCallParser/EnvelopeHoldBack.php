@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Providers\ToolCallParser;
 
 /**
  * Decides how much of a streamed text can be painted now, and how much has to
- * wait because it may be the start of a tool-call envelope (audit 15a A8).
+ * wait because it may be the start of a tool-call envelope.
  *
  * WHY HOLD BACK RATHER THAN RETRACT. A streamed chunk is painted the moment it
  * is yielded and appended to the turn's transcript buffer; there is no way to

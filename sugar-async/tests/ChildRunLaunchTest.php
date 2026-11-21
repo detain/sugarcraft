@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Async\ChildRunLaunch;
@@ -241,6 +242,170 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertLessThan(5.0, $elapsed, 'the kill budget bounds the run');
     }
 
+    /** Timers armed on a private StreamSelectLoop, read the way SharedLoopResidue reads the shared one. */
+    private function armedTimers(StreamSelectLoop $loop): int
+    {
+        $queue = (new \ReflectionProperty(StreamSelectLoop::class, 'timers'))->getValue($loop);
+        $store = (new \ReflectionProperty($queue, 'timers'))->getValue($queue);
+
+        return \count($store);
+    }
+
+    /**
+     * The ladder poll must not outlive a launch that settles first. The poll is
+     * armed by the cancel while the child ignores TERM; the child then dies and the
+     * exit is seen by checkExit() before the poll's next tick, so finish() settles
+     * the launch with the poll still in the loop unless it is cancelled there.
+     */
+    public function testACancelledLaunchLeavesNoLadderTimerArmedWhenItSettlesOnTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(['sh', '-c', 'trap "" TERM; exec sleep 30'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            null,
+            null,
+            $source->token(),
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result): void {
+            $result = $r;
+        });
+
+        $launch->start();
+        $source->cancel();
+        $this->assertGreaterThan(0, $this->armedTimers($loop), 'the cancel arms the kill ladder');
+
+        proc_terminate($proc, 9);
+        $probeGone = $this->reflect(ChildRunLaunch::class, 'probeGone');
+        $checkExit = $this->reflect(ChildRunLaunch::class, 'checkExit');
+        $until = microtime(true) + 5.0;
+        while (!$probeGone->invoke($launch) && microtime(true) < $until) {
+            usleep(1000);
+        }
+        $checkExit->invoke($launch);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the exit settles the launch');
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertSame(0, $this->armedTimers($loop), 'no ladder poll stays armed on the loop once the launch has settled');
+    }
+
+    /**
+     * A leader that dies on TERM settles the launch on its exit, but the group still
+     * holds a grandchild that ignores TERM. The ladder must outlive that settle and
+     * KILL the group, or the grandchild survives the launch.
+     */
+    public function testGroupPidLaunchKillsATermIgnoringGrandchildAfterTheLeaderSettlesTheRun(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // The subshell's ignored TERM survives exec, so only the group KILL reaches
+        // the sleep; the leader sh dies on TERM from the first rung.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', '(trap "" TERM; exec sleep 300) & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result, 'the leader exit must settle the run');
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+
+        try {
+            // Settling must not stop the ladder: the loop keeps running until the
+            // group KILL lands, bounded by the TERM and KILL graces plus slack.
+            $gone = false;
+            $poll = $loop->addPeriodicTimer(0.02, static function () use ($loop, $grandchild, &$gone): void {
+                if (BoundedShutdown::pidExited($grandchild)) {
+                    $gone = true;
+                    $loop->stop();
+                }
+            });
+            $bound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $loop->run();
+            $loop->cancelTimer($poll);
+            $loop->cancelTimer($bound);
+
+            $this->assertTrue($gone, 'the kill ladder must reach the TERM-ignoring grandchild after the run settled');
+
+            // The group-path exception is bounded: once the group is empty the ladder
+            // cancels itself on its next 5 ms tick. Run until only this probe and the
+            // bound remain on the loop, so a ladder that held on past the group's
+            // emptying fails here rather than outliving the test.
+            $drainBound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $drainProbe = $loop->addPeriodicTimer(0.01, function () use ($loop, &$drainProbe): void {
+                if ($this->armedTimers($loop) <= 2) {
+                    $loop->stop();
+                }
+            });
+            $loop->run();
+            $loop->cancelTimer($drainProbe);
+            $loop->cancelTimer($drainBound);
+            $this->assertSame(0, $this->armedTimers($loop), 'the ladder must leave the loop once the group is empty, not hold a timer past the settle');
+        } finally {
+            if (!BoundedShutdown::pidExited($grandchild)) {
+                @posix_kill($grandchild, 9);
+            }
+        }
+    }
+
     public function testLaunchFeedsStdinAndReadsItBackLineByLine(): void
     {
         $this->requirePosixPipes();
@@ -357,5 +522,1036 @@ final class ChildRunLaunchTest extends TestCase
         $loop->run();
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected);
+    }
+
+    public function testOnChunkFeedsLaunchAsItArrives(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            $this->php('fwrite(STDOUT, "tick"); fwrite(STDERR, "tock");'),
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $seen = ['1' => '', '2' => ''];
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            10.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$seen): void {
+                $seen[(string) $slot] .= $chunk;
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame('tick', $result->stdout);
+        $this->assertSame('tock', $result->stderr);
+        $this->assertSame('tick', $seen['1']);
+        $this->assertSame('tock', $seen['2']);
+    }
+
+    public function testGroupPidLaunchKillsGrandchildrenPastTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        // setsid execs sh in place, so the status pid is the group leader and
+        // the group id; the background sleep is the grandchild the ladder must reach.
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $groupPid = proc_get_status($proc)['pid'];
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            $groupPid,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => BoundedShutdown::pidExited($grandchild), 3.0),
+            'the containment group kill must reach the grandchild',
+        );
+    }
+
+    /**
+     * The launch path names no group at spawn when the containment wrapper has not
+     * yet become a group leader, so the rungs must read the group the child leads
+     * while it is alive. Without that read a deadline kill signals only the shell,
+     * and the background job outlives the run.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheGroupTheWrapperLeads(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', 'sleep 30 & echo $!; wait'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            0.5,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
+            'the kill must reach the grandchild through the group the wrapper leads, not only the shell',
+        );
+    }
+
+    /**
+     * Regression: a wrapped shell that exits before the deadline with no spawn-time
+     * group left its background job alive. The group was read only while the shell
+     * lived, and a shell that exited after several polls was never read, so the
+     * deadline kill found no group and signalled nothing.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsAfterAPoll(): void
+    {
+        $this->assertGrandchildKilledWhenShellExits('sleep 31 & echo $!; sleep 0.2; exit 0', 1.0);
+    }
+
+    /**
+     * Regression: the shell has exited and been reaped before the launch is built, so
+     * neither the spawn-time read nor any live read can name the group, and only the
+     * wrapper-pid fallback can answer. The setsid wrapper leads a group whose id is its
+     * own pid, so the deadline kill reaches the job.
+     */
+    public function testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsBeforeAnyPoll(): void
+    {
+        $this->assertGrandchildKilledWhenShellExits('sleep 31 & echo $!; exit 0', 0.5);
+    }
+
+    /**
+     * Regression: launch() built its ChildRunLaunch without forwarding withSetsidWrapped(),
+     * so the reap-path fallback never ran in production, while every direct-construction
+     * test stayed green. The timing tests above cannot catch that: the spawn-time group read
+     * may latch the group on its own. This pins the forwarding deterministically. It spawns
+     * a plain process, builds the launch through buildLaunch() without starting it, and reads
+     * the flag back from the constructed ChildRunLaunch, in both states.
+     */
+    public function testBuildLaunchForwardsTheSetsidWrappedFlagToTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+
+        foreach ([true, false] as $wrapped) {
+            $proc = proc_open(['sleep', '5'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+            $this->assertIsResource($proc);
+            try {
+                $run = ChildRun::new(['sleep', '5'])->withSetsidWrapped($wrapped);
+                $build = new \ReflectionMethod(ChildRun::class, 'buildLaunch');
+                $build->setAccessible(true);
+
+                /** @var ChildRunLaunch $launch */
+                $launch = $build->invoke($run, new StreamSelectLoop(), $proc, $pipes, null, null, new \React\Promise\Deferred());
+
+                $this->assertSame(
+                    $wrapped,
+                    $this->reflect(ChildRunLaunch::class, 'setsidWrapped')->getValue($launch),
+                    'launch() must forward withSetsidWrapped() to ChildRunLaunch; a dropped argument leaves the wrapper-pid fallback dead',
+                );
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+        }
+    }
+
+    /**
+     * Runs a setsid-wrapped shell with no spawn-time group, past its deadline, and
+     * asserts the background job it printed is gone once the launch settles.
+     */
+    private function assertGrandchildKilledWhenShellExits(string $script, float $timeout): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', $script],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        self::awaitShellReaped($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            $timeout,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+            setsidWrapped: true,
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $loop->run();
+        $loop->cancelTimer($guard);
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
+            'the kill must reach the background job the exited shell left in its group',
+        );
+    }
+
+    /**
+     * End-to-end pin of the production wiring: ChildRun::launch() of a containment-wrapped
+     * child, declared with withSetsidWrapped() as CommandBackend::childRun() does. The
+     * shell backgrounds a job and exits, and the deadline kill must reach the job. Which
+     * read answers is timing-dependent here: launch() reads the spawn-time group right
+     * after proc_open, and the setsid exec may not have happened yet, so that read can
+     * latch the group or miss it. Either way the job must die, but this test does not pin
+     * the wrapper-pid fallback. testLaunchWithoutASpawnTimeGroupKillsTheJobWhenTheShellExitsBeforeAnyPoll
+     * pins the fallback deterministically. Without the flag reaching ChildRunLaunch, the
+     * kill rungs have no group and the job survives.
+     */
+    public function testChildRunLaunchKillsTheJobOfAContainedShellThatExitedBeforeAnyPoll(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill and /usr/bin/setsid');
+        }
+
+        $grandchild = null;
+        $loop = new StreamSelectLoop();
+        $run = ChildRun::new(['/usr/bin/setsid', 'sh', '-c', 'sleep 31 & echo $!; exit 0'])
+            ->withTimeout(0.5)
+            ->withSetsidWrapped(true)
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            });
+
+        $result = $this->settle($loop, $run->launch($loop));
+
+        $this->assertSame(ChildResult::TIMED_OUT, $result->status);
+        $this->assertIsInt($grandchild, 'the grandchild pid must be read from stdout');
+        $this->assertTrue(
+            BoundedShutdown::waitBounded(static fn (): bool => self::grandchildGone($grandchild), 3.0),
+            'the kill must reach the background job of a contained shell that exited before any poll',
+        );
+    }
+
+    /**
+     * Regression: an unwrapped child never leads a group, so its pid is not a group id.
+     * Once it has exited with no live group read, the kill rungs must not fall back to
+     * that pid: a pid reused by a stranger's group leader would be signalled as a group.
+     * The job the shell left stays out of reach, as it does for any unwrapped child.
+     */
+    public function testUnwrappedChildThatExitedNamesNoGroupToSignal(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to reap the background job the shell left');
+        }
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            ['sh', '-c', 'sleep 31 & echo $!; exit 0'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $grandchild = null;
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            1.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use (&$grandchild): void {
+                if ($grandchild === null && (string) $slot === '1') {
+                    $grandchild = (int) trim($chunk);
+                }
+            },
+        );
+
+        // The shell's exit is seen while its background job still holds stdout open,
+        // so the probe reads the group in the state the deadline kill would.
+        $exited = new \ReflectionProperty(ChildRunLaunch::class, 'exited');
+        $killGroup = new \ReflectionMethod(ChildRunLaunch::class, 'killGroup');
+        $probed = false;
+        $groupAtExit = null;
+        $probe = $loop->addPeriodicTimer(0.02, static function () use (&$probed, &$groupAtExit, $exited, $killGroup, $launch): void {
+            if (!$probed && $exited->getValue($launch) === true) {
+                $probed = true;
+                $groupAtExit = $killGroup->invoke($launch);
+            }
+        });
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        try {
+            $launch->start();
+            $loop->run();
+        } finally {
+            $loop->cancelTimer($probe);
+            $loop->cancelTimer($guard);
+            if (is_int($grandchild) && $grandchild > 1 && @posix_kill($grandchild, 0)) {
+                @posix_kill($grandchild, 9);
+            }
+        }
+
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertTrue($probed, 'the shell never reached exited, so no group was read');
+        $this->assertNull($groupAtExit, 'an unwrapped child that exited must name no group for the kill rungs');
+        $this->assertIsInt($grandchild, 'the background job pid must be read from stdout');
+    }
+
+    /**
+     * Regression: a cancel that lands after a wrapped shell has exited but before the
+     * next status poll records it. The TERM rung must still reach the job the shell
+     * left in its group, so the job's TERM trap runs before any KILL. The cancel fires
+     * from the first loop tick that sees the shell as a zombie, while exited is unset.
+     */
+    public function testCancelInTheExitedShellWindowStillTerminatesTheBackgroundJob(): void
+    {
+        $this->requirePosixPipes();
+        if (!function_exists('posix_kill') || !is_executable('/usr/bin/setsid') || !is_readable('/proc/self/stat')) {
+            $this->markTestSkipped('needs posix_kill, /usr/bin/setsid and procfs');
+        }
+        $marker = tempnam(sys_get_temp_dir(), 'cc1term');
+        $this->assertIsString($marker);
+        @unlink($marker);
+
+        // The job traps TERM and writes the marker before it exits; the shell exits at once.
+        $script = '(trap "printf term > ' . $marker . '; exit 0" TERM; sleep 31 & wait) & echo $!; exit 0';
+        $proc = proc_open(
+            ['/usr/bin/setsid', 'sh', '-c', $script],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $loop = new StreamSelectLoop();
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            null,
+            null,
+            $source->token(),
+            null,
+            null,
+            setsidWrapped: true,
+        );
+        $result = null;
+        $deferred->promise()->then(static function (ChildResult $r) use (&$result, $loop): void {
+            $result = $r;
+            $loop->stop();
+        });
+        $guard = $loop->addTimer(10.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $launch->start();
+        $spawnPid = (new \ReflectionProperty(ChildRunLaunch::class, 'spawnPid'))->getValue($launch);
+        $this->assertGreaterThan(0, $spawnPid, 'start() must read the wrapper pid');
+        $exited = new \ReflectionProperty(ChildRunLaunch::class, 'exited');
+
+        $fired = false;
+        $firedLive = false;
+        $watch = $loop->addPeriodicTimer(0.001, static function () use (&$fired, &$firedLive, $source, $exited, $launch, $spawnPid): void {
+            if ($fired || !self::isZombie($spawnPid)) {
+                return;
+            }
+            $fired = true;
+            $firedLive = $exited->getValue($launch) === false;
+            $source->cancel();
+        });
+
+        $trapRan = false;
+        try {
+            $loop->run();
+        } finally {
+            $loop->cancelTimer($watch);
+            $loop->cancelTimer($guard);
+            $trapRan = is_file($marker);
+            @unlink($marker);
+            // Reaps whatever a failing run left behind in the shell's group.
+            @posix_kill(-$spawnPid, 9);
+        }
+
+        $this->assertTrue($fired, 'the shell was never seen as a zombie before its exit poll, so the cancel window was not reached');
+        $this->assertTrue($firedLive, 'the cancel must land while exited is still unset');
+        $this->assertInstanceOf(ChildResult::class, $result);
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertTrue($trapRan, 'the TERM rung must reach the job the exited shell left, so its TERM trap runs');
+    }
+
+    /** True while $pid is a zombie: exited and not yet reaped by the status poll. */
+    private static function isZombie(int $pid): bool
+    {
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat === false) {
+            return false;
+        }
+
+        $after = strrpos($stat, ')');
+
+        return $after !== false && substr(trim(substr($stat, $after + 1)), 0, 1) === 'Z';
+    }
+
+    /**
+     * Waits until the shell has exited and proc_get_status() has reaped it. The reap is
+     * what makes the group reads fail: getpgid() on a reaped pid finds no process, so the
+     * launch built afterwards sees no live group and must take the wrapper-pid fallback.
+     *
+     * @param resource $proc
+     */
+    private static function awaitShellReaped($proc): void
+    {
+        $until = microtime(true) + 5.0;
+        while (proc_get_status($proc)['running'] === true) {
+            if (microtime(true) >= $until) {
+                self::fail('the wrapped shell did not exit within 5 seconds');
+            }
+            usleep(5_000);
+        }
+    }
+
+    /**
+     * Gone means signal-refused or a zombie. The grandchild is reparented to PID 1 on
+     * kill, and a PID 1 that does not reap leaves it a zombie, which
+     * BoundedShutdown::pidExited() would count as alive. Mirrors the candy-code
+     * CommandBackendTest isLive() check.
+     */
+    private static function grandchildGone(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return true;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat !== false) {
+            $after = strrpos($stat, ')');
+            $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+            return $state === 'Z' || $state === 'X';
+        }
+
+        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>/dev/null'));
+
+        return $state === '' || $state[0] === 'Z';
+    }
+
+    public function testOnSpawnReportsThePidOnTheLoopPath(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $reported = [];
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, (string) getmypid());'))
+            ->withOnSpawn(static function (int $pid) use (&$reported): void {
+                $reported[] = $pid;
+            })
+            ->launch($loop));
+
+        $this->assertCount(1, $reported);
+        $this->assertGreaterThan(0, $reported[0]);
+        $this->assertSame((string) $reported[0], $r->stdout);
+    }
+
+    public function testAnOnSpawnThrowRejectsAndKillsTheStartedChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the rejection.');
+        }
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $pid = 0;
+
+        try {
+            $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+
+                    throw new \RuntimeException('onSpawn refused');
+                })
+                ->launch($loop));
+            self::fail('an onSpawn throw must reject launch()');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('onSpawn refused', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
+
+    public function testAnOnSpawnThrowOfAnyTypeRejectsLaunchWithoutThrowingSynchronously(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the child after the rejection.');
+        }
+        $loop = new StreamSelectLoop();
+        $pid = 0;
+
+        $promise = ChildRun::new($this->php('sleep(30);'))
+            ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                $pid = $spawned;
+
+                throw new \LogicException('onSpawn misuse');
+            })
+            ->launch($loop);
+
+        // A non-RuntimeException must become the rejection too, not escape launch() as a throw.
+        $this->assertInstanceOf(PromiseInterface::class, $promise);
+        try {
+            $this->settle($loop, $promise);
+            self::fail('an onSpawn LogicException must reject launch()');
+        } catch (\LogicException $e) {
+            $this->assertSame('onSpawn misuse', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $pid);
+        $this->runUntil($loop, static fn (): bool => !\posix_kill($pid, 0));
+        $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
+    }
+
+    /**
+     * abandonSpawn() serves launch(), which must never block the loop: the SIGKILLed
+     * child is closed by a loop timer, so the call itself returns with the handle
+     * still open, and the close lands on a later tick.
+     */
+    public function testAbandonSpawnDefersTheCloseToALoopTimer(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $staged = \tempnam(\sys_get_temp_dir(), 'staged-deferred-');
+        self::assertIsString($staged);
+        \file_put_contents($staged, 'payload');
+        $pipes = [];
+        $proc = \proc_open($this->php('sleep(30);'), [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($proc);
+
+        try {
+            $abandon = new \ReflectionMethod(ChildRun::class, 'abandonSpawn');
+            $abandon->setAccessible(true);
+            $abandon->invoke(null, $proc, $pipes, $staged, null, $loop);
+
+            self::assertTrue(\is_resource($proc), 'abandonSpawn must not close the child on the call itself');
+            self::assertFileExists($staged, 'the payload waits for the reap, not the call');
+
+            $this->runUntil($loop, static fn (): bool => !\is_resource($proc));
+            self::assertFalse(\is_resource($proc), 'the loop timer must close the killed child');
+            self::assertFileDoesNotExist($staged);
+        } finally {
+            @\unlink($staged);
+            if (\is_resource($proc)) {
+                \proc_terminate($proc, 9);
+                \proc_close($proc);
+            }
+        }
+    }
+
+    /**
+     * Run the loop until $done() holds (checked every 10 ms) or $budget seconds pass.
+     */
+    private function runUntil(LoopInterface $loop, callable $done, float $budget = 5.0): void
+    {
+        $poll = $loop->addPeriodicTimer(0.01, static function () use ($loop, $done): void {
+            if ($done()) {
+                $loop->stop();
+            }
+        });
+        $guard = $loop->addTimer($budget, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $loop->run();
+        $loop->cancelTimer($poll);
+        $loop->cancelTimer($guard);
+    }
+
+    /**
+     * The launch counterpart of the run() abandonment: the parent exits at once and
+     * a backgrounded descendant keeps the pipes open and silent. Launch cuts them
+     * after the silence budget and settles, EXITED with the pipe reported abandoned,
+     * long before the 4 s deadline.
+     */
+    public function testLaunchAbandonsAPipeHeldByADescendantAfterTheExitGrace(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertTrue($r->succeeded());
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the silence budget');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the silence budget before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch must settle after the exit grace, not at the 4s deadline');
+    }
+
+    /**
+     * Launch reads on while the pipes keep yielding after the exit: a descendant
+     * that writes every half second for two seconds is read to EOF, so all five
+     * lines are kept and nothing is abandoned.
+     */
+    public function testLaunchExitGraceCountsSilenceNotTimeFromTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', '(for i in 1 2 3 4 5; do echo $i; sleep 0.5; done) & exit 0'])
+            ->withTimeout(10.0)
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame("1\n2\n3\n4\n5\n", $r->stdout);
+        $this->assertFalse($r->abandonedPipes());
+    }
+
+    /**
+     * The child writes 60 000 bytes and exits. The loop stalls for 1.5 s just after
+     * the second 8 KiB chunk, which is past the 1 s exit grace, so the exit is seen
+     * with bytes still unread in the pipe. Those bytes were written before the exit,
+     * so launch must read them before it cuts a silent pipe: all 60 000 are kept and
+     * nothing is abandoned.
+     */
+    public function testLaunchKeepsOutputBufferedBehindAStalledLoopAfterTheExit(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $chunks = 0;
+
+        $r = $this->settle($loop, ChildRun::new($this->php('fwrite(STDOUT, str_repeat("x", 60000));'))
+            ->withTimeout(10.0)
+            ->withOnChunk(static function (int|string $slot, string $chunk) use (&$chunks, $loop): void {
+                if ($slot === 1 && ++$chunks === 2) {
+                    $loop->futureTick(static function (): void {
+                        \usleep(1_500_000);
+                    });
+                }
+            })
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(60000, \strlen($r->stdout), 'output buffered behind the stalled loop is read, not cut');
+        $this->assertFalse($r->abandonedPipes(), 'nothing was held by a descendant, so nothing is abandoned');
+    }
+
+    /**
+     * An idle budget shorter than the exit grace must not cut a child that has
+     * already exited: the grace governs its held pipe, so launch settles EXITED with
+     * the pipe reported abandoned, not TIMED_OUT.
+     */
+    public function testLaunchExitGraceGovernsAHeldPipeWhenAnIdleBudgetIsSet(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(4.0)
+            ->withIdleTimeout(0.5)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $r->status, 'an exited child is not idle-killed');
+        $this->assertSame(0, $r->exitCode);
+        $this->assertTrue($r->abandonedPipes(), 'the held pipe is abandoned after the exit grace');
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'the pipe is read on for the exit grace before it is cut');
+        $this->assertLessThan(3.0, $elapsed, 'launch settles after the exit grace, not at the idle budget or deadline');
+    }
+
+    /**
+     * Regression: launch() counted a stdin write as output for the exit grace, so a
+     * descendant that drained its stdin slowly and wrote nothing to stdout held the
+     * pipes to the deadline (TIMED_OUT), while run() cut them one grace after the exit
+     * and reported EXITED with the pipe abandoned. The grandchild reads 8 KiB every
+     * 0.2 s, so each stdin write lands inside the 0.6 s grace; only stdout reads count.
+     * Both entry points must give the same result.
+     */
+    public function testLaunchAndRunCutAHeldPipeAtTheSameGraceWhileADescendantDrainsStdin(): void
+    {
+        $this->requirePosixPipes();
+        $reader = 'while (($c = fread(STDIN, 8192)) !== "" && $c !== false) { usleep(200000); }';
+        // A background job in sh gets /dev/null as stdin unless it is redirected from
+        // an fd that still holds the pipe, so the pipe is duplicated first.
+        $argv = ['/bin/sh', '-c', 'exec 3<&0; "$0" -r "$1" <&3 & exit 0', PHP_BINARY, $reader];
+        $configured = static fn (): ChildRun => ChildRun::new($argv)
+            ->withTimeout(4.0)
+            ->withExitGrace(0.6)
+            ->withStdin(str_repeat('x', 262144));
+
+        $sync = $configured()->run();
+
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+        $async = $this->settle($loop, $configured()->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::EXITED, $sync->status, 'run() cuts the held pipe after the grace');
+        $this->assertTrue($sync->abandonedPipes());
+        $this->assertSame(ChildResult::EXITED, $async->status, 'launch() must cut the held pipe at the same grace, not hold it to the deadline');
+        $this->assertTrue($async->abandonedPipes(), 'the held pipe is reported abandoned on the loop path too');
+        $this->assertSame($sync->exitCode, $async->exitCode);
+        $this->assertLessThan(3.0, $elapsed, 'launch settles one grace after the exit, not at the 4 s deadline');
+    }
+
+    /** The control for the launch grace: with it removed, a held pipe holds launch to its deadline. */
+    public function testLaunchWithoutAnExitGraceHoldsAHeldPipeToTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $started = \SugarCraft\Async\Clock::monotonicSeconds();
+
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'sleep 6 & exit 0'])
+            ->withTimeout(2.0)
+            ->withExitGrace(null)
+            ->launch($loop));
+        $elapsed = \SugarCraft\Async\Clock::monotonicSeconds() - $started;
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertFalse($r->abandonedPipes(), 'a deadline kill is not an abandonment');
+        $this->assertGreaterThanOrEqual(1.5, $elapsed, 'launch waits for the deadline while the pipe is held');
+    }
+
+    /**
+     * The child exits with 60 000 bytes still unread, and the loop stalls past the
+     * exit grace before the exit is checked again. The post-exit read takes a chunk,
+     * and the chunk's onChunk cancels the launch. The ladder then closes the pipes,
+     * and the read must stop there: reading a closed pipe is a TypeError out of the
+     * check timer. The launch settles CANCELLED.
+     */
+    public function testACancelFromOnChunkDuringTheExitGraceSettlesCancelledWithoutATypeError(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $proc = proc_open(
+            $this->php('fwrite(STDOUT, str_repeat("x", 60000));'),
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+
+        $source = CancellationSource::new();
+        $deferred = new \React\Promise\Deferred();
+        $launch = new ChildRunLaunch(
+            $loop,
+            $proc,
+            $pipes,
+            '',
+            30.0,
+            ChildRun::DEFAULT_MAX_BYTES,
+            $deferred,
+            null,
+            static function (int|string $slot, string $chunk) use ($source): void {
+                $source->cancel();
+            },
+            null,
+            $source->token(),
+            null,
+            0.2,
+        );
+        $result = null;
+        $error = null;
+        $deferred->promise()->then(
+            static function (ChildResult $r) use (&$result): void {
+                $result = $r;
+            },
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+
+        $launch->start();
+        $probeGone = $this->reflect(ChildRunLaunch::class, 'probeGone');
+        $checkExit = $this->reflect(ChildRunLaunch::class, 'checkExit');
+
+        // The loop is not running, so nothing reads the pipe while the child exits.
+        $until = microtime(true) + 5.0;
+        while (!$probeGone->invoke($launch) && microtime(true) < $until) {
+            usleep(1000);
+        }
+        $this->assertTrue($probeGone->invoke($launch), 'the child exits with its output unread');
+
+        // Stall the loop past the 0.2 s grace, then the exit check reads the held bytes.
+        usleep(300_000);
+        $checkExit->invoke($launch);
+
+        $this->assertNull($error, 'a cancel from a chunk callback must not reject the launch');
+        $this->assertInstanceOf(ChildResult::class, $result, 'the cancel settles the launch');
+        $this->assertSame(ChildResult::CANCELLED, $result->status);
+        $this->assertSame(0, $this->armedTimers($loop), 'no timer stays armed once the launch has settled');
+    }
+
+    /** launch() beats on a loop timer until the run settles, and the beats stop with it. */
+    public function testLaunchBeatsUntilTheRunSettles(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $beats = 0;
+        $r = $this->settle($loop, ChildRun::new($this->php('usleep(300000); fwrite(STDOUT, "ok");'))
+            ->withHeartbeat(0.05, static function () use (&$beats): void {
+                $beats++;
+            })
+            ->launch($loop));
+
+        $this->assertSame('ok', $r->stdout);
+        $this->assertGreaterThanOrEqual(2, $beats, 'a 0.3 s launch at a 0.05 s heartbeat must beat several times');
+        $settledAt = $beats;
+        $loop->addTimer(0.15, static fn () => $loop->stop());
+        $loop->run();
+        $this->assertSame($settledAt, $beats, 'no beat fires after the run has settled');
+    }
+
+    /**
+     * Regression: a heartbeat hook that throws on the launch path. The throw used to
+     * escape the loop with no kill and no settle, so the child kept running and the
+     * promise never settled. As in run(), the child is killed and reaped, and the
+     * caller sees the throw, here as the rejection.
+     */
+    public function testAHeartbeatThatThrowsKillsTheChildAndRejectsTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to see whether the child survived');
+        }
+        $loop = new StreamSelectLoop();
+        $pid = 0;
+        $start = hrtime(true);
+        try {
+            $this->settle($loop, ChildRun::new($this->php('sleep(30);'))
+                ->withTimeout(20.0)
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+                })
+                ->withHeartbeat(0.2, static function (): void {
+                    throw new \LogicException('beat failed');
+                })
+                ->launch($loop));
+            $this->fail('the heartbeat throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('beat failed', $e->getMessage());
+        } finally {
+            $alive = $pid > 0 && \posix_kill($pid, 0);
+            if ($alive) {
+                \posix_kill($pid, 9);
+            }
+        }
+
+        $this->assertGreaterThan(0, $pid, 'onSpawn never saw the child');
+        $this->assertFalse($alive, 'the child outlived a heartbeat throw on the launch path');
+        $this->assertLessThan(10.0, (hrtime(true) - $start) / 1e9, 'the launch waited on the child instead of killing it');
+    }
+
+    /**
+     * launch() reports a signal death the way run() does: exitCode keeps the -1
+     * sentinel and the signal number rides beside it. launch() used to drop the
+     * number, so the same SIGTERM death read signal 15 from run() and null here.
+     */
+    public function testLaunchCarriesTheSignalNumberOfASignalDeath(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])->withTimeout(5.0)->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
+    public function testLaunchReportsNoSignalForAnExitCode(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'exit 3'])->withTimeout(5.0)->launch($loop));
+
+        $this->assertSame(3, $r->exitCode);
+        $this->assertNull($r->signal);
+    }
+
+    /** @return iterable<string, array{0: bool}> */
+    public static function groupLeaderModes(): iterable
+    {
+        yield 'unwrapped' => [false];
+        yield 'group leader' => [true];
+    }
+
+    /**
+     * Regression: a child that kills itself at once dies during the spawn's own
+     * status reads, which launch() shares with run(). The read that reaped it threw
+     * the status away and the launch's later read saw signaled=false, so the signal
+     * read null. The first read that sees the exit now keeps it for the launch.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('groupLeaderModes')]
+    public function testLaunchKeepsTheSignalOfADeathDuringTheSpawnReads(bool $groupLeader): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])
+            ->withTimeout(5.0)
+            ->withGroupLeader($groupLeader)
+            ->withOnSpawn(static function (): void {
+                usleep(150_000);
+            })
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
+    /** launch() runs its kill ladder on the graces withKillGrace() set, as run() does. */
+    public function testBuildLaunchForwardsTheKillGracesToTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+        $proc = proc_open(['sleep', '5'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+        try {
+            $run = ChildRun::new(['sleep', '5'])->withKillGrace(0.25, 0.75);
+            $build = new \ReflectionMethod(ChildRun::class, 'buildLaunch');
+            $build->setAccessible(true);
+
+            /** @var ChildRunLaunch $launch */
+            $launch = $build->invoke($run, new StreamSelectLoop(), $proc, $pipes, null, null, new \React\Promise\Deferred());
+
+            $this->assertSame(0.25, $this->reflect(ChildRunLaunch::class, 'terminateGrace')->getValue($launch));
+            $this->assertSame(0.75, $this->reflect(ChildRunLaunch::class, 'killGrace')->getValue($launch));
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            proc_terminate($proc);
+            proc_close($proc);
+        }
     }
 }

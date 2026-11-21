@@ -189,34 +189,49 @@ final class HookContextFilesTest extends TestCase
         // this test GREEN while the retained file stands for the wrong reason — "the
         // reaper is dead", not "the reaper cannot reach us". The decoy proves the
         // reaper actually fired on this very invocation.
-        $decoy = sys_get_temp_dir() . '/' . ToolIpcFiles::RUNTIME_PREFIX . bin2hex(random_bytes(4)) . '.json';
-        $previous = umask(0o077);
+        //
+        // The decoy is planted and swept in a bounded retry. The bare temp dir is
+        // SHARED with every other process on the box: a concurrent candy-code run
+        // (another shard's boot-time sweepOnce(), or a real-CLI subprocess test)
+        // can reap the hour-old decoy in the gap between this plant and this sweep,
+        // leaving removed === 0 for a reason that says nothing about this call. A
+        // re-plant and re-sweep keeps the positive control honest: an inert reaper
+        // still reds on every attempt, while a racing one has to win every attempt.
+        $removed = 0;
+        $decoyLeftBehind = true;
+        $decoy = '';
 
-        try {
-            file_put_contents($decoy, 'decoy ipc payload owed to a dead owner');
-        } finally {
-            umask($previous);
-        }
-        // Backdated past the hourly cutoff so the sweep's DEFAULT age rule reaps
-        // it. The sweep runs against the SHARED temp dir, and suites are sharded
-        // across parallel processes (scripts/parallel-tests.sh): a cutoff of 0
-        // would reap another shard's in-flight IPC payload written a moment ago.
-        // Only a payload older than the hour can be reaped here.
-        touch($decoy, time() - 2 * 3600);
+        for ($attempt = 1; $attempt <= 3 && $removed < 1; $attempt++) {
+            $decoy = sys_get_temp_dir() . '/' . ToolIpcFiles::RUNTIME_PREFIX . bin2hex(random_bytes(4)) . '.json';
+            $previous = umask(0o077);
 
-        try {
-            // The REAL sweep against the SHARED temp dir, at its production cutoff.
-            // Only a real `HookContextFiles::dir()` proves the two stores are
-            // disjoint, which is the whole point. `ToolIpcFilesTest` keeps the
-            // sandboxed positive-control pin for the reap behaviour in isolation.
-            $removed = ToolIpcFiles::sweep(sys_get_temp_dir());
-        } finally {
-            @unlink($decoy);
+            try {
+                file_put_contents($decoy, 'decoy ipc payload owed to a dead owner');
+            } finally {
+                umask($previous);
+            }
+            // Backdated past the hourly cutoff so the sweep's DEFAULT age rule reaps
+            // it. The sweep runs against the SHARED temp dir, and suites are sharded
+            // across parallel processes (scripts/parallel-tests.sh): a cutoff of 0
+            // would reap another shard's in-flight IPC payload written a moment ago.
+            // Only a payload older than the hour can be reaped here.
+            touch($decoy, time() - 2 * 3600);
+
+            try {
+                // The REAL sweep against the SHARED temp dir, at its production cutoff.
+                // Only a real `HookContextFiles::dir()` proves the two stores are
+                // disjoint, which is the whole point. `ToolIpcFilesTest` keeps the
+                // sandboxed positive-control pin for the reap behaviour in isolation.
+                $removed = ToolIpcFiles::sweep(sys_get_temp_dir());
+                $decoyLeftBehind = file_exists($decoy);
+            } finally {
+                @unlink($decoy);
+            }
         }
 
         $this->assertIsInt($removed);
         $this->assertGreaterThanOrEqual(1, $removed, 'the sweep reaped nothing — the decoy proves it never fired');
-        $this->assertFileDoesNotExist($decoy, 'the sweep left a same-prefix IPC decoy in the bare temp dir');
+        $this->assertFalse($decoyLeftBehind, 'the sweep left a same-prefix IPC decoy in the bare temp dir');
         $this->assertFileExists($path, 'the IPC sweep reached a retained hook-overflow file');
         $this->assertSame(
             'must not be reaped before the model reads it',

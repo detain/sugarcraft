@@ -16,7 +16,7 @@ final class StreamHelper
 {
     /**
      * Set a file mode through a path name, but only while that name still
-     * resolves to the inode the caller actually opened (audit 037/038).
+     * resolves to the inode the caller actually opened.
      *
      * PHP has no fchmod, so a plain `chmod($path)` after an open can be
      * pointed at a swapped symlink — the mode lands on some other file.

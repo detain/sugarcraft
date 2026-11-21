@@ -15,7 +15,9 @@ use SugarCraft\Plugins\Channel\ChannelInterface;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
+use SugarCraft\Code\Cli\Serve;
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
@@ -120,6 +122,75 @@ final class ChannelRegistryTest extends TestCase
         $registry->boot([], [], $this->freshLedger(), null, Loop::get(), $this->collector());
         $this->expectException(\LogicException::class);
         $registry->boot([], [], $this->freshLedger(), null, Loop::get(), $this->collector());
+    }
+
+    public function testBootHandsEachChannelItsBundlesInProcessHost(): void
+    {
+        // PL-5d regression: the host factory must reach the context a started channel receives.
+        // Dropping the host: argument in boot() goes red here. The serve's own factory is pinned by
+        // testTheServeWiringHandsEachChannelAnInProcessHostInstance below.
+        [$bundleA, , $trusted] = $this->twoBundleStage();
+        $journal = $this->journal();
+        $this->bakeHostProbe($bundleA, 'probe-chan', $journal);
+        $bundleA = $this->refresh($bundleA);
+        $host = $this->createMock(\SugarCraft\Plugins\Host\HostServices::class);
+        $asked = [];
+        $registry = ChannelRegistry::new();
+        $registry->boot(
+            [$bundleA],
+            $trusted,
+            $this->seenLedger($bundleA),
+            $this->scratch,
+            Loop::get(),
+            $this->collector(),
+            null,
+            null,
+            null,
+            static function (string $bundle) use ($host, &$asked): \SugarCraft\Plugins\Host\HostServices {
+                $asked[] = $bundle;
+
+                return $host;
+            },
+        );
+
+        self::assertSame(['probe-chan'], $registry->startedNames());
+        self::assertSame([$bundleA->name], $asked, 'the factory is asked for the bundle that owns the channel');
+        $lines = array_values(array_filter(array_map('trim', file($journal) ?: [])));
+        self::assertSame(['host:wired'], $lines, 'the started channel sees the in-process host on its context');
+    }
+
+    public function testTheServeWiringHandsEachChannelAnInProcessHostInstance(): void
+    {
+        // PL-5d regression: the serve passes ChannelRegistry::boot() the factory Serve::channelHostFactory()
+        // builds. An arrow wrapper that returned that factory instead of a host threw a TypeError inside
+        // boot()'s start try, so every bundle channel was refused as start-failed on each serve launch.
+        [$bundleA, , $trusted] = $this->twoBundleStage();
+        $journal = $this->journal();
+        $this->bakeHostProbe($bundleA, 'probe-chan', $journal);
+        $bundleA = $this->refresh($bundleA);
+        $fixture = ProtocolFixture::new(loop: Loop::get());
+        try {
+            $registry = ChannelRegistry::new();
+            $registry->boot(
+                [$bundleA],
+                $trusted,
+                $this->seenLedger($bundleA),
+                $this->scratch,
+                Loop::get(),
+                $this->collector(),
+                null,
+                null,
+                null,
+                Serve::channelHostFactory($fixture->dispatcher, Loop::get()),
+            );
+
+            self::assertSame(['probe-chan'], $registry->startedNames(), 'the serve factory lets the channel start instead of refusing it as start-failed');
+            $lines = array_values(array_filter(array_map('trim', file($journal) ?: [])));
+            self::assertSame(['host:wired'], $lines, 'the channel receives a HostServices instance on its context');
+            $registry->disposeAll($this->collector());
+        } finally {
+            $fixture->tearDown();
+        }
     }
 
     public function testAChannelWhoseConstructorThrowsIsRefusedAndLogged(): void
@@ -374,7 +445,7 @@ final class ChannelRegistryTest extends TestCase
      */
     private function refresh(Bundle $bundle): Bundle
     {
-        $fresh = Bundle::fromDir($bundle->dir, 'project');
+        $fresh = Bundle::fromDir($bundle->dir, 'user');
         self::assertNotNull($fresh, 'the baked fixture bundle must still parse: ' . $bundle->dir);
         return $fresh;
     }
@@ -385,7 +456,7 @@ final class ChannelRegistryTest extends TestCase
         mkdir($dir . '/.claude-plugin', 0777, true);
         $name = 'cc-p1-reg-' . $slug . '-' . getmypid() . '-' . (++$this->serial);
         file_put_contents($dir . '/.claude-plugin/plugin.json', (string) json_encode(['name' => $name, 'version' => '1.0.0']));
-        $bundle = Bundle::fromDir($dir, 'project');
+        $bundle = Bundle::fromDir($dir, 'user');
         self::assertNotNull($bundle);
         return $bundle;
     }
@@ -418,6 +489,14 @@ final class ChannelRegistryTest extends TestCase
     public function handleRequest(\\Psr\\Http\\Message\\ServerRequestInterface $request): \\Psr\\Http\\Message\\ResponseInterface { return new \\React\\Http\\Message\\Response(200, [], "channel-answered"); }
 ';
         $this->plantClass($bundle, $this->classText($bundle, 'web-chan', 'AcceptsHttpRequests', '', $members));
+    }
+
+    private function bakeHostProbe(Bundle $bundle, string $routeName, string $journal): void
+    {
+        $members = '    public function start(\\SugarCraft\\Plugins\\PluginContext $context): void { file_put_contents($this->journal, "host:" . ($context->host instanceof \\SugarCraft\\Plugins\\Host\\HostServices ? "wired" : "none") . PHP_EOL, FILE_APPEND); }
+    public function dispose(): void {}
+';
+        $this->plantClass($bundle, $this->classText($bundle, $routeName, 'ChannelInterface', $journal, $members));
     }
 
     private function bakeCtorThrower(Bundle $bundle): void

@@ -58,7 +58,7 @@ final readonly class UserMessage implements Message
 
     /**
      * The text a provider sends for this turn: the prompt, then every FILE
-     * attachment inlined as a `<file>` block (audit 15b-15) — or a
+     * attachment inlined as a `<file>` block — or a
      * `<context source="@diff">` block for a keyword mention (roadmap 5.8).
      *
      * Files travel as text on every provider - none of the wire formats this
@@ -122,7 +122,7 @@ final readonly class UserMessage implements Message
 
     /**
      * {@see wireText()} plus one line per image, for an encoder that can only
-     * send text. The NEVER-SILENT rule of audit 15b-15 at the last seam: an
+     * send text. The NEVER-SILENT rule at the last seam: an
      * image reaching a text-only wire is named in the text it does send.
      */
     public function textOnly(): string

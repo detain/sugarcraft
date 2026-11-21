@@ -8,7 +8,7 @@ use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 
 /**
  * A {@see Tool} that resolves model-supplied paths and can therefore be
- * re-confined to a sub-agent's git worktree after it was built (audit F-J5).
+ * re-confined to a sub-agent's git worktree after it was built.
  *
  * WHY A WITHER AND NOT ONLY THE CONSTRUCTOR ARGUMENT. Every implementer
  * already takes an optional trailing `worktreeJail` at construction, but the

@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -133,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-animation.png" alt="" aria-hidden="true">
@@ -155,28 +159,39 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#untrusted-ansi-input">Untrusted .ansi input</a></li>
-            <li class="toc-h3"><a href="#reduced-motion">Reduced motion</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-animation">SugarCraft\Animation</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-controls">Keys and controls</a></li>
+            <li class="toc-h3"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#untrusted-input">Untrusted input</a></li>
+            <li class="toc-h3"><a href="#localization">Localization</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#demos">Demos</a></li>
             <li class="toc-h3"><a href="#play">Play</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Two animators in one package: it decodes a <code>.gif</code> from disk via <code>ext-gd</code>, downsamples each frame to a configurable cell grid, and paints it with 24-bit ANSI color — as full-cell background color (space glyphs) or as an ASCII luminance ramp — and it parses and replays truecolor <code>.ansi</code> art files frame by frame. The ready-made viewer CLI ships separately as <code>candy-gifview</code>.</p>
+<p class="lede" style="margin-top: 28px;">SugarAnimation is an ANSI/GIF animation toolkit for PHP 8.3+. It decodes a <code>.gif</code> from disk with <code>ext-gd</code>, area-averages each frame onto a fixed cell grid, and paints it with 24-bit ANSI color. It also parses and replays truecolor <code>.ansi</code> art files frame by frame, which needs no GD at all. The GIF path is inspired by the Go project <a href="https://github.com/namzug16/gifterm">gifterm</a>; the library itself is native PHP. The ready-made viewer CLI ships separately as <code>candy-gifview</code>.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-animation</code></pre>
+    <p>Requires PHP 8.3 or newer. <code>ext-gd</code> is needed only for the GIF path (<code>Decoder</code>). <code>AnsiArt</code>, <code>ArtLibrary</code>, <code>ArtLoop</code> and <code>Player</code> run without it. Without GD, <code>Decoder::decode()</code>, <code>Decoder::decodeFile()</code> and <code>Decoder::decodeBytes()</code> throw a <code>RuntimeException</code> that names the missing extension. <code>Decoder::readFile()</code> and <code>Decoder::loopCount()</code> do not use GD and keep working.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># The ready-made viewer CLI is a separate app package:
-#   composer require sugarcraft/candy-gifview
-#   candy-gifview my-animation.gif         # solid blocks (default)
-#   candy-gifview my-animation.gif density # luminance ramp</code></pre>
-    <pre class="code"><code class="language-php">// Programmatic — "cat.gif" is just any .gif on disk:
+    <pre class="code"><code class="language-php">// Decode a GIF from disk and play it in the alternate screen.
+// "cat.gif" is any .gif on disk.
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Animation\Decoder;
@@ -185,66 +200,288 @@ use SugarCraft\Animation\Player;
 $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
 (new Program(new Player($frames),
              new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
-    <pre class="code"><code class="language-php">// .ansi art — parse once, print one frame as SGR text:
+    <pre class="code"><code class="language-php">// .ansi art: parse once, then print one frame as SGR text.
 use SugarCraft\Animation\AnsiArt;
 
 $art = AnsiArt::fromFile('logo-neon-tc-72x9.ansi');
 echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code></pre>
-    <p>The bundled <code>examples/play.php</code> generates a tiny synthetic animated GIF and plays it end-to-end — a self-contained way to see the pipeline without supplying any files of your own.</p>
+    <pre class="code"><code class="language-shell"># The viewer CLI is a separate app package:
+#   composer require sugarcraft/candy-gifview
+#   candy-gifview my-animation.gif           # solid blocks (default)
+#   candy-gifview my-animation.gif density   # luminance ramp</code></pre>
+    <p>To see the whole pipeline without any file of your own, run <code>examples/play.php</code> (see Examples below).</p>
+
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>The library has two halves that share a cell model. The GIF half turns bytes into <code>Frame</code> values. A <code>Frame</code> is a grid of RGB cells (<code>null</code> marks a transparent cell), a centisecond delay, a disposal method and a transparency flag. <code>Decoder</code> walks the GIF stream, hands each image to GD, and area-averages the source pixels under each cell with <code>CellSampler</code>. The grid size is fixed at decode time, so the art is stretched to exactly <code>cellsW</code> by <code>cellsH</code> cells and is never re-fit to the terminal.</p>
+    <p>The playback half is a TEA model. <code>Player</code> implements the sugar-core <code>Model</code> contract. It advances on <code>TickMsg</code> values scheduled with <code>Cmd::tick()</code>, so no fiber busy-waits. <code>Renderer</code> turns one frame into an ANSI string with one of two presets: <code>solid</code> paints full cells with a 24-bit background, and <code>density</code> maps each cell's luminance to a glyph from a ramp with a 24-bit foreground.</p>
+    <p>The <code>.ansi</code> half is separate. <code>AnsiArt</code> parses a byte stream of SGR runs and glyphs into cell-grid frames, <code>ArtLibrary</code> indexes a corpus of pre-authored files, and <code>ArtLoop</code> converts elapsed seconds into a frame index for banners and logos.</p>
+
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <p><strong>Decode a GIF to a fixed grid.</strong> Call <code>Decoder::decode($path, $cellsW, $cellsH)</code> for a plain <code>list&lt;Frame&gt;</code>. Use <code>Decoder::decodeFile()</code> when you also need the loop count and the stop reason in one value.</p>
+    <p><strong>Start paused and step by hand.</strong> Pass <code>paused: true</code> to the <code>Player</code> constructor. Then use the arrow keys to move one frame at a time.</p>
+    <p><strong>Bound a run.</strong> Chain <code>playOnce()</code>, <code>withLoops(3)</code> or <code>withMaxSeconds(10.0)</code> on the <code>Player</code>. Each returns a new instance.</p>
+    <p><strong>Pin the frame rate.</strong> Call <code>withFixedFps(12.0)</code> to advance on a uniform wall-clock cadence instead of the per-frame GIF delays.</p>
+    <p><strong>Choose the viewport-fit renderer.</strong> Pass <code>Renderer::withAdaptiveSize()</code> to the <code>Player</code> constructor. It reads the terminal size from STDOUT with <code>PosixBackend::queryWinsize(1)</code> and clips the art to the viewport. It throws a <code>RuntimeException</code> when STDOUT is not a terminal, so guard the call in piped output or CI and fall back to <code>Renderer::new()</code>. Pass <code>Renderer::withAdaptiveSize(reservedRows: 2)</code> to leave rows free for your own chrome.</p>
+    <p><strong>Pick a logo variant by terminal depth.</strong> Build an <code>ArtLibrary</code> with <code>ArtLibrary::fromDir($dir)</code>, then call <code>pick($slug, $depthTag)</code>. The requested depth is tried first. If the slug has no variant at that depth, the adjacent depths are tried in a fixed order: a <code>tc</code> request falls back to <code>256</code> then <code>16</code>, a <code>256</code> request to <code>tc</code> then <code>16</code>, and a <code>16</code> request to <code>256</code> then <code>tc</code>.</p>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>ext-gd decode</strong><span>Walks the GIF byte stream for image-descriptor offsets, hands each frame to GD, area-average downsamples to cell space.</span></div>
-      <div class="feature"><strong>Area-average downsampling</strong><span>Higher quality than nearest-neighbor — each cell averages the fully-opaque source pixels covering it; the palette path skips pixels matching the transparent index.</span></div>
-      <div class="feature"><strong>ASCII luminance ramp</strong><span>The <code>density</code> preset maps each cell's luminance (0.299r + 0.587g + 0.114b) to a ramp glyph and carries the color as a 24-bit foreground — the shape still reads where color is stripped.</span></div>
-      <div class="feature"><strong>Local color tables</strong><span>Per-frame Local Color Table (LCT) extracted from the GIF Image Descriptor; falls back to the Global Color Table (GCT) when no LCT is present. Each frame is reassembled in GIF89a order — Graphic Control Extension, Image Descriptor, LCT, LZW data — so LCT frames decode with their own colors.</span></div>
-      <div class="feature"><strong>GCE transparency + disposal</strong><span>Graphic Control Extension (GCE) transparent-color index and disposal method (none/restore-bg/restore-prev) tracked per-frame in <code>Frame</code>.</span></div>
-      <div class="feature"><strong>Two presets</strong><span><code>solid</code> — full-cell 24-bit background color (space glyph). <code>density</code> — ASCII luminance ramp <code>' .:-=+*#%@'</code> with a 24-bit foreground.</span></div>
-      <div class="feature"><strong>Pause + step</strong><span><code>Space</code> pauses; <code>←</code> / <code>→</code> step through frames manually.</span></div>
-      <div class="feature"><strong>Preset toggle + quit</strong><span><code>d</code> swaps solid ↔ density without losing your position; <code>q</code>, <code>Esc</code> or Ctrl+C quits. The Player's keys are fixed — not rebindable.</span></div>
-      <div class="feature"><strong>Viewport-fit rendering</strong><span><code>Renderer::withAdaptiveSize()</code> queries the TTY via <code>SizeIoctl</code> (ioctl <code>TIOCGWINSZ</code>) and clips the art to the viewport. The cell grid is fixed at decode, so a resize clips — art never re-scales; the Player's ~78-column status line is not width-clamped, so playback looks its best at 82+ columns.</span></div>
-      <div class="feature"><strong>.ansi art playback</strong><span>Truecolor <code>.ansi</code> byte streams (SGR runs + glyphs, frame headers <code>ESC[&lt;n&gt;A</code>) parse into cell-grid frames via <code>AnsiArt</code>; <code>ArtLibrary</code> indexes a corpus and selects a slug at the deepest supported depth (<code>tc</code> → <code>256</code> → <code>16</code>), and <code>ArtLoop</code> turns elapsed seconds into frame indices.</span></div>
-      <div class="feature"><strong>Bounded playback</strong><span><code>playOnce()</code>, <code>withLoops(n)</code> and <code>withMaxSeconds(s)</code> cap a run; <code>withFixedFps()</code> pins advance to a uniform wall-clock cadence.</span></div>
-      <div class="feature"><strong>Decode caps</strong><span>One decode holds at most 256 frames, 2,000,000 total source pixels, and 100,000 output cells, so a runaway file can't balloon the runtime. The caps bound decoding and compositing; the file entry points additionally refuse any file larger than <code>Decoder::MAX_INPUT_BYTES</code> (64 MiB) on the stat, before reading. <code>decodeBytes()</code> and <code>AnsiArt::fromString()</code> take bytes you already hold — their size is your budget.</span></div>
-      <div class="feature"><strong>Cmd::tick driven</strong><span><code>Cmd::tick($seconds, …)</code> (sugar-core) schedules frame advance — no busy-waiting in the main fiber.</span></div>
+      <div class="feature"><strong>ext-gd decode</strong><span>Walks the GIF byte stream for image-descriptor offsets, hands each frame to GD, and area-averages it onto the cell grid.</span></div>
+      <div class="feature"><strong>Area-average downsampling</strong><span>Each cell averages the fully opaque source pixels that cover it. The palette path skips pixels that match the transparent index.</span></div>
+      <div class="feature"><strong>ASCII luminance ramp</strong><span>The <code>density</code> preset maps each cell's luminance (0.299r + 0.587g + 0.114b) to a ramp glyph and carries the color as a 24-bit foreground, so the shape still reads where color is stripped.</span></div>
+      <div class="feature"><strong>Local color tables</strong><span>Each frame uses its own Local Color Table when the Image Descriptor carries one, and falls back to the Global Color Table otherwise.</span></div>
+      <div class="feature"><strong>Transparency and disposal</strong><span>The Graphic Control Extension supplies the transparent index and disposal method (none, restore to background, restore previous), tracked per frame in <code>Frame</code>.</span></div>
+      <div class="feature"><strong>Two presets</strong><span><code>solid</code> paints full cells with a 24-bit background and a space glyph. <code>density</code> uses the ramp <code>' .:-=+*#%@'</code> with a 24-bit foreground.</span></div>
+      <div class="feature"><strong>Viewport-fit rendering</strong><span><code>Renderer::withAdaptiveSize()</code> reads the terminal size from STDOUT through <code>PosixBackend::queryWinsize(1)</code> (<code>TIOCGWINSZ</code>) and clips the art. It throws when STDOUT is not a terminal. A resize clips the art; it never re-scales it.</span></div>
+      <div class="feature"><strong>.ansi art playback</strong><span>Truecolor <code>.ansi</code> streams parse into cell-grid frames with <code>AnsiArt</code>. <code>ArtLibrary</code> selects a variant for the detected depth, and <code>ArtLoop</code> cycles frames by elapsed time.</span></div>
+      <div class="feature"><strong>Bounded playback</strong><span><code>playOnce()</code>, <code>withLoops(n)</code> and <code>withMaxSeconds(s)</code> cap a run. <code>withFixedFps()</code> pins the cadence.</span></div>
+      <div class="feature"><strong>Decode caps</strong><span>One decode holds at most 256 frames (<code>Decoder::MAX_FRAMES</code>), 2,000,000 source pixels (<code>MAX_TOTAL_PIXELS</code>) and 100,000 output cells per frame (<code>MAX_CELLS</code>). A cap breach throws. The file entry points read at most one byte past <code>Decoder::MAX_INPUT_BYTES</code> (64 MiB), then refuse any file that is larger.</span></div>
     </div>
 
-    <h3 id="untrusted-ansi-input" style="margin-top: 40px;">Untrusted .ansi input</h3>
-    <p>The parser is defensive but not a sandbox. Complete OSC sequences and unknown CSI bodies are dropped, not rendered, and <code>Frame</code>/<code>AnsiArt</code> keep only canonical SGR runs, so <code>sgrText()</code> never replays an escape the input carried. Two caveats stand: C0 control bytes that are not part of an escape sequence are preserved <em>as glyph data</em> — echoing <code>$cell-&gt;glyph</code> raw (or <code>sgrText()</code>) hands them to your terminal, an audible-and-cursor hazard on hostile files — and file ingress is bounded by stat before reading (<code>Decoder::MAX_INPUT_BYTES</code>, 64 MiB) at <code>AnsiArt::fromFile()</code> and <code>Decoder::readFile()</code> — but <code>fromString()</code> parses whatever bytes you hand it, with no cap, so bound the corpora you point <code>ArtLibrary</code> and the string APIs at.</p>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Call</th><th>Signature</th><th>Description</th></tr>
+<tr><td>Decoder::decode()</td><td>decode(string $path, int $cellsW, int $cellsH): array</td><td>Decode a GIF file into a <code>list&lt;Frame&gt;</code>, stretched to exactly <code>cellsW</code> by <code>cellsH</code>. Throws on a cap breach, a missing ext-gd, or non-GIF input.</td></tr>
+<tr><td>Decoder::decodeFile()</td><td>decodeFile(string $path, int $cellsW, int $cellsH, bool $withCanvasRgba = false): DecodedAnimation</td><td>Decode a file and return frames, the loop count and the walk's stop reason in one value.</td></tr>
+<tr><td>Decoder::decodeBytes()</td><td>decodeBytes(string $bytes, int $cellsW, int $cellsH, bool $withCanvasRgba = false): \Generator</td><td>Decode bytes you already hold, yielding one <code>Frame</code> at a time. Pass <code>true</code> to carry full-canvas RGBA per frame.</td></tr>
+<tr><td>Decoder::readFile()</td><td>readFile(string $path): string</td><td>Read a file into bytes. It pulls at most <code>MAX_INPUT_BYTES</code> + 1 bytes and throws when the file is larger than <code>MAX_INPUT_BYTES</code>.</td></tr>
+<tr><td>Decoder::loopCount()</td><td>loopCount(string $bytes): ?int</td><td>Read the NETSCAPE loop count. <code>null</code> or <code>0</code> means loop forever.</td></tr>
+<tr><td>Frame::new()</td><td>new(array $cells, int $delay = 10, int $disposal = Frame::DISPOSAL_NONE, bool $transparent = false, ?string $rgba = null, int $rgbaWidth = 0, int $rgbaHeight = 0)</td><td>Value object for one frame: its cells, centisecond delay, disposal method, transparency and optional RGBA.</td></tr>
+<tr><td>DecodedAnimation::frames()</td><td>frames(): array</td><td>The decoded frames. <code>loopPlays()</code>, <code>truncated()</code> and <code>stopReason()</code> report the loop policy and whether the walk stopped early.</td></tr>
+<tr><td>Player::__construct()</td><td>__construct(array $frames, int $index = 0, bool $paused = false, string $preset = Renderer::PRESET_SOLID, ?Renderer $renderer = null, ?float $fixedFps = null, ?float $maxSeconds = null, ?int $loops = null)</td><td>Create the playback TEA model. Named arguments are the usual way to set the options.</td></tr>
+<tr><td>Player::withFixedFps()</td><td>withFixedFps(float $fps): self</td><td>Advance on a uniform cadence. The value must be positive and finite. Rates above <code>Player::MAX_FPS</code> (100,000) clamp to that ceiling.</td></tr>
+<tr><td>Player::withMaxSeconds()</td><td>withMaxSeconds(float $seconds): self</td><td>Stop after the given number of seconds.</td></tr>
+<tr><td>Player::withLoops()</td><td>withLoops(?int $plays): self</td><td>Stop after the given number of playthroughs. <code>null</code>, the default, loops forever. Stops on the tick that crosses the last lap, with no wall-clock timer armed.</td></tr>
+<tr><td>Player::playOnce()</td><td>playOnce(): self</td><td>Play a single pass, then stop.</td></tr>
+<tr><td>Player::withFrames()</td><td>withFrames(array $frames): self</td><td>Rebind the frame stream on a new instance.</td></tr>
+<tr><td>Player::withWatch()</td><td>withWatch(\Closure $probe): self</td><td>Install a reload probe that the player polls on a timer.</td></tr>
+<tr><td>Renderer::new()</td><td>new(): self</td><td>Unconstrained renderer.</td></tr>
+<tr><td>Renderer::withAdaptiveSize()</td><td>withAdaptiveSize(int $reservedRows = 0): self</td><td>Renderer that queries the terminal size and clips output to it.</td></tr>
+<tr><td>Renderer::withConstraints()</td><td>withConstraints(int $rows, int $cols): self</td><td>Renderer with a fixed row and column budget.</td></tr>
+<tr><td>Renderer::renderFrame()</td><td>renderFrame(Frame $f, string $preset = Renderer::PRESET_SOLID): string</td><td>Render one frame to an ANSI string, clipped to the budget.</td></tr>
+<tr><td>AnsiArt::fromFile()</td><td>fromFile(string $path): self</td><td>Parse a <code>.ansi</code> file. It reads at most <code>Decoder::MAX_INPUT_BYTES</code> + 1 bytes and refuses a larger file.</td></tr>
+<tr><td>AnsiArt::fromString()</td><td>fromString(string $bytes): self</td><td>Parse <code>.ansi</code> bytes you already hold. Input larger than <code>Decoder::MAX_INPUT_BYTES</code> (64 MiB) is refused.</td></tr>
+<tr><td>AnsiArt::frameCells()</td><td>frameCells(int $frame): array</td><td>The <code>AnsiCell</code> grid for one frame.</td></tr>
+<tr><td>AnsiArt::sgrText()</td><td>sgrText(int $frame): string</td><td>Canonical SGR replay text for one frame. Escapes that the input carried are not replayed.</td></tr>
+<tr><td>AnsiArt::width()</td><td>width(): int</td><td>Width of the art in cells.</td></tr>
+<tr><td>AnsiArt::height()</td><td>height(): int</td><td>Height of the art in cells.</td></tr>
+<tr><td>AnsiArt::frameCount()</td><td>frameCount(): int</td><td>Number of frames. A static file has one frame.</td></tr>
+<tr><td>AnsiArt::isAnimated()</td><td>isAnimated(): bool</td><td>True when the file carries more than one frame.</td></tr>
+<tr><td>AnsiCell::new()</td><td>new(string $glyph, string $sgr = ''): self</td><td>One cell: its glyph and its canonical whole-state SGR.</td></tr>
+<tr><td>ArtLibrary::fromDir()</td><td>fromDir(string $dir, bool $includeSkinny = false): self</td><td>Index a <code>.ansi</code> corpus from a directory.</td></tr>
+<tr><td>ArtLibrary::pick()</td><td>pick(string $slug, string $depthTag, bool $preferAnimated = true): ?AnsiArt</td><td>Select a slug at the requested depth. If that depth has no variant, the adjacent depths are tried in cascade order: <code>tc</code> then <code>256</code> then <code>16</code> for a <code>tc</code> request, <code>256</code> then <code>tc</code> then <code>16</code> for a <code>256</code> request, and <code>16</code> then <code>256</code> then <code>tc</code> for a <code>16</code> request.</td></tr>
+<tr><td>ArtLibrary::randomSlug()</td><td>randomSlug(string $depthTag, bool $preferAnimated = true, ?callable $rng = null): ?string</td><td>Pick a random slug that the depth tag supports.</td></tr>
+<tr><td>ArtLibrary::mergeManifest()</td><td>mergeManifest(string $jsonlPath): self</td><td>Add the entries from a JSONL manifest to the index.</td></tr>
+<tr><td>ArtLoop::new()</td><td>new(int $frameCount, float $frameSeconds = 0.1, float $pauseSeconds = 2.5): self</td><td>Cycle frames by elapsed seconds, with a pause between cycles.</td></tr>
+<tr><td>ArtLoop::frameAt()</td><td>frameAt(float $elapsedSeconds): int</td><td>Frame index for an elapsed time.</td></tr>
+</table>
 
-    <h3 id="reduced-motion" style="margin-top: 40px;">Reduced motion</h3>
-    <p>No <code>REDUCE_MOTION</code> (or other reduce-motion convention) is consulted anywhere in the library — autoplay is autoplay. The real mitigations are API-side: construct the <code>Player</code> paused (<code>new Player($frames, paused: true)</code>) so nothing moves until <code>Space</code>, step manually with <code>←</code>/<code>→</code>, slow the cadence with <code>withFixedFps()</code>, and bound the run with <code>playOnce()</code> / <code>withMaxSeconds()</code>. Consulting <code>REDUCE_MOTION</code> by default is a tracked code follow-up, not a current behavior.</p>
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-animation/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-animation -->
+<p>Only methods declared in <code>sugar-animation/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-animation">SugarCraft\Animation</h3>
+<h4 id="api-sugarcraft-animation-ansiart"><code>AnsiArt</code> <small>final class</small></h4>
+<p>A parsed <code>.ansi</code> ANSI-art document (the candy-top logo corpus format).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromString(string $bytes): self</code></td><td></td></tr>
+<tr><td><code>static fromFile(string $path): self</code></td><td></td></tr>
+<tr><td><code>width(): int</code></td><td>Max cell count over every row of every frame (half-blocks are single cells).</td></tr>
+<tr><td><code>height(): int</code></td><td>Row count of frame 0; redraw frames are assumed full-height by the corpus.</td></tr>
+<tr><td><code>frameCount(): int</code></td><td></td></tr>
+<tr><td><code>isAnimated(): bool</code></td><td></td></tr>
+<tr><td><code>frameCells(int $frame): array</code></td><td>Rows of cells for one frame. Row lengths are kept NATURAL (ragged): trailing default-background spaces are absent in the corpus, and padding them would invent cells the artwork never painted.</td></tr>
+<tr><td><code>sgrText(int $frame): string</code></td><td>Raw single-frame byte blob for apps that prefer replaying escapes verbatim instead of walking cells. Each cell carries a canonical WHOLE-state run, so a state change re-emits <code>ESC[0m</code> first (clearing components the next state omits) followed by the new canonical run; a change from default needs no reset, and each row plus the blob end in default state. The result is terminal-correct as replay AND cell-exactly re-parseable by fromString() — the accumulator reproduces every canonical whole-state run byte-for-byte, so the per-cell model and the raw stream stay in lockstep.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-ansicell"><code>AnsiCell</code> <small>final class</small></h4>
+<p>One rendered terminal cell of a parsed <code>.ansi</code> artwork: the glyph plus the CANONICAL RESOLVED SGR state active for it — the full cumulative ECMA-48 style (attributes + foreground + background) a real terminal would be showing at that point, as a single <code>ESC[…m</code> run in the fixed order documented on <code>AnsiArt::canonicalSgr()</code>; &#039;&#039; when every component is at terminal default.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $glyph, string $sgr = &#039;&#039;): self</code></td><td>House factory convention (<code>::new()</code>), mirroring the sugar-style immutable value-object shape.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-artlibrary"><code>ArtLibrary</code> <small>final class</small></h4>
+<p>Catalog over a directory of candy-top logo <code>.ansi</code> files, named <code>logo-&lt;slug&gt;[-skinny][-anim]-&lt;16|256|tc&gt;-&lt;WxH&gt;.ansi</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromDir(string $dir, bool $includeSkinny = false): self</code></td><td>Index every matching art file in <code>$dir</code>. Unparsable names are skipped silently — a logo directory accumulates scratch files, and the catalog should degrade to the valid subset rather than fail the whole app.</td></tr>
+<tr><td><code>static profileTag(ColorProfile $profile): string</code></td><td>Map a detected terminal colour profile onto this corpus&#039;s depth tags.</td></tr>
+<tr><td><code>mergeManifest(string $jsonlPath): self</code></td><td>Attach per-slug description/tags from a <code>logos.jsonl</code> manifest. Tolerant by design: a missing/unreadable file or malformed rows is a no-op, because the manifest is optional human metadata shipped alongside the corpus, never a load-bearing dependency. The tolerance is paid with a bound — the read is capped at MAX_MANIFEST_BYTES, and a manifest beyond the gate is skipped exactly like an absent one (no throw, no partial enrichment, no unbounded slurp of a file we were going to distrust anyway).</td></tr>
+<tr><td><code>slugs(): array</code></td><td></td></tr>
+<tr><td><code>entries(): array</code></td><td></td></tr>
+<tr><td><code>description(string $slug): string</code></td><td></td></tr>
+<tr><td><code>tags(string $slug): array</code></td><td></td></tr>
+<tr><td><code>pick(string $slug, string $depthTag, bool $preferAnimated = true): ?AnsiArt</code></td><td>Resolve a slug at a depth with the cascade: preferred-kind@depth -&gt; other-kind@depth -&gt; preferred-kind@adjacent-first other depth -&gt; other-kind@same, completing every rung of the wide render before the skinny axis is consulted (a slug present in both forms always prefers NON-skinny; the depth cascade never crosses the skinny axis). &quot;preferred kind&quot; is animation when <code>$preferAnimated</code>, else static. Returns null only when the slug is unknown entirely.</td></tr>
+<tr><td><code>randomSlug(string $depthTag, bool $preferAnimated = true, ?callable $rng = null): ?string</code></td><td>Uniform over slugs that have ANY cascaded entry at the depth family.</td></tr>
+<tr><td><code>pickRandom(string $depthTag, bool $preferAnimated = true, ?callable $rng = null): ?AnsiArt</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-artloop"><code>ArtLoop</code> <small>final class</small></h4>
+<p>Pure frame-pacing math for animated ANSI art. The <code>.ansi</code> corpus carries no per-frame delays (see AnsiArt), so playback speed is a caller policy: each frame shows for <code>$frameSeconds</code>, and the LAST frame is then held an extra <code>$pauseSeconds</code> before the loop restarts at frame 0 — the beat where the animation &quot;breathes&quot; on screen.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(int $frameCount, float $frameSeconds = 0.1, float $pauseSeconds = 2.5): self</code></td><td></td></tr>
+<tr><td><code>withPause(float $pauseSeconds): self</code></td><td>Fluent pause variant — the dwell on the last frame is the usual tuning knob.</td></tr>
+<tr><td><code>cycleSeconds(): float</code></td><td>One full lap: every frame once, plus the closing hold on the last.</td></tr>
+<tr><td><code>frameAt(float $elapsedSeconds): int</code></td><td>Which frame is on screen at an elapsed offset. Boundaries land on the later frame (a frame owns [start, start+duration) ).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-decodedanimation"><code>DecodedAnimation</code> <small>final class</small></h4>
+<p>The whole canonical decode as one value (SA-G1 -006).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>frames(): array</code></td><td></td></tr>
+<tr><td><code>loopPlays(): ?int</code></td><td>Total playthroughs, <code>null</code> = loop forever (see class docblock).</td></tr>
+<tr><td><code>truncated(): bool</code></td><td>May the frame list be hiding frames? True exactly when the walk carries a stop reason — either the frame cap withheld later frames (including the documented exactly-256 false positive) or an advertised frame was skipped undecodable.</td></tr>
+<tr><td><code>stopReason(): ?string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-decoder"><code>Decoder</code> <small>final class</small></h4>
+<p>Decode a GIF — from disk via self::decode() or in-memory via self::decodeBytes() (E-07) — into Frames, using ext-gd&#039;s <code>imagecreatefromstring()</code> for in-memory single-frame extraction and a hand-rolled GIF89a parser for per-frame timing.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static humanBytes(int $bytes): string</code></td><td>Render a byte count the way the refusal messages promise: &quot;64 MiB&quot;, not &quot;67108864 bytes&quot; (SA-D1, -053). Binary units, up to two decimals with trailing zeros trimmed.</td></tr>
+<tr><td><code>static decode(string $path, int $cellsW, int $cellsH): array</code></td><td>Decode a GIF file on disk into a list of Frames.</td></tr>
+<tr><td><code>static decodeFile(string $path, int $cellsW, int $cellsH, bool $withCanvasRgba = false): DecodedAnimation</code></td><td>The canonical file decode as a single value (SA-G1 -006): frames, loop policy, and the walk&#039;s stop reason, captured where the truth lives instead of re-guessed by every consumer.</td></tr>
+<tr><td><code>static readFile(string $path): string</code></td><td>Read a GIF file on disk into bytes for self::decodeBytes() and self::loopCount() — the ingress half of self::decode() exposed so a host can read once and feed both the frame stream and the loop-count inspection without a second open of the path.</td></tr>
+<tr><td><code>static loopCount(string $bytes): ?int</code></td><td>E-02: the NETSCAPE2.0 loop extension in GIF bytes, normalised to total playthroughs (mirror of libnsgif&#039;s app-extension intake, namzug16/libnsgif gif.c:808 and :862-871 — the block at 0x21 0xFF whose 11-byte identifier is &quot;NETSCAPE2.0&quot; or its Animation Shop twin &quot;ANIMEXTS1.0&quot;, carrying the sub-block 0x03 0x01 &amp;lt;lo&amp;gt; &amp;lt;hi&amp;gt;).</td></tr>
+<tr><td><code>static decodeBytes(string $bytes, int $cellsW, int $cellsH, bool $withCanvasRgba = false): \Generator</code></td><td>Decode in-memory GIF bytes into a stream of Frames (E-07).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-frame"><code>Frame</code> <small>final class</small></h4>
+<p>One downsampled GIF frame. Stored as a 2-D grid of RGB triples or null (transparent) in cell-coordinate space (post-downsample). The <code>Renderer</code> walks the grid and emits ANSI escapes per cell.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $cells, int $delay = 10, int $disposal = self::DISPOSAL_NONE, bool $transparent = false, ?string $rgba = null, int $rgbaWidth = 0, int $rgbaHeight = 0): self</code></td><td>Mint a frame through the geometry door (SA-V1 -021): the optional RGBA triple must AGREE. The bare constructor let any caller pair a buffer with mismatched (or zero) dimensions, after which <code>hasRgba()</code> answered true for a lying geometry and every byte-length consumer inherited the lie. Bytes without dimensions, or dimensions without bytes, are the same contradiction read from the other side — both refuse at construction, so nothing downstream re-validates.</td></tr>
+<tr><td><code>hasRgba(): bool</code></td><td>Whether this frame carries the full-canvas RGBA capture (E-07).</td></tr>
+<tr><td><code>rgbaBytes(): string</code></td><td>The composited frame as packed RGBA bytes — row-major, 4 bytes per pixel, <code>rgbaWidth() × rgbaHeight()</code> pixels. This is the chicle-parity frame representation: lossless pixels, so a consumer can size its own output at print time instead of inheriting this decoder&#039;s grid.</td></tr>
+<tr><td><code>rgbaWidth(): int</code></td><td></td></tr>
+<tr><td><code>rgbaHeight(): int</code></td><td></td></tr>
+<tr><td><code>width(): int</code></td><td></td></tr>
+<tr><td><code>height(): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-animation.</p>
+<h4 id="api-sugarcraft-animation-player"><code>Player</code> <small>final class</small></h4>
+<p>E-03: GIF player as a SugarCraft Model driven by an ABSOLUTE schedule. Loads every frame up-front (the decoder caps at 256); frame k is due at <code>anchor + C[k]</code> where C is the prefix sum of the frame periods (modulo one cycle of total length T), and each TickMsg re-arms the loop for the NEXT frame&#039;s deadline — <code>max(nextDue - now, MIN_TICK_CS)</code> — never a fresh copy of the CURRENT frame&#039;s delay. While the elapsed position resolves to a frame OTHER than the one on screen the table stays absolute from the kickoff origin: an overrun costs lateness, not drift, and the tick skips straight to its landing frame (the ArtLoop philosophy — on that path the displayed frame is a total function of elapsed time). The table DOES rescale at the wrap boundary, however: when the elapsed position lands back inside the window of the frame already on screen — which every stall of at least one full cycle does, as does a pump fired inside the current window — the tick force-advances exactly ONE frame and re-anchors the epoch to wall-clock now, so that frame holds a fresh full period. Post- wrap the cadence (the per-lap sequence of holds) is therefore preserved while the epoch is re-based, bounding the catch-up to one advance per tick. The naive alternative — continuing the absolute table without re- basing — was rejected because the force-advanced frame would survive only the sliver of window left before its table deadline (arbitrarily short partial holds at every stall boundary); the re-anchor is the shipped choice and PlayerScheduleTest pins the resulting index/arm stream against an independent walk. Before E-03 the Player re-armed the current frame&#039;s full delay on every tick, so the per-frame period was <code>delay + handling + render time</code> and playback silently stretched under load — the docblock here used to promise rate-stability the schedule did not deliver.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly array $frames, public readonly int $index = 0, public readonly bool $paused = false, public readonly string $preset = Renderer::PRESET_SOLID, public readonly ?Renderer $renderer = null, private readonly ?\Closure $now = null, public readonly ?float $fixedFps = null, public readonly ?float $maxSeconds = null, private readonly ?float $anchor = null, public readonly ?int $loops = null, private readonly int $lapsCarried = 0, private readonly ?\Closure $watch = null, private readonly float $elapsedCarried = 0.0, private readonly ?float $epochBasePos = null)</code></td><td>The six seam parameters — <code>$now</code>, <code>$anchor</code>, <code>$lapsCarried</code>, <code>$watch</code>, <code>$elapsedCarried</code>, <code>$epochBasePos</code> — are internal wiring (test clock, schedule anchoring, lap carry across a reload, watch rebind, played-time carry across a re-anchor, the live epoch&#039;s establishment position), not caller vocabulary: hosts build Players via self::start() and the fluent setters, which thread the seams themselves. They stay public in the signature deliberately — promoted readonly state beats a parallel private-property ceremony — and the reload paths carry them via mutate().</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>withFixedFps(float $fps): self</code></td><td>E-09: override the per-frame GIF delays with a uniform cadence of $fps frames per second on the same absolute schedule. Immutable. Re-anchors the schedule to the currently shown frame so a mid-play switch never triggers an instant catch-up jump. Rates above self::MAX_FPS clamp to that advertised ceiling (chicle&#039;s CHICLE_ANIM_FPS_MAX): past the MIN_TICK_CS arm floor a faster request is indistinguishable from the ceiling, so the ceiling is made real rather than left a doc promise.</td></tr>
+<tr><td><code>withMaxSeconds(float $seconds): self</code></td><td>E-09: stop playback once the schedule position (total play time; time spent paused never accrues) reaches $seconds. The bound makes the &quot;total&quot; literal: every re-anchor — pause/resume, manual step, the early-fire force-advance, a cadence swap — folds its played segment into the elapsed carry the check compares (playSeconds()), so the bound can no longer be laundered by interacting with it. The bound lives in the model and is checked on each tick — no wall-clock timer is armed for it, so a stalled loop cannot overshoot silently either.</td></tr>
+<tr><td><code>withLoops(?int $plays): self</code></td><td>E-02: cap playback at $plays total playthroughs (null = forever, the default). The stop happens INSIDE the schedule — on the tick whose position crosses the final lap boundary the Player returns Cmd::quit() while still displaying the last shown frame — so no wall-clock timer is armed for the bound (same E-09 law as withMaxSeconds()): a stalled loop cannot overshoot silently.</td></tr>
+<tr><td><code>playOnce(): self</code></td><td>E-02: play the frame stream exactly once and quit. This is the honest counterpart of libnsgif&#039;s remark that &quot;the only way to play the animation once is not to have this extension at all&quot; (namzug16/libnsgif gif.c:862-871): because an unauthored stream reports infinite from Decoder::loopCount(), a host that wants one pass must ask the Player for it, not read it off the bytes.</td></tr>
+<tr><td><code>withWatch(\Closure $probe): self</code></td><td>E-10: attach a watch probe. The closure is re-run every WATCH_POLL_SECONDS (see the constant&#039;s docblock for the chicle parity and the disclosed deviations); null = &quot;no change&quot;, a frame list = &quot;reload onto it now&quot;. Returns a new Player — the seam is state, not mutation.</td></tr>
+<tr><td><code>withFrames(array $frames): self</code></td><td>E-10: rebind the playback to a different frame stream IN PLACE — the reload half of the watch cycle, exposed publicly so hosts can swap frames without rebuilding the Player. The position restarts (index 0, carried laps 0, epoch unanchored so the first tick of the new stream anchors by the E-03 next-arrival law); playback policy — preset, renderer, cadence, duration bound, loop bound, and the watch seam itself — survives. A caller that wants the loop bound re-derived from the new bytes chains withLoops() onto the result. The asymmetry is the contract: the manual swap keeps the caller&#039;s bound because only the caller knows its intent, while the WatchMsg reload in self::update() re-derives the bound from the fresh bytes on purpose, so a file whose loop extension changed mid-session gets its new bound without the caller lifting a finger (pinned by PlayerWatchTest). The duration bound rides this survive-list as a carried total too — the live segment folds into the elapsed carry before the epoch drops, so swapping streams mid-run is not a budget reset either.</td></tr>
+<tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+<tr><td><code>playedSeconds(): ?float</code></td><td>E-09: the duration bound measured so far ON THE CURRENT SCHEDULE (null before the schedule is anchored, i.e. before the first tick) — the raw epoch position the E-03 cadence pins observe. The maxSeconds BOUND proper measures total play time across re-anchors — see self::playSeconds(); the carry applies to that bound, not this accessor.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-renderer"><code>Renderer</code> <small>final class</small></h4>
+<p>Render a Frame as ANSI-coloured cells.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static withAdaptiveSize(int $reservedRows = 0): self</code></td><td>Return a Renderer that adapts its output to fit the current TTY dimensions.</td></tr>
+<tr><td><code>static new(): self</code></td><td>Return a fresh Renderer with no adaptive sizing (default).</td></tr>
+<tr><td><code>cols(): ?int</code></td><td>The column budget art and overlays are clipped to, or null when this renderer is unconstrained (the Player clamps its status overlay against exactly this budget — one source of truth per surface, so the overlay can never lie about the width the art got).</td></tr>
+<tr><td><code>static render(Frame $f, string $preset = self::PRESET_SOLID): string</code></td><td>Static-compatible render — delegates to a zero-sized (unconstrained) instance. Preserved for backward compatibility; new code should use self::new()-&gt;renderFrame().</td></tr>
+<tr><td><code>renderFrame(Frame $f, string $preset = self::PRESET_SOLID): string</code></td><td>Render a frame. When adaptive dimensions are set (via withAdaptiveSize()), the output grid is clamped to fit within them.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-animation-tickmsg"><code>TickMsg</code> <small>final class</small></h4>
+<p>Per-frame animation tick driving the sugar-animation image transition.</p>
+<h4 id="api-sugarcraft-animation-watchmsg"><code>WatchMsg</code> <small>final class</small></h4>
+<p>E-10: One poll of the Player watch seam. Armed by the Player itself (init and every completed poll re-arm it at WATCH_POLL_SECONDS), consumed by Player::update() — the sugar-animation twin of chicle&#039;s run_watch re-stat cycle (tools/chafa/chafa.c:896-940), lifted from a g_usleep busy-loop into the event loop the TEA runtime already owns.</p>
+
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>cellsW</code>, <code>cellsH</code></td><td>int</td><td>none (required)</td><td>Cell grid for a decode. The grid is fixed for the animation's life.</td></tr>
+<tr><td><code>Player::$paused</code></td><td>bool</td><td><code>false</code></td><td>Start paused. <code>Space</code> resumes.</td></tr>
+<tr><td><code>Player::$preset</code></td><td>string</td><td><code>Renderer::PRESET_SOLID</code></td><td><code>solid</code> or <code>density</code>. The <code>d</code> key toggles between them.</td></tr>
+<tr><td><code>Player::$fixedFps</code></td><td>?float</td><td><code>null</code></td><td>Uniform cadence in frames per second, ignoring the GIF delays.</td></tr>
+<tr><td><code>Player::$maxSeconds</code></td><td>?float</td><td><code>null</code></td><td>Stop after this many seconds.</td></tr>
+<tr><td><code>Player::$loops</code></td><td>?int</td><td><code>null</code></td><td>Stop after this many plays. <code>playOnce()</code> sets it to 1.</td></tr>
+<tr><td><code>Renderer::withAdaptiveSize()</code></td><td>int</td><td><code>0</code> reserved rows</td><td>Rows to keep free below the art when the terminal size is read.</td></tr>
+<tr><td><code>ProgramOptions::__construct()</code>, argument <code>useAltScreen</code></td><td>bool</td><td><code>false</code> in sugar-core; the examples pass <code>true</code></td><td>Run in the alternate screen. Pass it as <code>new ProgramOptions(useAltScreen: true)</code>. This is a sugar-core constructor argument, not a Player option.</td></tr>
+</table>
+    <p>The decode caps (<code>Decoder::MAX_FRAMES</code>, <code>MAX_TOTAL_PIXELS</code>, <code>MAX_CELLS</code>, <code>MAX_INPUT_BYTES</code>) are class constants, not options. Read them from the class rather than copying the numbers.</p>
+
+    <h3 id="keys-and-controls" style="margin-top: 32px;">Keys and controls</h3>
+    <p>The <code>Player</code> handles these keys. The keys are fixed. The library has no rebind API, so a host that needs different chords must intercept messages before they reach <code>Player::update()</code>.</p>
+    <table class="api-table">
+<tr><th>Key</th><th>Action</th></tr>
+<tr><td><code>Space</code></td><td>Pause or resume.</td></tr>
+<tr><td><code>←</code> / <code>→</code></td><td>Step back or forward one frame.</td></tr>
+<tr><td><code>d</code></td><td>Toggle between the <code>solid</code> and <code>density</code> presets without losing your position.</td></tr>
+<tr><td><code>q</code>, <code>Esc</code>, Ctrl+C</td><td>Quit.</td></tr>
+</table>
+
+    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
+    <p>There is no theme object. Both presets always emit 24-bit truecolor SGR (<code>38;2;…</code> and <code>48;2;…</code>). The library has no 256-color fallback and no <code>NO_COLOR</code> mode. On a terminal without truecolor the colors degrade, and <code>density</code> stays the more legible preset. The <code>.ansi</code> side has its own fallback: <code>ArtLibrary</code> resolves a slug through the <code>tc</code>, <code>256</code> and <code>16</code> depth cascade and picks a pre-authored variant. It does not recolor art at runtime.</p>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p><code>examples/play.php</code> builds a three-frame synthetic GIF in the system temp directory. The GIF has a red, green and blue band that slides across a black field. It decodes that GIF and plays it in the alternate screen. The temporary file is removed on shutdown.</p>
+    <pre class="code"><code class="language-shell">php examples/play.php           # interactive player in a terminal
+php examples/play.php &lt; /dev/null   # prints: decoded 3 frame(s)</code></pre>
+    <p>When stdout is not a terminal, the example prints a one-line summary and exits. Run it that way in CI or in a pipe.</p>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>The suite runs with PHPUnit 10 and the golden-render fixtures in <code>tests/fixtures/</code>:</p>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p>The decoder tests use a set of hostile GIFs in <code>tests/fixtures/bad/</code>. They cover oversize descriptors, bad LZW data, zero-delay storms and frame floods. <code>GoldenRenderTest</code> compares the density render against <code>tests/fixtures/density-3x3.golden</code>. A changed render has to update that golden file on purpose.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Decode throws a <code>RuntimeException</code> that names ext-gd.</strong> Install or enable the <code>gd</code> extension. The <code>.ansi</code> classes never need it.</li>
+      <li><strong>The decode throws a cap error on a large GIF.</strong> The caps are <code>Decoder::MAX_FRAMES</code> (256), <code>MAX_TOTAL_PIXELS</code> (2,000,000), <code>MAX_CELLS</code> (100,000 per frame) and <code>MAX_INPUT_BYTES</code> (64 MiB). Shrink the source or lower the cell grid.</li>
+      <li><strong>The art is clipped after a resize.</strong> This is by design. The cell grid is fixed at decode time. Decode again at the new size, or use the viewport-fit renderer, which clips rather than re-scales.</li>
+      <li><strong>The status line wraps on a narrow terminal.</strong> The overlay is clamped to the renderer's column budget. It shows its full hint from 82 columns up. Use 82 or more columns for best results.</li>
+      <li><strong>Colors look wrong, or the art shows raw escapes.</strong> The output is 24-bit truecolor. On a terminal without truecolor, the colors degrade. On <code>TERM=dumb</code>, expect raw escape sequences. Switch to the <code>density</code> preset with <code>d</code> for a shape that still reads without color.</li>
+      <li><strong>The animation does not respect reduced-motion settings.</strong> The library does not read <code>REDUCE_MOTION</code>. Start paused with <code>paused: true</code>, slow it down with <code>withFixedFps()</code>, or bound it with <code>playOnce()</code>.</li>
+    </ul>
+
+    <h3 id="untrusted-input" style="margin-top: 40px;">Untrusted input</h3>
+    <p>The parser is defensive but it is not a sandbox. Complete OSC sequences and unknown CSI bodies are dropped. <code>Frame</code> and <code>AnsiArt</code> keep only canonical SGR runs, so <code>sgrText()</code> never replays an escape the input carried. C0 control bytes outside an escape sequence stay in the output as glyph data. Echoing <code>$cell-&gt;glyph</code> raw, or <code>sgrText()</code>, passes them to the terminal. Bound file ingress with <code>Decoder::MAX_INPUT_BYTES</code>, which the file entry points enforce with a bounded read. At most <code>MAX_INPUT_BYTES</code> + 1 bytes are pulled, and a larger file is refused. <code>fromString()</code> and <code>decodeBytes()</code> take the bytes you hold and refuse input over the same <code>MAX_INPUT_BYTES</code> cap. That check runs once the bytes are already in memory, so bound the input size yourself before you read it.</p>
+
+    <h3 id="localization" style="margin-top: 32px;">Localization</h3>
+    <p>Decode and parse errors, and the <code>Player</code> status overlay, go through <code>Lang</code> in the <code>animation</code> namespace. Translations ship for each locale in <code>lang/</code>. The literal key names the overlay advertises (<code>space</code>, <code>d</code>, <code>q</code>) do not change between locales.</p>
+
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>The GIF path runs <code>Decoder</code> (walk the stream and read each image) into <code>CellSampler</code> (area-average onto the grid) into <code>Frame</code>. The playback path runs <code>Player</code> (a TEA model that schedules <code>TickMsg</code> through <code>Cmd::tick()</code>) and <code>Renderer</code> (frame to SGR string). <code>AnsiArt</code>, <code>ArtLibrary</code> and <code>ArtLoop</code> form a separate path with no GD dependency.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Upstream idea</th><th>SugarAnimation class</th><th>Notes</th></tr>
+<tr><td>gifterm (Go): GIF to terminal cells</td><td><code>Decoder</code>, <code>CellSampler</code>, <code>Renderer</code></td><td>The GIF decode and cell render are inspired by gifterm. The PHP code is native, not a port.</td></tr>
+<tr><td>Charm TEA model (sugar-core)</td><td><code>Player</code></td><td>Implements <code>Model</code> with <code>init()</code>, <code>update()</code> and <code>view()</code>.</td></tr>
+<tr><td>Not upstream: <code>.ansi</code> art playback</td><td><code>AnsiArt</code>, <code>ArtLibrary</code>, <code>ArtLoop</code></td><td>Original SugarCraft work.</td></tr>
+</table>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package is published as <code>sugarcraft/sugar-animation</code> on Packagist and follows the monorepo's release flow. The repository has no separate changelog file. The commit history on <a href="https://github.com/sugarcraft/sugar-animation">GitHub</a> records each change. The viewer that the package feeds is versioned separately as <code>candy-gifview</code>.</p>
 
     <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-animation">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-animation/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-animation/blob/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/namzug16/gifterm">gifterm</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Decoder</td><td>decode(path, cellsW, cellsH)</td><td>Decode a GIF into a list of Frame objects — stretched to exactly cellsW×cellsH (no aspect-ratio fit); throws on cap breach, missing ext-gd, or non-GIF input.</td></tr>
-<tr><td>Decoder</td><td>decodeBytes(bytes, cellsW, cellsH, withCanvasRgba)</td><td>Decode from a byte string as a Generator; optionally carry full-canvas RGBA per frame.</td></tr>
-<tr><td>Decoder</td><td>readFile(path) / loopCount(bytes)</td><td>Read a file off disk / read the NETSCAPE loop count (null or 0 = infinite).</td></tr>
-<tr><td>Frame</td><td>__construct(cells, delay, disposal, transparent, rgba, …)</td><td>Value object: one frame's cells, centisecond delay, disposal method, transparency, optional RGBA.</td></tr>
-<tr><td>Player</td><td>__construct(frames, index = 0, paused = false, preset = Renderer::PRESET_SOLID, renderer = null, fixedFps = null, maxSeconds = null, loops = null)</td><td>Create the playback TEA model.</td></tr>
-<tr><td>Player</td><td>withFixedFps(fps)</td><td>Uniform cadence — positive finite; MAX_FPS (100,000) is a documented advisory ceiling the library does not enforce; hosts (candy-gifview) clamp.</td></tr>
-<tr><td>Player</td><td>withMaxSeconds(s) / withLoops(n) / playOnce()</td><td>Bound the run by time, repeat count, or a single pass.</td></tr>
-<tr><td>Player</td><td>withFrames(frames) / withWatch(probe)</td><td>Rebind the frame stream in place / install a reload probe closure.</td></tr>
-<tr><td>AnsiArt</td><td>fromFile(path) / fromString(bytes)</td><td>Parse a .ansi byte stream into cell-grid frames.</td></tr>
-<tr><td>AnsiArt</td><td>frameCells(i) / sgrText(i) / width() / height() / frameCount() / isAnimated()</td><td>One frame's AnsiCell grid / canonical SGR replay text / dimensions and frame metadata.</td></tr>
-<tr><td>AnsiCell</td><td>new(glyph, sgr)</td><td>One cell: glyph plus its canonical whole-state SGR (both public readonly).</td></tr>
-<tr><td>ArtLibrary</td><td>fromDir(dir) / pick(slug, depthTag) / randomSlug(depthTag) / mergeManifest(jsonl)</td><td>Index a .ansi corpus; select a slug at the deepest supported depth (tc → 256 → 16).</td></tr>
-<tr><td>ArtLoop</td><td>new(frameCount, frameSeconds, pauseSeconds) / frameAt(elapsed)</td><td>Elapsed-seconds frame cycling for banners and logos.</td></tr>
-<tr><td>Renderer</td><td>new() / withAdaptiveSize()</td><td>Unconstrained renderer / renderer that queries TTY size via SizeIoctl and clips output.</td></tr>
-<tr><td>Renderer</td><td>renderFrame(frame, preset)</td><td>Render one frame to an ANSI string, clipped to its rows/cols.</td></tr>
-<tr><td>Program (sugar-core)</td><td>__construct(model, options)</td><td>Create program.</td></tr>
-<tr><td>Program (sugar-core)</td><td>run()</td><td>Start the event loop.</td></tr>
-<tr><td>ProgramOptions (sugar-core)</td><td>__construct(useAltScreen: true, …)</td><td>Configure terminal mode.</td></tr>
-</table>
     </div>
   </div>
 </section>
@@ -257,9 +494,20 @@ echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code><
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="Terminal recording of examples/play.php animating a synthetic GIF through both render presets" onerror="this.parentElement.style.display='none'">
                 <h3 id="play">Play</h3>
-                <span class="demo-caption">Synthetic animated GIF from examples/play.php — decoded, played, and toggled through both presets.</span>
+                <span class="demo-caption">Synthetic animated GIF from examples/play.php, decoded, played and toggled through both presets.</span>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="related">Related</h2>
+        <ul>
+            <li><a href="candy-gifview.html">candy-gifview</a>: the terminal viewer CLI built on this library.</li>
+            <li><a href="sugar-core.html">SugarCore</a>: the TEA runtime, <code>Program</code>, <code>Cmd::tick()</code> and the <code>Model</code> contract.</li>
+            <li><a href="sugar-image.html">SugarImage</a>: image rendering for terminals, for when you need more than a cell grid.</li>
+        </ul>
     </div>
 </section>
 </main>

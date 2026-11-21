@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Backend;
 
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Support\ProcessContainment;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 final class CommandBackendTest extends TestCase
 {
@@ -313,6 +316,225 @@ final class CommandBackendTest extends TestCase
     }
 
     /**
+     * A cancel has to reach the grandchildren, not only the shell it started.
+     *
+     * The script backgrounds a `sleep` and writes that pid to a scratch file, so
+     * the sleep is a grandchild of the PHP process. The kill ladder signals the
+     * child's process group only when a containment prefix made the child a group
+     * leader ({@see ProcessContainment::spawnSpec()}). The launch takes that group
+     * from a snapshot at spawn, which can run before the setsid wrapper has become
+     * a leader, so the snapshot can miss the group and only the shell dies while the
+     * sleep is orphaned. The launch no longer depends on that one read: it latches
+     * the group live while the child lives (ChildRunLaunch::latchLiveGroup()), and
+     * once the shell has exited it falls back to the wrapper's own pid
+     * (ChildRunLaunch::killGroup()). Whether a cancel lands before the group is
+     * latched depends on timing, so this test is an end-to-end regression guard for
+     * the cancel reaching the grandchild, not a deterministic pin of the missed-group
+     * case. ChildRunLaunchTest pins that deterministically: it reaps the shell before
+     * the launch is built, so only the wrapper-pid fallback can name the group.
+     *
+     * The cancel waits for the pid file rather than a fixed delay: a fixed delay
+     * can fire before bash has started, and then no grandchild exists to check.
+     */
+    public function testCancelKillsTheGrandchildNotOnlyTheShell(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the grandchild pid.');
+        }
+
+        $pidFile = sys_get_temp_dir() . '/cmd_backend_grandchild_' . uniqid('', true) . '.pid';
+        $body = <<<SH
+        #!/bin/bash
+        cat > /dev/null
+        sleep 30 &
+        echo \$! > '{$pidFile}.tmp' && mv '{$pidFile}.tmp' '{$pidFile}'
+        wait
+        printf 'too late\\n'
+        SH;
+        $script = $this->writeScript($body . "\n");
+        $pid = 0;
+
+        try {
+            $backend = new CommandBackend($script);
+            $cancellation = new CancellationToken();
+            $loop = \React\EventLoop\Loop::get();
+
+            $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+
+            $armedAt = microtime(true);
+            $flip = null;
+            $flip = $loop->addPeriodicTimer(
+                0.02,
+                static function () use (&$flip, $loop, $cancellation, $pidFile, $armedAt): void {
+                    // The 5 s ceiling only stops a script that never starts from hanging
+                    // the test; the assertions below then report the missing pid.
+                    if (is_file($pidFile) || microtime(true) - $armedAt > 5.0) {
+                        $loop->cancelTimer($flip);
+                        $cancellation->cancel();
+                    }
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                $caught = $e;
+            } finally {
+                // A failed await rethrows past the lines below; the flip must still stop.
+                $loop->cancelTimer($flip);
+            }
+
+            $this->assertInstanceOf(\RuntimeException::class, $caught, 'the cancelled command did not reject');
+            $this->assertSame('Request cancelled', $caught->getMessage());
+            $this->assertFileExists($pidFile, 'the script never wrote the grandchild pid, so the cancel was not checked against a running grandchild');
+
+            $pid = (int) trim((string) file_get_contents($pidFile));
+            $this->assertGreaterThan(1, $pid, "the pid file held no usable pid: {$pid}");
+            $this->assertTrue(
+                self::waitUntilGone($pid, 2.0),
+                "grandchild sleep (pid {$pid}) survived the cancel: the kill ladder reached the shell but not its process group",
+            );
+        } finally {
+            if ($pid > 1 && self::isLive($pid)) {
+                @posix_kill($pid, 9);
+            }
+            if (is_file($pidFile)) {
+                unlink($pidFile);
+            }
+            @unlink($pidFile . '.tmp');
+            unlink($script);
+        }
+    }
+
+    /**
+     * A cancel reaches a job the shell left behind after the shell itself exited.
+     *
+     * The script backgrounds a `sleep` (a grandchild that inherits the stdout pipe, so the
+     * launch does not settle on the shell's exit), records its pid, then exits 0. The
+     * cancel is issued only once the shell is gone, so the kill ladder has to find the
+     * sleep through the containment group the wrapper led, not through the shell. The
+     * launch path declares that wrapper to ChildRunLaunch via withSetsidWrapped(), and
+     * the ladder reaches the group id of the exited wrapper from that declaration.
+     *
+     * Both pid files are waited for, and the cancel is held until the shell pid is no
+     * longer live. The 5 s ceiling only stops a script that never starts from hanging the
+     * test; the assertions below then report what was missing.
+     */
+    public function testCancelReachesTheJobOfAShellThatExitedBeforeTheCancel(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('The posix extension is needed to probe the grandchild pid.');
+        }
+
+        $base = sys_get_temp_dir() . '/cmd_backend_exited_' . uniqid('', true);
+        $grandFile = $base . '.grand';
+        $shellFile = $base . '.shell';
+        $body = <<<SH
+        #!/bin/bash
+        cat > /dev/null
+        sleep 31 &
+        echo \$! > '{$grandFile}.tmp' && mv '{$grandFile}.tmp' '{$grandFile}'
+        echo \$\$ > '{$shellFile}.tmp' && mv '{$shellFile}.tmp' '{$shellFile}'
+        exit 0
+        SH;
+        $script = $this->writeScript($body . "\n");
+        $pid = 0;
+
+        try {
+            $backend = new CommandBackend($script);
+            $cancellation = new CancellationToken();
+            $loop = \React\EventLoop\Loop::get();
+
+            $promise = $backend->completeAsync([Message::user('hello')], null, $cancellation);
+
+            $armedAt = microtime(true);
+            $shellGoneBeforeCancel = false;
+            $flip = null;
+            $flip = $loop->addPeriodicTimer(
+                0.02,
+                static function () use (&$flip, &$shellGoneBeforeCancel, $loop, $cancellation, $grandFile, $shellFile, $armedAt): void {
+                    if (is_file($grandFile) && is_file($shellFile)) {
+                        $shellPid = (int) trim((string) file_get_contents($shellFile));
+                        $shellGoneBeforeCancel = $shellPid > 1 && !self::isLive($shellPid);
+                    }
+                    if ($shellGoneBeforeCancel || microtime(true) - $armedAt > 5.0) {
+                        $loop->cancelTimer($flip);
+                        $cancellation->cancel();
+                    }
+                },
+            );
+
+            $caught = null;
+            try {
+                $this->awaitPromise($promise);
+            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                $caught = $e;
+            } finally {
+                // A failed await rethrows past the lines below; the flip must still stop.
+                $loop->cancelTimer($flip);
+            }
+
+            $this->assertTrue($shellGoneBeforeCancel, 'the shell was not seen to exit before the cancel, so the scenario did not run');
+            $this->assertInstanceOf(\RuntimeException::class, $caught, 'the cancelled command did not reject');
+            $this->assertSame('Request cancelled', $caught->getMessage());
+            $this->assertFileExists($grandFile, 'the script never wrote the grandchild pid');
+
+            $pid = (int) trim((string) file_get_contents($grandFile));
+            $this->assertGreaterThan(1, $pid, "the pid file held no usable pid: {$pid}");
+            $this->assertTrue(
+                self::waitUntilGone($pid, 2.0),
+                "grandchild sleep (pid {$pid}) survived the cancel after its shell exited: the kill ladder lost the group",
+            );
+        } finally {
+            if ($pid > 1 && self::isLive($pid)) {
+                @posix_kill($pid, 9);
+            }
+            foreach ([$grandFile, $shellFile] as $file) {
+                @unlink($file);
+                @unlink($file . '.tmp');
+            }
+            unlink($script);
+        }
+    }
+
+    /**
+     * Polls until $pid has exited, bounded by $seconds. True when it is gone.
+     * A pid that has exited but not yet been reaped counts as gone: the test is
+     * about where the kill landed, not about who reaps the orphan.
+     */
+    private static function waitUntilGone(int $pid, float $seconds): bool
+    {
+        return BoundedShutdown::waitBounded(static fn (): bool => !self::isLive($pid), $seconds);
+    }
+
+    /** Live means signalable and not a zombie. Reads /proc where it exists, `ps` elsewhere. */
+    private static function isLive(int $pid): bool
+    {
+        if (!@posix_kill($pid, 0)) {
+            return false;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if ($stat !== false) {
+            $after = strrpos($stat, ')');
+            $state = $after === false ? '' : substr(trim(substr($stat, $after + 1)), 0, 1);
+
+            return $state !== 'Z' && $state !== 'X';
+        }
+
+        // Stderr is read back with the output, not discarded: a missing ps then shows up as the
+        // reply, which the first-character test below reads as live rather than hiding it.
+        $state = trim((string) @shell_exec('ps -o stat= -p ' . $pid . ' 2>&1'));
+
+        return $state !== '' && $state[0] !== 'Z';
+    }
+
+    /**
      * THE CLASSIC DOUBLE-DEADLOCK, and the reason stdin goes non-blocking here
      * and not just stdout.
      *
@@ -357,6 +579,116 @@ final class CommandBackendTest extends TestCase
             $this->assertSame(4000 * 65 + 4, strlen($message->content));
         } finally {
             unlink($script);
+        }
+    }
+
+    /**
+     * A string command on POSIX runs under `/bin/sh -c`, the shell proc_open() used
+     * for a string before this backend ran on ChildRun.
+     */
+    public function testAStringCommandIsWrappedInBinShOnPosix(): void
+    {
+        $this->assertSame(
+            ['/bin/sh', '-c', 'printf hi'],
+            CommandBackend::shellSpec('printf hi', false),
+        );
+    }
+
+    /**
+     * The Windows arm hands a string command to proc_open() as the raw cmd.exe
+     * line, unescaped. This is a deliberate change from the `COMSPEC /d /s /c`
+     * argv CommandBackend used on master: PHP escapes an argv element by element
+     * on Windows, and that escaping of the embedded double quotes is not what
+     * cmd.exe reads. This runs on every platform: it pins the spawn-spec builder,
+     * not the spawn.
+     */
+    public function testAStringCommandReachesProcOpenAsTheRawLineOnWindows(): void
+    {
+        $line = 'echo "a b" & exit /b 3';
+
+        $this->assertSame($line, CommandBackend::shellSpec($line, true));
+    }
+
+    /**
+     * shellSpec() returns the raw line, but the choice of ChildRun factory is made
+     * one step later in childRun(). A string spec must reach ChildRun::commandLine()
+     * and never ChildRun::new(), or PHP escapes the embedded quotes element by
+     * element on Windows, which is the bug the raw line replaced.
+     */
+    public function testAStringSpecIsCarriedAsTheRawLineNotAnArgv(): void
+    {
+        $line = 'echo "a b" & exit /b 3';
+        $run = CommandBackend::childRunForSpec($line, '');
+
+        $this->assertSame([$line], $this->childRunProperty($run, 'argv'));
+        $this->assertTrue($this->childRunProperty($run, 'commandLine'));
+    }
+
+    public function testAListSpecIsExecdAsAnArgvNotACommandLine(): void
+    {
+        $run = CommandBackend::childRunForSpec(['printf', 'a;b'], '');
+
+        $this->assertSame(['printf', 'a;b'], $this->childRunProperty($run, 'argv'));
+        $this->assertFalse($this->childRunProperty($run, 'commandLine'));
+    }
+
+    private function childRunProperty(ChildRun $run, string $name): mixed
+    {
+        return (new \ReflectionProperty(ChildRun::class, $name))->getValue($run);
+    }
+
+    /**
+     * An empty string command is a no-op on both arms. The Windows arm used to
+     * hand the empty line to ChildRun::commandLine(), which throws, so the
+     * InvalidArgumentException escaped complete() and completeAsync() instead of
+     * an assistant reply. Both now answer an empty reply without spawning. The
+     * Windows arm cannot run on this host, so this pins the contract on every
+     * platform rather than reproducing the throw.
+     */
+    public function testAnEmptyStringCommandAnswersAnEmptyReplyOnBothEntryPoints(): void
+    {
+        $backend = new CommandBackend('');
+
+        $this->assertSame('', $backend->complete([Message::user('hi')])->content);
+        $this->assertSame('', $this->awaitPromise($backend->completeAsync([Message::user('hi')]))->content);
+    }
+
+    public function testAListCommandIsExecdDirectlyOnEveryPlatform(): void
+    {
+        $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], false));
+        $this->assertSame(['printf', 'a;b'], CommandBackend::shellSpec(['printf', 'a;b'], true));
+    }
+
+    /**
+     * childRun() declares its child a setsid wrapper exactly when spawnSpec() put a
+     * containment prefix in front of the plain spec. The launch path's cancel fallback
+     * reads that flag, and only a shell that exits before the first status poll would
+     * otherwise reach it, so this pins the wiring without spawning anything: no prefix
+     * gives false, and a prefix gives true. On Windows detachedSpawnPrefix() is always
+     * empty, so the same equality pins false there.
+     */
+    public function testChildRunDeclaresTheSetsidWrapperExactlyWhenAContainmentPrefixApplies(): void
+    {
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([]);
+        foreach (['printf hi', ['printf', 'a;b']] as $command) {
+            $this->assertFalse(
+                $this->childRunProperty(CommandBackend::childRun($command, ''), 'setsidWrapped'),
+                'with no containment prefix the child is not a setsid wrapper',
+            );
+        }
+
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([[\PHP_BINARY, '-r', ProcessContainment::PHP_SETSID_STUB, '--']]);
+        try {
+            $expected = ProcessContainment::detachedSpawnPrefix() !== [];
+            foreach (['printf hi', ['printf', 'a;b']] as $command) {
+                $this->assertSame(
+                    $expected,
+                    $this->childRunProperty(CommandBackend::childRun($command, ''), 'setsidWrapped'),
+                    'childRun() must declare the wrapper exactly when spawnSpec() prefixed the command',
+                );
+            }
+        } finally {
+            ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
         }
     }
 
