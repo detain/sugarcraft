@@ -447,7 +447,9 @@ every runtime.
 
 `withHeartbeat($seconds, $onBeat)` is a liveness hook, not a budget. `$onBeat` runs at
 most every `$seconds` for as long as the child runs, so a watchdog can be fed through a
-silent child. Unlike `withIdleTimeout()`, a beat never ends the run. `run()` beats while
+silent child. Unlike `withIdleTimeout()`, a beat that returns never ends the run. A beat
+that throws does: the child is killed through the same ladder and reaped, then `run()`
+rethrows the exception and `launch()` rejects its promise with it. `run()` beats while
 it reads the pipes and while it waits for an exit after the output closes; `launch()`
 beats on a loop timer until the run settles. `ChildPump::withHeartbeat()` is the same
 knob on the builder.
