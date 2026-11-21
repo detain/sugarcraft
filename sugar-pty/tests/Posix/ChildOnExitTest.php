@@ -253,7 +253,7 @@ final class ChildOnExitTest extends TestCase
         $foreign = static function (): void {
         };
         \pcntl_signal(\SIGCHLD, $foreign);
-        $this->assertSame([], $loop->periodicTimers, 'nothing may watch the disposition on a timer');
+        $this->assertSame([], $loop->periodicTimers, 'no periodic timer may watch the disposition');
 
         $secondCalls = [];
         $second->onExit($loop, static function (int $code) use (&$secondCalls): void {
@@ -268,6 +268,35 @@ final class ChildOnExitTest extends TestCase
 
         $this->assertSame([8], $firstCalls);
         $this->assertSame([9], $secondCalls);
+        $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
+    }
+
+    public function testABarePcntlSignalAfterArmingIsCaughtByTheDispositionRecheck(): void
+    {
+        $this->requireSigchld();
+
+        // The review repro: a handler installed with pcntl_signal() alone,
+        // followed by no attachSigchld() and no later onExit(), silences the
+        // listener. Only the slow one-shot disposition re-check can see it.
+        $loop = new RecordingLoop();
+        $child = $this->spawnShell('sleep 0.2; exit 4');
+
+        $exit = null;
+        $child->waitAsync($loop, 0.01)->then(static function (int $code) use (&$exit): void {
+            $exit = $code;
+        });
+        $foreign = static function (): void {
+        };
+        \pcntl_signal(\SIGCHLD, $foreign);
+        $this->assertSame([], $loop->periodicTimers, 'the handover waits for the re-check, never a periodic timer');
+
+        $this->runBounded($loop, static function () use (&$exit): bool {
+            return $exit !== null;
+        });
+
+        $this->assertSame(4, $exit, 'a wait displaced by a bare pcntl_signal() must still resolve');
+        $this->assertSame([0.01], $loop->periodicTimers, 'the re-check must hand the deaf listener to the fallback poll');
+        $this->assertSame([\SIGCHLD], $loop->signalsRemoved);
         $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
     }
 

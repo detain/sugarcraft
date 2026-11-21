@@ -541,7 +541,7 @@ application can drive PTY sessions without stalling its loop:
   contract (exit code / `0` no-child / `-1` still-running-at-teardown).
 - **`PosixChild::onExit($loop, $fn)`** — runs `$fn` once with the exit
   status when the child exits, woken by `SIGCHLD` through the loop's own
-  `addSignal()`; no periodic timer is armed. Returns a closure that
+  `addSignal()`; the child is not polled on a timer. Returns a closure that
   detaches `$fn` if it has not run yet.
 - **`PosixChild::waitAsync()`** — promise-returning `wait()`, built on
   `onExit()`; cancelling the promise detaches its listener only.
@@ -593,13 +593,14 @@ signal delivery), or a `SIGCHLD` handler the loop does not own (one
 installed with `pcntl_signal()` directly, such as
 `SignalForwarder::attachSigchld()`, or `SIG_IGN`), which the loop's listener
 would otherwise replace. A handler installed after `onExit()` silences the
-loop's listener. No timer watches for that: `SignalForwarder::attachSigchld()`
-and every later `onExit()` or `waitAsync()` call compare the `SIGCHLD`
-disposition with the one each pending listener armed under and switch a
-displaced one to the fallback probe, so its exit is still reported, and the
-handler is put back when the listener goes. A bare `pcntl_signal()` followed
-by neither is not seen, and the listener stays deaf: install such a handler
-before calling `onExit()`.
+loop's listener. `SignalForwarder::attachSigchld()` and every later
+`onExit()` or `waitAsync()` call compare the `SIGCHLD` disposition with the
+one each pending listener armed under and switch a displaced one to the
+fallback probe at once; a once-a-second re-check of the disposition (it never
+probes the child) catches a bare `pcntl_signal()`, so that exit is still
+reported, up to about a second late. The handler is put back when the
+listener goes. Install such a handler before calling `onExit()` to avoid the
+delay.
 `ReactPump` still polls `exited()` at its `selectTimeoutUs` cadence.
 
 The blocking APIs (`PosixPump::run()`, `Child::wait()`,

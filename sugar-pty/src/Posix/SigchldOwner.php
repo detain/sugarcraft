@@ -66,7 +66,8 @@ final class SigchldOwner
      * disposition with the one it armed under and starts its fallback poll if
      * another handler has taken the signal. Called where a new handler can be
      * seen arriving: SignalForwarder::attachSigchld() and each onExit() call.
-     * It reads the disposition only, so no timer is needed to drive it.
+     * A bare pcntl_signal() passes neither, so each listener also re-checks on
+     * its own slow one-shot timer.
      */
     public static function checkDisplaced(): void
     {
