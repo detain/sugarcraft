@@ -421,6 +421,10 @@ one when none is given) if it is destroyed while the child still runs, then
 reaps the child. The receiver keeps the default drop, which reaps an exited
 child and leaves a running one alone.
 
+Keep the result: it is the new handle, not a flag set on `$child`. A bare
+`$child->withKillOnDrop();` statement drops that handle at once, which
+tears the still-running child down while `$child` lives on.
+
 ```php
 $child = $child->withKillOnDrop(TerminationPolicy::new()->withGraceSeconds(0.5));
 unset($child);                    // SIGHUP, up to 0.5 s, SIGKILL, reap

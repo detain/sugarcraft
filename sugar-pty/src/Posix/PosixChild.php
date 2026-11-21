@@ -31,7 +31,8 @@ use SugarCraft\Pty\TerminationPolicy;
  *
  * Kill on drop is opt-in ({@see withKillOnDrop()}). By default, destroying
  * the handle reaps a child that has already exited and leaves a running one
- * alone, as it always has.
+ * alone, as it always has. withKillOnDrop() returns a new handle that must
+ * be kept: discarding its result kills the child at the end of the statement.
  *
  * @see creack/pty.Cmd
  * @see portable-pty.Process
@@ -54,6 +55,12 @@ final class PosixChild extends ChildProcess implements Child
     /**
      * A handle on the same child that tears it down when the handle is
      * destroyed while the child still runs.
+     *
+     * KEEP THE RESULT. This does not set a flag on the receiver: it returns a
+     * new handle, and that handle carries the kill duty. Calling it as a bare
+     * statement, `$child->withKillOnDrop();`, drops the new handle at the end
+     * of the statement, which tears the still-running child down at once
+     * while `$child` lives on. Assign it: `$child = $child->withKillOnDrop();`.
      *
      * The teardown is $policy's {@see TerminationPolicy::apply()} (the default
      * policy when null: SIGHUP, the core grace budgets, group reach), which

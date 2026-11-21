@@ -136,6 +136,19 @@ final class PosixChildKillOnDropTest extends TestCase
         $this->assertFalse(self::liveNonZombie($pid));
     }
 
+    public function testDiscardingTheResultEndsTheChildWhileTheReceiverLives(): void
+    {
+        // The documented sharp edge: the result is the kill-on-drop handle, not
+        // a flag on the receiver, so a bare statement drops it at once.
+        $receiver = $this->spawnTermTrapper();
+        $pid = $receiver->pid();
+
+        $receiver->withKillOnDrop($this->termPolicy());
+
+        $this->assertFalse(self::liveNonZombie($pid), 'a discarded kill-on-drop handle must end the child');
+        $this->assertFalse($receiver->killOnDrop(), 'the receiver must not have gained the duty');
+    }
+
     public function testDroppingAKillOnDropHandleAfterTheExitSendsNothing(): void
     {
         $child = $this->spawnTermTrapper()->withKillOnDrop($this->termPolicy());

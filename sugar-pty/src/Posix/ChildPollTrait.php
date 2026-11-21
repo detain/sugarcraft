@@ -228,8 +228,11 @@ trait ChildPollTrait
      * THE FALLBACK. A periodic {@see exited()} probe every $fallbackPollSec
      * takes over only where SIGCHLD cannot be delivered: no ext-pcntl (no
      * `SIGCHLD` constant), a loop whose `addSignal()` throws
-     * \BadMethodCallException (StreamSelectLoop without pcntl), or a SIGCHLD
-     * disposition the loop does not own. That last case is a handler installed
+     * \BadMethodCallException (StreamSelectLoop without pcntl), a second loop
+     * while another loop carries onExit() listeners or owns the SIGCHLD
+     * multiplexer (SIGCHLD has one process-global disposition, so only one
+     * loop can hold it), or a SIGCHLD disposition no loop owns. That last case
+     * is a handler installed
      * with `pcntl_signal()` directly, such as
      * {@see \SugarCraft\Pty\SignalForwarder::attachSigchld()}, or SIG_IGN:
      * arming the loop's listener would replace that handler, and the loop puts
@@ -285,6 +288,7 @@ trait ChildPollTrait
             if ($listener !== null) {
                 $loop->removeSignal($signal, $listener);
                 $listener = null;
+                SigchldOwner::release($loop);
             }
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
@@ -327,7 +331,7 @@ trait ChildPollTrait
             return $detach;
         }
 
-        $sigchld = self::deliverableSigchld();
+        $sigchld = self::deliverableSigchld($loop);
         if ($sigchld !== null) {
             $handler = static function () use ($queueProbe): void {
                 $queueProbe();
@@ -336,6 +340,7 @@ trait ChildPollTrait
                 $loop->addSignal($sigchld, $handler);
                 $signal = $sigchld;
                 $listener = $handler;
+                SigchldOwner::claim($loop);
             } catch (\BadMethodCallException) {
                 // The loop cannot deliver signals: fall through to the poll.
             }
@@ -408,16 +413,24 @@ trait ChildPollTrait
     }
 
     /**
-     * The SIGCHLD number when the loop may own its delivery, else null.
+     * The SIGCHLD number when $loop may own its delivery, else null.
      *
-     * Only an untouched disposition (SIG_DFL) or one a ReactPHP loop installed
-     * (its signal multiplexer) is taken. Under ext-uv or ext-ev the loop
-     * installs its handler below PHP, so pcntl still reads SIG_DFL and the
-     * loop's own `addSignal()` decides.
+     * Only an untouched disposition (SIG_DFL) or one $loop itself installed
+     * (its signal multiplexer) is taken. A multiplexer another loop installed
+     * is refused, and so is any loop while a different one carries onExit()
+     * listeners ({@see SigchldOwner}): arming a second loop would replace the
+     * first loop's handler, and its last removeSignal() would put SIG_DFL back,
+     * so the first loop would never hear its child exit. Under ext-uv or ext-ev
+     * the loop installs its handler below PHP, so pcntl still reads SIG_DFL;
+     * the owner record is what keeps a second loop off it there.
      */
-    private static function deliverableSigchld(): ?int
+    private static function deliverableSigchld(LoopInterface $loop): ?int
     {
         if (!\defined('SIGCHLD')) {
+            return null;
+        }
+        $owner = SigchldOwner::current();
+        if ($owner !== null && $owner !== $loop) {
             return null;
         }
         $signo = (int) \constant('SIGCHLD');
@@ -430,10 +443,32 @@ trait ChildPollTrait
         }
         // react/event-loop's StreamSelectLoop installs [SignalsHandler, 'call'].
         if (\is_array($handler) && ($handler[0] ?? null) instanceof \React\EventLoop\SignalsHandler) {
-            return $signo;
+            return $owner === $loop || self::loopHoldsSignals($loop, $handler[0]) ? $signo : null;
         }
 
         return null;
+    }
+
+    /**
+     * Whether $handler is $loop's own signal multiplexer: react/event-loop
+     * keeps it in a private `$signals` property. A loop without one (a
+     * wrapper, a foreign implementation) cannot be told apart from a second
+     * loop, so it is treated as not holding it and takes the poll.
+     */
+    private static function loopHoldsSignals(LoopInterface $loop, \React\EventLoop\SignalsHandler $handler): bool
+    {
+        for ($class = new \ReflectionClass($loop); $class !== false; $class = $class->getParentClass()) {
+            if ($class->hasProperty('signals')) {
+                $property = $class->getProperty('signals');
+                if ($property->isStatic() || !$property->isInitialized($loop)) {
+                    return false;
+                }
+
+                return $property->getValue($loop) === $handler;
+            }
+        }
+
+        return false;
     }
 
     /**

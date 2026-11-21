@@ -200,6 +200,81 @@ final class ChildOnExitTest extends TestCase
         $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
     }
 
+    public function testASecondLoopTakesThePollSoBothLoopsHearTheirChildren(): void
+    {
+        $this->requireSigchld();
+
+        // Two plain loops, as the review repro had them: a second loop that
+        // armed its own SIGCHLD listener replaced the first's handler and put
+        // SIG_DFL back on removal, so the first loop never fired.
+        $first = new StreamSelectLoop();
+        $second = new StreamSelectLoop();
+        $slow = $this->spawnShell('sleep 0.5; exit 3');
+        $fast = $this->spawnShell('sleep 0.1; exit 4');
+
+        $slowCalls = [];
+        $slow->onExit($first, static function (int $code) use (&$slowCalls): void {
+            $slowCalls[] = $code;
+        });
+        $ownHandler = \pcntl_signal_get_handler(\SIGCHLD);
+
+        $fastCalls = [];
+        $fast->onExit($second, static function (int $code) use (&$fastCalls): void {
+            $fastCalls[] = $code;
+        }, 0.01);
+        $this->assertSame($ownHandler, \pcntl_signal_get_handler(\SIGCHLD), 'a second loop must not replace the first loop\'s SIGCHLD handler');
+
+        $this->runBounded($second, static function () use (&$fastCalls): bool {
+            return $fastCalls !== [];
+        });
+        $this->assertSame([4], $fastCalls);
+        $this->assertSame($ownHandler, \pcntl_signal_get_handler(\SIGCHLD), 'the second loop must leave the first loop\'s handler installed');
+
+        $this->runBounded($first, static function () use (&$slowCalls): bool {
+            return $slowCalls !== [];
+        });
+        $this->assertSame([3], $slowCalls, 'the first loop must still hear its child exit');
+        $this->assertSame(\SIG_DFL, \pcntl_signal_get_handler(\SIGCHLD));
+    }
+
+    public function testASecondLoopTakesThePollWhileTheOwnerOfTheClaimHoldsListeners(): void
+    {
+        $this->requireSigchld();
+
+        $first = new RecordingLoop();
+        $second = new RecordingLoop();
+        $slow = $this->spawnShell('sleep 0.4; exit 0');
+        $fast = $this->spawnShell('sleep 0.1; exit 5');
+
+        $detach = $slow->onExit($first, static fn (int $code) => null);
+        $fastCalls = [];
+        $fast->onExit($second, static function (int $code) use (&$fastCalls): void {
+            $fastCalls[] = $code;
+        }, 0.01);
+
+        $this->assertSame([\SIGCHLD], $first->signalsAdded);
+        $this->assertSame([], $second->signalsAdded, 'only the loop holding the claim may arm SIGCHLD');
+        $this->assertSame([0.01], $second->periodicTimers);
+
+        $this->runBounded($second, static function () use (&$fastCalls): bool {
+            return $fastCalls !== [];
+        });
+        $this->assertSame([5], $fastCalls);
+
+        // Once the first loop's last listener goes, the claim is free again.
+        $detach();
+        $later = $this->spawnShell('sleep 0.1; exit 6');
+        $laterCalls = [];
+        $later->onExit($second, static function (int $code) use (&$laterCalls): void {
+            $laterCalls[] = $code;
+        });
+        $this->assertSame([\SIGCHLD], $second->signalsAdded, 'a released claim must let another loop arm SIGCHLD');
+        $this->runBounded($second, static function () use (&$laterCalls): bool {
+            return $laterCalls !== [];
+        });
+        $this->assertSame([6], $laterCalls);
+    }
+
     public function testRejectsANonPositiveFallbackInterval(): void
     {
         $child = $this->spawnShell('exit 0');
