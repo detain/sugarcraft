@@ -4196,79 +4196,104 @@ final class TreeWideGuardRosterTest extends TestCase
         $tainted = [];
         $functions = self::functionBodies($tokens);
 
+        // The tokens do not change between passes, so each rule's sites are
+        // read out once: an assignment's target spellings and right-hand
+        // side, and a foreach's subject and bound variables. Every pass then
+        // asks the same questions of the same text, in the same order, as
+        // when each pass re-scanned the tokens (which made this the hot spot
+        // of the whole derivation).
+        $assignments = [];
+        for ($i = 0; $i < $count; $i++) {
+            if ($tokens[$i] !== '=') {
+                continue;
+            }
+            $low = $i - 1;
+            while ($low >= 0 && !\in_array(self::text($tokens[$low]), [';', '{', '}', '(', ')', ',', '='], true)) {
+                $low--;
+            }
+            $target = self::join($tokens, $low + 1, $i - 1);
+            if ($target === '') {
+                continue;
+            }
+            $depth = 0;
+            $high = $i;
+            for ($k = $i + 1; $k < $count; $k++) {
+                $text = self::text($tokens[$k]);
+                if ($text === '(' || $text === '[') {
+                    $depth++;
+                }
+                if ($text === ')' || $text === ']') {
+                    $depth--;
+                }
+                if ($text === ';' && $depth <= 0) {
+                    break;
+                }
+                $high = $k;
+            }
+            // A constant or property declaration is written with its
+            // modifiers; the call site spells only the name, so both the
+            // written target and its bare tail are tainted.
+            $assignments[] = [self::join($tokens, $i + 1, $high), self::spellingsOf($target)];
+        }
+
+        $loops = [];
+        for ($i = 0; $i < $count; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FOREACH || ($tokens[$i + 1] ?? null) !== '(') {
+                continue;
+            }
+            [$end, $balanced] = self::closingBracket($tokens, $i + 1);
+            if (!$balanced) {
+                continue;
+            }
+            $as = -1;
+            $depth = 0;
+            for ($k = $i + 2; $k < $end; $k++) {
+                $text = self::text($tokens[$k]);
+                if ($text === '(' || $text === '[') {
+                    $depth++;
+                }
+                if ($text === ')' || $text === ']') {
+                    $depth--;
+                }
+                if ($depth === 0 && \is_array($tokens[$k]) && $tokens[$k][0] === T_AS) {
+                    $as = $k;
+
+                    break;
+                }
+            }
+            if ($as < 0) {
+                continue;
+            }
+            $bound = [];
+            for ($k = $as + 1; $k < $end; $k++) {
+                if (\is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE) {
+                    $bound[] = $tokens[$k][1];
+                }
+            }
+            $loops[] = [self::join($tokens, $i + 2, $as - 1), $bound];
+        }
+
         do {
             $before = \count($tainted);
 
-            for ($i = 0; $i < $count; $i++) {
-                if ($tokens[$i] !== '=') {
+            foreach ($assignments as [$value, $spellings]) {
+                if (!self::isRootAnchored($value, $tainted)) {
                     continue;
                 }
-                $low = $i - 1;
-                while ($low >= 0 && !\in_array(self::text($tokens[$low]), [';', '{', '}', '(', ')', ',', '='], true)) {
-                    $low--;
-                }
-                $target = self::join($tokens, $low + 1, $i - 1);
-                if ($target === '') {
-                    continue;
-                }
-                $depth = 0;
-                $high = $i;
-                for ($k = $i + 1; $k < $count; $k++) {
-                    $text = self::text($tokens[$k]);
-                    if ($text === '(' || $text === '[') {
-                        $depth++;
-                    }
-                    if ($text === ')' || $text === ']') {
-                        $depth--;
-                    }
-                    if ($text === ';' && $depth <= 0) {
-                        break;
-                    }
-                    $high = $k;
-                }
-                if (!self::isRootAnchored(self::join($tokens, $i + 1, $high), $tainted)) {
-                    continue;
-                }
-                // A constant or property declaration is written with its
-                // modifiers; the call site spells only the name, so both the
-                // written target and its bare tail are tainted.
-                foreach (self::spellingsOf($target) as $spelling) {
+                foreach ($spellings as $spelling) {
                     if (!\in_array($spelling, $tainted, true)) {
                         $tainted[] = $spelling;
                     }
                 }
             }
 
-            for ($i = 0; $i < $count; $i++) {
-                if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FOREACH || ($tokens[$i + 1] ?? null) !== '(') {
+            foreach ($loops as [$subject, $bound]) {
+                if (!self::isRootAnchored($subject, $tainted)) {
                     continue;
                 }
-                [$end, $balanced] = self::closingBracket($tokens, $i + 1);
-                if (!$balanced) {
-                    continue;
-                }
-                $as = -1;
-                $depth = 0;
-                for ($k = $i + 2; $k < $end; $k++) {
-                    $text = self::text($tokens[$k]);
-                    if ($text === '(' || $text === '[') {
-                        $depth++;
-                    }
-                    if ($text === ')' || $text === ']') {
-                        $depth--;
-                    }
-                    if ($depth === 0 && \is_array($tokens[$k]) && $tokens[$k][0] === T_AS) {
-                        $as = $k;
-
-                        break;
-                    }
-                }
-                if ($as < 0 || !self::isRootAnchored(self::join($tokens, $i + 2, $as - 1), $tainted)) {
-                    continue;
-                }
-                for ($k = $as + 1; $k < $end; $k++) {
-                    if (\is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE && !\in_array($tokens[$k][1], $tainted, true)) {
-                        $tainted[] = $tokens[$k][1];
+                foreach ($bound as $variable) {
+                    if (!\in_array($variable, $tainted, true)) {
+                        $tainted[] = $variable;
                     }
                 }
             }
@@ -4333,17 +4358,42 @@ final class TreeWideGuardRosterTest extends TestCase
         if (preg_match(self::ROOT_ANCHOR, $expression) === 1) {
             return true;
         }
-        foreach ($tainted as $name) {
-            if (preg_match(self::NAME_SPELLING, $name) !== 1) {
-                continue;
-            }
-            $boundary = '~(?<![A-Za-z0-9_$>])' . preg_quote($name, '~') . '(?![A-Za-z0-9_])~';
-            if (preg_match($boundary, $expression) === 1) {
-                return true;
-            }
+        $pattern = self::taintedNamePattern($tainted);
+        if ($pattern !== null && preg_match($pattern, $expression) === 1) {
+            return true;
         }
 
         return false;
+    }
+
+    /**
+     * One bounded alternation over every tainted name that NAME_SPELLING
+     * accepts, or null when none does.
+     *
+     * The same answer as one bounded match per name: the boundaries are the
+     * same on every alternative, and a failed lookahead backtracks into the
+     * next alternative at the same offset. Built once per distinct taint set
+     * (the set only grows within a fixpoint, so the memo is the last one
+     * seen) instead of compiling a pattern per name per expression.
+     *
+     * @param list<string> $tainted
+     */
+    private static function taintedNamePattern(array $tainted): ?string
+    {
+        static $for = null;
+        static $pattern = null;
+        if ($for !== $tainted) {
+            $names = [];
+            foreach ($tainted as $name) {
+                if (preg_match(self::NAME_SPELLING, $name) === 1) {
+                    $names[] = preg_quote($name, '~');
+                }
+            }
+            $pattern = $names === [] ? null : '~(?<![A-Za-z0-9_$>])(?:' . implode('|', $names) . ')(?![A-Za-z0-9_])~';
+            $for = $tainted;
+        }
+
+        return $pattern;
     }
 
     /**
