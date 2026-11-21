@@ -47,6 +47,14 @@ final class TerminationPolicy
     /** "No such process": the only kill(-pgid, 0) failure that means an empty group. */
     private const ERRNO_ESRCH = 3;
 
+    /**
+     * When each group last had a live member seen by the libc arm's /proc
+     * walk, keyed by pgid.
+     *
+     * @var array<int, float>
+     */
+    private static array $groupScannedAt = [];
+
     public function __construct(
         public readonly int $signal = self::SIGHUP,
         public readonly float $graceSeconds = BoundedShutdown::TERMINATE_GRACE_SECONDS,
@@ -97,7 +105,10 @@ final class TerminationPolicy
     /**
      * Run the policy against $child, blocking for at most the two budgets.
      *
-     * An already-gone child is answered at once with no signal spent.
+     * An already-gone child is answered at once with no signal spent. With
+     * group reach, a group left holding only unreaped zombies reads gone
+     * where /proc can be read; without /proc (Darwin) a zombie counts as a
+     * live member, and the budgets run out to false.
      *
      * @return bool whether the child (and, with group reach, its group) is
      *              gone by the end of the budgets
@@ -129,7 +140,8 @@ final class TerminationPolicy
      * whose only survivors are unreaped zombies (no init reaps orphans, as
      * when PHP runs as PID 1 in a container) therefore reads non-empty: the
      * full grace and kill budgets run and the promise resolves false, where
-     * apply() answers true for the same child at once. The same trade-off
+     * apply() answers true for the same child at once on a host whose /proc
+     * can be read (Linux, with or without ext-posix). The same trade-off
      * {@see BoundedShutdown::terminateBoundedAsync()} documents: latency
      * paid on a timer, never a loop freeze. A caller that must tell a
      * zombie-only group from a live one re-checks with
@@ -239,7 +251,68 @@ final class TerminationPolicy
             return BoundedShutdown::groupEmpty($groupPid, $walkProc);
         }
 
-        return self::groupEmptyViaLibc($groupPid);
+        if (self::groupEmptyViaLibc($groupPid)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+
+        return $walkProc && self::noLiveMemberScannedThrottled($groupPid);
+    }
+
+    /**
+     * The /proc half of the libc arm, so apply() reads a zombie-only group
+     * as gone with or without ext-posix, as core's probe does. Throttled per
+     * group like core's walk: the sync ladder asks on every 5 ms tick and a
+     * walk costs tens of milliseconds on a busy host.
+     */
+    private static function noLiveMemberScannedThrottled(int $groupPid): bool
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (isset(self::$groupScannedAt[$groupPid])
+            && $now - self::$groupScannedAt[$groupPid] < BoundedShutdown::REAP_POLL_SECONDS
+        ) {
+            return false;
+        }
+
+        if (self::noLiveMemberScanned($groupPid)) {
+            unset(self::$groupScannedAt[$groupPid]);
+
+            return true;
+        }
+        self::$groupScannedAt[$groupPid] = $now;
+
+        return false;
+    }
+
+    /**
+     * No member of $groupPid outside states Z and X, read from /proc. Without
+     * /proc the answer is false: a zombie then counts as live.
+     */
+    private static function noLiveMemberScanned(int $groupPid): bool
+    {
+        $stats = @\glob('/proc/[0-9]*/stat');
+        if ($stats === false || $stats === []) {
+            return false;
+        }
+
+        foreach ($stats as $statFile) {
+            $stat = @\file_get_contents($statFile);
+            if ($stat === false) {
+                continue;
+            }
+            // "pid (comm) state ppid pgrp ..." — comm may hold spaces and parens,
+            // so the match anchors on the LAST ") " before the fixed-shape tail.
+            if (\preg_match('/^\d+ \(.*\) ([A-Za-z]) \d+ (\d+) /s', $stat, $m) === 1
+                && (int) $m[2] === $groupPid
+                && $m[1] !== 'Z'
+                && $m[1] !== 'X'
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -248,7 +321,7 @@ final class TerminationPolicy
      * Only ESRCH means no member is left; EPERM is a live member this uid
      * cannot signal. There is no /proc walk here, so an unreaped zombie
      * member counts as live, the same conservative reading
-     * {@see applyAsync()} documents.
+     * {@see applyAsync()} documents; {@see apply()} adds the walk on top.
      *
      * @internal public only so the arm is testable on hosts that DO load
      *           ext-posix, where the policy never reaches it.

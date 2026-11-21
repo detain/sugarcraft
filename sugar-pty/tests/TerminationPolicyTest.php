@@ -222,6 +222,95 @@ final class TerminationPolicyTest extends TestCase
 
         $this->assertGreaterThanOrEqual(self::GRACE, $result['elapsed'], 'an exited leader must not end the ladder while its group lives');
         $this->assertFalse(self::liveNonZombie((int) $result['grandchild']), 'the SIGKILL rung must reach the group without ext-posix');
+        $this->assertTrue($result['gone'], 'apply() must report the killed group as gone without ext-posix');
+    }
+
+    /**
+     * Without ext-posix, apply() must still read a group left holding only an
+     * unreaped zombie as gone, as it does with ext-posix: the libc arm walks
+     * /proc on the sync path. The zombie is a group member whose parent (the
+     * runner) sits outside the group and never reaps it, the shape a PHP
+     * running as PID 1 in a container leaves behind.
+     */
+    public function testWithoutExtPosixApplyReadsAZombieOnlyGroupAsGone(): void
+    {
+        $this->requirePosix();
+        $this->requireFfi();
+        if (!\function_exists('posix_setpgid') || !\is_readable('/proc/self/stat')) {
+            $this->markTestSkipped('posix_setpgid() and a readable /proc are required to build a zombie-only group.');
+        }
+
+        $script = <<<'PHP'
+            require $argv[1];
+            if (\function_exists('posix_kill')) {
+                echo \json_encode(['error' => 'posix_kill is still defined']);
+                exit;
+            }
+            $io = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+            // The leader: its own group in this session, exits when stdin closes.
+            $leaderProc = \proc_open(
+                [\PHP_BINARY, '-r', 'posix_setpgid(0, 0); echo "ready\n"; fgets(STDIN);'],
+                $io,
+                $leaderPipes,
+            );
+            $leader = new \SugarCraft\Pty\Posix\PosixChild((int) \proc_get_status($leaderProc)['pid'], $leaderProc);
+            \fgets($leaderPipes[1]);
+            $group = $leader->pid();
+            // The zombie: joins the leader's group and exits; its handle is
+            // never polled, so it stays unreaped for the rest of the run.
+            $zombieProc = \proc_open(
+                [\PHP_BINARY, '-r', 'echo posix_setpgid(0, (int) $argv[1]) ? "joined" : "failed";', (string) $group],
+                $io,
+                $zombiePipes,
+            );
+            $zombie = (int) \proc_get_status($zombieProc)['pid'];
+            $joined = \stream_get_contents($zombiePipes[1]);
+            $state = '';
+            $deadline = \microtime(true) + 5.0;
+            while (\microtime(true) < $deadline) {
+                $stat = (string) @\file_get_contents("/proc/{$zombie}/stat");
+                if (\preg_match('/^\d+ \(.*\) ([A-Za-z]) \d+ (\d+) /s', $stat, $m) === 1 && $m[1] === 'Z') {
+                    $state = $m[1] . ':' . $m[2];
+                    break;
+                }
+                \usleep(10_000);
+            }
+            \fclose($leaderPipes[0]);
+            $leader->wait();
+            $started = \hrtime(true);
+            $gone = \SugarCraft\Pty\TerminationPolicy::new()
+                ->withGraceSeconds((float) $argv[2])
+                ->withKillGraceSeconds((float) $argv[3])
+                ->apply($leader);
+            $elapsed = (\hrtime(true) - $started) / 1e9;
+            $libcLive = !\SugarCraft\Pty\TerminationPolicy::groupEmptyViaLibc($group);
+            \proc_close($zombieProc);
+            echo \json_encode([
+                'group' => $group,
+                'joined' => $joined,
+                'state' => $state,
+                'libcLive' => $libcLive,
+                'gone' => $gone,
+                'elapsed' => $elapsed,
+            ]);
+            PHP;
+
+        $command = \implode(' ', \array_map('escapeshellarg', [
+            \PHP_BINARY, '-d', 'disable_functions=posix_kill', '-r', $script,
+            \dirname(__DIR__) . '/vendor/autoload.php', (string) self::GRACE, (string) self::KILL_GRACE,
+        ]));
+        $output = \shell_exec($command . ' 2>&1 </dev/null');
+        $this->assertIsString($output);
+        $result = \json_decode($output, true);
+        $this->assertIsArray($result, "the posix-less runner printed: {$output}");
+        $this->assertArrayNotHasKey('error', $result, (string) ($result['error'] ?? ''));
+        $this->groups[] = (int) $result['group'];
+
+        $this->assertSame('joined', $result['joined'], 'the zombie must have joined the leader\'s group');
+        $this->assertSame('Z:' . $result['group'], $result['state'], 'the group must hold an unreaped zombie when apply() runs');
+        $this->assertTrue($result['libcLive'], 'kill(-pgid, 0) alone must still see the zombie, or this test proves nothing');
+        $this->assertTrue($result['gone'], 'a zombie-only group must read as gone without ext-posix');
+        $this->assertLessThan(self::GRACE, $result['elapsed'], 'a zombie-only group must be answered at once, with no ladder run');
     }
 
     public function testApplyKillsAChildThatTrapsHangupWithinTheGraceBound(): void
