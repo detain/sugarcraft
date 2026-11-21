@@ -435,6 +435,95 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->wallHit);
     }
 
+    public function testAChildThatExitsAfterMasterEofIsStillReportedAsExited(): void
+    {
+        // A child that closes its tty then exits 0.3 s later: the master reports EOF
+        // at once, but the window must keep waiting for the exit, as PtyDriver does.
+        $exitAt = \microtime(true) + 0.3;
+        $child = new class ($exitAt) implements Child {
+            public function __construct(private float $exitAt)
+            {
+            }
+
+            public function pid(): int
+            {
+                return 1;
+            }
+
+            public function exited(): bool
+            {
+                return \microtime(true) >= $this->exitAt;
+            }
+
+            public function wait(): int
+            {
+                return 0;
+            }
+
+            public function exitCode(): ?int
+            {
+                return 0;
+            }
+
+            public function kill(int $signal): void
+            {
+            }
+        };
+        $eofMaster = new class implements MasterPty {
+            public function read(int $len = 8192, ?float $timeout = 0.05): ?string
+            {
+                return '';
+            }
+
+            public function write(string $bytes): int
+            {
+                return \strlen($bytes);
+            }
+
+            public function resize(int $cols, int $rows): void
+            {
+            }
+
+            public function size(): array
+            {
+                return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0];
+            }
+
+            public function stream(): mixed
+            {
+                throw new \LogicException('window master has no real stream');
+            }
+
+            public function setBlocking(bool $blocking): void
+            {
+            }
+
+            public function close(): void
+            {
+            }
+
+            public function isClosed(): bool
+            {
+                return false;
+            }
+
+            public function fd(): int
+            {
+                return -1;
+            }
+        };
+
+        $started = \microtime(true);
+        $result = Expect::on($eofMaster)
+            ->collectWindow(2.0, self::farDeadline(), 100, 0, 0, null, $child);
+
+        self::assertTrue($result->eof, 'the master closed before the child exited');
+        self::assertTrue($result->childExited, 'a late exit after EOF is still reported');
+        self::assertFalse($result->wallHit);
+        self::assertGreaterThanOrEqual(0.3, \microtime(true) - $started, 'the window waits for the exit');
+        self::assertLessThan(1.5, \microtime(true) - $started, 'the window ends at the exit, not at its length');
+    }
+
     // ------------------------------------------------------------ regex validity
 
     public function testAnInvalidRegexThrowsInsteadOfReportingNoMatch(): void
