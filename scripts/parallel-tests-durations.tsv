@@ -197,7 +197,7 @@ candy-code/tests/TtyStreamArgumentCensusTest.php	3.582	46
 candy-code/tests/Context/EnvironmentBlockTest.php	3.579	53
 candy-code/tests/Lint/TestRunnerTest.php	3.569	13
 candy-code/tests/Server/TlsListenerTest.php	3.551	4
-candy-code/tests/Agents/SubAgentProviderErrorSurfacingTest.php	3.531	13
+candy-code/tests/Agents/SubAgentProviderErrorSurfacingTest.php	3.531	11
 candy-code/tests/Agents/TaskToolForkContextTest.php	3.517	10
 candy-code/tests/Chat/RewindCommandTest.php	3.517	15
 candy-code/tests/Session/SessionSearchIndexTest.php	3.512	15
