@@ -82,6 +82,37 @@ final class BackgroundShellRegistryTest extends TestCase
         }
     }
 
+    /**
+     * Wait until signal 0 to the group fails: no process, zombie or live,
+     * still carries $pgid.
+     *
+     * A KILLed group's members die together but are reaped one at a time,
+     * orphans by PID 1, so for a moment after the member a test watches has
+     * gone another member can still answer `kill(-pgid, 0)` as a zombie. The
+     * registry's own groupMemberAlive() skips state Z for this reason. The
+     * one-shot probes here ran straight after that member check, and one of
+     * them went red once, in a K=32 full run on a box at load 56 (the
+     * orphaned-group teardown test). That window is the likely cause; it did
+     * not reproduce in 1,600 local trials at load 25-40, where PID 1 reaped
+     * both members at once. A group that is really left alive still fails
+     * here, after the budget.
+     */
+    private static function groupGone(int $pgid, float $budgetSeconds = 5.0): bool
+    {
+        if (!\function_exists('posix_kill')) {
+            return true;
+        }
+        $deadline = microtime(true) + $budgetSeconds;
+        while (@posix_kill(-$pgid, 0)) {
+            if (microtime(true) >= $deadline) {
+                return false;
+            }
+            usleep(20_000);
+        }
+
+        return true;
+    }
+
     public function testAQuickShellSettlesWithItsExitCodeInTheOutputAndTheDurableExitFile(): void
     {
         $registry = $this->registry();
@@ -250,10 +281,7 @@ final class BackgroundShellRegistryTest extends TestCase
         $transcript = (string) ($registry->read($id)['stderr'] ?? '');
         self::assertStringContainsString('got-term', $transcript, 'the TERM rung never reached the shell');
         self::assertNotSame('running', $registry->status($id)['state']);
-        self::assertFalse(
-            \function_exists('posix_kill') ? @posix_kill(-$pid, 0) : false,
-            'the process group survived the ladder — a settled leader is not a dead shell',
-        );
+        self::assertTrue(self::groupGone($pid), 'the process group survived the ladder — a settled leader is not a dead shell');
         self::assertNull($registry->status($id)['exitCode'], 'a killed wrapper leaves its exit file empty — the code is honestly unknown');
     }
 
@@ -298,7 +326,7 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertTrue($stopped['wasRunning']);
         self::assertTrue($stopped['confirmed'], 'the ladder stranded on the dead leader and never reached the group');
         self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => !@posix_kill($member, 0), 5.0), 'the TERM-proof member survived the group KILL');
-        self::assertFalse(@posix_kill(-$pid, 0), 'the process group survived the ladder — a reaped leader is not a dead shell');
+        self::assertTrue(self::groupGone($pid), 'the process group survived the ladder — a reaped leader is not a dead shell');
         self::assertNotSame('running', $registry->status($id)['state'], 'the row reads settled once the group is truly gone');
         @unlink($memberFile);
     }
@@ -351,7 +379,7 @@ final class BackgroundShellRegistryTest extends TestCase
         $registry->teardown();
 
         self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => !@posix_kill($member, 0), 5.0), 'the sweep stranded on the corpse leader and let the orphan escape the launch');
-        self::assertFalse(@posix_kill(-$pid, 0), 'no live group may survive teardown()');
+        self::assertTrue(self::groupGone($pid), 'no live group may survive teardown()');
         @unlink($memberFile);
     }
 
@@ -385,7 +413,7 @@ final class BackgroundShellRegistryTest extends TestCase
 
         foreach ($ids as $id) {
             self::assertNotSame('running', $registry->status($id)['state'], $id . ' survived the teardown');
-            self::assertFalse(@posix_kill(-$pids[$id], 0), $id . ' left a live process group behind the teardown');
+            self::assertTrue(self::groupGone($pids[$id]), $id . ' left a live process group behind the teardown');
         }
         self::assertSame([], $registry->localIds(), 'teardown releases every handle this process held');
     }
@@ -564,7 +592,7 @@ final class BackgroundShellRegistryTest extends TestCase
 
             Bootstrap::stopBackgroundShells();
             self::assertNotSame('running', $first->status($id)['state'], 'the launch shutdown killed the shell it bucketed');
-            self::assertFalse(@posix_kill(-$pid, 0), 'the shutdown sweep left no live group');
+            self::assertTrue(self::groupGone($pid), 'the shutdown sweep left no live group');
             self::assertNotSame($first, Bootstrap::backgroundShells($projectRoot), 'the bucket is released — the next call mints a fresh registry');
         } finally {
             Bootstrap::stopBackgroundShells();
