@@ -78,7 +78,10 @@ final class Expect
      *                                   {@see self::DEFAULT_MAX_BUFFER} (1 MiB).
      *                                   null = explicit opt-OUT: unbounded capture.
      *                                   When set, the buffer is trimmed to this size after
-     *                                   each read to prevent unbounded growth.
+     *                                   each read to prevent unbounded growth. `expectAny`
+     *                                   trims only after a pass has searched the fresh
+     *                                   chunk, so its buffer (and the one a match carries
+     *                                   forward) can exceed the cap by up to one read chunk.
      * @param int|null       $searchWindow Number of bytes at the buffer tail to search;
      *                                   null = search entire buffer (original behaviour).
      *                                   Reduces O(n²) re-scan cost for long sessions.
@@ -338,6 +341,15 @@ final class Expect
             );
         }
 
+        // Resume cursor per needle (rank 79): the first buffer offset at which
+        // that needle has not been tried yet. A failed pass proves no
+        // occurrence STARTS before `strlen - strlen(needle) + 1`, so the next
+        // pass starts there instead of rescanning from byte 0. A needle can
+        // still complete across the read boundary: its start sits inside the
+        // last strlen(needle) - 1 bytes, which the cursor never passes.
+        $resumeAt = \array_fill(0, \count($needles), 0);
+        $needles = \array_values($needles);
+
         while (true) {
             $bestPos = null;
             $bestNeedle = null;
@@ -347,9 +359,10 @@ final class Expect
                 ? \max(0, \strlen($buffer) - $this->searchWindow)
                 : 0;
 
-            foreach ($needles as $needle) {
-                $pos = \strpos($buffer, $needle, $searchStart);
+            foreach ($needles as $i => $needle) {
+                $pos = \strpos($buffer, $needle, \max($searchStart, $resumeAt[$i]));
                 if ($pos === false) {
+                    $resumeAt[$i] = \max(0, \strlen($buffer) - \strlen($needle) + 1);
                     continue;
                 }
                 if ($bestPos === null || $pos < $bestPos) {
@@ -366,6 +379,22 @@ final class Expect
                     'lastMatch' => $bestNeedle,
                     'before' => $before,
                 ]);
+            }
+
+            // Enforce maxBuffer only AFTER the pass above has searched every
+            // byte: trimming a fresh chunk before the search would cut away a
+            // match lying in, or spanning, the bytes the cap gives up. The
+            // trim keeps at least the longest needle, and each cursor already
+            // sits within that tail, so shifting the cursors by the cut never
+            // skips an untried offset. The buffer therefore peaks at maxBuffer
+            // plus one read chunk while a pass runs.
+            $untrimmed = \strlen($buffer);
+            $buffer = $this->trimBuffer($buffer, $maxNeedleLen);
+            $cut = $untrimmed - \strlen($buffer);
+            if ($cut > 0) {
+                foreach ($resumeAt as $i => $offset) {
+                    $resumeAt[$i] = \max(0, $offset - $cut);
+                }
             }
 
             $remaining = $deadline - \microtime(true);
@@ -385,10 +414,6 @@ final class Expect
             }
             $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
-
-            // Enforce maxBuffer: trim from front, keeping enough trailing bytes
-            // to still match the longest needle.
-            $buffer = $this->trimBuffer($buffer, $maxNeedleLen);
         }
     }
 
