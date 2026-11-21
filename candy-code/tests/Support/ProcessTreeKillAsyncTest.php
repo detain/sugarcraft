@@ -188,6 +188,101 @@ final class ProcessTreeKillAsyncTest extends TestCase
         self::assertSame([], ProcessTreeKillTest::survivingAfter($marker, 2.0), 'a walk stranded by a stopped loop left its tree alive (stopped) after the process exited');
     }
 
+    /**
+     * The other stranded state: the walk has settled, the frozen set has had
+     * its SIGTERM, and the loop stops while the grace is still running. The
+     * walk's own shutdown entry is retired by then, so only the grace
+     * ladder's entry (settle, then 9) stands between a SIGTERM-ignoring tree
+     * and a process that exits leaving it alive.
+     *
+     * Driven in a separate PHP process, as above. Both tree members trap
+     * SIGTERM and drop a marker file instead of exiting; the driver runs its
+     * loop until both markers exist (so the 15 provably went out and the 9,
+     * 30 s of grace away, provably did not), then stops the loop and exits.
+     */
+    public function testAGraceTheLoopNeverFinishesEndsInSigkillAtShutdown(): void
+    {
+        $script = $this->dir . '/grace.php';
+        $log = $this->dir . '/grace.log';
+        \file_put_contents($script, \sprintf(<<<'PHP'
+            <?php
+            declare(strict_types=1);
+            require %s;
+            $dir = %s;
+            $stubborn = static function (string $name) use ($dir): void {
+                pcntl_async_signals(true);
+                pcntl_signal(SIGTERM, static function () use ($dir, $name): void {
+                    @file_put_contents($dir . '/term-' . $name, 'seen');
+                });
+            };
+            $child = pcntl_fork();
+            if ($child === 0) {
+                $stubborn('child');
+                $grandchild = pcntl_fork();
+                if ($grandchild === 0) {
+                    $stubborn('grandchild');
+                    file_put_contents($dir . '/grandchild.pid', (string) posix_getpid());
+                    while (true) {
+                        usleep(10000);
+                    }
+                }
+                while (true) {
+                    usleep(10000);
+                }
+            }
+            echo $child, "\n";
+            $deadline = microtime(true) + 5.0;
+            while (!is_file($dir . '/grandchild.pid') && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            usleep(50000);
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            \SugarCraft\Code\Support\ProcessContainment::killTreeAsync($child, $loop, 30.0);
+            $loop->addPeriodicTimer(0.005, static function () use ($loop, $dir): void {
+                if (is_file($dir . '/term-child') && is_file($dir . '/term-grandchild')) {
+                    echo "in-grace\n";
+                    $loop->stop();
+                }
+            });
+            $loop->addTimer(10.0, static fn() => $loop->stop());
+            $loop->run();
+            echo "stopped\n";
+            PHP,
+            \var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            \var_export($this->dir, true),
+        ));
+
+        \exec(
+            'timeout -s KILL 30 ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($script)
+                . ' > ' . \escapeshellarg($log) . ' 2>&1',
+            $unused,
+            $exit,
+        );
+        $lines = \file($log, \FILE_IGNORE_NEW_LINES) ?: [];
+        $members = \array_filter([
+            (int) ($lines[0] ?? 0),
+            (int) @\file_get_contents($this->dir . '/grandchild.pid'),
+        ], static fn(int $pid): bool => $pid > 0);
+        \array_push($this->strays, ...$members);
+
+        self::assertSame(0, $exit, 'the driver script failed: ' . \implode("\n", $lines));
+        self::assertCount(2, $members, 'fixture: the tree never came up: ' . \implode("\n", $lines));
+        self::assertContains('in-grace', $lines, 'the loop stopped before both members had their SIGTERM: ' . \implode("\n", $lines));
+
+        $deadline = \microtime(true) + 2.0;
+        do {
+            $alive = \array_values(\array_filter(
+                $members,
+                static fn(int $pid): bool => \posix_kill($pid, 0)
+                    && !\in_array(ProcessTree::stat($pid)['state'] ?? 'X', ['Z', 'X'], true),
+            ));
+            if ($alive !== []) {
+                \usleep(20_000);
+            }
+        } while ($alive !== [] && \microtime(true) < $deadline);
+        self::assertSame([], $alive, 'a grace stranded by a stopped loop left its SIGTERM-ignoring tree alive after the process exited');
+    }
+
     public function testRefusesZeroAndTheCallersOwnPid(): void
     {
         $sentinel = $this->dir . '/alive';
