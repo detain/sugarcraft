@@ -6,6 +6,7 @@ namespace SugarCraft\Pty;
 
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Recorder;
+use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Exception\ExpectEofException;
 use SugarCraft\Pty\Exception\ExpectTimeoutException;
@@ -512,6 +513,201 @@ final class Expect
             // Pass 0 for needleLen since EOF doesn't need to match anything.
             $buffer = $this->trimBuffer($buffer, 0);
         }
+    }
+
+    /** Bytes requested per read inside a window pass. */
+    private const WINDOW_READ_BYTES = 8192;
+
+    /**
+     * The per-pass read tick. Short enough that a match lands within
+     * milliseconds of the paint, long enough that an idle window costs
+     * twenty wakeups per second and not one busier.
+     */
+    private const WINDOW_POLL_SECONDS = 0.05;
+
+    /** A post-exit drain stops after this many consecutive empty reads. */
+    private const DRAIN_QUIET_READS = 2;
+
+    /** Hard cap on chunks one post-exit drain may pull, so a still-writing child cannot extend it. */
+    private const DRAIN_MAX_CHUNKS = 32;
+
+    private const DRAIN_READ_TIMEOUT_SECONDS = 0.05;
+
+    /**
+     * One bounded read window that never throws on a timeout, an EOF or a child
+     * exit: the outcome is the return value, so a scripted session keeps one
+     * result row per planned step whatever the child does.
+     *
+     * The window ends at the first of: the regex matching the window's retained
+     * output, the child exiting, the window length elapsing, or the wall
+     * deadline passing. Each read is clamped to the time left in the window, so
+     * the deadline binds even against a silent master.
+     *
+     * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
+     * totals in and thread the returned ones into the next window. Bytes past the
+     * cap are counted as dropped, never silently lost, and a multi-byte codepoint
+     * is never split at the cap edge.
+     *
+     * @param float         $windowSeconds Window length from now, in seconds.
+     * @param float         $deadline      Absolute wall deadline, as microtime(true).
+     * @param int           $maxBytes      Session-wide cap on retained bytes.
+     * @param int           $retained      Session total retained before this window.
+     * @param int           $dropped       Session total dropped before this window.
+     * @param string|null   $regex         PCRE matched against this window's retained
+     *                                     output; null collects without matching.
+     * @param Child|null    $child         Child whose exit ends the window early.
+     * @param (\Closure(): void)|null     $heartbeat Fired once per read pass.
+     * @param (\Closure(string): void)|null $onChunk   Raw bytes per read, before retention.
+     */
+    public function collectWindow(
+        float $windowSeconds,
+        float $deadline,
+        int $maxBytes,
+        int $retained = 0,
+        int $dropped = 0,
+        ?string $regex = null,
+        ?Child $child = null,
+        ?\Closure $heartbeat = null,
+        ?\Closure $onChunk = null,
+    ): ExpectWindow {
+        $output = '';
+        $matched = $regex === null ? null : false;
+        $childExited = false;
+        $windowEnd = \min(\microtime(true) + $windowSeconds, $deadline);
+
+        while (true) {
+            $now = \microtime(true);
+            if ($now >= $windowEnd) {
+                break;
+            }
+
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
+
+            $tick = \min(self::WINDOW_POLL_SECONDS, $windowEnd - $now);
+            $chunk = $this->master->read(self::WINDOW_READ_BYTES, $tick);
+            if ($chunk !== null && $chunk !== '') {
+                if ($onChunk !== null) {
+                    // Fed before retention so a live tail is independent of the
+                    // transcript's byte budget.
+                    $onChunk($chunk);
+                }
+                [$output, $retained, $dropped] = self::retainCapped($output, $chunk, $maxBytes, $retained, $dropped);
+                if ($regex !== null && \preg_match($regex, $output) === 1) {
+                    $matched = true;
+                    break;
+                }
+            }
+
+            if ($child?->exited() === true) {
+                $childExited = true;
+                // The final repaint can land a hair after the exit is observed;
+                // one bounded drain keeps it inside this window.
+                $finalWindow = $this->drainMaster();
+                if ($onChunk !== null && $finalWindow !== '') {
+                    $onChunk($finalWindow);
+                }
+                [$output, $retained, $dropped] = self::retainCapped($output, $finalWindow, $maxBytes, $retained, $dropped);
+                if ($regex !== null && $matched === false && \preg_match($regex, $output) === 1) {
+                    $matched = true;
+                }
+
+                break;
+            }
+        }
+
+        $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
+
+        return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped);
+    }
+
+    /**
+     * Read the master until it answers nothing twice in a row, chunk-capped.
+     */
+    private function drainMaster(): string
+    {
+        $seen = '';
+        $quiet = 0;
+        $budget = self::DRAIN_MAX_CHUNKS;
+
+        while ($quiet < self::DRAIN_QUIET_READS && $budget-- > 0) {
+            $chunk = $this->master->read(self::WINDOW_READ_BYTES, self::DRAIN_READ_TIMEOUT_SECONDS);
+            if ($chunk === null || $chunk === '') {
+                ++$quiet;
+
+                continue;
+            }
+
+            $quiet = 0;
+            $seen .= $chunk;
+        }
+
+        return $seen;
+    }
+
+    /**
+     * Append a chunk under a cap shared across the whole session: `$retained` is
+     * the running total every window draws from, so step count cannot multiply
+     * the budget. Returns [buffer, retained, dropped].
+     *
+     * @return array{0: string, 1: int, 2: int}
+     */
+    private static function retainCapped(string $buffer, string $chunk, int $cap, int $retained, int $dropped): array
+    {
+        if ($chunk === '') {
+            return [$buffer, $retained, $dropped];
+        }
+
+        $room = $cap - $retained;
+        if ($room <= 0) {
+            return [$buffer, $retained, $dropped + \strlen($chunk)];
+        }
+
+        if (\strlen($chunk) <= $room) {
+            return [$buffer . $chunk, $retained + \strlen($chunk), $dropped];
+        }
+
+        // The cap is a byte budget, so a raw substr at $room can tear a multi-byte
+        // sequence and leave a lone continuation byte in the transcript. Back the
+        // cut off to a codepoint boundary; the bytes given up are counted as dropped.
+        $cut = self::utf8SafeByteCut($chunk, $room);
+
+        return [$buffer . \substr($chunk, 0, $cut), $retained + $cut, $dropped + \strlen($chunk) - $cut];
+    }
+
+    /**
+     * Largest cut length at or below $room bytes that does not split a UTF-8
+     * codepoint. The chunk is valid UTF-8 from its first byte, so a sequence can
+     * only be torn at the tail: scan back up to three bytes for the lead, and if
+     * its declared length exceeds the bytes present, back the cut off before it.
+     * A whole sequence's lead sits four bytes back at most, so three steps cannot
+     * miss an incomplete one.
+     */
+    private static function utf8SafeByteCut(string $chunk, int $room): int
+    {
+        $cut = \min($room, \strlen($chunk));
+
+        for ($back = 1; $back <= 3 && $back <= $cut; $back++) {
+            $b = \ord($chunk[$cut - $back]);
+            if (($b & 0xc0) === 0x80) {
+                continue; // continuation byte: keep looking for its lead
+            }
+
+            $need = match (true) {
+                ($b & 0xe0) === 0xc0 => 2,
+                ($b & 0xf0) === 0xe0 => 3,
+                ($b & 0xf8) === 0xf0 => 4,
+                default              => 1, // ASCII: the run is complete
+            };
+            if ($need > $back) {
+                $cut -= $back; // a lead whose sequence is not yet complete
+            }
+
+            break;
+        }
+
+        return \max(0, $cut);
     }
 
     /**
