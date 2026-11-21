@@ -901,6 +901,30 @@ final class GrepInstructionWiringTest extends TestCase
         }
     }
 
+    /**
+     * A zero cap with a loader wired budgets the instruction section at the 8 MiB
+     * default, as the final clip does. Unbudgeted, every hit directory's CLAUDE.md
+     * was loaded whole and appended after the clip, so 200 directories each
+     * holding a 60,000-byte rule file returned about 12 MB against the ceiling.
+     */
+    public function testAZeroCapHoldsAnInstructionSectionOfManyLargeRulesToTheDefaultCeiling(): void
+    {
+        $ceiling = 8 * 1024 * 1024;
+        $rules = str_repeat("R\n", 30000); // 60,000 bytes, under the per-file load cap
+        for ($i = 0; $i < 200; $i++) {
+            $dir = $this->dir . '/d' . $i;
+            mkdir($dir, 0o777, true);
+            file_put_contents($dir . '/CLAUDE.md', $rules);
+            file_put_contents($dir . '/hit.txt', "needle\n");
+        }
+
+        $grep = new Grep($this->dir, maxOutputBytes: 0, instructionLoader: new InstructionFileLoader($this->dir));
+        $content = $this->grep($grep);
+
+        self::assertStringContainsString('hit.txt:1:needle', $content, 'the hits themselves are still returned');
+        self::assertLessThanOrEqual($ceiling + 4096, strlen($content), 'a zero cap holds the instruction section inside the 8 MiB ceiling');
+    }
+
     // =========================================================================
 
     private function grep(Grep $tool): string

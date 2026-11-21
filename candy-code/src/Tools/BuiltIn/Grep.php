@@ -476,7 +476,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // matched files returned 10,096 bytes against a 400-byte cap (25.2x)
         // before this reservation existed, because the bodies were appended
         // AFTER the clip and so were never inside the budget at all.
-        $ceiling = $this->instructionSectionCeiling($this->maxOutputBytes);
+        // A non-positive cap is budgeted at the 8 MiB default, the same ceiling the
+        // final clip falls back to: an instruction section sized from the raw 0
+        // would have no room bound at all, and it is appended after the clip.
+        $budgetCap = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::DEFAULT_RETAINED_BYTES;
+        $ceiling = $this->instructionSectionCeiling($budgetCap);
 
         // COMPUTED BEFORE THE BODY IS CLIPPED, and that ordering is the whole
         // of the second half of E66. The nudge used to be built after the clip
@@ -580,7 +584,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // final cut was announced for the session but never shown.
         $floor = $this->maxOutputBytes > 0
             ? max(1, $bodyCap - $ceiling - 1)
-            : max(1, self::DEFAULT_RETAINED_BYTES - $nudgeCost);
+            : max(1, $budgetCap - $nudgeCost - $ceiling - 1);
         // A probe SAVES nothing (saveSpill: false): the final clip below may be
         // a different cut, and a probe that saved left an orphaned spill file
         // whenever the output fell between the floor and $bodyCap.
@@ -604,7 +608,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // BEFORE any body is loaded, so a path whose rules do not fit is
             // not retired for the session — see
             // {@see \SugarCraft\Code\Tools\Concerns\TruncatesOutput::instructionSection()}.
-            $section = $this->instructionSection($hitFiles, $this->instructionLoader, $this->maxOutputBytes);
+            $section = $this->instructionSection($hitFiles, $this->instructionLoader, $budgetCap);
         }
 
         // Clipped at the FLOOR whenever a rule was surfaced, and NOT at what
