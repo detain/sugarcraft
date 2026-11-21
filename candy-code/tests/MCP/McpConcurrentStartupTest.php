@@ -15,8 +15,14 @@ use SugarCraft\Code\MCP\McpClient;
  */
 final class McpConcurrentStartupTest extends TestCase
 {
-    /** Seconds each fixture server holds its `initialize` reply. */
-    private const DELAY = 2.0;
+    /**
+     * Fallback hold for a fixture waiting at the handshake barrier. A
+     * concurrent startup releases it as soon as the second fixture arrives,
+     * so it is generous on purpose: spawning that fixture can take seconds
+     * on a loaded box. It is paid in full only by a sequential startup, and
+     * stays well inside the client's 60 s start timeout.
+     */
+    private const BARRIER_FALLBACK = 20.0;
 
     /**
      * Fallback hold for a gated fixture, released early by the test. A blocking
@@ -41,20 +47,33 @@ final class McpConcurrentStartupTest extends TestCase
         @\rmdir($this->tempDir);
     }
 
-    public function testTwoSlowServersStartInLessThanTheSumOfTheirDelays(): void
+    /**
+     * Startup is concurrent when both `initialize` requests are in flight at
+     * the same time. Each fixture arrives at a barrier and holds its reply
+     * until the other has arrived too. A startup that waits for one handshake
+     * before it sends the next leaves the first fixture holding alone until
+     * BARRIER_FALLBACK, and that fixture says so with an `alone.<pid>` file.
+     *
+     * WHY NOT A STOPWATCH: this used to assert that two 2 s handshakes took
+     * less than 3.5 s. That left 1.5 s for two php spawns and the client's own
+     * work, and loaded K=32 and K=58 runs measured 3.77 s and 3.97 s for a
+     * startup that was concurrent. The barrier asks the same question with no
+     * clock in it.
+     */
+    public function testTwoSlowServersHandshakeAtTheSameTime(): void
     {
-        $client = new McpClient($this->writeConfig(['alpha', 'beta']));
+        $client = new McpClient($this->writeConfig(['alpha', 'beta'], self::BARRIER_FALLBACK, barrierParties: 2));
 
-        $started = \microtime(true);
         try {
             $client->startServers();
-            $elapsed = \microtime(true) - $started;
 
             $this->assertSame(['alpha', 'beta'], \array_keys($client->startedSnapshot()));
-            $this->assertLessThan(
-                2 * self::DELAY - 0.5,
-                $elapsed,
-                \sprintf('two %.1fs handshakes took %.2fs: they ran one after the other', self::DELAY, $elapsed),
+            $this->assertCount(2, \glob($this->tempDir . '/arrived.*') ?: [], 'both fixtures reached their initialize');
+            $this->assertSame(
+                [],
+                \glob($this->tempDir . '/alone.*') ?: [],
+                'a fixture held its initialize reply alone until the fallback: startup sent one handshake '
+                    . 'only after the other had finished',
             );
         } finally {
             $client->stopServers();
@@ -119,11 +138,14 @@ final class McpConcurrentStartupTest extends TestCase
     /**
      * @param list<string> $names
      */
-    private function writeConfig(array $names, float $delay = self::DELAY, ?string $releaseFile = null): string
+    private function writeConfig(array $names, float $delay, ?string $releaseFile = null, int $barrierParties = 0): string
     {
         $args = [$this->fixtureScript(), (string) $delay];
-        if ($releaseFile !== null) {
-            $args[] = $releaseFile;
+        if ($releaseFile !== null || $barrierParties > 0) {
+            $args[] = $releaseFile ?? '';
+        }
+        if ($barrierParties > 0) {
+            $args[] = (string) $barrierParties;
         }
 
         $servers = [];
@@ -146,6 +168,9 @@ final class McpConcurrentStartupTest extends TestCase
      * A stdio server that holds its `initialize` reply for the given seconds
      * and answers `tools/list` at once. Given a release file, it holds the
      * reply only until that file exists, with the seconds as the fallback.
+     * Given a party count, it holds the reply at a barrier instead: it writes
+     * `arrived.<pid>` beside itself and waits until that many fixtures have
+     * arrived, writing `alone.<pid>` if the fallback runs out first.
      */
     private function fixtureScript(): string
     {
@@ -153,14 +178,24 @@ final class McpConcurrentStartupTest extends TestCase
         \file_put_contents($path, <<<'PHP'
             <?php
             $delay = (float) ($argv[1] ?? 0);
-            $release = $argv[2] ?? null;
+            $release = ($argv[2] ?? '') !== '' ? $argv[2] : null;
+            $parties = (int) ($argv[3] ?? 0);
             while (($line = fgets(STDIN)) !== false) {
                 $msg = json_decode($line, true);
                 if (!is_array($msg) || !isset($msg['id'])) {
                     continue;
                 }
                 if (($msg['method'] ?? '') === 'initialize' && $delay > 0) {
-                    if ($release === null) {
+                    if ($parties > 0) {
+                        touch(__DIR__ . '/arrived.' . getmypid());
+                        $deadline = microtime(true) + $delay;
+                        while (count(glob(__DIR__ . '/arrived.*') ?: []) < $parties && microtime(true) < $deadline) {
+                            usleep(10000);
+                        }
+                        if (count(glob(__DIR__ . '/arrived.*') ?: []) < $parties) {
+                            touch(__DIR__ . '/alone.' . getmypid());
+                        }
+                    } elseif ($release === null) {
                         usleep((int) ($delay * 1000000));
                     } else {
                         $deadline = microtime(true) + $delay;
