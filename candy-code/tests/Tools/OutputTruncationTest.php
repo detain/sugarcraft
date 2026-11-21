@@ -258,25 +258,11 @@ final class OutputTruncationTest extends TestCase
     }
 
     /**
-     * Mainline's pin (eaa775ef8) for the zero-cap meaning, reworded to owner
-     * ruling A (2026-11-20): a zero bound takes the 8 MiB per-stream capture
-     * ceiling, it does not disable truncation. The output here is far below
-     * that ceiling, so the body is unchanged and the pin still holds.
-     */
-    public function testAZeroCapTakesTheCaptureCeilingNotNoCap(): void
-    {
-        $result = (new Bash(maxOutputBytes: 0))->execute([
-            'command' => 'for i in $(seq 1 5000); do echo "line-$i"; done',
-            'id' => 'call_6',
-        ]);
-
-        $this->assertStringNotContainsString('truncated:', $result->content());
-        $this->assertGreaterThan(30000, strlen($result->content()));
-    }
-
-    /**
      * A zero bound no longer means unbounded: output under the 8 MiB capture
      * ceiling is returned whole, with no marker, because nothing was dropped.
+     * Owner ruling A (2026-11-20) sets the zero-cap meaning; the overrun pin
+     * that tells the 8 MiB reading from no cap is
+     * testAZeroCapAnnouncesTheCaptureCeilingWhenOutputOverrunsIt below.
      */
     public function testAZeroCapLeavesOutputUnderTheCaptureCeilingUntouched(): void
     {

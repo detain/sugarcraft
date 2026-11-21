@@ -400,7 +400,12 @@ final class GlobTest extends TestCase
         $this->assertStringContainsString('bytes omitted', $result->content());
     }
 
-    public function testAZeroCapDisablesTruncationForACallerThatOptsOut(): void
+    /**
+     * Owner ruling A (2026-11-20): a zero cap takes the 8 MiB capture ceiling
+     * rather than disabling truncation. Four short paths sit far below that
+     * ceiling, so the whole list comes back with no marker.
+     */
+    public function testAZeroCapTakesTheCaptureCeilingNotNoCap(): void
     {
         $result = (new Glob(maxOutputBytes: 0, maxMatches: 0))->execute([
             'pattern' => '**/*.php',
@@ -410,6 +415,36 @@ final class GlobTest extends TestCase
 
         $this->assertStringNotContainsString('truncated', $result->content());
         $this->assertCount(4, $this->linesOf($result->content()));
+    }
+
+    /**
+     * The regression this pins: a zero cap read as "no clip", so a list past
+     * 8 MiB went into the transcript whole. Each path here is about 3,930 bytes
+     * (19 nested 200-byte directories, under PATH_MAX), so 2,400 of them put
+     * roughly 9 MiB in the list. The ceiling must clip it and say so.
+     */
+    public function testAZeroCapClipsAListThatOverrunsTheCaptureCeiling(): void
+    {
+        $dir = $this->root . '/deep';
+        for ($level = 0; $level < 19; $level++) {
+            $dir .= '/' . str_repeat('d', 200);
+        }
+        mkdir($dir, 0o777, true);
+
+        $stem = str_repeat('f', 60);
+        for ($i = 0; $i < 2_400; $i++) {
+            touch($dir . '/' . $stem . sprintf('%04d', $i) . '.zzz');
+        }
+
+        $result = (new Glob(maxOutputBytes: 0, maxMatches: 5_000))->execute([
+            'pattern' => 'deep/**/*.zzz',
+            'path' => $this->root,
+            'description' => 'find the deep fixture',
+        ]);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertStringContainsString('bytes omitted', $result->content());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024, strlen($result->content()));
     }
 
     // =========================================================================
