@@ -34,6 +34,7 @@
         "react/promise": "^3.3",
         "react/socket": "^1.16",
         "react/stream": "^1.4",
+        "sugarcraft/sugar-mcp-client": "dev-master",
         "sugarcraft/sugar-plugins": "dev-master"
     },
     "require-dev": {

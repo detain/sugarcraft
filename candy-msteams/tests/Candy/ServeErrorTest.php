@@ -41,4 +41,27 @@ final class ServeErrorTest extends TestCase
         self::assertSame('channel-bridge: command.exec: dispatcher exploded', $error->getMessage());
         self::assertSame($cause, $error->getPrevious());
     }
+
+    public function testALibraryRefusalKeepsItsKindAndRetryHint(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::of(
+            \SugarCraft\McpClient\Protocol\ErrorCode::Busy,
+            'session is busy',
+            null,
+            ['retryAfterMs' => 500],
+        );
+        $error = ServeError::fromHost('session.send', $refusal);
+
+        self::assertSame('busy', $error->kind);
+        self::assertSame(['kind' => 'busy', 'retryAfterMs' => 500, 'retryable' => true], $error->data);
+    }
+
+    public function testALibraryNotFoundRefusalKeepsItsKind(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::notFound('gone', 'session_not_found');
+        $error = ServeError::fromHost('session.get', $refusal);
+
+        self::assertSame('session_not_found', $error->kind);
+        self::assertSame(['kind' => 'session_not_found'], $error->data);
+    }
 }
