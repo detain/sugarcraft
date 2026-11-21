@@ -255,13 +255,12 @@ final class OutputTruncationTest extends TestCase
     }
 
     /**
-     * Mainline's pin (eaa775ef8) for the zero-cap meaning. Its name says zero
-     * disables truncation; the branch now reads zero as the 8 MiB capture
-     * ceiling. Both sides' assertions are kept: this one holds under either
-     * reading because the output is far below the ceiling. Which name and
-     * wording stays is pending the owner's ruling on the zero-cap meaning.
+     * Mainline's pin (eaa775ef8) for the zero-cap meaning, reworded to owner
+     * ruling A (2026-11-20): a zero bound takes the 8 MiB per-stream capture
+     * ceiling, it does not disable truncation. The output here is far below
+     * that ceiling, so the body is unchanged and the pin still holds.
      */
-    public function testAZeroCapDisablesBashTruncation(): void
+    public function testAZeroCapTakesTheCaptureCeilingNotNoCap(): void
     {
         $result = (new Bash(maxOutputBytes: 0))->execute([
             'command' => 'for i in $(seq 1 5000); do echo "line-$i"; done',

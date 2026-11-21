@@ -156,21 +156,17 @@ final class ToolDescriptionGuidanceTest extends TestCase
     }
 
     /**
-     * Mainline's pin (eaa775ef8): a caller that disabled the cap must not
-     * advertise one. The branch now advertises the 8 MiB capture ceiling
-     * instead, so this assertion is held back, not dropped, until the owner
-     * rules on the zero-cap meaning. The branch's replacement test below pins
-     * the current wording.
+     * Restated pin for mainline's zero-cap test (eaa775ef8), which asserted a
+     * disabled cap is advertised as "no size cap". Owner ruling A (2026-11-20):
+     * a zero or negative bound takes the 8 MiB per-stream default, so the
+     * description must state that ceiling and never the no-cap wording.
      */
     public function testBashDescriptionAdvertisesNoCapWhenTheCapIsDisabled(): void
     {
-        self::markTestSkipped(
-            'Pending owner ruling on the zero-cap meaning: mainline says "no size cap", the branch says the 8 MiB capture ceiling.',
-        );
-
         $description = (new Bash(maxOutputBytes: 0))->description();
 
-        $this->assertStringContainsString('no size cap on this instance', $description);
+        $this->assertStringContainsString('each stream is retained up to 8,388,608 bytes (8 MiB)', $description);
+        $this->assertStringNotContainsString('no size cap', $description);
         $this->assertStringNotContainsString('clipped at', $description);
     }
 
