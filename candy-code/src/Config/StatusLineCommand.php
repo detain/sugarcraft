@@ -236,10 +236,11 @@ final class StatusLineCommand
 
     /**
      * Longest one {@see drain()} `stream_select()` waits before the deadline is
-     * re-checked — {@see \SugarCraft\Code\Hooks\ScriptHook::DRAIN_SLICE_SECONDS}'
-     * 200ms, for its reason: nothing wakes a select when the only thing that
-     * has changed is the clock, so a command that writes nothing at all has to
-     * expire on time rather than on its first byte.
+     * re-checked — the 200ms slice ScriptHook's own pump used before the hook
+     * moved onto {@see \SugarCraft\Async\ChildRun}, which now owns the hook's
+     * select loop and its deadline. The reason stays: nothing wakes a select
+     * when the only thing that has changed is the clock, so a command that
+     * writes nothing at all has to expire on time rather than on its first byte.
      */
     private const DRAIN_SLICE_SECONDS = 0.2;
 
@@ -887,7 +888,8 @@ final class StatusLineCommand
      * $deadline and capped at {@see MAX_OUTPUT_BYTES} of stdout.
      *
      * The PUMP is {@see \SugarCraft\Code\Support\DrainsStreamedChild::walk()}
-     * now, the same one {@see \SugarCraft\Code\Hooks\ScriptHook::drain()} uses —
+     * now, the walker the hook's pump used before ScriptHook moved onto
+     * {@see \SugarCraft\Async\ChildRun} (whose pump does the same jobs) —
      * `stream_select()` over both pipes so a chatty stderr cannot deadlock a
      * parent blocked on stdout, non-blocking pipes so a partial-buffer wake
      * cannot block inside the `fread()`, a retried `false` so an EINTR from
@@ -955,8 +957,9 @@ final class StatusLineCommand
      * Poll `proc_get_status()` until the child is gone or $deadline passes;
      * true if it exited.
      *
-     * {@see \SugarCraft\Code\Hooks\ScriptHook::waitForExit()}, unchanged,
-     * including the ordering note: the deadline is tested AFTER the status, so
+     * The exit poll ScriptHook ran before it moved onto
+     * {@see \SugarCraft\Async\ChildRun}, kept here with its ordering note:
+     * the deadline is tested AFTER the status, so
      * an already-exited child is reported as exited even when the budget is
      * spent — which is the ordinary case on the drain-finished path.
      *
@@ -983,8 +986,9 @@ final class StatusLineCommand
      *
      * Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant, which comes
      * from ext-pcntl: this path must not itself fatal on a build without it.
-     * The same escalation and the same literal as
-     * {@see \SugarCraft\Code\Hooks\ScriptHook::terminateAndEscalate()}.
+     * The same ladder ScriptHook's deadline kill now runs through
+     * {@see \SugarCraft\Async\ChildRun::withKillGrace()}: SIGTERM, then
+     * signal 9, on the same 0.5 s graces.
      * E673: signalling goes through {@see ProcessContainment::terminate()},
      * so a wrapped command's whole group dies with the tick budget instead of
      * the wrapper dying and orphaning what it backgrounded.

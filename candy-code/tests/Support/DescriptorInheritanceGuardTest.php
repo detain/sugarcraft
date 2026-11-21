@@ -114,8 +114,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * 5 tests, 13 assertions, rc 0. The identical spawn in a method with no
      * row reddened it. So the guard was live everywhere except behind its own
      * exemptions, which is where a new offender is most likely to be added:
-     * `Hooks/ScriptHook.php::executeStaged()` already holds two `proc_open()`
-     * sites in one function today.
+     * `Hooks/ScriptHook.php::executeStaged()` held two `proc_open()` sites in
+     * one function when this was written (a spawn and its env-fallback retry).
+     * It holds none now: the hook spawns through sugar-async's `ChildRun` in
+     * `runChild()`, which the retry calls again rather than spawning itself.
      *
      * WHY THIS STILL EARNS ITS PLACE: the reason text is unchanged and is
      * still the point of the row. The count is not a headcount of the tree -
@@ -918,8 +920,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * A roster keyed `File.php::function` with boolean membership cannot
      * express "one of these is argued for and the next is not", and a function
      * is exactly the scope in which a second spawn quietly appears -
-     * `Hooks/ScriptHook.php::executeStaged()` has two today. This fixture is
-     * what proves the licence is spent rather than granted.
+     * `Hooks/ScriptHook.php::executeStaged()` had two (a spawn and its
+     * env-fallback retry) before the hook moved onto sugar-async's `ChildRun`,
+     * whose single spawn sits in `runChild()`. This fixture is what proves the
+     * licence is spent rather than granted.
      */
     private const KNOWN_POSITIVE_SECOND_SITE = <<<'PHP'
         <?php
