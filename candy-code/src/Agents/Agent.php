@@ -494,8 +494,7 @@ final readonly class Agent
      * the `sort -u` pipeline attached - so the second figure had no generator at
      * all, which is the defect the paragraph is about happening inside the
      * paragraph.
-     * WHAT IS TRUE: 2 and 2 - re-measured by the two pipelines above; the
-     * pair was 31 / 54 when the wrong sentence was written.
+     * WHAT IS TRUE: 2 and 2 - re-measured by the two pipelines above.
      * HOW MEASURED: both commands above, run from `candy-code/`, at
      * `f958ba8e6` - the merge that WROTE the wrong pair - and again at
      * `bb4a311d0`. Identical at both, 31 / 54. So this is not later drift:
@@ -830,24 +829,28 @@ final readonly class Agent
      *
      * TEN-to-EIGHT would be the ASYMMETRIC edit: the
      * `CompleteRequest` built from an unmarked block (five) and the worker's
-     * second render from a marked one (three). `App/App.php` has no attachment
-     * point that produces it. There is exactly ONE in `App.php` - the
-     * `$agent = $agent->withEnvironment(EnvironmentBlock::capture(...))`
-     * attachment inside `dispatchSkill()` - and BOTH consumers: the request's
-     * `systemPrompt:` argument and `ProcessExecutor::spawnWorker()`'s second
-     * render - read that one block. So the edit `App.php`
+     * second render from a marked one (three). The dispatchSkill path has no
+     * attachment point that produces it. `App/App.php` makes no
+     * `withEnvironment(` call itself: `dispatchSkill()` takes its agent from
+     * {@see \SugarCraft\Code\Skills\SkillFork::agent()}, whose
+     * `return $agent->withEnvironment(EnvironmentBlock::capture(...))` in
+     * `Skills/SkillFork.php` is the path's ONE attachment point
+     * (`dispatchSkill()` is its only production caller; the Task fork path uses
+     * `SkillFork::agentName()` and never this block). BOTH consumers - the
+     * request's `systemPrompt:` argument and `ProcessExecutor::spawnWorker()`'s
+     * second render - read that one block. So the edit this path
      * actually admits is SYMMETRIC. MEASURED with the same logging-`git`-shim
      * technique against `ProcessExecutor(simulatedWorker: true)`, on the same
      * generated fixture repository, all three shapes side by side:
      *
      *     DEFAULT, one unmarked block feeding both     => 10 subprocesses; consumers agree
      *     ASYMMETRIC, only the SubAgent's agent marked =>  8 subprocesses; consumers DISAGREE
-     *     SYMMETRIC, the single App.php dispatchSkill attachment =>  6 subprocesses; consumers agree
+     *     SYMMETRIC, the single SkillFork::agent() attachment =>  6 subprocesses; consumers agree
      *
      * The symmetric edit is 10 -> 6, and the two consumers still render
      * BYTE-FOR-BYTE identical prompts, so consumer disagreement is not a
      * reason to decline it: that is true only of the asymmetric shape, which
-     * `App.php` does not offer.
+     * this path does not offer.
      *
      * WHY IT IS DECLINED. `App::dispatchSkill()` has NO per-step seam - it is one of
      * the once-per-dispatch eight, with no loop around its render - so marking
@@ -864,11 +867,14 @@ final readonly class Agent
      * AND THE SECOND PROPOSED WIRING, IN THE OTHER DECLARED FILE - ALSO
      * MEASURED, ALSO DECLINED. `Cli/Bootstrap.php` has an attachment point
      * too. `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
-     * production attachment points - `Bootstrap.php`
+     * production attachment points of an agent's block - `Bootstrap.php`
      * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)->withSettings($userConfig)))`,
-     * inside `Bootstrap::agentManager()`'s roster loop) and `App::dispatchSkill()`
-     * treated above; every other hit is this file's own, the setter's
-     * declaration and this doc-block's quotations of the two.
+     * inside `Bootstrap::agentManager()`'s roster loop) and `SkillFork.php`
+     * (`SkillFork::agent()`, reached from `App::dispatchSkill()` and treated
+     * above). Every other hit is this file's own setter declaration or an
+     * unrelated same-named setter (`SettingsResolver`, `EditorCommand`,
+     * `SettingsSources`) that takes an environment-variable array, not an
+     * {@see EnvironmentBlock}.
      *
      * IT IS LIVE AS A CONSTRUCTION POINT, which is why it needs an argued
      * answer rather than a shrug: `Bootstrap::agentManager()` is reached from

@@ -1910,12 +1910,12 @@ final class AgentManager
                 $subAgent->tokensUsed += $result->tokensUsed;
                 $subAgent->costUsd += $result->costUsd;
                 // Status and output, for the same reason and with sharper
-                // consequences: a pool-executed sub-agent used to be left at
-                // `pending` with an empty buffer forever, so isWorking() (and
+                // consequences: without this mirror a pool-executed sub-agent
+                // stays at `pending` with an empty buffer, so isWorking() (and
                 // through it active(), the status strip and the dashboard)
-                // would report a finished agent as still working for the rest
-                // of the session, and liveOutput() would never see the text the
-                // child actually produced.
+                // reports a finished agent as still working for the rest of
+                // the session, and liveOutput() never sees the text the child
+                // actually produced.
                 $subAgent->status = self::subAgentStatus($result->status);
                 if ($result->output !== null) {
                     $subAgent->output = $result->output;

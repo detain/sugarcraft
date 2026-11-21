@@ -597,8 +597,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        1. Every {@see SubAgent} this engine builds carries it — or, for
      *           a stage whose preset declares a STRICTER mode, the narrowed
      *           gate {@see stageGate()} builds — so the field holds this
-     *           launch's policy rather than the `null` every workflow-spawned
-     *           sub-agent used to be built with. The field IS enforcement on
+     *           launch's policy, never an unconditional `null`. The field IS enforcement on
      *           the forked path: when the pool runs a stage through
      *           {@see \SugarCraft\Code\Agents\EngineExecutor} (the
      *           `forkedExecutor` {@see \SugarCraft\Code\Cli\WorkflowEngineWiring}
