@@ -2391,6 +2391,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                                 // Bounded: only the newest THINK_LINE_BYTES show.
                                 if (strlen($prose) > 4 * self::THINK_LINE_BYTES) {
                                     $prose = substr($prose, -2 * self::THINK_LINE_BYTES);
+                                    // The byte cut can land inside a codepoint, and
+                                    // tailClip() repairs only text it clips: shed the
+                                    // stray continuation bytes here.
+                                    $prose = ltrim($prose, "\x80..\xBF");
                                 }
                                 $shown = trim(self::tailClip((string) preg_replace('/\s+/', ' ', $prose), self::THINK_LINE_BYTES));
                                 if ($shown !== '') {

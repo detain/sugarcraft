@@ -400,6 +400,46 @@ final class TaskToolExecuteMergeTest extends TestCase
     }
 
     /**
+     * The prose bound cuts bytes, so a multibyte character can straddle the
+     * cut. When the kept window collapses under the trail cap, tailClip()
+     * leaves it as is, so the stray continuation byte must be shed before:
+     * the `writing:` line stays valid UTF-8 and JSON-encodable.
+     */
+    public function testTheProseBoundNeverSplitsACodepointOntoTheTrailLine(): void
+    {
+        $manager = self::sessionManager([]);
+        // 400 + 2 + 317 + 2 = 721 bytes: past the 640-byte bound, and the
+        // newest 320 bytes start on the second byte of the 'é'.
+        $content = str_repeat('x', 400) . 'é' . str_repeat(' ', 317) . 'ok';
+        $provider = new ScriptedProvider([
+            [new CompleteResponse(content: $content)],
+        ], streams: true);
+        $now = 0.0;
+        $seen = [];
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new($provider, 'm'))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use (&$manager, &$seen): void {
+                if ($activity->op === SubAgentActivity::OP_PROGRESS) {
+                    foreach ($manager->liveRuns() as $run) {
+                        $seen[] = $run->output;
+                    }
+                }
+            })
+            ->withActivityClock(static function () use (&$now): float {
+                return $now += 1.0;
+            });
+
+        $result = $task->execute(self::delegation());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame(['writing: ok'], $seen, 'the split codepoint is shed, not shown');
+        foreach ($seen as $output) {
+            $this->assertSame(1, preg_match('//u', $output), 'the trail line is valid UTF-8');
+            $this->assertNotFalse(json_encode(['output' => $output]));
+        }
+    }
+
+    /**
      * @return array<string, string>
      */
     private static function delegation(): array
