@@ -10,6 +10,9 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Code\Agents\Isolation;
@@ -18,14 +21,15 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\PermissionAction;
-use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
-use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Skills\SkillSource;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolCall as WireToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
@@ -495,7 +499,8 @@ final class ForeignAgentPresetRegistryTest extends TestCase
      * THE IMPORT ACTUALLY MATCHES A GIT CALL, end to end. The translation is
      * worthless if the imported declaration still cannot survive its own
      * grant, so this runs the FULL chain — foreign file -> preset -> Agent ->
-     * AgentManager grant -> per-call enforcement — in both directions: the
+     * AgentManager grant -> per-call enforcement on a Task delegation (the
+     * SubAgentGrantHook) — in both directions: the
      * call the rule was written for goes THROUGH (the pre-fix shape died
      * here, refused by an argument half that matched nothing), and a call it
      * never covered is still refused (proving the translation did not widen
@@ -512,33 +517,20 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         );
         $preset = $registry->discoverClaude($projectRoot)['git-runner'];
 
-        [$manager, $subAgent] = $this->managerRunning(
-            $preset,
-            new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
-        );
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        [$subAgent, $refusal, $bashRuns] = $this->delegatePresetCalling($preset, 'git status');
 
-        $this->assertSame(
-            SubAgent::STATUS_COMPLETE,
-            $subAgent->status,
-            'the imported rule must ADMIT the git call it was written for — the pre-fix verbatim import died here',
-        );
+        $this->assertNull($refusal, 'the imported rule must ADMIT the git call it was written for — the pre-fix verbatim import refused it here');
+        $this->assertSame(1, $bashRuns, 'the admitted git call ran');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
 
-        [$manager2, $subAgent2] = $this->managerRunning(
-            $preset,
-            new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /']),
-        );
-        $caught = null;
+        [$subAgent2, $refusal2, $bashRuns2] = $this->delegatePresetCalling($preset, 'rm -rf /');
 
-        try {
-            iterator_to_array($manager2->executeSubAgent($subAgent2->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'translation must not widen the rule past git');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent2->status);
+        // A refused call is that call's error result on the Task path, and
+        // the run goes on: the refusal is what the model was told.
+        $this->assertNotNull($refusal2, 'translation must not widen the rule past git');
+        $this->assertStringContainsString('is outside the tool grant', $refusal2);
+        $this->assertSame(0, $bashRuns2, 'the refused call never ran');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent2->status);
     }
 
     /**
@@ -571,43 +563,24 @@ final class ForeignAgentPresetRegistryTest extends TestCase
     }
 
     /**
-     * Run one preset through a real AgentManager: an in-process executor is
-     * not needed because executeSubAgent() drives the provider directly; the
-     * provider answers the scripted tool call exactly once and the gate is
-     * the permissive BypassPermissions so any refusal observed here can only
-     * have come from the GRANT — the same control AgentManagerTest uses.
+     * Delegate one preset through {@see TaskTool} on a real AgentManager: its
+     * first step calls Bash with $command and its second reports. The session
+     * gate is the permissive BypassPermissions, so any refusal observed here
+     * can only have come from the GRANT — the same control AgentManagerTest
+     * uses.
      *
-     * @return array{AgentManager, SubAgent}
+     * @return array{SubAgent, ?string, int} the settled row, the refusal the
+     *         model received for the call (null when it ran), and how many
+     *         times Bash ran
      */
-    private function managerRunning(AgentPreset $preset, ToolCall $call): array
+    private function delegatePresetCalling(AgentPreset $preset, string $command): array
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [$call],
-        ));
-
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: new SkillRegistry(),
-            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
-            toolRegistry: [$this->fakeBashTool()],
-        );
-        $manager->register(Agent::fromPreset($preset, 'anthropic', 'claude-sonnet-4-6', true));
-
-        return [$manager, $manager->createSubAgent($preset->name, 'do it')];
-    }
-
-    /** The smallest Tool that satisfies the registry contract for name `Bash`. */
-    private function fakeBashTool(): Tool
-    {
-        return new class implements Tool {
-            public function __construct(private readonly string $name = 'Bash') {}
+        $bash = new class implements Tool {
+            public int $runs = 0;
 
             public function name(): string
             {
-                return $this->name;
+                return 'Bash';
             }
 
             public function description(): string
@@ -622,9 +595,40 @@ final class ForeignAgentPresetRegistryTest extends TestCase
 
             public function execute(array $args): ToolResult
             {
-                return new ToolResult('id', 'ok');
+                $this->runs++;
+
+                return new ToolResult((string) ($args['id'] ?? ''), 'ok');
             }
         };
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+        $manager = new AgentManager(
+            provider: new ScriptedProvider([]),
+            skillRegistry: new SkillRegistry(),
+            permissionGateFactory: static fn(): PermissionGate => $gate,
+            toolRegistry: [$bash],
+        );
+        $manager->register(Agent::fromPreset($preset, 'anthropic', 'claude-sonnet-4-6', true));
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'Result', toolCalls: [new WireToolCall('call-1', 'Bash', ['command' => $command])]),
+            new CompleteResponse(content: 'reported'),
+        ]);
+        $result = (new TaskTool($manager, suspended: new SuspendedDelegations($this->tempDir . '/suspended')))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools([$bash])->withPermissionGate($gate))
+            ->execute(['description' => 'Preset check', 'prompt' => 'do it', 'agent' => $preset->name, 'id' => 'task-call']);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(2, $provider->requests, 'the run carried the call\'s result back to the model');
+        $runs = $manager->runs();
+        $this->assertCount(1, $runs);
+
+        $turns = array_values(array_filter(
+            $provider->requests[1]->messages,
+            static fn (mixed $message): bool => $message instanceof Message && $message->role() === 'tool',
+        ));
+        $this->assertCount(1, $turns);
+
+        return [$runs[0], $bash->runs === 0 ? $turns[0]->content() : null, $bash->runs];
     }
 
     // -------------------------------------------------------------------------
