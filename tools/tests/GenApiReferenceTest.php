@@ -245,8 +245,9 @@ final class GenApiReferenceTest extends TestCase
 
     /**
      * Empty: every fragment fits FRAGMENT_BUDGET_BYTES. candy-code was 2,427,565 bytes at the rollout and
-     * now lists its top-level namespace row by row (ApiReference::ROWS_IN_NAMESPACE), so its ceiling
-     * entry was removed rather than raised.
+     * now lists its top-level namespace row by row (ApiReference::ROWS_IN_NAMESPACE) and keeps a row for
+     * each of its ten largest public types outside that namespace (ApiReference::TOP_TYPES_LISTED), so its
+     * ceiling entry was removed rather than raised.
      *
      * @var array<string, int>
      */
