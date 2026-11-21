@@ -82,6 +82,14 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
     /** Upper bound for waiting on a fixture handshake file. */
     private const HANDSHAKE_BOUND_SECONDS = 3.0;
 
+    /**
+     * The fixture never speaks LSP, so this clock bounds exactly one thing:
+     * disconnect()'s `shutdown` request, which connect() made due (it marks the
+     * connection initialized) and which the fixture never answers. At 10 s it
+     * was ten seconds of every row; no row here runs an exchange it bounds.
+     */
+    private const REQUEST_TIMEOUT_SECONDS = 1.0;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -374,7 +382,7 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
         ));
 
         $connection = new LspConnection($script, [$script]);
-        $connection->connect(PHP_BINARY, [], null, 10.0);
+        $connection->connect(PHP_BINARY, [], null, self::REQUEST_TIMEOUT_SECONDS);
 
         return $connection;
     }
