@@ -14,10 +14,12 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\ToolCancelRequests;
 use SugarCraft\Code\Tests\Support\RosterAgent;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\BuiltIn\SkillTool;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
@@ -41,6 +43,9 @@ final class TaskToolExecuteMergeTest extends TestCase
 {
     private string $storeDir;
 
+    /** the scratch root of a forked skill's SKILL.md, removed in tearDown */
+    private ?string $skillRoot = null;
+
     protected function setUp(): void
     {
         $this->storeDir = sys_get_temp_dir() . '/sc_task_merge_' . bin2hex(random_bytes(6));
@@ -49,6 +54,13 @@ final class TaskToolExecuteMergeTest extends TestCase
     protected function tearDown(): void
     {
         ToolCancelRequests::forget();
+        if ($this->skillRoot !== null) {
+            @unlink($this->skillRoot . '/skills/fork-check/SKILL.md');
+            @rmdir($this->skillRoot . '/skills/fork-check');
+            @rmdir($this->skillRoot . '/skills');
+            @rmdir($this->skillRoot);
+            $this->skillRoot = null;
+        }
         foreach (glob($this->storeDir . '/*') ?: [] as $file) {
             @unlink($file);
         }
@@ -440,11 +452,93 @@ final class TaskToolExecuteMergeTest extends TestCase
     }
 
     /**
+     * A forked skill's run is wrapped the same way: SkillTool hands a
+     * `context: fork` skill to TaskTool::runForkedSkill(), and a throw from
+     * outside that run's turn (here its activity emitter) must still leave
+     * the row terminal with an end of span, out of liveRuns(), and its card
+     * off RUNNING. A row that already settled keeps its own outcome.
+     *
+     * @return array<string, array{string, string, string}>
+     */
+    public static function throwingFramesForAForkedSkill(): array
+    {
+        return [
+            'before the run settles' => [SubAgentActivity::OP_STARTED, SubAgent::STATUS_FAILED, SubAgentActivity::OUTCOME_FAILED],
+            'after the run settled' => [SubAgentActivity::OP_FINISHED, SubAgent::STATUS_COMPLETE, SubAgentActivity::OUTCOME_COMPLETE],
+        ];
+    }
+
+    #[DataProvider('throwingFramesForAForkedSkill')]
+    public function testAThrowOutsideAForkedSkillsTurnLeavesTheRowTerminal(string $throwOn, string $expectedStatus, string $expectedCardStatus): void
+    {
+        $session = 'merge-' . bin2hex(random_bytes(5));
+        $manager = self::sessionManager([]);
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new(new ScriptedProvider([new CompleteResponse(content: 'reported')]), 'm')->withSessionId($session))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($throwOn): void {
+                if ($activity->op === $throwOn) {
+                    throw new \RuntimeException('activity socket closed');
+                }
+            });
+        $skillTool = (new SkillTool($this->forkSkillRegistry()))->withForkDelegate($task);
+
+        $caught = null;
+        try {
+            $skillTool->execute(['name' => 'fork-check', 'id' => 'skill-call']);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'the emitter failure must still reach the SkillTool caller');
+        $this->assertSame('activity socket closed', $caught->getMessage());
+
+        $runs = $manager->runs();
+        $this->assertCount(1, $runs, 'the fork ran as a delegation on the session manager');
+        $row = $runs[0];
+        $this->assertSame('checker', $row->agent->name, 'the skill\'s agent: preset carried the run');
+        $this->assertSame($expectedStatus, $row->status);
+        $this->assertNotNull($row->completedAt, 'a terminal row has an end of span, so elapsed time stops counting');
+        $this->assertFalse($row->isRunning());
+        $this->assertSame([], $manager->liveRuns(), 'a dead forked run is not listed as live');
+        if ($expectedStatus === SubAgent::STATUS_FAILED) {
+            $this->assertSame('activity socket closed', $row->error);
+        } else {
+            $this->assertNull($row->error, 'a truthful COMPLETE is not rewritten by a later throw');
+        }
+
+        $cards = AgentRunCards::runs($session);
+        $this->assertCount(1, $cards, 'the forked run recorded its card before the throw');
+        $this->assertSame($row->id, $cards[0]['runId']);
+        $this->assertSame($expectedCardStatus, $cards[0]['status']);
+        $this->assertSame($expectedCardStatus, AgentRunCards::statusOf($cards[0]), 'a live pid no longer reads the dead run as running');
+    }
+
+    /**
      * @return array<string, string>
      */
     private static function delegation(): array
     {
         return ['description' => 'Merge check', 'prompt' => 'Check the tree', 'agent' => 'checker'];
+    }
+
+    /**
+     * A registry holding one `context: fork` skill read from a real SKILL.md,
+     * routed to the `checker` preset the session roster carries — the shape
+     * SkillTool's fork branch reads before it calls runForkedSkill().
+     */
+    private function forkSkillRegistry(): SkillRegistry
+    {
+        $this->skillRoot = sys_get_temp_dir() . '/sc_task_merge_skill_' . bin2hex(random_bytes(6));
+        $dir = $this->skillRoot . '/skills/fork-check';
+        $this->assertTrue(mkdir($dir, 0o700, true));
+        file_put_contents(
+            $dir . '/SKILL.md',
+            "---\nname: fork-check\ndescription: Fork check\ncontext: fork\nagent: checker\n---\n\nCheck the tree.\n",
+        );
+
+        $registry = new SkillRegistry();
+        $registry->register(['fork-check' => Skill::fromFile($dir . '/SKILL.md')]);
+
+        return $registry;
     }
 
     /**
