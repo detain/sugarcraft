@@ -21,7 +21,7 @@ final class ExpectWindowTest extends TestCase
 {
     /**
      * A master that serves the scripted chunks in order. A null chunk, or an
-     * empty script, is a read that times out after honouring the tick, so the
+     * empty script, is a read that times out after honoring the tick, so the
      * deadline arithmetic gets real wall time to measure.
      *
      * @param list<?string> $chunks

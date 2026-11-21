@@ -291,8 +291,12 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 `collectWindow(float $windowSeconds, float $deadline, int $maxBytes, int $retained = 0, int $dropped = 0, ?string $regex = null, ?Child $child = null, ?Closure $heartbeat = null, ?Closure $onChunk = null)`
 is the non-throwing alternative for scripted steps that must always yield a
 result row. It returns an `ExpectWindow` (`output`, `matched`, `childExited`,
-`wallHit`, and the session `retained`/`dropped` totals to thread into the next
-window). It ends on the first of a regex match, a child exit, the window length, or the
+`wallHit`, `next`, and the session `retained`/`dropped` totals). Run the next
+window on `$w->next`, not on the original `$e`: `next` holds the same master with
+the consumed buffer cleared, so reusing `$e` replays bytes already reported in
+`$w->output`. Thread the totals through as well:
+`$w2 = $w1->next->collectWindow(1.0, $deadline, $cap, $w1->retained, $w1->dropped);`.
+It ends on the first of a regex match, a child exit, the window length, or the
 absolute wall `$deadline` (each read is clamped to it). Master EOF (`eof` is set)
 stops the reads; it ends the window only when no `$child` is passed, and with a
 child the window keeps waiting for that child's exit, a match, or the deadline. An invalid regex throws `\InvalidArgumentException`. Bytes past
