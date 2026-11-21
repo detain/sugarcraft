@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Hooks;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\ChildResult;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
@@ -14,6 +16,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Hooks\ScriptHook;
 use SugarCraft\Code\Support\DrainsStreamedChild;
+use SugarCraft\Code\Support\ProcessContainment;
 
 /**
  * Step 3.D-1: an exit-0 script hook may print a Claude Code-shaped JSON
@@ -265,81 +268,81 @@ final class ScriptHookJsonStdoutTest extends TestCase
             projectRoot: sys_get_temp_dir(),
         );
     }
+
     /**
-     * PHP-m1 (G1-L5): THE PUMP IS SHARED, THE POLICY IS NOT.
+     * Run a PHP child through ScriptHook's own ChildRun wiring
+     * ({@see ScriptHook::runChild()}), returning the result and the two
+     * streams as the verdict sees them (ChildRun's retained head plus the
+     * {@see ScriptHook::capped()} stamp).
      *
-     * {@see ScriptHook::drain()} and `StatusLineCommand::drain()` now delegate
-     * the whole `stream_select()` walk to one class, so what each file owns is
-     * what it does with the bytes. The hook's ceiling TRIMS EACH STREAM and
-     * keeps reading to EOF; a cap shared across the buffer would let stdout
-     * take the whole budget and return stderr empty, which is exactly the
-     * merge these two copies could have taken. 130 × 8 KiB down BOTH pipes, so
-     * each stream answers with its own kept window and its own stamp naming its
-     * own refused tail.
+     * @return array{0: string, 1: string, 2: ChildResult}
      */
-    public function testTheSharedWalkerStillTrimsEachStreamSeparately(): void
+    private function runThroughChildRun(string $source, float $budget = 20.0): array
     {
-        $hook = new ScriptHook('two_caps', HookEvent::PreToolUse, '.*', 'true', '');
-        $drain = new \ReflectionMethod($hook, 'drain');
-
-        $source = 'for ($i = 0; $i < 130; ++$i) { echo str_repeat("A", 8192); }'
-            . ' for ($i = 0; $i < 130; ++$i) { fwrite(STDERR, str_repeat("B", 8192)); }';
-        $pipes = [];
-        $proc = proc_open(
+        $hook = new ScriptHook('child_run', HookEvent::PreToolUse, '.*', 'true', '');
+        $run = (new \ReflectionMethod($hook, 'runChild'))->invoke(
+            $hook,
             [PHP_BINARY, '-r', $source],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
+            null,
+            ProcessContainment::scrubbedEnv(),
+            '',
+            $budget,
         );
-        $this->assertIsResource($proc);
-        fclose($pipes[0]);
+        $this->assertInstanceOf(ChildResult::class, $run, 'the child was refused a spawn');
+        $capped = new \ReflectionMethod(ScriptHook::class, 'capped');
 
-        try {
-            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 20.0);
-        } finally {
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
-        }
+        return [
+            $capped->invoke(null, $run->stdout, $run->droppedBytes - $run->droppedStderrBytes),
+            $capped->invoke(null, $run->stderr, $run->droppedStderrBytes),
+            $run,
+        ];
+    }
 
-        $marker = ' … [hook output capped at 1048576 bytes; 16384 further bytes dropped]';
-        $this->assertFalse($timedOut, 'neither ceiling is a deadline and neither may report one');
+    /**
+     * CC-1 (ChildRun): THE CEILING TRIMS EACH STREAM, not the pair. A cap
+     * shared across both buffers would let stdout take the whole budget and
+     * return stderr empty. 1,026 x 8 KiB down BOTH pipes — the 8 MiB ceiling
+     * plus two reads — so each stream answers with its own kept window and its
+     * own stamp naming its own refused tail.
+     */
+    public function testTheChildRunCeilingStillTrimsEachStreamSeparately(): void
+    {
+        $source = '$s = str_repeat("A", 8192); for ($i = 0; $i < 1026; ++$i) { fwrite(STDOUT, $s); }'
+            . ' $s = str_repeat("B", 8192); for ($i = 0; $i < 1026; ++$i) { fwrite(STDERR, $s); }';
+
+        [$stdout, $stderr, $run] = $this->runThroughChildRun($source);
+
+        $marker = ' … [hook output capped at 8388608 bytes; 16384 further bytes dropped]';
+        $this->assertFalse($run->timedOut(), 'neither ceiling is a deadline and neither may report one');
         $this->assertStringStartsWith(str_repeat('A', 8192), $stdout);
         $this->assertStringStartsWith(str_repeat('B', 8192), $stderr);
         $this->assertStringEndsWith($marker, $stdout);
         $this->assertStringEndsWith($marker, $stderr);
         $this->assertSame(
-            2 * (1048576 + \strlen($marker)),
+            2 * (8388608 + \strlen($marker)),
             \strlen($stdout) + \strlen($stderr),
             'each stream gets the full cap — one budget shared by both is the wrong policy',
         );
     }
 
     /**
-     * PHP-m1 (G1-L5): ONE PUMP, STRUCTURALLY. Both callers route through
-     * {@see DrainsStreamedChild::walk()} and neither keeps a select loop of its
-     * own — the finding was copies of the same walk drifting apart, and a
-     * re-spread is silent otherwise. The `@` prefix is what separates the CALL
-     * from the prose, which quotes `stream_select()` in backticks on purpose.
+     * CC-1 (ChildRun): ScriptHook runs its child on ChildRun and keeps no pump
+     * of its own — no select loop, no `proc_open()`, no shared walker. The
+     * walker stays for StatusLineCommand, its one remaining caller, and holds
+     * exactly one select. The `@` prefix separates the CALL from the prose.
      */
-    public function testBothDrainCallersDelegateAndNeitherKeepsASelectLoop(): void
+    public function testTheHookRunsOnChildRunAndTheWalkerKeepsOnlyTheStatusLine(): void
     {
-        $sources = [
-            'ScriptHook' => (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Hooks/ScriptHook.php'),
-            'StatusLineCommand' => (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Config/StatusLineCommand.php'),
-        ];
+        $hook = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Hooks/ScriptHook.php');
+        $this->assertStringContainsString('ChildRun::new(', $hook, 'ScriptHook must spawn through ChildRun');
+        $this->assertStringContainsString('->run()', $hook, 'ScriptHook must wait through ChildRun::run()');
+        $this->assertStringNotContainsString('DrainsStreamedChild', $hook, 'ScriptHook went back to the shared walker');
+        $this->assertStringNotContainsString('@stream_select(', $hook, 'ScriptHook re-grew its own select loop');
+        $this->assertStringNotContainsString('@proc_open(', $hook, 'ScriptHook re-grew its own spawn');
 
-        foreach ($sources as $label => $source) {
-            $this->assertStringContainsString(
-                'DrainsStreamedChild::walk(',
-                $source,
-                \sprintf('%s must route its drain through the shared walker', $label),
-            );
-            $this->assertStringNotContainsString(
-                '@stream_select(',
-                $source,
-                \sprintf('%s re-grew its own select loop', $label),
-            );
-        }
+        $statusLine = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Config/StatusLineCommand.php');
+        $this->assertStringContainsString('DrainsStreamedChild::walk(', $statusLine, 'StatusLineCommand must route its drain through the walker');
+        $this->assertStringNotContainsString('@stream_select(', $statusLine, 'StatusLineCommand re-grew its own select loop');
 
         $walker = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Support/DrainsStreamedChild.php');
         $this->assertSame(
@@ -350,19 +353,19 @@ final class ScriptHookJsonStdoutTest extends TestCase
     }
 
     /**
-     * PHP-m1 (G1-L5): the retry budget lives in ONE class. ScriptHook keeps the
-     * name because docs/HOOKS.md states the figure and
-     * `DocFigureProseDriftTest::testHookDrainSweepAndMarkerSentencesSurviveTheirSources()`
-     * derives that sentence from this constant — so the name is an alias, not a
-     * second copy — and StatusLineCommand's copy is gone, bounded by the
-     * walker's default.
+     * CC-1 (ChildRun): the select retry budget is the pump's own. ScriptHook's
+     * alias for the walker's figure is gone with the walker call, ChildPump
+     * rides a signal out on the same 128, and StatusLineCommand still keeps no
+     * copy.
      */
-    public function testTheRetryBudgetLivesInExactlyOneClass(): void
+    public function testTheRetryBudgetIsThePumpsAndNoHookCopySurvives(): void
     {
-        $budget = (int) (new \ReflectionClassConstant(ScriptHook::class, 'DRAIN_SELECT_RETRIES'))->getValue();
-
-        $this->assertSame(DrainsStreamedChild::SELECT_RETRIES, $budget, 'the rostered name must track the walker');
-        $this->assertSame(128, $budget, 'the figure docs/HOOKS.md states in prose');
+        $this->assertFalse(
+            (new \ReflectionClass(ScriptHook::class))->getReflectionConstant('DRAIN_SELECT_RETRIES'),
+            'ScriptHook kept a retry figure for a pump it no longer runs',
+        );
+        $this->assertSame(128, ChildPump::SELECT_RETRIES, 'the figure docs/HOOKS.md states in prose');
+        $this->assertSame(DrainsStreamedChild::SELECT_RETRIES, ChildPump::SELECT_RETRIES, 'the walker and the pump ride a signal out alike');
         $this->assertFalse(
             (new \ReflectionClass(StatusLineCommand::class))->getReflectionConstant('DRAIN_SELECT_RETRIES'),
             'the second copy of the figure came back',
@@ -370,80 +373,38 @@ final class ScriptHookJsonStdoutTest extends TestCase
     }
 
     /**
-     * PHP-m1 (G1-L5): interleaved streams, EOF mid-line, and the clean-close
-     * flag — the shapes the shared walker used to walk twice, pinned as BYTES.
-     * Two streams ping-ponged line by line so the per-slot buffers can only
-     * come out right if slot 0 never saw a slot 1 chunk and vice versa; the
-     * stdout tail deliberately has no newline, because an EOF that lands
-     * mid-line is the shape a trim-on-newline rewrite would silently eat; and
-     * the flag must read FALSE — the child closed both pipes itself, so the
-     * walk ended CLOSED, and neither the cap nor the deadline had a say.
+     * CC-1 (ChildRun): interleaved streams, EOF mid-line, and the clean-exit
+     * status, pinned as BYTES. Two streams ping-ponged so the per-stream
+     * buffers come out right only if neither saw the other's chunk; the stdout
+     * tail has no newline, because an EOF that lands mid-line is the shape a
+     * trim-on-newline rewrite would silently eat; and the run must read EXITED,
+     * not timed out.
      */
-    public function testInterleavedStreamsAndAMidLineEofDrainToTheExactPerSlotBytes(): void
+    public function testInterleavedStreamsAndAMidLineEofArriveAsTheExactPerStreamBytes(): void
     {
-        $hook = new ScriptHook('interleave', HookEvent::PreToolUse, '.*', 'true', '');
-        $drain = new \ReflectionMethod($hook, 'drain');
-
         $source = 'for ($i = 1; $i <= 4; ++$i) { echo "o" . $i; fflush(STDOUT); fwrite(STDERR, "e" . $i); fflush(STDERR); }'
             . ' echo "no-newline-tail";';
-        $pipes = [];
-        $proc = proc_open(
-            [PHP_BINARY, '-r', $source],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        $this->assertIsResource($proc);
-        fclose($pipes[0]);
 
-        try {
-            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 20.0);
-        } finally {
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
-        }
+        [$stdout, $stderr, $run] = $this->runThroughChildRun($source);
 
         $this->assertSame('o1o2o3o4no-newline-tail', $stdout, 'stdout carried a stderr chunk or lost the mid-line tail');
         $this->assertSame('e1e2e3e4', $stderr, 'the other direction');
-        $this->assertFalse($timedOut, 'a child that closed both pipes finished — nothing timed out');
+        $this->assertSame(ChildResult::EXITED, $run->status, 'a child that exited on its own finished — nothing timed out');
+        $this->assertSame(0, $run->exitCode);
     }
 
     /**
-     * PHP-m1 (G1-L5): the DEADLINE leg, with its sweep, reported as the hook
-     * has always reported it. The child writes its bytes at once and then
-     * sits on the pipes for longer than the 0.15 s budget, so either the
-     * first iteration reads "swept" or the deadline exit sweeps it out of
-     * the kernel buffer — both routes must land the same triple, and the
-     * third element must be TRUE because it was the budget, not the child,
-     * that ended the walk. The terminate in the finally is the child's
-     * teardown; the drain's own stdin contract is untouched here ($stdin
-     * stays null, so no close obligation existed or was taken).
+     * CC-1 (ChildRun): the DEADLINE leg. The child writes its bytes at once and
+     * then sits on the pipes past the 0.15 s budget: what it already said
+     * survives, and the run reports TIMED_OUT, because it was the budget, not
+     * the child, that ended it — the status the hook's deny is built from.
      */
-    public function testTheDeadlinePathSweepsTheBufferedBytesAndReportsTimedOut(): void
+    public function testTheDeadlinePathKeepsTheBufferedBytesAndReportsTimedOut(): void
     {
-        $hook = new ScriptHook('sweep', HookEvent::PreToolUse, '.*', 'true', '');
-        $drain = new \ReflectionMethod($hook, 'drain');
-
-        $pipes = [];
-        $proc = proc_open(
-            [PHP_BINARY, '-r', 'echo "swept"; fflush(STDOUT); usleep(3_000_000);'],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        $this->assertIsResource($proc);
-        fclose($pipes[0]);
-
-        try {
-            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 0.15);
-        } finally {
-            proc_terminate($proc);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
-        }
+        [$stdout, $stderr, $run] = $this->runThroughChildRun('echo "swept"; fflush(STDOUT); usleep(3_000_000);', 0.15);
 
         $this->assertSame('swept', $stdout, 'the deadline exit lost the bytes that were already there');
         $this->assertSame('', $stderr);
-        $this->assertTrue($timedOut, 'the budget ended this walk and the caller must be told so it kills');
+        $this->assertTrue($run->timedOut(), 'the budget ended this run and the hook must be told so it denies');
     }
 }

@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -132,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-input.png" alt="" aria-hidden="true">
@@ -152,20 +157,35 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
             <li class="toc-h3"><a href="#escapedecoder">EscapeDecoder</a></li>
             <li class="toc-h3"><a href="#escapedecoderoptions">EscapeDecoderOptions</a></li>
             <li class="toc-h3"><a href="#inputdriver">InputDriver</a></li>
             <li class="toc-h3"><a href="#event-types">Event types</a></li>
             <li class="toc-h3"><a href="#keymodifier">KeyModifier</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-key-names">Keys and key names</a></li>
+            <li class="toc-h3"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-input">SugarCraft\Input</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-input-driver">SugarCraft\Input\Driver</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-input-event">SugarCraft\Input\Event</a></li>
             <li class="toc-h3"><a href="#security-decoded-content-is-untrusted">Security: decoded content is untrusted</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant, chunk-invariant, and fuzz-friendly, with counters that make dropped or discarded input observable.</p>
+<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant and fuzz-friendly, chunk-invariant in the events it emits once <code>deferTrailingEscape</code> holds a lone ESC, with counters that make dropped or discarded input observable.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-input</code></pre>
@@ -201,14 +221,26 @@ while (!$driver->isEof()) {
 
     <p>One termination caveat: <code>isEof()</code> means "ended <em>and</em> drained", not "ended". A stream that stops mid-sequence leaves the decoder holding a partial, so <code>isEof()</code> stays false and <code>read()</code> answers null forever — call <code>escapeDecoder()->reset()</code> (or bound the loop with a grace period) when shutdown must win over an unfinished frame.</p>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>The lib is a byte decoder. It never reads the terminal and never writes to it. The host puts the terminal into raw mode and negotiates the mouse, paste, focus and Kitty modes, then hands the decoder the bytes the terminal sends. <code>EscapeDecoder::decode()</code> turns each complete sequence into one typed <code>Event</code>, and it buffers a partial sequence until the rest arrives, so the output does not depend on how the bytes were chunked when <code>deferTrailingEscape</code> is on. By default a read that ends on a lone ESC settles it as an Escape key at once, so a split right after a <code>0x1b</code> byte can decode differently from a single call.</p>
+    <p>Each sequence belongs to one protocol family: legacy keys, Kitty keyboard, mouse, focus, bracketed paste, or a terminal reply. <code>EscapeDecoderOptions</code> switches families on and off. A frame from a disabled or unknown family is counted in <code>droppedUnknownCount()</code>, never decoded as a different key. Terminal replies, such as a cursor position report, are drained as <code>TerminalReplyEvent</code> values instead of being dropped.</p>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+    <ul>
+      <li><strong>Read keys from a non-blocking stream.</strong> Build a <code>StreamInputDriver</code> over <code>STDIN</code>, call <code>read()</code> in a loop, and sleep briefly when it returns null with <code>hasPending()</code> false.</li>
+      <li><strong>Put the terminal in the right shape first.</strong> Disable canonical mode and echo before decoding, for example with <code>stty -icanon -echo</code> or sugar-pty. Then enable the modes you need: <code>?1006</code> for mouse, <code>?2004</code> for bracketed paste, <code>?1004</code> for focus. The decoder never writes these itself.</li>
+      <li><strong>Handle a Kitty key release.</strong> Check <code>KeyEvent::isRelease()</code>. Release events arrive with a <code>Release</code> prefix on the key name, and autorepeat frames set <code>isRepeat</code> and decode as presses.</li>
+      <li><strong>Hold a trailing ESC until input goes idle.</strong> The default settles a lone ESC at once, as an immediate Escape key. Set <code>deferTrailingEscape</code> to hold it, then call <code>flushDeferredEscape()</code> on an input-idle timer.</li>
+      <li><strong>Recover from an unterminated paste or partial frame.</strong> Call <code>reset()</code> on the decoder, or bound the loop with a grace period, so shutdown wins over an unfinished frame.</li>
+      <li><strong>Resize without polling.</strong> Create a <code>SignalResizeDriver</code>, call <code>arm()</code> to install the SIGWINCH handler, and read <code>ResizeEvent</code> values from it. <code>arm()</code> returns false without ext-pcntl.</li>
+    </ul>
     <h3 id="escapedecoder" style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
-      <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
-      <div class="feature"><strong>remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
-      <div class="feature"><strong>flushDeferredEscape(): list&lt;Event&gt;</strong><span>Settle a lone trailing ESC on an input-idle timer (with deferTrailingEscape).</span></div>
-      <div class="feature"><strong>drainedReplyCount() / droppedUnknownCount() / discardedPasteBytes(): int</strong><span>Counters for terminal replies drained, frames refused, and bytes discarded after a paste overflow.</span></div>
-      <div class="feature"><strong>reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
+      <div class="feature"><strong>EscapeDecoder::__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
+      <div class="feature"><strong>EscapeDecoder::decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
+      <div class="feature"><strong>EscapeDecoder::remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
+      <div class="feature"><strong>EscapeDecoder::flushDeferredEscape(): list&lt;Event&gt;</strong><span>Settle a lone trailing ESC on an input-idle timer (with deferTrailingEscape).</span></div>
+      <div class="feature"><strong>EscapeDecoder::drainedReplyCount() / EscapeDecoder::droppedUnknownCount() / EscapeDecoder::discardedPasteBytes(): int</strong><span>Counters for terminal replies drained, frames refused, and bytes discarded after a paste overflow.</span></div>
+      <div class="feature"><strong>EscapeDecoder::reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
     </div>
 
     <h3 id="escapedecoderoptions" style="margin-top: 32px;">EscapeDecoderOptions</h3>
@@ -216,7 +248,7 @@ while (!$driver->isEof()) {
 
     <h3 id="inputdriver" style="margin-top: 32px;">InputDriver</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
+      <div class="feature"><strong>InputDriver::read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
     </div>
     <p><code>StreamInputDriver</code> additionally answers <code>isEof()</code> and <code>hasPending()</code> — the null alone does not distinguish idle from ended — and both the stream and React drivers expose their owned decoder via <code>escapeDecoder()</code> for <code>reset()</code>, the flush helper, and the counters.</p>
 
@@ -233,6 +265,51 @@ while (!$driver->isEof()) {
     <h3 id="keymodifier" style="margin-top: 32px;">KeyModifier</h3>
     <p>Modifiers arrive on events and are read with <code>includes()</code> / <code>value()</code>. The constants <code>SHIFT</code>, <code>ALT</code>, <code>CTRL</code>, <code>META</code>, <code>SUPER</code>, <code>HYPER</code>, <code>CAPS_LOCK</code>, <code>NUM_LOCK</code> document the wire bit layout the decoder maps from — Kitty lock-state bits arrive on the explicit-event-type form — and the constructor is private, so masks are not built by hand.</p>
 
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>enableMouse</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes X10, urxvt 1015 and SGR 1006/1016 mouse frames. Disabled frames count as drops.</td></tr>
+    <tr><td><code>enableKitty</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes Kitty keyboard protocol frames, including releases and repeats.</td></tr>
+    <tr><td><code>enableFocus</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes focus gained and lost reports (DECSET 1004).</td></tr>
+    <tr><td><code>enablePaste</code></td><td><code>bool</code></td><td><code>true</code></td><td>Decodes bracketed paste into <code>PasteEvent</code>, capped at 1 MiB.</td></tr>
+    <tr><td><code>deferTrailingEscape</code></td><td><code>bool</code></td><td><code>false</code></td><td>Holds a lone trailing ESC until <code>flushDeferredEscape()</code> settles it on input idle.</td></tr>
+    </table>
+    <p>The options are readonly values passed to the <code>EscapeDecoder</code> constructor. A null argument uses the defaults. The options change parsing only. They do not turn modes on or off on the terminal, and the host still sends those sequences.</p>
+    <h3 id="keys-and-key-names" style="margin-top: 32px;">Keys and key names</h3>
+    <p>Key events carry a symbolic <code>key</code> name, a <code>KeyModifier</code> bitmask and the <code>raw</code> bytes. Names cover literal characters, the arrows, Home, End, PageUp, PageDown, Insert, Delete, Backspace, Tab, Enter, Escape, and Ctrl plus a letter. Legacy function keys run from F1 to F24, and the Kitty protocol reaches F35. Modifiers are read with <code>includes()</code> and <code>value()</code>, and <code>KeyModifier::none()</code>, <code>shift()</code>, <code>ctrl()</code> and their combinations are the named constructors.</p>
+    <p>Mouse events carry <code>x</code>, <code>y</code>, <code>button</code> and <code>action</code>. X10 release frames report button 3, so match releases on <code>action</code>, not on the button index.</p>
+    <h3 id="theme-and-styling" style="margin-top: 32px;">Theme and styling</h3>
+    <p>Not applicable. This lib decodes input and draws nothing, so it has no theme, color or style surface. Rendering belongs to the host or to the output libraries, and the decoded events are plain PHP values.</p>
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p><code>examples/decode.php</code> is an <code>EscapeDecoder</code> micro-demo. It feeds labeled byte frames through the decoder and prints each event: literal keys, legacy arrows, Kitty arrows and releases, modifyOtherKeys, SGR mouse, drained replies, focus, and a bracketed paste. The forged mouse frame is refused, so it prints a label and no event line. Every frame is written with explicit hex escapes, so the file survives editor and terminal mangling of control bytes. Run it with <code>php examples/decode.php</code>.</p>
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the suite from the lib root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suites cover the decoder and its options, each driver, the event classes, the modifier bitmask, the terminal-reply drain, and a key table parity check. Feed the decoder split byte streams in your own tests and compare the events. With <code>deferTrailingEscape</code> set, the emitted events should match a single-call decode, because the decoder is then chunk-invariant in its events. The paste overshoot counter is not: <code>discardedPasteBytes()</code> can differ by chunking, so do not assert counter parity across different splits. Under the default options, a split right after a <code>0x1b</code> byte can emit an Escape key before the rest of the sequence arrives, so compare those boundaries with the option on.</p>
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>Arrow keys do not reach the decoder, or echo back as escape text.</strong> The terminal is still in canonical mode with echo on, so the bytes wait in the line buffer or echo to the screen. Disable ICANON and ECHO before decoding.</li>
+      <li><strong>The loop never ends after the stream closes.</strong> <code>isEof()</code> means ended and drained. A stream that stops mid-sequence leaves a partial in the decoder, so call <code>escapeDecoder()-&gt;reset()</code> or bound the loop with a grace period.</li>
+      <li><strong>A key from a Kitty-capable terminal is missing.</strong> Check <code>droppedUnknownCount()</code>. A frame from a disabled family, or an unknown one, is refused and counted, and the decoder never guesses at it.</li>
+      <li><strong>Paste text is truncated.</strong> Paste above 1 MiB is clipped, and <code>PasteEvent::truncated</code> is true. The overflow is discarded and the announcement fires once. The overshoot past the cap in the read that crosses it is counted in <code>discardedPasteBytes()</code> at once, and bytes arriving after that are counted as they arrive; only a paste that crosses the cap and ends in the same read is truncated without any overshoot count.</li>
+      <li><strong>Parameterized focus reports such as <code>CSI 1;3I</code> are ignored.</strong> This is intentional. Those forms are dropped, as xterm never sends them. 8-bit C1 controls are also not treated as sequence starts.</li>
+      <li><strong><code>arm()</code> returns false on Windows or without pcntl.</strong> SIGWINCH detection is POSIX-only and needs ext-pcntl. Without it, the resize driver is inert and the host must detect resizes some other way.</li>
+    </ul>
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The decoding semantics follow the input handling in <a href="https://github.com/charmbracelet/bubbletea">charmbracelet/bubbletea</a>. The port is native PHP. The README and body describe the typed terminal-reply draining and the 1 MiB paste cap as additions beyond the upstream surface.</p>
+    <table class="api-table">
+    <tr><th>Concern (bubbletea input)</th><th>SugarInput</th></tr>
+    <tr><td>Key message from raw bytes</td><td><code>EscapeDecoder::decode()</code> returning <code>KeyEvent</code></td></tr>
+    <tr><td>Mouse message</td><td><code>MouseEvent</code> (X10, 1006, 1015)</td></tr>
+    <tr><td>Paste message</td><td><code>PasteEvent</code>, capped at 1 MiB</td></tr>
+    <tr><td>Focus message</td><td><code>FocusEvent</code></td></tr>
+    <tr><td>Terminal replies</td><td><code>TerminalReplyEvent</code>, drained instead of dropped</td></tr>
+    </table>
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p><code>EscapeDecoder</code> is the core. It holds the partial-sequence buffer, the paste state and the counters, and it applies the <code>EscapeDecoderOptions</code> family switches. The stream and React drivers wrap a source and call the decoder. <code>StreamInputDriver</code> reads a non-blocking stream. <code>ReactInputDriver</code> emits events from a ReactPHP readable stream. <code>SignalResizeDriver</code> turns SIGWINCH into <code>ResizeEvent</code>. <code>StreamInputDriver</code> and <code>ReactInputDriver</code> expose their owned decoder through <code>escapeDecoder()</code>, which is the seam for <code>reset()</code>, the flush helper and the counters. <code>SignalResizeDriver</code> holds no decoder, so it has no <code>escapeDecoder()</code>. Events are value classes in the <code>Event</code> namespace.</p>
+    <p>Two decoders exist in the fleet. sugar-input is the byte-level decoder used by sugar-readline, sugar-pty and the input-facing apps. sugar-core's <code>InputReader</code> runs on every sugar-core <code>Program</code>. A program should use one of them for its whole input path, not both.</p>
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-input/</code> in the monorepo is the record of changes. The install line takes the monorepo's current release line.</p>
     <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Real-TTY input</strong> — decode raw bytes instead of symbolic key names, on plain streams or ReactPHP loops.</li>
@@ -261,8 +338,8 @@ while (!$driver->isEof()) {
 <tr><td>EscapeDecoder</td><td>remainder(): string</td><td>Get unconsumed bytes</td></tr>
 <tr><td>EscapeDecoder</td><td>flushDeferredEscape(): list&lt;Event&gt;</td><td>Settle a deferred lone ESC on input idle</td></tr>
 <tr><td>EscapeDecoder</td><td>drainedReplyCount(): int</td><td>Terminal replies drained as events</td></tr>
-<tr><td>EscapeDecoder</td><td>droppedUnknownCount(): int</td><td>Frames refused (unknown or disabled family)</td></tr>
-<tr><td>EscapeDecoder</td><td>discardedPasteBytes(): int</td><td>Bytes discarded after a paste overflow</td></tr>
+<tr><td>EscapeDecoder</td><td>droppedUnknownCount(): int</td><td>Frames refused (unknown or disabled family), an incomplete sequence whose buffered tail passes the 128-byte cap, or an unterminated OSC/DCS string abandoned past its 64 KiB budget</td></tr>
+<tr><td>EscapeDecoder</td><td>discardedPasteBytes(): int</td><td>Paste bytes discarded after a paste overflow (paste only, never sequences)</td></tr>
 <tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial, paste and string state</td></tr>
 <tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null (idle/EOF)</td></tr>
 <tr><td>StreamInputDriver</td><td>isEof(): bool / hasPending(): bool</td><td>Distinguish ended-and-drained from idle</td></tr>
@@ -298,11 +375,189 @@ while (!$driver->isEof()) {
 <tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
 </table>
 
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-input/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-input -->
+<p>Only methods declared in <code>sugar-input/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-input">SugarCraft\Input</h3>
+<h4 id="api-sugarcraft-input-escapedecoder"><code>EscapeDecoder</code> <small>final class</small></h4>
+<p>Terminal escape sequence decoder.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?EscapeDecoderOptions $options = null)</code></td><td></td></tr>
+<tr><td><code>decode(string $bytes): array</code></td><td>Decode a byte buffer into zero or more Events.</td></tr>
+<tr><td><code>remainder(): string</code></td><td>Get bytes that couldn&#039;t be consumed as part of a complete sequence.</td></tr>
+<tr><td><code>drainedReplyCount(): int</code></td><td>Count of unsolicited terminal replies drained into TerminalReplyEvent since the last reset() — the counters measure one decoder epoch, not a process lifetime. Distinguishes &quot;recognized and drained&quot; from the silent drops counted by droppedUnknownCount().</td></tr>
+<tr><td><code>droppedUnknownCount(): int</code></td><td>Count of complete-but-unrecognized sequences consumed with no event (unknown CSI finals, malformed runs, unknown Kitty key codes) since the last reset(); reset() clears it along with the state.</td></tr>
+<tr><td><code>discardedPasteBytes(): int</code></td><td>Bytes of paste body swallowed past the 1 MiB cap while waiting for the paste&#039;s real 201~ terminator (the truncated PasteEvent announce fires once, at the cap). A forged paste that never sends the terminator keeps discarding — this counter grows monotonically and is the visible proof the tail became nothing rather than keys. reset() clears it along with the state.</td></tr>
+<tr><td><code>flushDeferredEscape(): array</code></td><td>Resolve a lone trailing ESC deferred by the <code>deferTrailingEscape</code> option into the Escape key it (probably) was. Call from an application timer once no more input arrives within the escape-timeout window; if the buffered tail is exactly one ESC byte, clear it and return that KeyEvent. A held lone <code>ESC P</code> (no <code>&gt;</code> followed) resolves the same way, to Alt+P.</td></tr>
+<tr><td><code>reset(): void</code></td><td>Clear the partial-sequence buffer, paste/string state, overflow-discard states, and reply counters. This is the host&#039;s recovery lever for a forged paste whose 201~ terminator never arrives (the decoder otherwise keeps discarding, by design, so no attacker byte can become a key).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-escapedecoderoptions"><code>EscapeDecoderOptions</code> <small>final class</small></h4>
+<p>Configuration options for EscapeDecoder protocol filtering.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly bool $enableMouse = true, public readonly bool $enableKitty = true, public readonly bool $enableFocus = true, public readonly bool $enablePaste = true, public readonly bool $deferTrailingEscape = false)</code></td><td></td></tr>
+<tr><td><code>withMouse(bool $enabled = true): self</code></td><td></td></tr>
+<tr><td><code>withKitty(bool $enabled = true): self</code></td><td></td></tr>
+<tr><td><code>withFocus(bool $enabled = true): self</code></td><td></td></tr>
+<tr><td><code>withPaste(bool $enabled = true): self</code></td><td></td></tr>
+<tr><td><code>withTrailingEscapeDeferral(bool $deferred = true): self</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event"><code>Event</code> <small>interface</small></h4>
+<p>Marker interface for all input events produced by EscapeDecoder.</p>
+<h4 id="api-sugarcraft-input-inputdriver"><code>InputDriver</code> <small>interface</small></h4>
+<p>Contract for a pull-based source of decoded terminal events.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>read(): Event|null</code></td><td>Read and return the next input event, or null when none is available (EOF on a stream driver, no pending signal on the resize driver — each implementation documents which).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-keymodifier"><code>KeyModifier</code> <small>final class</small></h4>
+<p>Modifier key flags for keyboard and mouse events.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static none(): self</code></td><td>No modifiers held.</td></tr>
+<tr><td><code>static alt(): self</code></td><td>Alt modifier.</td></tr>
+<tr><td><code>static ctrl(): self</code></td><td>Ctrl modifier.</td></tr>
+<tr><td><code>static shift(): self</code></td><td>Shift modifier.</td></tr>
+<tr><td><code>static altShift(): self</code></td><td>Alt+Shift modifiers.</td></tr>
+<tr><td><code>static ctrlShift(): self</code></td><td>Ctrl+Shift modifiers.</td></tr>
+<tr><td><code>static altCtrl(): self</code></td><td>Alt+Ctrl modifiers.</td></tr>
+<tr><td><code>static shiftAltCtrl(): self</code></td><td>Shift+Alt+Ctrl — the bits the legacy CSI wire forms can express.</td></tr>
+<tr><td><code>static all(): self</code></td><td></td></tr>
+<tr><td><code>static fromMask(int $mask): self</code></td><td>Rebuild an instance from a stored mask value (the IPC/bridge seam for hosts that persisted <code>value()</code>). Refuses anything outside the defined bit union — a phantom bit fails fast at the boundary instead of travelling silently through the event stream.</td></tr>
+<tr><td><code>static fromKittyInt(int $raw): self</code></td><td>Build a modifier mask from a raw Kitty modifier bitmask (bits already de-based by the caller: the wire field is 1 + mask). Bit layout per the Kitty keyboard protocol: bit 0=Shift, bit 1=Alt, bit 2=Control, bit 3=Super, bit 4=Hyper, bit 5=Meta, bit 6=CapsLock, bit 7=NumLock.</td></tr>
+<tr><td><code>static fromSgrMouse(int $raw): self</code></td><td>Build a modifier mask from an SGR mouse modifier field. SGR uses: bit 0=Shift, bit 1=Alt, bit 2=Ctrl.</td></tr>
+<tr><td><code>static fromXtermParam(int $xtermParam): self</code></td><td>Build a modifier mask from an xterm modified-key parameter.</td></tr>
+<tr><td><code>includes(int $flag): bool</code></td><td>Check if a specific modifier flag is set.</td></tr>
+<tr><td><code>value(): int</code></td><td>Get the raw bitmask value.</td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-input.</p>
+<h3 id="sugarcraft-input-driver">SugarCraft\Input\Driver</h3>
+<h4 id="api-sugarcraft-input-driver-reactinputdriver"><code>ReactInputDriver</code> <small>final class</small></h4>
+<p>ReactPHP-compatible input driver that wraps a ReadableStreamInterface.</p>
+<p>Not listed: the methods of <code>Evenement\EventEmitterTrait</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly ReadableStreamInterface $stream, ?EscapeDecoderOptions $options = null)</code></td><td></td></tr>
+<tr><td><code>escapeDecoder(): EscapeDecoder</code></td><td>The decoder instance behind this driver — the seam for reset() after a forged unterminated paste and for the drop/drain counters.</td></tr>
+<tr><td><code>isReadable(): bool</code></td><td>Checks whether this stream is in a readable state.</td></tr>
+<tr><td><code>pause(): void</code></td><td>Pauses receiving data events.</td></tr>
+<tr><td><code>resume(): void</code></td><td>Resumes receiving data events.</td></tr>
+<tr><td><code>pipe(\React\Stream\WritableStreamInterface $dest, array $options = []): \React\Stream\WritableStreamInterface</code></td><td>Pipes the underlying byte stream into the given writable destination.</td></tr>
+<tr><td><code>close(): void</code></td><td>Closes the stream and emits a &#039;close&#039; event.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-driver-signalresizedriver"><code>SignalResizeDriver</code> <small>final class</small></h4>
+<p>InputDriver that detects terminal resize events via SIGWINCH signals.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?callable $commandRunner = null, ?callable $ttyProbe = null)</code></td><td></td></tr>
+<tr><td><code>arm(): bool</code></td><td>Opt in to the driver&#039;s process-global side effects.</td></tr>
+<tr><td><code>disarm(): bool</code></td><td>Undo arm() for this instance (m3: arming used to be a one-way door).</td></tr>
+<tr><td><code>read(): Event|ResizeEvent|null</code></td><td>Read the next resize event, or null if no resize has been detected.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-driver-streaminputdriver"><code>StreamInputDriver</code> <small>final class</small></h4>
+<p>InputDriver backed by a PHP stream resource (e.g. STDIN).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly mixed $stream, ?EscapeDecoderOptions $options = null)</code></td><td></td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>escapeDecoder(): EscapeDecoder</code></td><td>The decoder instance behind this driver — the seam for hosts that need reset() after a forged unterminated paste, flushDeferredEscape() on an input-idle timer (with deferTrailingEscape), or the drop/drain counters.</td></tr>
+<tr><td><code>isEof(): bool</code></td><td>True once the stream has reached end-of-file AND every buffered and remainder event has been handed out.</td></tr>
+<tr><td><code>hasPending(): bool</code></td><td>True when more events are already decoded and waiting (driver buffer or decoder remainder) — distinguishes &quot;keep pulling&quot; from a true idle.</td></tr>
+<tr><td><code>read(): Event|null</code></td><td>Read the next Event from the stream, or null when the non-blocking read found no data (also returned forever after EOF once buffers are drained).</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-input-event">SugarCraft\Input\Event</h3>
+<h4 id="api-sugarcraft-input-event-focusevent"><code>FocusEvent</code> <small>final readonly class</small></h4>
+<p>Focus event — terminal window gained or lost focus.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public bool $gained, public ?string $raw = null)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event-keyevent"><code>KeyEvent</code> <small>final readonly class</small></h4>
+<p>A keyboard event — plain key or escape sequence decoded key.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $key, public KeyModifier $modifiers, public string $raw, public bool $isRepeat = false)</code></td><td></td></tr>
+<tr><td><code>isRelease(): bool</code></td><td>True when this is a key RELEASE event: the name is the &quot;Release&quot; prefix followed by the press name with its first letter capitalised (&quot;ReleaseA&quot;, &quot;ReleaseArrowUp&quot;). Only the Kitty protocol can report releases, so this is false for every other source.</td></tr>
+<tr><td><code>static plain(string $char, ?KeyModifier $modifiers = null): self</code></td><td>A bare printable key: the character IS the event, so $raw defaults to $char and a null $modifiers means &quot;no modifiers held&quot; (KeyModifier::none() — PHP cannot default a parameter to a method call, hence the nullable).</td></tr>
+<tr><td><code>static esc(string $key, ?KeyModifier $modifiers = null, string $raw = &#039;&#039;): self</code></td><td>A named key (ArrowUp, Enter, F5, ...). Null $modifiers means none held; empty $raw falls back to the bare ESC byte, which is honest only for Escape itself — callers with real wire bytes should pass them.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event-mouseevent"><code>MouseEvent</code> <small>final readonly class</small></h4>
+<p>A mouse event (SGR 1006/1016, urxvt 1015, X10 1000).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $x, public int $y, public int $button, public string $action, public KeyModifier $modifiers)</code></td><td></td></tr>
+<tr><td><code>isScroll(): bool</code></td><td></td></tr>
+<tr><td><code>static scrollUp(int $x, int $y, ?KeyModifier $modifiers = null): self</code></td><td>Scroll up — wire button code 64 (SGR/X10), normalized to stored code 96.</td></tr>
+<tr><td><code>static scrollDown(int $x, int $y, ?KeyModifier $modifiers = null): self</code></td><td>Scroll down — wire button code 65 (SGR/X10), normalized to stored code 97.</td></tr>
+<tr><td><code>static scrollLeft(int $x, int $y, ?KeyModifier $modifiers = null): self</code></td><td>Horizontal wheel left — wire button code 66 (SGR/X10), stored as 98.</td></tr>
+<tr><td><code>static scrollRight(int $x, int $y, ?KeyModifier $modifiers = null): self</code></td><td>Horizontal wheel right — wire button code 67 (SGR/X10), stored as 99.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event-pasteevent"><code>PasteEvent</code> <small>final readonly class</small></h4>
+<p>A bracketed paste event — content being pasted from the clipboard.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $content, bool $truncated = false)</code></td><td></td></tr>
+<tr><td><code>static truncate(string $content): self</code></td><td>Clip a paste to MAX_SIZE. Since the cap binds in the constructor this is a plain construction; the factory is kept for its name at call sites.</td></tr>
+<tr><td><code>truncationNotice(): ?string</code></td><td>Translated notice describing the cap, or null when the paste is intact.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event-resizeevent"><code>ResizeEvent</code> <small>final readonly class</small></h4>
+<p>A terminal resize event (SIGWINCH).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $cols, public int $rows)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-input-event-terminalreplyevent"><code>TerminalReplyEvent</code> <small>final readonly class</small></h4>
+<p>A terminal REPLY that arrived unsolicited on the input stream.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $family, array $params = [], public string $raw = &#039;&#039;, public string $body = &#039;&#039;, public bool $truncated = false)</code></td><td></td></tr>
+<tr><td><code>is(string $family): bool</code></td><td></td></tr>
+</tbody>
+</table>
+
     <h3 id="security-decoded-content-is-untrusted" style="margin-top: 40px;">Security: decoded content is untrusted</h3>
     <p>Everything the decoder emits is attacker-writable input — any process that can write the pts slave, an injected <code>tmux send-keys</code> session, or whatever the clipboard held feeds the stream. Treat key names, <code>PasteEvent::content</code>, <code>TerminalReplyEvent::body</code>/<code>params</code>, and every <code>raw</code> field as hostile bytes: never echo decoded content straight back to the terminal (a crafted paste or reply body can carry OSC-8 hyperlinks and other introducers that command your renderer — sugar-core's <code>Sanitize</code> is the fleet's shared tool for the sweep), and never interpolate it into shell commands, paths, or logs without your own quoting and redaction discipline.</p>
-    <p>Two structural laws to design against. <strong>Bracketed paste fences are forgeable</strong>: <code>CSI 200~</code>/<code>CSI 201~</code> are just bytes — use framing for convenience (bulk text without keymap side effects), never as an authenticity boundary between typed and pasted. <strong>Caps never reinterpret</strong>: a sequence that overflows its cap is refused with one counted drop (<code>droppedUnknownCount()</code>); paste bytes past the cap are discarded and counted by <code>discardedPasteBytes()</code> — the paste-only counter. Neither is ever pushed back into the stream for a second parse. The fleet's private-use-area arena (zone sentinels U+E000/U+E001, image markers from U+E002) passes through decoding byte-identical — the consumer that renders owns the sweep, with <code>Sanitize::untrustedForMarkedFrames()</code>; sugar-core's <code>InputReader</code> is a consumer that strips. The decoder's own caps contain parser resource use; they do not make the content trustworthy. The fleet-wide contract lives in <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
+    <p>Two structural laws to design against. <strong>Bracketed paste fences are forgeable</strong>: <code>CSI 200~</code>/<code>CSI 201~</code> are just bytes — use framing for convenience (bulk text without keymap side effects), never as an authenticity boundary between typed and pasted. <strong>Caps never reinterpret</strong>: a sequence that overflows its cap is refused with one counted drop (<code>droppedUnknownCount()</code>); paste bytes past the cap are discarded and counted by <code>discardedPasteBytes()</code> — the paste-only counter — as they arrive, and the overshoot of the cap-crossing read is included too, except when that same read carries the <code>201~</code> terminator: such a paste is truncated and its overshoot is not counted. Neither is ever pushed back into the stream for a second parse. The fleet's private-use-area arena (zone sentinels U+E000/U+E001, image markers from U+E002) passes through decoding byte-identical — the consumer that renders owns the sweep, with <code>Sanitize::untrustedForMarkedFrames()</code>; sugar-core's <code>InputReader</code> is a consumer that strips. The decoder's own caps contain parser resource use; they do not make the content trustworthy. The fleet-wide contract lives in <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
     </div>
   </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="related">Related</h2>
+        <ul>
+            <li><a href="sugar-readline.html">SugarReadline</a>: line-editing and selection prompts for terminal UIs, one layer above raw key events.</li>
+            <li><a href="sugar-pty.html">SugarPty</a>: pseudo-terminal primitives for hosting a program under a PTY.</li>
+        </ul>
+    </div>
 </section>
 </main>
 

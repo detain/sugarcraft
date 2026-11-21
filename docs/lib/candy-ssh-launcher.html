@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -151,83 +156,406 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#security">Security</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#connect-from-the-picker">Connect from the picker</a></li>
+            <li class="toc-h3"><a href="#connect-by-name-without-the-picker">Connect by name, without the picker</a></li>
+            <li class="toc-h3"><a href="#import-your-openssh-config">Import your OpenSSH config</a></li>
+            <li class="toc-h3"><a href="#jump-through-a-bastion-with-keys-and-flags">Jump through a bastion with keys and flags</a></li>
+            <li class="toc-h3"><a href="#use-a-different-transport-for-one-host">Use a different transport for one host</a></li>
+            <li class="toc-h3"><a href="#script-the-list">Script the list</a></li>
+            <li class="toc-h2"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshlauncher">SugarCraft\SshLauncher</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshlauncher-support">SugarCraft\SshLauncher\Support</a></li>
+            <li class="toc-h2"><a href="#keys">Keys</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#where-the-wishlist-comes-from">Where the wishlist comes from</a></li>
+            <li class="toc-h3"><a href="#ssh-binary-resolution">Ssh binary resolution</a></li>
+            <li class="toc-h3"><a href="#environment">Environment</a></li>
+            <li class="toc-h3"><a href="#endpoint-fields">Endpoint fields</a></li>
+            <li class="toc-h2"><a href="#security">Security</a></li>
+            <li class="toc-h2"><a href="#theme-and-styling">Theme and styling</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#the-picker-needs-an-interactive-terminal">The picker needs an interactive terminal</a></li>
+            <li class="toc-h3"><a href="#a-config-is-refused-as-owned-by-another-user-or-writable">A config is refused as owned by another user or writable</a></li>
+            <li class="toc-h3"><a href="#it-says-the-file-looks-like-an-openssh-config">It says the file looks like an OpenSSH config</a></li>
+            <li class="toc-h3"><a href="#the-ssh-binary-is-not-found-or-not-executable">The ssh binary is not found or not executable</a></li>
+            <li class="toc-h3"><a href="#the-picker-exits-130-before-drawing">The picker exits 130 before drawing</a></li>
+            <li class="toc-h3"><a href="#exit-3-at-launch">Exit 3 at launch</a></li>
+            <li class="toc-h3"><a href="#a-duplicate-name-warning">A duplicate name warning</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#source-and-demos">Source and demos</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#picker">Picker</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Launch <code>candy-ssh-launcher</code>, pick a host, hit Enter — the current process is replaced with <code>ssh</code> connecting to it. Reads YAML or JSON; supports identity files, ssh options, ProxyJump.</p>
+<p class="lede" style="margin-top: 28px;">Launch <code>candy-ssh-launcher</code>, pick a host, and press Enter. The launcher replaces its own process with <code>ssh</code> connecting to that host, so the prompts, the keys and the exit code are all ssh's. It is a PHP port of the selection flow in <a href="https://github.com/charmbracelet/wishlist">charmbracelet/wishlist</a>: your machines live in one YAML or JSON list, you type to narrow it, and Enter connects. The picker is a one-shot local widget, not a server-backed store.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher</code></pre>
-    <p>The package publishes its dev branch until the first <code>candy-ssh-launcher/v*</code> tag is cut, so projects on Composer's default <code>minimum-stability</code> need the root <code>"minimum-stability": "dev", "prefer-stable": true</code> pair. A single-file <code>.phar</code> is built from <code>tools/build-phar.php</code> (see the README); release download URLs appear with the tags.</p>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher:@dev</code></pre>
+    <p>Until the first <code>candy-ssh-launcher/v*</code> tag is cut, the package publishes only its dev branch, so a bare <code>composer require</code> finds nothing under Composer's default <code>minimum-stability</code>. The <code>:@dev</code> suffix names that branch explicitly. The binary lands at <code>vendor/bin/candy-ssh-launcher</code>, and <code>tools/build-phar.php</code> builds a single-file <code>.phar</code>.</p>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer with <code>ext-pcntl</code> (the launcher hands off with <code>pcntl_exec</code>), a Unix host (raw-mode terminals, <code>pcntl</code> and <code>~</code> expansion have no Windows story) and a UTF-8 terminal, because the picker draws <code>▸</code>, <code>─</code> and <code>…</code>.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-yaml"># ~/.config/wishlist.yml
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <p>Endpoints form a flat top-level YAML list. This is <code>examples/sample-wishlist.yml</code>:</p>
+    <pre class="code"><code class="language-yaml"># Sample wishlist directory. Copy to ~/.config/wishlist.yml and edit.
+
 - name: production
   host: prod.example.com
   port: 2222
   user: deploy
+  # A leading ~ on an identity path is expanded by the launcher ($HOME,
+  # passwd fallback). An absolute path is the portable spelling — it does
+  # not depend on who expands it.
   identity_file: ~/.ssh/prod-deploy
+  description: Live customer-facing app servers
 
 - name: staging
   host: stage.example.com
   user: deploy
+  description: Pre-prod mirror — safe to break
+
+- name: dev
+  host: dev.example.com
+  user: dev
 
 - name: jumpbox
   host: bastion.example.com
   options:
     - ServerAliveInterval=30
-    - ProxyJump=gw.example.com</code></pre>
+    - ServerAliveCountMax=3</code></pre>
+    <p>Run the picker in a terminal. With no <code>--config</code>, the launcher looks for <code>wishlist.yml</code> in the current directory, then in <code>~/.config</code>:</p>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-ssh-launcher --config examples/sample-wishlist.yml</code></pre>
+    <p>Without a terminal, <code>--list</code> prints one row per endpoint (name, <code>host:port</code>, user or <code>-</code>), tab-separated, and exits 0:</p>
+    <pre class="code"><code class="language-text">production	prod.example.com:2222	deploy
+staging	stage.example.com:22	deploy
+dev	dev.example.com:22	dev
+jumpbox	bastion.example.com:22	-</code></pre>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Config discovery</strong><span><code>--config</code> ▸ <code>./wishlist.{yml,yaml,json}</code> ▸ <code>~/.config/wishlist.{yml,yaml,json}</code> — first file that exists wins at each tier.</span></div>
-      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, description, identityFiles[] (or the singular identity_file / identityFile aliases), proxyJump, options[].</span></div>
-      <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list (sugar-fuzzy Smith–Waterman scoring, live match count, 16 locales).</span></div>
-      <div class="feature"><strong>ProxyJump / Options</strong><span>Pass any ssh option through the entry's <code>options</code> array.</span></div>
-      <div class="feature"><strong>pcntl_exec</strong><span>Replaces the launcher process — no double-shell — so signals + exit codes propagate cleanly.</span></div>
-      <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/candy-ssh-launcher</code>, plus a self-contained <code>.phar</code> built by <code>tools/build-phar.php</code>.</span></div>
-      <div class="feature"><strong>Keys</strong><span>↑/↓, Home/End, PgUp/PgDn move; type to narrow; Enter connects; Ctrl+U/W/H edit the query; Esc quits with 130. Bracketed paste is text, never a command.</span></div>
-      <div class="feature"><strong>Requirements</strong><span>PHP 8.3+ with <code>ext-pcntl</code>, Unix only, UTF-8 terminal. Honors <code>NO_COLOR</code>/<code>CLICOLOR=0</code> and <code>TERM=dumb</code>.</span></div>
-      <div class="feature"><strong>Accessibility</strong><span>Keyboard-only with glyph-marked selection and zero animation; screen-reader path is <code>--list</code> plus direct named dispatch (<code>candy-ssh-launcher home</code>).</span></div>
-    </div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The config file is <strong>trusted input</strong>, exactly like <code>~/.ssh/config</code>. The launcher does not sandbox a wishlist. It turns each row into an argument list and gives that list to ssh, so the rows decide what runs. The security section below explains which rows deserve a second look.</p>
+    <p>An endpoint becomes an argv list. <code>Endpoint::toSshArgv()</code> emits <code>ssh</code>, then <code>-p</code> when the port is not 22, one <code>-</code> flag per letter in <code>flags</code>, one <code>-i</code> per identity file in order, <code>-J</code> for a jump host, one <code>-o</code> per option, then <code>--</code>, the destination and an optional remote command. A value that starts with a dash is refused by name before it reaches argv, so a config cannot smuggle a second option in through a host or identity field.</p>
+    <p>The picker is a one-shot widget. <code>Picker::pick()</code> draws one frame, reads keys until Enter or Esc, and returns one <code>Endpoint</code> or <code>null</code>. It needs a real terminal on both stdin and stdout, so a piped run is refused with exit 2. Pasted text is typed into the filter and never connects, even when the paste ends in a newline.</p>
+    <p>Dispatch replaces the process. <code>Launcher::dispatch()</code> calls <code>pcntl_exec</code> with the vetted binary, which performs no <code>$PATH</code> search. A successful call never returns, so signals and the exit status belong to ssh. A failed exec throws, and the CLI reports it as exit 3.</p>
 
-    <h3 id="security" style="margin-top: 32px;">Security</h3>
-    <p>Your config file is <strong>trusted input</strong> — exactly like <code>~/.ssh/config</code> itself. Whatever a config declares, the launcher passes to ssh: <code>options:</code> entries become real <code>-o</code> settings verbatim, and OpenSSH options such as <code>ProxyCommand</code> / <code>LocalCommand</code> <strong>execute arbitrary commands at connect time</strong>. Keep config files (and <code>~/.ssh/config</code>) owned by you with <code>0600</code>/<code>0644</code> permissions and do not accept endpoint files from strangers; see the fleet-wide <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">trust boundary</a>.</p>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+    <h3 id="connect-from-the-picker" style="margin-top: 24px;">Connect from the picker</h3>
+    <p>Type to narrow the list (the match is fuzzy and scored by sugar-fuzzy), move with the arrow keys, and press Enter. The header shows the shown-of-total count while a filter is live, and a <code>(no matches …)</code> line appears when the filter removes every row.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="connect-by-name-without-the-picker" style="margin-top: 24px;">Connect by name, without the picker</h3>
+    <p>A bare positional argument names an endpoint. An exact, unique match dispatches straight away and never touches the terminal, so it works in scripts, because ssh gets the terminal and no picker is drawn. An ambiguous name opens the picker already filtered to the matches. An unknown name opens the full picker rather than failing on a typo.</p>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-ssh-launcher --config examples/sample-wishlist.yml staging</code></pre>
+
+    <h3 id="import-your-openssh-config" style="margin-top: 24px;">Import your OpenSSH config</h3>
+    <p><code>--from-ssh-config</code> reads endpoints from an OpenSSH config instead of a wishlist. Host patterns become endpoint names, and <code>HostName</code> (or the pattern, when no <code>HostName</code> is given) becomes the host. Without <code>--config</code> it reads <code>~/.ssh/config</code>, which is auto-discovered and therefore passes the same ownership gate. The source file is named on stderr so an imported list is never mistaken for your wishlist.</p>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-ssh-launcher --from-ssh-config
+vendor/bin/candy-ssh-launcher --from-ssh-config --config ~/lab/ssh_config</code></pre>
+
+    <h3 id="jump-through-a-bastion-with-keys-and-flags" style="margin-top: 24px;">Jump through a bastion with keys and flags</h3>
+    <p>Set <code>proxyJump</code> for <code>-J</code>, list <code>identityFiles</code> (each becomes its own <code>-i</code>, in order), add <code>options</code> for <code>-o</code>, and use <code>flags</code> for the letter-only switches such as <code>t</code> (<code>-t</code>) or <code>N</code> (<code>-N</code>).</p>
+    <pre class="code"><code class="language-yaml">- name: db-prod
+  host: db.internal.example.com
+  user: dba
+  proxyJump: bastion.example.com
+  identityFiles:
+    - ~/.ssh/prod-deploy
+    - ~/.ssh/prod-dba
+  options:
+    - ServerAliveInterval=30
+  flags:
+    - t
+  remoteCommand: psql</code></pre>
+
+    <h3 id="use-a-different-transport-for-one-host" style="margin-top: 24px;">Use a different transport for one host</h3>
+    <p>A row may set <code>command</code> (the alias <code>transport</code> is accepted) to name a different binary for that endpoint, such as a mosh-style client. The binary passes the same exists-and-executable check as <code>--ssh</code>, and it is not searched on <code>$PATH</code>. Fields the custom transport cannot carry (<code>identityFiles</code>, <code>proxyJump</code>, <code>options</code> and <code>remoteCommand</code>) are dropped, and the launcher prints one stderr line naming each dropped field before it runs.</p>
+
+    <h3 id="script-the-list" style="margin-top: 24px;">Script the list</h3>
+    <p><code>--list</code> is the machine-readable view and never launches anything, so it stays safe in a pipe. Each row is name, <code>host:port</code> and user (or <code>-</code>). Tabs and line breaks inside a value are folded to spaces so one endpoint is always one row, and a duplicated name gets a <code>#n</code> suffix with its 1-based config index. A config with zero endpoints prints nothing and exits 0 under <code>--list</code>.</p>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-ssh-launcher --list | awk -F'\t' '$3 == "deploy" { print $1 }'</code></pre>
+
+    <h2 id="api" style="margin-top: 40px;">API</h2>
+    <p>Every class lives under <code>SugarCraft\SshLauncher\</code>. <code>Endpoint</code> and <code>Config</code> are the data path, and <code>Picker</code> and <code>Launcher</code> are the two seams an embedding program would call.</p>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>Endpoint</td><td><code>__construct(name, host, port = 22, user, identityFiles, description, proxyJump, options, flags, remoteCommand, command)</code></td><td>Readonly value object. An empty name or host, or a port outside 1 to 65535, throws</td></tr>
+<tr><td>Endpoint</td><td><code>parsePort(string $host, mixed $raw): int</code></td><td>Accepts integers and unsigned decimal strings only. Booleans, floats and junk are refused by name</td></tr>
+<tr><td>Endpoint</td><td><code>toSshArgv(string $binary = 'ssh'): list&lt;string&gt;</code></td><td>The full argv for ssh, ready for <code>pcntl_exec</code></td></tr>
+<tr><td>Endpoint</td><td><code>toTransportArgv(string $binary): list&lt;string&gt;</code></td><td>The argv for a custom <code>command</code>: port, flags and destination only</td></tr>
+<tr><td>Endpoint</td><td><code>transportIncompatibles()</code>, <code>unsafeOptions()</code>, <code>displayLine()</code></td><td>The fields a custom transport drops, the options that weaken trust, and the picker row text</td></tr>
+<tr><td>Endpoint</td><td><code>withName()</code>, <code>withHost()</code>, <code>withPort()</code>, <code>withUser()</code>, <code>withIdentityFiles()</code>, <code>withDescription()</code>, <code>withProxyJump()</code>, <code>withOptions()</code>, <code>withFlags()</code>, <code>withRemoteCommand()</code>, <code>withCommand()</code></td><td>Fluent setters. Each returns a new endpoint and leaves the receiver unchanged</td></tr>
+<tr><td>Config</td><td><code>load(string $path): list&lt;Endpoint&gt;</code></td><td>Loads a YAML or JSON wishlist, detecting the format from the extension</td></tr>
+<tr><td>Config</td><td><code>parse(string $raw, string $hintPath = 'wishlist'): list&lt;Endpoint&gt;</code></td><td>Parses wishlist text. The hint path picks the format, and JSON is assumed when the text opens with <code>[</code> or <code>{</code></td></tr>
+<tr><td>Config</td><td><code>importFromSshConfig(string $path): list&lt;Endpoint&gt;</code></td><td>Imports endpoints from an OpenSSH config</td></tr>
+<tr><td>Config</td><td><code>setWarningStream($stream)</code></td><td>Routes load warnings to a stream. The default is stderr, and tests use it to capture warnings</td></tr>
+<tr><td>Picker</td><td><code>__construct($in = null, $out = null)</code>, <code>pick(array $endpoints): ?Endpoint</code></td><td>Runs the picker on the given streams. Returns null on cancel, on an empty list, or when the terminal is too narrow</td></tr>
+<tr><td>Launcher</td><td><code>__construct(?callable $executor = null)</code>, <code>dispatch(Endpoint $e, string $sshBinary = Launcher::DEFAULT_SSH): void</code></td><td>The executor seam receives the binary and argv. The default executor replaces the process and throws when the exec fails</td></tr>
+<tr><td>Launcher</td><td><code>firstExecutableSsh(array $candidates): ?string</code></td><td>The first existing executable among the known ssh locations, or null</td></tr>
+<tr><td>IdentityPath</td><td><code>expand(string $path): string</code></td><td>Expands a leading <code>~</code> against <code>$HOME</code>, with a passwd fallback</td></tr>
+</table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from candy-ssh-launcher/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-ssh-launcher -->
+<p>Only methods declared in <code>candy-ssh-launcher/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-sshlauncher">SugarCraft\SshLauncher</h3>
+<h4 id="api-sugarcraft-sshlauncher-config"><code>Config</code> <small>final class</small></h4>
+<p>Loads a wishlist directory from disk.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static setWarningStream($stream): void</code></td><td>Test seam: route load warnings to $stream (null restores STDERR).</td></tr>
+<tr><td><code>static load(string $path): array</code></td><td></td></tr>
+<tr><td><code>static parse(string $raw, string $hintPath = &#039;wishlist&#039;): array</code></td><td></td></tr>
+<tr><td><code>static importFromSshConfig(string $path): array</code></td><td>Import endpoints from an OpenSSH config file (~/.ssh/config).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-endpoint"><code>Endpoint</code> <small>final class</small></h4>
+<p>One row in a wishlist directory — a host the user can pick to <code>ssh</code> into. Held as an immutable value object; build via <code>new Endpoint(...)</code> or via Config::load().</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $name, public readonly string $host, public readonly int $port = 22, public readonly ?string $user = null, public readonly array $identityFiles = [], public readonly ?string $description = null, public readonly ?string $proxyJump = null, public readonly array $options = [], public readonly array $flags = [], public readonly ?string $remoteCommand = null, public readonly ?string $command = null)</code></td><td></td></tr>
+<tr><td><code>static parsePort(string $host, mixed $raw): int</code></td><td>Parse+validate a config-supplied port before it reaches the ctor. Accepts ints and unsigned decimal strings only — booleans, floats and anything <code>((int))</code> would silently mangle (&quot;notanumber&quot; → 0) are refused by name, not coerced.</td></tr>
+<tr><td><code>toSshArgv(string $binary = &#039;ssh&#039;): array</code></td><td>Build the argv list for <code>ssh(1)</code>. The first element is the binary name (<code>ssh</code>); the rest is options, the destination and — per the ssh(1) synopsis <code>ssh [options] destination [command]</code> — an optional remote command riding after the destination. Suitable for <code>pcntl_exec($argv[0], array_slice($argv, 1))</code>.</td></tr>
+<tr><td><code>toTransportArgv(string $binary): array</code></td><td>Build the argv list for a custom transport (-027): binary, the <code>-p</code> port leg when it is not 22, the raw flag lane, then the destination — nothing else. The ssh-only machinery (<code>-i</code>/<code>-J</code>/<code>-o</code> legs and the remote-command positional) is left out because mosh-class transports reject it; transportIncompatibles() names what was set but dropped so the launcher can warn instead of silently trimming. The <code>flags</code> lane rides verbatim by design — the user picked a custom binary precisely to speak its dialect.</td></tr>
+<tr><td><code>transportIncompatibles(): array</code></td><td>The fixed field names whose values would be silently lost by toTransportArgv() — computed from what is actually set, so a plain mosh row (<code>command: /usr/bin/mosh</code> and nothing else) carries no warning debt.</td></tr>
+<tr><td><code>unsafeOptions(): array</code></td><td>The host-key-trust-destruction family (candy-ssh-launcher-029).</td></tr>
+<tr><td><code>displayLine(): string</code></td><td>The picker row for this endpoint.</td></tr>
+<tr><td><code>withName(string $name): self</code></td><td></td></tr>
+<tr><td><code>withHost(string $host): self</code></td><td></td></tr>
+<tr><td><code>withPort(int $port): self</code></td><td></td></tr>
+<tr><td><code>withUser(?string $user): self</code></td><td></td></tr>
+<tr><td><code>withIdentityFiles(array $identityFiles): self</code></td><td></td></tr>
+<tr><td><code>withDescription(?string $description): self</code></td><td></td></tr>
+<tr><td><code>withProxyJump(?string $proxyJump): self</code></td><td></td></tr>
+<tr><td><code>withOptions(array $options): self</code></td><td></td></tr>
+<tr><td><code>withFlags(array $flags): self</code></td><td></td></tr>
+<tr><td><code>withRemoteCommand(?string $remoteCommand): self</code></td><td></td></tr>
+<tr><td><code>withCommand(?string $command): self</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-identitypath"><code>IdentityPath</code> <small>final class</small></h4>
+<p>Tilde expansion for identity-file paths, ONE implementation shared by both ingest paths (F-4, 2026-11-06).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static expand(string $path): string</code></td><td>Expand a leading <code>~</code> in an identity-file path; everything else is returned verbatim.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-ssh-launcher.</p>
+<h4 id="api-sugarcraft-sshlauncher-launcher"><code>Launcher</code> <small>final class</small></h4>
+<p>Replaces the current PHP process with <code>ssh(1)</code> connecting to the chosen Endpoint. Uses <code>pcntl_exec()</code> so file descriptors, environment, controlling tty, and exit status all flow through unchanged — the user sees a normal <code>ssh</code> session, including host-key prompts, agent forwarding, and the standard MOTD.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static firstExecutableSsh(array $candidates = self::SSH_CANDIDATES): ?string</code></td><td>First candidate that is an existing executable file, or null when none is — the caller then falls back to DEFAULT_SSH and the honest exit-1 refusal names the default.</td></tr>
+<tr><td><code>setWarningStream($stream): void</code></td><td></td></tr>
+<tr><td><code>__construct(?callable $executor = null)</code></td><td></td></tr>
+<tr><td><code>dispatch(Endpoint $e, string $sshBinary = self::DEFAULT_SSH): void</code></td><td>Dispatch into the chosen endpoint. On success, the PHP process is replaced and this method does not return; on failure the executor throws.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-picker"><code>Picker</code> <small>class</small></h4>
+<p>Tiny terminal picker — renders marker-prefixed display lines (selectedMarker() over displayLine()) of Endpoints. The user moves with ↑/↓, Home/End and PgUp/PgDn (j/k are query letters on every row — the invert model, -060), narrows with type-to-search, and picks with Enter. Returns the selected Endpoint, or null on Esc or the cancel byte (0x03 — what a closed stdin maps to as well). On a real terminal Ctrl-C raises SIGINT, which the picker traps to restore the terminal before exiting 130.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct($in = null, $out = null)</code></td><td></td></tr>
+<tr><td><code>pick(array $endpoints): ?Endpoint</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-sshconfigparser"><code>SshConfigParser</code> <small>final class</small></h4>
+<p>Parses an OpenSSH config file (~/.ssh/config) into a list of Endpoints.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>parse(string $raw): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshlauncher-support">SugarCraft\SshLauncher\Support</h3>
+<h4 id="api-sugarcraft-sshlauncher-support-commentstrip"><code>CommentStrip</code> <small>final class</small></h4>
+<p>The quote-aware trailing-comment strip shared by both config readers.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static strip(string $line): string</code></td><td>Strip a trailing &#039;#&#039; comment from a config line — quote-aware (F-18).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshlauncher-support-version"><code>Version</code> <small>final class</small></h4>
+<p>Version surface for the phar build (the installed-version probe shape).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static resolve(string $archive): string</code></td><td>Resolve the version for the current run.</td></tr>
+<tr><td><code>static fromPharMetadata(string $archivePath): ?string</code></td><td>Read and normalize the version stamp inside an archive, or null when the path is empty, is not a file, is not a readable phar, or its stamp does not parse as a comparable release. Every failure mode falls back to null rather than throwing — a corrupt archive must not crash --version.</td></tr>
+</tbody>
+</table>
+
+    <h2 id="keys" style="margin-top: 40px;">Keys</h2>
+    <p>The picker reads these keys in its raw-mode loop. Letters always type into the filter, so <code>j</code> and <code>k</code> do not move the selection.</p>
+<table class="api-table">
+<caption>Picker keys</caption>
+<thead><tr><th scope="col">Key</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>↑</code> / <code>↓</code></td><td>Move the selection through the matches (CSI and SS3 forms both work)</td></tr>
+<tr><td><code>Home</code> / <code>End</code></td><td>Jump to the first or last match</td></tr>
+<tr><td><code>PgUp</code> / <code>PgDn</code></td><td>Move by one visible page</td></tr>
+<tr><td>Any printable character</td><td>Append to the filter (fuzzy match over the display line)</td></tr>
+<tr><td><code>Backspace</code> or <code>Ctrl+H</code></td><td>Delete the last character of the filter</td></tr>
+<tr><td><code>Ctrl+W</code></td><td>Delete the last word of the filter</td></tr>
+<tr><td><code>Ctrl+U</code></td><td>Clear the whole filter</td></tr>
+<tr><td><code>Enter</code></td><td>Connect to the highlighted endpoint (no match, no action)</td></tr>
+<tr><td><code>Esc</code> or <code>Ctrl+C</code></td><td>Cancel and exit 130</td></tr>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <p>The launcher has a small command line, a handful of environment variables and one per-endpoint schema.</p>
+<table class="api-table">
+<caption>Command-line options</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>--config &lt;path&gt;</code> (or <code>--config=&lt;path&gt;</code>)</td><td>Read this wishlist (or, with <code>--from-ssh-config</code>, this OpenSSH config). Naming a path skips the ownership and mode gate, because naming a path is consent.</td></tr>
+<tr><td><code>--ssh &lt;path&gt;</code></td><td>The ssh binary. Must be an existing executable path. A bare name such as <code>ssh</code> is refused, because nothing searches <code>$PATH</code>.</td></tr>
+<tr><td><code>--from-ssh-config</code></td><td>Import endpoints from an OpenSSH config. See the task above.</td></tr>
+<tr><td><code>--list</code></td><td>Print the endpoints as tab-separated rows and exit 0. No terminal and no ssh are needed.</td></tr>
+<tr><td><code>[endpoint]</code></td><td>Positional name. An exact, unique match dispatches directly; an ambiguous or unknown name falls back to the picker.</td></tr>
+<tr><td><code>-h</code>, <code>--help</code></td><td>Print usage, the keys and the exit codes, then exit 0.</td></tr>
+<tr><td><code>-v</code>, <code>--version</code></td><td>Print the version, then exit 0. No config is read.</td></tr>
+<tr><td><code>--</code></td><td>End option parsing. Anything after it is ignored, so name the endpoint before it.</td></tr>
+</table>
+
+    <h3 id="where-the-wishlist-comes-from" style="margin-top: 24px;">Where the wishlist comes from</h3>
+    <p>Without <code>--config</code>, the first file that exists wins at each tier, and the tiers are searched in this order:</p>
+    <ol>
+      <li>The current directory: <code>wishlist.yml</code>, then <code>wishlist.yaml</code>, then <code>wishlist.json</code>. A notice on stderr names the project-local file.</li>
+      <li>The user directory: the same three names under <code>$XDG_CONFIG_HOME</code> when it is set and non-empty, otherwise under <code>~/.config</code>.</li>
+    </ol>
+    <p>Auto-discovered files face a trust gate. A file owned by another user (root excepted) or writable by its group or by others is refused by name. Keep the file owned by you and at mode <code>0600</code> or <code>0644</code>.</p>
+
+    <h3 id="ssh-binary-resolution" style="margin-top: 24px;">Ssh binary resolution</h3>
+    <p><code>--ssh</code> wins. Otherwise <code>SSH_LAUNCHER_SSH</code> is used when set. Otherwise the first existing executable of <code>/usr/bin/ssh</code>, <code>/run/current-system/sw/bin/ssh</code> and <code>/opt/homebrew/bin/ssh</code> is used, and <code>/usr/bin/ssh</code> is the final fallback. The gate then checks that the chosen path is an executable file, and it refuses honestly when it is not.</p>
+
+    <h3 id="environment" style="margin-top: 24px;">Environment</h3>
+<table class="api-table">
+<caption>Environment variables</caption>
+<thead><tr><th scope="col">Variable</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>SSH_LAUNCHER_SSH</code></td><td>The ssh binary when <code>--ssh</code> is absent. Use an absolute path.</td></tr>
+<tr><td><code>XDG_CONFIG_HOME</code></td><td>Base directory for the user wishlist when set and non-empty.</td></tr>
+<tr><td><code>HOME</code></td><td>Locates <code>~/.config</code>, <code>~/.ssh/config</code> and the expansion of <code>~</code> in identity paths.</td></tr>
+<tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>Message locale, read in that order. The messages ship in 16 catalogs, English included.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>CLICOLOR=0</code></td><td>Remove all color escapes. The layout glyphs stay.</td></tr>
+<tr><td><code>TERM=dumb</code></td><td>Single-pass frames with no cursor addressing, no alternate screen and no bracketed paste.</td></tr>
+<tr><td><code>ESCDELAY</code></td><td>Milliseconds to wait after an Esc for the rest of an escape sequence, 1 to 4 digits. The default is 150.</td></tr>
+</table>
+
+    <h3 id="endpoint-fields" style="margin-top: 24px;">Endpoint fields</h3>
+<table class="api-table">
+<caption>Endpoint fields</caption>
+<thead><tr><th scope="col">Field (aliases)</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>name</code></td><td>string</td><td>required</td><td>Identifier used for dispatch and shown in the picker. An empty name is refused. Duplicates load with a warning.</td></tr>
+<tr><td><code>host</code></td><td>string</td><td>required</td><td>Destination host. An empty host is refused.</td></tr>
+<tr><td><code>port</code></td><td>integer 1 to 65535</td><td><code>22</code></td><td>Passed as <code>-p</code> when it is not 22.</td></tr>
+<tr><td><code>user</code></td><td>string</td><td>none</td><td>Makes the destination <code>user@host</code>.</td></tr>
+<tr><td><code>description</code></td><td>string</td><td>none</td><td>Dim text after the row in the picker.</td></tr>
+<tr><td><code>identityFiles</code> (<code>identity_files</code>, <code>identity_file</code>, <code>identityFile</code>)</td><td>string or list</td><td>none</td><td>One <code>-i</code> per entry, in order. A leading <code>~</code> is expanded against <code>$HOME</code>.</td></tr>
+<tr><td><code>proxyJump</code> (<code>proxy_jump</code>)</td><td>string</td><td>none</td><td>Passed as <code>-J</code>.</td></tr>
+<tr><td><code>options</code></td><td>list of strings</td><td>none</td><td>Each entry becomes <code>-o</code> with the value verbatim, for example <code>ServerAliveInterval=30</code>.</td></tr>
+<tr><td><code>flags</code></td><td>list of letters</td><td>none</td><td>Each letter becomes <code>-</code> plus the letter, for example <code>t</code> gives <code>-t</code>.</td></tr>
+<tr><td><code>remoteCommand</code> (<code>remote_command</code>)</td><td>string</td><td>none</td><td>Passed after the destination, where ssh expects a remote command.</td></tr>
+<tr><td><code>command</code> (<code>transport</code>)</td><td>string</td><td>none</td><td>Replaces the ssh binary for this endpoint. See the task above.</td></tr>
+</table>
+    <p>A key outside this list, and outside the aliases, is named on stderr and ignored, so a typo never changes the connection silently. The loader refuses files larger than 4 MiB, refuses a list field with more than 1000 items, strips a leading UTF-8 byte-order mark, and refuses UTF-16 by name.</p>
+
+    <h2 id="security" style="margin-top: 40px;">Security</h2>
+    <p>Whatever a wishlist declares, the launcher passes to ssh. Most options are safe, but a few weaken the trust that ssh gives a connection, and <code>ProxyCommand</code> and <code>LocalCommand</code> run commands at connect time. Before it execs, the launcher prints one stderr line for each option that degrades host-key trust or logging, naming the option and what it costs:</p>
+    <ul>
+      <li><code>StrictHostKeyChecking</code> set to <code>no</code>, <code>never</code> or <code>accept-new</code></li>
+      <li><code>LogLevel</code> set to <code>quiet</code>, <code>error</code> or <code>fatal</code></li>
+      <li><code>UserKnownHostsFile</code>, <code>GlobalKnownHostsFile</code>, <code>IdentityAgent</code> and <code>CertificateFile</code>, whatever their value</li>
+    </ul>
+    <p>Keep wishlists and <code>~/.ssh/config</code> owned by you, and do not accept endpoint files from other people. The fleet-wide rules are in the <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">trust boundary</a> document.</p>
+
+    <h2 id="theme-and-styling" style="margin-top: 40px;">Theme and styling</h2>
+    <p>The picker has no theme option. Its palette is fixed: a bold cyan <code>▸</code> marker on the selected row, a cyan filter line, and dim gray descriptions. <code>NO_COLOR</code> and <code>CLICOLOR=0</code> remove every color escape, and the marker and the layout stay, so the selection is still visible without color. <code>--list</code> prints plain text in every case.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p><code>examples/endpoint-argv.php</code> loads the sample wishlist and prints the ssh argv each endpoint would produce. It executes nothing and exits 0.</p>
+    <pre class="code"><code class="language-shell">php examples/endpoint-argv.php</code></pre>
+    <pre class="code"><code class="language-text">production
+  ssh -p 2222 -i /home/you/.ssh/prod-deploy -- deploy@prod.example.com
+staging
+  ssh -- deploy@stage.example.com
+dev
+  ssh -- dev@dev.example.com
+jumpbox
+  ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -- bastion.example.com</code></pre>
+    <p>The <code>-i</code> path is the first endpoint's identity file expanded against your <code>$HOME</code>, so that line differs between machines.</p>
+    <p><code>examples/unsafe-options.php</code> parses an inline wishlist and lists the options that the launcher would flag before connecting. It exits 0.</p>
+    <pre class="code"><code class="language-shell">php examples/unsafe-options.php</code></pre>
+    <pre class="code"><code class="language-text">lab: StrictHostKeyChecking=no
+legacy: UserKnownHostsFile=/dev/null, LogLevel=quiet</code></pre>
+    <p><code>examples/sample-wishlist.yml</code> is the config used in the quickstart.</p>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd candy-ssh-launcher &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite covers the config loader (<code>ConfigTest</code>, <code>ConfigHardeningTest</code>, <code>ConfigEncodingTest</code>), the argv builder (<code>EndpointArgvSafetyTest</code>, <code>EndpointIdentityFilesTest</code>), the OpenSSH importer (<code>SshConfigParserTest</code>), the picker (<code>PickerTest</code>, <code>PickerInputIntegrityTest</code>), the exec handoff through the executor seam (<code>LauncherTest</code>, <code>ExecHandoffTest</code>), the CLI (<code>BinCliTest</code>), the translation catalogs (<code>LocaleParityTest</code>) and a pseudo-terminal signal test (<code>PtySignalIntegrationTest</code>).</p>
+
+    <h2 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 id="the-picker-needs-an-interactive-terminal" style="margin-top: 24px;">The picker needs an interactive terminal</h3>
+    <p>The launcher exits 2 and prints <code>the picker needs an interactive terminal</code> when stdin or stdout is not a TTY. Use <code>--list</code> to read the endpoints, or name an endpoint, which dispatches without a terminal when the name is unique.</p>
+
+    <h3 id="a-config-is-refused-as-owned-by-another-user-or-writable" style="margin-top: 24px;">A config is refused as owned by another user or writable</h3>
+    <p>An auto-discovered file that another user owns, or that its group or the world can write, exits 1 and is named in the message. Run <code>chmod 600</code> on it, or pass the file explicitly with <code>--config</code>, which skips the gate because naming a path is consent.</p>
+
+    <h3 id="it-says-the-file-looks-like-an-openssh-config" style="margin-top: 24px;">It says the file looks like an OpenSSH config</h3>
+    <p>A file with a line that begins with <code>Host</code> is ssh config syntax, not a wishlist. The launcher refuses it and points at <code>--from-ssh-config</code>. A top-level mapping keyed by endpoint name, the shape charmbracelet/wishlist uses, is also refused, because the schema is a flat list. The README names the failure.</p>
+
+    <h3 id="the-ssh-binary-is-not-found-or-not-executable" style="margin-top: 24px;">The ssh binary is not found or not executable</h3>
+    <p>Pass <code>--ssh /absolute/path/to/ssh</code>, or set <code>SSH_LAUNCHER_SSH</code>. A bare name such as <code>ssh</code> is never resolved through <code>$PATH</code>, because <code>pcntl_exec</code> receives exactly the path the gate vetted.</p>
+
+    <h3 id="the-picker-exits-130-before-drawing" style="margin-top: 24px;">The picker exits 130 before drawing</h3>
+    <p>A terminal narrower than 12 columns is refused as too small. The picker then returns the same result as a cancel, so the launcher prints the cancel line and exits 130. Widen the terminal and run it again.</p>
+
+    <h3 id="exit-3-at-launch" style="margin-top: 24px;">Exit 3 at launch</h3>
+    <p>Exit 3 means the endpoint was refused at dispatch (a field that starts with a dash, or an empty field), or the exec itself failed. The message names the binary and, when PHP reports one, the reason. A custom <code>command</code> that is not an executable file is refused the same way.</p>
+
+    <h3 id="a-duplicate-name-warning" style="margin-top: 24px;">A duplicate name warning</h3>
+    <p>Names identify endpoints, so two rows with the same name cannot be told apart in the picker. Both still load, and <code>--list</code> suffixes each with its config index (<code>name#2</code>). Rename one of them.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <p>The port follows the selection flow of charmbracelet/wishlist: a list, a fuzzy filter, and a connect step. The table maps each part of that flow to the SugarCraft class that carries it. The deliberate differences from upstream are listed in the <a href="https://github.com/sugarcraft/candy-ssh-launcher/blob/master/README.md#divergences-from-upstream-wishlist">README</a>.</p>
+<table class="api-table">
+<caption>Upstream flow to SugarCraft class</caption>
+<thead><tr><th scope="col">Flow step</th><th scope="col">Class</th><th scope="col">Notes</th></tr></thead>
+<tr><td>Filterable list of hosts</td><td><code>Picker</code></td><td>One-shot raw-mode loop with no event loop. Matching uses sugar-fuzzy's Smith–Waterman scorer.</td></tr>
+<tr><td>Endpoint file (YAML or JSON)</td><td><code>Config</code></td><td>A flat top-level list. The parser is shared by the wishlist and the OpenSSH import.</td></tr>
+<tr><td>Import from OpenSSH config</td><td><code>SshConfigParser</code>, <code>Config::importFromSshConfig()</code></td><td>Host patterns become names. The parser reads <code>HostName</code>, <code>User</code>, <code>Port</code>, <code>IdentityFile</code> and <code>ProxyJump</code>, and expands <code>%h</code>, <code>%r</code> and <code>%u</code>.</td></tr>
+<tr><td>Connect step</td><td><code>Endpoint</code>, <code>Launcher</code></td><td><code>Endpoint::toSshArgv()</code> builds the argv, and <code>Launcher::dispatch()</code> runs it through <code>pcntl_exec</code>.</td></tr>
+<tr><td>Path expansion</td><td><code>IdentityPath</code></td><td>Expands a leading <code>~</code> in identity paths against <code>$HOME</code>, with a passwd fallback.</td></tr>
+</table>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <p>Nine classes carry the program. <code>Config</code> reads a file and turns each row into an <code>Endpoint</code>, a readonly value object whose <code>with*()</code> methods return new instances. <code>SshConfigParser</code> reads the OpenSSH import, and <code>Support\CommentStrip</code> removes trailing comments from both formats. <code>IdentityPath</code> expands <code>~</code>. <code>Picker</code> renders the rows and reads keys. <code>Launcher</code> builds the final argv and performs the exec through a callable seam, which is how tests observe the handoff without replacing the process. <code>Support\Version</code> reports the version, and <code>Lang</code> wraps the shared <code>SugarCraft\Core\I18n\T</code> catalog for the <code>sshlauncher</code> keys. The bin script ties them together: argument parsing, the trust gate, resolution of the ssh binary and the exit codes.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>Releases are tagged <code>candy-ssh-launcher/v*</code>, and a tagged phar stamps its tag into <code>--version</code>. A checkout reports the compiled-in version. The commit history on GitHub is the change record.</p>
+
+    <h2 id="source-and-demos" style="margin-top: 40px;">Source and demos</h2>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-ssh-launcher">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/tree/master/examples">Sample config</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/wishlist">wishlist</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/tree/master/tests">Test suite</a></li>
+      <li>Ported from <a href="https://github.com/charmbracelet/wishlist">wishlist</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Endpoint</td><td>new(name, host)</td><td>Create SSH endpoint (port, user, identityFiles, description, proxyJump, options optional)</td></tr>
-<tr><td>Endpoint</td><td>withName(name) · withHost(host) · withPort(port) · withUser(user)</td><td>Fluent setters — each returns a new endpoint</td></tr>
-<tr><td>Endpoint</td><td>withIdentityFiles(paths[])</td><td>Set identity files, in order, each passed to ssh as its own <code>-i</code></td></tr>
-<tr><td>Endpoint</td><td>withDescription(text) · withProxyJump(host) · withOptions(options[])</td><td>Fluent setters — each returns a new endpoint</td></tr>
-<tr><td>Endpoint</td><td>parsePort(host, raw)</td><td>Validate a port value (1–65535); junk is refused naming the endpoint</td></tr>
-<tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML/JSON (format auto-detected)</td></tr>
-<tr><td>Config</td><td>parse(raw, hintPath)</td><td>Parse config text directly (extension hint, else JSON when the payload opens with <code>[</code> or <code>{</code>)</td></tr>
-<tr><td>Config</td><td>importFromSshConfig(path)</td><td>Import endpoints from ~/.ssh/config</td></tr>
-<tr><td>Picker</td><td>pick(endpoints)</td><td>Interactive selection (null on cancel or empty endpoint list)</td></tr>
-<tr><td>Launcher</td><td>__construct(executor)</td><td>Optional callable executor seam for embedding and tests</td></tr>
-<tr><td>Launcher</td><td>dispatch(endpoint, binary)</td><td>pcntl_exec handoff — never returns on success; the default executor throws a RuntimeException naming the binary when exec fails</td></tr>
-</table>
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
     </div>
   </div>
 </section>

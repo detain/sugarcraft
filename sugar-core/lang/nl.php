@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'semafoon gesloten voordat een vergunning werd verleend',
     'semaphore.closed' => 'semafoon is gesloten en kan geen vergunning meer verlenen',
     'semaphore.derive_closed' => 'kan geen nieuwe pool afleiden van een gesloten semafoon',
+    'semaphore.map_cancelled' => 'batch geannuleerd voordat alle items klaar waren',
     'lru_map.capacity_invalid' => 'LRU-capaciteit moet minstens 1 zijn, gekregen {capacity}',
     'lru_map.capacity_too_large' => 'LRU-capaciteit {capacity} overschrijdt groeibeperking {max}',
     'lru_map.evict_from_empty' => 'kan niets verwijderen uit een lege LRU-map',

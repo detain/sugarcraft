@@ -1,44 +1,192 @@
-<p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes, up to six multi-vendor GPU / NPU boxes, a server BMC (ipmi) band and a VM dashboard, drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="sugar-core.html">sugar-core</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
+<p class="lede" style="margin-top: 28px;">candy-top is a full-screen terminal system monitor in pure PHP, in the tradition of <a href="https://github.com/aristocratos/btop">btop</a>. It draws cpu, memory and disks, network, processes, containers and VMs, GPU and NPU boxes, and a server BMC band, with braille, block and sextant graphs and gradient meters. It reads Linux <code>/proc</code> and <code>/sys</code> or FreeBSD <code>sysctl</code>, and it runs on the <a href="sugar-core.html">sugar-core</a> Model/Cmd runtime. It reads btop's config format, so a copied <code>btop.conf</code> loads unchanged.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top</code></pre>
+    <p>Add <code>:@dev</code> (<code>composer require sugarcraft/candy-top:@dev</code>) while your project's <code>minimum-stability</code> is <code>stable</code> and you want a commit newer than the newest <code>candy-top/v*</code> tag. Composer installs the launcher as <code>vendor/bin/candy-top</code>. For a global tool, use <code>composer global require sugarcraft/candy-top</code>.</p>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer on Linux or FreeBSD. The host needs an interactive terminal on both stdin and stdout, and a UTF-8 locale codeset. <code>ext-posix</code>, <code>ext-pcntl</code> and <code>ext-sodium</code> are optional, and <code>nvidia-smi</code> and <code>ipmitool</code> enable the NVIDIA and BMC readings.</p>
 
-    <h3 style="margin-top: 32px;">Run</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <p>Start it on the live host, or on deterministic fake data that never reads your processes:</p>
     <pre class="code"><code class="language-shell">vendor/bin/candy-top                      # the live host
 vendor/bin/candy-top --config ~/top.conf  # another config file (also the save target)
 vendor/bin/candy-top --fake               # deterministic demo data, never the real host
-vendor/bin/candy-top --help               # options + the full key list
-vendor/bin/candy-top --version            # version line, no tty needed
-php candy-top.phar self-update            # phar installs: swap in place, no tty needed</code></pre>
+vendor/bin/candy-top --help               # options plus the full key list
+vendor/bin/candy-top --version            # version line, no tty needed</code></pre>
+    <p>Four boxes appear on first run: cpu, memory, network and processes. Press <code>1</code> to <code>4</code> to toggle them, <code>F1</code> or <code>h</code> for the help overlay, and <code>q</code> to quit. The layout is saved on the way out, as btop does.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>cpu box</strong><span>Upper/lower dual-sample graphs (any <code>/proc/stat</code> field), per-core grid with mini graphs and temperatures, load / uptime, frequency (aggregate and per-core, value or graph), battery badge with watts, GPU sub-graphs for the GPUs without a box of their own.</span></div>
-      <div class="feature"><strong>mem + disks</strong><span>Used / available / cached / free as graphs or meters, a single focused metric (<code>mem_selected</code>), swap + zswap, ZFS ARC, per-mount meters with read/write/busy readouts and a big-graph io mode.</span></div>
-      <div class="feature"><strong>net box</strong><span>Download/upload graphs with hysteresis auto-scale and sync, interface cycling, totals zeroing, interface IP in the title.</span></div>
-      <div class="feature"><strong>proc box</strong><span>Sortable list (cpu lazy/direct, memory, io, …), tree view with collapse, live substring / regex filter, detailed view with cwd and IO, signals, renice, follow, pause, IO/R + IO/W columns, per-process <code>Gpu%</code> / <code>GMem</code> columns with a mini GPU graph, <code>gpu</code> / <code>gpu memory</code> sorts and a GPU-only filter (<code>g</code>).</span></div>
-      <div class="feature"><strong>ipmi box</strong><span>The server's BMC through <code>ipmitool</code>, run in the background one child at a time: a braille power gauge with the BMC's min / avg / max window and a draw history, per-PSU in → out bars with efficiency, temperatures filled to each sensor's own critical limit, fans with the redundancy state, centered voltage deviation bars, chassis fault chips and the event-log fill. A band under the cpu box toggled with <code>I</code>; degrades from four sub-panel columns to one line each.</span></div>
-      <div class="feature"><strong>gpu boxes</strong><span>Up to six GPU / NPU boxes toggled with <code>5</code>–<code>0</code>, laid out side by side (<code>gpu_box_columns</code>) at Full, Compact or Minimal detail, each retargetable with its <code>← gpuN →</code> title arrows. NVIDIA via <code>nvidia-smi</code>, AMD and Intel GPUs plus Intel / AMD NPUs via sysfs.</span></div>
-      <div class="feature"><strong>Containers + VMs</strong><span>Processes tagged <code>[engine:name]</code> from their cgroup — docker, podman, k8s, lxc, nspawn — and KVM/QEMU guests by name; one key hides them all. The containers box (<code>x</code>) lists each container's — and each libvirt guest's — processes, memory and cpu from cgroup v2, with docker names from the socket and VMs named by domain; <code>[</code> / <code>]</code> pick one and the proc box shows only its processes. Running inside a container, the cpu title shows its engine.</span></div>
-      <div class="feature"><strong>btop's menus</strong><span>Main menu, a tabbed options menu with grouped headings and live preview, paged help, signal chooser, renice and warning boxes — over a dimmed backdrop.</span></div>
-      <div class="feature"><strong>Presets + layout</strong><span><code>p</code> / <code>P</code> cycle layout presets (with btop #1476's proc width field); Shift/Alt/Ctrl+Shift arrows resize the proc box; boxes toggle with <code>1</code>–<code>4</code>, the containers box with <code>x</code>, the VM dashboard with <code>v</code>, the ipmi box with <code>I</code>, gpu boxes with <code>5</code>–<code>0</code>.</span></div>
-      <div class="feature"><strong>Themes + TTY mode</strong><span>candy-top's own <code>pastel</code> theme is the default: bright pastels on a deep plum background, with box outlines that flow from one color to the next. The 42 ported btop themes are bundled too, <code>Default</code> and <code>TTY</code> are built in rather than files, and you can add your own <code>.theme</code> files. TTY mode (16 colors, stepped gradients, tty glyphs) is used on a real console or with <code>force_tty</code>.</span></div>
-      <div class="feature"><strong>Config that persists</strong><span>btop-format <code>config.conf</code>, atomic save on exit (also on SIGTERM / SIGHUP), <code>ctrl+r</code> hot reload, every key documented; the reference tables track the program exactly.</span></div>
-      <div class="feature"><strong>Mouse</strong><span>Every border button, list rows, tree markers, a draggable scrollbar, the wheel, and menu tabs and entries all respond to the mouse.</span></div>
-    </div>
+    <h2 style="margin-top: 40px;">Concepts</h2>
+    <p><code>App</code> is the program's <code>Model</code>. <code>init()</code> returns the startup batch: the clock, the first collection and the data tick. <code>update(Msg)</code> folds each message into the state and returns <code>[Model, ?Cmd]</code>. <code>view()</code> returns the frame. Sampling and config saves run as commands, so the drawing never waits on the host.</p>
+    <p>Data comes from one of two sources. The live source reads the host through the collectors in <code>Collect\*</code>. With <code>--fake</code>, the same interface is served by <code>Source\Fake\*</code>, whose waves and process lists are seeded, so a demo or a bug report needs no host state. Each box is a panel in <code>Panel\*</code>, and <code>View\FrameBuilder</code> lays the boxes out and works out the smallest terminal that fits them.</p>
+    <p>Configuration is declared once. <code>Config\Schema</code> lists the options with their types, defaults and bounds. <code>Config\ConfigFile</code> reads the btop-format file, and a save writes it atomically, so a crash never leaves a half-written file.</p>
 
-    <p>Threshold color is a gradient, but no information rides on hue alone: every threshold reading carries its number, and the loudest states add words — a full SEL prints <code>full</code>, a starved guest gets a textual <code>psi cpu 23%</code> badge, an unmeasured field prints <code>n/a</code>. The monitor is designed for sighted users though: the braille, block and sextant graph runs carry no text alternative, and <code>tty_mode</code>, the <code>tty</code> <code>graph_symbol</code> and <code>NO_COLOR</code> step the decoration down without adding narration — every numeric readout stays intact.</p>
+    <h2 style="margin-top: 40px;">Tasks</h2>
+    <h3 style="margin-top: 24px;">Look at the layout without touching the host</h3>
+    <p><code>--fake</code> still needs a terminal, because the tty gate runs before the fake source starts. Outside a terminal, run it under a pseudo-terminal, or record the VHS tape in <code>.vhs/top.tape</code>.</p>
+    <pre class="code"><code class="language-shell">script -qec 'vendor/bin/candy-top --fake' /dev/null</code></pre>
 
-    <h3 style="margin-top: 32px;">Adopted upstream btop PRs</h3>
-    <p>zswap (#1739), per-core frequency (#1785), interface IPs (#1573), command basename (#1859), per-process IO columns and sorts (#1823), container tags, filter and the containers box (#1873), <code>block2</code> sextant graphs (#1783), focused mem graph (#1747), <code>disks_order</code> (#1700), cwd in the detail view (#1546), tree branch sorting, option headings and tree-state persistence in an XDG state file (#1791), proc box width and presets W field (#1476), digit option tabs (#1411), reload repaint (#1849), the <code>mellow</code> theme (#1683), WSL <code>nvidia-smi</code> discovery (#1869), GPU boxes with slots and target arrows (#1730), the GPU box grid and detail levels (#1881), Intel and AMD NPUs (#985, #1839), AMD sysfs and multi-Intel GPUs (#1854, #1888), per-process GPU columns, sorts and filter (#1552), the FreeBSD memory and battery fixes (#1851, #1728, #1830, #1787), keep-last-good on a failed read (#1008), process names with spaces or parentheses (#1856), hidden boxes never sampled (#1858), and the gpu-graph clamping and lower-graph width split (#1614). The README lists the key, config key and theme tables, which track the program exactly. It also covers data sources, permissions, and every deviation from btop.</p>
+    <h3 style="margin-top: 24px;">Try a preset or a theme for one session</h3>
+    <p><code>-p N</code> applies layout preset N from the <code>presets</code> option, and <code>-t name</code> applies a theme. Both last for this session only, and the config file keeps its value.</p>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-top -p 2 -t tokyo-night</code></pre>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 style="margin-top: 24px;">Make a theme or an option permanent</h3>
+    <p>Set the value in the config file, or change it in the options menu (<code>F2</code> or <code>o</code>), which saves on exit.</p>
+    <pre class="code"><code class="language-text">color_theme = "tokyo-night"
+update_ms = 1000
+shown_boxes = "cpu mem net proc"</code></pre>
+
+    <h3 style="margin-top: 24px;">Add your own theme</h3>
+    <p>Drop any btop-format <code>.theme</code> file into <code>~/.config/candy-top/themes/</code>, or point <code>--themes-dir &lt;path&gt;</code> at a directory for one run. The file is then selectable by its name.</p>
+
+    <h3 style="margin-top: 24px;">Act on a process</h3>
+    <p>Select a row in the process box with the arrow keys. <code>t</code> asks to send SIGTERM and <code>k</code> asks to send SIGKILL; both open a Yes/No box before anything is sent. <code>s</code> opens the signal chooser, and <code>N</code> sets a new nice value. With <code>vim_keys</code> on, kill is <code>K</code>, because <code>k</code> moves the selection up. Renicing needs <code>ext-pcntl</code>, and names need <code>ext-posix</code>.</p>
+
+    <h3 style="margin-top: 24px;">Keep the tree collapse state between runs</h3>
+    <p>Set <code>proc_tree_persist_state = true</code>. The collapsed and expanded branches are stored in <code>$XDG_STATE_HOME/candy-top/tree-state.json</code>, not in the config, so the config stays btop-compatible.</p>
+
+    <h3 style="margin-top: 24px;">Update a phar install</h3>
+    <p>The released <code>candy-top.phar</code> updates itself. Check first, and install only when you choose to. <code>self-update</code> answers before the terminal check, so it works over ssh and in cron.</p>
+    <pre class="code"><code class="language-shell">php candy-top.phar self-update --check
+php candy-top.phar self-update
+php candy-top.phar self-update --rollback</code></pre>
+
+    <h2 style="margin-top: 40px;">API reference</h2>
+    <p>The surface has about 280 classes. The table lists the entry points and the largest classes, which carry most of the behavior. Each class lives under <code>SugarCraft\Top\</code> with the namespace shown.</p>
+<table class="api-table">
+<caption>Entry points and largest classes</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td><code>App</code></td><td><code>static start(Config, Palette, HostInfo, array $panels, …)</code>, <code>init()</code>, <code>update(Msg)</code>, <code>view()</code></td><td>The Model: builds the program, then folds messages into state and draws the frame. <code>programOptions()</code> maps the config to the terminal options.</td></tr>
+<tr><td><code>Config\Schema</code></td><td><code>options()</code>, <code>option(name)</code>, <code>persistedNames()</code>, <code>defaults()</code></td><td>The declared options, with types, defaults and bounds.</td></tr>
+<tr><td><code>Config\ConfigFile</code></td><td><code>new(?path)</code>, <code>defaultPath()</code>, <code>load()</code>, <code>write(Config)</code></td><td>Reads and atomically writes the btop-format config file.</td></tr>
+<tr><td><code>Theme\ThemeRegistry</code></td><td><code>fromDirs(...$dirs)</code>, <code>names()</code>, <code>find(theme)</code>, <code>load(theme)</code></td><td>Lists the theme files and loads a palette by name.</td></tr>
+<tr><td><code>View\FrameBuilder</code></td><td><code>layout(cols, rows, Config, coreCount)</code>, <code>minSize(boxes)</code></td><td>Computes the box positions and the smallest terminal that fits the layout.</td></tr>
+<tr><td><code>Panel\ProcPanel</code></td><td><code>new(Source, ?ProcessControl)</code>, <code>withGpu(?Source)</code>, <code>box()</code></td><td>The process list: sorting, the tree view, filtering and the GPU columns.</td></tr>
+<tr><td><code>Panel\Cpu\CpuView</code></td><td><code>paint(Region, PanelFrame, CpuPanel)</code></td><td>Draws the cpu box: graphs, per-core grid, frequency and temperatures.</td></tr>
+<tr><td><code>Panel\Proc\ProcView</code></td><td><code>sizes(width, graphs)</code>, <code>paint(Region, PanelFrame, rows, ProcSelection)</code></td><td>Draws the process table and its detail view.</td></tr>
+<tr><td><code>Panel\Ipmi\IpmiView</code></td><td><code>paint(Region, PanelFrame, IpmiData)</code></td><td>Draws the BMC band: power, PSUs, temperatures, fans and the event log.</td></tr>
+<tr><td><code>Collect\Gpu</code></td><td><code>new()</code>, <code>candidates()</code>, <code>sample()</code>, <code>sampleAsync()</code></td><td>Reads NVIDIA through <code>nvidia-smi</code>, and AMD, Intel and NPU devices through sysfs.</td></tr>
+<tr><td><code>Collect\Process\AsyncCommand</code></td><td><code>run(argv, timeout, maxBytes)</code>, <code>launch(argv, loop)</code></td><td>Runs an external command with a timeout and an output cap, without blocking the loop.</td></tr>
+<tr><td><code>Overlay\OptionsMenu</code></td><td><code>new()</code>, <code>choices(option, OverlayContext)</code>, <code>update(Msg, OverlayContext)</code></td><td>The tabbed options menu, with live preview.</td></tr>
+<tr><td><code>Cli\SelfUpdate</code></td><td><code>run()</code></td><td>The <code>self-update</code> verb for phar installs: check, update and roll back.</td></tr>
+<tr><td><code>Cli\Help</code></td><td><code>version()</code>, <code>versionString()</code></td><td>The version line printed by <code>--version</code>.</td></tr>
+<tr><td><code>Input\KeyTable</code></td><td><code>rows()</code>, <code>keyRows()</code>, <code>bindings()</code></td><td>The key table. The help overlay and <code>--help</code> both read it.</td></tr>
+</table>
+
+        <!-- api-reference:generated -->
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <p>The config file is <code>$XDG_CONFIG_HOME/candy-top/config.conf</code>, or <code>~/.config/candy-top/config.conf</code> when <code>XDG_CONFIG_HOME</code> is unset or not absolute. <code>--config &lt;path&gt;</code> reads another file and makes it the save target. The format is btop's: <code>#</code> comments and <code>name = value</code> lines, with strings in double quotes. Unknown keys are skipped, and a value that fails validation is dropped with a warning on stderr, while the option keeps its previous value.</p>
+    <p>The schema declares 115 options, and 105 of them persist to the file. The table lists the options most people change, with the defaults from <code>Config\Schema</code>. <code>examples/config-defaults.php</code> prints the same defaults from the code.</p>
+<table class="api-table">
+<caption>Common options</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td><code>color_theme</code></td><td>string</td><td><code>"pastel"</code></td><td>The theme: a <code>.theme</code> file name, or <code>Default</code> or <code>TTY</code>.</td></tr>
+<tr><td><code>update_ms</code></td><td>integer</td><td><code>2000</code></td><td>Frame update period in milliseconds. The <code>+</code> and <code>-</code> keys change it by 100.</td></tr>
+<tr><td><code>shown_boxes</code></td><td>string</td><td><code>"cpu mem net proc"</code></td><td>The boxes shown at start, in order.</td></tr>
+<tr><td><code>graph_symbol</code></td><td>string</td><td><code>"braille"</code></td><td>The graph glyphs: <code>braille</code>, <code>block</code>, <code>block2</code> or <code>tty</code>.</td></tr>
+<tr><td><code>truecolor</code></td><td>boolean</td><td><code>true</code></td><td>Set <code>false</code> to map colors to the 256-color cube.</td></tr>
+<tr><td><code>theme_background</code></td><td>boolean</td><td><code>true</code></td><td>Paint the theme's background. <code>false</code> uses the terminal's own background.</td></tr>
+<tr><td><code>tty_mode</code></td><td>boolean</td><td><code>false</code></td><td>Runtime only, so a config file cannot set it. It turns on by itself on a real console, giving the 16-color look with stepped gradients and tty glyphs. Use <code>force_tty</code> to turn it on anywhere.</td></tr>
+<tr><td><code>force_tty</code></td><td>boolean</td><td><code>false</code></td><td>Turn TTY mode on even when the terminal is not a console.</td></tr>
+<tr><td><code>vim_keys</code></td><td>boolean</td><td><code>false</code></td><td>Add <code>h</code>, <code>j</code>, <code>k</code>, <code>l</code> movement in lists, and <code>g</code>/<code>G</code> for first and last. Kill moves to <code>K</code> and help moves to <code>H</code>.</td></tr>
+<tr><td><code>proc_sorting</code></td><td>string</td><td><code>"cpu lazy"</code></td><td>The process sort column, with its mode.</td></tr>
+<tr><td><code>proc_tree</code></td><td>boolean</td><td><code>false</code></td><td>Start the process list in tree view.</td></tr>
+<tr><td><code>proc_tree_persist_state</code></td><td>boolean</td><td><code>false</code></td><td>Remember collapsed and expanded branches in the XDG state directory.</td></tr>
+<tr><td><code>net_auto</code></td><td>boolean</td><td><code>true</code></td><td>Auto-scale the network graphs.</td></tr>
+<tr><td><code>save_config_on_exit</code></td><td>boolean</td><td><code>true</code></td><td>Write changed options back to the config on every quit path.</td></tr>
+<tr><td><code>ipmi_update_ms</code></td><td>integer</td><td><code>10000</code></td><td>How often the BMC band is sampled, in milliseconds.</td></tr>
+</table>
+    <p>The file is rewritten on exit when <code>save_config_on_exit</code> is on and something persisted has changed. That includes a file that did not exist yet. A value that fails validation is dropped with a warning, and the warning names the value.</p>
+
+    <h2 style="margin-top: 40px;">Keys</h2>
+    <p><code>candy-top --help</code> prints the full table, generated from the same <code>Input\KeyTable</code> the help overlay uses. The most used keys are below. The README <a href="https://github.com/sugarcraft/candy-top/blob/master/README.md#key-bindings">key bindings</a> section has the complete list, including the mouse actions.</p>
+<table class="api-table">
+<caption>Common keys</caption>
+<thead><tr><th scope="col">Key</th><th scope="col">Action</th></tr></thead>
+<tr><td><code>Esc</code>, <code>m</code></td><td>Main menu</td></tr>
+<tr><td><code>F2</code>, <code>o</code></td><td>Options menu</td></tr>
+<tr><td><code>F1</code>, <code>?</code>, <code>h</code> (<code>H</code> with <code>vim_keys</code>)</td><td>Help overlay</td></tr>
+<tr><td><code>1</code> to <code>4</code></td><td>Toggle the cpu, mem, net and proc boxes</td></tr>
+<tr><td><code>5</code> to <code>0</code></td><td>Toggle the GPU boxes</td></tr>
+<tr><td><code>x</code>, <code>[</code>, <code>]</code></td><td>Toggle the containers box, and select the previous or next container</td></tr>
+<tr><td><code>v</code>, <code>s</code>, <code>S</code></td><td>Toggle the VM dashboard, and step its card order</td></tr>
+<tr><td><code>Shift+I</code></td><td>Toggle the ipmi box</td></tr>
+<tr><td><code>p</code>, <code>Shift+P</code></td><td>Next and previous layout preset</td></tr>
+<tr><td><code>+</code>, <code>-</code>, <code>=</code></td><td>Add or subtract 100 ms from the update period</td></tr>
+<tr><td><code>f</code> or <code>/</code></td><td>Filter the process list. Start with <code>!</code> for a regex.</td></tr>
+<tr><td><code>e</code>, <code>E</code>, <code>c</code>, <code>r</code></td><td>Tree view, collapse all, per-core process usage, reverse the sort</td></tr>
+<tr><td><code>Enter</code>, <code>F</code>, <code>u</code></td><td>Detailed view of the selected process, follow it, pause the list</td></tr>
+<tr><td><code>t</code>, <code>k</code> (<code>K</code> with <code>vim_keys</code>), <code>s</code>, <code>N</code></td><td>Terminate, kill, signal or renice the selected process. Terminate and kill ask for confirmation first.</td></tr>
+<tr><td><code>Ctrl+R</code></td><td>Reload the config file from disk</td></tr>
+<tr><td><code>q</code>, <code>Ctrl+C</code></td><td>Quit, saving the config</td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Theming and TTY mode</h2>
+    <p>The default theme is <code>pastel</code>, candy-top's own palette on a deep plum background, with box outlines that flow from one color to the next. The 43 bundled theme files are the btop theme set plus <code>pastel</code>, and <code>Default</code> and <code>TTY</code> are built in. The <a href="https://github.com/sugarcraft/candy-top/tree/master/examples">themes example</a> lists them.</p>
+    <p>Themes are read from the user directory first (<code>$XDG_CONFIG_HOME/candy-top/themes</code>, or <code>~/.config/candy-top/themes</code>), then from the bundled <code>themes/</code> directory. When both hold the same file name, the user copy wins every lookup by name. <code>--themes-dir</code> puts a directory above both for one run.</p>
+    <p>TTY mode is btop's console look: the 16-color <code>TTY</code> theme, stepped gradients and the <code>tty</code> glyph set. It turns on by itself on a real Linux console, and <code>force_tty = true</code> turns it on anywhere. <code>NO_COLOR</code> removes color entirely, and the numbers stay readable without it. Every threshold reading carries its value, so no information depends on hue alone.</p>
+
+    <h2 style="margin-top: 40px;">Examples</h2>
+    <p><code>examples/top.php</code> is the VHS demo. It starts candy-top on fake data with a throwaway config path, so your own config cannot change the recording. It needs a terminal on both ends, and it exits 0 when you press <code>q</code>.</p>
+    <pre class="code"><code class="language-shell">php examples/top.php</code></pre>
+    <p><code>examples/themes.php</code> lists the theme names candy-top can select, followed by the count. It reads only the bundled directory, so it exits 0 with the same output on every machine.</p>
+    <pre class="code"><code class="language-shell">php examples/themes.php</code></pre>
+    <p><code>examples/config-defaults.php</code> prints the number of options and the defaults of a few of them. It reads the schema and never a config file.</p>
+    <pre class="code"><code class="language-shell">php examples/config-defaults.php</code></pre>
+
+    <h2 style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd candy-top &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite drives the model with scripted messages and checks the rendered frames. Tests that need a real terminal run the binary on a pseudo-terminal, through a helper built on <code>sugar-pty</code>, and the bootstrap loads the <code>sugar-testing</code> helpers. The shipped <code>phpunit.xml</code> treats warnings as failures.</p>
+
+    <h2 style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3 style="margin-top: 24px;">"Terminal size too small"</h3>
+    <p>The notice names the width and height the current layout needs. Resize the terminal, or shrink the layout: <code>1</code> to <code>4</code> hide boxes and <code>5</code> to <code>0</code> hide the GPU slots. Hiding a box also lowers the minimum.</p>
+
+    <h3 style="margin-top: 24px;">The colors look wrong, or the graphs are plain</h3>
+    <p>The terminal is being stepped down. <code>force_tty = true</code> selects the 16-color palette, <code>truecolor = true</code> asks for 24-bit color, and <code>NO_COLOR</code> in the environment removes color. <code>TERM=dumb</code> drops every color escape and the full-screen modes.</p>
+
+    <h3 style="margin-top: 24px;">A field reads <code>n/a</code></h3>
+    <p>Nothing was measured yet, or the source cannot be read on this host. It is not a zero. A GPU row shows <code>n/a</code> when the card stops answering, and it never invents a value.</p>
+
+    <h3 style="margin-top: 24px;">It refuses to start</h3>
+    <p><code>candy-top --version</code> proves that the binary runs. The startup refusals (no terminal, a non-UTF-8 locale, an unusable config path, a bad option value) all print the reason on stderr and exit non-zero before anything is drawn. A non-UTF-8 codeset is refused like btop does, and <code>--utf-force</code> starts anyway on a terminal that misreports its encoding.</p>
+
+    <h3 style="margin-top: 24px;">Something btop shows is missing</h3>
+    <p>Check the deliberate differences first. The README section on differences from btop lists what is not implemented yet, including the macOS and OpenBSD collectors and CPU package watts.</p>
+
+    <h3 style="margin-top: 24px;">Where the files live</h3>
+    <p>The config is in <code>$XDG_CONFIG_HOME/candy-top/config.conf</code>, the themes beside it, and the tree-collapse state in <code>$XDG_STATE_HOME/candy-top/tree-state.json</code>. candy-top keeps no log file, and <code>log_level</code> is accepted for btop compatibility and ignored.</p>
+
+    <h2 style="margin-top: 40px;">Upstream mapping</h2>
+    <p>candy-top follows the feature set of btop v1.4.7, plus a set of upstream pull requests that btop adopted. The README lists each adopted change. The table maps the btop parts to the classes that carry them.</p>
+<table class="api-table">
+<caption>btop feature to SugarCraft class</caption>
+<thead><tr><th scope="col">btop part</th><th scope="col">SugarCraft class</th></tr></thead>
+<tr><td>cpu box and per-core grid</td><td><code>Panel\Cpu\CpuView</code>, <code>Collect\Cpu</code></td></tr>
+<tr><td>proc box, tree view and detail view</td><td><code>Panel\ProcPanel</code>, <code>Panel\Proc\ProcView</code>, <code>Collect\Process\*</code></td></tr>
+<tr><td>GPU and NPU boxes</td><td><code>Collect\Gpu</code>, <code>Panel\Gpu\*</code></td></tr>
+<tr><td>BMC (ipmi) band</td><td><code>Panel\Ipmi\IpmiView</code>, <code>Collect\Ipmi\*</code></td></tr>
+<tr><td>Options and main menus</td><td><code>Overlay\OptionsMenu</code>, <code>Overlay\*</code></td></tr>
+<tr><td>Config file and options</td><td><code>Config\ConfigFile</code>, <code>Config\Schema</code></td></tr>
+<tr><td>Themes</td><td><code>Theme\ThemeRegistry</code>, <code>Theme\ThemeFile</code>, <code>Theme\Palette</code></td></tr>
+<tr><td>Key bindings and help</td><td><code>Input\KeyTable</code></td></tr>
+</table>
+
+    <h2 style="margin-top: 40px;">Architecture</h2>
+    <p>Five layers sit under the Model. <code>Collect\*</code> reads the host (Linux <code>/proc</code> and <code>/sys</code>, FreeBSD sysctl) and <code>Source\*</code> presents either the live readers or the seeded fakes. <code>Panel\*</code> and <code>View\*</code> turn samples into boxes and frames, <code>Overlay\*</code> draws the menus over a dimmed backdrop, and <code>Config\*</code>, <code>Theme\*</code>, <code>State\*</code> and <code>Input\*</code> hold the settings, palettes, saved state and key table. <code>bin/candy-top</code> parses the flags, and <code>Cli\Help</code>, <code>Cli\Reporter</code> and <code>Cli\SelfUpdate</code> answer the ones that run before the terminal starts, such as <code>--help</code>, <code>--version</code> and <code>self-update</code>.</p>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>Releases are tagged <code>candy-top/v*</code>, for example <code>candy-top/v0.1.0</code>. Changes merged after the newest tag are dev-only until the next tag. A tagged phar stamps its tag into <code>--version</code>, and <code>self-update</code> follows the release channel the build was made for, or the one you pass with <code>--channel</code>. The commit history on GitHub is the change record.</p>
+
+    <h2 style="margin-top: 40px;">Source and demos</h2>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a> — key bindings, config keys, themes, collectors</li>
+      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a> with the key, config and theme tables</li>
+      <li><a href="https://github.com/sugarcraft/candy-top/tree/master/examples">Runnable examples</a></li>
       <li><a href="https://github.com/sugarcraft/candy-top/tree/master/tests">Test suite</a></li>
       <li>Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (C++); SugarCraft is developed as a native PHP project.</li>
     </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
 

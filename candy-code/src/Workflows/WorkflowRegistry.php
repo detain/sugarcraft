@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Workflows;
 
 use SugarCraft\Code\Agents\Isolation;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\JsonSchemaArgument;
 use SugarCraft\Core\Util\Sanitize;
@@ -239,7 +238,7 @@ final class WorkflowRegistry
      *        is confined to $projectRoot — {@see readableProjectDir()} states
      *        why per-entry confinement could not see a symlinked workflows
      *        directory, and what boundary each of the two checks enforces. Both
-     *        halves are decided by {@see \SugarCraft\Code\Support\ContainedPath},
+     *        halves are decided by {@see \SugarCraft\Core\Util\PathJail},
      *        which is also what a project's `.claude/skills` now asks
      *        ({@see \SugarCraft\Code\Skills\SkillLoader::skillFilesIn()}) — the
      *        two tiers ran their own copies of the idiom until the skills one
@@ -726,18 +725,18 @@ final class WorkflowRegistry
      * so this is the only thing standing between a committed
      * `deploy.yaml -> /etc/shadow` and the loader opening it.
      *
-     * THE PREDICATE ITSELF LIVES IN {@see ContainedPath}, which is where the
+     * THE PREDICATE ITSELF LIVES IN {@see \SugarCraft\Core\Util\PathJail}, which is where the
      * "resolve both sides, compare with a trailing separator" argument is
      * written down once — including why the separator is load-bearing and what
      * an unresolvable path answers. This method exists for the ENTRY question
-     * ({@see ContainedPath::within()}, equality counted as contained) and for
+     * ({@see \SugarCraft\Core\Util\PathJail::within()}, equality counted as contained) and for
      * the sentence below, which is specific to this class.
      *
      * $dir is resolved too, which is what makes this predicate blind to a $dir
      * that is ITSELF a link: the boundary moves with it. That is a real escape
      * and it is answered separately, on the directory rather than the entry, by
      * {@see readableProjectDir()} — which asks the STRICTER
-     * {@see ContainedPath::below()} precisely because the two questions differ
+     * {@see \SugarCraft\Core\Util\PathJail::below()} precisely because the two questions differ
      * about equality.
      *
      * The separator half is pinned by
@@ -747,7 +746,7 @@ final class WorkflowRegistry
      */
     private function containedIn(string $path, string $dir): bool
     {
-        return ContainedPath::within($path, $dir);
+        return \SugarCraft\Core\Util\PathJail::within($path, $dir);
     }
 
     /**
@@ -853,7 +852,7 @@ final class WorkflowRegistry
      * `/workflow list` enumerated the basenames of every
      * `[a-zA-Z0-9_-]+\.yaml` in the developer's checkout regardless of
      * provenance, and any that parsed as a workflow map put its `description`
-     * in the listing and the transcript. {@see ContainedPath::below()} refuses
+     * in the listing and the transcript. {@see \SugarCraft\Core\Util\PathJail::below()} refuses
      * the equality arm, and the checkout root is the one directory in the tree
      * where untracked local files conventionally sit.
      *
@@ -970,7 +969,7 @@ final class WorkflowRegistry
 
         $anchor = $this->projectRoot !== null ? $this->expandPath($this->projectRoot) : dirname($dir);
 
-        if (ContainedPath::below($dir, $anchor)) {
+        if (\SugarCraft\Core\Util\PathJail::below($dir, $anchor)) {
             return $dir;
         }
 
@@ -1053,7 +1052,7 @@ final class WorkflowRegistry
 
         $anchor = $this->userHome !== null ? $this->expandPath($this->userHome) : \dirname($dir);
 
-        if (ContainedPath::below($dir, $anchor)) {
+        if (\SugarCraft\Core\Util\PathJail::below($dir, $anchor)) {
             return $dir;
         }
 

@@ -5,13 +5,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents;
 
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnumSpelling;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Skills\SkillSource;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Discovers agent definitions written for OTHER coding CLIs -- Claude Code's
@@ -117,8 +117,6 @@ use SugarCraft\Code\Skills\SkillSource;
  */
 final class ForeignAgentPresetRegistry
 {
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * opencode names its built-in tools in lowercase; candy-code's own tools
      * report StudlyCase names ({@see \SugarCraft\Code\Tools\BuiltIn\Bash::name()}).
@@ -418,9 +416,9 @@ final class ForeignAgentPresetRegistry
      * TWO BOUNDARIES, the pair {@see \SugarCraft\Code\Skills\SkillLoader::skillFilesIn()}
      * and {@see \SugarCraft\Code\Commands\CommandLoader::loadFromDirectory()}
      * each need. The DIRECTORY a repository chose must resolve strictly inside
-     * the checkout that named it ({@see ContainedPath::below()}), and each
+     * the checkout that named it ({@see \SugarCraft\Core\Util\PathJail::below()}), and each
      * `*.md` ENTRY must still resolve inside the directory it was listed from
-     * ({@see ContainedPath::within()}). Without the first the second is
+     * ({@see \SugarCraft\Core\Util\PathJail::within()}). Without the first the second is
      * relocatable rather than binding: `realpath()` on both sides means a
      * boundary directory that is itself a symlink travels with the link.
      *
@@ -480,7 +478,7 @@ final class ForeignAgentPresetRegistry
                 continue;
             }
 
-            if ($anchor !== null && !ContainedPath::below($dir, $anchor)) {
+            if ($anchor !== null && !\SugarCraft\Core\Util\PathJail::below($dir, $anchor)) {
                 // NAMES THE ANCHOR, not "the checkout": the user tier is
                 // anchored to `$HOME` now, where the objection is that the link
                 // leaves the user's own home rather than that a repository
@@ -502,7 +500,7 @@ final class ForeignAgentPresetRegistry
                 // The directory is contained; an ENTRY inside it need not be.
                 // `agents/link.md -> ~/.ssh/config` is one committed line, and
                 // `glob()` does not resolve it.
-                if (!ContainedPath::within($file, $dir)) {
+                if (!\SugarCraft\Core\Util\PathJail::within($file, $dir)) {
                     $this->refusedDirectories[$file] = sprintf(
                         'resolves outside %s, the directory it was listed from, so it is not an agent that '
                         . 'directory declares',
@@ -558,16 +556,17 @@ final class ForeignAgentPresetRegistry
             throw new \RuntimeException("Could not read agent file: {$file}");
         }
 
-        if (!preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split === null) {
             throw new \RuntimeException("No YAML frontmatter found in: {$file}");
         }
 
-        $data = Frontmatter::parse($matches[1]);
+        $data = Frontmatter::parse($split->meta);
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$file}");
         }
 
-        return [$data, trim(substr($content, strlen($matches[0])))];
+        return [$data, trim($split->body)];
     }
 
     /**

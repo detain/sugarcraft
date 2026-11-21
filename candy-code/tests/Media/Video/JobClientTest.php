@@ -328,6 +328,55 @@ final class JobClientTest extends TestCase
         self::assertStringStartsWith("\x00\x00\x00\x20ftypisom", (string) file_get_contents($artifact->path()));
     }
 
+    public function testAnIntervalAboveThePollCeilingIsRefusedBeforeAnyDial(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient(['GET /v1/videos/job-77' => []], calls: $calls);
+
+        try {
+            JobPollLoop::run(
+                $client,
+                'job-77',
+                static function (): void {
+                },
+                static fn (): bool => false,
+                intervalSeconds: 3600.5,
+                sleeper: static function (float $seconds): void {
+                },
+            );
+            self::fail('an interval past the poll ceiling must be refused, not silently clamped');
+        } catch (SdException $e) {
+            self::assertStringContainsString('poll interval must not exceed 3600', $e->getMessage());
+        }
+
+        self::assertSame([], $calls, 'the refusal happens before the first status poll dials');
+    }
+
+    public function testAnIntervalAtThePollCeilingPausesTheFullInterval(): void
+    {
+        $sleeps = [];
+        $client = $this->w5vClient([
+            'GET /v1/videos/job-77' => [
+                $this->w5vFixtureRow('jobs-queued.json'),
+                $this->w5vFixtureRow('jobs-done-b64.json'),
+            ],
+        ]);
+
+        JobPollLoop::run(
+            $client,
+            'job-77',
+            static function (): void {
+            },
+            static fn (): bool => false,
+            intervalSeconds: 3600.0,
+            sleeper: static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame([3600.0], $sleeps, 'the ceiling itself is a legal cadence: one full pause between the queued and done polls');
+    }
+
     public function testTheUrlShapeIsFetchedThroughTheGuardAndOnlyTheServerRelativePathDials(): void
     {
         $calls = [];
@@ -539,6 +588,31 @@ final class JobClientTest extends TestCase
         $this->expectExceptionMessage('poll interval must be positive');
 
         JobPollLoop::run($client, 'job-77', static function (): void {}, static fn (): bool => false, 0.0);
+    }
+
+    public function testACancelDuringAFlappingStatusReturnsTheDoneSummaryWithoutAPause(): void
+    {
+        $calls = [];
+        $client = $this->w5vClient([
+            'GET /v1/videos/job-77' => [['status' => 500, 'body' => '{"error":"boom"}']],
+        ], calls: $calls);
+
+        $sleeps = [];
+        $summary = JobPollLoop::run(
+            $client,
+            'job-77',
+            static function (): void {
+            },
+            static fn (): bool => true,
+            sleeper: static function (float $seconds) use (&$sleeps): void {
+                $sleeps[] = $seconds;
+            },
+        );
+
+        self::assertSame(JobPollSummary::TERMINATION_DONE, $summary->termination);
+        self::assertSame(0, $summary->polls, 'no status ever succeeded, so no poll is counted');
+        self::assertCount(1, $calls, 'the cancel lands after the first failed dial and no retry follows');
+        self::assertSame([], $sleeps, 'cancel wins before the retry pause');
     }
 
     public function testAnEmptyTaskIdCannotAddressAJobRoute(): void

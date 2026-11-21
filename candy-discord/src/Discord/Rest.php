@@ -9,7 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use React\Http\Browser;
 use React\Http\Message\Response;
 use React\Socket\ConnectorInterface;
-use SugarCraft\Code\Protocol\JsonRpc;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * Discord REST v10 (https://discord.com/developers/docs/reference#api-versioning

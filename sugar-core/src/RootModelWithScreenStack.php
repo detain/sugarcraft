@@ -44,7 +44,7 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
 
     /**
      * Immutable write channel honoured by {@see Program} when persisting
-     * an active screen's next model (lib-reviews-1102 C6).
+     * an active screen's next model.
      */
     public function withScreens(ScreenStack $screens): self
     {

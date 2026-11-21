@@ -262,6 +262,30 @@ final class LsTest extends TestCase
         $this->assertLessThanOrEqual(4096, strlen($tight->content()));
     }
 
+    /**
+     * Owner ruling A (2026-11-20): a zero cap takes the 8 MiB capture ceiling.
+     * The regression this pins: a zero cap read as "no clip", so a listing past
+     * 8 MiB went into the transcript whole. Each line here is 251 bytes with
+     * its newline, so 34,000 entries put about 8.5 MiB in the listing.
+     */
+    public function testAZeroCapClipsAListingThatOverrunsTheCaptureCeiling(): void
+    {
+        $stem = str_repeat('e', 246);
+        for ($i = 0; $i < 34_000; $i++) {
+            touch($this->root . '/' . $stem . sprintf('%04d', $i));
+        }
+
+        $result = (new Ls(root: $this->root, maxOutputBytes: 0, maxEntries: 40_000))->execute([
+            'id' => 'ls-zero-cap',
+            'path' => $this->root,
+            'description' => 'List the overrun fixture',
+        ]);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertStringContainsString('bytes omitted', $result->content());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024, strlen($result->content()));
+    }
+
     public function testHugeDirectoryKeepsTheFirstNByNameWithoutHoldingAll(): void
     {
         // SHL-2-P1 pin: the entry cap used to apply AFTER collect() had

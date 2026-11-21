@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Context;
 
 use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Memory\MemoryStore;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\ProjectRoot;
 
 /**
@@ -31,7 +30,7 @@ use SugarCraft\Code\Support\ProjectRoot;
  * creates anything — a missing directory is the ordinary state, answered
  * with null. {@see createForRoot()} is the writer's resolver and may create
  * the tree. Both refuse a directory that does not resolve STRICTLY inside the
- * project root: `ContainedPath::below()` is the same gate `.mcp.json` faces,
+ * project root: `\SugarCraft\Core\Util\PathJail::below()` is the same gate `.mcp.json` faces,
  * policing the symlink a cloned tree can actually carry (see the class
  * doc-block there for why symlinks and not hard links are the case
  * containment serves here).
@@ -209,6 +208,6 @@ final class ProjectMemoryWriter
      */
     private static function resolvesInsideRoot(string $directory, string $root): bool
     {
-        return ContainedPath::below($directory, $root);
+        return \SugarCraft\Core\Util\PathJail::below($directory, $root);
     }
 }

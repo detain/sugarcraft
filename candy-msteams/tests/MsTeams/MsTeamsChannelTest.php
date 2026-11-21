@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
+use SugarCraft\Plugins\PluginContext;
 use CandyCode\Bundles\MsTeams\MsTeams\Jwk;
 use CandyCode\Bundles\MsTeams\MsTeamsChannel;
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe;
-use SugarCraft\Code\Server\Auth\TokenStore;
-use SugarCraft\Code\Server\DiscoveryFile;
-use SugarCraft\Code\Server\StateDir;
 use CandyCode\Bundles\MsTeams\Support\CredentialStore;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use GuzzleHttp\Psr7\ServerRequest;
@@ -17,13 +16,14 @@ use GuzzleHttp\Psr7\Utils;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
-use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Plugins\Bridge\HostServicesServeClient;
+use SugarCraft\Plugins\Host\HostServices;
 
 /**
  * Policy-door pins for the channel root, bundle-local (the marketplace
  * trust walk lives in candy-code's MsTeamsBundleWeldTest). The HOME
  * sandbox is the law here — every reader resolves through
- * Bootstrap::trustedConfigDirPath() into the temp tree, so a developer's
+ * $this->configDir() into the temp tree, so a developer's
  * real ~/.candy-code can neither turn these windows red nor receive
  * bundle state. Everything that must refuse BEFORE any crypto or platform
  * byte exists is owned by this file; the trust-door legs behind a verified
@@ -71,7 +71,7 @@ final class MsTeamsChannelTest extends TestCase
 
         self::assertSame(['channels.msteams: disabled posture, nothing started'], $lines);
         self::assertSame([], $channel->faceNames());
-        self::assertDirectoryDoesNotExist(Bootstrap::trustedConfigDirPath() . '/msteams');
+        self::assertDirectoryDoesNotExist($this->configDir() . '/msteams');
 
         $channel->dispose();
         $channel->dispose(); // idempotent by contract
@@ -81,7 +81,7 @@ final class MsTeamsChannelTest extends TestCase
     public function testAMultiTenantAuthorityNameRefusesToStartLoudly(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-common', 'appPassword' => 'common-secret', 'tenantId' => 'common',
         ]);
@@ -100,7 +100,7 @@ final class MsTeamsChannelTest extends TestCase
     public function testAnEmptyTenantBootsNoFace(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-empty', 'appPassword' => 'empty-secret', 'tenantId' => '',
         ]);
@@ -133,7 +133,7 @@ final class MsTeamsChannelTest extends TestCase
 
         $channel->dispose();
         self::assertDirectoryDoesNotExist(
-            Bootstrap::trustedConfigDirPath() . '/msteams',
+            $this->configDir() . '/msteams',
             'the endpoint parse precedes any state-directory creation',
         );
     }
@@ -154,7 +154,7 @@ final class MsTeamsChannelTest extends TestCase
         // The shipped default is the footgun; boot must say so once, loud,
         // content-free (account label only — never ids, never secrets).
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-open', 'appPassword' => 'open-roster-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
@@ -176,7 +176,7 @@ final class MsTeamsChannelTest extends TestCase
     {
         foreach ([['approvers' => ['u1']], ['enabled' => false]] as $arm => $approvals) {
             $this->writeUserConfig(['channels.msteams' => ['enabled' => true, 'approvals' => $approvals]]);
-            $store = new CredentialStore(CredentialStore::defaultPath());
+            $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
             $store->writeMsteamsPairing('default', [], [], [
                 'appId' => 'app-quiet-' . $arm, 'appPassword' => 'quiet-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
             ]);
@@ -206,7 +206,7 @@ final class MsTeamsChannelTest extends TestCase
             $this->markTestSkipped('root ignores 0500 mode bits — the refusal cannot be provoked');
         }
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-fs', 'appPassword' => 'fs-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
@@ -239,7 +239,7 @@ final class MsTeamsChannelTest extends TestCase
         // at boot: the duplicate is named once, gets no face, and the first
         // validator entry survives.
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-dup', 'appPassword' => 'dup-secret-first', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
@@ -267,7 +267,7 @@ final class MsTeamsChannelTest extends TestCase
     public function testEveryRefusalBeforeCryptoCostsTheLoudCodeNotTheQuietOne(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-chan', 'appPassword' => 'chan-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
@@ -303,7 +303,7 @@ final class MsTeamsChannelTest extends TestCase
         self::assertSame([], $channel->faceNames());
         // A started channel created its state dir; dispose must not delete
         // durable state (the bindings outlive the dial, docs/SPEC.md §9.1) — pin it.
-        self::assertDirectoryExists(Bootstrap::trustedConfigDirPath() . '/msteams');
+        self::assertDirectoryExists($this->configDir() . '/msteams');
     }
 
     /**
@@ -399,7 +399,7 @@ final class MsTeamsChannelTest extends TestCase
     public function testTheTenantIdRidesTheRedactionRosterBesideTheAppPassword(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => '1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a',
         ]);
@@ -426,85 +426,93 @@ final class MsTeamsChannelTest extends TestCase
     }
 
     /**
-     * msteams-02: the 5 s discovery poll must dial ONE router per serve,
-     * not one per tick. Two ticks over an unchanged discovery + token keep
-     * the ServeBridge/ConversationRouter objects; flipping the token rotates
-     * them. This is the finding's evidence gap: nothing on disk ever touched
-     * dialIdentity/pollServe before this pin.
+     * PL-5d: the channel calls the serve through the host it is given, in process. Start
+     * connects that host once and routes through a client over it. No discovery record is read.
      */
-    public function testAnUnchangedDiscoveryKeepsTheRouterAcrossPollTicks(): void
+    public function testTheChannelConnectsTheInjectedHostOnceAndRoutesThroughIt(): void
     {
-        $serve = new FakeServe($this->loop, 'tick-token');
-        $port = $serve->listen();
-        $serverDir = $this->homeRoot . '/server-state';
-        putenv('CANDY_CODE_SERVER_DIR=' . $serverDir);
-        mkdir($serverDir, 0o700, true);
-        $dir = StateDir::existing($serverDir);
-        self::assertNotNull($dir, 'the state dir must be creatable under the sandbox HOME');
-        DiscoveryFile::forThisProcess(
-            '0.0.0-test',
-            'http://127.0.0.1:' . $port,
-            '127.0.0.1',
-            $port,
-            null,
-            false,
-            null,
-        )->write($dir);
-        $tokenPath = $dir->path . '/' . TokenStore::FILE;
-        file_put_contents($tokenPath, 'tick-token');
-        chmod($tokenPath, 0o600);
-
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
-            'appId' => 'app-tick', 'appPassword' => 'tick-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+            'appId' => 'app-host', 'appPassword' => 'host-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
         ]);
+        $host = new FakeServe($this->loop);
         $channel = new MsTeamsChannel();
         $channel->start($this->context(static function (string $line): void {
-        }));
-
-        $dialProp = new \ReflectionProperty(MsTeamsChannel::class, 'dialIdentity');
-        $dialProp->setAccessible(true);
-        $serveProp = new \ReflectionProperty(MsTeamsChannel::class, 'serve');
-        $serveProp->setAccessible(true);
-        $routerProp = new \ReflectionProperty(MsTeamsChannel::class, 'router');
-        $routerProp->setAccessible(true);
-        $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServe');
-        $poll->setAccessible(true);
+        }, $host));
 
         try {
-            // Boot already fired one pollServe; pump until that dial lands
-            // (a rejected/never-dial serve would leave dialIdentity '' and
-            // rebuild for the wrong reason).
-            $deadline = microtime(true) + 5.0;
-            while ($dialProp->getValue($channel) === '' && microtime(true) < $deadline) {
-                $this->pump(100);
-            }
-            self::assertNotSame('', $dialProp->getValue($channel), 'the first dial never succeeded');
+            $this->pump(50);
+            self::assertSame(1, $host->helloSeen, 'the channel connects its host exactly once');
 
-            $serveBefore = $serveProp->getValue($channel);
-            $routerBefore = $routerProp->getValue($channel);
-            self::assertNotNull($serveBefore);
-            self::assertNotNull($routerBefore);
-
-            $poll->invoke($channel);
-            self::assertSame($serveBefore, $serveProp->getValue($channel), 'an unchanged discovery must not rebuild the serve bridge');
-            self::assertSame($routerBefore, $routerProp->getValue($channel), 'an unchanged discovery must not rebuild the router');
-
-            // A rotated token is a new dial: the objects must turn over.
-            file_put_contents($tokenPath, 'tick-token-rotated');
-            chmod($tokenPath, 0o600);
-            $poll->invoke($channel);
-            self::assertNotSame($serveBefore, $serveProp->getValue($channel), 'a rotated serve token must re-dial');
-            self::assertNotSame($routerBefore, $routerProp->getValue($channel), 'a rotated serve token must rebuild the router');
+            $serve = new \ReflectionProperty(MsTeamsChannel::class, 'serve');
+            $serve->setAccessible(true);
+            self::assertInstanceOf(HostServicesServeClient::class, $serve->getValue($channel));
+            $router = new \ReflectionProperty(MsTeamsChannel::class, 'router');
+            $router->setAccessible(true);
+            self::assertNotNull($router->getValue($channel));
         } finally {
             $channel->dispose();
-            $serve->stop();
-            @unlink($tokenPath);
-            @unlink($dir->discoveryPath());
-            @rmdir($serverDir);
-            putenv('CANDY_CODE_SERVER_DIR');
         }
+    }
+
+    /**
+     * A hello refused at boot is dialled again on the retry ladder, so the channel is not dead
+     * until a serve restart (the pre-5d ServeBridge kept that ladder). The refusal lifts after the
+     * first attempt; the second hello, 0.25 s later, lands and the channel says so.
+     */
+    public function testARefusedBootHelloIsRetriedUntilTheServeAnswers(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-retry', 'appPassword' => 'retry-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $host = new FakeServe($this->loop);
+        $host->refuseHello = true;
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }, $host));
+
+        try {
+            $this->loop->addTimer(0.1, static function () use ($host): void {
+                $host->refuseHello = false;
+            });
+            $this->pump(1500);
+
+            self::assertGreaterThanOrEqual(2, $host->helloSeen, 'the refused hello is dialled again');
+            $connected = false;
+            $host->isConnected()->then(static function (bool $answer) use (&$connected): void {
+                $connected = $answer;
+            });
+            self::assertTrue($connected, 'the retried hello lands');
+            $log = implode("\n", $lines);
+            self::assertStringContainsString('channels.msteams.serve_dial_failed', $log);
+            self::assertStringContainsString('channels.msteams.serve_connected', $log);
+            self::assertStringNotContainsString('channels.msteams.serve_giveup', $log);
+        } finally {
+            $channel->dispose();
+        }
+    }
+
+    /** PL-5d: a channel started with no host starts nothing and says so. */
+    public function testWithoutAHostTheChannelStartsNothing(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-nohost', 'appPassword' => 'nohost-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }, null, false));
+
+        self::assertContains('channels.msteams: no serve host wired in, nothing started', $lines);
+        $channel->dispose();
     }
 
     /**
@@ -517,7 +525,7 @@ final class MsTeamsChannelTest extends TestCase
     {
         $lines = [];
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-fence', 'appPassword' => 'fence-secret', 'tenantId' => '2b3c4d5e-6f70-4182-93a4-b5c6d7e8f901',
         ]);
@@ -547,10 +555,6 @@ final class MsTeamsChannelTest extends TestCase
             $warned = \array_values(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'prune_tick_failed')));
             self::assertGreaterThanOrEqual(2, count($warned), 'each failed tick must name itself');
 
-            // The poll fence holds the same contract on a clean tick.
-            $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServeGuarded');
-            $poll->setAccessible(true);
-            $poll->invoke($channel);
         } finally {
             $channel->dispose();
         }
@@ -565,7 +569,7 @@ final class MsTeamsChannelTest extends TestCase
     public function testAPendingCodeFromTheStoreIsRedactedFromBootOnward(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [
             'CD234567' => ['userId' => 'peer-x', 'createdAt' => time(), 'expiresAt' => time() + 3600, 'lastReminderAt' => time()],
         ], ['peer-x'], [
@@ -693,7 +697,7 @@ final class MsTeamsChannelTest extends TestCase
             'enabled' => true,
             'transport' => ['jwksUrl' => 'file://' . $keysFile],
         ]]);
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store = new CredentialStore($this->channelsPath(), new FileCredentialWriter($this->channelsPath()));
         $store->writeMsteamsPairing('default', [], [], [
             'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
@@ -707,15 +711,15 @@ final class MsTeamsChannelTest extends TestCase
     }
 
     /** @param \Closure(string):void $sink */
-    private function context(\Closure $sink): \SugarCraft\Code\Channels\ChannelContext
+    private function context(\Closure $sink, ?HostServices $host = null, bool $withHost = true): PluginContext
     {
-        return \SugarCraft\Code\Channels\ChannelContext::for(
-            'candy-msteams',
-            'msteams',
-            $this->homeRoot,
-            $this->loop,
-            $sink,
-        );
+        return $this->ctx('candy-msteams', 'msteams', $this->homeRoot, $this->loop, $sink, $host, $withHost);
+    }
+
+    /** @param \Closure(string):void $sink */
+    private function ctx(string $bundle, string $name, string $root, LoopInterface $loop, \Closure $sink, ?HostServices $host = null, bool $withHost = true): PluginContext
+    {
+        return PluginContext::for($bundle, $name, $root, $loop, $sink, $this->userSection('channels.' . $name), $this->configDir(), $withHost ? ($host ?? new FakeServe($loop)) : null);
     }
 
     /** @param array<string,mixed> $tree */
@@ -727,5 +731,31 @@ final class MsTeamsChannelTest extends TestCase
             $this->homeRoot . '/.candy-code/config.json',
             (string) json_encode($tree),
         );
+    }
+
+    /** The candy-code configuration directory the sandbox HOME carries. */
+    private function configDir(): string
+    {
+        return $this->homeRoot . '/.candy-code';
+    }
+
+    private function channelsPath(): string
+    {
+        return $this->configDir() . '/channels.json';
+    }
+
+    /**
+     * The settings section a host would freeze for this channel, read from the
+     * sandbox's config.json directly so the bundle test never loads candy-code.
+     *
+     * @return array<string, mixed>
+     */
+    private function userSection(string $key): array
+    {
+        $path = $this->configDir() . '/config.json';
+        $tree = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+        $section = is_array($tree) ? ($tree[$key] ?? []) : [];
+
+        return is_array($section) ? $section : [];
     }
 }

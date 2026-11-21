@@ -18,9 +18,11 @@ use SugarCraft\Image\Mosaic;
  * switch re-derives instead of returning the stale probe of whichever mode was
  * asked for first, while `'auto'` keeps the pre-W2.2 detect-based behaviour
  * byte-identically (golden pin below). Detection is faked through sugar-image's
- * own env table (`KITTY_WINDOW_ID` answers `Detect::probe()` without any TTY —
- * the DA1/`setProbeStdin` path needs an interactive ctty a piped suite never
- * has), and every test restores the process statics in tearDown — a leaked
+ * own env table. `KITTY_WINDOW_ID` only makes a Kitty CLAIM; sugar-image's
+ * `Detect::probe()` confirms it through the APC `a=q` reply (P1-13b), which
+ * needs a tty a piped suite never has. {@see answerAsKittyTerminal()} stands in
+ * for that reply through the probe-stdin seams, so a faked Kitty env without it
+ * drops to the non-Kitty ladder. Every test restores the process statics in tearDown — a leaked
  * render mode or memo entry across the suite is the MAJOR the review brief
  * names (HomeSandbox-style snapshot/restore discipline).
  *
@@ -58,6 +60,7 @@ final class ToolResultRenderModeTest extends TestCase
 
         $this->resetToolResultStatics();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
         Detect::reset();
 
         parent::tearDown();
@@ -72,6 +75,20 @@ final class ToolResultRenderModeTest extends TestCase
     {
         (new \ReflectionProperty(ToolResult::class, 'renderMode'))->setValue(null, 'auto');
         (new \ReflectionProperty(ToolResult::class, 'mosaics'))->setValue(null, []);
+    }
+
+    /**
+     * sugar-image confirms a Kitty env claim only through the APC `a=q` reply
+     * (P1-13b). A piped suite has no ctty, so the probe seams stand in for a
+     * Kitty terminal: the OK reply, then the DA1 answer that closes the window.
+     */
+    private static function answerAsKittyTerminal(): void
+    {
+        $in = fopen('php://temp', 'r+b');
+        fwrite($in, "\x1b_Gi=31;OK\x1b\\" . "\x1b[?62;4c");
+        rewind($in);
+        Detect::setProbeStdin($in);
+        Detect::setProbeStdout(fopen('php://temp', 'r+b'));
     }
 
     /**
@@ -111,12 +128,32 @@ final class ToolResultRenderModeTest extends TestCase
 
     public function testAutoUnderFakedKittyEnvironmentDetectsKitty(): void
     {
-        // The detect-based half stays detect-based: sugar-image's env table
-        // answers definitively for kitty without any TTY (DA1 is skipped).
+        // The detect-based half stays detect-based: sugar-image confirms the
+        // env claim through the Kitty APC reply, which the faked terminal gives.
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();
+        self::answerAsKittyTerminal();
 
         self::assertSame('kitty', self::innerProtocol(ToolResult::mosaic()->protocol()));
+    }
+
+    public function testKittyEnvironmentClaimWithoutReplyIsNotKitty(): void
+    {
+        // The negative half of P1-13b: KITTY_WINDOW_ID is only a claim. With
+        // a stdin that carries no APC a=q reply, the claim is dropped and the
+        // non-Kitty ladder decides, so tool-result images never emit Kitty APC
+        // bytes into a run that cannot confirm the terminal (a redirected
+        // one-shot, or tmux with no reply relayed).
+        putenv('KITTY_WINDOW_ID=1');
+        Detect::reset();
+        Detect::setProbeStdin(fopen('php://temp', 'r+b'));
+        Detect::setProbeStdout(fopen('php://temp', 'r+b'));
+
+        self::assertNotSame('kitty', self::innerProtocol(ToolResult::mosaic()->protocol()));
+        self::assertNotSame(
+            'kitty',
+            self::innerProtocol(ToolResult::okWithImage('shot', 'ok', 'bytes')->imageProtocol),
+        );
     }
 
     // =========================================================================
@@ -143,7 +180,7 @@ final class ToolResultRenderModeTest extends TestCase
      */
     public function testForcedModeSelectsThatRenderer(string $mode, bool $isInline): void
     {
-        putenv('KITTY_WINDOW_ID=1'); // auto WOULD say kitty; the mode must win
+        putenv('KITTY_WINDOW_ID=1'); // an unconfirmed claim (no APC a=q reply): the forced mode selects
         Detect::reset();
         ToolResult::setRenderMode($mode);
 
@@ -185,6 +222,7 @@ final class ToolResultRenderModeTest extends TestCase
         // back forever.
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();
+        self::answerAsKittyTerminal();
         $auto = ToolResult::mosaic();
         self::assertSame('kitty', self::innerProtocol($auto->protocol()));
 

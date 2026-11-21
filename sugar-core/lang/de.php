@@ -32,6 +32,7 @@ return [
     'semaphore.shutdown' => 'Semaphore wurde geschlossen, bevor eine Genehmigung erteilt werden konnte',
     'semaphore.closed' => 'Semaphore ist geschlossen und kann keine weitere Genehmigung erteilen',
     'semaphore.derive_closed' => 'Aus einem geschlossenen Semaphore kann kein neuer Pool abgeleitet werden',
+    'semaphore.map_cancelled' => 'Stapel vor Abschluss aller Einträge abgebrochen',
     'lru_map.capacity_invalid' => 'LRU-Kapazität muss mindestens 1 sein, erhalten: {capacity}',
     'lru_map.capacity_too_large' => 'LRU-Kapazität {capacity} überschreitet die Wachstumsgrenze {max}',
     'lru_map.evict_from_empty' => 'Aus einer leeren LRU-Zuordnung kann nichts entfernt werden',

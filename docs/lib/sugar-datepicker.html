@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -132,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-datepicker.png" alt="" aria-hidden="true">
@@ -151,104 +156,445 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
-            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#limit-selection-to-a-date-window">Limit selection to a date window</a></li>
+            <li class="toc-h3"><a href="#restore-a-saved-range">Restore a saved range</a></li>
+            <li class="toc-h3"><a href="#pin-the-reference-today">Pin the reference &quot;today&quot;</a></li>
+            <li class="toc-h3"><a href="#size-the-grid-for-a-host-layout">Size the grid for a host layout</a></li>
+            <li class="toc-h3"><a href="#resolve-a-mouse-click-to-a-date">Resolve a mouse click to a date</a></li>
+            <li class="toc-h3"><a href="#record-transitions-for-analytics-or-undo">Record transitions for analytics or undo</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-datepicker">SugarCraft\DatePicker</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
             <li class="toc-h3"><a href="#may-june-2026">May → June 2026</a></li>
-            <li class="toc-h3"><a href="#min-max-constraints">Min / max constraints</a></li>
+            <li class="toc-h3"><a href="#min-and-max-constraints">Min and max constraints</a></li>
+            <li class="toc-h3"><a href="#interactive-range-selection">Interactive range selection</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#enter-does-nothing-on-a-day">Enter does nothing on a day</a></li>
+            <li class="toc-h3"><a href="#withmindate-or-withmaxdate-throws">withMinDate() or withMaxDate() throws</a></li>
+            <li class="toc-h3"><a href="#model-new-throws-when-given-a-time-and-a-picker">Model::new() throws when given a time and a picker</a></li>
+            <li class="toc-h3"><a href="#the-grid-is-narrower-or-wider-than-requested">The grid is narrower or wider than requested</a></li>
+            <li class="toc-h3"><a href="#the-grid-shows-mojibake-on-a-latin1-terminal">The grid shows mojibake on a latin1 terminal</a></li>
+            <li class="toc-h3"><a href="#ctrl-chords-quit-the-host-on-a-paste">Ctrl chords quit the host on a paste</a></li>
+            <li class="toc-h3"><a href="#the-today-marker-is-missing">The today marker is missing</a></li>
+            <li class="toc-h3"><a href="#events-are-missing-after-a-direct-handlekey-call">Events are missing after a direct handleKey() call</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, localized day and month names (17 locales), and a fully-rendered ANSI view.</p>
+<p class="lede" style="margin-top: 28px;">SugarDatepicker is a month-grid date picker for terminal UIs. It offers single-date and range selection, min and max bounds, keyboard and mouse seams, and localized day and month names in 17 locales. It is a port of the interaction model of <a href="https://github.com/EthanEFung/bubble-datepicker">EthanEFung/bubble-datepicker</a> (Go), and it renders to an ANSI string. Use <code>DatePicker</code> for a pure value you drive yourself, or <code>Model</code> to run it as a sugar-core TEA model.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-datepicker</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-datepicker:@dev</code></pre>
+    <p style="margin-top: 12px;">The package has no tagged release yet, so it ships only <code>dev-master</code>, and the <code>@dev</code> constraint is required until the first version tag lands. It needs PHP <code>^8.3</code> and <code>ext-mbstring</code>, and it pulls in <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-cellbuffer</code>. The package was renamed in 2026-10 from <code>sugarcraft/sugar-calendar</code>, and the old name is frozen at its last release, so depend on the new name only.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
 
-// Opens on January 2026 with the cursor aimed at the seed date, 2026-01-15
-// (a cursor on an empty cell falls back to the first valid day); every step
-// returns a new picker.
+// The picker opens on the seed date's month, with the cursor on the seed.
+// Every step returns a new picker, so rebind each result.
 $picker = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
-    -&gt;handleKey(DatePicker::KEY_DOWN)   // one row down: Thursday the 22nd
-    -&gt;selectDate();                      // selects the date under the cursor
+    ->handleKey(DatePicker::KEY_DOWN)  // one row down: Thursday the 22nd
+    ->selectDate();                     // select the date under the cursor
 
-$picker-&gt;selectedDate()-&gt;format('Y-m-d');   // '2026-01-22'
-echo $picker-&gt;view();                       // month grid, today and cursor highlighted
+echo $picker->selectedDate()->format('Y-m-d'); // 2026-01-22
+echo $picker->view();                           // the month grid
 
-// Range mode: Enter sets the start, a second Enter the end
+// Range mode: the first Enter sets the start, the second sets the end.
 $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
-    -&gt;withRangeMode(true)
-    -&gt;handleKey(DatePicker::KEY_DOWN)-&gt;handleKey(DatePicker::KEY_ENTER)
-    -&gt;handleKey(DatePicker::KEY_RIGHT)-&gt;handleKey(DatePicker::KEY_RIGHT)
-    -&gt;handleKey(DatePicker::KEY_ENTER);
-[$range-&gt;rangeStart()-&gt;format('j'), $range-&gt;rangeEnd()-&gt;format('j')];   // ['22', '24']</code></pre>
+    ->withRangeMode(true)
+    ->handleKey(DatePicker::KEY_DOWN)->handleKey(DatePicker::KEY_ENTER)
+    ->handleKey(DatePicker::KEY_RIGHT)->handleKey(DatePicker::KEY_RIGHT)
+    ->handleKey(DatePicker::KEY_ENTER);
+[$range->rangeStart()->format('j'), $range->rangeEnd()->format('j')]; // ['22', '24']</code></pre>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localized day and month names (17 locales), weeks starting Sunday (firstDayOfWeek is not configurable), today and the cursor highlighted, and optional ISO week numbers.</span></div>
-      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last selectable day of the viewed month (bounds consulted), PgUp/PgDn step one month, Enter selects (single mode) or sets the range start/end, Esc/Escape clears.</span></div>
-      <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
-      <div class="feature"><strong>Date bounds</strong><span><code>withMinDate()</code>/<code>withMaxDate()</code> clamp navigation to the allowed months and refuse out-of-range selection; <code>withoutMinDate()</code>/<code>withoutMaxDate()</code> lift a bound.</span></div>
-      <div class="feature"><strong>Host-owned color policy</strong><span>The widget emits raw SGR unconditionally; NO_COLOR stripping, attribute-only monochrome re-styling, and contrast alternates are documented host-side seams (README: Accessibility and terminal fallbacks).</span></div>
-      <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store recording all eight published wire transitions (<code>cursor_moved</code>, <code>month_changed</code>, <code>range_started</code>, <code>range_restarted</code>, <code>range_cleared</code>, <code>date_selected</code>, <code>date_cleared</code>, <code>selection_refused</code>); the payload contract is in the README's Events section.</span></div>
+    <p style="margin-top: 12px;">Drive the same picker as a TEA model when your host runs a sugar-core program loop. The <code>Model</code> maps each <code>KeyMsg</code> itself, and it records transitions to an optional event store:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\DatePicker\Model;
+
+$model = Model::new(new \DateTimeImmutable('2026-05-15'));
+[$model, $cmd] = $model->update(new KeyMsg(KeyType::Right));
+[$model, $cmd] = $model->update(new KeyMsg(KeyType::Enter)); // selects the date
+echo $model->view();</code></pre>
+
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p><code>DatePicker</code> is an immutable value. It holds a viewed month, a cursor on one grid cell, an optional single selection or range, min and max bounds, a today anchor, and the render state (width, week numbers and styles). Each method returns a new picker, and nothing mutates in place. The grid is always six rows of seven days, Sunday first, with blank lead-in and trailing cells. The cursor can rest on a blank cell, but Enter is refused there.</p>
+    <p>A selection is either refused or accepted, and nothing partial is kept. Enter on a blank cell, or on a day outside the bounds, returns the picker unchanged. The same refusal surfaces as a <code>selection_refused</code> event when the key arrives through <code>Model</code>. Navigation never wraps and never throws. Stepping past a bound, or past the calendar floor at January 0001, is a no-op.</p>
+    <p>The <code>Model</code> is the only channel that records events. <code>DatePicker::handleKey()</code> and the imperative methods record nothing, by design. A host that drives the picker directly either wraps it in a <code>Model</code> or compares the picker states itself.</p>
+
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
+
+    <h3 id="limit-selection-to-a-date-window" style="margin-top: 24px;">Limit selection to a date window</h3>
+    <p>Set both bounds. Setting a bound pulls the viewed month into the window and re-clamps the cursor. An out-of-window selection is refused, and an existing selection that falls outside is dimmed, never cleared. <code>examples/constraints.php</code> walks through clamped navigation and refused Enter presses.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
+
+$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+    ->withMinDate(new \DateTimeImmutable('2026-05-10'))
+    ->withMaxDate(new \DateTimeImmutable('2026-07-20'));
+
+$picker->inBounds(new \DateTimeImmutable('2026-04-01')); // false
+$picker = $picker->withoutMinDate(); // lift one bound again</code></pre>
+
+    <h3 id="restore-a-saved-range" style="margin-top: 24px;">Restore a saved range</h3>
+    <p><code>withRange()</code> presets both endpoints, and each must lie inside the current bounds. It does not enable range mode, so compose the two calls. Pass <code>null</code> to clear the endpoints and keep the mode.</p>
+    <pre class="code"><code class="language-php">$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+    ->withRange(new \DateTimeImmutable('2026-05-04'), new \DateTimeImmutable('2026-05-08'))
+    ->withRangeMode(true);
+
+$cleared = $picker->withRange(null); // clears both endpoints, keeps range mode</code></pre>
+
+    <h3 id="pin-the-reference-today" style="margin-top: 24px;">Pin the reference "today"</h3>
+    <p>By default the today marker follows the wall clock, and it is re-read on every render. <code>withToday()</code> pins a reference day, which keeps renders deterministic in tests. <code>withoutToday()</code> hides the marker, and <code>withClockToday()</code> resumes wall-clock following. <code>goToToday()</code> still navigates to the real current day while the marker is hidden.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
+
+$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+    ->withToday(new \DateTimeImmutable('2026-05-15'));
+$hidden = $picker->withoutToday();
+$hidden->todayHidden(); // true</code></pre>
+
+    <h3 id="size-the-grid-for-a-host-layout" style="margin-top: 24px;">Size the grid for a host layout</h3>
+    <p>The width is clamped into a band, never rejected. Ask <code>renderWidth()</code> for the exact width that <code>view()</code> will produce, and reserve nine rows for every render.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
+
+$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'));
+$picker->renderWidth(30, true); // 34: a 30-wide grid plus the 4-cell week column
+$picker->renderWidth(64);       // 63: clamped to MAX_TOTAL_WIDTH
+echo $picker->view(30, true);</code></pre>
+
+    <h3 id="resolve-a-mouse-click-to-a-date" style="margin-top: 24px;">Resolve a mouse click to a date</h3>
+    <p><code>hitTest()</code> maps a character coordinate in the rendered view to the date under it, or <code>null</code> for chrome, blank cells and padding. It never throws. It reads the week-column state the picker was configured with, so a host must use the same flag it renders with.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
+
+$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'));
+$date = $picker->hitTest(0, 0); // the header row is chrome, so null</code></pre>
+
+    <h3 id="record-transitions-for-analytics-or-undo" style="margin-top: 24px;">Record transitions for analytics or undo</h3>
+    <p>Pass an <code>EventStore</code> to <code>Model::new()</code>, and drain it with <code>release()</code> after each update. Every value change is recorded as one of eight <code>PickerEvent</code> kinds. <code>release()</code> returns the rows oldest first, each shaped <code>array{type, payload, time}</code>, where <code>time</code> is whole epoch seconds. The payload keys for each kind are:</p>
+<ul>
+  <li><code>cursor_moved</code>: <code>{index, date}</code>, with <code>date</code> null on a blank cell.</li>
+  <li><code>range_started</code>: <code>{date}</code>.</li>
+  <li><code>date_selected</code>: <code>{date}</code> in single mode, or <code>{date, rangeStart, rangeEnd}</code> when a range completes.</li>
+  <li><code>date_cleared</code>: an empty payload.</li>
+  <li><code>range_restarted</code>: <code>{from, to}</code>, where <code>to</code> may equal <code>from</code>.</li>
+  <li><code>range_cleared</code>: <code>{from}</code>.</li>
+  <li><code>selection_refused</code>: <code>{date, reason}</code>, where <code>reason</code> is <code>out_of_bounds</code> or <code>empty_cell</code>, and <code>date</code> is null on a blank cell.</li>
+  <li><code>month_changed</code>: <code>{year, month}</code>.</li>
+</ul>
+    <p><code>examples/interactive.php</code> prints the drained transcript.</p>
+
+    <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>The table covers the public surface. Each DatePicker method returns a new picker, and each Model method returns a new model, unless the row says otherwise.</p>
+<table class="api-table">
+<caption>Public API surface of sugar-datepicker</caption>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+<tr><td><code>DatePicker</code></td><td><code>DatePicker::new(?\DateTimeImmutable $time = null)</code></td><td>A picker on the seed's month, with the cursor on the seed. Without a seed, it opens on the current month.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>goToPreviousMonth()</code> / <code>goToNextMonth()</code> / <code>goToPreviousYear()</code> / <code>goToNextYear()</code> / <code>goToToday()</code></td><td>Step the viewed month or year. Steps clamp at the calendar floor, the ceiling and the bounds.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>setTime(\DateTimeImmutable)</code> / <code>moveToDate(\DateTimeImmutable)</code></td><td>Jump the view to a month, or put the cursor on a given day.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>moveCursorLeft()</code> / <code>moveCursorRight()</code> / <code>moveCursorUp()</code> / <code>moveCursorDown()</code></td><td>Move the cursor one cell. The cursor stays within the grid, and it does not wrap into a neighboring month.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>handleKey(string $key)</code></td><td>The string-keyed input door. Accepts the <code>KEY_*</code> constants, and returns the picker unchanged on an unknown key.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>selectDate()</code> / <code>clearDate()</code> / <code>toggleSelection()</code></td><td>Select the cursor date, clear the selection, or do one of the two. A refused selection returns the picker unchanged.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>selectedDate()</code> / <code>isSelecting()</code></td><td>The single selection, or <code>null</code>, and whether a selection is set.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>withRangeMode(bool)</code> / <code>isRangeMode()</code></td><td>Switch range mode on or off, and read the mode.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>rangeStart()</code> / <code>rangeEnd()</code> / <code>withRange(?\DateTimeImmutable $start, ?\DateTimeImmutable $end = null)</code></td><td>Read the endpoints, or preset both. Each endpoint must lie in the bounds, and they may not be crossed. The preset does not enable range mode.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>withMinDate(\DateTimeImmutable)</code> / <code>withMaxDate(\DateTimeImmutable)</code> / <code>withoutMinDate()</code> / <code>withoutMaxDate()</code></td><td>Set or lift a bound. A date outside <code>0001-01-01..9999-12-31</code> throws <code>InvalidArgumentException</code>.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>minDate()</code> / <code>maxDate()</code> / <code>inBounds(\DateTimeImmutable)</code> / <code>selectionTarget()</code> / <code>selectionRefusal()</code></td><td>Read the bounds, test a date, or read the date the next Enter would act on and the reason it would be refused.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>withToday(\DateTimeImmutable)</code> / <code>withoutToday()</code> / <code>withClockToday()</code> / <code>todayHidden()</code></td><td>Pin, hide, or resume the today marker, and read whether it is hidden.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>cursorIndex()</code> / <code>dateAtCursor()</code> / <code>viewMonth()</code> / <code>viewYear()</code></td><td>Read the cursor's grid index, the date under it (or <code>null</code> on a blank cell), and the viewed month and year.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>view(?int $width = null, ?bool $showWeekNumbers = null)</code> / <code>renderWidth(?int $width = null, ?bool $showWeekNumbers = null)</code></td><td>Render the nine-row grid, or report the exact width it will occupy. A null argument falls back to the configured state.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>withWidth(int)</code> / <code>withShowWeekNumbers(bool)</code></td><td>The render state that <code>view()</code> uses when no argument is passed.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>withHeaderStyle()</code> / <code>withDayNameStyle()</code> / <code>withTodayStyle()</code> / <code>withSelectedStyle()</code> / <code>withSelectedTodayStyle()</code> / <code>withCursorStyle()</code> / <code>withRangeStyle()</code></td><td>The seven SGR style setters. Each accepts a bare SGR parameter string and refuses anything else.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>hitTest(int $col, int $row, ?bool $showWeekNumbers = null)</code></td><td>Map a character coordinate to the date under it, or <code>null</code>. Never throws.</td></tr>
+<tr><td><code>DatePicker</code></td><td><code>DatePicker::MIN_TOTAL_WIDTH</code> / <code>DatePicker::MAX_TOTAL_WIDTH</code></td><td>The width band: the floor is 21 cells, or 25 with the week column, and the ceiling is 63 cells in both cases.</td></tr>
+<tr><td><code>Model</code></td><td><code>Model::new(?\DateTimeImmutable $time = null, ?EventStoreInterface $store = null, ?DatePicker $picker = null)</code></td><td>A TEA model. Pass a seed time or a configured picker, never both. Passing both throws.</td></tr>
+<tr><td><code>Model</code></td><td><code>init()</code> / <code>update(Msg $msg)</code> / <code>view(?int $width = null, ?bool $showWeekNumbers = null)</code> / <code>subscriptions()</code></td><td>The sugar-core Model contract. <code>init()</code> returns <code>null</code>, and <code>update()</code> always returns a <code>null</code> command.</td></tr>
+<tr><td><code>Model</code></td><td><code>picker()</code> / <code>withPicker(callable|DatePicker)</code></td><td>Read the wrapped picker, or change it. The callable form receives the current picker. The event store stays attached.</td></tr>
+<tr><td><code>EventStore</code></td><td><code>EventStore::new(?\Closure $clock = null)</code> / <code>record(string $type, array $payload = [])</code> / <code>release()</code> / <code>hasEvents()</code> / <code>count()</code></td><td>A bounded ring of up to <code>MAX_EVENTS</code> (1000) transitions. <code>release()</code> drains it. The clock seam makes tests deterministic.</td></tr>
+<tr><td><code>EventStoreInterface</code></td><td><code>record()</code> / <code>release()</code> / <code>hasEvents()</code> / <code>count()</code></td><td>The contract <code>Model</code> consumes, for a store of your own.</td></tr>
+<tr><td><code>PickerEvent</code></td><td>Eight <code>string</code> constants, one per wire event</td><td><code>CURSOR_MOVED</code>, <code>RANGE_STARTED</code>, <code>RANGE_RESTARTED</code>, <code>RANGE_CLEARED</code>, <code>DATE_SELECTED</code>, <code>DATE_CLEARED</code>, <code>MONTH_CHANGED</code> and <code>SELECTION_REFUSED</code>.</td></tr>
+<tr><td><code>DateRange</code></td><td><code>DateRange::new(?\DateTimeImmutable $start = null, ?\DateTimeImmutable $end = null)</code> / <code>withStart()</code> / <code>withEnd()</code> / <code>contains()</code> / <code>durationInDays(?\DateTimeImmutable $now = null)</code> / <code>isComplete()</code></td><td>The immutable start and end value behind range mode.</td></tr>
+<tr><td><code>Navigation</code></td><td><code>Navigation::gridIndexToDate(int $gridIndex, int $month, int $year)</code></td><td>Convert a raw grid index to a date. Throws <code>InvalidArgumentException</code> when the month is outside 1 to 12, or the year is below 1.</td></tr>
+</table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-datepicker/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-datepicker -->
+<p>Only methods declared in <code>sugar-datepicker/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-datepicker">SugarCraft\DatePicker</h3>
+<h4 id="api-sugarcraft-datepicker-datepicker"><code>DatePicker</code> <small>final class</small></h4>
+<p>Interactive date picker component.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?\DateTimeImmutable $time = null)</code></td><td>Public constructor — kept as a house exception pending a v2 convergence on private ctors; the docs advertise <code>DatePicker::new()</code> as the entry point.</td></tr>
+<tr><td><code>static new(?\DateTimeImmutable $time = null): self</code></td><td></td></tr>
+<tr><td><code>goToPreviousMonth(): self</code></td><td></td></tr>
+<tr><td><code>goToNextMonth(): self</code></td><td></td></tr>
+<tr><td><code>goToPreviousYear(): self</code></td><td></td></tr>
+<tr><td><code>goToNextYear(): self</code></td><td></td></tr>
+<tr><td><code>goToToday(): self</code></td><td></td></tr>
+<tr><td><code>withMinDate(\DateTimeImmutable $min): self</code></td><td>Set the earliest selectable date. If the current view is before the bound&#039;s month it is pulled back into the window.</td></tr>
+<tr><td><code>withoutMinDate(): self</code></td><td>Remove the lower selection bound.</td></tr>
+<tr><td><code>withMaxDate(\DateTimeImmutable $max): self</code></td><td>Set the latest selectable date. If the current view is after the bound&#039;s month it is pulled back into the window.</td></tr>
+<tr><td><code>withoutMaxDate(): self</code></td><td>Remove the upper selection bound.</td></tr>
+<tr><td><code>minDate(): ?\DateTimeImmutable</code></td><td></td></tr>
+<tr><td><code>maxDate(): ?\DateTimeImmutable</code></td><td></td></tr>
+<tr><td><code>inBounds(\DateTimeImmutable $date): bool</code></td><td>Whether $date lies inside the configured bounds (inclusive).</td></tr>
+<tr><td><code>selectionTarget(): ?\DateTimeImmutable</code></td><td>The date an Enter on the CURRENT cursor state would attempt to apply: the cursor date, or null on a blank lead-in/trailing cell — the single-mode first-of-month fallback was retired in dp-26 so both modes treat the blank cell identically (refuse, announce). Pure query over current state (dp-09 refusal seam), which is exactly what selectDate() and handleRangeEnter() act on.</td></tr>
+<tr><td><code>selectionRefusal(): ?string</code></td><td>Why a bare Enter on the CURRENT cursor state would be refused, or null when it would apply (dp-09, symmetric for both modes by dp-26). Vocabulary mirrors PickerEvent::SELECTION_REFUSED payloads: <code>out_of_bounds</code> (dimmed day under cursor) and <code>empty_cell</code> (blank lead-in/trailing cell — Enter there never selects a distant day).</td></tr>
+<tr><td><code>withToday(\DateTimeImmutable $today): self</code></td><td>Pin the &quot;today&quot; reference (testability). Default (unset) uses the real wall-clock now, so production behavior is unchanged. Pinning also un-hides the marker if withoutToday() had hidden it (dp-33).</td></tr>
+<tr><td><code>withoutToday(): self</code></td><td>Hide the today marker entirely (dp-33 honest semantics): no cell renders with the today/selected-today style until <code>withClockToday()</code> restores the wall-clock anchor or <code>withToday()</code> pins a new one. Navigation by <code>goToToday()</code> still works while hidden — the date exists, only the marker is off.</td></tr>
+<tr><td><code>withClockToday(): self</code></td><td>Follow the real wall clock as &quot;today&quot; again after withoutToday() — the state a freshly built picker starts in. The marker re-reads the clock on every render, so a session crossing midnight silently repaints a different today (no tick source, by design; dp-33 documentation flip).</td></tr>
+<tr><td><code>todayHidden(): bool</code></td><td>True while the today marker is hidden by withoutToday() (dp-33).</td></tr>
+<tr><td><code>setTime(\DateTimeImmutable $t): self</code></td><td></td></tr>
+<tr><td><code>moveToDate(\DateTimeImmutable $date): self</code></td><td>Aim the cursor at an arbitrary date (the edit-existing-value recipe): when $date falls inside the currently viewed month the cursor lands on its cell; otherwise the view is unchanged and the cursor is re-aimed at the viewed month&#039;s FIRST SELECTABLE day (min/max consulted via firstValidIndex — the same &quot;aim or reset to first valid&quot; law the constructor and setTime follow). The cursor never keeps a stale position on an out-of-month jump: an off-screen cursor is worse than a reset one. Immutable.</td></tr>
+<tr><td><code>moveCursorLeft(): self</code></td><td></td></tr>
+<tr><td><code>moveCursorRight(): self</code></td><td></td></tr>
+<tr><td><code>moveCursorUp(): self</code></td><td></td></tr>
+<tr><td><code>moveCursorDown(): self</code></td><td></td></tr>
+<tr><td><code>selectDate(): self</code></td><td>Enter selection mode and set the selected date to the cursor date.</td></tr>
+<tr><td><code>clearDate(): self</code></td><td>Clear selection / exit selection mode.</td></tr>
+<tr><td><code>toggleSelection(): self</code></td><td></td></tr>
+<tr><td><code>withRangeMode(bool $mode): self</code></td><td></td></tr>
+<tr><td><code>rangeStart(): ?\DateTimeImmutable</code></td><td></td></tr>
+<tr><td><code>rangeEnd(): ?\DateTimeImmutable</code></td><td></td></tr>
+<tr><td><code>isRangeMode(): bool</code></td><td></td></tr>
+<tr><td><code>withRange(?\DateTimeImmutable $start, ?\DateTimeImmutable $end = null): self</code></td><td>Preset both range endpoints programmatically (dp-19, sugar-datepicker-021): restores a saved [from, to] pair without keystroke simulation — the fragile path that had to survive bounds, clamps and month arithmetic by accident.</td></tr>
+<tr><td><code>handleKey(string $key): self</code></td><td>Handle keyboard navigation and selection (single AND range mode).</td></tr>
+<tr><td><code>selectedDate(): ?\DateTimeImmutable</code></td><td></td></tr>
+<tr><td><code>isSelecting(): bool</code></td><td></td></tr>
+<tr><td><code>cursorIndex(): int</code></td><td></td></tr>
+<tr><td><code>viewMonth(): int</code></td><td></td></tr>
+<tr><td><code>viewYear(): int</code></td><td></td></tr>
+<tr><td><code>dateAtCursor(): ?\DateTimeImmutable</code></td><td>Get the date at the current cursor position, or null when the cursor sits on an empty cell (before the 1st of the month or past the last day in the 6×7 grid).</td></tr>
+<tr><td><code>hitTest(int $col, int $row, ?bool $showWeekNumbers = null): ?\DateTimeImmutable</code></td><td>Map a character coordinate in a rendered view to the date under it, or null (dp-34). This is the click-to-select seam: a host that receives mouse cells from its framework hits them here instead of reimplementing the grid math — no cell is ever &quot;selected&quot; by a coordinate that renders a blank lead-in/trailing cell, a header, the day-name row, the separator, or out-of-grid padding. NEVER throws.</td></tr>
+<tr><td><code>renderWidth(?int $width = null, ?bool $showWeekNumbers = null): int</code></td><td>Exact total width the renderer will produce for the given intent, following the SAME clamp path view() takes — the predictable oracle behind the silent-clamp contract (dp-23, sugar-datepicker-026). Null arguments fall back to the stored withWidth()/ withShowWeekNumbers() state, so <code>renderWidth()</code> answers &quot;what will my argless view() measure?&quot; for TEA hosts.</td></tr>
+<tr><td><code>view(?int $width = null, ?bool $showWeekNumbers = null): string</code></td><td></td></tr>
+<tr><td><code>withHeaderStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withDayNameStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withTodayStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withSelectedStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withSelectedTodayStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withCursorStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withRangeStyle(string $s): self</code></td><td></td></tr>
+<tr><td><code>withWidth(int $width): self</code></td><td>Configure the render width used by view() and Model::view() whenever no explicit width argument is passed. The intent is stored as given — the renderer clamps into the visible band at draw time (a host sizing from a live terminal may set anything; it will never be rejected).</td></tr>
+<tr><td><code>withShowWeekNumbers(bool $show): self</code></td><td>Configure whether the ISO week-number column renders by default. As with withWidth(), this is the state-side default; an explicit view($width, $showWeekNumbers) argument still wins per call.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-daterange"><code>DateRange</code> <small>final readonly class</small></h4>
+<p>Represents a date range with start and end dates.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public ?\DateTimeImmutable $start = null, public ?\DateTimeImmutable $end = null)</code></td><td></td></tr>
+<tr><td><code>static new(?\DateTimeImmutable $start = null, ?\DateTimeImmutable $end = null): self</code></td><td>House factory mirroring the constructor.</td></tr>
+<tr><td><code>withStart(\DateTimeImmutable $start): self</code></td><td></td></tr>
+<tr><td><code>withEnd(\DateTimeImmutable $end): self</code></td><td></td></tr>
+<tr><td><code>contains(\DateTimeImmutable $date): bool</code></td><td></td></tr>
+<tr><td><code>durationInDays(?\DateTimeImmutable $now = null): ?int</code></td><td>Whole elapsed days between start and end — 2026-01-01 to 2026-01-03 returns 2, although the calendar span covers three days. The count is SIGNED: an inverted range (end before start) reports the negative elapsed figure — 2026-01-05 to 2026-01-01 returns -4, never a mirror +4 — so a consumer can tell &quot;backwards&quot; from &quot;same instant&quot;. Membership deliberately disagrees: contains() treats an inverted range as empty (false everywhere); the sign is direction information, not an invitation to probe inside. With an open-ended range, $now supplies the closing date; it defaults to real wall-clock now so the pure-integer math stays testable without a clock injection when the caller wants the live figure.</td></tr>
+<tr><td><code>isComplete(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-eventstore"><code>EventStore</code> <small>final class</small></h4>
+<p>Simple in-memory event store for calendar state changes.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly ?\Closure $clock = null)</code></td><td></td></tr>
+<tr><td><code>static new(?\Closure $clock = null): self</code></td><td>House factory mirroring the constructor; the public ctor stays legal as the declared store exception (CALIBER_LEARNINGS) pending a v2 flip.</td></tr>
+<tr><td><code>record(string $type, array $payload = []): void</code></td><td></td></tr>
+<tr><td><code>release(): array</code></td><td></td></tr>
+<tr><td><code>hasEvents(): bool</code></td><td></td></tr>
+<tr><td><code>count(): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-eventstoreinterface"><code>EventStoreInterface</code> <small>interface</small></h4>
+<p>Interface for event stores used in DI-friendly event sourcing.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>record(string $type, array $payload = []): void</code></td><td></td></tr>
+<tr><td><code>release(): array</code></td><td></td></tr>
+<tr><td><code>hasEvents(): bool</code></td><td></td></tr>
+<tr><td><code>count(): int</code></td><td>Number of events currently held (before the next drain).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-datepicker.</p>
+<h4 id="api-sugarcraft-datepicker-model"><code>Model</code> <small>final class</small></h4>
+<p>TEA Model wrapper for the DatePicker component.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly DatePicker $picker, private readonly ?EventStoreInterface $store = null)</code></td><td>Public constructor — kept as a house exception pending a v2 convergence on private ctors; the docs advertise <code>Model::new()</code> as the entry point (same declared deviation as DatePicker&#039;s ctor note).</td></tr>
+<tr><td><code>static new(?\DateTimeImmutable $time = null, ?EventStoreInterface $store = null, ?DatePicker $picker = null): self</code></td><td>Factory: build a new date-picker model.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>Init returns null — no startup command needed.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td>Handle a KeyMsg, returning [nextModel, optionalCmd].</td></tr>
+<tr><td><code>view(?int $width = null, ?bool $showWeekNumbers = null): string</code></td><td>Render the grid. Null arguments fall back to the picker&#039;s configured state (withWidth()/withShowWeekNumbers()), so a framework-driven host invoking the argless Core\Model contract gets the configured grid — not a hard-coded 21×9.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td>No subscriptions needed.</td></tr>
+<tr><td><code>picker(): DatePicker</code></td><td>Expose the wrapped picker for direct inspection by callers that prefer the imperative API — including month/year navigation reached through <code>goToNextMonth()</code> and friends, which have no dedicated key beyond PageUp/PageDown.</td></tr>
+<tr><td><code>withPicker(callable|DatePicker $picker): self</code></td><td>Swap the wrapped picker, keeping the SAME EventStore instance wired in.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-navigation"><code>Navigation</code> <small>final readonly class</small></h4>
+<p>Grid-index → date conversion for the calendar.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static gridIndexToDate(int $gridIndex, int $month, int $year): ?\DateTimeImmutable</code></td><td>Convert grid index to \DateTimeImmutable for given month/year.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-datepicker-pickerevent"><code>PickerEvent</code> <small>final class</small></h4>
+<p>Wire vocabulary for the events the TEA Model records.</p>
+
+    <h3 id="configuration-and-options" style="margin-top: 40px;">Configuration and options</h3>
+    <p>There is no configuration file and no environment variable. Every option is a setter on <code>DatePicker</code>, and every setter returns a new picker.</p>
+<table class="api-table">
+<caption>Picker options and their defaults</caption>
+<thead><tr><th scope="col">Option</th><th scope="col">Setter</th><th scope="col">Default</th><th scope="col">Effect</th></tr></thead>
+<tr><td>Seed date</td><td><code>DatePicker::new()</code></td><td>the current month, when no seed is given</td><td>The month the view opens on, with the cursor on the seed date.</td></tr>
+<tr><td>Width</td><td><code>withWidth(int)</code></td><td>21 cells, the natural grid</td><td>Width of the calendar area, clamped into 21 to 63, or 25 to 63 with the week column.</td></tr>
+<tr><td>Week numbers</td><td><code>withShowWeekNumbers(bool)</code></td><td>off</td><td>Shows the ISO week column on the left, which adds 4 cells.</td></tr>
+<tr><td>Range mode</td><td><code>withRangeMode(bool)</code></td><td>off</td><td>The first Enter sets the start, the second the end, and a third restarts the range.</td></tr>
+<tr><td>Minimum date</td><td><code>withMinDate()</code></td><td>unset</td><td>Earliest selectable day. Navigation clamps to its month.</td></tr>
+<tr><td>Maximum date</td><td><code>withMaxDate()</code></td><td>unset</td><td>Latest selectable day. Navigation clamps to its month.</td></tr>
+<tr><td>Today</td><td><code>withToday()</code> / <code>withoutToday()</code> / <code>withClockToday()</code></td><td>the wall clock</td><td>The reference day for the today marker. <code>withoutToday()</code> removes the marker.</td></tr>
+<tr><td>Event clock</td><td><code>EventStore::new(clock: …)</code></td><td>the real clock</td><td>The time source for event timestamps, in whole epoch seconds.</td></tr>
+</table>
+
+    <h3 id="keys-and-input" style="margin-top: 40px;">Keys and input</h3>
+    <p>The picker has a fixed key table. Rebinding is a host job: match the keys you want in your own input reducer, then call the public methods. Every action in the table is also a public method.</p>
+<table class="api-table">
+<caption>Key mapping for handleKey() and Model</caption>
+<thead><tr><th scope="col">Action</th><th scope="col">handleKey() string</th><th scope="col">Model KeyMsg</th></tr></thead>
+<tr><td>Move the cursor</td><td><code>left</code>, <code>right</code>, <code>up</code>, <code>down</code></td><td><code>KeyType::Left</code>, <code>Right</code>, <code>Up</code>, <code>Down</code></td></tr>
+<tr><td>First or last selectable day</td><td><code>home</code>, <code>end</code></td><td><code>KeyType::Home</code>, <code>KeyType::End</code></td></tr>
+<tr><td>Select, or arm and complete a range leg</td><td><code>enter</code></td><td><code>KeyType::Enter</code></td></tr>
+<tr><td>Clear the selection, or cancel a range</td><td><code>esc</code> or <code>escape</code></td><td><code>KeyType::Escape</code></td></tr>
+<tr><td>Previous or next month</td><td><code>pgup</code>, <code>pgdn</code></td><td><code>KeyType::PageUp</code>, <code>KeyType::PageDown</code></td></tr>
+<tr><td>Vim-style cursor moves</td><td>none (Model only)</td><td>bare <code>h</code>, <code>j</code>, <code>k</code>, <code>l</code> runes</td></tr>
+<tr><td>Jump to today</td><td>none (Model only)</td><td>bare <code>t</code> rune</td></tr>
+<tr><td>Toggle the selection without moving</td><td>none (Model only)</td><td><code>space</code>, in single mode</td></tr>
+</table>
+    <p style="margin-top: 12px;">Year jumps are programmatic only, through <code>goToPreviousYear()</code> and <code>goToNextYear()</code>. Through <code>Model</code>, the action keys and the letter bindings are reserved to the host under any chord. Ctrl, Alt or Shift held means the key is ignored, so a Shift+Enter newline in a chat host is never hijacked. The six navigation keys act with or without a chord.</p>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p>Seven setters take bare SGR parameter strings such as <code>1;36</code>, up to 32 characters. The accepted set is attributes 1 to 7 and 9, foregrounds 30 to 37 and 90 to 97, and backgrounds 40 to 47 and 100 to 107. Anything else is refused and the offending code is named, which includes escape sequences, the extended-color introducers 38 and 48, and the reset codes. Blink codes 5 and 6 are accepted but discouraged.</p>
+<table class="api-table">
+<caption>Shipped style defaults</caption>
+<thead><tr><th scope="col">Setter</th><th scope="col">Default SGR</th><th scope="col">Renders as</th></tr></thead>
+<tr><td><code>withHeaderStyle()</code></td><td><code>1;37</code></td><td>bold, white as truecolor <code>38;2;229;229;229</code></td></tr>
+<tr><td><code>withDayNameStyle()</code></td><td><code>90</code></td><td>bright black as truecolor <code>38;2;127;127;127</code></td></tr>
+<tr><td><code>withTodayStyle()</code></td><td><code>1;32</code></td><td>bold, green as truecolor <code>38;2;0;205;0</code></td></tr>
+<tr><td><code>withSelectedStyle()</code></td><td><code>1;36</code></td><td>bold, cyan as truecolor <code>38;2;0;205;205</code></td></tr>
+<tr><td><code>withSelectedTodayStyle()</code></td><td><code>1;33</code></td><td>bold, yellow as truecolor <code>38;2;205;205;0</code></td></tr>
+<tr><td><code>withCursorStyle()</code></td><td><code>7</code></td><td>reverse video</td></tr>
+<tr><td><code>withRangeStyle()</code></td><td><code>1;35</code></td><td>bold, magenta as truecolor <code>38;2;205;0;205</code></td></tr>
+</table>
+    <p style="margin-top: 12px;">The picker does not check the terminal. It does not read <code>NO_COLOR</code>, consult a color profile, or detect a dumb terminal, and it does not fall back to basic colors. Basic foregrounds 30 to 37 and 90 to 97, and backgrounds 40 to 47 and 100 to 107, are mapped through the RGB table of sugar-core's ANSI16 palette and emitted as truecolor (<code>38;2</code> and <code>48;2</code>). Attribute-only codes 1, 2, 4, 7 and 9 pass through unchanged. Those choices belong to the host. A colorless build can point every setter at attribute-only codes, for example <code>withHeaderStyle('1')</code>, <code>withDayNameStyle('2')</code>, <code>withTodayStyle('1;4')</code>, <code>withSelectedStyle('3')</code>, <code>withSelectedTodayStyle('1;3')</code>, <code>withCursorStyle('7')</code> and <code>withRangeStyle('9')</code>.</p>
+    <p style="margin-top: 12px;">Out-of-bounds days always get a faint composition on top of whichever style applies, and no setter changes that. The reverse-video cursor and the faint attribute are the cues that survive a colorless display. The default <code>90</code> day-name style has the lowest contrast, so <code>37</code> or <code>97</code> are the suggested alternates on dark themes.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <p>Each example is a standalone script under <code>examples/</code>, and each runs on built-in input with no terminal required.</p>
+<ul>
+  <li><code>examples/basic.php</code> walks May and June 2026, then selects 2026-07-12 in July and 2026-12-03 in December, both with the cursor methods.</li>
+  <li><code>examples/constraints.php</code> shows min and max bounds, clamped navigation, and refused and accepted Enter presses.</li>
+  <li><code>examples/interactive.php</code> mounts the TEA model in a sugar-core program loop, feeds it a scripted list of key messages, and prints the drained event transcript. It is the reference for how a keystroke reaches <code>update()</code>.</li>
+</ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/constraints.php
+php examples/interactive.php</code></pre>
+
+    <div class="demo-grid" style="margin-top: 24px;">
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="May to June 2026" onerror="this.parentElement.style.display='none'">
+            <h3 id="may-june-2026">May → June 2026</h3>
+            <span class="demo-caption">Month-grid date picker with cursor and selected day, walking the sections of examples/basic.php.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/constraints.gif" alt="Min and max constraints" onerror="this.parentElement.style.display='none'">
+            <h3 id="min-and-max-constraints">Min and max constraints</h3>
+            <span class="demo-caption">The same picker bounded between two dates.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/interactive.gif" alt="Interactive range selection" onerror="this.parentElement.style.display='none'">
+            <h3 id="interactive-range-selection">Interactive range selection</h3>
+            <span class="demo-caption">The scripted run from examples/interactive.php: cursor moves, a single selection, then a range.</span>
+        </div>
     </div>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install
+vendor/bin/phpunit</code></pre>
+    <p style="margin-top: 12px;">The suite pins the canonical month layouts with golden-file snapshots through <code>sugar-testing</code>. <code>LangCoverageTest</code> checks every locale file against the English key set. <code>ReadmeSnippetResolvesTest</code> checks that the README code samples resolve against the source. <code>InteractiveDemoTest</code> runs the scripted demo. The rest covers bounds, navigation, the event store, the model and the style setters.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+
+    <h3 id="enter-does-nothing-on-a-day" style="margin-top: 24px;">Enter does nothing on a day</h3>
+    <p>The day is either a blank lead-in or trailing cell, or a dimmed day outside the bounds. Enter is refused in both cases, and the picker comes back unchanged. Through <code>Model</code>, the refusal is recorded as a <code>selection_refused</code> event whose <code>reason</code> is <code>empty_cell</code> or <code>out_of_bounds</code>.</p>
+
+    <h3 id="withmindate-or-withmaxdate-throws" style="margin-top: 24px;">withMinDate() or withMaxDate() throws</h3>
+    <p>The date is outside <code>0001-01-01..9999-12-31</code>, or the new bound crosses the existing one. A zero date, such as a MySQL empty-row value, is refused for that reason. Check the value before you pass it in.</p>
+
+    <h3 id="model-new-throws-when-given-a-time-and-a-picker" style="margin-top: 24px;">Model::new() throws when given a time and a picker</h3>
+    <p>Pass either a seed time or a configured picker. Passing both throws, because the time would be silently discarded. Put the seed on the picker with <code>DatePicker::new()</code> when you need both.</p>
+
+    <h3 id="the-grid-is-narrower-or-wider-than-requested" style="margin-top: 24px;">The grid is narrower or wider than requested</h3>
+    <p>The requested width is clamped into the band and never rejected. A request below the natural floor grows to 21, or 25 with the week column. A request above 63 shrinks. Ask <code>renderWidth()</code> for the width that <code>view()</code> will produce.</p>
+
+    <h3 id="the-grid-shows-mojibake-on-a-latin1-terminal" style="margin-top: 24px;">The grid shows mojibake on a latin1 terminal</h3>
+    <p>The separator is the box-drawing character U+2500, and the grid assumes UTF-8 output. Set the terminal and the PHP output to UTF-8.</p>
+
+    <h3 id="ctrl-chords-quit-the-host-on-a-paste" style="margin-top: 24px;">Ctrl chords quit the host on a paste</h3>
+    <p>Pasted NUL and corrupted bytes arrive as invented Ctrl chords with an empty rune. The model ignores them. A host that maps any Ctrl chord to quit does not, so bind quit to a named key or an explicit, labeled chord.</p>
+
+    <h3 id="the-today-marker-is-missing" style="margin-top: 24px;">The today marker is missing</h3>
+    <p>A picker hides the marker after <code>withoutToday()</code> until <code>withClockToday()</code> or a fresh <code>withToday()</code> restores it. A pinned reference day never follows the wall clock, so a session that runs past midnight keeps showing the pinned day.</p>
+
+    <h3 id="events-are-missing-after-a-direct-handlekey-call" style="margin-top: 24px;">Events are missing after a direct handleKey() call</h3>
+    <p><code>handleKey()</code> and the imperative methods record nothing. Only <code>Model</code> emits events. Drive the picker through a <code>Model</code>, or compare the states yourself.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <p>The port follows the construction and interaction model of <a href="https://github.com/EthanEFung/bubble-datepicker">EthanEFung/bubble-datepicker</a>. The table lists where the port differs.</p>
+<table class="api-table">
+<tr><th scope="col">Upstream concept</th><th scope="col">SugarCraft</th><th scope="col">Notes</th></tr>
+<tr><td>Date picker model and construction</td><td><code>Model::new()</code>, <code>DatePicker::new()</code></td><td>The seed or configured-picker construction pattern.</td></tr>
+<tr><td>Month and cursor navigation</td><td><code>goTo*()</code>, <code>moveCursor*()</code>, <code>handleKey()</code></td><td>Navigation clamps at the bounds and never wraps.</td></tr>
+<tr><td>Focus, tab cycling and per-focus arrows</td><td>not ported</td><td>The single-cursor design has no key vocabulary for them.</td></tr>
+<tr><td>Replaceable key binding</td><td>a fixed table, plus host rebinding</td><td>The public methods cover every action in the table.</td></tr>
+<tr><td>Range selection</td><td><code>withRangeMode()</code>, <code>rangeStart()</code>, <code>rangeEnd()</code>, <code>DateRange</code></td><td>The first Enter sets the start, the second sets the end.</td></tr>
+</table>
+
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <p>The month grid is laid out by <code>DatePicker</code> into a sugar-cellbuffer buffer that is nine rows high and 21 to 63 cells wide (25 to 63 with the week column), and <code>Buffer::toAnsi()</code> serializes it. Cell widths come from the sugar-core width oracle, so the rendered width agrees with <code>renderWidth()</code>. <code>Model</code> wraps the picker as a sugar-core <code>Model</code>. Its <code>update()</code> maps key messages onto the picker, and it records each transition through the <code>EventStoreInterface</code>. <code>Navigation</code> holds the static grid-index conversion, and <code>DateRange</code> is the immutable endpoint value.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The package is pre-1.0 and ships only <code>dev-master</code>. It was renamed in 2026-10 from <code>sugarcraft/sugar-calendar</code>, and the namespace moved from <code>SugarCraft\Calendar\</code> to <code>SugarCraft\DatePicker\</code>. The upstream PascalCase method spellings still resolve to the camelCase methods, and <code>ApiAliasTest</code> pins them.</p>
+
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-datepicker">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-datepicker/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-datepicker/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/EthanEFung/bubble-datepicker">EthanEFung/bubble-datepicker</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><strong>sugar-dashboard</strong> has a separate <code>Components\Select\DatePicker</code>. It is a labeled form field with a calendar popup, and it has its own API. This package is the standalone calendar.</li>
+      <li><strong>sugar-core</strong> supplies the Model contract, the key messages, the width oracle and the i18n lookup.</li>
+    </ul>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>DatePicker</td><td>static new(?DateTimeImmutable) / withToday(DateTimeImmutable) / withClockToday() / setTime(DateTimeImmutable)</td><td>Create a picker on a month; pin "today"; jump to a date</td></tr>
-<tr><td>DatePicker</td><td>goToPreviousMonth() / goToNextMonth() / goToPreviousYear() / goToNextYear() / goToToday()</td><td>Navigate the viewed month</td></tr>
-<tr><td>DatePicker</td><td>moveCursorLeft/Right/Up/Down() / handleKey(string $key)</td><td>Move the cursor</td></tr>
-<tr><td>DatePicker</td><td>selectDate() / clearDate() / toggleSelection() / selectedDate() / isSelecting()</td><td>Single-date selection</td></tr>
-<tr><td>DatePicker</td><td>withRangeMode(bool) / rangeStart() / rangeEnd() / isRangeMode()</td><td>Range selection</td></tr>
-<tr><td>DatePicker</td><td>withMinDate(DateTimeImmutable) / withMaxDate(DateTimeImmutable) / withoutMinDate() / withoutMaxDate() / minDate() / maxDate() / inBounds() / withRange(?DateTimeImmutable, ?DateTimeImmutable)</td><td>Min/max date constraints (clamped navigation, refused selection)</td></tr>
-<tr><td>DatePicker</td><td>withoutToday() / withClockToday() / todayHidden()</td><td>Hide the today marker outright, resume wall-clock following, read the state</td></tr>
-<tr><td>DatePicker</td><td>view(?int $width = null, ?bool $showWeekNumbers = null) / renderWidth(?int, ?bool)</td><td>Render the month grid</td></tr>
-<tr><td>DatePicker</td><td>withHeaderStyle() / withDayNameStyle() / withTodayStyle() / withSelectedStyle() / withSelectedTodayStyle() / withCursorStyle() / withRangeStyle()</td><td>Styling (SGR strings)</td></tr>
-<tr><td>DatePicker</td><td>moveToDate(DateTimeImmutable) / dateAtCursor() / cursorIndex() / viewMonth() / viewYear()</td><td>Aim and read the cursor</td></tr>
-<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / withPicker(callable|DatePicker) / update($msg) / view() / picker()</td><td>sugar-core Model wrapping the picker; the argless view() contract render honors the picker's withWidth()/withShowWeekNumbers() state — picker()->view($width, $showWeekNumbers) overrides per call</td></tr>
-<tr><td>DatePicker</td><td>hitTest(int $col, int $row, ?bool $showWeekNumbers = null)</td><td>Mouse seam: character coordinate of a rendered view to the date under it, or null (blanks, chrome, padding) — never throws</td></tr>
-<tr><td>DateRange</td><td>public readonly $start / $end / withStart() / withEnd() / contains() / durationInDays(?$now) / isComplete()</td><td>Immutable start/end value object behind range mode</td></tr>
-<tr><td>EventStore</td><td>__construct(?\Closure $clock = null) / record($type, $payload) / release() / hasEvents() / count()</td><td>Bounded transition ring (MAX_EVENTS 1000); optional clock seam for deterministic tests</td></tr>
-<tr><td>EventStoreInterface</td><td>record() / release() / hasEvents() / count()</td><td>The contract Model consumes</td></tr>
-<tr><td>Navigation</td><td>static gridIndexToDate(int $gridIndex, int $month, int $year)</td><td>Raw grid index → date; throws when month is outside 1–12 or year is below 1</td></tr>
-</table>
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
     </div>
   </div>
-</section>
-
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="May to June 2026" onerror="this.parentElement.style.display='none'">
-                <h3 id="may-june-2026">May → June 2026</h3>
-                <span class="demo-caption">Month-grid date picker with cursor and selected day; the recording walks all four sections of examples/basic.php (May and June views, a July selection, a direct-API December cursor move).</span>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/constraints.gif" alt="Min / max constraints" onerror="this.parentElement.style.display='none'">
-                <h3 id="min-max-constraints">Min / max constraints</h3>
-                <span class="demo-caption">Same picker bounded between two dates.</span>
-            </div>
-        </div>
-    </div>
 </section>
 </main>
 

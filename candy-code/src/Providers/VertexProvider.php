@@ -403,7 +403,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     }
 
     /**
-     * Audit 15b-15: Claude and Gemini both read images, as `image` blocks
+     * Claude and Gemini both read images, as `image` blocks
      * ({@see anthropicBlocks()}) and `inlineData` parts
      * ({@see formatGeminiContents()}) - the request-side image block this used
      * to wait for. The legacy PaLM envelope does not, and gets the attachment

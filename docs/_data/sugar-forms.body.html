@@ -92,7 +92,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
@@ -100,7 +100,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible, non-skippable fields — hidden fields, hidden groups and skippable Note fields are excluded (legacy <code>getString()</code> &amp; friends remain as deprecated forwarders, to be removed in 2.0.0)</td></tr>
 <tr><td>Form</td><td>get(key, default = null)</td><td>Value of one field, or the fallback when the key is absent</td></tr>
 <tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
-<tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>
+<tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all current validation errors at once, without waiting for submit</td></tr>
 <tr><td>Form</td><td>withKeyMap(?KeyMap)</td><td>Rebind Next / Prev / Submit / Abort per form</td></tr>
 <tr><td>Group</td><td>new(Field ...$fields) / withHideFunc(?\Closure(array): bool)</td><td>A page of fields; the predicate receives the visible values collected before this group</td></tr>
 <tr><td>Field\Input</td><td>new(string)</td><td>Create a text input field</td></tr>
@@ -112,7 +112,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Field\Select</td><td>withFuzzySuggestions(list)</td><td>Filter options by fuzzy match score</td></tr>
 <tr><td>Field\Select</td><td>withAsyncSuggestions(callable, int = 150, ?WorkerPool = null, ?float = null)</td><td>Async suggestions with debounce</td></tr>
 <tr><td>Field\Select</td><td>withEnum(BackedEnum::class)</td><td>Coerce selected value to enum type</td></tr>
-<tr><td>Field\MultiSelect</td><td>new(name)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
+<tr><td>Field\MultiSelect</td><td>new(key, ...options)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
 <tr><td>Field\Note</td><td>new(key)</td><td>Create note field — text set via withTitle/withDescription; plain notes never appear in values() (a withNext(true) note contributes a null entry)</td></tr>
 <tr><td>Validator\Required</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is empty</td></tr>
 <tr><td>Validator\Email</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is not a valid email</td></tr>
@@ -122,6 +122,100 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use sugar-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
+
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <p>Each option is set through a fluent builder method on <code>Form</code>, <code>TextInput</code> or an async-capable field. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Form::withAccessible(bool)</code>: bool, default <code>false</code>. Switches to the single-line plain-text view of the focused field.</li>
+      <li><code>Form::withShowHelp(bool)</code>: bool, default <code>true</code>. Shows the <code>Step X of Y</code> indicator on multi-group forms. A single-group form renders the same either way, and the form never draws key-help rows (<code>keyBinds()</code> returns them for the host to draw).</li>
+      <li><code>Form::withShowErrors(bool)</code>: bool, default <code>true</code>. Paints each field's inline error.</li>
+      <li><code>Form::withErrorSummary(bool)</code>: bool, default <code>false</code>. Lists every current validation error at once as soon as a visible field fails, with no submit needed.</li>
+      <li><code>Form::withTheme(Theme)</code>: <code>Theme</code>, default <code>Theme::ansi()</code>. Sets the palette every field is painted with.</li>
+      <li><code>Form::withKeyMap(?KeyMap)</code>: <code>?KeyMap</code>, default <code>null</code>, which uses <code>KeyMap::new()</code>. Rebinds Next, Prev, Submit and Abort.</li>
+      <li><code>TextInput::charLimit(int)</code>: int, default <code>4096</code>. Bounds a paste or insert to this many characters. <code>0</code> turns the bound off.</li>
+      <li><code>withAsyncSuggestions(callable, int $debounceMs)</code>: int, default <code>150</code>. Milliseconds to wait after the last keystroke before a suggestion fetch starts.</li>
+      <li><code>withAsyncSuggestions(..., ?float $fetchTimeoutSeconds)</code>: ?float, default <code>null</code>. Wall-clock ceiling per fetch. <code>null</code> adds no timeout.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Keys</h3>
+    <p>The default <code>KeyMap::new()</code> binds the following keys.</p>
+    <ul>
+      <li>Next: <code>Tab</code>, <code>↓</code></li>
+      <li>Prev: <code>Shift+Tab</code>, <code>Alt+Tab</code>, <code>↑</code></li>
+      <li>Submit: <code>Enter</code></li>
+      <li>Abort: <code>Esc</code>, <code>Ctrl+C</code></li>
+    </ul>
+    <p><code>MultiSelect</code> adds <code>j</code> and <code>k</code> for cursor movement and <code>Space</code> to toggle an option. <code>KeyMap::withNext()</code>, <code>withPrev()</code>, <code>withSubmit()</code> and <code>withAbort()</code> each replace one binding list, and <code>Form::withKeyMap()</code> installs the result. Passing <code>null</code> restores the defaults.</p>
+
+    <h3 style="margin-top: 32px;">Theming</h3>
+    <p>Seven presets are available as static factories on <code>Theme</code>: <code>ansi()</code> (the default), <code>plain()</code>, <code>charm()</code>, <code>dracula()</code>, <code>catppuccin()</code>, <code>base16()</code> and <code>base()</code>. <code>Theme::catalog()</code> returns their names. Apply one with <code>Form::withTheme()</code>:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Theme;
+
+$form = Form::new(Input::new('name')->withTitle('Your name?'))
+    -&gt;withTheme(Theme::dracula());</code></pre>
+
+    <h3 style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>.</p>
+    <ul>
+      <li><code>burger.php</code>: The canonical burger order form from the huh README, built from four fields: bun, patty, extras and a Confirm. Renders the first frame.</li>
+      <li><code>confirm.php</code>: The Confirm field in three states: default-no, default-yes and custom labels.</li>
+      <li><code>form.php</code>: A static render of one form made of an Input, a Select and a Confirm.</li>
+      <li><code>hide.php</code>: Conditional visibility through <code>withHideFunc()</code>.</li>
+      <li><code>input.php</code>: The Input field with a title, description and placeholder.</li>
+      <li><code>multi-page-form.php</code>: A multi-page form with conditional show and hide.</li>
+      <li><code>multi-select.php</code>: The MultiSelect field with min and max bounds.</li>
+      <li><code>no-color.php</code>: How a program reads <code>NO_COLOR</code> and <code>CLICOLOR</code> through sugar-core and renders to match.</li>
+      <li><code>select.php</code>: The single-choice Select field.</li>
+      <li><code>spinner.php</code>: A blocking <code>ActionSpinner</code> that runs a worker callable while it spins on STDERR.</li>
+      <li><code>text.php</code>: The multi-line Text field.</li>
+      <li><code>themes.php</code>: The same form rendered under five built-in themes.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-forms
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test touches the event loop, because the async-suggestion tests arm debounce and timeout timers on it. <code>sugar-testing</code> is a <code>require-dev</code> dependency, and <code>tests/GoldenRenderTest.php</code> uses its golden-file helpers.</p>
+
+    <!-- api-reference:generated -->
+
+    <h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 style="margin-top: 24px;"><code>values()</code> has no entry for a field</h3>
+    <p>A field is left out of <code>values()</code> when it, or the group it sits in, is hidden through <code>withHideFunc()</code>, and when it is a plain <code>Note</code>, which never contributes a value. A <code>Note</code> built with <code>withNext(true)</code> adds a <code>null</code> entry instead. <code>get()</code> returns its fallback for an absent key, so a default there can hide the omission. Check the field's visibility before reading the key.</p>
+
+    <h3 style="margin-top: 24px;">A boolean predicate goes to <code>withValidator()</code></h3>
+    <p><code>withValidator()</code> takes a closure that returns <code>null</code> to pass or an error string to block. A closure that returns <code>true</code> or <code>false</code> is not read as a predicate: its return value goes into the field's error slot, which holds only a string or <code>null</code>, so the validation pass that runs it throws a <code>TypeError</code>. For a true/false predicate use <code>withValidation()</code> on <code>Input</code> or <code>Text</code>, which passes on <code>true</code>.</p>
+
+    <h3 style="margin-top: 24px;">Pasted text is cut short, or newlines disappear</h3>
+    <p><code>TextInput</code> clips a paste or insert to the remaining <code>charLimit</code> budget, which defaults to 4096 characters. It also strips CR and LF at insert, because a single-line field cannot hold them. Raise the limit with <code>charLimit()</code>, or pass <code>0</code> to turn the bound off. For multi-line input use <code>Text</code>, which wraps a <code>TextArea</code> and counts newlines against its own budget. That budget defaults to 65536 characters, not 4096. <code>charLimit()</code> on <code>Text</code> changes it, and passing <code>0</code> turns it off.</p>
+
+    <h3 style="margin-top: 24px;">Suggestions never arrive, or a fetch fails after a timeout</h3>
+    <p>A fetch that breaches <code>$fetchTimeoutSeconds</code> surfaces as the fetcher failing. Results that arrive after a newer keystroke or after the field loses focus are discarded by design (the generation check from SF-52), so a slow fetch can look like no fetch at all. A zero, negative or non-finite timeout throws <code>\InvalidArgumentException</code> when the field is built, and so does a negative debounce. Leave <code>$workerPool</code> null: it is stored but never consulted.</p>
+
+    <h3 style="margin-top: 24px;"><code>NO_COLOR</code> or <code>TERM=dumb</code> still gets colored output</h3>
+    <p>The form does not read the environment itself. Turn accessible mode on from your own check, for example <code>withAccessible(getenv('NO_COLOR') !== false || getenv('TERM') === 'dumb')</code>. Accessible mode is a single-line plain-text view of the focused field, so the group titles and error summary disappear with the colors.</p>
+
+    <h3 style="margin-top: 24px;">Values read as empty after the program ends</h3>
+    <p><code>Form</code> is immutable, and the <code>run()</code> method of sugar-core's <code>Program</code> drives a copy and returns the final model. The <code>$form</code> you built before the run never holds the submitted values. Capture the return value and read it, and check <code>isSubmitted()</code> first, because an aborted form returns too.</p>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The engine ports <code>charmbracelet/huh</code>, and the primitives port <code>charmbracelet/bubbles</code>. Most class docblocks cite the upstream method they mirror, written as <code>Mirrors charmbracelet/...</code>.</p>
+    <ul>
+      <li><code>Form</code> (with <code>withTheme</code>, <code>withAccessible</code>, <code>withErrorSummary</code>): <code>huh.Form</code> with <code>WithTheme</code>, <code>WithAccessible</code>, <code>WithErrorSummary</code></li>
+      <li><code>Group</code>: <code>huh.Group</code></li>
+      <li><code>Theme</code>: <code>huh.Theme</code></li>
+      <li><code>Field\Note</code>: <code>huh.Note</code></li>
+      <li><code>Spinner\Spinner</code> and <code>Spinner\TickMsg</code>: <code>bubbles</code> spinner</li>
+      <li><code>TextArea\TextArea</code>: <code>bubbles</code> textarea</li>
+      <li><code>Viewport\Viewport</code>: <code>bubbles</code> viewport</li>
+      <li><code>Cursor\Cursor</code>: <code>bubbles</code> cursor</li>
+    </ul>
+
+    <h2 style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of <code>sugar-forms/</code> in the monorepo, which the <a href="https://github.com/sugarcraft/sugar-forms/commits/master">split mirror on GitHub</a> records. The API table above marks the deprecated accessors on <code>Form</code> and the <code>Fuzzy\FuzzyMatcher</code> shim. Every deprecation whose docblock reads <code>REMOVED-IN: 2.0.0</code> retires in 2.0.0. That covers the <code>getString()</code>, <code>getInt()</code>, <code>getBool()</code>, <code>getArray()</code> and <code>getFocusedField()</code> accessors on <code>Form</code>, the <code>getDescription()</code> and <code>getError()</code> accessors on <code>Field</code> and its subclasses, the <code>getWidth()</code> and <code>getHeight()</code> accessors on <code>Viewport</code>, and the legacy setters and accessors on <code>TextArea</code>, <code>TextInput</code>, <code>ItemList</code> and <code>FilePicker</code>. The <code>Fuzzy\FuzzyMatcher</code> shim, which delegates to sugar-fuzzy, has no removal version yet, so do not plan its removal for 2.0.0.</p>
   </div>
 </section>
 

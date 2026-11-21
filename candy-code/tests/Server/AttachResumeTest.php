@@ -5,8 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use Ratchet\RFC6455\Messaging\Frame;
 use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use React\Stream\CompositeStream;
+use React\Stream\ThroughStream;
+use function React\Promise\reject;
+use function React\Promise\resolve;
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Code\Cli\Attach;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Host\SessionEvent;
@@ -195,42 +203,86 @@ final class AttachResumeTest extends TestCase
         self::assertSame('user walked away', $host->closeReason());
     }
 
-    public function testARedialThatThrowsEndsTheAttachmentInsteadOfUnwindingTheLoop(): void
+    public function testARedialThatThrowsCountsAsAFailedAttemptInsteadOfUnwindingTheLoop(): void
     {
-        // S-O04: the backoff timer runs the redial from the Loop. A redial that
-        // THROWS (a dialer that faults before it can return a promise) must end
-        // the attachment with a verdict, not escape into Loop::run().
-        $queue = [];
+        // S-O04: the redial runs from a Loop timer. A dialer that THROWS before it
+        // can return a promise must not escape into Loop::run(); it is a failed
+        // attempt like any refused dial, so the ladder redials it.
         $server = $this->server();
-        $socket = $this->fixture->await(Attach::stream('ws://127.0.0.1:' . $server->port() . '/ws', self::LADDER_TOKEN));
-        self::assertIsArray($socket, $socket instanceof \Throwable ? $socket->getMessage() : 'no handshake');
-        $host = RemoteSessionHost::overStream(
-            $socket[0],
-            RemoteSessionHost::CLIENT_NAME,
-            $socket[1],
-            static function (): never {
-                throw new \RuntimeException('redial exploded');
-            },
-            static function (float $seconds, \Closure $run) use (&$queue): void {
-                $queue[] = $run;
-            },
-        );
-        $this->hosts[] = $host;
-        $opened = $this->fixture->await($host->hello()->then(static fn (): PromiseInterface => $host->open()));
-        self::assertNotInstanceOf(\Throwable::class, $opened, $opened instanceof \Throwable ? $opened->getMessage() : '');
+        $dials = 0;
+        $host = $this->detached($server, static function () use (&$dials): never {
+            $dials++;
+            throw new \RuntimeException('redial exploded');
+        });
         $closes = [];
         $host->onClose(static function (string $reason) use (&$closes): void {
             $closes[] = $reason;
         });
 
         $server->stop();
-        $this->fixture->run(0.05);
-        self::assertCount(1, $queue, 'the drop queued the first redial');
+        self::assertTrue($this->pumpUntil(function () use (&$dials): bool {
+            return $dials >= 2;
+        }), 'a throw did not end the ladder');
+        self::assertSame([], $closes, 'one throw is one failed attempt, not a verdict');
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the throws ran out the budget');
+        self::assertCount(1, $closes, 'the exhausted ladder ends the attachment with one verdict');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
 
-        $queue[0]();
+    public function testTheRedialBudgetRunsOutAfterExactlyTheReconnectAttempts(): void
+    {
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, static function () use (&$dials): PromiseInterface {
+            $dials++;
 
-        self::assertCount(1, $closes, 'the throw ended the attachment with one verdict');
-        self::assertStringContainsString('redial exploded', $closes[0]);
+            return reject(new \RuntimeException('refused'));
+        });
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the refused redials ran out the budget');
+        $this->fixture->run(0.1);
+
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'each failed redial spent one attempt, and no attempt beyond the budget was made');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertSame($closes, [$host->closeReason()]);
+        self::assertFalse($host->isOpen());
+    }
+
+    public function testCancellingTheLadderStopsTheRetries(): void
+    {
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, static function () use (&$dials): PromiseInterface {
+            $dials++;
+
+            return reject(new \RuntimeException('refused'));
+        });
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$dials): bool {
+            return $dials >= 2;
+        }), 'the ladder is redialing');
+        $host->close('user walked away');
+        $atClose = $dials;
+        $this->fixture->run(0.2);
+
+        self::assertSame($atClose, $dials, 'no redial is made once the close cancelled the ladder');
+        self::assertSame(['user walked away'], $closes, 'the deliberate close is the one verdict');
         self::assertFalse($host->isOpen());
     }
 
@@ -281,6 +333,82 @@ final class AttachResumeTest extends TestCase
         self::assertFalse($host->isOpen());
     }
 
+    public function testAResumeHelloTheServerAnswersWithAnErrorCountsAsAnAttempt(): void
+    {
+        // The hello's own failure is the attempt's failure: the ladder redials
+        // it until the budget is spent, and only then ends the attachment.
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, $this->brokenRedials('answer-with-error', $dials));
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the refused resume hellos ran out the budget');
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'each failed resume hello spent one attempt');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
+
+    public function testASocketThatDiesMidResumeHelloCountsAsAnAttempt(): void
+    {
+        // A socket dying while its hello is pending rejects that hello, and the
+        // rejection is the attempt's one failure, so the ladder keeps redialing.
+        $server = $this->server();
+        $dials = 0;
+        $host = $this->detached($server, $this->brokenRedials('die-mid-hello', $dials));
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        self::assertTrue($this->pumpUntil(function () use (&$closes): bool {
+            return $closes !== [];
+        }), 'the dying hellos ran out the budget');
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'each hello lost to a dead socket spent one attempt');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
+
+    /**
+     * A redial whose sockets never answer a resume hello cleanly. "answer-with-error"
+     * replies to the hello with a top-level JSON-RPC error; "die-mid-hello" closes
+     * the socket before any reply. Both cost the ladder one attempt each.
+     */
+    private function brokenRedials(string $mode, int &$dials): \Closure
+    {
+        return function () use ($mode, &$dials): PromiseInterface {
+            $dials++;
+            $in = new ThroughStream();
+            $out = new ThroughStream();
+            $out->on('data', static function (string $bytes) use ($in, $mode): void {
+                if ($mode === 'die-mid-hello') {
+                    Loop::get()->futureTick(static function () use ($in): void {
+                        $in->close();
+                    });
+
+                    return;
+                }
+                $frame = new Frame();
+                $frame->addBuffer($bytes);
+                $request = \json_decode($frame->getPayload(), true, 512, \JSON_THROW_ON_ERROR);
+                $reply = ['jsonrpc' => '2.0', 'id' => $request['id'], 'error' => ['code' => -32000, 'message' => 'resume refused']];
+                Loop::get()->futureTick(static function () use ($in, $reply): void {
+                    $in->emit('data', [(new Frame(\json_encode($reply, \JSON_THROW_ON_ERROR), true, Frame::OP_TEXT))->getContents()]);
+                });
+            });
+
+            return resolve([new CompositeStream($in, $out), '']);
+        };
+    }
+
     /** @param list<array<string, mixed>> $received */
     private function countType(array $received, string $type): int
     {
@@ -308,6 +436,42 @@ final class AttachResumeTest extends TestCase
         return $server;
     }
 
+    /** The production ladder's shape with millisecond rungs, so a budget spends in milliseconds. */
+    private static function fastLadder(): Backoff
+    {
+        return Backoff::new(5.0, 1.0)->withAttempts(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS);
+    }
+
+    /**
+     * An attachment over a socket of its own, whose redial is $reopen: the
+     * first wait is a fast loop timer and the rungs come from fastLadder().
+     *
+     * @param \Closure(): PromiseInterface $reopen
+     */
+    private function detached(Server $server, \Closure $reopen): RemoteSessionHost
+    {
+        $socket = $this->fixture->await(Attach::stream('ws://127.0.0.1:' . $server->port() . '/ws', self::LADDER_TOKEN));
+        self::assertIsArray($socket, $socket instanceof \Throwable ? $socket->getMessage() : 'no handshake');
+        $host = RemoteSessionHost::overStream(
+            $socket[0],
+            RemoteSessionHost::CLIENT_NAME,
+            $socket[1],
+            $reopen,
+            static function (float $seconds, \Closure $run): void {
+                Loop::addTimer(self::FAST_AFTER, static function () use ($run): void {
+                    $run();
+                });
+            },
+            self::fastLadder(),
+        );
+        $this->hosts[] = $host;
+        $opened = $this->fixture->await($host->hello()->then(static fn (): PromiseInterface => $host->open()));
+        self::assertNotInstanceOf(\Throwable::class, $opened, $opened instanceof \Throwable ? $opened->getMessage() : '');
+        $this->fixture->run(0.05);
+
+        return $host;
+    }
+
     private function attached(Server $server, ?\Closure $after = null): RemoteSessionHost
     {
         $after ??= static function (float $seconds, \Closure $run): void {
@@ -320,12 +484,42 @@ final class AttachResumeTest extends TestCase
             self::LADDER_TOKEN,
             null,
             $after,
+            self::fastLadder(),
         )->then(static fn (RemoteSessionHost $host): PromiseInterface => $host->hello()->then(static fn (): PromiseInterface => $host->open())));
         self::assertInstanceOf(RemoteSessionHost::class, $host, $host instanceof \Throwable ? $host->getMessage() : 'no answer');
         $this->hosts[] = $host;
         $this->fixture->run(0.05);
 
         return $host;
+    }
+
+    /**
+     * The connect wait now rides Await::until. It must still hand back the
+     * value, hand a rejection back as a value (even a TimeoutException, which
+     * is a session outcome, not the wait's own budget), and give up as null
+     * once the budget elapses.
+     */
+    public function testTheConnectWaitKeepsItsBudgetAndHandsBackEveryOtherOutcome(): void
+    {
+        $await = new \ReflectionMethod(Attach::class, 'await');
+
+        $resolved = new Deferred();
+        $resolved->resolve('session');
+        self::assertSame('session', $await->invoke(null, $resolved->promise(), 1.0));
+
+        $refusal = new \RuntimeException('refused');
+        $refused = new Deferred();
+        $refused->reject($refusal);
+        self::assertSame($refusal, $await->invoke(null, $refused->promise(), 1.0));
+
+        $inner = new TimeoutException('the server never answered', seconds: 1.0);
+        $timedOutInside = new Deferred();
+        $timedOutInside->reject($inner);
+        self::assertSame($inner, $await->invoke(null, $timedOutInside->promise(), 1.0));
+
+        $started = \microtime(true);
+        self::assertNull($await->invoke(null, (new Deferred())->promise(), 0.05));
+        self::assertLessThan(5.0, \microtime(true) - $started, 'the budget bounds the wait');
     }
 
     private function pumpUntil(\Closure $condition, float $timeout = 10.0): bool

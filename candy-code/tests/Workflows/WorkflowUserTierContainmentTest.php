@@ -91,7 +91,7 @@ final class WorkflowUserTierContainmentTest extends TestCase
      *
      * Closed by the directory anchor alone. The per-entry check cannot see this
      * shape at all, which is why deleting `readableUserDir()`'s
-     * `ContainedPath::below()` reddens this test and not the entry one.
+     * `\SugarCraft\Core\Util\PathJail::below()` reddens this test and not the entry one.
      */
     public function testALinkedUserWorkflowsDirectoryDoesNotGetItsPhpRequired(): void
     {

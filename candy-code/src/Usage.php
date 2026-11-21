@@ -367,7 +367,7 @@ final readonly class Usage
     /**
      * {@see $totalTokens} without the share delegated runs billed into it —
      * the tokens THIS conversation's own provider calls counted. What a reader
-     * that treats the total as a conversation size must use (audit B4-rem).
+     * that treats the total as a conversation size must use.
      */
     public function ownTokens(): int
     {

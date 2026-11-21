@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Server\Workspace\ConnectionTarget;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Server\Workspace\WorkspaceHostProcess;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
@@ -178,7 +179,7 @@ final class WorkspaceHostTest extends TestCase
         $sessionRoots = $roots->getValue($this->gateway);
         $subscribers = $subs->getValue($this->gateway);
         $sessionRoots[$plantId] = $this->other;
-        $subscribers[$plantId] = [$client->connection->id() => $client->connection];
+        $subscribers[$plantId] = [$client->connection->id() => new ConnectionTarget($client->connection, $this->fixture->dispatcher)];
         $roots->setValue($this->gateway, $sessionRoots);
         $subs->setValue($this->gateway, $subscribers);
 

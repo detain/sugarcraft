@@ -307,6 +307,30 @@ final class SymbolMap
     private ?array $sortedWideDefs = null;
 
     /**
+     * Per-map memo of {@see findCandidates()} answers, keyed on
+     * (bitmap, allowInverse, limit). The walk is a pure function of the
+     * corpus, which is readonly here, so an answer never goes stale; the
+     * constructor paths all build a new instance, so nothing carries over
+     * between corpora. Bounded by {@see CANDIDATE_MEMO_MAX}.
+     *
+     * @var array<string, list<array{0:SymbolDef, 1:bool}>>
+     */
+    private array $candidateMemo = [];
+
+    /**
+     * Blank-cell answers ({@see findCandidates()} with bitmap 0), kept in a
+     * slot of their own: a blank cell is the most common query on a frame
+     * with empty space, and it must not compete with the bounded memo for
+     * room or be evicted by a run of distinct glyph bitmaps.
+     *
+     * @var array<string, list<array{0:SymbolDef, 1:bool}>>
+     */
+    private array $blankCandidateMemo = [];
+
+    /** Growth ceiling for {@see $candidateMemo}; past it the walk runs unmemoised. */
+    private const CANDIDATE_MEMO_MAX = 4096;
+
+    /**
      * @param list<SymbolDef> $defs  the corpus in build order
      * @param bool $latin whether the opt-in LATIN tier is appended
      *                    (see {@see withLatin()})
@@ -1072,9 +1096,48 @@ final class SymbolMap
      * also chafa's own shape; the engine wins for this finding live in
      * coverageOf()'s memo and the renderer's banded sampling.
      *
+     * The answer is memoised per (bitmap, allowInverse, limit): the renderer asks
+     * the same glyph bitmaps once per scored cell per frame, and a blank cell
+     * (bitmap 0) answers from its own slot without touching the bounded memo.
+     *
      * @return list<array{0:SymbolDef, 1:bool}> sorted ascending by distance
+     *
+     * @throws \InvalidArgumentException on a limit below 1
      */
     public function findCandidates(int $bitmap, bool $allowInverse, int $limit): array
+    {
+        if ($limit < 1) {
+            throw new \InvalidArgumentException('candidate limit must be >= 1, got ' . $limit);
+        }
+
+        $key   = $bitmap . ($allowInverse ? '|i|' : '|n|') . $limit;
+        $blank = $bitmap === 0;
+
+        if ($blank) {
+            if (isset($this->blankCandidateMemo[$key])) {
+                return $this->blankCandidateMemo[$key];
+            }
+            return $this->blankCandidateMemo[$key] = $this->scanCandidates(0, $allowInverse, $limit);
+        }
+
+        if (isset($this->candidateMemo[$key])) {
+            return $this->candidateMemo[$key];
+        }
+
+        $out = $this->scanCandidates($bitmap, $allowInverse, $limit);
+        if (count($this->candidateMemo) < self::CANDIDATE_MEMO_MAX) {
+            $this->candidateMemo[$key] = $out;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The uncached Hamming walk behind {@see findCandidates()}.
+     *
+     * @return list<array{0:SymbolDef, 1:bool}>
+     */
+    private function scanCandidates(int $bitmap, bool $allowInverse, int $limit): array
     {
         // 8 slots seeded {index 0, hd 65, inverted false} exactly as chafa does.
         $cand = array_fill(0, 8, [0, 65, false]);
@@ -1098,10 +1161,6 @@ final class SymbolMap
                 break;
             }
             $valid++;
-        }
-
-        if ($limit < 1) {
-            throw new \InvalidArgumentException('candidate limit must be >= 1, got ' . $limit);
         }
 
         $out = [];

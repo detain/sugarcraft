@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol;
 
+use SugarCraft\McpClient\Protocol\ErrorCode as LibErrorCode;
+use SugarCraft\McpClient\Protocol\RpcError as LibRpcError;
+use SugarCraft\Plugins\Host\RefusedCall;
+
 /**
  * A `candy-code.v1` method's refusal: thrown by a method, answered by the
  * {@see Dispatcher} as a JSON-RPC error object whose `data.kind` is the
  * machine-readable reason (Appendix O §6.2). Nothing a client sent is echoed
  * in the message; `data` carries only what the method chose to put there.
  */
-final class RpcError extends \RuntimeException
+final class RpcError extends \RuntimeException implements RefusedCall
 {
     /**
      * @param array<string, mixed> $data extra `data` fields beside `kind`
@@ -40,6 +44,30 @@ final class RpcError extends \RuntimeException
     public static function notFound(string $message, string $kind = 'not_found'): self
     {
         return self::of(ErrorCode::NotFound, $message, $kind);
+    }
+
+    public function refusalKind(): string
+    {
+        return $this->kind;
+    }
+
+    /**
+     * The wire's `data` object: the same fields a JSON-RPC client decodes.
+     *
+     * @return array<string, mixed>
+     */
+    public function refusalData(): array
+    {
+        return $this->toArray()['data'];
+    }
+
+    /**
+     * This refusal as the library codec's RpcError, for the wire: the same code, message,
+     * kind and data, so the frame it builds is the frame this copy builds.
+     */
+    public function toLibrary(): LibRpcError
+    {
+        return LibRpcError::of(LibErrorCode::from($this->errorCode->value), $this->getMessage(), $this->kind, $this->data);
     }
 
     /**

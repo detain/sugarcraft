@@ -8,7 +8,7 @@ use SugarCraft\Code\Usage;
 
 /**
  * The append-only spend file one concurrent tool group shares, so that runs
- * forked side by side can see what each other has billed (audit B4-rem).
+ * forked side by side can see what each other has billed.
  *
  * WHY A FILE. {@see \SugarCraft\Code\Runtime::executeConcurrently()} forks one
  * child per call, and a delegated Task run lives entirely inside its child: the

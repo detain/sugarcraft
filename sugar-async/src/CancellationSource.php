@@ -40,7 +40,7 @@ final class CancellationSource implements Cancellable
 
     /**
      * The state lives in the token (single source of truth): a cancellation
-     * raised through the token's @internal paths is visible here too, so the
+     * raised through the token's internal paths is visible here too, so the
      * source and its token can never disagree on isCancelled().
      */
     public function isCancelled(): bool

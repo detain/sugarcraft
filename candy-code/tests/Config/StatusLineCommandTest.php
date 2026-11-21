@@ -1098,8 +1098,9 @@ final class StatusLineCommandTest extends TestCase
      * with NO hook-style stamp, because there is nothing to explain to a
      * one-row readout, and its second element says KILL, which is what routes
      * {@see StatusLineCommand::run()} off the read-to-EOF path that used to
-     * freeze the TUI thread. The hook answers the same shape with a marker and
-     * a false — see `ScriptHookJsonStdoutTest::testTheSharedWalkerStillTrimsEachStreamSeparately()`.
+     * freeze the TUI thread. The hook, on ChildRun now, answers the same shape
+     * with a marker and no timeout — see
+     * `ScriptHookJsonStdoutTest::testTheChildRunCeilingStillTrimsEachStreamSeparately()`.
      */
     public function testTheDrainStopsAtTheCapAndReportsItForTheKillPath(): void
     {

@@ -548,10 +548,18 @@ final class SkillPathScopingWiringTest extends TestCase
             // the literal branch is not dead weight: a tool that deliberately
             // spends a different share writes the number, and the guards below
             // must still cover it.
+            //
+            // THE CAP IS EITHER A PROPERTY OR A LOCAL THAT NAMES ONE. Glob now
+            // budgets through `$budgetCap`, a local holding its cap or, for a
+            // non-positive one, the 8 MiB capture ceiling (owner ruling A,
+            // 2026-11-20: no output bound in the tool layer is unbounded). The
+            // local is read back to its assignment by {@see capBehindLocal()}
+            // rather than accepted on sight, so the budget below is still the
+            // one the tool computes.
             self::assertSame(
                 1,
                 preg_match(
-                    '/intdiv\(\$this->(\w+),\s*(?:(\d+)|SkillPathNudge::CALLER_BUDGET_DIVISOR)\s*\)/',
+                    '/intdiv\(\$(?:this->(?<property>\w+)|(?<local>\w+)),\s*(?:(?<literal>\d+)|SkillPathNudge::CALLER_BUDGET_DIVISOR)\s*\)/',
                     $budgetSource,
                     $captured,
                 ),
@@ -566,14 +574,20 @@ final class SkillPathScopingWiringTest extends TestCase
                 ),
             );
 
-            $capProperty = new \ReflectionProperty($tool, $captured[1]);
+            $fallback = null;
+            $property = $captured['property'];
+            if ($property === '') {
+                [$property, $fallback] = self::capBehindLocal((string) file_get_contents($file), $captured['local'], $class);
+            }
+
+            $capProperty = new \ReflectionProperty($tool, $property);
             $capProperty->setAccessible(true);
             $cap = $capProperty->getValue($tool);
-            self::assertIsInt($cap, $short . '::$' . $captured[1] . ' is not an int cap');
+            self::assertIsInt($cap, $short . '::$' . $property . ' is not an int cap');
 
-            $wroteALiteral = ($captured[2] ?? '') !== '';
+            $wroteALiteral = ($captured['literal'] ?? '') !== '';
             $divisor = $wroteALiteral
-                ? (int) $captured[2]
+                ? (int) $captured['literal']
                 : SkillPathNudge::CALLER_BUDGET_DIVISOR;
             self::assertGreaterThan(0, $divisor);
 
@@ -591,9 +605,11 @@ final class SkillPathScopingWiringTest extends TestCase
                 // only thing that distinguishes "on the dial" from "agrees
                 // with the dial today".
                 'divisorSource' => $wroteALiteral
-                    ? $captured[2]
+                    ? $captured['literal']
                     : 'SkillPathNudge::CALLER_BUDGET_DIVISOR',
-                'budget' => $cap > 0 ? intdiv($cap, $divisor) : PHP_INT_MAX,
+                'budget' => $cap > 0
+                    ? intdiv($cap, $divisor)
+                    : ($fallback !== null ? intdiv($fallback, $divisor) : PHP_INT_MAX),
             ];
         }
 
@@ -601,6 +617,51 @@ final class SkillPathScopingWiringTest extends TestCase
         sort($unbudgeted);
 
         return ['spend' => $spend, 'unbudgeted' => $unbudgeted];
+    }
+
+    /**
+     * The property a budget local stands for, and the cap it takes when that
+     * property is not positive: read from the local's one assignment, which
+     * must have the shape `$local = $this->cap > 0 ? $this->cap : Class::CONST;`.
+     * Any other shape fails here naming the local, for the reason the roster
+     * fails on an unreadable budget — a tool this cannot read is a tool the
+     * ceiling guards would stop covering.
+     *
+     * @param \ReflectionClass<object> $class
+     *
+     * @return array{0: string, 1: int}
+     */
+    private static function capBehindLocal(string $source, string $local, \ReflectionClass $class): array
+    {
+        self::assertSame(
+            1,
+            preg_match_all(
+                '/\$' . preg_quote($local, '/') . '\s*=\s*\$this->(\w+)\s*>\s*0\s*\?\s*\$this->\1\s*:\s*([A-Za-z_\\\\][\w\\\\]*)::([A-Z][A-Z0-9_]*)\s*;/',
+                $source,
+                $assigned,
+                PREG_SET_ORDER,
+            ),
+            sprintf(
+                '%s budgets its nudge through $%s, which is not assigned exactly once as '
+                . '`$%s = $this->cap > 0 ? $this->cap : Class::CONST;` — teach capBehindLocal() the new shape',
+                $class->getShortName(),
+                $local,
+                $local,
+            ),
+        );
+        [, $property, $owner, $constant] = $assigned[0];
+
+        $fqcn = ltrim($owner, '\\');
+        if (!str_contains($owner, '\\')) {
+            $fqcn = preg_match('/^use\s+([\w\\\\]+\\\\' . preg_quote($owner, '/') . ')\s*;/m', $source, $imported) === 1
+                ? $imported[1]
+                : $class->getNamespaceName() . '\\' . $owner;
+        }
+        $fallback = (new \ReflectionClassConstant($fqcn, $constant))->getValue();
+        self::assertIsInt($fallback, $fqcn . '::' . $constant . ' is not an int cap');
+        self::assertGreaterThan(0, $fallback, $fqcn . '::' . $constant . ' is not a positive cap');
+
+        return [$property, $fallback];
     }
 
     /**

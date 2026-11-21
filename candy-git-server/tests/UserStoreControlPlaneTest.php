@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\UserStore;
 use SugarCraft\GitServer\User;
+use SugarCraft\GitServer\Tests\Support\ShortWriteFileStream;
 
 /**
  * Control-plane persistence pins .
@@ -127,13 +128,95 @@ final class UserStoreControlPlaneTest extends TestCase
         foreach (['fwrite', 'fflush', 'fsync', 'fclose', 'rename'] as $i => $step) {
             $this->assertIsInt(
                 [$write, $flush, $sync, $close, $rename][$i],
-                "save() must contain the {$step} step of the durable publish chain"
+                "publish() must contain the {$step} step of the durable publish chain"
             );
         }
         $this->assertLessThan((int) $flush, (int) $write, 'payload lands before the flush');
         $this->assertLessThan((int) $sync, (int) $flush, 'flush precedes the settle');
         $this->assertLessThan((int) $close, (int) $sync, 'the settle happens on the open handle');
         $this->assertLessThan((int) $rename, (int) $close, 'nothing is still in flight when the name flips');
+    }
+
+    public function testSettleFailureIsFatalAndUnsuppressed(): void
+    {
+        // The fsync result must abort the publish. Pinned structurally for the
+        // same reason as the ordering test: a functional save cannot make fsync
+        // fail. A silent variant (no throw, or an @-suppressed call as in
+        // AtomicTextFile) must turn this red.
+        $reflection = new \ReflectionMethod(UserStore::class, 'publish');
+        $lines = \file((string) $reflection->getFileName());
+        $body = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine() - 1,
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1
+        ));
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/@\s*\\\\?fsync\s*\(/',
+            $body,
+            'the settle call must not be error-suppressed'
+        );
+        $this->assertMatchesRegularExpression(
+            '/\\\\?fsync\(\$handle\)\s*===\s*false\s*\)\s*\{\s*throw\s+new\s+\\\\?RuntimeException\(/',
+            $body,
+            'a failed fsync must throw, not fall through to the rename'
+        );
+    }
+
+    public function testShortPayloadWriteIsFatalBeforeTheFsyncAndRename(): void
+    {
+        // fwrite() on a plain file returns the byte count it landed, so a
+        // disk-full partial write is not false. Only a count-vs-strlen
+        // comparison stops a truncated users.json from being fsynced and
+        // renamed over the last good store. Pinned structurally: a short
+        // write cannot be forced through a plain-path fopen in a test.
+        $reflection = new \ReflectionMethod(UserStore::class, 'publish');
+        $lines = \file((string) $reflection->getFileName());
+        $body = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine() - 1,
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1
+        ));
+
+        $this->assertMatchesRegularExpression(
+            '/\$written\s*===\s*false\s*\|\|\s*\$written\s*!==\s*\\\\?strlen\(\$payload\)/',
+            $body,
+            'a short fwrite must throw before the flush, fsync and rename'
+        );
+        $this->assertLessThan(
+            (int) \strpos($body, 'fsync('),
+            (int) \strpos($body, '$written !=='),
+            'the short-write check must precede the settle'
+        );
+    }
+
+    public function testFailedTempWriteLeavesNoResidueAndKeepsTheLastGoodStore(): void
+    {
+        // Behavioral twin of the structural pin above: a real short write to
+        // the temp file must throw, unlink that temp (it holds bcrypt hashes
+        // and keys at 0600), and leave the previously published store intact.
+        // The good store is seeded on a plain path because fsync() refuses
+        // user-wrapper streams, so only the armed publish runs through the seam.
+        $path = $this->tmpDir . '/users.json';
+        $seed = new UserStore($path);
+        $seed->add(User::new('alice'));
+        $seed->save();
+
+        ShortWriteFileStream::register();
+        $store = new UserStore(ShortWriteFileStream::SCHEME . '://' . $path);
+        $store->add(User::new('bob'));
+        ShortWriteFileStream::armNextTempWrite();
+        try {
+            $store->save();
+            $this->fail('a short payload write must refuse the publish');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('cannot write user store payload', $e->getMessage());
+        }
+
+        $this->assertSame([], \glob($this->tmpDir . '/users.json.*.tmp') ?: [], 'a failed publish must not strand the temp file');
+        $reread = new UserStore($path);
+        $this->assertNotNull($reread->find('alice'), 'the last good store must survive a failed publish');
+        $this->assertNull($reread->find('bob'), 'a truncated payload must never be renamed over the store');
     }
 
     public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void

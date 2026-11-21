@@ -155,12 +155,33 @@ final class ToolDescriptionGuidanceTest extends TestCase
         $this->assertStringNotContainsString('65,536', (new Bash(maxOutputBytes: 4096))->description());
     }
 
-    /** A caller that disabled the cap must not advertise one. */
-    public function testBashDescriptionAdvertisesNoCapWhenTheCapIsDisabled(): void
+    /**
+     * Restated pin for mainline's zero-cap test (eaa775ef8), which asserted a
+     * disabled cap is advertised as "no size cap". Owner ruling A (2026-11-20):
+     * a zero or negative bound takes the 8 MiB per-stream default, so the
+     * description must state that ceiling and never the no-cap wording.
+     */
+    public function testBashDescriptionStatesTheCeilingWhenTheCapIsZero(): void
     {
         $description = (new Bash(maxOutputBytes: 0))->description();
 
-        $this->assertStringContainsString('no size cap on this instance', $description);
+        $this->assertStringContainsString('each stream is retained up to 8,388,608 bytes (8 MiB)', $description);
+        $this->assertStringNotContainsString('no size cap', $description);
+        $this->assertStringNotContainsString('clipped at', $description);
+    }
+
+    /**
+     * A caller that set a zero cap must not advertise an unbounded result: a
+     * zero cap takes the 8 MiB ceiling, capture stops each stream there, and
+     * the model has to be told that overflow makes the answer PARTIAL.
+     */
+    public function testBashDescriptionNamesTheCaptureCeilingWhenTheCapIsDisabled(): void
+    {
+        $description = (new Bash(maxOutputBytes: 0))->description();
+
+        $this->assertStringContainsString('each stream is retained up to 8,388,608 bytes (8 MiB)', $description);
+        $this->assertStringContainsString('dropped with a PARTIAL marker', $description);
+        $this->assertStringNotContainsString('no size cap', $description);
         $this->assertStringNotContainsString('clipped at', $description);
     }
 

@@ -10,7 +10,7 @@ use SugarCraft\Code\Session;
 
 /**
  * The tick {@see \SugarCraft\Code\Session\DebouncedTranscriptWriter::schedule()} arms: when it
- * lands, {@see Chat} writes the newest pending transcript snapshot (audit R2).
+ * lands, {@see Chat} writes the newest pending transcript snapshot.
  *
  * Payload-free: the snapshot lives on the shared writer, so whichever Chat is
  * on screen when the tick arrives writes the LATEST history, not the one that

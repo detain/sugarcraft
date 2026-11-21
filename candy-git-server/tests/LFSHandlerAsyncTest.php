@@ -301,7 +301,7 @@ final class LFSHandlerAsyncTest extends TestCase
      * $concurrentTransfers, per-object storage calls happen once per
      * object and in input order (the pool never reorders or duplicates
      * work). The bound itself is proven with overlapping promise tasks
-     * in PromisePoolTest::testBoundedConcurrencyRespected — LFS object
+     * in SemaphoreTest::testMapBoundsInFlightWorkToTheLimit — LFS object
      * inspection is synchronous file I/O inside its tick, so backend
      * calls can never overlap by construction.
      */
@@ -352,5 +352,135 @@ final class LFSHandlerAsyncTest extends TestCase
 
         $this->assertSame($oids, $backend->calls);
         $this->assertSame($oids, \array_column($result['objects'], 'oid'));
+    }
+
+    /**
+     * Seven objects through a window of three: the batch refills the window as
+     * each object settles, and the results must still land at their original
+     * positions, identical to the sequential path.
+     */
+    public function testAsyncBatchKeepsInputOrderAcrossWindowRefills(): void
+    {
+        $repo = $this->createRepo();
+        $lfsDir = $this->tmpDir . '/lfs';
+        $backend = new LocalStorageBackend($lfsDir);
+        foreach ([1, 3, 5] as $i) {
+            $stream = \fopen('data://text/plain;base64,' . \base64_encode("Content {$i}"), 'r');
+            $backend->write(\str_repeat((string) $i, 64), $stream);
+            \fclose($stream);
+        }
+
+        $handler = new LFSHandler($repo, User::new('alice'), $lfsDir, $backend, 3, publicBaseUrl: '');
+        $request = [
+            'operation' => 'download',
+            'objects' => \array_map(
+                static fn (int $n): array => ['oid' => \str_repeat((string) $n, 64), 'size' => 9],
+                [1, 2, 3, 4, 5, 6, 7],
+            ),
+        ];
+
+        $async = $this->awaitBatch($handler, $request);
+
+        $this->assertSame($handler->handleBatch($request), $async);
+        $this->assertSame(
+            \array_map(static fn (int $n): string => \str_repeat((string) $n, 64), [1, 2, 3, 4, 5, 6, 7]),
+            \array_column($async['objects'], 'oid'),
+        );
+    }
+
+    /**
+     * Cancelling the async batch rejects it with the sugar-async cancellation
+     * type and starts no object: nothing has run yet when the cancel lands, so
+     * the storage backend must see no call at all.
+     */
+    public function testCancellingAnAsyncBatchRejectsAndStartsNoObject(): void
+    {
+        $repo = $this->createRepo();
+        $backend = new class implements LFSStorageBackendInterface {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function exists(string $oid): bool
+            {
+                $this->calls[] = $oid;
+
+                return false;
+            }
+
+            public function size(string $oid): int
+            {
+                return 0;
+            }
+
+            public function read(string $oid)
+            {
+                throw new \RuntimeException('unused');
+            }
+
+            public function write(string $oid, $stream): void
+            {
+            }
+
+            public function delete(string $oid): void
+            {
+            }
+
+            public function path(string $oid): ?string
+            {
+                return null;
+            }
+        };
+
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 1, publicBaseUrl: '');
+        $loop = new StreamSelectLoop();
+        $promise = $handler->handleBatchAsync([
+            'operation' => 'download',
+            'objects' => \array_map(
+                static fn (int $n): array => ['oid' => \str_repeat((string) $n, 64), 'size' => 1],
+                [1, 2, 3],
+            ),
+        ], $loop);
+
+        $error = null;
+        $promise->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $promise->cancel();
+        $loop->run();
+
+        $this->assertInstanceOf(\SugarCraft\Async\OperationCancelledException::class, $error);
+        $this->assertSame([], $backend->calls, 'a cancelled batch must not start any object');
+    }
+
+    /**
+     * A concurrency limit of 0 is clamped to 1 by handleBatchAsync(), so the
+     * batch still resolves in full rather than the pool throwing synchronously
+     * on a zero-permit Semaphore. Pins the clamp at the LFS level: removing it
+     * makes this test fail with an InvalidArgumentException.
+     */
+    public function testZeroConcurrentTransfersIsClampedAndStillResolvesTheBatch(): void
+    {
+        $repo = $this->createRepo();
+        $lfsDir = $this->tmpDir . '/lfs';
+        $backend = new LocalStorageBackend($lfsDir);
+        $stream = \fopen('data://text/plain;base64,' . \base64_encode('Content'), 'r');
+        $backend->write(\str_repeat('a', 64), $stream);
+        \fclose($stream);
+
+        $handler = (new LFSHandler($repo, User::new('alice'), $lfsDir, $backend, 4, publicBaseUrl: ''))
+            ->withConcurrentTransfers(0);
+        $request = [
+            'operation' => 'download',
+            'objects' => [
+                ['oid' => \str_repeat('a', 64), 'size' => 7],
+                ['oid' => \str_repeat('b', 64), 'size' => 7],
+            ],
+        ];
+
+        $async = $this->awaitBatch($handler, $request);
+
+        $this->assertSame(0, $handler->concurrentTransfers());
+        $this->assertSame($handler->handleBatch($request), $async);
+        $this->assertCount(2, $async['objects']);
     }
 }

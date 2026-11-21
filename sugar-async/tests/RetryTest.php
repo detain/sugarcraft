@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use SugarCraft\Async\Backoff;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\Retry;
 use function React\Promise\reject;
@@ -373,5 +374,28 @@ final class RetryTest extends TestCase
         $p = Retry::reconnect(fn () => $d->promise(), Backoff::new(1), null, Loop::get());
         $p->cancel();
         $this->assertTrue($cancelled);
+    }
+
+    /**
+     * Cancelling the reconnect promise must drop the token registration it made. The
+     * registration otherwise stays on the token until that token fires, however long
+     * the caller keeps it.
+     */
+    public function testACancelledReconnectPromiseRemovesItsTokenRegistration(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+        $registrations = new \ReflectionProperty(CancellationToken::class, 'callbacks');
+
+        $d = new Deferred();
+        $p = Retry::reconnect(fn () => $d->promise(), Backoff::new(1), $token, Loop::get());
+        $p->then(null, static function (): void {
+        });
+        $this->assertCount(1, $registrations->getValue($token), 'the reconnect holds one registration while it runs');
+
+        $p->cancel();
+
+        $this->assertCount(0, $registrations->getValue($token), 'a cancelled reconnect must leave the token');
+        $this->assertFalse($source->isCancelled(), 'the cancel came from the promise, not the token');
     }
 }

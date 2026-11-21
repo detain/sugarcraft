@@ -230,7 +230,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // BOTH (PL-2a review, classification reversed from USER). Its gate is
         // bundlesProjectRoot(): a symlinked `.candy-code` or bundle root is
         // refused with a line, and manifest names are regex-validated before
-        // any path is built. The write is not ContainedPath-gated because this
+        // any path is built. The write is not sugar-core PathJail-gated because this
         // holder is not in wiredHolders(); its containment is the symlink refusal.
         'Cli/Subcommands.php|.candy-code/bundles' => self::BOTH,
         // C-EXT-4.b 2026-10-28: the two git-metadata reads bundlesGitSha()
@@ -305,14 +305,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // the refusals surface in the command's own response and nothing
         // reaches `$projectTierRefusals` (DRAIN_EVIDENCE stays without an entry,
         // which is what keeps the derivation calling it a gap). The write is
-        // gated AT THE CALL SITE — `ContainedPath::below` on the directory and
+        // gated AT THE CALL SITE — `\SugarCraft\Core\Util\PathJail::below` on the directory and
         // temp-create + rename for the file, so no write ever follows a planted
         // symlink — which is why no collector entry is owed here.
         'Host/Commands/MemoryCommand.php|.candy-code/memory' => self::REPOSITORY,
         // INT-1(c): the Copilot tail alias. `.github/copilot-instructions.md` is
         // a file the shipped tree carries, looked for one level down from every
         // candidate directory — repository-chosen on the same basis as the
-        // instruction tiers around it, gated by the very same ContainedPath
+        // instruction tiers around it, gated by the very same sugar-core PathJail
         // compares (`an alias adds candidates, never a new read path`). NAMED
         // GAP, the eighth: `InstructionFileLoader` records refusals loader-local
         // in its own `refusedPaths()` and only `instructionDeferrals()` reads
@@ -352,7 +352,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // serving both `~/.candy-code/agent-memory/<name>` and
         // `<root>/.candy-code/agent-memory/<name>`; the `-local` sibling is a
         // `<root>`-only tier, so the checkout picks its location outright. Both
-        // are written behind `ContainedPath` gates at their call sites and refuse
+        // are written behind `sugar-core PathJail` gates at their call sites and refuse
         // nothing of their own to drain — named GAPS (§7 closeout classification).
         'Memory/AgentMemory.php|.candy-code/agent-memory' => self::BOTH,
         'Memory/AgentMemory.php|.candy-code/agent-memory-local' => self::REPOSITORY,
@@ -543,7 +543,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // bundlesExistingProjectRoot() applies to the update walk. The read
         // takes directory NAMES only (scandir plus is_dir) and never reads a
         // file's content, so a symlinked entry under a real bundle root adds
-        // one name to the exclusion list and nothing more; ContainedPath is the
+        // one name to the exclusion list and nothing more; sugar-core PathJail is the
         // gate for holders that read content, and this one does not.
         'Cli/Bootstrap.php|.candy-code/bundles' => self::BOTH,
         // C-TOOL-6.m + the self-update/push waves: three independent home-cache
@@ -994,7 +994,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             // §7 closeout: the five classified late, all loader-local or
             // never-refusing. The styles tier refuses inside its own loader;
             // the two agent-memory tiers write user-home and read the
-            // repository through ContainedPath at their single call sites;
+            // repository through sugar-core PathJail at their single call sites;
             // /newagent drafts are gated at the write seam; and the prettier
             // binary is located through PATH-style lookup that records
             // nothing into this collector.
@@ -1133,7 +1133,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     /**
      * DORMANT IS NOT UNGATED — the finding this round's gating work came from.
      * Each dormant holder routes its non-`~` directory through
-     * {@see \SugarCraft\Code\Support\ContainedPath}, so "nothing constructs it
+     * {@see \SugarCraft\Core\Util\PathJail}, so "nothing constructs it
      * yet" is never again the whole answer to "is it contained".
      *
      * THIS PROVIDER NO LONGER CARRIES THE GATE REQUIREMENT ON ITS OWN. The
@@ -1256,7 +1256,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     /**
      * PRESENCE IS NOT ENFORCEMENT, which is the category this class's own
      * doc-block opens by condemning — and this test was an instance of it. It
-     * was `assertStringContainsString('ContainedPath::below(', $source)`, which a
+     * was `assertStringContainsString('\SugarCraft\Core\Util\PathJail::below(', $source)`, which a
      * gate whose RESULT IS DISCARDED satisfies exactly as well as a real one.
      * That is the same defect
      * {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest} measured
@@ -1278,7 +1278,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $consumed = $this->consumedContainmentCalls(\dirname(__DIR__, 2) . '/' . $relative);
 
         foreach ($requiredGates as $gate) {
-            $this->assertContains($gate, $consumed, "{$relative} calls ContainedPath::{$gate}() and uses the answer");
+            $this->assertContains($gate, $consumed, "{$relative} calls \SugarCraft\Core\Util\PathJail::{$gate}() and uses the answer");
         }
 
         $this->assertTrue(class_exists($driver), "{$relative} names a test class that drives its gates");
@@ -1293,7 +1293,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * The names of every `ContainedPath::within()`/`::below()` in $file whose
+     * The names of every `\SugarCraft\Core\Util\PathJail::within()`/`::below()` in $file whose
      * result the enclosing statement CONSUMES.
      *
      * A deliberately small reimplementation of
@@ -1334,7 +1334,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
                 continue;
             }
 
-            if (!\is_array($subject) || !str_ends_with((string) $subject[1], 'ContainedPath')) {
+            if (!\is_array($subject) || $subject[0] !== \T_NAME_FULLY_QUALIFIED || $subject[1] !== '\\SugarCraft\\Core\\Util\\PathJail') {
                 continue;
             }
 

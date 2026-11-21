@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Covers the setters that take a plain value: colors, the boolean
  * attributes, underline shape and color, sizes and tab width, alignment,
  * color profile, padding and margin as whole shorthands, the padding and
- * margin glyphs and margin background, and the bound content. Four groups
+ * margin glyphs and margin background, and the bound content. Three groups
  * stay on {@see Style}, and a chain that needs one calls build() and
  * continues there:
  *  - structural setters: border() and its side and color variants, the

@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 /**
  * A streamed completion that failed AFTER the HTTP response had already
- * started, so no status code is left to say so (audit 15a A2).
+ * started, so no status code is left to say so.
  *
  * WHY THIS EXISTS
  * ---------------
@@ -138,8 +138,7 @@ final class ProviderStreamException extends \RuntimeException
     /**
      * A stream that reached EOF without the protocol's terminal signal - no
      * `finish_reason` and no `data: [DONE]` on the OpenAI wire, no
-     * `message_stop` on Anthropic's, no `finishReason` on Gemini's (audit
-     * 15a A3).
+     * `message_stop` on Anthropic's, no `finishReason` on Gemini's.
      *
      * A proxy idle-timeout, a server restart or a reset connection does not
      * throw on the streaming path: Guzzle's StreamHandler just reports

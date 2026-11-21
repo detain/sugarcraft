@@ -9,7 +9,7 @@ use SugarCraft\Code\Chat;
 
 /**
  * The tick {@see Chat::subscriptions()} declares while the open session is
- * READ-ONLY because another TUI holds its lock (audit SES-3 residual): when it
+ * READ-ONLY because another TUI holds its lock: when it
  * lands, {@see Chat} retries the non-blocking lock, and on success reloads the
  * stored transcript and becomes writable.
  *

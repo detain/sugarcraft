@@ -338,11 +338,7 @@ final class ServerContext
             if (!$client->isInitialized()) {
                 continue;
             }
-            if ($mustArrive) {
-                $client->send(JsonRpc::encode($event->notification()));
-            } else {
-                $client->outbox()->pushEphemeral($event->notification());
-            }
+            $client->emit($event, $mustArrive);
         }
     }
 
@@ -817,6 +813,14 @@ final class ServerContext
         if ($fireLoops) {
             $this->loopTickAt = $now;
         }
+        // A background launch's handshake and a stop's rungs advance only when their
+        // supervisor is ticked. Driving them here, at this pump's 50 ms cadence rather
+        // than the 2 s background poll, answers bg.spawn and bg.stop promptly; a stop
+        // left to the poll would let its acknowledgement window lapse before the first
+        // read and escalate a graceful stop to SIGTERM.
+        $supervisor = $this->background()?->supervisor();
+        $supervisor?->advanceSpawns();
+        $supervisor?->advanceStops();
         foreach ($this->hub->openSessionIds() as $sessionId) {
             $host = $this->hub->get($sessionId);
             if ($host === null) {

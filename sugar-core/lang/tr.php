@@ -27,6 +27,7 @@ return [
     'semaphore.shutdown' => 'izin verilmeden önce semafor kapatıldı',
     'semaphore.closed' => 'semafor kapalı ve yeni izin veremiyor',
     'semaphore.derive_closed' => 'kapalı semafordan yeni havuz türetilemiyor',
+    'semaphore.map_cancelled' => 'tüm öğeler bitmeden toplu iş iptal edildi',
     'lru_map.capacity_invalid' => 'LRU kapasitesi en az 1 olmalı, alınan: {capacity}',
     'lru_map.capacity_too_large' => 'LRU kapasitesi {capacity}, büyüme sınırını {max} aşıyor',
     'lru_map.evict_from_empty' => 'boş LRU haritasından çıkarma yapılamaz',

@@ -6,7 +6,7 @@ namespace CandyCode\Bundles\MsTeams\Tests;
 
 use CandyCode\Bundles\MsTeams\MsTeamsChannel;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Channels\ChannelInterface;
+use SugarCraft\Plugins\Channel\ChannelInterface;
 
 /**
  * msteams-12: the manifest IS the loader contract — the P1 trust door

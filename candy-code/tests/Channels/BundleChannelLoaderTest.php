@@ -305,6 +305,78 @@ final class BundleChannelLoaderTest extends TestCase
         self::assertFileDoesNotExist($this->markers['quiet'] ?? '', 'a trusted sibling opens nothing for the untrusted one');
     }
 
+    /**
+     * Name trust is a user-tier consent (ruling 2026-11-20). A project-tier copy
+     * that shares a trusted name is refused before its bytes are read, while the
+     * user-tier copy of the same name loads on the second launch as usual.
+     */
+    public function testAProjectTierCopyOfATrustedNameIsRefusedAndNeverRequiredWhileTheUserCopyLoads(): void
+    {
+        $name = $this->trusted('shadow-user');
+        $userEntry = $this->entryFile('shadow-user');
+        $userBundle = $this->bundleFromEntrypoints('shadow-user', ['channel' => [$userEntry]]);
+        $this->names['shadow-project'] = $name;
+        $projectEntry = $this->entryFile('shadow-project');
+        $projectBundle = $this->bundleFromEntrypoints('shadow-project', ['channel' => [$projectEntry]], 'project');
+        self::assertSame($userBundle->name, $projectBundle->name, 'the fixture really shares one name across both tiers');
+        self::assertSame('user', $userBundle->tier);
+        self::assertSame('project', $projectBundle->tier);
+
+        $store = $this->store();
+        $trusted = [$name];
+
+        $first = BundleChannelLoader::load([$projectBundle, $userBundle], $trusted, $store);
+        self::assertSame([], $first['loaded'], 'first sight: nothing runs on launch one');
+        self::assertCount(1, $first['quarantined'], 'only the user-tier copy reaches quarantine');
+        self::assertSame($userEntry['path'], $first['quarantined'][0]['path'] ?? null);
+        self::assertCount(1, $first['refusals'], 'the project copy is refused, and nothing else is');
+        self::assertSame('project-tier', $first['refusals'][0]['reason'] ?? null);
+        self::assertSame($projectEntry['path'], $first['refusals'][0]['path'] ?? null);
+        self::assertFileDoesNotExist($projectEntry['marker'], 'the project copy is never required');
+        self::assertFalse($store->seenEntrypoint($projectEntry['path']), 'a refused project copy is not even a first sight');
+
+        $second = BundleChannelLoader::load([$projectBundle, $userBundle], $trusted, $store);
+        self::assertCount(1, $second['loaded'], 'the user-tier copy loads on launch two');
+        self::assertSame($name, $second['loaded'][0]['bundle'] ?? null);
+        self::assertSame($userEntry['path'], $second['loaded'][0]['path'] ?? null);
+        self::assertSame('project-tier', $second['refusals'][0]['reason'] ?? null, 'the project copy stays refused on every launch');
+        self::assertFileExists($userEntry['marker'], 'the user-tier bytes ran');
+        self::assertFileDoesNotExist($projectEntry['marker'], 'the project-tier bytes never ran');
+    }
+
+    /** A project-tier bundle carrying a trusted name, with no user-tier copy, is refused every launch. */
+    public function testAProjectTierBundleWithATrustedNameIsRefusedOnEveryLaunch(): void
+    {
+        $entry = $this->entryFile('lone-project');
+        $bundle = $this->bundleFromEntrypoints('lone-project', ['channel' => [$entry]], 'project');
+        $trusted = [$this->trusted('lone-project')];
+        $store = $this->store();
+
+        $first = BundleChannelLoader::load([$bundle], $trusted, $store);
+        $second = BundleChannelLoader::load([$bundle], $trusted, $store);
+
+        foreach ([$first, $second] as $buckets) {
+            self::assertSame([], $buckets['loaded']);
+            self::assertSame([], $buckets['quarantined'], 'a project copy is never listed as a first sight either');
+            self::assertCount(1, $buckets['refusals']);
+            self::assertSame('project-tier', $buckets['refusals'][0]['reason'] ?? null);
+        }
+        self::assertFileDoesNotExist($entry['marker'], 'the inherited-trust path is closed: nothing executes');
+        self::assertFalse($store->seenEntrypoint($entry['path']));
+    }
+
+    /** An untrusted project-tier bundle keeps the silence it always had: never opened, never refused. */
+    public function testAProjectTierBundleWhoseNameIsNotTrustedKeepsTheExistingSilence(): void
+    {
+        $entry = $this->entryFile('untrusted-project');
+        $bundle = $this->bundleFromEntrypoints('untrusted-project', ['channel' => [$entry]], 'project');
+        $buckets = BundleChannelLoader::load([$bundle], ['someone-else'], $this->store());
+        self::assertSame([], $buckets['loaded']);
+        self::assertSame([], $buckets['quarantined']);
+        self::assertSame([], $buckets['refusals'], 'an untrusted name is not refused, it is never opened');
+        self::assertFileDoesNotExist($entry['marker']);
+    }
+
     // ---- fixture builders (loader-domain spellings; the registry file must NOT copy these) ----
 
     /** @var array<string,string> slug => marker file path */
@@ -349,7 +421,7 @@ final class BundleChannelLoaderTest extends TestCase
     }
 
     /** @param array<string,list<array{path:string,class:string}>> $kinds */
-    private function bundleFromEntrypoints(string $slug, array $kinds): Bundle
+    private function bundleFromEntrypoints(string $slug, array $kinds, string $tier = 'user'): Bundle
     {
         $dir = $this->bundleDir($slug);
         $entrypoints = [];
@@ -359,7 +431,7 @@ final class BundleChannelLoaderTest extends TestCase
             }
         }
         $this->writeManifest($slug, $dir, ['entrypoints' => $entrypoints]);
-        $bundle = Bundle::fromDir($dir, 'project');
+        $bundle = Bundle::fromDir($dir, $tier);
         self::assertNotNull($bundle, 'fixture bundle must parse: ' . $slug);
         return $bundle;
     }

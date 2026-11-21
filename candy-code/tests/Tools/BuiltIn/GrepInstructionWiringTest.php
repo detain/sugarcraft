@@ -854,6 +854,86 @@ final class GrepInstructionWiringTest extends TestCase
         self::assertSame(['/a', '/b'], $loader->emittedPaths());
     }
 
+    /**
+     * A zero cap clips the final result at the 8 MiB ceiling, so the probe
+     * that decides which instruction rules are announced must read at that
+     * same ceiling. Unbounded, a hit past the final cut was announced (and its
+     * rule marked spent for the session) while the model never saw the hit.
+     *
+     * A stand-in `rg` on PATH replays a stdout just under the ceiling with two
+     * hits in two ruled directories: one on the first line, inside the probe,
+     * and one on the last line, past the probe's floor. Both directions are
+     * asserted, with no condition on what was announced: the early hit's rule
+     * is announced and the hit is shown, while the late hit's rule is not
+     * announced and the hit is cut with it, so nothing is announced for a hit
+     * the model cannot see.
+     */
+    public function testAZeroCapAnnouncesARuleOnlyForAHitTheModelReceives(): void
+    {
+        $ceiling = 8 * 1024 * 1024;
+        mkdir($this->dir . '/scoped', 0o777, true);
+        mkdir($this->dir . '/late', 0o777, true);
+        file_put_contents($this->dir . '/scoped/CLAUDE.md', "SCOPED-RULE-BETA\n");
+        file_put_contents($this->dir . '/late/CLAUDE.md', "LATE-RULE-GAMMA\n");
+
+        $bin = $this->dir . '-bin';
+        mkdir($bin, 0o777, true);
+        $hit = $this->dir . '/scoped/a.php:1:needle' . "\n";
+        $late = $this->dir . '/late/b.php:1:needle' . "\n";
+        $noise = $this->dir . '/big/noise.txt:1:' . str_repeat('x', 59) . "\n";
+        $fill = intdiv($ceiling - 1024 - strlen($hit) - strlen($late), strlen($noise));
+        file_put_contents($bin . '/out.txt', $hit . str_repeat($noise, $fill) . $late);
+        file_put_contents($bin . '/err.txt', str_repeat("warn\n", 400));
+        file_put_contents($bin . '/rg', "#!/bin/sh\ncat " . escapeshellarg($bin . '/out.txt') . "\ncat " . escapeshellarg($bin . '/err.txt') . " >&2\n");
+        chmod($bin . '/rg', 0o755);
+
+        $oldPath = (string) getenv('PATH');
+        putenv('PATH=' . $bin . PATH_SEPARATOR . $oldPath);
+        try {
+            $grep = new Grep(
+                $this->dir,
+                maxOutputBytes: 0,
+                instructionLoader: new InstructionFileLoader($this->dir),
+                rgAvailable: true,
+            );
+            $content = $this->grep($grep);
+        } finally {
+            putenv('PATH=' . $oldPath);
+            exec('rm -rf ' . escapeshellarg($bin));
+        }
+
+        self::assertStringStartsWith($this->dir . '/scoped/a.php:1:needle', $content, 'the stand-in rg ran: the replayed output leads the result');
+        self::assertLessThanOrEqual($ceiling + 4096, strlen($content), 'a zero cap still holds the result to the 8 MiB ceiling');
+        self::assertStringContainsString('SCOPED-RULE-BETA', $content, 'the rule governing a hit inside the probe is announced');
+        self::assertStringContainsString('scoped/a.php:1:needle', $content, 'and that hit is shown to the model');
+        self::assertStringNotContainsString('late/b.php:1:needle', $content, 'a hit past the probe floor is cut once a rule is surfaced');
+        self::assertStringNotContainsString('LATE-RULE-GAMMA', $content, 'so its rule is not announced for a hit the model never sees');
+    }
+
+    /**
+     * A zero cap with a loader wired budgets the instruction section at the 8 MiB
+     * default, as the final clip does. Unbudgeted, every hit directory's CLAUDE.md
+     * was loaded whole and appended after the clip, so 200 directories each
+     * holding a 60,000-byte rule file returned about 12 MB against the ceiling.
+     */
+    public function testAZeroCapHoldsAnInstructionSectionOfManyLargeRulesToTheDefaultCeiling(): void
+    {
+        $ceiling = 8 * 1024 * 1024;
+        $rules = str_repeat("R\n", 30000); // 60,000 bytes, under the per-file load cap
+        for ($i = 0; $i < 200; $i++) {
+            $dir = $this->dir . '/d' . $i;
+            mkdir($dir, 0o777, true);
+            file_put_contents($dir . '/CLAUDE.md', $rules);
+            file_put_contents($dir . '/hit.txt', "needle\n");
+        }
+
+        $grep = new Grep($this->dir, maxOutputBytes: 0, instructionLoader: new InstructionFileLoader($this->dir));
+        $content = $this->grep($grep);
+
+        self::assertStringContainsString('hit.txt:1:needle', $content, 'the hits themselves are still returned');
+        self::assertLessThanOrEqual($ceiling + 4096, strlen($content), 'a zero cap holds the instruction section inside the 8 MiB ceiling');
+    }
+
     // =========================================================================
 
     private function grep(Grep $tool): string

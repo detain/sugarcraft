@@ -727,7 +727,7 @@ final class McpClient
 
     /**
      * The entries the admission check refused in the last {@see startServers()}
-     * run (audit MCP-5).
+     * run.
      *
      * @return list<string>
      */
@@ -1888,7 +1888,7 @@ final class McpClient
      * `$configPath` (and since MCP-3 `$userConfigPath`) into this client; an
      * entry that lost its verdict arrives as an EMPTY path, and this method
      * re-reads rather than re-adjudicates. That is {@see
-     * \SugarCraft\Code\Support\ContainedPath}'s house rule stated where the
+     * \SugarCraft\Core\Util\PathJail}'s house rule stated where the
      * window lives (E40(a)): between the grant's `is_file()` + `within()` and
      * this `file_get_contents()` the bytes under the granted path can change,
      * and nothing here narrows the window, because a co-resident writer that
@@ -1896,7 +1896,7 @@ final class McpClient
      * residual is a config that names servers nobody approved between two
      * stats — answered by the trust gate upstream, not by a second containment
      * here. The hard-link limit of that grant is qualified at {@see
-     * \SugarCraft\Code\Support\ContainedPath}'s threat-model paragraph.
+     * \SugarCraft\Core\Util\PathJail}'s threat-model paragraph.
      *
      * E41 (c) — WHAT SAID: an existing-but-broken config used to answer `[]`
      * three different ways (unreadable, unparseable, wrong shape) and the launch

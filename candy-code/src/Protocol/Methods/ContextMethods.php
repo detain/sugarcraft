@@ -19,7 +19,6 @@ use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\TrustAsks;
 use SugarCraft\Code\Support\AtomicFileWriter;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
 
@@ -123,7 +122,7 @@ final class ContextMethods
      * resolve even when it does not exist yet, mirroring the TUI's
      * `/instructions`-open laws ({@see \SugarCraft\Code\Chat}). Containment
      * is re-checked at write time through the one routed compare
-     * ({@see ContainedPath}) so a listing that raced into a symlink cannot
+     * ({@see \SugarCraft\Core\Util\PathJail}) so a listing that raced into a symlink cannot
      * write outside its tier's boundary. The size cap is the loader's own
      * constant — writing bytes it would later refuse to read back would only
      * teach the session a silent truncation.
@@ -273,14 +272,14 @@ final class ContextMethods
 
     /**
      * Whether $path resolves inside ANY boundary — the one routed
-     * {@see ContainedPath::within} compare this class carries (C-CTX-3.c).
+     * {@see \SugarCraft\Core\Util\PathJail::within} compare this class carries (C-CTX-3.c).
      *
      * @param list<string> $boundaries
      */
     private static function held(string $path, array $boundaries): bool
     {
         foreach ($boundaries as $boundary) {
-            if (ContainedPath::within($path, $boundary)) {
+            if (\SugarCraft\Core\Util\PathJail::within($path, $boundary)) {
                 return true;
             }
         }

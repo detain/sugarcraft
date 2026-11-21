@@ -19,6 +19,7 @@ use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
 /**
  * GAP-3 seam pins (code-chat P1 step 5/8): the attachFeed closure's third call
@@ -34,6 +35,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 final class ChannelSubscriberFeedTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use DrainsSharedLoopTrait;
 
     private string $sandbox = '';
     private string $project = '';
@@ -147,9 +149,9 @@ final class ChannelSubscriberFeedTest extends TestCase
         $entryPath = $dir . '/gen/sub-' . $class . '.php';
         mkdir($dir . '/gen', 0777, true);
         $throwLine = $blows ? "throw new \\RuntimeException('feed subscriber blown');\n        " : '';
-        $code = "<?php\nfinal class {$class} implements \\SugarCraft\\Code\\Channels\\SubscribesToSessionEvents\n{\n"
+        $code = "<?php\nfinal class {$class} implements \\SugarCraft\\Plugins\\Channel\\SubscribesToSessionEvents\n{\n"
             . "    public function name(): string\n    {\n        return 'feed-chan';\n    }\n\n"
-            . "    public function start(\\SugarCraft\\Code\\Channels\\ChannelContext \$context): void\n    {\n    }\n\n"
+            . "    public function start(\\SugarCraft\\Plugins\\PluginContext \$context): void\n    {\n    }\n\n"
             . "    public function dispose(): void\n    {\n    }\n\n"
             . "    public function onEvent(array \$envelope): void\n    {\n        {$throwLine}"
             . "file_put_contents(" . var_export($sink, true) . ", json_encode(\$envelope) . PHP_EOL, FILE_APPEND | LOCK_EX);\n    }\n}\n";
@@ -159,7 +161,7 @@ final class ChannelSubscriberFeedTest extends TestCase
             'entrypoints' => ['channel' => [['file' => $entryPath, 'class' => $class]]],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
-        return [Bundle::fromDir($dir, 'project'), $name, $entryPath];
+        return [Bundle::fromDir($dir, 'user'), $name, $entryPath];
     }
 
     private function sinkFile(): string

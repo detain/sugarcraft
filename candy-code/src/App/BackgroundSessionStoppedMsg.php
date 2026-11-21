@@ -9,7 +9,7 @@ use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\Chat;
 
 /**
- * Internal Msg carrying the OUTCOME of a `/bg stop <id>` (audit BG-1).
+ * Internal Msg carrying the OUTCOME of a `/bg stop <id>`.
  *
  * {@see \SugarCraft\Code\Background\BackgroundSupervisor::stopSession()} waits —
  * boundedly, but for up to several seconds on its signal rungs — for the

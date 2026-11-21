@@ -7,6 +7,7 @@ namespace SugarCraft\Plugins\Tests;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Plugins\PluginContext;
+use SugarCraft\Plugins\Tests\Support\FakeHostServices;
 
 final class PluginContextTest extends TestCase
 {
@@ -47,6 +48,22 @@ final class PluginContextTest extends TestCase
         $this->assertNull($context->stateDir);
         $this->assertSame([], $context->config);
         $this->assertNull(($context->log)('discarded'));
+    }
+
+    public function testHostDefaultsToNull(): void
+    {
+        $context = PluginContext::for('p', 'p', null, Loop::get());
+
+        $this->assertNull($context->host);
+    }
+
+    public function testForCarriesTheHostServicesItIsGiven(): void
+    {
+        $host = new FakeHostServices();
+
+        $context = PluginContext::for('p', 'p', null, Loop::get(), host: $host);
+
+        $this->assertSame($host, $context->host);
     }
 
     public function testTheContextIsReadonly(): void

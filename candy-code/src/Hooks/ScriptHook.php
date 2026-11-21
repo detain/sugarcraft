@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
-use SugarCraft\Code\Support\WindowsPipes;
+use SugarCraft\Async\ChildResult;
+use SugarCraft\Async\ChildRun;
+use SugarCraft\Async\StdinStagingException;
 use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Share\JsonlTranscriptWriter;
-use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\HookContextFiles;
+use SugarCraft\Code\Support\HookProcessGroups;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\Support\WindowsShell;
+use SugarCraft\Code\Support\WindowsTaskKill;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Core\Util\Sanitize;
 
@@ -130,24 +132,6 @@ final readonly class ScriptHook implements BoundedHookInterface
     public const DIALECT_CLAUDE = 'claude';
 
     /**
-     * How many CONSECUTIVE `stream_select()` failures {@see drain()} rides out
-     * before it gives up on a pipe.
-     *
-     * The figure is {@see \SugarCraft\Code\Support\DrainsStreamedChild::SELECT_RETRIES}
-     * — ONE copy now that the pump itself is shared. It is spelled out again
-     * here because this is the class whose page rosters it: docs/HOOKS.md states
-     * the budget in prose, and
-     * `DocFigureProseDriftTest::testHookDrainSweepAndMarkerSentencesSurviveTheirSources()`
-     * derives that sentence from this constant. WHY the number is what it is —
-     * a signal is the expected cause and it is not an error, so the budget has
-     * to be generous; a genuinely broken descriptor fails instantly and forever,
-     * so it has to be finite; any successful select resets it, which makes 128
-     * "128 signals with no readable byte in between" rather than 128 per hook —
-     * lives with the walker.
-     */
-    private const DRAIN_SELECT_RETRIES = DrainsStreamedChild::SELECT_RETRIES;
-
-    /**
      * Wall-clock budget for ONE hook run when the entry names no `timeout:`.
      *
      * A HOOK RUNS ON THE TUI'S OWN THREAD. Both live gates —
@@ -225,38 +209,27 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
-     * Longest one {@see drain()} `stream_select()` waits before the deadline is
-     * re-checked.
-     *
-     * The wait used to be NULL, i.e. zero wakeups for the whole of a hook that
-     * is thinking, and this trades that for five wakeups a second — the same
-     * trade {@see \SugarCraft\Code\Commands\CommandSpec::runShellSubstitution()}
-     * makes at the same 200ms, and for the same reason: a hook that produces no
-     * output at all has to expire ON TIME rather than on its first byte, and
-     * nothing wakes the select when the only thing that changed is the clock.
-     */
-    private const DRAIN_SLICE_SECONDS = 0.2;
-
-    /**
-     * ISS-090(d): the drain's byte ceiling PER STREAM.
+     * ISS-090(d): the byte ceiling PER STREAM on what a hook's run retains.
      *
      * Every downstream bound in this class clips what a verdict CARRIES —
      * deny reasons, ask questions, context notes. None of them clipped what a
-     * hook PRINTS while the pump is still reading: a wedged-but-chatty hook
-     * (a build loop on stdout, an argparse stack trace repeating on a stuck
-     * retry) grew `$buffers` until the process ran out of memory long before
-     * the deadline could answer it, and the deadline itself bounds the WAIT,
-     * not the VOLUME inside it — a hook writing 40 MB within the window landed
-     * whole. 1 MiB is generously above every envelope a real hook ships (the
-     * rewrite ceiling below is two orders of magnitude smaller), so what this
-     * cuts off is runaway output, not content.
+     * hook PRINTS while its output is still being read: a wedged-but-chatty
+     * hook (a build loop on stdout, an argparse stack trace repeating on a
+     * stuck retry) grew the buffers until the process ran out of memory long
+     * before the deadline could answer it, and the deadline itself bounds the
+     * WAIT, not the VOLUME inside it.
+     *
+     * The figure is {@see ChildRun::DEFAULT_MAX_BYTES} (8 MiB), the same
+     * per-stream ceiling every captured tool run keeps
+     * ({@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}),
+     * so a hook and a tool child are bounded alike. ChildRun keeps the HEAD of
+     * each stream and counts what it refused; {@see capped()} stamps the count.
      *
      * A cut on stdout is fail-CLOSED by construction: JSON truncated at the
      * cap does not decode, and {@see envelope()} answers such an output with
-     * null — the same existing path as a partial write from an interrupted
-     * select. The verdict still comes from the exit code.
+     * null. The verdict still comes from the exit code.
      */
-    private const MAX_DRAIN_BYTES = 1_048_576;
+    private const MAX_DRAIN_BYTES = ChildRun::DEFAULT_MAX_BYTES;
 
     /**
      * Bytes of the hook's own words a DENY may carry back.
@@ -472,46 +445,33 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private const OVERSIZE_ENV_MARKER = '@@CRUSH_PAYLOAD_IN_FILE@@';
 
-    /** Grace given to SIGTERM before {@see terminateAndEscalate()} sends signal 9. */
+    /**
+     * Grace the deadline kill gives SIGTERM before it sends signal 9: ChildRun's
+     * kill ladder, run on this family's pinned 0.5 s budgets rather than its
+     * 1 s defaults, because the deadline has already spent the hook's patience.
+     */
     private const TERMINATE_GRACE_SECONDS = 0.5;
 
-    /** Grace given to signal 9 before the handle is closed regardless. */
+    /** Grace the deadline kill gives signal 9 before the reap is left to run late. */
     private const KILL_GRACE_SECONDS = 0.5;
 
     /**
-     * How often {@see waitForExit()} asks whether the child is gone. Ten
-     * milliseconds is short enough that the usual case (already exited) costs
-     * one poll and long enough that a full sixty-second budget is at most six
-     * thousand `proc_get_status()` calls.
+     * The shortest bound {@see withTimeoutSeconds()} hands out: ten
+     * milliseconds, the interval at which ChildRun polls a child for its exit,
+     * so the shortest budget this class can tell apart from zero.
      */
     private const EXIT_POLL_MICROSECONDS = 10_000;
 
     /**
-     * The clock the run's deadline is measured against.
-     *
-     * PRODUCTION IS INERT: the default is `microtime(true)`, and no shipped
-     * caller passes anything else. The seam exists for the two
-     * `HookRegistryTest` cases that must watch a budget EXPIRE — the fact
-     * they assert is about the arithmetic of a deadline, but reading it off
-     * the wall clock made the verdict a function of how the box was
-     * scheduling, which is the wave-8 determinism defect. A scripted clock
-     * turns "wait until 0.6 seconds have gone by" into "take the next tick",
-     * at the same number of reads and the same branch shape. Same idiom as
-     * {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow::$clock}.
-     */
-    private readonly \Closure $clock;
-
-    /**
-     * $timeoutSeconds is the wall clock this hook's whole run — drain AND
+     * $timeoutSeconds is the wall clock this hook's whole run — output AND
      * reap — has to finish inside; see {@see DEFAULT_TIMEOUT_SECONDS}. A value
      * that is not positive AND FINITE is NOT "no timeout":
      * {@see timeoutSeconds()} reads it as "unset" and applies the default,
      * because the one thing this parameter must not be able to express is the
      * unbounded wait it was added to remove — and `INF` expressed it exactly,
-     * being a float that is greater than zero.
+     * being a float that is greater than zero. The deadline is measured on
+     * ChildRun's monotonic clock; there is no clock seam.
      *
-     * @param callable(): float|null $clock deadline clock; null keeps production
-     *        on `microtime(true)` — see {@see self::$clock} for the seam's why.
      * @param string $dialect whose exit-code table this row's file was written
      *        against: {@see self::DIALECT_NATIVE} for candy-code's own
      *        `hooks.yaml`, {@see self::DIALECT_CLAUDE} for a Claude Code
@@ -531,7 +491,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      *        — non-null with a non-null sandbox means the jail cannot start on
      *        this host, and the fail-closed law of C-TOOL-4.d refuses the hook
      *        rather than running it unconfined. It is CARRIED rather than
-     *        re-probed because this class spawns with `proc_open()` directly
+     *        re-probed because this class spawns through ChildRun directly
      *        and has no captured-run door to probe through.
      */
     public function __construct(
@@ -541,15 +501,11 @@ final readonly class ScriptHook implements BoundedHookInterface
         private string $command,
         private string $description,
         private float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
-        ?callable $clock = null,
         private string $dialect = self::DIALECT_NATIVE,
         private bool $advisory = false,
         private ?SandboxBackend $sandbox = null,
         private ?string $sandboxRefusal = null,
     ) {
-        $this->clock = $clock !== null
-            ? \Closure::fromCallable($clock)
-            : static fn (): float => microtime(true);
     }
 
     /**
@@ -658,10 +614,10 @@ final readonly class ScriptHook implements BoundedHookInterface
         $floor = self::EXIT_POLL_MICROSECONDS / 1_000_000;
         $requested = is_finite($seconds) ? max($floor, $seconds) : $floor;
 
-        // THE CLONE CARRIES the clock, dialect, advisory flag and the jail pair:
+        // THE CLONE CARRIES the dialect, advisory flag and the jail pair:
         // {@see mutate()} carries every field, so a chain clamp can neither
-        // re-anchor the clamped copy to the wall clock, hand a Claude Code hook
-        // the native exit table, nor shed a jail set by {@see withSandbox()}.
+        // hand a Claude Code hook the native exit table nor shed a jail set by
+        // {@see withSandbox()}.
         return $this->mutate(['timeoutSeconds' => min($this->timeoutSeconds(), $requested)]);
     }
 
@@ -687,10 +643,8 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
-     * The ONE place this hook's eleven constructor inputs are carried over
-     * (S-X06): `$clock` is stored as a closure, so the generic
-     * {@see \SugarCraft\Core\Concerns\Mutable} splat does not fit. A new
-     * `with*()` names only what it changes.
+     * The ONE place this hook's ten constructor inputs are carried over
+     * (S-X06). A new `with*()` names only what it changes.
      *
      * @param array<string, mixed> $changes
      */
@@ -703,7 +657,6 @@ final readonly class ScriptHook implements BoundedHookInterface
             'command' => $this->command,
             'description' => $this->description,
             'timeoutSeconds' => $this->timeoutSeconds,
-            'clock' => $this->clock,
             'dialect' => $this->dialect,
             'advisory' => $this->advisory,
             'sandbox' => $this->sandbox,
@@ -802,11 +755,11 @@ final readonly class ScriptHook implements BoundedHookInterface
     /**
      * The spawn command for one run of this row (C-TOOL-4.d).
      *
-     * PREFIX-ONLY BY LAW: both {@see executeStaged()} proc_open sites stay
-     * exactly the shape the descriptor-inheritance census accounts for — only
-     * what goes THROUGH {@see ProcessContainment::spawnSpec()} changes, and
-     * only when a jail is paired. Out of scope the row's spec is byte-for-byte
-     * the one this class has always built.
+     * PREFIX-ONLY BY LAW: the ChildRun spawn in {@see runChild()} stays the
+     * same shape whether or not a jail is paired — only what goes THROUGH
+     * {@see ProcessContainment::spawnSpec()} changes, and only when a jail is
+     * paired. Out of scope the row's spec is byte-for-byte the one this class
+     * has always built.
      *
      * In scope the jail's own argv ends with `--chdir <root> --`, so the hook
      * WORKS the directory the jail declares: the project root when the context
@@ -870,34 +823,27 @@ final readonly class ScriptHook implements BoundedHookInterface
             'CRUSH_PROVIDER' => $context->provider,
         ];
 
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        // Windows: the stdin payload (200 KB tool outputs are normal) cannot
-        // go through a pipe there: a write past its 4096-byte buffer blocks
-        // until the hook reads, and a hook that never reads stdin would hang
-        // it past every deadline. The payload is staged as a file instead;
-        // the hook reads the same bytes and the same EOF.
-        $stdinFile = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::stageStdin($this->stdinPayload($context)) : null;
-        if ($stdinFile !== null) {
-            $descriptors[0] = ['file', $stdinFile, 'r'];
-        }
-
         $spec = $this->spawnCommand($cwd, $payload['files']);
         if ($spec === null) {
             return HookResult::deny(ShellInvocation::refusal());
         }
 
+        // ONE DEADLINE FOR THE WHOLE RUN, output AND reap: ChildRun arms it at
+        // the spawn and holds a child that closed its pipes (`hook.sh
+        // >/dev/null 2>&1`) to the same instant. See {@see DEFAULT_TIMEOUT_SECONDS}
+        // for the measurement of both halves.
+        $budget = $this->timeoutSeconds();
+        // ISS-038: the child's stdin carries the {@see stdinPayload()} JSON, the
+        // Claude-Code-shaped contract most hook scripts are written against.
+        // ChildRun's pump offers it only as a ready pipe takes it (and stages
+        // it to a file on the Windows runtime), so a talkative child that never
+        // reads stdin cannot deadlock the write.
+        $stdin = $this->stdinPayload($context);
+
         // THE REAL BYTES ARE OFFERED FIRST AND THE OS DECIDES — see
         // MAX_ENV_ENTRY_BYTES for why this is an attempt rather than a
-        // calculation. `@` because the refusal is REPORTED, below, as a deny
-        // that names the sizes: the bare call emits
-        // `proc_open(): posix_spawn() failed: Argument list too long`, which in
-        // the TUI lands mid-frame over whatever sugar-core last painted, and
-        // under `failOnWarning="true"` turns this suite's own coverage of the
-        // refusal path into a failure.
+        // calculation. A refused spawn comes back as null, never as a warning:
+        // it is REPORTED, below, as a deny that names the sizes.
         // E672/E674: the spec and the env come from the ONE choke point —
         // `setsid -w` detach over /dev/tty, NONINTERACTIVE forced and
         // SUDO_ASKPASS/GPG_TTY stripped — with the hook's own CRUSH_* keys
@@ -905,33 +851,22 @@ final readonly class ScriptHook implements BoundedHookInterface
         // win. scrubbedEnv(), not env() (audit F-E1): a hook's stdout can
         // become `additionalContext` the model reads, so credential-shaped
         // variables are dropped unless the operator's `secretEnvAllowlist`
-        // names them. The size-refusal reasoning below is unchanged.
-        $process = @proc_open(
-            ProcessContainment::spawnSpec($spec),
-            $descriptors,
-            $pipes,
-            $cwd,
-            ProcessContainment::scrubbedEnv($fixed + $payload['env'])
-        );
+        // names them.
+        try {
+            $run = $this->runChild($spec, $cwd, ProcessContainment::scrubbedEnv($fixed + $payload['env']), $stdin, $budget);
 
-        if (!is_resource($process) && $payload['fallback'] !== null) {
-            // The exec was refused with the payloads IN the environment, so try
-            // again with everything that has a file moved OUT of it. The hook
-            // has not run — `proc_open()` returning false means no child was
-            // started — so this is a retry, never a second execution.
-            $process = @proc_open(
-                ProcessContainment::spawnSpec($spec),
-                $descriptors,
-                $pipes,
-                $cwd,
-                ProcessContainment::scrubbedEnv($fixed + $payload['fallback'])
-            );
+            if ($run === null && $payload['fallback'] !== null) {
+                // The exec was refused with the payloads IN the environment, so
+                // try again with everything that has a file moved OUT of it. The
+                // hook has not run — a refused spawn started no child — so this
+                // is a retry, never a second execution.
+                $run = $this->runChild($spec, $cwd, ProcessContainment::scrubbedEnv($fixed + $payload['fallback']), $stdin, $budget);
+            }
+        } catch (StdinStagingException $staging) {
+            return $this->stagingRefused($staging);
         }
 
-        if (!is_resource($process)) {
-            if ($stdinFile !== null) {
-                @unlink($stdinFile);
-            }
+        if ($run === null) {
             // NAMES THE SIZES. This branch's old message — "Hook X could not be
             // executed" — was the whole of what a user saw when a 128 KB tool
             // call hit `MAX_ARG_STRLEN` (see stagePayloads()), and it reads as
@@ -943,81 +878,17 @@ final readonly class ScriptHook implements BoundedHookInterface
             return HookResult::deny($this->execRefused($context, $payload['unbacked']));
         }
 
-        // ONE DEADLINE FOR THE WHOLE RUN, started before the drain and still
-        // in force after it, because the wait is in two halves and bounding
-        // either one alone bounds nothing. See {@see DEFAULT_TIMEOUT_SECONDS}
-        // for the measurement of both.
-        $budget = $this->timeoutSeconds();
-        $deadline = ($this->clock)() + $budget;
-        // Registered so a quit can SIGTERM this hook's group (see
-        // Chat::abandonActiveHookGroups()); released before proc_close().
-        $hookPid = (int) (proc_get_status($process)['pid'] ?? 0);
-        \SugarCraft\Code\Support\HookProcessGroups::register($hookPid);
+        $output = self::capped($run->stdout, $run->droppedBytes - $run->droppedStderrBytes);
+        $errors = self::capped($run->stderr, $run->droppedStderrBytes);
 
-        // ISS-038: the child's stdin is no longer closed on sight. It carries
-        // the {@see stdinPayload()} JSON — the Claude-Code-shaped contract most
-        // hook scripts are written against — and it is FLUSHED FROM INSIDE THE
-        // DRAIN PUMP below rather than written here. A blocking write at this
-        // point deadlocks the CLI on exactly the hook shape the payloads
-        // already assume is large: a 200 KB tool output does not fit the
-        // 64 KiB pipe buffer, so the write parks the parent while a child that
-        // talks first (a verbose deny, a debug banner) parks on its own full
-        // stdout. The pump only ever offers what a ready pipe will take.
-        [$output, $errors, $timedOut] = $this->drain(
-            $pipes[1],
-            $pipes[2],
-            $deadline,
-            $stdinFile === null ? $pipes[0] : null,
-            $stdinFile === null ? $this->stdinPayload($context) : '',
-            WindowsPipes::runningProbe($process),
-        );
-
-        // THE DRAIN CAN END WITH THE CHILD STILL RUNNING and `proc_close()`
-        // WAITS for it. A hook that redirects its own output — `hook.sh
-        // >/dev/null 2>&1`, which is what a hook whose only product is its
-        // exit code is written as — closes both pipes at once, so the drain
-        // sees EOF immediately and every remaining second of the hook is spent
-        // inside `proc_close()`. Same shape, and the same fix, as
-        // {@see \SugarCraft\Code\Commands\CommandSpec::runShellSubstitution()}'s
-        // post-read wait.
-        if (!$timedOut) {
-            $timedOut = !$this->waitForExit($process, $deadline);
+        $unanswered = $this->unanswered($run, $output, $errors, $budget);
+        if ($unanswered !== null) {
+            return $unanswered;
         }
 
-        if ($timedOut) {
-            // Kill BEFORE closing the pipes and before `proc_close()`: closing
-            // this end only gives the child EPIPE the next time it writes, and
-            // a hook that is stuck is by definition not writing.
-            self::terminateAndEscalate($process);
-        }
-
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        \SugarCraft\Code\Support\HookProcessGroups::release($hookPid);
-        $exitCode = proc_close($process);
-        if ($stdinFile !== null) {
-            @unlink($stdinFile);
-        }
-
-        if ($timedOut) {
-            // The exit code from a killed child says "signalled", never what
-            // the hook meant, so it is not consulted — the verdict is the
-            // timeout itself. Whatever the hook managed to say before it
-            // wedged is carried through, since a half-written deny reason is
-            // still the most useful thing on offer.
-            return HookResult::deny(rtrim(sprintf(
-                'Hook %s did not finish within %s seconds and was killed; a hook that '
-                . 'has not answered has not allowed anything. %s',
-                $this->name,
-                rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
-                self::clip(
-                    trim($errors) !== '' ? trim($errors) : trim($output),
-                    self::MAX_DENY_REASON_BYTES,
-                ),
-            )));
-        }
-
+        // A signal death reads -1 from ChildRun, which every table below sends
+        // to its deny (or non-blocking) arm.
+        $exitCode = $run->exitCode ?? -1;
         $output = trim($output);
         $errors = trim($errors);
 
@@ -1063,6 +934,67 @@ final readonly class ScriptHook implements BoundedHookInterface
                 self::clip($errors, self::MAX_DENY_REASON_BYTES) ?: "Hook exited with code $exitCode",
             ),
         };
+    }
+
+    /**
+     * The deny for a run that ended without the hook answering, or null when
+     * the hook exited on its own and its exit code is the verdict.
+     *
+     * Both cases ignore the exit code: a deadline kill and a pipe-failure kill
+     * each leave the kill's status, never what the hook meant, so even a
+     * reported 0 must not read as an allow.
+     */
+    private function unanswered(ChildResult $run, string $output, string $errors, float $budget): ?HookResult
+    {
+        if ($run->timedOut()) {
+            // The exit code from a killed child says "signalled", never what
+            // the hook meant, so it is not consulted — the verdict is the
+            // timeout itself. Whatever the hook managed to say before it
+            // wedged is carried through, since a half-written deny reason is
+            // still the most useful thing on offer.
+            return HookResult::deny(rtrim(sprintf(
+                'Hook %s did not finish within %s seconds and was killed; a hook that '
+                . 'has not answered has not allowed anything. %s',
+                $this->name,
+                rtrim(rtrim(number_format($budget, 3, '.', ''), '0'), '.'),
+                self::clip(
+                    trim($errors) !== '' ? trim($errors) : trim($output),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
+            )));
+        }
+
+        if ($run->status === ChildResult::PIPE_FAILED) {
+            // The pipes kept failing, so ChildRun stopped reading and killed the
+            // child: its exit code is the kill's, not the hook's answer. Fail
+            // closed, carrying whatever it said before the read failed.
+            return HookResult::deny(rtrim(sprintf(
+                'Hook %s could not be read to the end (its output pipes kept failing) and was killed; '
+                . 'a hook that has not answered has not allowed anything. %s',
+                $this->name,
+                self::clip(
+                    trim($errors) !== '' ? trim($errors) : trim($output),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
+            )));
+        }
+
+        return null;
+    }
+
+    /**
+     * The deny for a stdin payload ChildRun could not stage to a temp file.
+     * Windows only: no other runtime stages the payload. Nothing ran, so the
+     * hook has allowed nothing.
+     */
+    private function stagingRefused(StdinStagingException $staging): HookResult
+    {
+        return HookResult::deny(sprintf(
+            'Hook %s could not be executed: its stdin payload could not be staged to a temporary file in %s. '
+            . 'A hook that has not seen the call has not allowed it.',
+            $this->name,
+            $staging->tempDir() ?? sys_get_temp_dir(),
+        ));
     }
 
     /**
@@ -1465,184 +1397,100 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
-     * Read both pipes to EOF without letting either one wedge the other.
+     * Spawn one run of this hook on ChildRun and wait for it, or answer null
+     * when the OS refused to start it.
      *
-     * The PUMP is {@see \SugarCraft\Code\Support\DrainsStreamedChild::walk()}
-     * now — the `stream_select()` over both pipes, the non-blocking reads, the
-     * retried `false`, the {@see DRAIN_SLICE_SECONDS} slice that makes the
-     * deadline reachable, the interleaved stdin write and the EOF it owns on
-     * every way out. WHY that shape is forced lives with the walker; what lives
-     * here is the hook's own policy, the part a shared pump must not decide.
+     * ChildRun owns the pump (both pipes read without either wedging the
+     * other, the `stream_select()` retried across a signal, the stdin payload
+     * offered as the pipe takes it), the deadline, the per-stream byte ceiling
+     * and the kill ladder. What this method adds is the hook's own wiring:
      *
-     * VOLUME IS BOUNDED PER STREAM — ISS-090(d). Reads go through a capture
-     * that stops at {@see MAX_DRAIN_BYTES} in EACH buffer and counts the refused
-     * bytes, and every way out stamps a constant-size marker naming both
-     * figures. A hook's words are the operator's: a truncated deny reason still
-     * says why the call stopped, and a truncated rewrite fails closed, because
-     * JSON cut at the cap does not decode and {@see envelope()} answers such an
-     * output with null — the same existing path as a partial write from an
-     * interrupted select. The verdict still comes from the exit code.
+     * - NO EXIT GRACE: a backgrounded grandchild that keeps the output pipes
+     *   open holds the run to its deadline on POSIX, where the group is killed
+     *   and the hook is denied as it always was; the Windows runtime ends the
+     *   read shortly after the exit instead. A hook has not answered until its
+     *   output is done.
+     * - THE GROUP: a `setsid -w` wrapper leads its own process group, so the
+     *   deadline kill reaches whatever the hook backgrounded. On Windows the
+     *   kill seam walks the tree with taskkill first, as the captured tool
+     *   runs do.
+     * - THE QUIT REGISTRY: the pid is registered with
+     *   {@see HookProcessGroups} as soon as the child starts, so a quit can
+     *   SIGTERM this hook's group (see `Chat::abandonActiveHookGroups()`), and
+     *   released once ChildRun has reaped it.
      *
-     * A GIVE-UP SWEEPS WHAT IS ALREADY BUFFERED before the markers are stamped
-     * (the pipes are non-blocking, so the sweep cannot park): a partial deny
-     * reason beats none.
+     * @param string|array<int|string, string> $spec
+     * @param array<string, string> $env
      *
-     * A deadline expiry is reported as the third element rather than by
-     * returning short, because {@see execute()} has to KILL the child on that
-     * path and cannot infer it from the buffers. The retry give-up is NOT: the
-     * descriptors failed, not the budget, and what the hook wrote is a finished
-     * read. There is no `keepGoing` below — this ceiling is a trim, not a stop,
-     * so the walker's STOPPED reason is unreachable on this path.
-     *
-     * @param resource $stdout
-     * @param resource $stderr
-     * @param float $deadline instant on this hook's clock (see {@see self::$clock})
-     *        past which the drain gives up on whatever the hook has not written yet
-     * @param resource|null $stdin the child's stdin, flushed from inside the
-     *        pump when given — see {@see stdinPayload()} for WHAT rides it
-     * @return array{0: string, 1: string, 2: bool} stdout, stderr, timed-out
+     * @throws StdinStagingException when the Windows runtime cannot stage the stdin payload
      */
-    private function drain($stdout, $stderr, float $deadline, $stdin = null, string $stdinData = '', ?\Closure $running = null): array
+    private function runChild(string|array $spec, ?string $cwd, array $env, string $stdin, float $budget): ?ChildResult
     {
-        $buffers = ['', ''];
-        // Bytes refused for the slot because the cap was reached — the marker
-        // counts them so the user learns the buffer is a window, not the whole
-        // file.
-        $dropped = [0, 0];
+        $wrapped = ProcessContainment::spawnSpec($spec);
 
-        $capture = static function (int $slot, string $bytes) use (&$buffers, &$dropped): void {
-            $room = self::MAX_DRAIN_BYTES - strlen($buffers[$slot]);
+        try {
+            $run = \is_array($wrapped) ? ChildRun::new(array_values($wrapped)) : ChildRun::commandLine($wrapped);
+        } catch (\InvalidArgumentException) {
+            // An empty command: there is nothing the OS could start.
+            return null;
+        }
 
-            if ($room >= strlen($bytes)) {
-                $buffers[$slot] .= $bytes;
+        $leadsGroup = ProcessContainment::groupsSpawns();
+        $hookPid = 0;
+        $run = $run
+            ->withCwd($cwd)
+            ->withEnv($env)
+            ->withStdin($stdin)
+            ->withMaxBytes(self::MAX_DRAIN_BYTES)
+            ->withTimeout($budget)
+            ->withExitGrace(null)
+            ->withKillGrace(self::TERMINATE_GRACE_SECONDS, self::KILL_GRACE_SECONDS)
+            ->withGroupLeader($leadsGroup)
+            ->withOnSpawn(static function (int $pid) use (&$hookPid): void {
+                $hookPid = $pid;
+                HookProcessGroups::register($pid);
+            });
+        if (WindowsShell::isWindows()) {
+            $run = $run->withOnKill(static function (int $pid): void {
+                WindowsTaskKill::tree($pid);
+            });
+        }
 
-                return;
+        try {
+            return $run->run();
+        } catch (StdinStagingException $staging) {
+            throw $staging;
+        } catch (\RuntimeException $refused) {
+            // ChildRun raises RuntimeException for a refused spawn only; once
+            // the child has started, a throw is not a refusal and must surface.
+            if ($hookPid > 0) {
+                throw $refused;
             }
 
-            if ($room > 0) {
-                $buffers[$slot] .= substr($bytes, 0, $room);
+            return null;
+        } finally {
+            if ($hookPid > 0) {
+                HookProcessGroups::release($hookPid);
             }
-
-            $dropped[$slot] += strlen($bytes) - max(0, $room);
-        };
-
-        // The marker is constant-size and stamped once per stream, so a sealed
-        // buffer is bounded by cap + marker and the stamp itself cannot reopen
-        // the cap.
-        $seal = static function () use (&$buffers, &$dropped): void {
-            foreach ($dropped as $slot => $count) {
-                if ($count > 0) {
-                    $buffers[$slot] .= sprintf(
-                        ' … [hook output capped at %d bytes; %d further bytes dropped]',
-                        self::MAX_DRAIN_BYTES,
-                        $count,
-                    );
-                    $dropped[$slot] = 0;
-                }
-            }
-        };
-
-        $reason = DrainsStreamedChild::walk(
-            $stdout,
-            $stderr,
-            $deadline,
-            self::DRAIN_SLICE_SECONDS,
-            $this->clock,
-            $capture,
-            onGiveUp: static function (string $why, array $open) use ($capture): void {
-                foreach ($open as $slot => $pipe) {
-                    $rest = @stream_get_contents($pipe);
-
-                    if (is_string($rest)) {
-                        $capture($slot, $rest);
-                    }
-                }
-            },
-            stdin: $stdin,
-            stdinData: $stdinData,
-            selectRetries: self::DRAIN_SELECT_RETRIES,
-            running: $running,
-        );
-
-        $seal();
-
-        return [$buffers[0], $buffers[1], $reason === DrainsStreamedChild::EXPIRED];
-    }
-
-    /**
-     * Poll `proc_get_status()` until the child is gone or $deadline passes;
-     * true if it exited.
-     *
-     * The same bounded poll as
-     * {@see \SugarCraft\Code\Support\ProcessReaper::waitForExit()} — and its
-     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndAwaitExit()}
-     * for the term-then-await case — differing only in that those take a BUDGET
-     * while this one takes the
-     * absolute deadline the whole run already has to share: an unflagged wait
-     * is the thing being removed, and there is no portable way to wait for a
-     * `proc_open()` child with a deadline in PHP.
-     * The exit code survives the polling — PHP caches it on the first
-     * `proc_get_status()` that reaps the child, so `proc_close()` still
-     * returns the real status rather than -1.
-     *
-     * @param resource $process
-     */
-    private function waitForExit($process, float $deadline): bool
-    {
-        while (true) {
-            if ((proc_get_status($process)['running'] ?? false) !== true) {
-                return true;
-            }
-
-            // Tested AFTER the status, so an already-exited child is reported
-            // as exited even when the caller's budget is already spent — which
-            // is the ordinary case on the drain-finished path, where the
-            // deadline may well have nothing left on it.
-            if (($this->clock)() >= $deadline) {
-                return false;
-            }
-
-            usleep(self::EXIT_POLL_MICROSECONDS);
         }
     }
 
     /**
-     * SIGTERM the child, wait a bounded moment, then signal 9 — so a hook that
-     * traps TERM cannot turn the expiry path back into the unbounded wait it
-     * exists to end.
-     *
-     * Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant: that
-     * constant comes from ext-pcntl, and this is a path that must not itself
-     * fatal on a build without it — since E676 the sequence and that doctrine
-     * live in {@see \SugarCraft\Code\Support\ProcessReaper::escalate()}.
-     *
-     * E673: the child is a `setsid -w` wrapper that LEADS its own process
-     * group (where the host offers a usable detach), so {@see
-     * \SugarCraft\Code\Support\ProcessContainment::terminate()} group-kills
-     * and a hook that backgrounded something dies WITH the container instead
-     * of orphaning it. On the unwrapped fallback the direct child IS the
-     * command and only it is signalled — what is unconditionally guaranteed
-     * here is that `execute()` returns; tree-reaching is guaranteed wherever
-     * the kernel says the child leads its group.
-     *
-     * @param resource $process
+     * One stream as the verdict sees it: ChildRun's retained head, plus a
+     * constant-size marker naming the ceiling and the refused byte count when
+     * the ceiling cut it — so the buffer reads as a window, not the whole
+     * output. The marker is stamped once, so it cannot reopen the cap.
      */
-    private static function terminateAndEscalate($process): void
+    private static function capped(string $kept, int $dropped): string
     {
-        // E676: the rung SEQUENCE is ProcessReaper::escalate(); this call site
-        // keeps only what the rungs MEAN for a hook child (the group-aware
-        // containment signal) and this family's pinned 0.5 s budgets. The
-        // return stays unchecked by the same right as before: after signal 9
-        // the only way to still be running is an uninterruptible kernel wait.
-        ProcessReaper::escalate(
-            static function (int $signal) use ($process): void {
-                ProcessContainment::terminate($process, $signal);
-            },
-            static function () use ($process): bool {
-                return (\proc_get_status($process)['running'] ?? false) !== true;
-            },
-            self::TERMINATE_GRACE_SECONDS,
-            self::KILL_GRACE_SECONDS,
+        if ($dropped <= 0) {
+            return $kept;
+        }
+
+        return $kept . sprintf(
+            ' … [hook output capped at %d bytes; %d further bytes dropped]',
+            self::MAX_DRAIN_BYTES,
+            $dropped,
         );
     }
 

@@ -10,7 +10,6 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\Validator\AbsolutePathValidator;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The settings editor's write door (roadmap N-P2, Appendix N §4.4) — a SEPARATE
@@ -188,7 +187,7 @@ final class SettingsWriter
             return is_dir($root) && !is_link(rtrim($root, '/')) ? $path : null;
         }
 
-        return is_dir($dir) && ContainedPath::below($dir, $root) ? $path : null;
+        return is_dir($dir) && \SugarCraft\Core\Util\PathJail::below($dir, $root) ? $path : null;
     }
 
     /** The committed project file as the merge's walk names it, or null. */

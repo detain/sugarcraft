@@ -21,10 +21,10 @@ declare(strict_types=1);
  * host namespace is allowed by construction. String literals are judged, so a
  * `'SugarCraft\\Code\\Foo'` passed to `class_exists()` cannot hide the reference.
  *
- * THE ROSTER. The bundles (`candy-discord`, `candy-msteams`) still require
- * candy-code today; they join the roster when phase 1c-i switches them to the
- * plugin contract. Until then the guard covering them would be red on master,
- * so they are deliberately absent, and the roster is the one place to add them.
+ * THE BUNDLES. `candy-discord` and `candy-msteams` sit on the roster with no
+ * allowance. Phase 1c-ii gave each its own `lang/` catalog and dropped the
+ * host's `Lang` as its last use, so a bundle that requires candy-code or imports
+ * `SugarCraft\Code\Lang` again reds like any other plugin lib.
  *
  * Usage: php tools/check-plugin-deps.php [--root=<monorepo root>]
  * Exit 0 clean, 1 on any violation, 2 when a roster lib or its manifest is
@@ -33,7 +33,7 @@ declare(strict_types=1);
 final class CheckPluginDeps
 {
     /** Libs that must stay independent of candy-code. */
-    public const ROSTER = ['sugar-plugins', 'sugar-serve-protocol'];
+    public const ROSTER = ['sugar-plugins', 'sugar-serve-protocol', 'candy-discord', 'candy-msteams'];
 
     private const HOST_PACKAGE = 'sugarcraft/candy-code';
 

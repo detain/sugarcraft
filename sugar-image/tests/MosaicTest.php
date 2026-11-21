@@ -20,6 +20,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\Symbol\CanvasMode;
 use SugarCraft\Image\TmuxPassthroughDecorator;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * @covers \SugarCraft\Image\Mosaic
@@ -61,7 +62,14 @@ final class MosaicTest extends TestCase
         // Clear TMUX to avoid tmux() wrapper prefix
         putenv('TMUX');
         putenv('TERM_PROGRAM=WezTerm');
-        $m = Mosaic::auto();
+        \SugarCraft\Image\Detect::reset();
+        // The env claim stands only once the terminal answers the Kitty query (P1-13b).
+        KittyTerminal::answer();
+        try {
+            $m = Mosaic::auto();
+        } finally {
+            KittyTerminal::clear();
+        }
         $protocol = $m->protocol();
         // WezTerm may return 'kitty' or 'tmux(kitty)' depending on environment
         $this->assertStringContainsString('kitty', $protocol);

@@ -275,7 +275,13 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
             );
         }
 
-        $output = $this->truncateOutput($output, $this->maxOutputBytes);
+        // A non-positive bound takes the 8 MiB ceiling, as Glob and Grep do under
+        // owner ruling A (2026-11-20): truncateOutput() reads 0 as "no clip", and
+        // a zero cap would return an unbounded listing into the transcript.
+        $output = $this->truncateOutput(
+            $output,
+            $this->maxOutputBytes > 0 ? $this->maxOutputBytes : Bash::DEFAULT_RETAINED_BYTES,
+        );
 
         // Every note below is one bounded line and the ONLY place its fact
         // appears, so like Glob and Grep they go after the clip, behind the

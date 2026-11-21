@@ -315,6 +315,46 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame([], $result->quarantined);
     }
 
+    public function testATrustedNameFromANonTrustableCandidateIsRefusedBeforeItsManifestIsRead(): void
+    {
+        $plugin = $this->declaring('Impl');
+        $reads = 0;
+        $ledger = new MemoryLedger();
+        $candidate = new PluginCandidate(
+            name: 'demo',
+            dir: $plugin['dir'],
+            manifest: static function () use ($plugin, &$reads): ?PluginManifest {
+                $reads++;
+
+                return PluginManifest::fromDir($plugin['dir']);
+            },
+            trustable: false,
+        );
+
+        $result = $this->load([$candidate], $ledger, trusted: ['demo']);
+
+        $this->assertSame(0, $reads, 'a project-tier copy of a trusted name has its bytes left unread');
+        $this->assertSame([], $result->loaded);
+        $this->assertSame([], $result->quarantined);
+        $this->assertSame([], $ledger->recorded, 'a refused candidate is not recorded as seen');
+        $this->assertSame(['tier-refused'], array_values(array_unique(array_column($result->refusals, 'reason'))));
+        $this->assertSame(['channel'], array_column($result->refusals, 'kind'), 'one row per requested kind');
+    }
+
+    public function testAnUntrustedNameFromANonTrustableCandidateOwesNoRow(): void
+    {
+        $plugin = $this->declaring('Impl');
+
+        $result = $this->load([new PluginCandidate(
+            name: 'demo',
+            dir: $plugin['dir'],
+            manifest: static fn (): ?PluginManifest => PluginManifest::fromDir($plugin['dir']),
+            trustable: false,
+        )], new MemoryLedger(), trusted: ['other']);
+
+        $this->assertSame([], $result->refusals, 'the trust gate answers first, so an untrusted name is never listed');
+    }
+
     public function testAnEntrypointOutsideTheCandidateDirectoryIsRefusedUncontained(): void
     {
         $plugin = $this->declaring('Impl');
@@ -322,7 +362,7 @@ final class PluginLoaderTest extends TestCase
         $this->dirs[] = $elsewhere;
         $ledger = new MemoryLedger();
         $ledger->prime($plugin['file']);
-        $candidate = new PluginCandidate('demo', $elsewhere, static fn (): ?PluginManifest => PluginManifest::fromDir($plugin['dir']));
+        $candidate = new PluginCandidate('demo', $elsewhere, static fn (): ?PluginManifest => PluginManifest::fromDir($plugin['dir']), trustable: true);
 
         $result = $this->load([$candidate], $ledger);
 
@@ -378,7 +418,7 @@ final class PluginLoaderTest extends TestCase
         $this->assertSame(['channel', 'theme'], array_column($result->refusals, 'kind'));
     }
 
-    public function testAContractAtOrBelowTheHostIsAccepted(): void
+    public function testAContractEqualToTheHostIsAccepted(): void
     {
         $plugin = $this->declaring('Impl', contract: 3);
 
@@ -386,6 +426,15 @@ final class PluginLoaderTest extends TestCase
 
         $this->assertCount(1, $result->quarantined);
         $this->assertSame([], $result->refusals);
+    }
+
+    public function testAContractBelowTheHostIsRefusedBecauseTheCheckIsExact(): void
+    {
+        $plugin = $this->declaring('Impl', contract: 2);
+
+        $result = $this->load([Plugins::candidate('demo', $plugin['dir'])], new MemoryLedger(), host: 3);
+
+        $this->assertSame(['contract-unsupported'], array_column($result->refusals, 'reason'));
     }
 
     public function testAWorldWritableFileIsRefused(): void

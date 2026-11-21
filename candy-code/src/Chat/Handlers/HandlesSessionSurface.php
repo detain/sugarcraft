@@ -107,6 +107,9 @@ use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\ShellSendSettledMsg;
+use SugarCraft\Code\App\ScheduleFiredMsg;
+use SugarCraft\Code\Chat\ScheduleVerdicts;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\ModelCatalogReadyMsg;
@@ -155,6 +158,17 @@ use SugarCraft\Code\Lang;
 // pump, window reflow, mouse, paste bracket, clipboard image, picker load-more). W7-S4.
 trait HandlesSessionSurface
 {
+    /**
+     * How often a rewake tick re-queues itself while a `/bg` stop waits on the
+     * daemon (seconds). The stop's rungs advance only from a tick, and the poll
+     * ({@see \SugarCraft\Code\Chat::BACKGROUND_POLL_SECONDS}) is two seconds apart,
+     * so without this a stop from an idle TUI answers one rung per poll. A tenth of
+     * a second keeps each rung's answer prompt and the repaint rate close to the
+     * tool-event pump's; it runs only while a stop is in flight, so an idle chat
+     * pays nothing.
+     */
+    private const BACKGROUND_STOP_REWAKE_SECONDS = 0.1;
+
     /**
      * Route family handler: owns the class-disjoint Msg arms listed below;
      * returns null when none match so route()'s chain can try the next
@@ -215,6 +229,19 @@ trait HandlesSessionSurface
                 \SugarCraft\Code\Host\Commands\BackgroundCommand::isSpawnFailure($msg),
             )]]), null];
         }
+        if ($msg instanceof ShellSendSettledMsg) {
+            // The answer to a `/shells send` that waited for its relay: one UI-only row,
+            // appended where the echo already sits (P4-12 CC-1). The wait can outlive
+            // the session it was typed in, so a row for a session no longer on screen
+            // is dropped, the same rule the side-question answer follows. A `/clear`
+            // since the send empties the transcript the row was typed into, so the
+            // transcript generation is checked as well as the session.
+            if ($msg->sessionId !== $this->currentSessionId || $msg->transcriptEpoch !== $this->transcriptEpoch) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
+        }
         if ($msg instanceof BackgroundSessionStoppedMsg) {
             // Record the settled status as already announced, so the next
             // background poll does not repeat it as "is now stopped".
@@ -231,8 +258,17 @@ trait HandlesSessionSurface
                 'backgroundStatuses' => $statuses,
             ]), null];
         }
+        if ($msg instanceof ScheduleFiredMsg) {
+            // The launches that answered after the tick that started them: the same
+            // verdict lines that tick writes for the ones it could already decide.
+            $notices = ScheduleVerdicts::announce($msg->results, $this->dispatchOutboundWebhook(...));
+
+            return [$notices === [] ? $this : $this->mutate(['history' => [...$this->history, ...$notices]]), null];
+        }
         if ($msg instanceof BackgroundTickMsg) {
-            return $this->pumpBackgroundSessions();
+            [$next, $cmd] = $this->pumpBackgroundSessions();
+
+            return [$next, $this->rewakeWhileStopWaits($msg, $cmd)];
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
@@ -406,5 +442,31 @@ trait HandlesSessionSurface
         }
 
         return null;
+    }
+
+    /**
+     * Queue the next rewake tick while a stop this process started still waits on
+     * the daemon. Only a rewake tick re-queues: the subscription's own ticks never
+     * start a chain. One chain serves every in-flight stop, so a tick that arrives
+     * while the chain runs is a duplicate and queues nothing
+     * ({@see \SugarCraft\Code\Background\BackgroundSupervisor::advanceRewakeChain()}).
+     */
+    private function rewakeWhileStopWaits(BackgroundTickMsg $tick, ?\Closure $cmd): ?\Closure
+    {
+        if (!$tick->rewake || $this->backgroundSupervisor === null) {
+            return $cmd;
+        }
+
+        $chain = $this->backgroundSupervisor->advanceRewakeChain($tick->chain);
+        if ($chain === null) {
+            return $cmd;
+        }
+
+        $again = Cmd::tick(
+            self::BACKGROUND_STOP_REWAKE_SECONDS,
+            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(rewake: true, chain: $chain),
+        );
+
+        return $cmd === null ? $again : Cmd::batch($cmd, $again);
     }
 }

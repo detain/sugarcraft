@@ -87,7 +87,7 @@ final class Cmd
      * produce closure keeps its existing seat (no stacking). A producer
      * that returns `null` steps down — its deliveries stop and the timer
      * tears itself down when the last consumer leaves. This synchronised
-     * cadence is the shipped contract (audit sugar-core-004).
+     * cadence is the shipped contract.
      *
      * Mirrors charmbracelet/bubbletea.Every.
      *
@@ -178,8 +178,8 @@ final class Cmd
      * use this for cursor-area-neutral effects (window title, OSC
      * inline images, etc.) and call {@see Program::forceRepaint()}
      * themselves if they intentionally clobber the painted region.
-     * (Pre-sc-35 this instruction named Renderer::reset(), which no
-     * public path reaches — forceRepaint() is the reachable seam, DX-05.)
+     * (An earlier version named Renderer::reset(), which no public path
+     * reaches; forceRepaint() is the reachable seam.)
      *
      * Mirrors charmbracelet/bubbletea.Raw.
      */

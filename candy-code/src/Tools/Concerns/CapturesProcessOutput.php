@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\Concerns;
 
+use SugarCraft\Async\ChildResult;
+use SugarCraft\Async\ChildRun;
+use SugarCraft\Async\StdinStagingException;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
-use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Support\WindowsTaskKill;
 
@@ -84,6 +87,16 @@ use SugarCraft\Code\Support\WindowsTaskKill;
  * pty is a terminal, not a typist, and no askpass surface exists here.
  * InteractivePromptContainmentTest pinned this parameter's ABSENCE until
  * the mechanism landed; the flip of that pin is the chosen change.
+ *
+ * ## OUTPUT CAP — the default when a caller names none
+ *
+ * Every captured stream is RETAINED up to {@see DEFAULT_RETAINED_BYTES} (8 MiB)
+ * when the caller passes no bound, or a zero or negative one. Bytes past that are
+ * read, counted as dropped per stream, and discarded; they are never concatenated.
+ * The old no-bound path appended every chunk unboundedly, so a runaway child could
+ * grow the agent's memory without limit. The cap is the same figure
+ * TestRunner::MAX_CAPTURE_BYTES uses for its own capture, so the two read alike.
+ * A caller that needs a different ceiling passes its own positive $maxBytes.
  */
 trait CapturesProcessOutput
 {
@@ -98,13 +111,52 @@ trait CapturesProcessOutput
         '... [stderr suppressed: the command succeeded and also wrote to stderr; re-run with 2>&1 to see it]';
 
     /**
-     * $maxBytes bounds what is RETAINED per stream, not what is read: the
-     * pipes are still drained to completion so the child never blocks on a
-     * full buffer, but bytes past the bound are counted and discarded instead
-     * of accumulated. Without it a `cat` of a multi-gigabyte file is an
-     * out-of-memory kill of the agent itself, long before {@see
-     * TruncatesOutput} would get a chance to clip the finished string. Null
-     * keeps the capture unbounded for callers that want the whole thing.
+     * Bytes RETAINED per captured stream when the caller names no bound (null,
+     * zero or negative). Output past it is counted as dropped, never kept.
+     */
+    public const DEFAULT_RETAINED_BYTES = 8 * 1024 * 1024;
+
+    /**
+     * The deadline a run gets when the caller names none: far past any real
+     * command, so ChildRun's deadline is always set and the wait is still
+     * unbounded in practice, as the historical no-timeout path was.
+     */
+    private const UNBOUNDED_TIMEOUT_SECONDS = 86400.0 * 365;
+
+    /** The shortest deadline ChildRun accepts; a zero or negative caller bound becomes this. */
+    private const MINIMUM_TIMEOUT_SECONDS = 0.001;
+
+    /** How often a runCaptured() caller's $onWait is beaten while the child runs. */
+    private const WAIT_BEAT_SECONDS = 0.2;
+
+    /**
+     * Grace budgets for the deadline kill's 15→9 ladder: StatusLineCommand's
+     * 0.5 s each rather than the reaper's 1 s defaults, because the caller
+     * that set a deadline has already spent its patience. The ladder is the
+     * tail of that budget, not a second one of the same size.
+     */
+    private const DEADLINE_TERMINATE_GRACE_SECONDS = 0.5;
+    private const DEADLINE_KILL_GRACE_SECONDS = 0.5;
+
+    /**
+     * Appended to stderr when ChildRun stopped reading because the pipes failed
+     * (stream_select() kept failing). Without it the result is a bare exit code
+     * from the kill, which reads as the command's own answer.
+     */
+    private const PIPE_FAILED_NOTE =
+        '[output capture failed: reading the command\'s output kept failing, so the capture stopped early '
+        . 'and the command was killed if it was still running; the output above may be incomplete, '
+        . 'and the exit code may be the kill\'s rather than the command\'s own]';
+
+    /**
+     * $maxBytes bounds what is RETAINED per stream, not what is read: ChildRun
+     * drains the pipes to completion so the child never blocks on a full buffer,
+     * but bytes past the bound are counted and discarded instead of accumulated.
+     * Without it a `cat` of a multi-gigabyte file is an out-of-memory kill of the
+     * agent itself, long before {@see TruncatesOutput} would get a chance to clip
+     * the finished string. Null, or zero or less, takes {@see DEFAULT_RETAINED_BYTES}:
+     * there is no unbounded capture, so a caller that wants more than the default
+     * passes it.
      *
      * The discard counts are reported PER STREAM, not only as a total. Which
      * stream lost bytes is not bookkeeping trivia: {@see
@@ -121,29 +173,33 @@ trait CapturesProcessOutput
      * discard count alone, since a cut that happened to fall on a newline
      * needs no repair).
      *
-     * $timeoutSeconds is an OPTIONAL wall-clock bound (audit 15d-14), and
-     * null — the default — keeps the historical unbounded wait byte for
-     * byte for callers that pass none (Grep). Bash passes its `timeout`
-     * parameter (default 120 s, item 0.4). A caller that cannot afford to wait, the prompt
-     * assembly's git reads above all, passes one: the drain stops at the
-     * deadline, and a child that closed its pipes but has not exited is
-     * waited on only until the same deadline, because bounding the drain
-     * alone leaves the unbounded wait inside `proc_close()`. On expiry the
-     * child's whole process group (it leads one under the `setsid -w`
-     * spawn) gets the reaper's 15→9 ladder on short graces, the pipes are
-     * closed and the child reaped; the result is exit 124 (timeout(1)'s
-     * number) with `timedOut` true and whatever output arrived before the
-     * deadline. `timedOut` is the discriminator to read — an exit code of
-     * 124 can also be a command's own answer. The group id the ladder
-     * signals is RECORDED AT SPAWN, while the leader is certainly alive
-     * (ISS-014): a command that backgrounds a child and lets the wrapper
-     * exit first loses its group to `proc_get_status()`'s own reaping, and
-     * re-deriving the id at kill time would then signal a dead pid while
-     * the group lived. `groupKilled` carries the honest claim — true only
-     * when the recorded group was confirmed empty afterwards (on Windows,
-     * the direct-exec spawn's recorded pid doubles as the tree handle and
-     * taskkill /T /F's own exit code is the confirmation); a kill that
-     * could not be confirmed must never be narrated as one.
+     * $timeoutSeconds is an OPTIONAL wall-clock bound (audit 15d-14). Null — the
+     * default — keeps the historical unbounded wait for callers that pass none
+     * (Grep): it becomes {@see UNBOUNDED_TIMEOUT_SECONDS}, a figure no run reaches.
+     * Bash passes its `timeout` parameter (default 120 s, item 0.4). A caller that
+     * cannot afford to wait, the prompt assembly's git reads above all, passes one.
+     * On expiry ChildRun kills the child's whole process group on the 15→9 ladder,
+     * reaps it, and the result is exit 124 (timeout(1)'s number) with `timedOut`
+     * true and whatever output arrived before the deadline. `timedOut` is the
+     * discriminator to read — an exit code of 124 can also be a command's own
+     * answer. A backgrounded grandchild that keeps the pipes open is not waited on
+     * past the deadline either: ChildRun runs with no exit grace here, so the held
+     * pipes run the clock out and the same kill follows.
+     *
+     * `groupKilled` is true only when `timedOut` is AND the process group the child
+     * led was measured empty after the kill. A child that was not started behind a
+     * containment wrapper leads no group of its own, so it is never true for one.
+     * A kill that could not be confirmed is never narrated as one (ISS-014).
+     *
+     * Windows has no process group, and ChildRun's ladder ends at proc_terminate(),
+     * which kills only the direct child. There the kill seam walks the child's tree
+     * with {@see WindowsTaskKill::tree()} before the ladder's first signal, while
+     * the child still roots the tree, and `groupKilled` is taskkill's own verdict.
+     * The deadline kill runs on 0.5 s graces, not ChildRun's 1 s defaults.
+     *
+     * A pipe failure (ChildRun's PIPE_FAILED: stream_select() kept failing) ends
+     * the read early and kills the child. The result then carries a note on stderr
+     * saying the capture failed, so the exit code is not read as the command's own.
      *
      * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
      * wins over the inherited environment — and over the credential scrub,
@@ -151,11 +207,16 @@ trait CapturesProcessOutput
      * minus credentials (audit F-E1). EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
      * (audit 15d-12) so the lock rule stays scoped to its own git reads.
      *
-     * $onWait is called once per select slice (at most every 200 ms) for as
-     * long as the drain waits — the hook a sequential tool's heartbeat rides
-     * (item 0.4-b, {@see \SugarCraft\Code\Tools\AcceptsHeartbeat}), so a
-     * long-running command reads as alive to the turn's idle watchdog. It
-     * is only ever called from this process; the caller throttles.
+     * $onWait is called on ChildRun's heartbeat, at most every 200 ms, for as
+     * long as the child runs — including the wait for its exit after its output
+     * has closed, which is where a `cmd >/dev/null 2>&1` spends its time. The hook
+     * a sequential tool's heartbeat rides (item 0.4-b, {@see
+     * \SugarCraft\Code\Tools\AcceptsHeartbeat}), so a long-running command reads
+     * as alive to the turn's idle watchdog. It is only ever called from this
+     * process; the caller throttles.
+     *
+     * $stdinFile is read into ChildRun's stdin payload before the spawn. A file
+     * that cannot be read refuses the run the same way a failed spawn does.
      *
      * @param string|list<string> $command the shell string, or — since
      *        C-TUI-6.a, for the Windows Bash path — the direct-exec argv the
@@ -180,244 +241,135 @@ trait CapturesProcessOutput
     private function runCaptured(string|array $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null, ?string $stdinFile = null, array $envUnset = []): array
     {
         // $stdinFile feeds the child from a file (git's --stdin readers) without
-        // a shell `<` redirect; $envUnset removes inherited names before the
-        // overrides land, which is what a shell's `unset` did before `VAR=val`.
-        $descriptors = [
-            0 => $stdinFile === null ? ['pipe', 'r'] : ['file', $stdinFile, 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
+        // a shell `<` redirect. ChildRun takes a payload, not a descriptor, so the
+        // file is read whole; the readers this serves are fed path lists, which
+        // are small. $envUnset removes inherited names before the overrides land,
+        // which is what a shell's `unset` did before `VAR=val`.
+        $stdin = null;
+        if ($stdinFile !== null) {
+            $stdin = @file_get_contents($stdinFile);
+            if ($stdin === false) {
+                return self::spawnRefused($command, 'its stdin file ' . $stdinFile . ' could not be read', null);
+            }
+        }
 
-        // Phase 9 layer A, routed through the choke point under E672: the
-        // spec comes from ProcessContainment::spawnSpec() (a proven
-        // `setsid -w` wrapper naming /bin/sh explicitly, because that is
-        // exactly the shell PHP's string form runs, or the original command
-        // where no usable detach exists) and the env from ::scrubbedEnv() —
-        // ::env() minus credentials (audit F-E1), because what this child
-        // prints is handed to the model. ONE
-        // proc_open call, with the spec chosen above, not a ternary of two:
-        // DescriptorInheritanceGuardTest licenses spawn sites by name, and a
-        // doubly-anonymous result would read as two unclassifiable exposed
-        // children where one known site lives. The env block rides both
-        // paths: detach is the half that needs a binary, fail-fast env needs
-        // none.
-        $spawnSpec = ProcessContainment::spawnSpec($command);
+        // Phase 9 layer A: the spec comes from ProcessContainment::spawnSpec() (a
+        // proven `setsid -w` wrapper naming /bin/sh explicitly, or the original
+        // command where no usable detach exists) and the env from
+        // ::scrubbedEnv() — ::env() minus credentials (audit F-E1), because what
+        // this child prints is handed to the model. Both run paths take both.
+        $spec = ProcessContainment::spawnSpec($command);
         $env = ProcessContainment::scrubbedEnv($envOverrides, $envUnset);
-        // Clear the last error before the @-suppressed call so error_get_last()
-        // below can only describe THIS spawn, never a stale diagnostic from
-        // earlier in the process; proc_open() failure always pairs with a
-        // warning, so a null here means the call failed silently and the
-        // message says only what is known.
-        error_clear_last();
-        $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
-        if (!is_resource($process)) {
-            $cause = error_get_last()['message'] ?? null;
-            $text = \is_array($command) ? implode(' ', $command) : $command;
-            $shown = strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
-            return [
-                'stdout' => '',
-                'stderr' => 'Could not start the command ' . $shown . ' — proc_open() failed'
-                    . ($cause === null ? '' : ' (' . $cause . ')')
-                    . '; the command was never run. This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.',
-                'exitCode' => 127,
-                'truncatedBytes' => 0,
-                'stdoutDropped' => 0,
-                'stderrDropped' => 0,
-                'stdoutMidLine' => false,
-                'stderrMidLine' => false,
-                'timedOut' => false,
-                'groupKilled' => false,
-            ];
+
+        try {
+            $run = \is_array($spec) ? ChildRun::new(array_values($spec)) : ChildRun::commandLine($spec);
+        } catch (\InvalidArgumentException $refused) {
+            return self::spawnRefused($command, 'the command is empty, so there was nothing to run', null);
         }
 
-        // ISS-014: take the process-group id NOW, while the leader is
-        // certainly alive. proc_get_status() reaps a dead child, so an id
-        // re-derived at kill time can race the wrapper out of the process
-        // table (a backgrounded `cmd &` exits the shell immediately and
-        // keeps the pipes open). A plain int stays signalable as -pgid
-        // after the leader's death for as long as any member lives.
-        $groupId = self::recordedGroupId($process);
-
-        // Close stdin immediately: a command that reads from it (and nothing
-        // supplies input) would otherwise block the agent forever.
-        if ($stdinFile === null) {
-            fclose($pipes[0]);
-        }
-
-        // Non-blocking reads on both pipes. Draining only stdout first can
-        // deadlock: a command producing more stderr than the pipe buffer holds
-        // blocks writing it while we sit waiting on stdout.
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
-        $stdout = '';
-        $stderr = '';
-        $stdoutDropped = 0;
-        $stderrDropped = 0;
-        $deadline = $timeoutSeconds === null ? null : microtime(true) + max(0.0, $timeoutSeconds);
-        $timedOut = false;
-        $keep = static function ($pipe, string $chunk) use ($pipes, $maxBytes, $onChunk, &$stdout, &$stderr, &$stdoutDropped, &$stderrDropped): void {
-            if ($pipe === $pipes[1]) {
-                $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
-            } else {
-                $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
-            }
-            // WEB-4: every byte the capture keeps is offered to the live
-            // tail feed, stdout and stderr alike — the ring shows what
-            // the watcher sees, in the order the pipes answered.
-            if ($onChunk !== null) {
+        // The spawn, the pumps, the deadline and the kill ladder are ChildRun's. A
+        // wrapped spec makes the child its own group leader, so the group is recorded
+        // from its pid at spawn and survives its leader exiting first.
+        // The cap is the same figure TestRunner::MAX_CAPTURE_BYTES uses for its own
+        // capture, so the two read alike. Held pipes are not given an exit grace:
+        // with none, a grandchild holding the output runs the clock out to the
+        // deadline, which is what the byte-for-byte historical wait did.
+        $started = false;
+        $leadsGroup = ProcessContainment::groupsSpawns();
+        $groupPid = null;
+        $run = $run
+            ->withCwd($cwd)
+            ->withEnv($env)
+            ->withMaxBytes($maxBytes === null || $maxBytes <= 0 ? self::DEFAULT_RETAINED_BYTES : $maxBytes)
+            ->withTimeout($timeoutSeconds === null ? self::UNBOUNDED_TIMEOUT_SECONDS : max(self::MINIMUM_TIMEOUT_SECONDS, $timeoutSeconds))
+            ->withExitGrace(null)
+            ->withKillGrace(self::DEADLINE_TERMINATE_GRACE_SECONDS, self::DEADLINE_KILL_GRACE_SECONDS)
+            ->withGroupLeader($leadsGroup)
+            ->withStdin($stdin)
+            ->withOnSpawn(static function (int $pid) use (&$started, &$groupPid, $leadsGroup): void {
+                $started = true;
+                // An unwrapped child shares this process's group, so only a child that leads its own is recorded.
+                if ($leadsGroup) {
+                    $groupPid = $pid;
+                }
+            });
+        if ($onChunk !== null) {
+            $run = $run->withOnChunk(static function (int|string $slot, string $chunk) use ($onChunk): void {
                 $onChunk($chunk);
-            }
-        };
-
-        // Windows: stream_set_blocking() cannot unblock a proc_open pipe,
-        // stream_select() reports both pipes ready with nothing in them, and
-        // the fread() after it blocks until the child exits, so the select loop
-        // below would never reach its deadline check (see WindowsPipes). This
-        // arm reads only the bytes fstat says are waiting, polls the child
-        // between passes, and ends on its EXIT rather than on EOF, which
-        // Windows cannot report without a read that might block. Output that a
-        // backgrounded grandchild writes after the shell has exited is not
-        // waited for here. The POSIX loop waits for it until EOF.
-        //
-        // Keyed on the REAL runtime, not WindowsShell::isWindows(): blocking
-        // pipes are a property of PHP's Windows stream layer, while the
-        // injectable family only picks the command dialect. On Linux, fstat()
-        // of a pipe always answers size 0, so this arm would read nothing
-        // there (BashWindowsSpecTest drives the Windows dialect over real
-        // Linux pipes and caught exactly that).
-        $windowsExit = null;
-        if (WindowsPipes::runtimeNeedsIt()) {
-            while (true) {
-                if ($onWait !== null) {
-                    $onWait();
-                }
-                // Checked on EVERY pass, reads included: a child that writes
-                // without pause (`yes`) always has bytes waiting, and a
-                // deadline consulted only on idle passes would never fire.
-                if ($deadline !== null && microtime(true) >= $deadline) {
-                    $timedOut = true;
-                    break;
-                }
-                $got = false;
-                foreach ([$pipes[1], $pipes[2]] as $pipe) {
-                    $chunk = WindowsPipes::readAvailable($pipe);
-                    if ($chunk !== '') {
-                        $keep($pipe, $chunk);
-                        $got = true;
-                    }
-                }
-                if ($got) {
-                    continue;
-                }
-                $status = proc_get_status($process);
-                if (($status['running'] ?? false) !== true) {
-                    $windowsExit = (int) ($status['exitcode'] ?? -1);
-                    // Bytes written between the last pass and the exit are
-                    // still in the pipe; take them before reporting. Bounded:
-                    // a backgrounded grandchild can keep the pipe fed forever
-                    // after the shell exits, so the drain stops at the
-                    // deadline (and counts as a timeout, so the tree kill
-                    // runs) or, unbounded runs, after a short fixed grace.
-                    $drainUntil = min(
-                        $deadline ?? \INF,
-                        microtime(true) + WindowsPipes::EXIT_DRAIN_GRACE_SECONDS,
-                    );
-                    foreach ([$pipes[1], $pipes[2]] as $pipe) {
-                        while (($chunk = WindowsPipes::readAvailable($pipe)) !== '') {
-                            $keep($pipe, $chunk);
-                            if (microtime(true) >= $drainUntil) {
-                                $timedOut = $deadline !== null && microtime(true) >= $deadline;
-                                break 2;
-                            }
-                        }
-                    }
-                    break;
-                }
-                $sleep = WindowsPipes::POLL_MICROSECONDS;
-                if ($deadline !== null) {
-                    $remaining = $deadline - microtime(true);
-                    $sleep = max(1, min($sleep, (int) ceil($remaining * 1_000_000)));
-                }
-                usleep($sleep);
-            }
+            });
+        }
+        if ($onWait !== null) {
+            $run = $run->withHeartbeat(self::WAIT_BEAT_SECONDS, $onWait);
+        }
+        // Windows: no group to signal, and proc_terminate() reaches the direct child
+        // only. The tree is walked from the kill seam, before the ladder's first
+        // signal, because taskkill /T needs the root alive to find its descendants.
+        $treeKilled = false;
+        if (WindowsShell::isWindows()) {
+            $run = $run->withOnKill(static function (int $pid) use (&$treeKilled): void {
+                $treeKilled = WindowsTaskKill::tree($pid);
+            });
         }
 
-        while ($windowsExit === null && !$timedOut && (!feof($pipes[1]) || !feof($pipes[2]))) {
-            if ($onWait !== null) {
-                $onWait();
+        // ChildRun raises RuntimeException for a refused spawn only. Once the child
+        // has started, a throw is a caller's own (a callback), and it must reach
+        // the caller rather than be reported as a spawn failure.
+        error_clear_last();
+        try {
+            $r = $run->run();
+        } catch (\RuntimeException $failure) {
+            if ($started) {
+                throw $failure;
             }
-            $read = array_filter([$pipes[1], $pipes[2]], static fn($p) => !feof($p));
-            if ($read === []) {
-                break;
-            }
-            $selectMicros = 200000;
-            if ($deadline !== null) {
-                $remaining = $deadline - microtime(true);
-                if ($remaining <= 0.0) {
-                    $timedOut = true;
-                    break;
-                }
-                // Never sleep past the deadline: a silent child must be
-                // noticed AT the bound, not up to one 200 ms slice after it.
-                $selectMicros = max(1, min($selectMicros, (int) ceil($remaining * 1_000_000)));
-            }
-            $write = $except = null;
-            if (@stream_select($read, $write, $except, 0, $selectMicros) === false) {
-                break;
-            }
-            foreach ($read as $pipe) {
-                $chunk = fread($pipe, 8192);
-                if ($chunk === false || $chunk === '') {
-                    continue;
-                }
-                $keep($pipe, $chunk);
-            }
+
+            return self::startFailed($command, $failure, error_get_last()['message'] ?? null);
         }
 
-        // Bounded mode only: EOF on both pipes does not mean the child
-        // exited (`cmd >/dev/null 2>&1` closes them at once), and proc_close()
-        // would then wait for as long as it runs. The status observed here is
-        // kept because it, not proc_close(), is the one known to carry the
-        // exit code once proc_get_status() has seen the exit. The Windows arm
-        // above already observed the exit and carries its own.
-        $observedExit = $windowsExit;
-        if ($deadline !== null && !$timedOut && $observedExit === null) {
-            $observedExit = self::awaitExitUntil($process, $deadline, $onWait);
-            $timedOut = $observedExit === null;
-        }
+        // ChildRun's ladder reports whether it reaped the child, not whether the group
+        // it signalled is empty, so the group is measured now. A kill that left a
+        // member alive is never narrated as a group kill (ISS-014). On Windows the
+        // verdict is taskkill's, from the kill seam above.
+        $groupKilled = $r->timedOut()
+            && (($groupPid !== null && BoundedShutdown::groupEmpty($groupPid)) || $treeKilled);
 
-        $groupKilled = false;
-        if ($timedOut) {
-            // Kill BEFORE closing the pipes — StatusLineCommand's order: a
-            // stuck child is not writing, so EPIPE would never reach it.
-            // The claim needs BOTH a recorded group id (an unwrapped child
-            // shares this process's group and only IT can be signalled —
-            // see the deadline tests' detachedSpawnBinary()==='' arm) and
-            // the ladder's confirmation that the group answered nothing.
-            $ladderConfirmed = self::terminateGroup($process, $groupId);
-            $groupKilled = $groupId !== null && $ladderConfirmed;
-        }
+        return self::capturedResult($r, $groupKilled);
+    }
 
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $closedExit = proc_close($process);
-        $exitCode = $timedOut ? 124 : ($observedExit ?? $closedExit);
+    /**
+     * runCaptured()'s answer for a run ChildRun finished: the streams, the exit, the
+     * per-stream drops, and the pipe-failure note when the read failed.
+     *
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
+     */
+    private static function capturedResult(ChildResult $r, bool $groupKilled): array
+    {
+        $timedOut = $r->timedOut();
+        $stdoutDropped = $r->droppedBytes - $r->droppedStderrBytes;
+        $stderrDropped = $r->droppedStderrBytes;
+
+        // The note goes on stderr, the tail the presentation layer keeps under any
+        // cap. It ends the stream on a whole line, so a cap that cut stderr mid-line
+        // no longer marks its end for repair: the repair would drop the note.
+        $stderr = rtrim($r->stderr, "\n");
+        $stderrMidLine = $stderrDropped > 0 && !str_ends_with($r->stderr, "\n");
+        if ($r->status === ChildResult::PIPE_FAILED) {
+            $stderr .= ($stderr === '' ? '' : "\n") . self::PIPE_FAILED_NOTE;
+            $stderrMidLine = false;
+        }
 
         // Decided BEFORE the rtrim: a stream that lost bytes but happened to
         // stop on a newline is intact, and repairing it anyway would throw
         // away a complete line for nothing.
-        $stdoutMidLine = $stdoutDropped > 0 && !str_ends_with($stdout, "\n");
-        $stderrMidLine = $stderrDropped > 0 && !str_ends_with($stderr, "\n");
-
         return [
-            'stdout' => rtrim($stdout, "\n"),
-            'stderr' => rtrim($stderr, "\n"),
-            'exitCode' => $exitCode,
-            'truncatedBytes' => $stdoutDropped + $stderrDropped,
+            'stdout' => rtrim($r->stdout, "\n"),
+            'stderr' => $stderr,
+            // A signal death reads -1 from ChildRun's poll, which is not the number the
+            // result reports: the signal is, as proc_close() gives it on an unpolled child.
+            'exitCode' => $timedOut ? 124 : ($r->signal ?? $r->exitCode ?? -1),
+            'truncatedBytes' => $r->droppedBytes,
             'stdoutDropped' => $stdoutDropped,
             'stderrDropped' => $stderrDropped,
-            'stdoutMidLine' => $stdoutMidLine,
+            'stdoutMidLine' => $stdoutDropped > 0 && !str_ends_with($r->stdout, "\n"),
             'stderrMidLine' => $stderrMidLine,
             'timedOut' => $timedOut,
             'groupKilled' => $groupKilled,
@@ -425,154 +377,66 @@ trait CapturesProcessOutput
     }
 
     /**
-     * Grace budgets for the deadline path's 15→9 ladder: StatusLineCommand's
-     * 0.5 s each rather than the reaper's 1 s defaults, because the caller
-     * that set a deadline has already spent its patience — the ladder is the
-     * tail of that budget, not a second one of the same size.
-     */
-    private const DEADLINE_TERMINATE_GRACE_SECONDS = 0.5;
-    private const DEADLINE_KILL_GRACE_SECONDS = 0.5;
-
-    /**
-     * Poll until the child exits or $deadline passes; the exit code on exit,
-     * null on expiry. The status is read BEFORE the clock so a child that
-     * exited right at the bound still counts as exited. $onWait beats here
-     * too: `cmd >/dev/null 2>&1` closes both pipes at once and then spends
-     * its whole run in this loop.
+     * runCaptured()'s answer for a run ChildRun refused to start. A stdin payload
+     * the Windows runtime could not stage to a temp file is a temp-directory
+     * problem, reported as one and without the process-limit hint; its cause is the
+     * tempnam()/write warning. Every other refusal is proc_open() refusing the
+     * spawn, which keeps the hint.
      *
-     * @param resource $process
-     * @param (\Closure(): void)|null $onWait
+     * @param string|list<string> $command
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
      */
-    private static function awaitExitUntil($process, float $deadline, ?\Closure $onWait = null): ?int
+    private static function startFailed(string|array $command, \RuntimeException $failure, ?string $cause): array
     {
-        while (true) {
-            if ($onWait !== null) {
-                $onWait();
-            }
-            $status = proc_get_status($process);
-            if (($status['running'] ?? false) !== true) {
-                return (int) ($status['exitcode'] ?? -1);
-            }
-            if (microtime(true) >= $deadline) {
-                return null;
-            }
-            usleep(ProcessReaper::POLL_INTERVAL_US);
+        if ($failure instanceof StdinStagingException) {
+            $dir = $failure->tempDir();
+
+            return self::spawnRefused(
+                $command,
+                'its stdin could not be staged: no temp file could be created and written in '
+                    . ($dir ?? 'the temp directory'),
+                $cause,
+            );
         }
+
+        return self::spawnRefused($command, 'proc_open() failed', $cause, true);
     }
 
     /**
-     * The process-group id a deadline kill should target, recorded while
-     * the child is certainly alive (ISS-014).
+     * The never-started answer for runCaptured(): exit 127, empty stdout, the
+     * reason on stderr. The run was never started, so nothing ran and nothing
+     * was read.
      *
-     * {@see ProcessContainment::groupId()} cannot serve HERE, at spawn
-     * time: the tracked pid is the `setsid(1)` process BEFORE it calls
-     * setsid(2), so a measured `posix_getpgid(child) === child` read this
-     * early still sees the inherited group and answers null exactly when
-     * asked the one question it can answer. The wrapper gives the same
-     * fact by construction instead: setsid(2) in place (the forked child
-     * is never already a group leader, so setsid(1) execs rather than
-     * forks) makes the spawned pid its own group leader, and a pid is
-     * stable from birth. Without the wrapper the child shares THIS
-     * process's group and there is no group of ours to record — answering
-     * null keeps both the kill and the claim honest.
+     * $systemFailure marks a spawn the system refused (proc_open() failed), and
+     * only that case carries the process-limit hint. An empty command or an
+     * unreadable stdin file is a problem with the request, and the hint would
+     * point the reader at the wrong cause.
      *
-     * On Windows there is no process group at all, but the spawn shape
-     * C-TUI-6.a uses (a direct-exec array form, no wrapper the child could
-     * have been folded into) makes the child the ROOT OF OUR OWN TREE:
-     * every descendant under it was started by us. The recorded pid is
-     * therefore the faithful twin of a setsid group id, and
-     * {@see WindowsTaskKill::tree()} is the twin of kill(-pgid, ·) —
-     * with taskkill's own exit code standing in for the ESRCH answer as
-     * the "tree is empty" oracle (see {@see terminateGroup()}).
-     *
-     * @param resource $process
+     * @param string|list<string> $command
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
      */
-    private static function recordedGroupId($process): ?int
+    private static function spawnRefused(string|array $command, string $why, ?string $cause, bool $systemFailure = false): array
     {
-        // On Windows the recorded pid IS the handle (no group, no wrapper,
-        // but the direct-exec child roots our own tree). Off Windows the
-        // setsid wrapper is what gives the group its existence: without it
-        // the child shares THIS process's group and there is nothing of
-        // ours to record.
-        if (!WindowsShell::isWindows()
-            && (!\function_exists('posix_kill') || ProcessContainment::detachedSpawnBinary() === '')
-        ) {
-            return null;
-        }
+        $text = \is_array($command) ? implode(' ', $command) : $command;
+        $shown = strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
 
-        $pid = (int) (proc_get_status($process)['pid'] ?? 0);
-
-        return $pid > 0 ? $pid : null;
-    }
-
-    /**
-     * The shared 15→9 ladder over the child's process GROUP, so git's own
-     * helpers (an fsmonitor hook, a credential helper) die with it rather
-     * than being orphaned holding the repository.
-     *
-     * The group id is RECORDED AT SPAWN and handed in (ISS-014): if SIGTERM
-     * — or the command's own exit — removes the wrapper first, a
-     * re-derivation would find no group (proc_get_status() reaps the corpse,
-     * and posix_getpgid() fails on a gone pid), the signal-9 rung would
-     * reach only the dead wrapper, and the caller would narrate a group kill
-     * that never happened. The recorded id is signalled whatever the
-     * leader's state.
-     *
-     * The return value is a CONFIRMATION, not a hope: with a recorded group
-     * the ladder only reports gone once the leader's corpse has been reaped
-     * AND kill(-pgid, 0) answers ESRCH — a zombie leader still holds its
-     * group "alive" for signalling purposes, which is why the poll reads
-     * proc_get_status() first. On Windows the twin oracle is taskkill's own
-     * verdict: the ladder reports gone only once the leader is reaped AND a
-     * rung's taskkill /T /F answered 0 — a taskkill that failed on a dead
-     * leader walked no tree at all, so its descendants are unaccounted for
-     * and no claim may be narrated. Without a group id the verdict covers only
-     * the child this process spawned, and callers must not claim more.
-     *
-     * @param resource $process
-     */
-    private static function terminateGroup($process, ?int $groupId): bool
-    {
-        $treeConfirmed = false;
-
-        return ProcessReaper::escalate(
-            static function (int $signal) use ($process, $groupId, &$treeConfirmed): void {
-                if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
-                    return;
-                }
-                if ($groupId !== null && WindowsShell::isWindows()) {
-                    // The recorded pid IS the tree handle (see
-                    // recordedGroupId()); consult taskkill directly rather
-                    // than through terminate(), which falls back to a
-                    // leader-only proc_terminate and would answer true for
-                    // a tree it never walked. The fallback below keeps
-                    // proc_close() bounded when the walk fails.
-                    $treeConfirmed = WindowsTaskKill::tree($groupId) || $treeConfirmed;
-                    if (!$treeConfirmed) {
-                        ProcessContainment::terminate($process, $signal);
-                    }
-
-                    return;
-                }
-                ProcessContainment::terminate($process, $signal);
-            },
-            static function () use ($process, $groupId, &$treeConfirmed): bool {
-                // The status read doubles as the leader's reaper.
-                if ((proc_get_status($process)['running'] ?? false) === true) {
-                    return false;
-                }
-
-                if ($groupId !== null && WindowsShell::isWindows()) {
-                    return $treeConfirmed;
-                }
-
-                return $groupId === null
-                    || !\function_exists('posix_kill')
-                    || @\posix_kill(-$groupId, 0) === false;
-            },
-            self::DEADLINE_TERMINATE_GRACE_SECONDS,
-            self::DEADLINE_KILL_GRACE_SECONDS,
-        );
+        return [
+            'stdout' => '',
+            'stderr' => 'Could not start the command' . ($shown === '' ? '' : ' ' . $shown) . ' — ' . $why
+                . ($cause === null ? '' : ' (' . $cause . ')')
+                . '; the command was never run.'
+                . ($systemFailure
+                    ? ' This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.'
+                    : ''),
+            'exitCode' => 127,
+            'truncatedBytes' => 0,
+            'stdoutDropped' => 0,
+            'stderrDropped' => 0,
+            'stdoutMidLine' => false,
+            'stderrMidLine' => false,
+            'timedOut' => false,
+            'groupKilled' => false,
+        ];
     }
 
     /**
@@ -878,8 +742,10 @@ trait CapturesProcessOutput
      */
     private static function appendBounded(string $buffer, string $chunk, ?int $maxBytes, int &$discarded): string
     {
+        // No unbounded append: a null or non-positive bound takes the default cap,
+        // so every captured stream stays bounded whatever the caller passed.
         if ($maxBytes === null || $maxBytes <= 0) {
-            return $buffer . $chunk;
+            $maxBytes = self::DEFAULT_RETAINED_BYTES;
         }
 
         $room = $maxBytes - strlen($buffer);
@@ -983,9 +849,10 @@ trait CapturesProcessOutput
         //
         // Deliberately WITHOUT a byte count. The only figure available here is
         // `strlen($run['stderr']) + $stderrDropped`, and it is not stable
-        // across the cap: `runCaptured()` rtrims the retained text, so an
-        // UNCAPPED capture loses its trailing newline while a capped one --
-        // whose retained slice ends mid-line -- does not. The same command
+        // across the cap: `runCaptured()` rtrims the retained text, so a capture
+        // that stayed under DEFAULT_RETAINED_BYTES loses its trailing newline
+        // while one that reached the cap -- whose retained slice ends mid-line --
+        // does not. The same command
         // would then report two different totals depending on $maxOutputBytes,
         // which is a number travelling without its domain and would also break
         // the cap-invariance the two OutputTruncationTest chatty-stderr cases

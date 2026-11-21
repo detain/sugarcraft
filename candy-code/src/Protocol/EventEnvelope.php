@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Protocol;
 
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * One event as the wire carries it (Appendix O §6.4): the `params` of an

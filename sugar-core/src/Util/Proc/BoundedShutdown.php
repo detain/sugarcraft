@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util\Proc;
 
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 use SugarCraft\Core\Lang;
 
 /**
@@ -264,6 +265,10 @@ final class BoundedShutdown
      * @param callable():bool $isGone
      * @param callable(bool):void|null $done
      * @param callable():void|null $onEscalate
+     * @return TimerInterface the poll timer driving the ladder. A caller that settles
+     *                        before the ladder does must cancel it: the poll only stops
+     *                        itself once $isGone holds or the kill budget is spent, so
+     *                        an unchecked handle keeps the loop armed for up to one poll.
      */
     public static function escalateAsync(
         LoopInterface $loop,
@@ -273,7 +278,7 @@ final class BoundedShutdown
         float $terminateGrace = self::TERMINATE_GRACE_SECONDS,
         float $killGraceSeconds = self::KILL_GRACE_SECONDS,
         ?callable $onEscalate = null,
-    ): void {
+    ): TimerInterface {
         $signal(15);
         $killed = false;
         $deadline = self::now() + $terminateGrace;
@@ -310,6 +315,8 @@ final class BoundedShutdown
                 $deadline = self::now() + $killGraceSeconds;
             },
         );
+
+        return $timer;
     }
 
     /**

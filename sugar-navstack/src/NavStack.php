@@ -306,7 +306,7 @@ final class NavStack
      * `Breadcrumb::renderTitles()` run every stack-sourced title through
      * before emitting it. Hosts echoing an UNTRUSTED title outside those
      * surfaces (a `<title>` tag, a log line, a custom renderer closure)
-     * call this instead of reaching into the `@internal` sanitizer — or,
+     * call this instead of reaching into the internal sanitizer — or,
      * worse, printing the raw accessor output.
      *
      * Terminal controls, zone sentinels, invisible-formatting spoofers, and

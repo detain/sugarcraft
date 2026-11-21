@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Async\Retry;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Events\MediaProgress;
@@ -154,9 +155,22 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
         return $this->mutate(['mediaRoot' => $root]);
     }
 
-    /** The same tool pacing its job-poll loop without real sleeps. */
+    /**
+     * The same tool pacing its job-poll loop without real sleeps.
+     *
+     * @throws \InvalidArgumentException when the interval is above Retry::MAX_BACKOFF_SECONDS
+     */
     public function withLoopPacing(?float $intervalSeconds, ?\Closure $sleeper): self
     {
+        // Refused at configuration, before any submit: JobPollLoop raises the
+        // same refusal from inside awaitJob, where the readout-failure catch
+        // would cancel the job that was just queued.
+        if ($intervalSeconds !== null && $intervalSeconds > Retry::MAX_BACKOFF_SECONDS) {
+            throw new \InvalidArgumentException(
+                'poll interval must not exceed ' . Retry::MAX_BACKOFF_SECONDS . ' seconds',
+            );
+        }
+
         return $this->mutate(['pollIntervalSeconds' => $intervalSeconds, 'pollSleeper' => $sleeper]);
     }
 

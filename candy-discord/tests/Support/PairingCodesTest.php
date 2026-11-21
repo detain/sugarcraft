@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Tests\Support;
 
+use CandyCode\Bundles\Discord\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\Discord\Support\CredentialStore;
 use CandyCode\Bundles\Discord\Support\PairingCodes;
 use CandyCode\Bundles\Discord\Support\TextSafety;
@@ -27,7 +28,7 @@ final class PairingCodesTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/p2-pair-' . getmypid() . '-' . uniqid('', true);
         mkdir($this->dir, 0o700, true);
         $this->path = $this->dir . '/channels.json';
-        $this->store = new CredentialStore($this->path);
+        $this->store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $this->safety = new TextSafety();
         $this->codes = new PairingCodes($this->store, $this->safety);
     }
@@ -134,7 +135,7 @@ final class PairingCodesTest extends TestCase
         $fresh = new TextSafety();
         self::assertStringContainsString($code, $fresh->outbound('transcript mentions ' . $code), 'before the boot hook the code leaks');
 
-        $rebuilt = new PairingCodes(new CredentialStore($this->path), $fresh);
+        $rebuilt = new PairingCodes(new CredentialStore($this->path, new FileCredentialWriter($this->path)), $fresh);
         $rebuilt->registerLiveSecrets(['default']);
         self::assertStringNotContainsString($code, $fresh->outbound('transcript mentions ' . $code), 'the boot hook redacts live pending codes');
     }
@@ -160,7 +161,7 @@ final class PairingCodesTest extends TestCase
     public function testTheRosterSurvivesAProcessRestartByReadingTheStoreAgain(): void
     {
         $code = (string) $this->codes->request('default', 'peer-1')['code'];
-        $rebuilt = new PairingCodes(new CredentialStore($this->path), new TextSafety());
+        $rebuilt = new PairingCodes(new CredentialStore($this->path, new FileCredentialWriter($this->path)), new TextSafety());
         self::assertSame('silent', $rebuilt->request('default', 'peer-1')['kind']);
         self::assertSame(['state' => 'granted', 'userId' => 'peer-1'], $rebuilt->approve('default', $code));
     }

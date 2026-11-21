@@ -19,6 +19,7 @@ use SugarCraft\CandyImage\Cli;
 use SugarCraft\Core\Util\Tty\Kernel32Interface;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\SymbolMapRenderer;
 
 final class CliTest extends TestCase
@@ -142,8 +143,11 @@ final class CliTest extends TestCase
 
     public function testProbeFlagIsRefusedAsUnknownOnThisBase(): void
     {
-        // Kept --probe off the surface: Detect exposes no env-only
-        // probe seam, so honoring the spelling here would be a lie.
+        // Kept --probe off the surface. The probe-free seam is
+        // Mosaic::fromModeString(mode, probe: false) via Detect::fromEnv;
+        // it reports an unconfirmed Kitty claim and no DA1 sixel, so
+        // mapping --probe=off onto it would change the auto() protocol
+        // choice rather than skip a probe.
         [, , $err] = self::drive(['--probe=off', 'x.png']);
 
         $this->assertStringContainsString('unknown option --probe', $err);
@@ -1037,6 +1041,29 @@ final class CliTest extends TestCase
 
         $this->assertSame(Cli::EXIT_OK, $exit);
         $this->assertStringContainsString('da1-reply: (none)', $out, 'an empty echo is not an answer');
+    }
+
+    /**
+     * Argv validation of --format is probe-free: Mosaic::fromModeString($raw,
+     * probe: false), so the auto() memo stays unset after the argv pass and
+     * --passthrough is applied before any terminal probe runs. The file is
+     * missing, so the run stops after validation and nothing renders.
+     */
+    public function testFormatValidationDoesNotRunTheTerminalProbe(): void
+    {
+        $memo = new \ReflectionProperty(Mosaic::class, 'autoMemo');
+        $memo->setAccessible(true);
+
+        Mosaic::resetAutoMemo();
+        try {
+            [$exit, , $err] = self::drive(['--format=auto', '--passthrough=none', '/nonexistent/candy-image-probe.png']);
+
+            $this->assertNotSame(Cli::EXIT_USAGE, $exit, 'explicit --format=auto must pass argv validation: ' . $err);
+            $this->assertStringNotContainsString('unknown render format', $err, 'explicit --format=auto must be accepted');
+            $this->assertNull($memo->getValue(), 'argv validation must not run the auto() probe before --passthrough is applied');
+        } finally {
+            Mosaic::resetAutoMemo();
+        }
     }
 
     private function armConsoleCodepage(Kernel32Interface $kernel32): ?callable

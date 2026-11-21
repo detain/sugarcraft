@@ -72,11 +72,19 @@ namespace SugarCraft\Core\Util;
  * Containment compares canonical paths against the platform separator
  * (`DIRECTORY_SEPARATOR`), which is what realpath() answers with: `/` on POSIX,
  * `\\` on Windows. Direct and nested entries are judged by the same rule
- * there. Paths that already exist are judged by realpath(), as on POSIX. A path
- * that does NOT exist yet is refused by {@see resolveForCreate()} and so by
- * {@see confine()} on Windows, because its lexical walk has no drive-aware form
- * and has not been tested there. Drive-letter and case handling are not exercised on Windows, so a
- * Windows caller must test before it relies on this class.
+ * there.
+ *
+ * On Windows, an input path is first normalised lexically by {@see WindowsPath}:
+ * drive letters (`c:` and `C:`), UNC prefixes (`\\server\share`), mixed `/` and
+ * `\` separators, and `..` after normalisation. A path it cannot normalise with
+ * certainty is refused before any filesystem call (see WindowsPath for the list).
+ * A `..` that follows a symbolic link or junction is refused too, since the
+ * lexical collapse would apply it to the wrong directory. Paths that already
+ * exist are then judged by realpath(). A path that does NOT exist yet is still
+ * refused by {@see resolveForCreate()} and so by {@see confine()} on Windows:
+ * its walk has no tested Windows form. {@see windowsLexical()} is the pure
+ * half, and runs on any platform. The filesystem half has not been run on a
+ * Windows host, so a Windows caller must test it before it relies on this class.
  *
  * ## Not covered
  *
@@ -131,25 +139,26 @@ final class PathJail
             return null;
         }
 
-        $fullPath = str_starts_with($path, '/')
-            ? $path
-            : self::under($rootReal, $path);
+        $fullPath = self::candidate($rootReal, $path);
+        if ($fullPath === null) {
+            return null;
+        }
 
         $resolved = realpath($fullPath);
         if ($resolved !== false) {
             return self::inside($resolved, $rootReal) ? $resolved : null;
         }
 
+        // The walk below anchors a missing path with a leading `/`, which turns a
+        // drive-letter root into `/C:\...` and answers no ancestor. Refuse instead.
+        if (!self::lexicalWalkSupported(DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
         // The lexical collapse below and the kernel disagree about `link/..`: the
         // kernel follows the link first and steps up from its target. Refuse that
         // shape before collapsing, or the approved path lands outside the root.
         if (self::parentWalkCrossesLink($fullPath)) {
-            return null;
-        }
-
-        // The walk below anchors a missing path with a leading `/`, which turns a
-        // drive-letter root into `/C:\...` and answers no ancestor. Refuse instead.
-        if (!self::lexicalWalkSupported(DIRECTORY_SEPARATOR)) {
             return null;
         }
 
@@ -201,15 +210,34 @@ final class PathJail
             return null;
         }
 
-        $fullPath = str_starts_with($path, '/')
-            ? $path
-            : self::under($rootReal, $path);
+        $fullPath = self::candidate($rootReal, $path);
+        if ($fullPath === null) {
+            return null;
+        }
         $resolved = realpath($fullPath);
         if ($resolved === false) {
             return null;
         }
 
         return self::inside($resolved, $rootReal) ? $resolved : null;
+    }
+
+    /**
+     * The pure, platform-independent Windows verdict: the collapsed candidate
+     * for $path under $root when it lies at or below $root, or null.
+     *
+     * It takes no filesystem input, so Windows fixtures run on any platform.
+     * The FS-backed methods call the same normaliser on Windows, and their link
+     * checks are the part this does not cover.
+     *
+     * $root must be canonical, as realpath() answers it: its names are trusted
+     * for the 8.3 short-name rule only. Every other name rule still refuses a
+     * bad root, so `C:\CON` or `C:\data\a:b` answers null, while `C:\PROGRA~1`
+     * is accepted. Only the 8.3 check is skipped for the root; $path gets it all.
+     */
+    public static function windowsLexical(string $root, string $path): ?string
+    {
+        return WindowsPath::within($root, $path);
     }
 
     /**
@@ -235,7 +263,10 @@ final class PathJail
 
         // The raw path, not a lexically collapsed one: `s/../dl` reaches the link
         // through the kernel's `..`, which the collapse would drop.
-        $probe = str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
+        $probe = self::candidate($rootReal, $path);
+        if ($probe === null) {
+            return null;
+        }
         if (realpath($probe) === false) {
             // A missing leaf takes the writer's verdict. settle() would accept
             // `link/../new.txt` on its parent check alone, which resolveForCreate()
@@ -295,9 +326,10 @@ final class PathJail
             return null;
         }
 
-        $fullPath = str_starts_with($path, '/')
-            ? $path
-            : self::under($rootReal, $path);
+        $fullPath = self::candidate($rootReal, $path);
+        if ($fullPath === null) {
+            return null;
+        }
         $resolved = realpath($fullPath);
 
         if ($resolved === false) {
@@ -369,6 +401,80 @@ final class PathJail
     private static function under(string $rootReal, string $path): string
     {
         return rtrim($rootReal, '/') . '/' . ltrim($path, '/');
+    }
+
+    /**
+     * The path to examine for $path under the canonical $rootReal, or null when
+     * it cannot be proven.
+     *
+     * On POSIX this is the historical join. On Windows the path is normalised by
+     * {@see WindowsPath}, and a `..` that follows a link is refused before the
+     * collapse, because the kernel would step up from the link's target.
+     */
+    private static function candidate(string $rootReal, string $path): ?string
+    {
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return str_starts_with($path, '/') ? $path : self::under($rootReal, $path);
+        }
+
+        $parts = WindowsPath::resolve($rootReal, $path);
+        if ($parts === null || self::windowsDotDotCrossesLink($parts)) {
+            return null;
+        }
+
+        $normal = WindowsPath::normalise($parts);
+
+        return $normal === null ? null : WindowsPath::render($normal[0], $normal[1]);
+    }
+
+    /**
+     * Whether a `..` in the Windows path $parts would be applied by the
+     * filesystem to a different directory from the lexical collapse.
+     *
+     * The shape of {@see parentWalkCrossesLink()}, written over WindowsPath's
+     * anchor and segments, so the drive and UNC prefixes render correctly. Any
+     * prefix that is a link, or that realpath() would move, is a refusal. Unlike
+     * parentWalkCrossesLink(), the move test is case-insensitive (see
+     * {@see windowsRealpathMoves()}), so the two checks are not interchangeable:
+     * routing this through parentWalkCrossesLink() would refuse a `..` after a
+     * directory typed in other than its on-disk case.
+     *
+     * @param array{0: string, 1: list<string>} $parts
+     */
+    private static function windowsDotDotCrossesLink(array $parts): bool
+    {
+        [$anchor, $segments] = $parts;
+
+        $stack = [];
+        foreach ($segments as $segment) {
+            if ($segment !== '..') {
+                $stack[] = $segment;
+                continue;
+            }
+            if ($stack !== []) {
+                $current = WindowsPath::render($anchor, $stack);
+                $real = realpath($current);
+                if (is_link($current) || ($real !== false && self::windowsRealpathMoves($current, $real))) {
+                    return true;
+                }
+            }
+            array_pop($stack);
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether realpath() answered with a different path for the same prefix.
+     *
+     * NTFS ignores case by default, and realpath() answers with the on-disk
+     * spelling, so a case-only difference names the same entry and is not a
+     * redirect. Comparing case-sensitively refused a `..` after any directory
+     * typed in other than its on-disk case, which is a false refusal.
+     */
+    private static function windowsRealpathMoves(string $typed, string $real): bool
+    {
+        return !WindowsPath::sameSpelling($typed, $real);
     }
 
     /**

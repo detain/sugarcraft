@@ -9,8 +9,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 
 /**
- * The directory a launch's `.candy-code/*` lookups resolve against (audit
- * 15d-13 (b)), as opposed to the working directory the tools are jailed to.
+ * The directory a launch's `.candy-code/*` lookups resolve against, as opposed to the working directory the tools are jailed to.
  *
  * WHY THE TWO DIFFER. `cd repo/src && candy-code` used to look for the
  * project's settings, skills, rules, commands, workflows, agent presets,

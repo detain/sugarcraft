@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents;
 
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * Configuration for git worktree isolation per agent.
@@ -17,7 +16,7 @@ use SugarCraft\Code\Support\ContainedPath;
  * bookkeeping. {@see new()} read `__DIR__ . '/../../../.candy-code/config.json'`
  * — the directory CONTAINING this package, which in the development monorepo is
  * the checkout root and under a composer install is `vendor/sugarcraft/` — with
- * no containment of any kind: no {@see ContainedPath}, no anchor, no `..` guard.
+ * no containment of any kind: no {@see \SugarCraft\Core\Util\PathJail}, no anchor, no `..` guard.
  * That file sets `worktreeIncludeFile`, {@see WorktreeManager::resolveWorktreeInclude()}
  * reads it as `$repoRoot . '/' . <value>`, and every line of THAT file becomes a
  * copy pattern. MEASURED on this host against the ungated build, with a
@@ -157,10 +156,10 @@ final class WorktreeConfig
      * doc-block for what the ungated version was measured doing):
      *
      *  - `<dir>/.candy-code` must resolve STRICTLY inside `<dir>`
-     *    ({@see ContainedPath::below()}), so a committed `.candy-code -> /elsewhere`
+     *    ({@see \SugarCraft\Core\Util\PathJail::below()}), so a committed `.candy-code -> /elsewhere`
      *    relocates the check instead of tripping it;
      *  - `config.json` must resolve inside that directory
-     *    ({@see ContainedPath::within()}), so `config.json -> /elsewhere/evil.json`
+     *    ({@see \SugarCraft\Core\Util\PathJail::within()}), so `config.json -> /elsewhere/evil.json`
      *    is refused on its own.
      *
      * A refused config is silently the DEFAULTS, not an exception: this factory
@@ -240,11 +239,11 @@ final class WorktreeConfig
         $configPath = rtrim($dir, '/') . '/' . self::CONFIG_PATH;
         $configDir = \dirname($configPath);
 
-        if (!ContainedPath::below($configDir, $dir)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($configDir, $dir)) {
             return [];
         }
 
-        if (!ContainedPath::within($configPath, $configDir)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($configPath, $configDir)) {
             return [];
         }
 

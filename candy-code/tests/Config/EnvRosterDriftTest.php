@@ -1923,6 +1923,14 @@ final class EnvRosterDriftTest extends TestCase
             ),
             'a constant is only a read when it is the key of getenv() or of $_ENV / $_SERVER',
         );
+        // The positive arm the zero-fixture pairing rule asks for: the same instrument
+        // must still report the literal key when it IS a getenv() key, or the empty
+        // answers above could mean a dead scanner rather than a correct refusal.
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn('<?php class A { function f() { return getenv("HTTPS_PROXY"); } }'),
+            'the scanner still reads a literal getenv() key, so the empty answers below are real refusals',
+        );
         $this->assertSame(
             [],
             self::literalEnvReadsIn('<?php class A { function f() { return getenv(Other::PROXY_ENV); } }'),

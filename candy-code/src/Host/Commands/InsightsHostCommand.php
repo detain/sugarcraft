@@ -9,8 +9,8 @@ use SugarCraft\Code\Commands\InsightsCommand;
 use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * Gathers the insights report (C-SES-8.c, GAP-OBS-06) and writes it beside
@@ -91,7 +91,7 @@ final class InsightsHostCommand implements HostCommand
             $directory = $this->exportsDir !== null ? rtrim($this->exportsDir, '/') : self::exportsDirectory();
             $stamp = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd');
             $target = $directory . '/insights-' . $stamp . '.html';
-            AtomicFileWriter::write($target, $html, 0600);
+            AtomicTextFile::at($target)->withPermissions(0600)->write($html);
         } catch (\Throwable $error) {
             return CommandResult::reply($text, $page . "\n" . Lang::t('cmd.insights.write-failed', [
                 'reason' => Chat::reportField($error->getMessage()),

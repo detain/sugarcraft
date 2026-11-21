@@ -78,6 +78,10 @@
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
                     <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -119,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -132,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 43 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-spring.png" alt="" aria-hidden="true">
@@ -152,11 +157,54 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#three-damping-regimes">Three damping regimes</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#the-frame-time-is-baked-in">The frame time is baked in</a></li>
+            <li class="toc-h3"><a href="#done-means-settled-not-a-frame-count">Done means settled, not a frame count</a></li>
+            <li class="toc-h3"><a href="#y-up-coordinates">Y-up coordinates</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#animate-a-value-one-frame-at-a-time">Animate a value one frame at a time</a></li>
+            <li class="toc-h3"><a href="#pick-a-feel-with-a-preset">Pick a feel with a preset</a></li>
+            <li class="toc-h3"><a href="#stagger-stages-with-a-spring-chain">Stagger stages with a spring chain</a></li>
+            <li class="toc-h3"><a href="#drive-many-named-values-with-a-spring-collection">Drive many named values with a spring collection</a></li>
+            <li class="toc-h3"><a href="#re-aim-a-projectile-between-frames">Re-aim a projectile between frames</a></li>
+            <li class="toc-h3"><a href="#use-a-css-style-timing-curve">Use a CSS-style timing curve</a></li>
+            <li class="toc-h3"><a href="#honour-reduced-motion-in-a-non-spring-curve">Honour reduced motion in a non-spring curve</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#spring-and-springconfig">Spring and SpringConfig</a></li>
+            <li class="toc-h3"><a href="#springchain-and-springcollection">SpringChain and SpringCollection</a></li>
+            <li class="toc-h3"><a href="#projectile-point-and-vector">Projectile, Point and Vector</a></li>
+            <li class="toc-h3"><a href="#easing-and-cubicbezier">Easing and CubicBezier</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-spring">SugarCraft\Spring</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-spring-easing">SugarCraft\Spring\Easing</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#spring-constructor-inputs">Spring constructor inputs</a></li>
+            <li class="toc-h3"><a href="#configuration">Spring presets</a></li>
+            <li class="toc-h3"><a href="#springconfig-physical-units">SpringConfig physical units</a></li>
+            <li class="toc-h3"><a href="#reduced-motion-environment">Reduced-motion environment</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#examples-spring-php">examples/spring.php</a></li>
+            <li class="toc-h3"><a href="#examples-projectile-php">examples/projectile.php</a></li>
+            <li class="toc-h3"><a href="#examples-particle-php">examples/particle.php</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#the-constructor-throws-dampingratio-must-be-0">The constructor throws &quot;dampingRatio must be &gt; 0&quot;</a></li>
+            <li class="toc-h3"><a href="#the-animation-runs-too-fast-or-too-slow">The animation runs too fast or too slow</a></li>
+            <li class="toc-h3"><a href="#values-jump-straight-to-the-target">Values jump straight to the target</a></li>
+            <li class="toc-h3"><a href="#the-chain-or-the-projectile-never-moves">The chain or the projectile never moves</a></li>
+            <li class="toc-h3"><a href="#a-loop-never-settles-on-a-small-threshold">A loop never settles on a small threshold</a></li>
+            <li class="toc-h3"><a href="#normalize-throws-a-runtimeexception">normalize() throws a RuntimeException</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#pure-values-no-i-o">Pure values, no I/O</a></li>
+            <li class="toc-h3"><a href="#immutable-state-with-checked-doors">Immutable state with checked doors</a></li>
+            <li class="toc-h3"><a href="#the-reduced-motion-memo">The reduced-motion memo</a></li>
+            <li class="toc-h3"><a href="#messages-in-every-locale">Messages in every locale</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#spring">Spring</a></li>
             <li class="toc-h3"><a href="#projectile">Projectile</a></li>
@@ -165,48 +213,513 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett form, spring core mirrors <code>charmbracelet/harmonica</code>) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects, easing + bezier timing curves, spring chains and collections, and reduced-motion awareness throughout the spring-driven types. No terminal I/O anywhere.</p>
+<p class="lede" style="margin-top: 28px;">sugar-spring is a pure-math animation engine. It provides damped harmonic springs for smooth motion and controlled overshoot, a Newtonian projectile integrator for arcs and particle fields, CSS-compatible easing and cubic-bezier curves, and spring chains and collections that drive many values at once. It has no terminal I/O, no ReactPHP dependency and no render path: values go in, values come out, and your frame loop decides when to paint. The spring core mirrors <a href="https://github.com/charmbracelet/harmonica">charmbracelet/harmonica</a>, the Go library for the same job, and the damped-oscillator math follows Ryan Juckett's spring physics articles.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-spring</code></pre>
+    <p>Requires PHP 8.3 or newer. The package depends on <code>sugarcraft/sugar-core</code> and <code>sugarcraft/sugar-colorprofile</code>, and both track <code>dev-master</code>, so the plain command resolves only when dev stability is allowed. Pin the package with <code>composer require sugarcraft/sugar-spring:@dev</code>, or set <code>minimum-stability</code> to <code>dev</code> with <code>prefer-stable</code> set to <code>true</code> in the consuming manifest. At runtime the library reads one thing from sugar-colorprofile: the reduced-motion probe.</p>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Spring\{Spring, Projectile, Point, Vector};
 
 $spring = new Spring(
     deltaTime:        Spring::fps(60),
     angularFrequency: 6.0,
-    dampingRatio:     1.0,    // critical
+    dampingRatio:     1.0,    // critical: fastest approach, no overshoot
 );
-$pos = 0.0; $vel = 0.0; $target = 100.0;
+
+$pos = 0.0;
+$vel = 0.0;
+$target = 100.0;
 $frame = 0;
-do {                                 // animate until settled, not for a
+while (!Spring::settled($pos, $vel, $target) &amp;&amp; $frame &lt; 600) {   // stop on settled(), not a fixed count
     [$pos, $vel] = $spring-&gt;update($pos, $vel, $target);
-} while (!Spring::settled($pos, $vel, $target) &amp;&amp; ++$frame &lt; 600);
+    $frame++;
+}
 
 $ball = Projectile::new(
     deltaTime:    Spring::fps(60),
     position:     Point::zero(),
-    velocity:     new Vector(5.0, 10.0),      // +y is up: Projectile::gravity() is (0, -9.81, 0)
+    velocity:     new Vector(5.0, 10.0),   // +y is up: Projectile::gravity() is (0, -9.81, 0)
     acceleration: Projectile::gravity(),
 );
 for ($i = 0; $i &lt; 60; $i++) {
-    $ball = $ball-&gt;update();                   // update() returns a NEW projectile — reassign
+    $ball = $ball-&gt;update();              // update() returns a NEW Projectile: reassign it
 }</code></pre>
+    <p>The quickstart prints nothing. Every value it computes lives in <code>$pos</code>, <code>$vel</code> and <code>$ball</code>, and your render code reads them. The three examples shipped with the package print what the same maths looks like (see <a href="#examples">Examples</a>).</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped. Non-positive frame time, zero/negative damping and near-zero frequency are refused at construction — a spring that cannot converge is illegal, not slow.</span></div>
-      <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers (Y-up, with legacy Y-down spellings).</span></div>
-      <div class="feature"><strong>Easing &amp; Bezier</strong><span>All 16 <code>Easing</code> cases (Linear plus the analytic Quadratic/Cubic/Bounce curves and the sin-modulated Elastic/Back family — the Back cases are not Penner's classic <code>c1</code> polynomial) + <code>CubicBezier</code> matching the CSS <code>transition-timing-function</code> solver.</span></div>
-      <div class="feature"><strong>Chains &amp; collections</strong><span><code>SpringChain::tick()</code> hands off stage-to-stage on settle; <code>SpringCollection</code> drives many named springs with one tick and one <code>settled()</code> predicate.</span></div>
-      <div class="feature"><strong>Reduced motion</strong><span>Every spring-composed type snaps to target when <code>REDUCE_MOTION</code>/<code>PREFERS_REDUCED_MOTION</code> is set (via sugar-colorprofile's <code>Probe</code>); the environment is probed once per process and remembered (<code>Spring::resetReducedMotionProbe()</code> re-reads it), and one spring can be pinned either way with <code>reducedMotionOverride</code> — evaluated per call, it always beats the memo; gate <code>Projectile</code>/easing yourself — the README shows the recipe.</span></div>
-      <div class="feature"><strong>Used in-tree</strong><span>sugar-overlay transitions (Fade/Scale/Slide), candy-flappy's bird physics, sugar-widgets <code>AnimatedProgress</code>.</span></div>
-      <div class="feature"><strong>Terminal-agnostic</strong><span>No ReactPHP, no <code>ext-pcntl</code>, no render path — pure values in, pure values out. Its sugar-core + sugar-colorprofile deps never touch a TTY here.</span></div>
-      <div class="feature"><strong>i18n</strong><span>Every exception message runs through <code>Lang::t()</code> across 16 shipped locales.</span></div>
-    </div>
+    <h3 id="three-damping-regimes" style="margin-top: 24px;">Three damping regimes</h3>
+    <p>The damping ratio <code>dampingRatio</code> picks the regime. The output below is <code>php examples/spring.php</code>, trimmed to its first rows, with all three springs driving the same target of 100 at <code>angularFrequency = 6</code>:</p>
+    <pre class="code"><code class="language-text">frame │ under-damped ζ=0.3     │ critical ζ=1.0         │ over-damped ζ=2.0
+──────┼─────────────────────────┼─────────────────────────┼─────────────────────────
+   0  │ ▏                  0.5 │ ▏                  0.5 │ ▏                  0.4
+   4  │ █                 11.1 │ █                  9.0 │ █                  7.0
+   8  │ ████              31.9 │ ███               22.8 │ ██                15.6
+  12  │ ███████           57.9 │ █████             37.3 │ ███               24.0
+  16  │ ██████████        84.2 │ ██████            50.7 │ ████              31.7</code></pre>
+    <p>The under-damped column passes 100 and peaks near 137 before it comes back. The critical column approaches 100 without crossing it. The over-damped column is the slowest of the three at every row shown.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>A <code>Spring</code> is an immutable value. Its frame time (<code>deltaTime</code>), angular frequency and damping ratio are fixed at construction. <code>update($pos, $vel, $target)</code> returns the next <code>[$pos, $vel]</code> pair and keeps no state of its own. The caller owns the state and the clock: call <code>update()</code> once per frame, at the rate the spring was built for, and the motion tracks wall-clock time. The same applies to <code>Projectile</code>, whose <code>update()</code> returns a new projectile.</p>
+
+    <h3 id="the-frame-time-is-baked-in" style="margin-top: 24px;">The frame time is baked in</h3>
+    <p><code>Spring::fps(60)</code> returns <code>1/60</code> of a second. A spring built with it advances one 60th of a second per <code>update()</code> call, so a loop that runs at 30 Hz stretches the animation to twice its length. Replays stay deterministic if you record tick counts rather than wall-clock time. For a real loop that measures frame time, rebuild the spring with the measured <code>deltaTime</code> each frame; coefficient setup is cheap, about a microsecond.</p>
+
+    <h3 id="done-means-settled-not-a-frame-count" style="margin-top: 24px;">Done means settled, not a frame count</h3>
+    <p><code>Spring::settled($pos, $vel, $target, $threshold)</code> is the stop predicate. It needs the position within the threshold (default <code>Spring::SETTLING_THRESHOLD</code>, <code>1e-4</code>) and the velocity below it. A position-only check gives false positives on under-damped springs, which cross the target at full speed and come back. A frame budget is only a safety cap: the <code>Molasses</code> preset alone needs 439 frames to settle at 60 fps.</p>
+
+    <h3 id="y-up-coordinates" style="margin-top: 24px;">Y-up coordinates</h3>
+    <p>Projectile gravity points down the Y axis, and increasing Y means up the screen. <code>Projectile::gravity()</code> returns <code>(0, -9.81, 0)</code> and <code>Projectile::terminalGravity()</code> returns <code>(0, -53, 0)</code>. Terminal renderers usually grow downward, so <code>Projectile::gravityYDown()</code> and <code>terminalGravityYDown()</code> keep the same magnitudes with the sign flipped.</p>
+
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="animate-a-value-one-frame-at-a-time" style="margin-top: 24px;">Animate a value one frame at a time</h3>
+    <p>Step the spring once per paint and convert the position to a cell only when you draw:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\Spring;
+
+$spring = new Spring(Spring::fps(60), 6.0, 1.0);
+$pos = 0.0;
+$vel = 0.0;
+
+// One update and one paint per frame. Never run a settle loop inside a frame.
+[$pos, $vel] = $spring-&gt;update($pos, $vel, 100.0);
+$cell = (int) round($pos);   // the integer cell to draw this frame</code></pre>
+    <p>If <code>$cell</code> is unchanged from the previous frame, skip the repaint. Pass a cell-sized threshold such as <code>0.5</code> to <code>settled()</code> when the consumer renders at cell resolution, because a spring usually stops changing the frame well before it stops settling at <code>1e-4</code>.</p>
+
+    <h3 id="pick-a-feel-with-a-preset" style="margin-top: 24px;">Pick a feel with a preset</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\{Spring, SpringPreset};
+
+$spring = Spring::fromPreset(SpringPreset::Wobbly);                       // 60 fps by default
+$slow   = Spring::fromPreset(SpringPreset::Molasses, Spring::fps(30));    // explicit frame time</code></pre>
+    <p>The five presets and their measured settle times are in <a href="#configuration">Configuration</a>.</p>
+
+    <h3 id="stagger-stages-with-a-spring-chain" style="margin-top: 24px;">Stagger stages with a spring chain</h3>
+    <p>A <code>SpringChain</code> runs one stage at a time. Each stage is a <code>[Spring, position, velocity, target]</code> tuple, and the next stage starts when the active one settles:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\{Spring, SpringChain, SpringPreset};
+
+$chain = (new SpringChain([]))
+    -&gt;withStage(Spring::fromPreset(SpringPreset::Gentle), 0.0, 0.0, 50.0)
+    -&gt;withStage(Spring::fromPreset(SpringPreset::Wobbly), 0.0, 0.0, 100.0)
+    -&gt;withStage(Spring::fromPreset(SpringPreset::Stiff),  0.0, 0.0, 75.0);
+
+while (!$chain-&gt;isComplete()) {
+    $chain = $chain-&gt;tick();              // reassign: tick() returns the advanced chain
+    $positions = $chain-&gt;currentPositions();
+}</code></pre>
+    <p>Build the full stage list before the first <code>tick()</code>. <code>withStage()</code> restarts the new chain at stage 0, so calling it mid-run throws the progress away.</p>
+
+    <h3 id="drive-many-named-values-with-a-spring-collection" style="margin-top: 24px;">Drive many named values with a spring collection</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\{Spring, SpringCollection, SpringPreset};
+
+$group = (new SpringCollection())
+    -&gt;withSpring('menu',  Spring::fromPreset(SpringPreset::Stiff),    0.0, 0.0, 40.0)
+    -&gt;withSpring('panel', Spring::fromPreset(SpringPreset::Molasses), 0.0, 0.0, 90.0);
+
+$frame = 0;
+while (!$group-&gt;settled() &amp;&amp; $frame &lt; 600) {
+    $group = $group-&gt;tick();              // a new collection; every member advances
+    $frame++;
+}
+
+echo sprintf("menu=%.2f panel=%.2f\n", $group-&gt;position('menu'), $group-&gt;position('panel'));</code></pre>
+    <p>Read values with <code>position($id)</code>, <code>target($id)</code>, <code>velocity($id)</code> and <code>all()</code>. Ids that are not in the collection throw an <code>OutOfBoundsException</code> that names the id.</p>
+
+    <h3 id="re-aim-a-projectile-between-frames" style="margin-top: 24px;">Re-aim a projectile between frames</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\{Point, Projectile, Spring, Vector};
+
+$p = Projectile::new(Spring::fps(60), Point::zero(), new Vector(5.0, 10.0), Projectile::gravity());
+$p = $p-&gt;withVelocity(new Vector(-2.0, 4.0));    // a new Projectile with one field swapped
+$p = $p-&gt;update();                              // reassign: update() never mutates the receiver</code></pre>
+
+    <h3 id="use-a-css-style-timing-curve" style="margin-top: 24px;">Use a CSS-style timing curve</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\Easing\{CubicBezier, Easing};
+
+$curve  = CubicBezier::easeOutCubic();        // control points 0.22, 0.61, 0.36, 1.00
+$custom = new CubicBezier(0.25, 0.10, 0.25, 1.00);
+$named  = Easing::CubicOut;                   // the same family as an enum case
+
+$a = $curve-&gt;ease(0.5);
+$b = $custom-&gt;ease(0.5);
+$c = $named-&gt;ease(0.5);</code></pre>
+
+    <h3 id="honour-reduced-motion-in-a-non-spring-curve" style="margin-top: 24px;">Honour reduced motion in a non-spring curve</h3>
+    <p><code>Projectile</code>, <code>Easing</code> and <code>CubicBezier</code> are pure functions of time with no target to snap to, so they ignore the reduced-motion signal. Gate them in the application by jumping to the end of the motion when the user asks for less of it:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\Probe;
+use SugarCraft\Spring\Easing\Easing;
+
+$frame = 12;                                            // 12th frame of a 60-frame motion
+$t = Probe::reducedMotion() ? 1.0 : $frame / 60.0;      // t = 1.0 is "already there"
+$progress = Easing::CubicOut-&gt;ease($t);</code></pre>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The value classes are <code>final</code> and immutable. Methods that change state return a new instance, and the table names the return type where it matters. Bare accessors have no <code>get</code> prefix.</p>
+
+    <h3 id="spring-and-springconfig" style="margin-top: 24px;">Spring and SpringConfig</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>Spring</td><td><code>__construct(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride = null)</code></td><td>Refuses non-finite input, <code>deltaTime</code> ≤ 0, <code>angularFrequency</code> &lt; 1e-9, <code>dampingRatio</code> ≤ 0 and coefficient overflow</td></tr>
+    <tr><td>Spring</td><td><code>new(...)</code></td><td>House factory with the same arguments and guarantees as the constructor</td></tr>
+    <tr><td>Spring</td><td><code>update(pos, vel, target): array</code></td><td>One step; returns <code>[position, velocity]</code> with both named and positional keys. Snaps to <code>[target, 0.0]</code> under reduced motion</td></tr>
+    <tr><td>Spring</td><td><code>settled(pos, vel, target, threshold = 1e-4): bool</code></td><td>Static. Position and velocity both within the threshold</td></tr>
+    <tr><td>Spring</td><td><code>fps(n): float</code></td><td>Static. Returns <code>1 / n</code>; refuses non-finite, non-positive and overflowing rates</td></tr>
+    <tr><td>Spring</td><td><code>fromPreset(preset, deltaTime = null, reducedMotionOverride = null)</code></td><td>Static. Builds a spring from a <code>SpringPreset</code> at 60 fps unless a frame time is given</td></tr>
+    <tr><td>Spring</td><td><code>deltaTime()</code>, <code>angularFrequency()</code>, <code>dampingRatio()</code>, <code>reducedMotionOverride()</code></td><td>Accessors for the constructor inputs</td></tr>
+    <tr><td>Spring</td><td><code>resetReducedMotionProbe(): void</code></td><td>Static. Forgets the memoised environment read so the next <code>update()</code> re-probes it</td></tr>
+    <tr><td>SpringConfig</td><td><code>__construct(tension, friction, mass)</code> and <code>new(...)</code></td><td>Physical units. Public readonly <code>$angularFrequency</code> and <code>$dampingRatio</code> are derived at construction</td></tr>
+    <tr><td>SpringConfig</td><td><code>spring(deltaTime = 1/60, reducedMotionOverride = null): Spring</code></td><td>Builds the matching <code>Spring</code></td></tr>
+    <tr><td>SpringPreset</td><td><code>Gentle</code>, <code>Wobbly</code>, <code>Stiff</code>, <code>Slow</code>, <code>Molasses</code></td><td>Enum. <code>resolve(): SpringConfig</code> returns the preset's physical triple</td></tr>
+    </table>
+
+    <h3 id="springchain-and-springcollection" style="margin-top: 24px;">SpringChain and SpringCollection</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>SpringChain</td><td><code>__construct(stages, activeIndex = 0)</code> and <code>new(stages)</code></td><td>Stages are <code>[Spring, position, velocity, target]</code>. Malformed stages and out-of-range indexes are refused</td></tr>
+    <tr><td>SpringChain</td><td><code>withStage(spring, position, velocity, target): self</code></td><td>Build time only. Returns a chain restarted at stage 0</td></tr>
+    <tr><td>SpringChain</td><td><code>tick(): self</code></td><td>Advances the active stage. Reassign the result, or the run never moves on</td></tr>
+    <tr><td>SpringChain</td><td><code>currentPositions(): list&lt;float&gt;</code>, <code>isComplete(): bool</code>, <code>activeStage(): int</code></td><td>Read the state of the chain as of its last tick</td></tr>
+    <tr><td>SpringChain</td><td><code>SETTLING_THRESHOLD = 5e-4</code></td><td>The hand-off threshold. Looser than <code>Spring::SETTLING_THRESHOLD</code> on purpose</td></tr>
+    <tr><td>SpringCollection</td><td><code>__construct(springs, positions, velocities, targets)</code></td><td>Keyed by id. The positions, velocities and targets maps must cover the same ids as the springs</td></tr>
+    <tr><td>SpringCollection</td><td><code>withSpring(id, spring, position, velocity, target)</code>, <code>without(id)</code>, <code>withTarget(id, target)</code></td><td>Copy-on-write. Each returns a new collection</td></tr>
+    <tr><td>SpringCollection</td><td><code>tick(): self</code></td><td>Advances every member one frame and returns a new collection</td></tr>
+    <tr><td>SpringCollection</td><td><code>position(id)</code>, <code>velocity(id)</code>, <code>target(id)</code>, <code>all()</code>, <code>allVelocities()</code>, <code>has(id)</code></td><td>Readers. Unknown ids throw <code>OutOfBoundsException</code></td></tr>
+    <tr><td>SpringCollection</td><td><code>settled(threshold = 1e-4): bool</code></td><td>True when every member has settled</td></tr>
+    </table>
+
+    <h3 id="projectile-point-and-vector" style="margin-top: 24px;">Projectile, Point and Vector</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>Projectile</td><td><code>new(deltaTime, position, velocity, acceleration)</code></td><td>Explicit Euler integrator. The construction door refuses non-finite values</td></tr>
+    <tr><td>Projectile</td><td><code>update(): self</code></td><td>Returns a new projectile one step ahead. The receiver is not changed</td></tr>
+    <tr><td>Projectile</td><td><code>position()</code>, <code>velocity()</code>, <code>acceleration()</code></td><td>The same values as the public readonly properties</td></tr>
+    <tr><td>Projectile</td><td><code>withPosition()</code>, <code>withVelocity()</code>, <code>withAcceleration()</code>, <code>withDeltaTime()</code></td><td>Each returns a new projectile with one field swapped and the other three kept</td></tr>
+    <tr><td>Projectile</td><td><code>gravity()</code>, <code>terminalGravity()</code>, <code>gravityYDown()</code>, <code>terminalGravityYDown()</code></td><td>Static. Shared immutable <code>Vector</code> presets</td></tr>
+    <tr><td>Projectile</td><td><code>GRAVITY = 9.81</code>, <code>TERMINAL_GRAVITY = 53.0</code></td><td>Magnitudes behind the presets</td></tr>
+    <tr><td>Point</td><td><code>new(x, y, z = 0.0)</code>, <code>zero()</code>, <code>add(Vector)</code>, <code>delta(Point): Vector</code>, <code>distance(Point)</code></td><td>Immutable 3D position. Components must be finite</td></tr>
+    <tr><td>Point</td><td><code>fromArray(list)</code>, <code>jsonSerialize()</code></td><td>Wire format is the positional <code>[x, y, z]</code> list</td></tr>
+    <tr><td>Vector</td><td><code>new(x, y, z = 0.0)</code>, <code>zero()</code>, <code>add()</code>, <code>sub()</code>, <code>scale()</code>, <code>dot()</code>, <code>cross()</code>, <code>lerp()</code></td><td>Immutable 3D vector. Components must be finite</td></tr>
+    <tr><td>Vector</td><td><code>length()</code>, <code>lengthSquared()</code>, <code>normalize(): self</code></td><td><code>normalize()</code> throws <code>RuntimeException</code> for a zero or overflowed length, not <code>InvalidArgumentException</code></td></tr>
+    </table>
+
+    <h3 id="easing-and-cubicbezier" style="margin-top: 24px;">Easing and CubicBezier</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>Easing</td><td>Enum of 16 cases: <code>Linear</code>, <code>QuadraticIn/Out/InOut</code>, <code>CubicIn/Out/InOut</code>, <code>ElasticIn/Out/InOut</code>, <code>BounceIn/Out/InOut</code>, <code>BackIn/Out/InOut</code></td><td>Implements <code>EasingFunction</code>. <code>ease(t): float</code> takes a normalised time <code>t</code>; Elastic and Back cases may overshoot</td></tr>
+    <tr><td>CubicBezier</td><td><code>__construct(x1, y1, x2, y2)</code> and <code>new(...)</code></td><td>CSS <code>cubic-bezier()</code> control points. The x values must lie in [0, 1]; y may overshoot</td></tr>
+    <tr><td>CubicBezier</td><td><code>ease(t): float</code></td><td>Evaluates the curve. Refuses non-finite <code>t</code></td></tr>
+    <tr><td>CubicBezier</td><td>26 static presets such as <code>cssEase()</code>, <code>easeIn()</code>, <code>easeOutCubic()</code>, <code>easeInOutExpo()</code></td><td>Memoised. The five CSS keywords plus 21 Penner-style families (Sine, Quad, Cubic, Quart, Quint, Expo, Circ)</td></tr>
+    </table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-spring/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-spring -->
+<p>Only methods declared in <code>sugar-spring/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-spring">SugarCraft\Spring</h3>
+<h4 id="api-sugarcraft-spring-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-spring.</p>
+<h4 id="api-sugarcraft-spring-point"><code>Point</code> <small>final class</small></h4>
+<p>3D point. Same shape as Vector; kept as a distinct type for the same reason harmonica does — semantically a position vs. a delta.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly float $x, public readonly float $y, public readonly float $z = 0.0)</code></td><td></td></tr>
+<tr><td><code>static zero(): self</code></td><td></td></tr>
+<tr><td><code>static new(float $x, float $y, float $z = 0.0): self</code></td><td>Factory alias of the constructor — the house <code>::new()</code> entry shape (finding 052); the same door as <code>new Point(...)</code>.</td></tr>
+<tr><td><code>add(Vector $v): self</code></td><td>Add a Vector delta to this point, returning a new Point.</td></tr>
+<tr><td><code>delta(self $to): Vector</code></td><td>The motion primitive: the Vector from this point to <code>$to</code> (<code>$to − $this</code> — the displacement a spring or projectile must traverse to get HERE there). Feeds Vector-returning callers (normalize for a direction, length for a budget) without hand-writing the subtraction. Coordinates near 1e308 overflow the difference to INF, which the Vector door refuses outright — distance() returns INF for that pair instead (it never builds a Vector); the asymmetry is by construction, not drift.</td></tr>
+<tr><td><code>distance(self $other): float</code></td><td>Euclidean distance to another point. Returns INF when the squared deltas sum past PHP_FLOAT_MAX (extreme coordinates ~1e154 and up).</td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>static fromArray(array $wire): self</code></td><td>Rebuild from the wire format jsonSerialize() emits: a positional <code>[x, y, z]</code> list (Point carries z like Vector — the serializer always emits three entries). **The index order is contractual and frozen**: this method and the serializer are two halves of one wire format. int entries (json_decode of <code>1</code> yields an int) are widened here; wrong arity or type is refused before the constructor sees a partial tuple, and finiteness stays the constructor&#039;s own door.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>Wire format: positional <code>[x, y, z]</code>. The index order is contractual — fromArray() decodes this exact shape and a re-ordered or keyed payload is a breaking change, not a style edit.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-projectile"><code>Projectile</code> <small>final class</small></h4>
+<p>Newtonian-physics projectile. Mirrors charmbracelet/harmonica.NewProjectile.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly float $deltaTime, public readonly Point $position, public readonly Vector $velocity, public readonly Vector $acceleration)</code></td><td></td></tr>
+<tr><td><code>static new(float $deltaTime, Point $position, Vector $velocity, Vector $acceleration): self</code></td><td></td></tr>
+<tr><td><code>update(): self</code></td><td>Advance the simulation by one step. Returns a new Projectile — the original is untouched. Position += velocity·dt; velocity += acceleration·dt.</td></tr>
+<tr><td><code>withPosition(Point $position): self</code></td><td>New projectile at $position, same velocity/acceleration/frame time.</td></tr>
+<tr><td><code>withVelocity(Vector $velocity): self</code></td><td>New projectile with $velocity, same position/acceleration/frame time.</td></tr>
+<tr><td><code>withAcceleration(Vector $acceleration): self</code></td><td>New projectile with $acceleration, same position/velocity/frame time.</td></tr>
+<tr><td><code>withDeltaTime(float $deltaTime): self</code></td><td>New projectile stepping at $deltaTime, same state. 0.0 is a LEGAL value here (the accepted-freeze idiom, finding 049) and must not be swallowed by a naive null-coalescing rebuild — pinned.</td></tr>
+<tr><td><code>position(): Point</code></td><td></td></tr>
+<tr><td><code>velocity(): Vector</code></td><td></td></tr>
+<tr><td><code>acceleration(): Vector</code></td><td></td></tr>
+<tr><td><code>static gravity(): Vector</code></td><td>Gravity vector — Y-up, matching upstream harmonica <code>Gravity = Vector{0, -9.81, 0}</code>. Use this when porting examples from the harmonica docs verbatim. Returns a shared immutable instance (see the memo above).</td></tr>
+<tr><td><code>static terminalGravity(): Vector</code></td><td>Terminal-velocity gravity — Y-up, matching upstream harmonica <code>TerminalGravity = Vector{0, -53, 0}</code>. Shared immutable instance.</td></tr>
+<tr><td><code>static gravityYDown(): Vector</code></td><td>Legacy Y-down gravity. Earlier versions of SugarSpring used <code>(0, +9.81, 0)</code> (Y-down) — kept here so existing PHP code that relied on the old convention can opt back in via a single name change without flipping every Y-coord in the model. Shared immutable instance.</td></tr>
+<tr><td><code>static terminalGravityYDown(): Vector</code></td><td>Legacy Y-down terminal-velocity gravity. See gravityYDown(). Shared immutable instance.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-spring"><code>Spring</code> <small>final class</small></h4>
+<p>Damped harmonic oscillator (Ryan Juckett&#039;s &quot;Damped Springs&quot;), with under-/critically-/over-damped branches chosen by the damping ratio — readable back off any live spring via self::dampingRatio().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(float $deltaTime, float $angularFrequency, float $dampingRatio, ?bool $reducedMotionOverride = null)</code></td><td></td></tr>
+<tr><td><code>static new(float $deltaTime, float $angularFrequency, float $dampingRatio, ?bool $reducedMotionOverride = null): self</code></td><td>Factory alias of the constructor — the house <code>::new()</code> entry shape, one vocabulary across the library (finding 052). <code>Spring::new(...)</code> and <code>new Spring(...)</code> are the same door, not two behaviours.</td></tr>
+<tr><td><code>update(float $pos, float $vel, float $target): array</code></td><td>Advance one step toward $target, returning the new position and velocity.</td></tr>
+<tr><td><code>deltaTime(): float</code></td><td>Tuning triple: seconds elapsed per integration step.</td></tr>
+<tr><td><code>angularFrequency(): float</code></td><td>Tuning triple: rad/sec (NOT Hz) — see the constructor note.</td></tr>
+<tr><td><code>dampingRatio(): float</code></td><td>Tuning triple: &lt;1 oscillating, =1 critical, &gt;1 over-damped.</td></tr>
+<tr><td><code>reducedMotionOverride(): ?bool</code></td><td>The pinned reduced-motion override, or null when it defers to the environment.</td></tr>
+<tr><td><code>static resetReducedMotionProbe(): void</code></td><td>Test seam: forget the memoized reduced-motion verdict so the next probe re-reads the environment. Production callers should never need this — the point of the memo is that a process&#039;s a11y setting is read once. Environments that DO hot-swap REDUCE_MOTION mid-run (long-lived daemons re-reading config) are the documented reason this seam is public.</td></tr>
+<tr><td><code>static settled(float $pos, float $vel, float $target, float $threshold = self::SETTLING_THRESHOLD): bool</code></td><td>Whether a spring resting at ($pos, $vel) has settled at $target.</td></tr>
+<tr><td><code>static fps(float $n): float</code></td><td>Frame-time (seconds) for a given frame rate. <code>Spring::fps(60)</code> → 1/60.</td></tr>
+<tr><td><code>static fromPreset(SpringPreset $preset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null): Spring</code></td><td>Construct a spring from a named preset at 60 fps.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-springchain"><code>SpringChain</code> <small>final class</small></h4>
+<p>Sequences multiple springs so that one spring&#039;s settle triggers the next.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $stages, int $activeIndex = 0)</code></td><td></td></tr>
+<tr><td><code>static new(array $stages): self</code></td><td>Build a chain from a spring and initial conditions for each stage.</td></tr>
+<tr><td><code>withStage(Spring $spring, float $position, float $velocity, float $target): self</code></td><td>Add a stage to the end of the chain (fluent).</td></tr>
+<tr><td><code>tick(): self</code></td><td>Advance the chain by one step, returning the NEW chain.</td></tr>
+<tr><td><code>currentPositions(): array</code></td><td>Get all current positions of all stages.</td></tr>
+<tr><td><code>isComplete(): bool</code></td><td>Check if the chain has completed all stages.</td></tr>
+<tr><td><code>activeStage(): int</code></td><td>Get the index of the currently active stage.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-springcollection"><code>SpringCollection</code> <small>final class</small></h4>
+<p>Manages multiple named spring instances.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $springs = [], array $positions = [], array $velocities = [], array $targets = [])</code></td><td></td></tr>
+<tr><td><code>withSpring(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): self</code></td><td>Return a NEW collection with the given spring added (immutable).</td></tr>
+<tr><td><code>without(string $id): self</code></td><td>Return a NEW collection with the named spring removed (immutable).</td></tr>
+<tr><td><code>withTarget(string $id, float $target): self</code></td><td>Return a NEW collection with the target for one spring changed (immutable).</td></tr>
+<tr><td><code>tick(): self</code></td><td>Advance every UNSETTLED spring by one step; settled members keep their floats untouched (finding 006 — cost follows motion, not collection size). Returns a NEW SpringCollection when anything advanced, leaving the original instance unchanged; a fully-settled collection returns <code>$this</code> identity.</td></tr>
+<tr><td><code>position(string $id): float</code></td><td>The current position of a spring by id — the house bare accessor.</td></tr>
+<tr><td><code>velocity(string $id): float</code></td><td>Get the current velocity of a spring by id.</td></tr>
+<tr><td><code>allVelocities(): array</code></td><td>Get all current velocities, keyed by spring id.</td></tr>
+<tr><td><code>settled(float $threshold = Spring::SETTLING_THRESHOLD): bool</code></td><td>Whether EVERY spring in the collection has settled at its target.</td></tr>
+<tr><td><code>has(string $id): bool</code></td><td>Check if a spring exists in the collection.</td></tr>
+<tr><td><code>all(): array</code></td><td>Get all current positions.</td></tr>
+<tr><td><code>target(string $id): float</code></td><td>Get the target for a specific spring.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-springconfig"><code>SpringConfig</code> <small>final readonly class</small></h4>
+<p>The tension / friction / mass triple behind a Spring: physical parameters the class turns into the angular frequency and damping ratio the oscillator integrates with.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(float $tension, float $friction, float $mass): self</code></td><td>Factory alias of the constructor — the house <code>::new()</code> entry shape (finding 052); the same door as <code>new SpringConfig(...)</code>.</td></tr>
+<tr><td><code>__construct(public float $tension, public float $friction, public float $mass)</code></td><td></td></tr>
+<tr><td><code>spring(float $deltaTime = 1.0 / 60.0, ?bool $reducedMotionOverride = null): Spring</code></td><td>Build a spring from this config&#039;s derived values.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-springpreset"><code>SpringPreset</code> <small>enum</small></h4>
+<p>Predefined spring parameter sets for common animation moods.</p>
+<p>Cases: <code>Gentle</code> · <code>Wobbly</code> · <code>Stiff</code> · <code>Slow</code> · <code>Molasses</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>resolve(): SpringConfig</code></td><td>Resolve this preset to a fully constructed SpringConfig. The returned instance is SHARED per preset (immutable by type).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-vector"><code>Vector</code> <small>final class</small></h4>
+<p>3D vector for Projectile. Immutable.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly float $x, public readonly float $y, public readonly float $z = 0.0)</code></td><td></td></tr>
+<tr><td><code>static zero(): self</code></td><td></td></tr>
+<tr><td><code>static new(float $x, float $y, float $z = 0.0): self</code></td><td>Factory alias of the constructor — the house <code>::new()</code> entry shape (finding 052); the same door as <code>new Vector(...)</code>.</td></tr>
+<tr><td><code>add(self $other): self</code></td><td></td></tr>
+<tr><td><code>sub(self $other): self</code></td><td></td></tr>
+<tr><td><code>scale(float $s): self</code></td><td>Scale all three components by <code>$s</code>.</td></tr>
+<tr><td><code>length(): float</code></td><td>Euclidean length in 3D. Returns INF when the squared components sum past PHP_FLOAT_MAX (finite components ~1e154 and up).</td></tr>
+<tr><td><code>dot(self $other): float</code></td><td>Dot product.</td></tr>
+<tr><td><code>cross(self $other): self</code></td><td>Cross product. Returns a new perpendicular Vector.</td></tr>
+<tr><td><code>lengthSquared(): float</code></td><td>Squared Euclidean length — avoids sqrt() for comparisons. Returns INF on overflow exactly like length() (components ~1e154 and up).</td></tr>
+<tr><td><code>normalize(): self</code></td><td>Normalized (unit) vector.</td></tr>
+<tr><td><code>lerp(self $other, float $t): self</code></td><td>Linear interpolation between this vector and $other.</td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>static fromArray(array $wire): self</code></td><td>Rebuild from the wire format jsonSerialize() emits: a positional <code>[x, y, z]</code> list. **The index order is contractual and frozen** — this method and the serializer are two halves of one wire format, so no component may ever move or gain a name. int entries (json_decode of <code>1</code> yields an int) are widened here; everything else about the members — type, arity — is refused before the constructor ever sees a partial tuple, and finiteness stays the constructor&#039;s own door (one guard, no duplicated policy).</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>Wire format: positional <code>[x, y, z]</code>. The index order is contractual — fromArray() decodes this exact shape and a re-ordered or keyed payload is a breaking change to every serialized vector, not a style edit.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-spring-easing">SugarCraft\Spring\Easing</h3>
+<h4 id="api-sugarcraft-spring-easing-cubicbezier"><code>CubicBezier</code> <small>final class</small></h4>
+<p>Cubic Bezier easing functions — matches the CSS <code>cubic-bezier()</code> spec.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(float $x1, float $y1, float $x2, float $y2)</code></td><td></td></tr>
+<tr><td><code>static new(float $x1, float $y1, float $x2, float $y2): self</code></td><td>Factory alias of the constructor — the house <code>::new()</code> entry shape (finding 052), SHIPPED rather than exempted on purpose: this class already serves static calls with named presets, and the uniform door costs nothing next to teaching five classes one vocabulary. Custom (off-table) curves take this door; the 26 named ones take their presets, which stay the memoized shared instances.</td></tr>
+<tr><td><code>static cssEase(): self</code></td><td>The CSS <code>ease</code> transition-timing-function keyword. Named <code>cssEase()</code> because the seam sampler ease() owns the bare spelling — PHP forbids one name as both static preset and instance sampler. The legacy static <code>CubicBezier::ease()</code> cannot forward through <code>__callStatic()</code> (the engine resolves it to the instance method and raises an Error) and fails loudly instead; migrate to <code>cssEase()</code>.</td></tr>
+<tr><td><code>static easeIn(): self</code></td><td></td></tr>
+<tr><td><code>static easeOut(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOut(): self</code></td><td></td></tr>
+<tr><td><code>static linear(): self</code></td><td></td></tr>
+<tr><td><code>static __callStatic(string $name, array $arguments): self</code></td><td>BC door for the CSS-keyword preset, honestly stated: PHP resolves a static call to the instance sampler <code>ease()</code> and raises an Error WITHOUT consulting <code>__callStatic</code>, so no deprecation forwarder can exist for <code>CubicBezier::ease()</code>. The legacy spelling fails LOUDLY until 2.0.0; <code>cssEase()</code> is the preset. This hook guards the other static misses only: a typo must fail with a named refusal here, not quietly become some preset.</td></tr>
+<tr><td><code>static easeInSine(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutSine(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutSine(): self</code></td><td></td></tr>
+<tr><td><code>static easeInQuad(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutQuad(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutQuad(): self</code></td><td></td></tr>
+<tr><td><code>static easeInCubic(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutCubic(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutCubic(): self</code></td><td></td></tr>
+<tr><td><code>static easeInQuart(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutQuart(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutQuart(): self</code></td><td></td></tr>
+<tr><td><code>static easeInQuint(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutQuint(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutQuint(): self</code></td><td>Pre-2022 easings.net approximation: cubic-bezier(0.86, 0, 0.07, 1). (The site&#039;s 2022 redesign table lists (0.83, 0, 0.17, 1) instead; this preset family consistently ships the original table, see the class docblock.)</td></tr>
+<tr><td><code>static easeInExpo(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutExpo(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutExpo(): self</code></td><td></td></tr>
+<tr><td><code>static easeInCirc(): self</code></td><td></td></tr>
+<tr><td><code>static easeOutCirc(): self</code></td><td></td></tr>
+<tr><td><code>static easeInOutCirc(): self</code></td><td>Pre-2022 easings.net approximation: cubic-bezier(0.785, 0.135, 0.15, 0.86).</td></tr>
+<tr><td><code>ease(float $t): float</code></td><td>Ease normalized time $t ∈ [0, 1] through this curve — the seam sampler of EasingFunction.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-easing-easing"><code>Easing</code> <small>enum</small></h4>
+<p>Standard easing functions for animation.</p>
+<p>Cases: <code>Linear</code> · <code>QuadraticIn</code> · <code>QuadraticOut</code> · <code>QuadraticInOut</code> · <code>CubicIn</code> · <code>CubicOut</code> · <code>CubicInOut</code> · <code>ElasticIn</code> · <code>ElasticOut</code> · <code>ElasticInOut</code> · <code>BounceIn</code> · <code>BounceOut</code> · <code>BounceInOut</code> · <code>BackIn</code> · <code>BackOut</code> · <code>BackInOut</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>ease(float $t): float</code></td><td>Apply the easing function to a normalized time value.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-spring-easing-easingfunction"><code>EasingFunction</code> <small>interface</small></h4>
+<p>Interface for custom easing functions.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>ease(float $t): float</code></td><td>Apply the easing function to a normalized time value.</td></tr>
+</tbody>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+
+    <h3 id="spring-constructor-inputs" style="margin-top: 24px;">Spring constructor inputs</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>deltaTime</code></td><td><code>float</code></td><td>none (required)</td><td>Seconds per <code>update()</code> call. Must be finite and &gt; 0. Use <code>Spring::fps(60)</code> for a 60 Hz loop</td></tr>
+    <tr><td><code>angularFrequency</code></td><td><code>float</code></td><td>none (required)</td><td>Speed in radians per second. Must be finite and at least <code>1e-9</code>. Larger values settle faster</td></tr>
+    <tr><td><code>dampingRatio</code></td><td><code>float</code></td><td>none (required)</td><td>The regime. Must be &gt; 0. Below 1 oscillates, exactly 1 is critical, above 1 is over-damped</td></tr>
+    <tr><td><code>reducedMotionOverride</code></td><td><code>?bool</code></td><td><code>null</code></td><td><code>null</code> defers to the environment. <code>false</code> animates even when reduced motion is requested. <code>true</code> snaps to target even when it is not</td></tr>
+    </table>
+
+    <h3 style="margin-top: 24px;" id="configuration">Spring presets</h3>
+    <p><code>Spring::fromPreset()</code> builds a spring at 60 fps from one of five hand-tuned presets. The presets are not literal UIKit values. They were tuned against the react-spring-era tables, and every one is under-damped, so each overshoots a little. The settle times below were measured for a move from 0 to 100 at the default <code>1e-4</code> threshold:</p>
+    <table class="api-table">
+    <tr><th>Preset</th><th>Tension</th><th>Friction</th><th>Mass</th><th>ζ</th><th>Overshoot</th><th>Settle at 60 fps</th></tr>
+    <tr><td><code>Gentle</code></td><td>100</td><td>10</td><td>1</td><td>0.50</td><td>about 16%</td><td>174 frames (about 2.9 s)</td></tr>
+    <tr><td><code>Wobbly</code></td><td>180</td><td>12</td><td>1</td><td>0.45</td><td>about 21%</td><td>141 frames (about 2.4 s)</td></tr>
+    <tr><td><code>Stiff</code></td><td>500</td><td>20</td><td>1</td><td>0.45</td><td>about 21%</td><td>94 frames (about 1.6 s)</td></tr>
+    <tr><td><code>Slow</code></td><td>50</td><td>6</td><td>1</td><td>0.42</td><td>about 23%</td><td>292 frames (about 4.9 s)</td></tr>
+    <tr><td><code>Molasses</code></td><td>30</td><td>4</td><td>1</td><td>0.37</td><td>about 29%</td><td>439 frames (about 7.3 s)</td></tr>
+    </table>
+    <p>No critically damped preset ships. Build one with <code>dampingRatio: 1.0</code>, or with <code>new SpringConfig(...)</code> and a friction of <code>2 * sqrt(tension * mass)</code>.</p>
+
+    <h3 id="springconfig-physical-units" style="margin-top: 24px;">SpringConfig physical units</h3>
+    <p><code>SpringConfig</code> takes tension, friction and mass, which must all be finite and greater than zero, and derives the two numbers <code>Spring</code> consumes:</p>
+    <pre class="code"><code class="language-text">angularFrequency = sqrt(tension / mass)
+dampingRatio     = friction / (2 * sqrt(tension * mass))</code></pre>
+    <pre class="code"><code class="language-php">use SugarCraft\Spring\SpringConfig;
+
+$config  = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
+$spring  = $config-&gt;spring();                                   // 1/60 s frame time
+$pinned  = $config-&gt;spring(reducedMotionOverride: true);        // always snaps, env ignored
+echo $config-&gt;angularFrequency;                                 // 13.416... (public readonly)</code></pre>
+    <p>Extreme but finite triples are refused when the derived values are not finite, not positive or numerically degenerate. Past a damping ratio of about 2<sup>26.5</sup>, the two over-damped roots collapse to one number and the spring would freeze.</p>
+
+    <h3 id="reduced-motion-environment" style="margin-top: 24px;">Reduced-motion environment</h3>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Value</th><th>Effect</th></tr>
+    <tr><td><code>REDUCE_MOTION</code></td><td>unset, <code>0</code>, <code>false</code>, <code>no</code> or <code>off</code> (any case)</td><td>Off. Springs animate normally</td></tr>
+    <tr><td><code>REDUCE_MOTION</code></td><td>any other non-empty value, <code>1</code> included</td><td>On. Springs snap to target</td></tr>
+    <tr><td><code>PREFERS_REDUCED_MOTION</code></td><td>same rules as above</td><td>Consulted after <code>REDUCE_MOTION</code>. Either variable reading on is enough, so an off value in one never cancels an on value in the other</td></tr>
+    </table>
+    <p>The environment is read once per process, on the first <code>update()</code> that needs it, and the answer is remembered. Changing the variable later in the same process does not change behaviour until <code>Spring::resetReducedMotionProbe()</code> is called. A per-spring <code>reducedMotionOverride</code> is checked on every call and always wins over the memo. The lookup goes through <code>SugarCraft\ColorProfile\Probe::reducedMotion()</code>, and no terminal query or accessibility daemon is consulted.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The three examples live in <code>examples/</code>. None takes arguments, and each runs from the package root after <code>composer install</code>.</p>
+
+    <h3 id="examples-spring-php" style="margin-top: 24px;">examples/spring.php</h3>
+    <p>Drives the same target through three damping ratios and prints the rows side by side (see <a href="#quickstart">Quickstart</a> for the output). Under <code>REDUCE_MOTION</code> every <code>update()</code> snaps to target, so the example prints flat lines and says so once.</p>
+    <pre class="code"><code class="language-shell">php examples/spring.php</code></pre>
+
+    <h3 id="examples-projectile-php" style="margin-top: 24px;">examples/projectile.php</h3>
+    <p>Traces one two-dimensional arc over its first 90 frames (1.5 s at 60 fps). The initial velocity points up and to the right, and gravity bends it over. The example plots those samples as an ASCII curve, and the plot stops before the apex, so it shows only the rising half of the arc. Projectile ignores the reduced-motion signal by design, and the example prints one line when the variable is set.</p>
+    <pre class="code"><code class="language-shell">php examples/projectile.php</code></pre>
+
+    <h3 id="examples-particle-php" style="margin-top: 24px;">examples/particle.php</h3>
+    <p>Spawns 80 projectiles from the origin, each with a randomised velocity and a small position offset, runs 60 frames under Y-up gravity, and plots every frame position of each particle into one grid. The random generator is seeded with <code>mt_srand(42)</code>, so the output is the same on every run.</p>
+    <pre class="code"><code class="language-shell">php examples/particle.php</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <pre class="code"><code class="language-shell">cd sugar-spring &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite lives in <code>tests/</code>. <code>GoldenRenderTest</code> compares the spring and projectile trajectories with the files in <code>tests/fixtures/</code>. Run it with <code>UPDATE_GOLDENS=1 vendor/bin/phpunit</code> to record new fixtures after an intentional change. <code>ReducedMotionTest</code> and <code>ReducedMotionOverrideTest</code> cover the environment probe and the per-spring override. <code>LocaleParityTest</code> keeps all 16 language files in step with <code>lang/en.php</code>. <code>AccessorDeprecationTest</code> checks the removed-aliases table in the README against the source.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="the-constructor-throws-dampingratio-must-be-0" style="margin-top: 24px;">The constructor throws "dampingRatio must be &gt; 0"</h3>
+    <p>A damping ratio of zero is an oscillator that never settles, and a negative one diverges. Use a value above zero. <code>1.0</code> is critically damped and the fastest approach without overshoot.</p>
+
+    <h3 id="the-animation-runs-too-fast-or-too-slow" style="margin-top: 24px;">The animation runs too fast or too slow</h3>
+    <p>The frame time is fixed when the spring is built. If the loop calls <code>update()</code> at 30 Hz but the spring was built with <code>Spring::fps(60)</code>, the motion takes twice as long. Build the spring with the rate you really call it at, or rebuild it each frame with the measured <code>deltaTime</code> (clamped, so a stall cannot teleport the value).</p>
+
+    <h3 id="values-jump-straight-to-the-target" style="margin-top: 24px;">Values jump straight to the target</h3>
+    <p><code>REDUCE_MOTION</code> or <code>PREFERS_REDUCED_MOTION</code> is set to a value other than <code>0</code>, <code>false</code>, <code>no</code> or <code>off</code>. This is deliberate. Pin the spring with <code>reducedMotionOverride: false</code> if the motion carries information the end state does not. Call <code>Spring::resetReducedMotionProbe()</code> if the variable changed after the first probe in the same process.</p>
+
+    <h3 id="the-chain-or-the-projectile-never-moves" style="margin-top: 24px;">The chain or the projectile never moves</h3>
+    <p><code>SpringChain::tick()</code>, <code>SpringCollection::tick()</code> and <code>Projectile::update()</code> return a new value. Assign it back (<code>$chain = $chain-&gt;tick();</code>). Discarding the return value leaves the receiver untouched, and the loop replays the same frame forever.</p>
+
+    <h3 id="a-loop-never-settles-on-a-small-threshold" style="margin-top: 24px;">A loop never settles on a small threshold</h3>
+    <p><code>settled()</code> needs both the position and the velocity within the threshold, and the default <code>1e-4</code> is finer than one terminal cell. Pass <code>0.5</code> when you render at cell resolution, and keep a frame cap such as <code>$frame &lt; 600</code> as an escape hatch.</p>
+
+    <h3 id="normalize-throws-a-runtimeexception" style="margin-top: 24px;">normalize() throws a RuntimeException</h3>
+    <p><code>Vector::normalize()</code> has no honest answer for a zero-length or overflowed vector, so it throws <code>RuntimeException</code>, not <code>InvalidArgumentException</code>. Check <code>length()</code> first, or catch <code>RuntimeException</code> around the call.</p>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>SugarCraft</th><th>charmbracelet/harmonica</th><th>Notes</th></tr>
+    <tr><td><code>Spring</code> (<code>new</code>, <code>update</code>)</td><td><code>harmonica.NewSpring</code>, <code>Spring.Update</code></td><td>Mirrors the spring core. The Ryan Juckett damped-oscillator algorithm is shared upstream</td></tr>
+    <tr><td><code>Projectile</code></td><td><code>harmonica.NewProjectile</code>, <code>Projectile.Update</code></td><td>Explicit Euler integration. Returns a new value instead of mutating</td></tr>
+    <tr><td><code>Projectile::GRAVITY</code>, <code>gravity()</code></td><td><code>harmonica.Gravity</code></td><td>Standard gravity, Y-up</td></tr>
+    <tr><td><code>Projectile::TERMINAL_GRAVITY</code>, <code>terminalGravity()</code></td><td><code>harmonica.TerminalGravity</code></td><td>Approximate skydiver terminal velocity, Y-up</td></tr>
+    <tr><td><code>Point</code></td><td><code>harmonica.Point</code></td><td>A position, kept apart from a delta on purpose, as upstream does</td></tr>
+    <tr><td><code>Vector</code></td><td><code>harmonica.Vector</code></td><td>The same 3D value type</td></tr>
+    <tr><td><code>SpringConfig</code>, <code>SpringPreset</code>, <code>SpringChain</code>, <code>SpringCollection</code>, <code>Easing</code>, <code>CubicBezier</code>, reduced motion</td><td>none</td><td>SugarCraft additions. Easing follows the CSS <code>cubic-bezier()</code> algorithm and the easings.net control points</td></tr>
+    </table>
+    <p>Mapping lives in the class doc comments, which cite <code>Mirrors charmbracelet/harmonica.&lt;Method&gt;</code> where the port is direct. The full upstream-to-port table is in <a href="https://github.com/sugarcraft/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <h3 id="pure-values-no-i-o" style="margin-top: 24px;">Pure values, no I/O</h3>
+    <p>sugar-spring has no event loop, no ReactPHP, no <code>ext-pcntl</code> and no output path. Each step is a function of its inputs. <code>update()</code> takes <code>(pos, vel, target)</code> and returns a new pair, so a spring can be shared between several frame loops without any coordination.</p>
+    <h3 id="immutable-state-with-checked-doors" style="margin-top: 24px;">Immutable state with checked doors</h3>
+    <p>Constructors refuse bad input, and the <code>with*()</code> builders go through the same checks. A value that overflows to infinity mid-simulation is refused by the constructor that would have stored it, so a bad state never reaches the caller.</p>
+    <h3 id="the-reduced-motion-memo" style="margin-top: 24px;">The reduced-motion memo</h3>
+    <p>The environment is read at most once per process, and the result is memoised in a static. The per-spring override is evaluated on every call. The probe lives in sugar-colorprofile, and it is the only sugar-colorprofile call the spring path makes.</p>
+    <h3 id="messages-in-every-locale" style="margin-top: 24px;">Messages in every locale</h3>
+    <p>Exception messages go through <code>SugarCraft\Spring\Lang::t()</code>, which sits on the shared <code>SugarCraft\Core\I18n</code> machinery. Lookup runs exact locale, then base locale, then <code>en</code>, then the raw key. Set the locale once with <code>SugarCraft\Core\I18n\T::setLocale('de')</code>.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package was published as <code>sugarcraft/honey-bounce</code> until its rename in 2026-10, and its namespace changed from <code>SugarCraft\Bounce\</code> to <code>SugarCraft\Spring\</code>. Removed APIs are listed in the README table titled <em>Removed aliases (2.0.0)</em>, with the canonical replacement for each. That table is pinned to the source by <code>AccessorDeprecationTest</code>, so it cannot drift silently. </p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><code>sugarcraft/sugar-colorprofile</code>: the <code>Probe</code> that answers the reduced-motion question.</li>
+      <li><code>sugarcraft/sugar-overlay</code>: the Fade, Scale and Slide overlay animations consume the easing seam, including the <code>CubicBezier</code> presets.</li>
+      <li><code>sugarcraft/sugar-widgets</code>: <code>AnimatedProgress</code> caches one <code>Spring</code> for its lifetime and steps it on each tick.</li>
+      <li><code>sugarcraft/candy-flappy</code>: <code>Bird</code> integrates a <code>Projectile</code> for its flap-and-fall arc.</li>
+    </ul>
+
+    <h3 id="source-demos" style="margin-top: 32px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-spring">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-spring/blob/master/README.md">Full README</a></li>
@@ -215,23 +728,6 @@ for ($i = 0; $i &lt; 60; $i++) {
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt ≤ 0 / ω &lt; 1e-9 / ζ ≤ 0 / coefficient overflow refused</td></tr>
-<tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the simulation; snaps to [target, 0] under reduced motion</td></tr>
-<tr><td>Spring</td><td>settled(pos, vel, target, threshold?)</td><td>Completion predicate on position AND velocity</td></tr>
-<tr><td>Spring</td><td>fps($fps) / fromPreset($preset, $dt?, $override?)</td><td>deltaTime helper; five hand-tuned presets</td></tr>
-<tr><td>SpringConfig</td><td>new(tension, friction, mass) → spring()</td><td>react-spring-style triple; exposes public readonly ω/ζ</td></tr>
-<tr><td>SpringChain</td><td>tick(): self / isComplete() / currentPositions()</td><td>Stage hand-off on settle; under reduced motion final positions land after 2n−1 ticks, complete on 2n</td></tr>
-<tr><td>SpringCollection</td><td>tick(): self / settled() / velocity($id) / get($id)</td><td>Many named springs, one driver</td></tr>
-<tr><td>Easing</td><td>Linear, QuadraticIn … CubicOut … BackInOut → ease($t)</td><td>16 preset curves implementing EasingFunction</td></tr>
-<tr><td>CubicBezier</td><td>new(x1, y1, x2, y2) → evaluate($t)</td><td>CSS-style timing function (Newton + bounded subdivision)</td></tr>
-<tr><td>Projectile</td><td>new(deltaTime, position, velocity, acceleration) → update()</td><td>Explicit Euler; returns a new instance — reassign it</td></tr>
-<tr><td>Point / Vector</td><td>new(x, y, z = 0.0)</td><td>Finite-checked 2D/3D values; Vector: add/sub/scale/dot/cross/normalize/lerp/length</td></tr>
-<tr><td>Gravity</td><td>standard() / terminal()</td><td>Y-up acceleration vectors (Y-down spellings available)</td></tr>
-</table>
     </div>
   </div>
 </section>
@@ -247,14 +743,14 @@ for ($i = 0; $i &lt; 60; $i++) {
                 <span class="demo-caption">Damped harmonic oscillator — settles smoothly to its target.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/projectile.gif" alt="Looping recording of a projectile tracing a gravity arc and bouncing off the floor" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/projectile.gif" alt="Looping recording of a projectile tracing the rising half of a gravity arc" onerror="this.parentElement.style.display='none'">
                 <h3 id="projectile">Projectile</h3>
-                <span class="demo-caption">Newtonian projectile sim with gravity + bouncing.</span>
+                <span class="demo-caption">Newtonian projectile arc under gravity.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/particle.gif" alt="Looping recording of a projectile-driven particle field falling under terminal gravity" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/particle.gif" alt="Looping recording of a projectile-driven particle field rising and slowing under gravity" onerror="this.parentElement.style.display='none'">
                 <h3 id="particle">Particle</h3>
-                <span class="demo-caption">Projectile-driven particle field with terminal gravity.</span>
+                <span class="demo-caption">Projectile-driven particle field with gravity.</span>
             </div>
         </div>
     </div>

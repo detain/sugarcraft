@@ -126,7 +126,7 @@ final class FsLister
     }
 
     /**
-     * CF-39 (closes audit 063): memoized decorator over any lister —
+     * CF-39: memoized decorator over any lister —
      * keyed by path, invalidated by the directory's own mtime. The
      * injectable-lister contract is untouched (this just wraps whatever
      * closure it is handed), so tests keep their deterministic fakes and

@@ -52,6 +52,7 @@ final class BuildPharVendorPruneTest extends TestCase
         self::assertContains('vendor/sugarcraft/pkg/src/Keep.php', $listed);
         self::assertContains('vendor/sugarcraft/pkg/src/Tests/Keep.php', $listed, 'src/ is never pruned');
         self::assertContains('vendor/sugarcraft/pkg/composer.json', $listed);
+        self::assertContains('vendor/sugarcraft/sugar-markdown/themes/solarized.json', $listed, 'bundled data is runtime code and survives the prune');
         self::assertContains('vendor/composer/installed.json', $listed);
         self::assertNotContains('vendor/sugarcraft/pkg/tests/FooTest.php', $listed);
         self::assertNotContains('vendor/sugarcraft/pkg/README.md', $listed);
@@ -92,6 +93,12 @@ final class BuildPharVendorPruneTest extends TestCase
             'vendor/sugarcraft/pkg/docs/a.html',
             'vendor/sugarcraft/pkg/doc/a.html',
             'vendor/sugarcraft/pkg/test/a.php',
+            // candy-mdview's Guard 3b refuses to build unless the vendored
+            // sugar-markdown ships its bundled themes; a fleet fixture without
+            // them would fail that app for a reason unrelated to the prune.
+            'vendor/sugarcraft/sugar-markdown/themes/solarized.json',
+            'vendor/sugarcraft/sugar-markdown/themes/monokai.json',
+            'vendor/sugarcraft/sugar-markdown/themes/github.json',
         ] as $rel) {
             $put($rel);
         }

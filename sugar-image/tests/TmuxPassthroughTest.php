@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\TmuxPassthrough;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * Transactional tmux allow-passthrough ensure/restore.
@@ -396,8 +397,12 @@ final class TmuxPassthroughTest extends TestCase
         // + TMUX → fromCapability → ensure(). Public entry, no reflection.
         putenv('KITTY_WINDOW_ID=1');
         Detect::reset();
+        // The env claim stands only once the terminal answers the Kitty query (P1-13b).
+        KittyTerminal::answer();
+        $probed = Mosaic::probe();
+        KittyTerminal::clear();
 
-        $this->assertInstanceOf(Mosaic::class, Mosaic::probe());
+        $this->assertInstanceOf(Mosaic::class, $probed);
         $this->assertSame([self::SHOW_CALL, self::SET_CALL], $this->calls(),
             'a tmux pane with a graphics protocol must get the ensure bracket');
 

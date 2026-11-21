@@ -2362,14 +2362,11 @@ final class ImageSource
             );
         }
 
-        $src = @imagecreatefromstring($this->bytes);
-        if ($src === false) {
-            throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
-        }
-        ForceTrueColor::convert($src);
+        // Read-only use of the shared decode: imagecrop() returns a new image,
+        // so the cached handle is never destroyed here (rank 71, decode once).
+        $src = DecodedImageCache::gd($this);
 
         $cropped = imagecrop($src, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
-        imagedestroy($src);
         if ($cropped === false) {
             throw new \RuntimeException(Lang::t('image_source.crop_failed'));
         }
@@ -2401,15 +2398,11 @@ final class ImageSource
         // fromGd()'s own guard only fires after that allocation already happened.
         self::guardPixelCount($w, $h, $this->maxPixels);
 
-        $src = @imagecreatefromstring($this->bytes);
-        if ($src === false) {
-            throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
-        }
-        ForceTrueColor::convert($src);
+        // Shared decode (rank 71): the source handle is read, never destroyed.
+        $src = DecodedImageCache::gd($this);
 
         $dst = imagecreatetruecolor($w, $h);
         if ($dst === false) {
-            imagedestroy($src);
             throw new \RuntimeException(Lang::t('image_source.gd_create_failed'));
         }
 
@@ -2418,7 +2411,6 @@ final class ImageSource
         imagealphablending($dst, false);
 
         imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, $this->width, $this->height);
-        imagedestroy($src);
 
         try {
             return $this->fromGd($dst, $this->reencodeFormat(), $this->maxPixels);

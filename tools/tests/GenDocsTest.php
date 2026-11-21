@@ -937,6 +937,116 @@ final class GenDocsTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    // API reference splice (PD2): docs/_data/<slug>.api.html into the body's marker
+    // -----------------------------------------------------------------
+
+    private const API_MARKER = '<!-- api-reference:generated -->';
+
+    /**
+     * A fixture root whose MATCHUPS lists sugar-core, the one slug ApiReference::ENABLED
+     * allows a fragment for. The splice only runs for enabled slugs, so the positive
+     * splice case cannot use a fixture slug.
+     */
+    private function makeEnabledCoreRoot(): string
+    {
+        $root = $this->makeFixtureRoot([]);
+        $md = (string) \file_get_contents("$root/docs/MATCHUPS.md");
+        \file_put_contents(
+            "$root/docs/MATCHUPS.md",
+            \str_replace("| alpha | `fixture-alpha/` |\n", "| alpha | `fixture-alpha/` |\n| core | `sugar-core/` |\n", $md)
+        );
+        $this->writeData($root, 'sugar-core');
+
+        return $root;
+    }
+
+    public function testASplicePutsTheFragmentWhereTheMarkerWas(): void
+    {
+        $root = $this->makeEnabledCoreRoot();
+        \file_put_contents("$root/docs/_data/sugar-core.body.html", '<p>before</p>' . self::API_MARKER . '<p>after</p>');
+        \file_put_contents("$root/docs/_data/sugar-core.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $page = $this->page($root, 'sugar-core');
+        $this->assertStringContainsString('<p>before</p><h3>Demo</h3><p>after</p>', $page);
+        $this->assertStringNotContainsString(self::API_MARKER, $page);
+    }
+
+    /**
+     * A fragment for a lib outside ApiReference::ENABLED is spliced but never regenerated
+     * or compared, so its page would go stale under a green gate. It must fail closed.
+     */
+    public function testAFragmentForALibOutsideTheEnabledListFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>x</p>' . self::API_MARKER);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Hand written</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('not in ApiReference::ENABLED', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    /**
+     * A marker with no fragment would publish the raw comment in place of a reference,
+     * and a green build would not show it. The run must stop before any page is written.
+     */
+    public function testAMarkerWithNoFragmentFailsClosedAndWritesNothing(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", '<p>x</p>' . self::API_MARKER);
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('does not exist', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    /** A second marker would splice the fragment twice, so the page would carry two references. */
+    public function testAMarkerAppearingTwiceFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html", self::API_MARKER . self::API_MARKER);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('(found 2)', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    public function testAFragmentWithNoMarkerInItsBodyFailsClosed(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit'], $r['output']);
+        $this->assertStringContainsString('(found 0)', $r['output']);
+    }
+
+    /**
+     * A page with a generated reference is authored with a marker, and extracting it would
+     * copy the fragment into the body. The extract run must skip it and write no _data.
+     */
+    public function testExtractLeavesAPageWithAGeneratedReferenceAlone(): void
+    {
+        $root = $this->makeFixtureRoot(['fixture-alpha']);
+        $this->assertSame(0, $this->runScript($root)['exit']);
+        \unlink("$root/docs/_data/fixture-alpha.json");
+        \unlink("$root/docs/_data/fixture-alpha.body.html");
+        \file_put_contents("$root/docs/_data/fixture-alpha.api.html", "<h3>Demo</h3>\n");
+
+        $r = $this->runScript($root, ['--extract']);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertStringContainsString("skipping 'fixture-alpha'", $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-alpha.json");
+        $this->assertFileDoesNotExist("$root/docs/_data/fixture-alpha.body.html");
+    }
+
+    // -----------------------------------------------------------------
     // Failure modes
     // -----------------------------------------------------------------
 

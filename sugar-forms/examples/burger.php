@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * The canonical "burger" form from huh's README. Builds a burger
- * order from three fields: bun + patty + extras.
+ * order from four fields: bun + patty + extras, then a Confirm step.
  *
  * Renders the form's first frame; in a real interactive Program it
  * would Tab through each field collecting input.

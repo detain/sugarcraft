@@ -1013,7 +1013,7 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by its own root through `ContainedPath` — nine call
+Every read is bounded by its own root through sugar-core's `PathJail` — nine call
 sites, one per read decision: `loadPersonal()`'s personal-directory gate
 (shared by the head file and its persona candidates) and its
 `~/.claude` fallback (each bounded by its own directory),
