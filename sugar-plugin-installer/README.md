@@ -84,6 +84,32 @@ project tier, then the user tier, then the directory Composer recorded for the
 package. `composer remove` therefore still deletes a
 plugin staged under a section that has since been broken.
 
+## Install closure and extension requirements
+
+The installer requires `sugarcraft/sugar-plugins`, and that is deliberate. The
+provenance record below is written by `SugarCraft\Plugins\Provenance\SourceRecord`,
+the same class candy-code's marketplace install writes its own record through.
+A copy of the writer here would let the two record formats, and the atomic-write
+and lock rules behind them, drift apart, so the installer writes through the
+library's writer and keeps no copy of its own.
+
+Requiring `sugarcraft/sugar-plugins` also pulls in a closure, and a project that
+installs this package must be able to satisfy all of it:
+
+| Package | Requirements that matter here | Reached through |
+|---|---|---|
+| `sugarcraft/sugar-plugins` | `sugarcraft/sugar-core`, `ext-tokenizer`, `psr/http-message`, `react/event-loop`, `react/promise` | this package |
+| `sugarcraft/sugar-core` | `ext-intl`, `ext-mbstring`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-ansi-parser`, `react/*` | `sugar-plugins` |
+| `sugarcraft/sugar-pty` | `ext-ffi`, `sugarcraft/sugar-input`, `sugarcraft/sugar-ansi-parser`, `sugar-core`, `react/*` | `sugar-core` |
+| `sugarcraft/sugar-input` | `ext-mbstring`, `evenement/evenement`, `react/*` | `sugar-pty` |
+
+The extensions a host PHP needs are therefore `ext-ffi` (through `sugar-pty`),
+`ext-intl` (through `sugar-core`), `ext-mbstring` and `ext-tokenizer`. Composer checks
+platform requirements on `composer require` and `composer install`, so a host
+without one of them refuses to resolve the closure. Neither `ext-ffi` nor `ext-intl`
+is needed by this package's own code. They arrive because the record writer's
+package requires them.
+
 ## Provenance record
 
 Each successful install and update writes `.sugar-plugin-source.json` into the staged
@@ -169,6 +195,14 @@ with a scratch `HOME`, `COMPOSER_HOME`, cache and network disabled. It requires
 the installer and a sample `sugar-plugin` package by path repository, then checks
 the staged tree and that the trust list and ledger bytes do not change, across
 `require` and `remove`. It skips with a reason when `composer` is not on `PATH`.
+
+The offline run cannot fetch the closure above, so the test puts two stand-ins in
+the scratch project in place of `sugarcraft/sugar-core` and `sugarcraft/sugar-plugins`.
+`StubClosureDriftTest::STUBBED` lists which requirements each stand-in keeps and
+which it drops. `StubClosureDriftTest::testStubsDropExactlyTheDocumentedRequirements`
+checks that table against the real manifests, so a new requirement in the closure
+fails the suite until the table says how it is handled. It lives in its own class
+so it still runs where `composer` is not on `PATH`.
 
 ## Plan
 

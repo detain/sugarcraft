@@ -51,8 +51,14 @@ final class StagingDownloader implements DownloaderInterface
         return $this->stage($target, $path);
     }
 
+    /**
+     * Deletes the staged tree the way the real file downloader does, so a test
+     * can assert that a tree was gone after a remove or a tier move.
+     */
     public function remove(PackageInterface $package, string $path): PromiseInterface
     {
+        Scratch::remove($path);
+
         return \React\Promise\resolve(null);
     }
 

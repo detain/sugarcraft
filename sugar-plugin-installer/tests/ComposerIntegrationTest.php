@@ -47,10 +47,12 @@ final class ComposerIntegrationTest extends TestCase
 
     /**
      * The installer requires sugarcraft/sugar-plugins, whose own requirements
-     * (sugar-core, sugar-pty, react, ...) cannot be fetched with the network off.
-     * The scratch project therefore gets two stand-in packages that expose the
-     * monorepo sources, with no requirements of their own, so the installer's
-     * SourceRecord code runs as shipped while the resolution stays offline.
+     * cannot be fetched with the network off. The scratch project therefore gets
+     * two stand-ins, sugar-core and sugar-plugins, that expose the monorepo
+     * sources and declare only the kept requirements in StubClosureDriftTest::STUBBED.
+     * The installer's SourceRecord code runs as shipped while the resolution stays
+     * offline. The closure that a real install pulls in (ext-intl and ext-ffi, through
+     * sugar-core and sugar-pty) is documented in README.md, not exercised here.
      */
     private function writeClosureStubs(): void
     {

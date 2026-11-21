@@ -3409,10 +3409,12 @@ final class Runtime
      * own (the frame channel, on a TUI turn) — and send each verdict back
      * down that member's relay exactly as it was settled (roadmap 1.C-5).
      *
-     * Blocks while a question is open, as a sequential turn's gate does: the
-     * parent pauses its idle ceiling for an open ask, the other members keep
-     * running, and their beats and questions wait on their own sockets until
-     * this one is answered — one modal at a time.
+     * Waits while a question is open, as a sequential turn's gate does: on a
+     * loop-driven turn the approver suspends this turn's fiber, so the loop
+     * keeps running, and a turn that is not loop-driven blocks on the socket.
+     * Either way the parent pauses its idle ceiling for an open ask, the other
+     * members keep running, and their beats and questions wait on their own
+     * sockets until this one is answered — one modal at a time.
      *
      * @param list<array<string, mixed>> $jobs
      */

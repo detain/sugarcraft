@@ -6350,6 +6350,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
     {
         try {
+            // Accepted residual (AUD 12.1 A4, rows 47 and 49): this no-fork path
+            // (pcntl_fork or the socket pair missing, e.g. Windows) has no child
+            // and no channel. Subagents and ShellSend waits run on the TUI loop
+            // here and cannot see a parent stop until they end. The Retry-based
+            // ShellSend waits (ShellSend::relayReady and sendBounded, both
+            // Retry::bounded usleep loops) are named in the same exception. The
+            // whole turn already blocks this loop, so moving only those waits
+            // would not change that.
+            //
+            // A second no-fork route reaches the same waits without passing
+            // through this method: AgentWorkerPool::startAgent's sequential arm
+            // (no pcntl_fork and no injected executor) runs executeInline() in
+            // the parent with the forkedExecutor, an EngineExecutor. A /workflow
+            // stage's agent turn therefore runs inside driveWorkflowFiber() on
+            // the TUI loop, and any ShellSend wait or SubagentsTool::wait that
+            // agent calls blocks that loop too. The verdict is unchanged: the
+            // whole agent turn already blocks the loop on that route.
             $engine = $this;
             // ISS-072: this path has no child, so the ranking is primed here
             // — still never in the parent of a fork.

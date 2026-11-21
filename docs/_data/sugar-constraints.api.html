@@ -66,7 +66,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -80,7 +80,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $weight = 1)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -94,7 +94,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $n)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -108,7 +108,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $n)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -122,7 +122,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $n)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -136,7 +136,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $n)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
@@ -150,7 +150,7 @@
 <tbody>
 <tr><td><code>__construct(public readonly int $numerator, public readonly int $denominator)</code></td><td></td></tr>
 <tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
-<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Grows only when slack survives every Fill and Max in the set (they eat slack first); does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells — a soft floor. Takes slack directly only when the set has neither Fill nor Max; otherwise grows only from cells a Max clamp hands back, which Min takes before Fill. Does not guarantee <code>$n</code> when demand exceeds the area.</td></tr>
 <tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
 <tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
 <tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>

@@ -9,6 +9,7 @@ use ReflectionMethod;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Chat\Handlers\HandlesKeys;
 use SugarCraft\Code\Chat\Handlers\HandlesPointer;
+use SugarCraft\Code\Chat\Handlers\HandlesScheduledPumps;
 use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 use SugarCraft\Code\Chat\Handlers\HandlesSessionSurface;
 use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
@@ -48,6 +49,7 @@ final class RouteTraitParityTest extends TestCase
         'AutoCommittedMsg',
         'BackgroundSessionSpawnedMsg',
         'BackgroundSessionStoppedMsg',
+        'ShellSendSettledMsg', // P4-12 CC-1: the settled `/shells send` row, HandlesSessionSurface arm
         'BackgroundTickMsg',
         'BackendToolEventsMsg',
         'BangShellResultMsg',
@@ -214,11 +216,12 @@ final class RouteTraitParityTest extends TestCase
         // HandlesPointer is the one NON-route trait: the mouse selection /
         // pane-geometry helpers moved out of Chat.php to hold the size
         // ratchet. It owns no route arm, so it is rostered here, not in
-        // families().
+        // families(). HandlesScheduledPumps joins the same way: the schedule
+        // clock moved out of Chat.php for the same ratchet, and owns no arm.
         self::assertEqualsCanonicalizing(
-            [...array_values(self::families()), HandlesPointer::class],
+            [...array_values(self::families()), HandlesPointer::class, HandlesScheduledPumps::class],
             $used,
-            'Chat must compose exactly the four family traits plus HandlesPointer',
+            'Chat must compose exactly the four family traits plus HandlesPointer and HandlesScheduledPumps',
         );
 
         foreach (self::families() as $handler => $trait) {

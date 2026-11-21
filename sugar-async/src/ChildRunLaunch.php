@@ -36,10 +36,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *
  * The kill ladder normally ends with the result: settling cancels every timer,
  * the ladder's included. One exception is kept on purpose. A group-path launch
- * (a containment group is named) keeps its ladder poll armed past settle, for at
- * most the TERM and KILL grace, and only while a group member is still alive, so
- * a descendant that ignores TERM is not orphaned once its leader has settled the
- * run. The group-path ladder test in ChildRunLaunchTest pins this behavior.
+ * (a containment group is named or read from the live child) keeps its ladder
+ * poll armed past settle, for at most the TERM and KILL grace, and only while a
+ * group member is still alive, so a descendant that ignores TERM is not orphaned
+ * once its leader has settled the run. The group-path ladder test in
+ * ChildRunLaunchTest pins this behavior.
  */
 final class ChildRunLaunch
 {
@@ -77,6 +78,15 @@ final class ChildRunLaunch
     private bool $cancelled = false;
 
     /**
+     * The group read from the live child when the spawn-time snapshot named none.
+     * Latched, since a reaped leader reads as no group.
+     */
+    private ?int $liveGroup = null;
+
+    /** The child's own pid, read from the live handle at start(); a setsid wrapper's group id. */
+    private int $spawnPid = 0;
+
+    /**
      * Last sign of life: a chunk read from either stream, or a stdin write the child
      * accepted. The idle budget counts from here, as ChildRun::run() counts it.
      */
@@ -99,12 +109,13 @@ final class ChildRunLaunch
     /**
      * @param resource $proc
      * @param array<int, resource> $pipes  0 stdin (absent when the stdin is a staged file), 1 stdout, 2 stderr
-     * @param null|int $groupPid  Process group the kill rungs signal, or null for the direct child
+     * @param null|int $groupPid  Process group the kill rungs signal, or null to read it from the live child
      * @param null|\Closure(int|string, string): void $onChunk  Live feed of every chunk, or null
      * @param null|float $idleTimeout  Seconds of silence before the kill ladder starts, or null for none
      * @param null|CancellationToken $cancellation  Starts the kill ladder when cancelled, or null
      * @param null|string $stagedStdin  Temp file the child reads as stdin (Windows), removed at settle, or on the reap if the child still holds it
      * @param null|float $exitGrace  Seconds of pipe silence read on after the exit is seen, or null to read to EOF
+     * @param bool $setsidWrapped  The child is a setsid wrapper that may not have led its group at the spawn read. Only then does the handle's pid stand in for the group once the child has exited; an unwrapped child leads no group of its own
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -120,6 +131,7 @@ final class ChildRunLaunch
         private readonly ?CancellationToken $cancellation = null,
         private readonly ?string $stagedStdin = null,
         private readonly ?float $exitGrace = null,
+        private readonly bool $setsidWrapped = false,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
@@ -129,6 +141,8 @@ final class ChildRunLaunch
 
     public function start(): void
     {
+        $this->spawnPid = (int) proc_get_status($this->proc)['pid'];
+        $this->latchLiveGroup();
         $this->lastActivityAt = Clock::monotonicSeconds();
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
         $this->timers[] = $this->loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, fn () => $this->checkExit());
@@ -349,6 +363,8 @@ final class ChildRunLaunch
             return true;
         }
 
+        // Before the status read: the group is only readable while the leader lives.
+        $this->latchLiveGroup();
         $status = proc_get_status($this->proc);
         if ($status['running'] !== false) {
             return false;
@@ -385,6 +401,10 @@ final class ChildRunLaunch
             return;
         }
 
+        // Before the first signal: a shell that exited since the last poll is only
+        // reachable through the setsid fallback in killGroup(), which needs exited set.
+        $this->probeGone();
+
         $this->killing = true;
         $this->closeAllPipes();
         $this->closeStdin();
@@ -419,7 +439,48 @@ final class ChildRunLaunch
     /** One kill(-pgid, 0) per check, never a /proc walk: this runs on the loop. True without a group. */
     private function groupGone(): bool
     {
-        return $this->groupPid === null || BoundedShutdown::groupEmpty($this->groupPid, false);
+        $group = $this->killGroup();
+
+        return $group === null || BoundedShutdown::groupEmpty($group, false);
+    }
+
+    /**
+     * The group the kill rungs signal: the spawn-time one, else the group the live
+     * child led when it was last seen alive. ChildRun::launch() reads the group before
+     * the setsid wrapper has become a leader, so the snapshot can be null for a
+     * containment-wrapped child. ChildRun::killGroup() takes the same live fallback
+     * on the blocking path.
+     */
+    private function killGroup(): ?int
+    {
+        if ($this->groupPid !== null) {
+            return $this->groupPid;
+        }
+
+        $this->latchLiveGroup();
+        if ($this->liveGroup !== null) {
+            return $this->liveGroup;
+        }
+
+        // A setsid wrapper that exits before any live read leaves no group to read, yet
+        // it leads a group whose id is its own pid, which the handle keeps. An unwrapped
+        // child never leads one, and its pid can be reused by a stranger's group leader,
+        // so the fallback is limited to a child declared as a wrapper.
+        return $this->exited && $this->setsidWrapped && $this->spawnPid > 0 ? $this->spawnPid : null;
+    }
+
+    /**
+     * Latches the group a live child leads. Run from start() and from every status
+     * poll before the exit is recorded: a shell that backgrounds a job and exits
+     * leaves no live group to read at the deadline, so the group must be taken while
+     * the leader still leads it. A reaped leader reads as no group, and a null read
+     * keeps the earlier latch.
+     */
+    private function latchLiveGroup(): void
+    {
+        if ($this->groupPid === null && $this->liveGroup === null && !$this->exited) {
+            $this->liveGroup = Containment::groupId($this->proc);
+        }
     }
 
     /**
@@ -429,7 +490,7 @@ final class ChildRunLaunch
      */
     private function signal(int $signal): void
     {
-        Containment::signal($this->proc, $this->groupPid, $signal);
+        Containment::signal($this->proc, $this->killGroup(), $signal);
     }
 
     private function checkDone(): void
