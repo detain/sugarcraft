@@ -2161,4 +2161,4 @@ candy-code/tests/Backend/LoopDrivenTurnTest.php	0.064	6
 candy-code/tests/Backend/ForkedTurnOwnsItsLoopTest.php	0.422	1
 candy-code/tests/Tools/CapturedOutputCapTest.php	0.200	6
 candy-code/tests/Support/DrainsStreamedChildTest.php	0.100	3
-candy-code/tests/Tools/TaskToolExecuteMergeTest.php	0.616	9
+candy-code/tests/Tools/TaskToolExecuteMergeTest.php	0.616	13
