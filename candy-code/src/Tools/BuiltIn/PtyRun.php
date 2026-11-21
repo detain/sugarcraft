@@ -7,7 +7,8 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 use SugarCraft\AnsiParser\Codec\KeySequence;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\PtyDriver;
+use SugarCraft\Code\Support\PtyBackend;
+use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
@@ -23,6 +24,10 @@ use SugarCraft\Code\Tools\ShellTailRing;
 use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Pty\Contract\Child;
+use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Expect;
 
 /**
  * Runs a terminal program on a real pseudo-terminal and DRIVES it: each step
@@ -37,8 +42,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * receive input (its own refusal message says so). PtyRun answers "what does
  * the screen say AFTER I press this", needs per-step result rows, and carries
  * its own geometry/budget surface; bolting that onto Bash would rewrite the
- * merged stdout/stderr shape every existing pin depends on. The shared engine
- * is {@see PtyDriver}; folding Bash's drain onto it is the recorded follow-up.
+ * merged stdout/stderr shape every existing pin depends on. The session
+ * engine is {@see runSession()}: it spawns here and reads every step through
+ * sugar-pty's {@see Expect::collectWindow()}; folding Bash's drain onto that
+ * window is the recorded follow-up.
  *
  * SAFETY mirrors Bash-interactive and then some: the program runs under
  * ProcessContainment's fail-fast env (no prompt will ever wait on a password
@@ -114,6 +121,25 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         '\\' => '\\',
         '<' => '<',
     ];
+
+    /**
+     * Fixed one-second courtesy between "the script ended" and "we call it
+     * still running" — see {@see teardownSession()} for the race it settles.
+     */
+    private const EXIT_GRACE_SECONDS = 1.0;
+
+    /**
+     * The teardown drain's own window. With the child gone, the window's
+     * post-exit drain answers after two quiet reads; with a child the ladder
+     * could not confirm gone, it is all the drain waits.
+     */
+    private const TEARDOWN_DRAIN_WINDOW_SECONDS = 0.1;
+
+    /**
+     * Hard ceiling on the teardown drain. It runs after the wall deadline may
+     * already have passed, so it carries its own bound rather than the wall's.
+     */
+    private const TEARDOWN_DRAIN_CEILING_SECONDS = 2.0;
 
     public function __construct(
         private ?string $root = null,
@@ -375,7 +401,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         // not make. The frame the failed jail paints stands in for stderr.
         if ($this->sandbox !== null) {
             $refusal = $this->sandbox->probe(function (string $probe): array {
-                $verdict = PtyDriver::run(
+                $verdict = self::runSession(
                     command: $probe,
                     cwd: null,
                     cols: 80,
@@ -422,7 +448,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             $progress->onChunk(\SugarCraft\Core\Util\Ansi::strip($chunk));
         };
 
-        $run = PtyDriver::run(
+        $run = self::runSession(
             command: $command,
             cwd: $cwd,
             cols: $cols,
@@ -442,6 +468,304 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         }
 
         return $this->render($toolCallId, $cols, $rows, $run, $harvest);
+    }
+
+    /**
+     * Run one scripted PTY session: spawn the program on a pseudo-terminal of
+     * the requested size, drive it with the parsed sends and read windows, and
+     * always leave through the TERM→KILL ladder.
+     *
+     * THE HANG BUDGET IS THE DESIGN. Every read window is clamped to the
+     * smaller of the step window and the remaining wall deadline (sugar-pty's
+     * {@see Expect::collectWindow()} owns that clamp); `$child->wait()` — an
+     * unbounded poll in sugar-pty — is called ONLY when
+     * {@see BoundedShutdown::escalate()} has reported the child gone, so a
+     * child that traps SIGTERM cannot turn a bounded refusal back into a hang.
+     * Teardown fires on every exit path, including expect-timeout and
+     * mid-script exceptions.
+     *
+     * THE TRANSCRIPT IS A BYTE PREFIX. The byte budget is shared across the
+     * whole session: the running `retained` and `dropped` totals are threaded
+     * from window to window. Once the cap has refused a byte (including the
+     * bytes a codepoint back-off gave up), every later byte is refused, in that
+     * step and in every later one, so nothing is spliced in after the gap.
+     *
+     * $steps is the tool-boundary-PARSED plan (never raw model input): each
+     * entry `{send: string, windowSeconds: float, regex: ?string}` where a
+     * non-null `$regex` is a compiled-true PCRE matched against the bytes
+     * retained SINCE this step's window opened, and a null one just collects
+     * for `windowSeconds`. Every step yields one result row, aligned with the
+     * plan, even when the program exited or the wall fired before it ran
+     * (`skipped`).
+     *
+     * @param list<array{send: string, windowSeconds: float, regex: ?string}> $steps
+     * @param (\Closure(): void)|null $heartbeat fired once per read pass
+     * @param (\Closure(string): void)|null $onChunk raw bytes per read window (C-TOOL-3.a live tail);
+     *     best-effort — fed inside every step window, not the teardown drain
+     * @param list<string> $spawnArgvPrefix jail argv (ISS-002) prefixed onto the spawn argv
+     * @return array{
+     *     refusal: ?string,
+     *     pid: int,
+     *     steps: list<array{output: string, matched: ?bool, note: string}>,
+     *     retained: int,
+     *     dropped: int,
+     *     exitCode: ?int,
+     *     exited: bool,
+     *     killed: bool,
+     * }
+     */
+    private static function runSession(
+        string $command,
+        ?string $cwd,
+        int $cols,
+        int $rows,
+        float $wallSeconds,
+        int $maxBytes,
+        array $steps,
+        ?\Closure $heartbeat = null,
+        ?\Closure $onChunk = null,
+        array $spawnArgvPrefix = [],
+    ): array {
+        $spawned = self::spawnSession($command, $cwd, $cols, $rows, $spawnArgvPrefix);
+        if (\is_string($spawned)) {
+            return self::sessionResult(refusal: $spawned, pid: -1, ran: [], retained: 0, dropped: 0, exitCode: null, exited: false, killed: false);
+        }
+
+        [$master, $child] = $spawned;
+
+        // An empty plan is still a session: collect until the program exits or
+        // the wall fires — the sized, safe shape of the old drain.
+        $plan = $steps === []
+            ? [['send' => '', 'windowSeconds' => $wallSeconds, 'regex' => null]]
+            : $steps;
+
+        /** @var list<array{output: string, matched: ?bool, note: string}> $ran */
+        $ran = [];
+        $retained = 0;
+        $dropped = 0;
+        $deadline = \microtime(true) + $wallSeconds;
+        $childExited = false;
+        $expect = Expect::on($master);
+        $killed = false;
+
+        try {
+            foreach ($plan as $step) {
+                if ($childExited) {
+                    $ran[] = ['output' => '', 'matched' => null, 'note' => 'skipped (program exited)'];
+
+                    continue;
+                }
+
+                if ($step['send'] !== '') {
+                    try {
+                        $master->write($step['send']);
+                    } catch (\Throwable $writeFailure) {
+                        // A dead master (program raced us to exit) must not
+                        // abort the script: note it and let the windows below
+                        // observe the exit through their normal path.
+                        $ran[] = ['output' => '', 'matched' => $step['regex'] === null ? null : false, 'note' => 'send failed: ' . $writeFailure->getMessage()];
+
+                        $childExited = $child->exited();
+
+                        continue;
+                    }
+                }
+
+                $window = $expect->collectWindow(
+                    windowSeconds: $step['windowSeconds'],
+                    deadline: $deadline,
+                    maxBytes: $maxBytes,
+                    retained: $retained,
+                    dropped: $dropped,
+                    regex: $step['regex'],
+                    child: $child,
+                    heartbeat: $heartbeat,
+                    onChunk: $onChunk,
+                );
+                $expect = $window->next ?? $expect;
+                $retained = $window->retained;
+                $dropped = $window->dropped;
+                $childExited = $window->childExited;
+
+                $note = $window->wallHit ? 'wall deadline hit mid-step' : '';
+                if ($window->matched === false) {
+                    $note = 'no-match within ' . \round($step['windowSeconds'] * 1000) . 'ms';
+                }
+                $ran[] = ['output' => $window->output, 'matched' => $window->matched, 'note' => $note];
+
+                if ($window->wallHit) {
+                    // Pad the untouched tail so the result rows stay aligned
+                    // with the plan the tool reported to the model.
+                    foreach (\array_slice($plan, \count($ran)) as $unused) {
+                        $ran[] = ['output' => '', 'matched' => null, 'note' => 'skipped (wall deadline)'];
+                    }
+
+                    break;
+                }
+            }
+        } finally {
+            // Teardown runs on EVERY path out of the loop — normal finish,
+            // wall hit, or a throw from inside a step.
+            [$killed, $tail, $retained, $dropped] = self::teardownSession($master, $child, $expect, $heartbeat, $maxBytes, $retained, $dropped);
+            // The final frame rides the answer even when the exit beat the
+            // last read; it belongs to the step that was open when the
+            // program went.
+            if ($tail !== '') {
+                $lastIndex = \max(0, \count($ran) - 1);
+                $ran[$lastIndex]['output'] = ($ran[$lastIndex]['output'] ?? '') . $tail;
+            }
+        }
+
+        return self::sessionResult(
+            refusal: null,
+            pid: $child->pid(),
+            ran: $ran,
+            retained: $retained,
+            dropped: $dropped,
+            exitCode: $killed ? 124 : $child->exitCode(),
+            exited: $child->exited(),
+            killed: $killed,
+        );
+    }
+
+    /**
+     * Refuse or spawn: the availability gates first, then the master opened
+     * and the child spawned at the requested size, so the master's winsize is
+     * set before the child's first draw (`spawn()` applies it before forking
+     * and re-asserts it best-effort after, the Darwin zeroing quirk) and a
+     * TUI's first frame already sees the requested geometry.
+     *
+     * @param list<string> $spawnArgvPrefix
+     * @return string|array{0: MasterPty, 1: Child} the refusal sentence, or the live pair
+     */
+    private static function spawnSession(string $command, ?string $cwd, int $cols, int $rows, array $spawnArgvPrefix): string|array
+    {
+        if (!ProcessContainment::interactiveAvailable()) {
+            return 'pty mechanism unavailable on this host (no pty); the program was refused and never started';
+        }
+
+        if (ProcessContainment::interactiveBashMissing()) {
+            // ConPTY is fine here; the plan it would carry is not. §6.3: name
+            // the install that fixes it, never a cmd.exe substitute.
+            return WindowsShell::BASH_MISSING_NOTICE;
+        }
+
+        $master = null;
+        try {
+            // The backend seam asks the platform factory, so this same run
+            // loop speaks to a ConPTY master on Windows and the canonical
+            // POSIX master everywhere else (C-TUI-6.d).
+            $pair = PtyBackend::open($cols, $rows);
+            $master = $pair->master();
+            $child = $pair->slave()->spawn(
+                ProcessContainment::interactiveSpawnCommand($command, $cwd, $spawnArgvPrefix),
+                // Scrubbed for the same reason as every other capture path:
+                // the pty transcript is the model's to read (audit F-E1), and
+                // NONINTERACTIVE_ENV's fail-fast prompts keep a driven program
+                // from ever blocking on a password this terminal will not type.
+                ProcessContainment::scrubbedEnv(),
+                $cols,
+                $rows,
+                // Not a hard-coded true: ConPTY has no ctty and refuses the
+                // request outright, so the capability answers (C-TUI-6.d's
+                // other half — the seam that picked ConPTY must also decide
+                // whether the ctty wrapper applies). POSIX stays true.
+                PtyBackend::honoursControllingTerminal(),
+            );
+        } catch (\Throwable $failure) {
+            // spawn() throwing AFTER open() succeeded would otherwise strand the
+            // master handle — the teardown belongs to the run loop, which this
+            // path never reaches. open() itself throwing leaves $master null,
+            // and the systems close their own partials on a failed open.
+            if ($master !== null) {
+                try {
+                    $master->close();
+                } catch (\Throwable) {
+                    // Nothing to escalate a failure to; the refusal is the answer.
+                }
+            }
+
+            return 'pty refused: the pseudo-terminal could not be allocated (' . $failure->getMessage() . ')';
+        }
+
+        return [$master, $child];
+    }
+
+    /**
+     * Leave the session: a bounded exit grace, then the TERM→KILL ladder for a
+     * child still running, then one last bounded drain through the same Expect
+     * window (and the same threaded byte totals, so the byte-prefix rule holds
+     * for the tail too), and the master closed whatever the drain does.
+     *
+     * @return array{0: bool, 1: string, 2: int, 3: int} killed, tail, retained, dropped
+     */
+    private static function teardownSession(MasterPty $master, Child $child, Expect $expect, ?\Closure $heartbeat, int $maxBytes, int $retained, int $dropped): array
+    {
+        $killed = false;
+        $tail = '';
+
+        try {
+            // A clean exit races its own last frame: the `BYE` a program
+            // prints fires the final match a hair BEFORE its exit(0), and the
+            // /bin/sh wrapper needs a beat more to follow its exec'd child.
+            // One bounded grace poll (never a hang — it is fixed at a second
+            // regardless of the plan) keeps "answered and left" from being
+            // misreported as "terminated by us". A child already gone skips it.
+            $graceEnd = \microtime(true) + self::EXIT_GRACE_SECONDS;
+            while (!$child->exited() && \microtime(true) < $graceEnd) {
+                if ($heartbeat !== null) {
+                    $heartbeat();
+                }
+                \usleep(10000);
+            }
+
+            if (!$child->exited()) {
+                $killed = true;
+                $gone = BoundedShutdown::escalate(
+                    static function (int $signal) use ($child): void {
+                        ProcessContainment::terminatePid($child->pid(), $signal);
+                    },
+                    static fn (): bool => $child->exited(),
+                );
+                if ($gone) {
+                    $child->wait();
+                }
+            }
+
+            $drain = $expect->collectWindow(
+                windowSeconds: self::TEARDOWN_DRAIN_WINDOW_SECONDS,
+                deadline: \microtime(true) + self::TEARDOWN_DRAIN_CEILING_SECONDS,
+                maxBytes: $maxBytes,
+                retained: $retained,
+                dropped: $dropped,
+                child: $child,
+            );
+            $tail = $drain->output;
+            $retained = $drain->retained;
+            $dropped = $drain->dropped;
+        } finally {
+            $master->close();
+        }
+
+        return [$killed, $tail, $retained, $dropped];
+    }
+
+    /**
+     * @param list<array{output: string, matched: ?bool, note: string}> $ran
+     * @return array{refusal: ?string, pid: int, steps: list<array{output: string, matched: ?bool, note: string}>, retained: int, dropped: int, exitCode: ?int, exited: bool, killed: bool}
+     */
+    private static function sessionResult(?string $refusal, int $pid, array $ran, int $retained, int $dropped, ?int $exitCode, bool $exited, bool $killed): array
+    {
+        return [
+            'refusal' => $refusal,
+            'pid' => $pid,
+            'steps' => $ran,
+            'retained' => $retained,
+            'dropped' => $dropped,
+            'exitCode' => $exitCode,
+            'exited' => $exited,
+            'killed' => $killed,
+        ];
     }
 
     /**

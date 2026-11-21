@@ -533,7 +533,7 @@ trait CapturesProcessOutput
                 ProcessContainment::scrubbedEnv(),
                 80,
                 24,
-                // Same capability answer as PtyDriver::run(): the ConPTY
+                // Same capability answer as PtyRun's session spawn: the ConPTY
                 // pair throws on a hard-wired true, the POSIX map's absence
                 // keeps the historical request (LANE-CC, 2026-11-11).
                 PtyBackend::honoursControllingTerminal(),

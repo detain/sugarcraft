@@ -262,7 +262,7 @@ final class ChildStderrCaptureTest extends TestCase
         // PtyRun's mini-TUI fixture (r9x lane): its two stty probes discard
         // the helper's stderr into /dev/null on purpose — a missing or busy
         // ctty must fall back to the declared 80x24 defaults silently, and
-        // whoever launches this fixture (PtyDriver's pty) reads the screen,
+        // whoever launches this fixture (PtyRun's pty) reads the screen,
         // not fd 2; any text stty writes there would pollute the very grid
         // the suite asserts on.
         'fixtures/pty-mini-tui.php' => [

@@ -148,7 +148,7 @@ final class InteractiveWindowsArmsTest extends TestCase
         // but no bash answers the install message). Both call sites, same
         // shape — positional slices of the two guarded openers.
         foreach ([
-            [__DIR__ . '/../../src/Support/PtyDriver.php', 'PtyDriver'],
+            [__DIR__ . '/../../src/Tools/BuiltIn/PtyRun.php', 'PtyRun'],
             [__DIR__ . '/../../src/Tools/Concerns/CapturesProcessOutput.php', 'CapturesProcessOutput'],
         ] as [$file, $label]) {
             $source = \file_get_contents($file);

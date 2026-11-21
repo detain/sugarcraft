@@ -12,8 +12,9 @@ use SugarCraft\Pty\PtySystemFactory;
  * The single PTY opener for this application: hand back a CONTRACT pair from
  * the platform factory, never the deprecated POSIX-only facade.
  *
- * WHY A BACKEND SEAM (C-TUI-6.d): the app's two live openers —
- * {@see PtyDriver::run()} and the Bash-interactive capture path in
+ * WHY A BACKEND SEAM (C-TUI-6.d): the app's two live openers — the PtyRun
+ * tool's session engine ({@see \SugarCraft\Code\Tools\BuiltIn\PtyRun}) and
+ * the Bash-interactive capture path in
  * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput} — each called
  * the deprecated `SugarCraft\Pty\Pty` facade directly. That facade hardwires
  * `PosixPtySystem` and can never answer on Windows. `PtySystemFactory::new()`

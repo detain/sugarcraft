@@ -115,8 +115,9 @@ final class PtyRelay
 
     /**
      * Final-drain discipline: two consecutive quiet reads and the session is
-     * over — the twin of {@see \SugarCraft\Code\Support\PtyDriver}'s
-     * quiet-drain, kept as a count because the child's exit is what actually
+     * over — the twin of the post-exit drain inside sugar-pty's
+     * {@see \SugarCraft\Pty\Expect::collectWindow()}, which PtyRun reads
+     * through, kept as a count because the child's exit is what actually
      * ends the loop and this only catches the bytes that raced it.
      */
     private const DRAIN_QUIET_READS = 2;
@@ -197,7 +198,7 @@ final class PtyRelay
         // steals a terminal already bound to another session (measured:
         // claim fails with errno EPERM for exactly this shape, while the
         // same spawn from a session MEMBER claims clean, which is why
-        // PtyDriver/runCapturedInteractive work in-process). So the pty
+        // PtyRun/runCapturedInteractive work in-process). So the pty
         // opener must NOT be a session leader: fork, and let the child — a
         // member of this session and group — run the pump below. The parent
         // keeps the setsid lifecycle intact: it is the signal target the

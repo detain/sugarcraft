@@ -2185,12 +2185,6 @@ parameters:
 			path: src/Support/ProcessContainment.php
 
 		-
-			message: '#^Negated boolean expression is always true\.$#'
-			identifier: booleanNot.alwaysTrue
-			count: 1
-			path: src/Support/PtyDriver.php
-
-		-
 			message: '#^Call to an undefined method FFI\:\:fcntl\(\)\.$#'
 			identifier: method.notFound
 			count: 1
