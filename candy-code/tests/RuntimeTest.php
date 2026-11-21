@@ -8635,8 +8635,10 @@ DOC;
      * the downstream thing that falsifies it, and P3.S6 needs the number. The
      * EIGHT falsified in turn by cc-fix-1111 M-11 (2026-11-11), which collapsed
      * `WorkflowEngine`'s five live seams into two inside `renderStagePrompt()`;
-     * the census now derives FIVE, and this test answered with the new number
-     * rather than rotting the prose - which is the point of deriving.
+     * the census derived FIVE, and FOUR once CC1C-c3 deleted AgentManager's
+     * in-process sub-agent entry point and its one call; each time this test
+     * answered with the new number rather than rotting the prose - which is
+     * the point of deriving.
      *
      * IT PINS AGREEMENT, NOT A LITERAL. There is no hard-coded total here:
      * the census derives the count and the assertion is that the PROSE says
@@ -8745,7 +8747,6 @@ DOC;
 
         $this->assertSame(
             [
-                'src/Agents/AgentManager.php' => 1,
                 'src/Agents/ProcessExecutor.php' => 1,
                 'src/App/App.php' => 1,
                 'src/Workflows/WorkflowEngine.php' => 2,

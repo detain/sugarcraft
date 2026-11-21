@@ -104,9 +104,10 @@ final class RuntimeRetryAfterProductionPathTest extends TestCase
      */
     public function testNoProductionRetrySiteCallsTheBareLadderAnymore(): void
     {
+        // Runtime holds every retry loop since CC1C-c3 deleted the sub-agent
+        // pair in AgentManager; a sub-agent's Task run retries through these.
         $sites = [
             \dirname(__DIR__, 2) . '/src/Runtime.php' => ['bare' => 0, 'failure' => 2, 'beat' => 4],
-            \dirname(__DIR__, 2) . '/src/Agents/AgentManager.php' => ['bare' => 0, 'failure' => 2, 'beat' => 3],
         ];
 
         foreach ($sites as $file => $shape) {

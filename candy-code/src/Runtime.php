@@ -1342,7 +1342,7 @@ final class Runtime
      *     count travels with its command instead of standing alone. THE
      *     CONCLUSION IS UNCHANGED BY THE CORRECTION: no call means the path can
      *     never reach the suppressed state and pays FIVE git subprocesses on
-     *     every one of its 5 `Agent::systemPrompt()` call sites, per render
+     *     every one of its 4 `Agent::systemPrompt()` call sites, per render
      *     rather than per turn.
      *
      *     THAT FIGURE SAID "NINE" AND NINE WAS WRONG, and the correction is
@@ -1357,8 +1357,7 @@ final class Runtime
      *     `function &name()` shape, which is a separate token and defeated an
      *     earlier cut of the census), receiver required to be `->`/`?->`/`::`
      *     or a bare call. The invocations are in `App/App.php`,
-     *     `Agents/ProcessExecutor.php`, `Agents/AgentManager.php` and
-     *     `Workflows/WorkflowEngine.php`.
+     *     `Agents/ProcessExecutor.php` and `Workflows/WorkflowEngine.php`.
      *
      *     THE COUNT APPEARS EXACTLY ONCE IN THIS PARAGRAPH, IN THE SENTENCE
      *     ABOVE, AND AS A DIGIT. Both are deliberate. A word would need a
@@ -1368,7 +1367,7 @@ final class Runtime
      *     other three would have rotted silently while an author corrected the
      *     sentence the failure message named. §16.8 rule 2 is "never pin a
      *     cardinality in prose"; where a figure must be written, write it
-     *     once. The per-file DISTRIBUTION is pinned too (one, one, one, two),
+     *     once. The per-file DISTRIBUTION is pinned too (one, one, two),
      *     because unlike a line number it survives an edit above it. Line
      *     numbers are deliberately NOT given here: the census prints them in
      *     its own failure output, where they cannot be stale.
