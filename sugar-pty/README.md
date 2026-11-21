@@ -299,7 +299,8 @@ the consumed buffer cleared, so reusing `$e` replays bytes already reported in
 It ends on the first of a regex match, a child exit, the window length, or the
 absolute wall `$deadline` (each read is clamped to it). Master EOF (`eof` is set)
 stops the reads; it ends the window only when no `$child` is passed, and with a
-child the window keeps waiting for that child's exit, a match, or the deadline. An invalid regex throws `\InvalidArgumentException`. Bytes past
+child the window keeps waiting for that child's exit or a match, up to the window
+length and the deadline. An invalid regex throws `\InvalidArgumentException`. Bytes past
 `$maxBytes` are counted as dropped. A chunk that overruns the cap is cut so the cut
 itself never splits a multi-byte codepoint; a codepoint already torn at a chunk edge
 is retained as the child wrote it, so the transcript is a prefix of the stream, not
