@@ -44,14 +44,21 @@ final class TerminationPolicy
     /** Hangup: what the kernel sends a session whose terminal went away. */
     public const SIGHUP = 1;
 
+    /** "No such process": the only kill(-pgid, 0) failure that means an empty group. */
+    private const ERRNO_ESRCH = 3;
+
     public function __construct(
         public readonly int $signal = self::SIGHUP,
         public readonly float $graceSeconds = BoundedShutdown::TERMINATE_GRACE_SECONDS,
         public readonly float $killGraceSeconds = BoundedShutdown::KILL_GRACE_SECONDS,
         public readonly bool $groupReach = true,
     ) {
-        if ($signal < 1) {
-            throw new \InvalidArgumentException(Lang::t('termination.signal_invalid', ['signal' => $signal]));
+        $max = self::maxSignal();
+        if ($signal < 1 || $signal > $max) {
+            throw new \InvalidArgumentException(Lang::t('termination.signal_invalid', [
+                'signal' => $signal,
+                'max' => $max,
+            ]));
         }
         self::assertBudget('graceSeconds', $graceSeconds);
         self::assertBudget('killGraceSeconds', $killGraceSeconds);
@@ -187,7 +194,7 @@ final class TerminationPolicy
         return static function (int $rung) use ($child, $first, $groupReach): void {
             $signal = $rung === 9 ? 9 : $first;
             $pid = $child->pid();
-            if ($groupReach && (!$child->exited() || !BoundedShutdown::groupEmpty($pid, false))
+            if ($groupReach && (!$child->exited() || !self::groupEmpty($pid, false))
                 && Libc::kill(-$pid, $signal)
             ) {
                 return;
@@ -213,8 +220,53 @@ final class TerminationPolicy
                 return false;
             }
 
-            return !$groupReach || BoundedShutdown::groupEmpty($child->pid(), $walkProc);
+            return !$groupReach || self::groupEmpty($child->pid(), $walkProc);
         };
+    }
+
+    /**
+     * {@see BoundedShutdown::groupEmpty()}, or the libc probe when ext-posix
+     * is absent.
+     *
+     * Core's probe answers "empty" outright without `posix_kill()`, while this
+     * policy's signals still reach the group through {@see Libc::kill()} over
+     * FFI. Trusting that answer would end the ladder as soon as the leader
+     * exits and spare a grandchild that ignored the first signal.
+     */
+    private static function groupEmpty(int $groupPid, bool $walkProc): bool
+    {
+        if (\function_exists('posix_kill')) {
+            return BoundedShutdown::groupEmpty($groupPid, $walkProc);
+        }
+
+        return self::groupEmptyViaLibc($groupPid);
+    }
+
+    /**
+     * The ext-posix-less arm of the group probe: libc `kill(-pgid, 0)`.
+     *
+     * Only ESRCH means no member is left; EPERM is a live member this uid
+     * cannot signal. There is no /proc walk here, so an unreaped zombie
+     * member counts as live, the same conservative reading
+     * {@see applyAsync()} documents.
+     *
+     * @internal public only so the arm is testable on hosts that DO load
+     *           ext-posix, where the policy never reaches it.
+     * @throws PtyException if libc cannot be loaded
+     */
+    public static function groupEmptyViaLibc(int $groupPid): bool
+    {
+        return !Libc::killViaLibc(-$groupPid, 0) && Libc::errno() === self::ERRNO_ESRCH;
+    }
+
+    /**
+     * The host's highest signal number: SIGRTMAX on Linux, NSIG - 1 on
+     * Darwin. An out-of-range signal fails here, not as a kill() error at
+     * teardown time.
+     */
+    private static function maxSignal(): int
+    {
+        return \PHP_OS_FAMILY === 'Darwin' ? 31 : 64;
     }
 
     /** @param array<string, mixed> $changes */

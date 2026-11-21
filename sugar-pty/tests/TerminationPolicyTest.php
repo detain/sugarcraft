@@ -124,9 +124,104 @@ final class TerminationPolicyTest extends TestCase
     public function testANonPositiveSignalIsRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/signal must be a positive signal number; got 0/');
+        $this->expectExceptionMessageMatches('/signal must be a signal number from 1 to \\d+; got 0/');
 
         TerminationPolicy::new()->withSignal(0);
+    }
+
+    public function testASignalPastTheHostRangeIsRejectedAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/signal must be a signal number from 1 to \\d+; got 200/');
+
+        TerminationPolicy::new()->withSignal(200);
+    }
+
+    public function testTheHighestPortableSignalIsAccepted(): void
+    {
+        // 31 is in range on Linux and Darwin alike (Darwin's NSIG is 32).
+        $this->assertSame(31, TerminationPolicy::new()->withSignal(31)->signal);
+    }
+
+    public function testTheLibcGroupProbeTellsALiveGroupFromAGoneOne(): void
+    {
+        [$child, $grandchild] = $this->spawnGroupWithGrandchild();
+        $this->requireFfi();
+
+        $this->assertFalse(TerminationPolicy::groupEmptyViaLibc($child->pid()), 'a group with live members is not empty');
+
+        \posix_kill(-$child->pid(), 9);
+        $child->wait();
+        $deadline = \microtime(true) + 5.0;
+        while (!TerminationPolicy::groupEmptyViaLibc($child->pid()) && \microtime(true) < $deadline) {
+            \usleep(10_000);
+        }
+
+        $this->assertTrue(TerminationPolicy::groupEmptyViaLibc($child->pid()), 'ESRCH must read as an empty group');
+        $this->assertFalse(self::liveNonZombie($grandchild));
+    }
+
+    /**
+     * Without ext-posix, core's group probe answers "empty" outright. The
+     * policy must not trust that: a leader that dies on SIGHUP would end the
+     * ladder at once and spare a grandchild that ignores it. Run in a PHP
+     * whose posix_kill() is disabled, the SIGKILL rung must still reach the
+     * group through libc.
+     */
+    public function testWithoutExtPosixGroupReachStillKillsAGrandchildThatIgnoresHangup(): void
+    {
+        $this->requirePosix();
+        $this->requireFfi();
+        if (!\is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('/usr/bin/setsid is required to give the child its own process group.');
+        }
+
+        $script = <<<'PHP'
+            require $argv[1];
+            if (\function_exists('posix_kill')) {
+                echo \json_encode(['error' => 'posix_kill is still defined']);
+                exit;
+            }
+            $proc = \proc_open(
+                ['/usr/bin/setsid', '/bin/sh', '-c', '/bin/sh -c \'trap "" HUP; echo ready; exec sleep 30\' & echo $!; wait'],
+                [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+                $pipes,
+            );
+            $child = new \SugarCraft\Pty\Posix\PosixChild((int) \proc_get_status($proc)['pid'], $proc);
+            $grandchild = 0;
+            for ($i = 0; $i < 2; $i++) {
+                $line = \trim((string) \fgets($pipes[1]));
+                if (\ctype_digit($line)) {
+                    $grandchild = (int) $line;
+                }
+            }
+            $started = \hrtime(true);
+            $gone = \SugarCraft\Pty\TerminationPolicy::new()
+                ->withGraceSeconds((float) $argv[2])
+                ->withKillGraceSeconds((float) $argv[3])
+                ->apply($child);
+            echo \json_encode([
+                'group' => $child->pid(),
+                'grandchild' => $grandchild,
+                'gone' => $gone,
+                'elapsed' => (\hrtime(true) - $started) / 1e9,
+            ]);
+            PHP;
+
+        $command = \implode(' ', \array_map('escapeshellarg', [
+            \PHP_BINARY, '-d', 'disable_functions=posix_kill', '-r', $script,
+            \dirname(__DIR__) . '/vendor/autoload.php', (string) self::GRACE, (string) self::KILL_GRACE,
+        ]));
+        $output = \shell_exec($command . ' 2>&1 </dev/null');
+        $this->assertIsString($output);
+        $result = \json_decode($output, true);
+        $this->assertIsArray($result, "the posix-less runner printed: {$output}");
+        $this->assertArrayNotHasKey('error', $result, (string) ($result['error'] ?? ''));
+        $this->groups[] = (int) $result['group'];
+        $this->assertGreaterThan(0, $result['grandchild'], 'the runner must report the grandchild pid');
+
+        $this->assertGreaterThanOrEqual(self::GRACE, $result['elapsed'], 'an exited leader must not end the ladder while its group lives');
+        $this->assertFalse(self::liveNonZombie((int) $result['grandchild']), 'the SIGKILL rung must reach the group without ext-posix');
     }
 
     public function testApplyKillsAChildThatTrapsHangupWithinTheGraceBound(): void
@@ -296,6 +391,13 @@ final class TerminationPolicyTest extends TestCase
         $this->assertSame($child->pid(), \posix_getpgid((int) $grandchild), 'the grandchild must share the group');
 
         return [$child, (int) $grandchild];
+    }
+
+    private function requireFfi(): void
+    {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
+            $this->markTestSkipped('ext-ffi is required for the libc group probe.');
+        }
     }
 
     private function requirePosix(): void
