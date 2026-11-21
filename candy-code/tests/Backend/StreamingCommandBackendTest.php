@@ -8,7 +8,9 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\StreamingCommandBackend;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
+use SugarCraft\Code\Tests\Support\SharedLoopResidue;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 final class StreamingCommandBackendTest extends TestCase
 {
@@ -1211,6 +1213,26 @@ printf 'ok\n'
 
             $elapsed = microtime(true) - $started;
             $loop->cancelTimer($flip);
+
+            // The cancel TERMs the shell's whole group, and the `sleep` it was waiting on is
+            // a member. A group-path launch keeps its kill-ladder poll armed past settle until
+            // that group is empty (ChildRunLaunch::finish()), so run the loop until only the
+            // bound and the probe remain, as ChildRunLaunchTest does. Without this the ladder
+            // timer outlives the test and the residue guard fails the file.
+            $drainBound = $loop->addTimer(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+                static function () use ($loop): void {
+                    $loop->stop();
+                },
+            );
+            $drainProbe = $loop->addPeriodicTimer(0.01, function () use ($loop, &$drainProbe): void {
+                if (SharedLoopResidue::census()['timers'] <= 2) {
+                    $loop->stop();
+                }
+            });
+            $loop->run();
+            $loop->cancelTimer($drainProbe);
+            $loop->cancelTimer($drainBound);
 
             $this->assertInstanceOf(\RuntimeException::class, $caught);
             $this->assertSame('Request cancelled', $caught->getMessage());

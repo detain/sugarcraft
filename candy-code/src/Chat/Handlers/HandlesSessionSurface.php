@@ -107,6 +107,7 @@ use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\App\ScheduleFiredMsg;
 use SugarCraft\Code\Chat\ScheduleVerdicts;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
@@ -227,6 +228,19 @@ trait HandlesSessionSurface
             return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()->withError(
                 \SugarCraft\Code\Host\Commands\BackgroundCommand::isSpawnFailure($msg),
             )]]), null];
+        }
+        if ($msg instanceof ShellSendSettledMsg) {
+            // The answer to a `/shells send` that waited for its relay: one UI-only row,
+            // appended where the echo already sits (P4-12 CC-1). The wait can outlive
+            // the session it was typed in, so a row for a session no longer on screen
+            // is dropped, the same rule the side-question answer follows. A `/clear`
+            // since the send empties the transcript the row was typed into, so the
+            // transcript generation is checked as well as the session.
+            if ($msg->sessionId !== $this->currentSessionId || $msg->transcriptEpoch !== $this->transcriptEpoch) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
         }
         if ($msg instanceof BackgroundSessionStoppedMsg) {
             // Record the settled status as already announced, so the next
