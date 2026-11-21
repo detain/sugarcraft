@@ -35,6 +35,9 @@ final class GatewayEventSinkTest extends TestCase
 
     private int $sinkSeq = 0;
 
+    /** @var list<InProcessEventSink> every sink sink() built, closed in tearDown() */
+    private array $sinks = [];
+
     /** @var array<string, list<array<string, mixed>>> what each sink's listener heard, by sink id */
     private array $heardBy = [];
 
@@ -52,6 +55,14 @@ final class GatewayEventSinkTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The interleaving leaves earlier seeds' sinks subscribed and holding hundreds of
+        // undelivered entries, which the fixture's 1 ms teardown run would drain one budget per
+        // zero-delay timer. Under load that run stops mid-drain with a re-armed timer still on
+        // the shared loop, and the residue guard fails the shard. A closed sink drops its queue
+        // and never re-arms, so the teardown run only consumes the pending future ticks.
+        foreach ($this->sinks as $sink) {
+            $sink->close();
+        }
         $this->fixture->tearDown();
     }
 
@@ -276,7 +287,7 @@ final class GatewayEventSinkTest extends TestCase
     {
         $id = 'inproc:gw-' . (++$this->sinkSeq);
 
-        return new InProcessEventSink(
+        return $this->sinks[] = new InProcessEventSink(
             $id,
             $this->gateway,
             Loop::get(),

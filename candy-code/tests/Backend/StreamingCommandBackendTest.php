@@ -870,6 +870,7 @@ printf 'ok\n'
         }
         $elapsed = microtime(true) - $started;
         $loop->cancelTimer($flip);
+        $this->drainKillLadder($loop);
 
         $this->assertInstanceOf(\RuntimeException::class, $caught);
         $this->assertSame('Request cancelled', $caught->getMessage());
@@ -1214,25 +1215,7 @@ printf 'ok\n'
             $elapsed = microtime(true) - $started;
             $loop->cancelTimer($flip);
 
-            // The cancel TERMs the shell's whole group, and the `sleep` it was waiting on is
-            // a member. A group-path launch keeps its kill-ladder poll armed past settle until
-            // that group is empty (ChildRunLaunch::finish()), so run the loop until only the
-            // bound and the probe remain, as ChildRunLaunchTest does. Without this the ladder
-            // timer outlives the test and the residue guard fails the file.
-            $drainBound = $loop->addTimer(
-                BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
-                static function () use ($loop): void {
-                    $loop->stop();
-                },
-            );
-            $drainProbe = $loop->addPeriodicTimer(0.01, function () use ($loop, &$drainProbe): void {
-                if (SharedLoopResidue::census()['timers'] <= 2) {
-                    $loop->stop();
-                }
-            });
-            $loop->run();
-            $loop->cancelTimer($drainProbe);
-            $loop->cancelTimer($drainBound);
+            $this->drainKillLadder($loop);
 
             $this->assertInstanceOf(\RuntimeException::class, $caught);
             $this->assertSame('Request cancelled', $caught->getMessage());
@@ -1438,6 +1421,36 @@ printf 'ok\n'
         file_put_contents($probe, $source);
 
         return $probe;
+    }
+
+    /**
+     * Runs the shared loop until a cancelled group-path launch has disarmed its kill ladder.
+     *
+     * The cancel TERMs the shell's whole group, and the `sleep` it was waiting on is a member.
+     * A group-path launch keeps its kill-ladder poll armed past settle until that group is
+     * empty (ChildRunLaunch::finish()), so run the loop until only the bound and the probe
+     * remain, as ChildRunLaunchTest does. Without this the ladder timer outlives the test and
+     * the residue guard fails the file. How long the group takes to empty depends on load:
+     * run alone it is usually gone before the promise settles, and under a K=24 sharded run
+     * it is not, which is why a cancel test that skipped this drain passed alone and failed
+     * its shard.
+     */
+    private function drainKillLadder(\React\EventLoop\LoopInterface $loop): void
+    {
+        $drainBound = $loop->addTimer(
+            BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 2.0,
+            static function () use ($loop): void {
+                $loop->stop();
+            },
+        );
+        $drainProbe = $loop->addPeriodicTimer(0.01, static function () use ($loop): void {
+            if (SharedLoopResidue::census()['timers'] <= 2) {
+                $loop->stop();
+            }
+        });
+        $loop->run();
+        $loop->cancelTimer($drainProbe);
+        $loop->cancelTimer($drainBound);
     }
 
     /**
