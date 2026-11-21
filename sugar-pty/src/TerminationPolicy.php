@@ -116,9 +116,22 @@ final class TerminationPolicy
      * Cancelling the returned promise cancels the ladder's poll timer; a
      * signal already sent is not taken back.
      *
+     * ZOMBIES COUNT AS LIVE HERE. With group reach, the group probe is
+     * `kill(-pgid, 0)` alone, never the /proc walk {@see apply()} uses
+     * ({@see BoundedShutdown::groupEmpty()} with `$walkProc` false). A group
+     * whose only survivors are unreaped zombies (no init reaps orphans, as
+     * when PHP runs as PID 1 in a container) therefore reads non-empty: the
+     * full grace and kill budgets run and the promise resolves false, where
+     * apply() answers true for the same child at once. The same trade-off
+     * {@see BoundedShutdown::terminateBoundedAsync()} documents: latency
+     * paid on a timer, never a loop freeze. A caller that must tell a
+     * zombie-only group from a live one re-checks with
+     * `BoundedShutdown::groupEmpty($child->pid())` after a false.
+     *
      * @return PromiseInterface<bool> resolves with whether the child (and,
-     *                                with group reach, its group) is gone
-     *                                by the end of the budgets
+     *                                with group reach, its group) reads gone
+     *                                by the end of the budgets; false also
+     *                                covers a group left holding only zombies
      */
     public function applyAsync(PosixChild $child, ?LoopInterface $loop = null): PromiseInterface
     {
