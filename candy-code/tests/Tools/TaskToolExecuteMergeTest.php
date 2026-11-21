@@ -30,9 +30,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * loop on the in-process row the session's {@see AgentManager} holds.
  *
  * What executeSubAgent() did that TaskTool already does under another name is
- * recorded in the CC1C-c1 commit message and is not re-pinned here; the one
- * entry that message filed as present but is not (per-chunk usage telemetry)
- * is recorded as not merged at TaskTool's step usage observer.
+ * recorded in the CC1C-c1 commit message and is not re-pinned here. The one
+ * entry that message filed as present but was not (per-chunk usage telemetry)
+ * has since been merged: TaskTool's chunk usage observer raises the row on
+ * every streamed chunk, pinned here and in TaskToolProgressFramesTest.
  */
 final class TaskToolExecuteMergeTest extends TestCase
 {
@@ -313,6 +314,47 @@ final class TaskToolExecuteMergeTest extends TestCase
             'at the tool call' => SubAgent::STATUS_STREAMING,
         ], $seen);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $manager->runs()[0]->status);
+    }
+
+    /**
+     * The row's tokens and cost rise on every streamed chunk, as
+     * executeSubAgent() folded each chunk's usage, not only once a provider
+     * response completes; the step's billed usage then replaces the chunk
+     * figures instead of being added to them.
+     */
+    public function testTheRowCountsEachStreamedChunkAndSettlesOnTheBilledUsage(): void
+    {
+        $probe = self::statusProbe(static function (): void {
+        });
+        $manager = self::sessionManager([$probe]);
+        $provider = new ScriptedProvider([
+            [
+                new CompleteResponse(content: 'looking ', tokensUsed: 100, costUsd: 0.01),
+                new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'StatusProbe', [])], tokensUsed: 200, costUsd: 0.02),
+            ],
+            [
+                new CompleteResponse(content: 'the ', tokensUsed: 30, costUsd: 0.003),
+                new CompleteResponse(content: 'report', tokensUsed: 20, costUsd: 0.002),
+            ],
+        ], streams: true);
+        $now = 0.0;
+        $tokens = [];
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use (&$tokens): void {
+                $tokens[] = $activity->tokensUsed;
+            })
+            ->withActivityClock(static function () use (&$now): float {
+                return $now += 1.0;
+            });
+
+        $result = $task->execute(self::delegation());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertContains(330, $tokens, 'the second reply\'s first chunk is counted while that reply still streams');
+        $row = $manager->runs()[0];
+        $this->assertSame(350, $row->tokensUsed, 'chunk figures are replaced by the step\'s billed usage, not added to it');
+        $this->assertEqualsWithDelta(0.035, $row->costUsd, 1e-9);
     }
 
     /**
