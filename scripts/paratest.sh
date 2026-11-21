@@ -10,11 +10,17 @@
 #   --lib         lib directory slug (default: candy-code). Needs
 #                 <slug>/vendor/bin/paratest (brianium/paratest ~7.4.9, the last
 #                 release for PHPUnit 10).
-#   -p K          worker count. Default: min(nproc, suggested K), where the
-#                 suggested K is ceil(1.25 x total / longest file) from the
-#                 durations. Above total / longest the longest file sets the
-#                 wall and extra workers only add contention, which is where
-#                 timing flakes come from. Without durations: nproc.
+#   -p K          worker count. Default: min(suggested K, nproc / 2), where
+#                 the suggested K is ceil(1.25 x total / longest file) from
+#                 the durations. Above total / longest the longest file sets
+#                 the wall and extra workers only add contention, which is
+#                 where timing flakes come from. The nproc / 2 cap is
+#                 measured: candy-code on 64 cpus ran clean at K=32 (145 s),
+#                 while K=58 cut the wall to 111 s but grew the summed test
+#                 time 23% and a concurrency-timing red, because tests spawn
+#                 children that need cpus too. The inflated junit then
+#                 suggests a higher K still, so the rule alone ratchets up.
+#                 Pass -p to go past the cap. Without durations: nproc / 2.
 #   --durations   per-file durations: a junit from an earlier run of this lib,
 #                 a "path<TAB>seconds" TSV, or `none` for plain alphabetical
 #                 order. Default: the junit this script left in --out last
@@ -164,13 +170,15 @@ cat "$OUT/lpt.log"
 
 SUGGESTED=$(sed -n 's/.*suggested-k=\([0-9]*\).*/\1/p' "$OUT/lpt.log" | tail -n 1)
 NPROC=$(nproc)
+CAP=$((NPROC / 2))
+[ "$CAP" -ge 1 ] || CAP=1
 if [ -z "$K" ]; then
-	K=$NPROC
-	if [ -n "$SUGGESTED" ] && [ "$SUGGESTED" -gt 0 ] && [ "$SUGGESTED" -lt "$NPROC" ]; then
+	K=$CAP
+	if [ -n "$SUGGESTED" ] && [ "$SUGGESTED" -gt 0 ] && [ "$SUGGESTED" -lt "$CAP" ]; then
 		K=$SUGGESTED
 	fi
 fi
-echo "paratest.sh: $LIB with K=$K (suggested ${SUGGESTED:-n/a} from $DURATIONS, nproc $NPROC)"
+echo "paratest.sh: $LIB with K=$K (suggested ${SUGGESTED:-n/a} from $DURATIONS, cap $CAP = nproc $NPROC / 2)"
 
 if [ "$CONFIG_ONLY" = 1 ]; then
 	echo "paratest.sh: wrote $CONFIG"
