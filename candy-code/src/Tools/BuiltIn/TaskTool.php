@@ -1031,16 +1031,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
 
         if ($this->engine !== null) {
-            $result = $this->runOnEngine(
-                $this->engine,
-                $this->agentManager,
+            $engine = $this->engine;
+            $manager = $this->agentManager;
+            $result = self::settlingOnThrow($subAgent, fn (): ToolResult => $this->runOnEngine(
+                $engine,
+                $manager,
                 $subAgent,
                 $toolCallId,
                 $startedAt,
                 $suspension === null ? null : ['id' => $resumeId] + $suspension,
                 is_string($args['description'] ?? null) ? $args['description'] : '',
                 $requestedModel,
-            );
+            ));
 
             $lead = array_values(array_filter([$backgroundNote, $forkNote], static fn (?string $note): bool => $note !== null));
 
@@ -1369,9 +1371,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             return $this->refusal($toolCallId, $e->getMessage());
         }
 
-        return $this->runOnEngine(
-            $this->engine,
-            $this->agentManager,
+        $engine = $this->engine;
+        $manager = $this->agentManager;
+
+        return self::settlingOnThrow($subAgent, fn (): ToolResult => $this->runOnEngine(
+            $engine,
+            $manager,
             $subAgent,
             $toolCallId,
             $startedAt,
@@ -1379,7 +1384,42 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             requestedModel: trim((string) $skill->model),
             declaredEffort: Effort::tryFrom(trim((string) $skill->effort)),
             declaredEffortBy: sprintf('skill "%s"', $skill->name),
-        );
+        ));
+    }
+
+    /**
+     * Run $run, and when it throws, leave $subAgent's row terminal before the
+     * throwable goes on: FAILED, the throwable's message as its error, and its
+     * end of span stamped — the guarantee `AgentManager::executeSubAgent()`
+     * gave every run it drove (CC1C-c1).
+     *
+     * {@see runOnEngine()} settles every outcome it handles itself — a turn
+     * that fails part-way arrives as a TurnInterrupted and is settled there —
+     * but code outside the turn boundary can still throw after the row went
+     * RUNNING: an activity emitter whose socket broke, a suspension store
+     * that cannot write, a run card that cannot be recorded. Before this the
+     * row stayed RUNNING with no completedAt, so elapsedSeconds() counted
+     * against wall-clock forever and liveRuns() listed a dead run as live.
+     *
+     * A row the run already settled keeps its outcome: a throw after a
+     * truthful COMPLETE does not make the work it reported undone. Nothing is
+     * swallowed; the caller sees the same throwable it saw before.
+     *
+     * @param \Closure(): ToolResult $run
+     */
+    private static function settlingOnThrow(SubAgent $subAgent, \Closure $run): ToolResult
+    {
+        try {
+            return $run();
+        } catch (\Throwable $e) {
+            if (!$subAgent->isComplete() && !$subAgent->isStopped()) {
+                $subAgent->status = SubAgent::STATUS_FAILED;
+                $subAgent->error = $e->getMessage();
+                $subAgent->completedAt ??= new \DateTimeImmutable();
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -1797,6 +1837,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $subAgent->runModel = $engine->model();
         $subAgent->status = SubAgent::STATUS_RUNNING;
         $subAgent->startedAt = new \DateTimeImmutable();
+        // CC1C-c1, from `AgentManager::executeSubAgent()`: the row reads
+        // STREAMING once the provider's output starts arriving, so the
+        // dashboard tells "streaming" from "working" for a run held in THIS
+        // process (no fork: the row is the manager's own and nothing projects
+        // over it; forked, the parent's projected row already flips on the
+        // first progress frame). Only from RUNNING: a terminal row is never
+        // reopened by a late delta.
+        $markStreaming = static function () use ($subAgent): void {
+            if ($subAgent->status === SubAgent::STATUS_RUNNING) {
+                $subAgent->status = SubAgent::STATUS_STREAMING;
+            }
+        };
 
         // Frame ordering within one run: strictly increasing, minted here (the
         // run's own stack), never derived from wall clock — a reader that sees
@@ -2224,7 +2276,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                                 $event->result->durationMs() ?? 0,
                             ));
                         },
-                        onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought): void {
+                        onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought, $markStreaming): void {
                             $onProgress();
                             $readControls(false);
                             $logThought .= $delta;
@@ -2233,6 +2285,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                             // carries no thought to fold, but it still ticks the
                             // frame buffer.
                             if ($delta !== '') {
+                                $markStreaming();
                                 $think .= $delta;
                                 if (strlen($think) >= self::THINK_LINE_BYTES) {
                                     $foldThink();
@@ -2250,11 +2303,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         // live line shows the newest fragment when the run is
                         // writing rather than calling tools. Items only: the v1
                         // tail stays the run's trail of what it did.
-                        onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse): void {
+                        onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse, $markStreaming): void {
                             $onProgress();
                             $readControls(false);
                             $logProse .= $delta;
                             if ($delta !== '') {
+                                $markStreaming();
                                 $buffer->add(ActivityItem::text($delta));
                             }
                             $flushIfDue();
