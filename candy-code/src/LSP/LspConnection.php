@@ -1324,6 +1324,7 @@ final class LspConnection implements LspConnectionInterface
      */
     private function readResponse(string $id, float $deadline): LspResponse
     {
+        $serverGone = false;
         while (microtime(true) < $deadline) {
             // ONE DRAIN PER PUMP ITERATION, not merely per refill pass.
             // {@see readMessage()} can return a WHOLE message from
@@ -1342,6 +1343,22 @@ final class LspConnection implements LspConnectionInterface
                 // No complete message available yet, check if process is still alive.
                 if (!is_resource($this->process)) {
                     return LspResponse::ioError('Process ended while reading response');
+                }
+                // A DEAD SERVER'S HANDLE IS STILL A RESOURCE until proc_close(),
+                // so the check above never saw a server that died mid-exchange,
+                // and the loop ran on to the deadline: the whole request timeout
+                // (30 s by default) for an answer nobody was left to send.
+                // Measured with LspConnectionTest::testProcessDiesMidRead's
+                // fixture: SIGKILL, then a request, waited 5.0 s at its 5.0 s
+                // timeout in 7 of 8 takes. A gone server gets ONE more pass, as
+                // the pipe can still hold what it wrote before it exited; when
+                // that pass comes back empty too, the answer is given up.
+                if ($serverGone) {
+                    return LspResponse::ioError('Process ended while reading response');
+                }
+                if (!$this->serverIsRunning()) {
+                    $serverGone = true;
+                    continue;
                 }
                 // Brief sleep to avoid busy-waiting.
                 usleep(10000); // 10ms

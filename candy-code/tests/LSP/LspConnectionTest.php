@@ -91,6 +91,10 @@ while (true) {
         ];
     } elseif ($method === 'shutdown') {
         $result = null;
+    } elseif ($method === 'test/exitWithoutAnswer') {
+        // Takes the request, then dies without a reply: the exchange's read
+        // side is the only thing left to notice.
+        exit(0);
     } elseif ($method === 'textDocument/definition') {
         $result = [
             ['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0], 'end' => ['line' => 1, 'character' => 5]]],
@@ -529,6 +533,28 @@ PHP;
 
         // Clean up.
         @proc_close($process);
+    }
+
+    /**
+     * A server that takes a request and dies without answering ends the
+     * exchange as an I/O error, not as a timeout. A dead child's process handle
+     * stays a resource until proc_close(), so the read loop's old liveness
+     * check never saw the death and waited out the whole request timeout
+     * (30 s by default) for a reply nobody was left to send. The timeout here
+     * is 10 s so that a regression is red in 10 s rather than 30.
+     */
+    public function testAServerThatDiesWithoutAnsweringEndsTheRequestAsAnIoError(): void
+    {
+        $conn = new LspConnection('php', [$this->mockScript]);
+        $conn->connect('php', [], $this->workDir, 10.0);
+        $conn->initialize();
+
+        $response = $conn->sendRequest('test/exitWithoutAnswer', null);
+
+        $this->assertFalse($response->isTimeout(), 'the read loop waited out the request timeout on a dead server');
+        $this->assertTrue($response->isError);
+
+        $conn->disconnect();
     }
 
     // -------------------------------------------------------------------------
