@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Recorder;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Expect;
@@ -120,6 +121,37 @@ final class ExpectWindowTest extends TestCase
     private static function farDeadline(): float
     {
         return \microtime(true) + 30.0;
+    }
+
+    /** A recorder that appends every output byte it is handed to the shared sink. */
+    private static function capturingRecorder(\ArrayObject $sink): Recorder
+    {
+        return new class ($sink) implements Recorder {
+            public function __construct(private \ArrayObject $sink)
+            {
+            }
+
+            public function recordResize(int $cols, int $rows): void
+            {
+            }
+
+            public function recordInputBytes(string $bytes): void
+            {
+            }
+
+            public function recordOutput(string $bytes): void
+            {
+                $this->sink->append($bytes);
+            }
+
+            public function recordQuit(): void
+            {
+            }
+
+            public function close(): void
+            {
+            }
+        };
     }
 
     // ----------------------------------------------------------- retention cap
@@ -384,6 +416,7 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->wallHit, 'the child exit closed the window before the deadline was hit');
     }
 
+    // Deliberately diverges from PtyDriver, which reports no wall hit for a past-entry deadline.
     public function testAPastDeadlineReturnsAtOnceAsAWallHit(): void
     {
         $started = \microtime(true);
@@ -610,5 +643,56 @@ final class ExpectWindowTest extends TestCase
         self::assertSame('abcdef', $seen, 'the live tail is fed before retention, independent of the budget');
         self::assertSame('ab', $result->output);
         self::assertSame(4, $result->dropped);
+    }
+
+    public function testTheRecorderGetsEveryChunkTheWindowReadsNotOnlyTheRetainedBytes(): void
+    {
+        // The cap keeps 'abcd' in the transcript, but the recording is the child's stream.
+        $sink = new \ArrayObject();
+        $result = Expect::on(self::master(['abc', 'def']), recorder: self::capturingRecorder($sink))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertSame('abcd', $result->output);
+        self::assertSame('abcdef', \implode('', $sink->getArrayCopy()));
+    }
+
+    public function testBytesAnExpectReadPastItsMatchAreRecordedOnceAndNotReplayedFromTheMaster(): void
+    {
+        $sink = new \ArrayObject();
+        $expect = Expect::on(self::master(['ok> more']), recorder: self::capturingRecorder($sink))
+            ->expect('> ');
+        $result = $expect->collectWindow(0.2, self::farDeadline(), 100);
+
+        self::assertSame('more', $result->output);
+        self::assertSame('ok> more', \implode('', $sink->getArrayCopy()), 'the expect read records its bytes once; the window adds none');
+    }
+
+    public function testTheBufferLeftByAnExpectIsTheWindowsFirstInput(): void
+    {
+        $expect = Expect::on(self::master(['ok> more']))->expect('> ');
+
+        self::assertSame('more', $expect->buffer);
+        $result = $expect->collectWindow(0.2, self::farDeadline(), 100);
+
+        self::assertSame('more', $result->output, 'bytes read past the expect match must not be skipped');
+    }
+
+    public function testABufferedMatchEndsTheWindowWithoutReadingTheMaster(): void
+    {
+        $expect = Expect::on(self::master(['ok> more']))->expect('> ');
+        $result = $expect->collectWindow(5.0, self::farDeadline(), 100, 0, 0, '/mo/');
+
+        self::assertTrue($result->matched);
+        self::assertSame('more', $result->output);
+    }
+
+    public function testABufferedWindowCountsAgainstTheByteCap(): void
+    {
+        $expect = Expect::on(self::master(['ok> more']))->expect('> ');
+        $result = $expect->collectWindow(0.2, self::farDeadline(), 2);
+
+        self::assertSame('mo', $result->output);
+        self::assertSame(2, $result->retained);
+        self::assertSame(2, $result->dropped);
     }
 }

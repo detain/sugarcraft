@@ -547,7 +547,9 @@ final class Expect
      * tty and exits a moment later is still reported as exited, matching
      * `PtyDriver::collectWindow`. With no child to wait for, EOF ends the window.
      * Each read is clamped to the time left in the window, so the deadline binds
-     * even against a silent master.
+     * even against a silent master. A buffer left by an earlier `expect*` call is the
+     * window's first input: those bytes were read past that call's match, so the window
+     * reports them and does not read them from the master again.
      * An invalid regex throws `\InvalidArgumentException`, as `expectPattern` does.
      *
      * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
@@ -589,7 +591,19 @@ final class Expect
         $eof = false;
         $windowEnd = \min(\microtime(true) + $windowSeconds, $deadline);
 
-        while (true) {
+        // Already recorded when the earlier read pulled them, so they are not recorded again.
+        $pending = $this->buffer;
+        if ($pending !== '') {
+            if ($onChunk !== null) {
+                $onChunk($pending);
+            }
+            [$output, $retained, $dropped] = self::retainCapped($output, $pending, $maxBytes, $retained, $dropped);
+            if ($regex !== null && \preg_match($regex, $output) === 1) {
+                $matched = true;
+            }
+        }
+
+        while ($matched !== true) {
             $now = \microtime(true);
             if ($now >= $windowEnd) {
                 break;
@@ -608,6 +622,7 @@ final class Expect
                 $eof = true;
             }
             if ($chunk !== null && $chunk !== '') {
+                $this->recorder?->recordOutput($chunk);
                 if ($onChunk !== null) {
                     // Fed before retention so a live tail is independent of the
                     // transcript's byte budget.
@@ -625,6 +640,9 @@ final class Expect
                 // The final repaint can land a hair after the exit is observed;
                 // one bounded drain keeps it inside this window.
                 $finalWindow = $this->drainMaster($deadline);
+                if ($finalWindow !== '') {
+                    $this->recorder?->recordOutput($finalWindow);
+                }
                 if ($onChunk !== null && $finalWindow !== '') {
                     $onChunk($finalWindow);
                 }
@@ -647,8 +665,9 @@ final class Expect
         }
 
         // A deadline already past on entry ends the window with no read and still counts
-        // as a wall hit. PtyDriver::collectWindow flags it only after a read, so a port
-        // that replaces PtyDriver must map that case explicitly rather than assume parity.
+        // as a wall hit. PtyDriver::collectWindow never flags that case: its loop exits
+        // before any read, so its wallHit stays false. A port that replaces PtyDriver must
+        // map that difference explicitly rather than assume parity.
         // EOF does not suppress it: with a live child the window keeps waiting past EOF,
         // so a deadline that passes there is a wall hit, as PtyDriver reports it.
         $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
