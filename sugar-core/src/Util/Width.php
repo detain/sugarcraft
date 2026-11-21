@@ -901,6 +901,39 @@ final class Width
                 continue;
             }
 
+            // A run of printable non-space ASCII is a run of one-byte,
+            // one-cell clusters, the same shortcut cutAtWidth() takes: no
+            // ASCII byte extends or joins, so the segmenter would answer the
+            // same. The run's last byte is left to the segmenter when a
+            // non-ASCII byte follows, since that byte may be a combining mark
+            // on it. The run is then added to the word in slices, with the
+            // same hard break the per-cluster branch below makes when the
+            // word reaches $max. Without this a long ASCII transcript went
+            // through the grapheme walk byte by byte (a 400-message history
+            // rendered at four widths spent 97% of its 25 s there).
+            $run = strspn($s, self::asciiWordBytes(), $i);
+            if ($run > 0 && $i + $run < $len && ord($s[$i + $run]) >= 0x80) {
+                $run--;
+            }
+            if ($run > 0) {
+                while ($run > 0) {
+                    if ($wordWidth >= $max) {
+                        if ($line !== '') {
+                            $flushLine();
+                        }
+                        $lines[] = rtrim($word);
+                        $word = '';
+                        $wordWidth = 0;
+                    }
+                    $take = min($run, $max - $wordWidth);
+                    $word .= substr($s, $i, $take);
+                    $wordWidth += $take;
+                    $i += $take;
+                    $run -= $take;
+                }
+                continue;
+            }
+
             $cluster = self::nextCluster($s, $i);
             $cw = self::graphemeWidth($cluster);
             // If even the running word would overflow, hard-break it.
@@ -935,6 +968,14 @@ final class Width
             $lines[] = rtrim($line);
         }
         return implode("\n", $lines);
+    }
+
+    /** The strspn() mask for {@see wrapAnsi()}'s ASCII run: bytes 0x21-0x7E. */
+    private static function asciiWordBytes(): string
+    {
+        static $bytes = null;
+
+        return $bytes ??= implode('', array_map('chr', range(0x21, 0x7E)));
     }
 
     private static function wrapParagraph(string $s, int $max): string
