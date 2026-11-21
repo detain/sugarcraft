@@ -18,12 +18,12 @@ use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
-use SugarCraft\Code\Tools\Web\HtmlToMarkdown;
+use SugarCraft\Markdown\Html\HtmlToMarkdown;
+use SugarCraft\Markdown\Html\UrlReference;
 
 /**
  * Fetches one URL and refuses everything that aims at this machine or its
- * network. The defence is resolve-once-then-dial (audit M6+M7, wave
- * 2026-09-30):
+ * network. The defence is resolve-once-then-dial:
  *
  *  1. Each hop resolves the hostname ONCE across both address families.
  *     The pre-wave check used `gethostbyname()`, which answers only the IPv4
@@ -75,6 +75,14 @@ use SugarCraft\Code\Tools\Web\HtmlToMarkdown;
  *     verbatim, and a body that cannot be converted falls back to raw with
  *     a one-line note. The cap applies to whatever the model receives,
  *     converted or not.
+ *     The converted text is Markdown source, not display text, so the model
+ *     sees the escapes: brackets and backslashes from the page's prose come
+ *     back as `\[`, `\]` and `\\`, and a copied path or pattern carries them
+ *     too. The page's hidden text is absent from that Markdown as well: an
+ *     element with the `hidden` attribute or an inline `display:none`, and
+ *     the text of `template`, `noembed` and `noframes`, are dropped whole
+ *     as are the `script`, `style`, `nav`, `svg`, `iframe` and `noscript`
+ *     subtrees. Both behaviors are pinned by WebFetchMarkdownTest.
  *
  * The two closure seams exist so tests can simulate rebinding-shaped DNS
  * answers and dial a loopback fixture without a nameserver or a public IP;
@@ -395,7 +403,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
                 // any other target: scheme, hostname, resolve-once, blocklist,
                 // pinned dial. A relative reference is never a shortcut past
                 // the guards — it is just another URL once resolved.
-                $finalUrl = self::resolveReference($finalUrl, $location);
+                $finalUrl = UrlReference::resolve($finalUrl, $location);
                 continue;
             }
 
@@ -708,7 +716,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
             $base .= (string) $parsed['path'];
         }
         if (isset($parsed['query'])) {
-            // chr(63): a bare '?' literal is glob-shaped (see HtmlToMarkdown).
+            // chr(63): a bare '?' literal is glob-shaped (see sugar-markdown HtmlToMarkdown).
             $base .= chr(63) . $parsed['query'];
         }
 
@@ -874,108 +882,6 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         }
 
         return null;
-    }
-
-    /**
-     * Resolve $reference against the absolute $base, per RFC 3986 §5.2.2
-     * (strict parser), with §5.2.4 dot-segment removal. The fragment is
-     * dropped: it is never sent to a server, so it cannot change what a hop
-     * fetches.
-     *
-     * The result is NOT vetted here. Whatever scheme or authority it names —
-     * `file:x`, `//169.254.169.254/` — faces the caller's per-hop guard chain
-     * exactly like an absolute Location, which is what keeps resolution from
-     * becoming a way around it.
-     *
-     * Public since C-TOOL-2.a because {@see HtmlToMarkdown} resolves a
-     * document's own links through this same RFC implementation rather than
-     * carrying a second copy; there, as here, the dropped fragment is inert —
-     * a link that lost its anchor still names the same document.
-     */
-    public static function resolveReference(string $base, string $reference): string
-    {
-        $r = self::splitReference($reference);
-        $b = self::splitReference($base);
-
-        $scheme = $r['scheme'] ?? $b['scheme'];
-        if ($r['scheme'] !== null || $r['authority'] !== null) {
-            $authority = $r['authority'];
-            $path = self::removeDotSegments($r['path']);
-            $query = $r['query'];
-        } else {
-            $authority = $b['authority'];
-            $query = $r['query'];
-            if ($r['path'] === '') {
-                $path = $b['path'];
-                $query ??= $b['query'];
-            } elseif (str_starts_with($r['path'], '/')) {
-                $path = self::removeDotSegments($r['path']);
-            } elseif ($b['authority'] !== null && $b['path'] === '') {
-                // §5.2.3 merge: an authority with an empty path is "/".
-                $path = self::removeDotSegments('/' . $r['path']);
-            } else {
-                $slash = strrpos($b['path'], '/');
-                $directory = $slash === false ? '' : substr($b['path'], 0, $slash + 1);
-                $path = self::removeDotSegments($directory . $r['path']);
-            }
-        }
-
-        return ($scheme !== null ? $scheme . ':' : '')
-            . ($authority !== null ? '//' . $authority : '')
-            . $path
-            . ($query !== null ? '?' . $query : '');
-    }
-
-    /**
-     * RFC 3986 Appendix B's component regex. parse_url() is not used because
-     * it is not a reference parser: it reads `g:h`-style and `//`-relative
-     * input by its own rules, and it cannot tell an absent query from an
-     * empty one — which §5.2.2 distinguishes.
-     *
-     * @return array{scheme: ?string, authority: ?string, path: string, query: ?string}
-     */
-    private static function splitReference(string $reference): array
-    {
-        preg_match('~^(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?~', $reference, $m, PREG_UNMATCHED_AS_NULL);
-
-        return [
-            'scheme' => $m[1] ?? null,
-            'authority' => $m[2] ?? null,
-            'path' => (string) ($m[3] ?? ''),
-            'query' => $m[4] ?? null,
-        ];
-    }
-
-    /**
-     * RFC 3986 §5.2.4, the loop exactly as specified.
-     */
-    private static function removeDotSegments(string $input): string
-    {
-        $output = '';
-        while ($input !== '') {
-            if (str_starts_with($input, '../')) {
-                $input = substr($input, 3);
-            } elseif (str_starts_with($input, './')) {
-                $input = substr($input, 2);
-            } elseif (str_starts_with($input, '/./')) {
-                $input = substr($input, 2);
-            } elseif ($input === '/.') {
-                $input = '/';
-            } elseif (str_starts_with($input, '/../') || $input === '/..') {
-                $input = '/' . substr($input, $input === '/..' ? 3 : 4);
-                $cut = strrpos($output, '/');
-                $output = $cut === false ? '' : substr($output, 0, $cut);
-            } elseif ($input === '.' || $input === '..') {
-                $input = '';
-            } else {
-                $next = strpos($input, '/', 1);
-                $segment = $next === false ? $input : substr($input, 0, $next);
-                $output .= $segment;
-                $input = $next === false ? '' : substr($input, $next);
-            }
-        }
-
-        return $output;
     }
 
     /**

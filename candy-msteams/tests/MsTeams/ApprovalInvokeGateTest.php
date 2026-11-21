@@ -17,8 +17,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
 use CandyCode\Bundles\MsTeams\MsTeams\MsTeamsAccount;
 use CandyCode\Bundles\MsTeams\MsTeams\Rest;
@@ -59,7 +59,7 @@ final class ApprovalInvokeGateTest extends TestCase
         \mkdir($this->tempDir, 0o700, true);
         $this->api = new FakeTeamsApi($this->loop);
         $this->api->listen();
-        $this->store = new CredentialStore($this->tempDir . '/channels.json');
+        $this->store = new CredentialStore($this->tempDir . '/channels.json', new FileCredentialWriter($this->tempDir . '/channels.json'));
         $this->pairing = new PairingCodes($this->store, new TextSafety());
         $this->safety = new TextSafety();
     }
@@ -136,11 +136,10 @@ final class ApprovalInvokeGateTest extends TestCase
 
     public function testTheBoundSubmitFromAPairedPeerAnswersEndToEnd(): void
     {
-        $serve = new FakeServe($this->loop, 'tok-serve');
-        $port = $serve->listen();
-        $bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $serve = new FakeServe($this->loop);
+        $bridge = $serve->client();
         $started = false;
-        $bridge->start()->then(static function () use (&$started): void {
+        $serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {
@@ -196,18 +195,15 @@ final class ApprovalInvokeGateTest extends TestCase
         $this->face->handleActivity($this->submit('ghost', 'ask_9', 'always', $nonce));
         $this->settle(600);
         self::assertSame($after, $serve->respondSeen, 'the nonce is not a ticket for an ungated actor');
-
-        $bridge->stop();
-        $serve->stop();
+        $serve->disconnect();
     }
 
     public function testARedeliveredCardSubmitIsAnsweredOnce(): void
     {
-        $serve = new FakeServe($this->loop, 'tok-serve');
-        $port = $serve->listen();
-        $bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $serve = new FakeServe($this->loop);
+        $bridge = $serve->client();
         $started = false;
-        $bridge->start()->then(static function () use (&$started): void {
+        $serve->connect()->then(static function () use (&$started): void {
             $started = true;
         });
         for ($tick = 0; $tick < 20 && !$started; $tick++) {
@@ -251,9 +247,7 @@ final class ApprovalInvokeGateTest extends TestCase
         $this->settle(600);
 
         self::assertSame($before + 1, $serve->respondSeen, 'the redelivered submit must not answer the ask a second time');
-
-        $bridge->stop();
-        $serve->stop();
+        $serve->disconnect();
     }
 
     // ── harness ──
@@ -267,7 +261,7 @@ final class ApprovalInvokeGateTest extends TestCase
             'http://127.0.0.1:' . $this->api->port,
         ), Log::silent(), true);
         $router = new ConversationRouter(
-            new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
+            (new FakeServe($this->loop))->client(),
             new SessionMap($this->tempDir . '/sessions.db'),
             Log::silent(),
             $this->safety,

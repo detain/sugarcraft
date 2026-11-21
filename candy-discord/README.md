@@ -2,11 +2,15 @@
 
 Discord channel bundle for `candy-code serve`. A Discord bot receives direct
 messages and guild messages, forwards them into a served candy-code session
-over the ordinary WebSocket protocol, and posts the replies back in chunks.
+through the serve's in-process host, and posts the replies back in chunks.
 Pairing gates, guild allowlists, approval buttons and native slash commands
 are all handled inside the bundle.
 
 Package: `sugarcraft/candy-discord` (bundle namespace `CandyCode\Bundles\Discord\`).
+
+Original work: this bundle has no upstream port, so it carries no `Mirrors charmbracelet/...`
+citation. It is a channel plugin for `candy-code serve` and sits outside the 42 + 22 package matrix
+in `docs/MATCHUPS.md`.
 
 ## Contents
 
@@ -29,8 +33,8 @@ Package: `sugarcraft/candy-discord` (bundle namespace `CandyCode\Bundles\Discord
   reader. The bundle refuses to start (with a log line) on an older host.
 - A Discord account that can create an application in the Developer Portal,
   and a server (guild) where you can invite the bot.
-- The serve process running on the same machine as the bundle. The bundle
-  dials the serve over the local WebSocket; it does not accept inbound
+- A `candy-code serve` process that loads the bundle. The bundle calls the
+  serve in process: it dials no socket, and it does not accept inbound
   connections from Discord.
 - Outbound HTTPS and WebSocket access to Discord's API and gateway.
 - `ext-pdo_sqlite`: the session and pairing stores are sqlite. Without the
@@ -108,9 +112,10 @@ and only when `transport.insecureLoopbackProxy` is true. A refused override
 fails at startup, naming the setting that would authorize it, because the bot
 token rides every request.
 
-`CANDY_CODE_SERVER_DIR` points the bundle at the serve process's discovery
-directory (default `~/.candy-code/server`). The precedence law is fixed in
-`DiscordChannel::start()`: the environment wins over the settings tree. To
+The bundle reads no discovery record and no `CANDY_CODE_SERVER_DIR`: the
+serve's own state directory is that variable's business, not the bundle's. The
+precedence law for the endpoint overrides is fixed in `DiscordChannel::start()`:
+the environment wins over the settings tree. To
 front Discord through a local mirror or test proxy, run it on **loopback** and
 set `transport.insecureLoopbackProxy` — in `Endpoint`'s own words, "a
 plain-HTTP override must never silently point at a remote host", because a bot
@@ -262,15 +267,14 @@ bundle reads.
 
 ## Language
 
-User-facing copy rides the host's catalogs: every delivered string goes
-through `Lang::t()` over the `channels.discord.*` key family in
-`candy-code/lang/`, mirrored across all twelve host locales and enforced by
-`tests/I18n/UserFacingLiteralGuardTest` — a new bare literal in a
-user-facing slot, or a key missing from any locale, fails the bundle
-suite. The bundle ships no `lang/` directory of its own: it is a trusted
-bundle living inside the candy-code process, so the host's catalogs are
-its catalogs. Log rows stay content-free English by the bundle's log law:
-event names and scalars, never message bodies.
+The bundle owns its catalog: every delivered string goes through
+`Lang::t()` over the `channels.discord.*` key family in `lang/`, a
+plugin-owned catalog loaded through `SugarCraft\Plugins\Lang`. It is
+mirrored across all twelve locales and checked by `tests/I18n/LangParityTest`;
+`tests/I18n/UserFacingLiteralGuardTest` fails on a new bare literal in a
+user-facing slot. A key missing from any locale fails the bundle suite.
+Log rows stay content-free English by the bundle's log law: event names and
+scalars, never message bodies.
 
 ## Settings reference
 
@@ -333,11 +337,8 @@ Every row is one structured line in the channel log.
 | `channels.discord.missing_extension` | `ext-pdo_sqlite` is not loaded, so the session/pairing store cannot open. | Enable the extension and restart — nothing else starts. |
 | `channels.discord.account_without_credentials` | One named account booted without a token and was skipped (the `account` field names it). | Fill that account's `token` row in `channels.json`. |
 | `channels.discord.no_usable_accounts` | No token survived the account scan — including the plain no-credential boot (each skipped account first logs `account_without_credentials`). | Add the token(s); or leave `enabled: false` to stay dark on purpose. |
-| `channels.discord.state_dir_refused` | The serve discovery dir exists but refused validation. | Check `CANDY_CODE_SERVER_DIR` and permissions; the poll retries on a 30 s back-off. |
-| `channels.discord.discovery_url_untranslatable` | The discovery record's url cannot become a ws endpoint. | Restart `candy-code serve`; the bundle keeps polling. |
-| `channels.discord.serve_dial_failed` | The WebSocket connect to the serve leg threw. | Is `candy-code serve` running? The poll retries. |
-| `channels.discord.serve_down` | The serve leg dropped mid-run (`why` says which shape). | None needed: re-follow resumes each session from its cursor. |
-| `channels.discord.serve_giveup` | The dial ladder for a serve leg exhausted. | Back-off ends on a 30 s cadence; fix the serve side if it persists. |
+| `channels.discord.serve_dial_failed` | The in-process hello to the serve was refused (the `error` field says why). | The bundle redials on a ladder: 0.25 s doubling, capped at 30 s. Check the serve's own log if it persists. |
+| `channels.discord.serve_giveup` | 60 hellos in a row were refused, so the bundle stopped redialling. | Fix the serve side, then restart `candy-code serve`: the channel dials again only at boot. |
 | `channels.discord.serve_connected` | The serve leg is up and bindings were adopted. | — (success row) |
 | `discord_intents_degraded` | The gateway closed 4013/4014 or text was withheld; this process is mention-only now — one-way. | Enable the portal intent and restart. |
 

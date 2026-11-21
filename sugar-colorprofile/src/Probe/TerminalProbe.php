@@ -48,6 +48,16 @@ use SugarCraft\ColorProfile\Env;
  * - BracketedPaste/FocusEvents: RESERVED — reporting them requires the
  *   raw-mode query round-trip this library leaves to the TUI layer
  *
+ * @deprecated REMOVED-IN: 2.0.0. This is the synchronous twin of the
+ *             capability report: its terminfo leg blocks the calling thread
+ *             for up to the 5 s deadline (plus the 1 s grace) when called
+ *             from an event-loop thread. Use {@see AsyncProbe::report()}
+ *             with the loop you own; it returns the same ProbeReport and
+ *             spawns the infocmp child on that loop. For the TrueColor
+ *             verdict alone, {@see AsyncProbe::colorProfile()} is the
+ *             async equivalent. Runtime behavior is unchanged for BC: no
+ *             runtime notice is raised, and every consumer keeps working.
+ *
  * @see https://github.com/charmbracelet/colorprofile
  * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/
  */

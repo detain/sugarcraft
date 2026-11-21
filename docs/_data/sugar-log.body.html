@@ -1,107 +1,181 @@
-<p class="lede" style="margin-top: 28px;">Minimal, colorful leveled logging. Debug / Info / Warn / Error / Fatal with structured key/value context, Text / JSON / Logfmt formatters, and sub-loggers with persistent fields.</p>
+<p class="lede" style="margin-top: 28px;">SugarLog is a leveled, colorful logger for PHP 8.3+ command-line tools. It writes Debug, Info, Warn, Error and Fatal records with structured key/value context, renders them as text, JSON or logfmt, and creates sub-loggers that carry persistent fields. The record model is inspired by <a href="https://github.com/charmbracelet/log">charmbracelet/log</a> (Go); the port is native PHP, not a binding.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-log</code></pre>
+    <p>Requires PHP 8.3 or newer and <code>psr/log</code> ^3.0. The package requires its <code>sugarcraft/</code> siblings at <code>dev-master</code>, so a project on the default <code>stable</code> minimum stability must add <code>"minimum-stability": "dev"</code> and <code>"prefer-stable": true</code> to its root <code>composer.json</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
     <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+use SugarCraft\Log\Level;
 
-$log = Logger::new();
+$log = Logger::new(level: Level::Debug);   // default threshold is Info; Debug opts in
+$log-&gt;debug('preheat cycle', ['stage' =&gt; 1]);
 $log-&gt;info('Starting oven', ['degree' =&gt; 375]);
 $log-&gt;warn('Almost ready', ['batch' =&gt; 2]);
 $log-&gt;error('Temperature too low', ['err' =&gt; 'underheated']);
 
 $child = $log-&gt;with(['service' =&gt; 'bakery']);   // every line from $child carries service=bakery
 $child-&gt;info('Batch complete');</code></pre>
+    <p><img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-log/.vhs/demo.gif" alt="All log levels + formats"></p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Leveled logging</strong><span>Debug, Info, Warn, Error, Fatal. Color runs in two layers: a construction-time style profile that honors NO_COLOR / CLICOLOR_FORCE, and a per-write gate that downgrades non-TTY destinations so files and pipes get plain bytes.</span></div>
-            <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JsonFormatter, LogfmtFormatter — swap via <code>withFormatter()</code>.</span></div>
-            <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
-            <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
-            <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
-            <div class="feature"><strong>PSR-3 bridge</strong><span><code>PsrBridge</code> wraps a Logger and exposes the full PSR-3 <code>LoggerInterface</code> API.</span></div>
-            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via <code>HookRegistry::onLevel()</code> for middleware-style interceptors — dispatched only by <code>PsrBridge</code> (or an explicit <code>fire()</code>); direct Logger calls never fire hooks.</span></div>
-            <div class="feature"><strong>Caller info</strong><span><code>reportCaller</code> on Logger adds <code>basename:line</code> of the nearest caller outside the library — best-effort: a bounded 20-frame walk, and the part is omitted when no such caller is found.</span></div>
-            <div class="feature"><strong>PartsOrder DTO</strong><span>Configure which log-parts appear and in what order — default, syslog, or custom.</span></div>
+    <h2 id="concepts" style="margin-top: 40px;">Concepts and how it works</h2>
+    <p><strong>Levels.</strong> <code>Level</code> is an int-backed enum: <code>Debug</code> is -4, <code>Info</code> 0, <code>Warn</code> 4, <code>Error</code> 8 and <code>Fatal</code> 12. The values follow charmbracelet/log's deltas and are not RFC 5424 severities, so compare <code>-&gt;value</code> when filtering. A record is emitted when its level value is at or above the logger's minimum level, which defaults to <code>Info</code>. <code>print()</code> and <code>printf()</code> bypass that filter.</p>
+    <p><strong>Pipeline.</strong> <code>Logger</code> builds one record per call, hands it to a <code>Formatter</code> (<code>TextFormatter</code> unless you pass another), and writes the rendered line to the configured stream. Records at or above the error threshold go to the optional error stream instead. Fatal records are written first and then raise <code>FatalLoggedException</code>, a <code>RuntimeException</code> subclass.</p>
+    <p><strong>Color is decided twice.</strong> The constructor consults the color-profile probe once, and a per-write gate (<code>ColorGate::allowsColor()</code>) keeps files and pipes free of ANSI bytes. Styles are snapshotted per logger, so changing one logger's styles does not recolor another.</p>
+    <p><strong>Immutable children, mutable setters.</strong> <code>with*()</code> methods such as <code>withPrefix()</code> and <code>with()</code> return a new logger and leave the parent alone. <code>set*()</code> methods such as <code>setMinLevel()</code> change the logger in place.</p>
 
-    </div>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks and recipes</h2>
+    <h3>Write JSON lines to a file</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+use SugarCraft\Log\Formatter\JsonFormatter;
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+$file = fopen('/var/log/bakery.jsonl', 'a');
+$log  = Logger::new(formatter: new JsonFormatter(), stream: $file);
+$log-&gt;info('batch complete', ['loaves' =&gt; 12]);</code></pre>
+    <p>A stream that is a file or a pipe receives plain bytes, so the JSON lines carry no escape sequences.</p>
+
+    <h3>Route errors to stderr</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+use SugarCraft\Log\Level;
+
+$log = Logger::new(errorStream: STDERR, errorStreamAt: Level::Error);
+$log-&gt;info('still on stdout');
+$log-&gt;error('goes to stderr');</code></pre>
+
+    <h3>Catch the fatal signal</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\FatalLoggedException;
+use SugarCraft\Log\Logger;
+
+$log = Logger::new();
+try {
+    $log-&gt;fatal('out of flour');   // the record is written, then the exception is thrown
+} catch (FatalLoggedException $e) {
+    exit(1);
+}</code></pre>
+
+    <h3>Forward PSR-3 calls and run hooks</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+use SugarCraft\Log\PsrBridge;
+use SugarCraft\Log\Hook\HookRegistry;
+use SugarCraft\Log\Level;
+
+$hooks = new HookRegistry();
+$hooks-&gt;onLevel(Level::Error, static function (Level $level, string $psr, string $msg, array $ctx): void {
+    // page the on-call engineer, post to a chat channel, and so on
+});
+
+$psr = new PsrBridge(Logger::new(), $hooks);
+$psr-&gt;error('oven door open', ['zone' =&gt; 2]);</code></pre>
+    <p>Hooks fire only through <code>PsrBridge</code> or an explicit <code>HookRegistry::fire()</code>. Direct <code>Logger</code> calls never dispatch hooks.</p>
+
+    <h3>Add caller location</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+
+$log = Logger::new(reportCaller: true);
+$log-&gt;info('where am I');</code></pre>
+    <p>The caller is the nearest frame outside the library, found by a bounded walk of at most 20 frames. When no such frame exists, the caller part is omitted rather than guessed.</p>
+
+    <h2 id="api" style="margin-top: 40px;">API reference</h2>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Purpose</th></tr>
+    <tr><td><code>Logger</code></td><td><code>new(...)</code></td><td>Build a logger. Named arguments: <code>formatter</code>, <code>level</code>, <code>prefix</code>, <code>reportTimestamp</code>, <code>timeFormat</code>, <code>reportCaller</code>, <code>stream</code>, <code>partsOrder</code>, <code>errorStream</code>, <code>errorStreamAt</code>.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>debug()</code>, <code>info()</code>, <code>warn()</code>, <code>error()</code>, <code>fatal()</code></td><td>Level-bound methods taking <code>(string $message, array $context = [])</code>.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>debugf()</code> … <code>fatalf()</code>, <code>printf()</code></td><td><code>sprintf</code>-style siblings. The level-bound helpers check <code>enabled()</code> before formatting.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>log()</code>, <code>print()</code>, <code>enabled()</code>, <code>flush()</code></td><td>Explicit-level write, filter-bypassing write, threshold query, and stream flush.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>with()</code>, <code>withError()</code>, <code>withPrefix()</code>, <code>withFormatter()</code>, <code>withMinLevel()</code>, <code>withPartsOrder()</code>, <code>withTimeFormat()</code>, <code>withOutput()</code>, <code>withErrorStream()</code></td><td>Return a child logger with one change applied.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>setFormatter()</code>, <code>setMinLevel()</code>, <code>setReportCaller()</code>, <code>setReportTimestamp()</code>, <code>setTimeFormat()</code>, <code>setPrefix()</code>, <code>setOutput()</code>, <code>setErrorStream()</code>, <code>setStyles()</code>, <code>setPartsOrder()</code></td><td>Change the logger in place.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>formatter()</code>, <code>level()</code>, <code>prefix()</code>, <code>output()</code>, <code>styles()</code></td><td>Bare accessors for current state.</td></tr>
+    <tr><td><code>Log</code></td><td><code>default()</code>, <code>setLogger()</code>, <code>reset()</code></td><td>Process-shared facade over one lazily created default <code>Logger</code>.</td></tr>
+    <tr><td><code>Log</code></td><td><code>debug()</code> … <code>fatal()</code>, <code>print()</code>, <code>debugf()</code> … <code>fatalf()</code></td><td>Static forms of the logger methods, forwarding to the default logger.</td></tr>
+    <tr><td><code>Log</code></td><td><code>installPanicHandler()</code>, <code>removePanicHandler()</code>, <code>restoreTerminal()</code></td><td>Uncaught-exception and fatal-error reporting, and terminal restoration.</td></tr>
+    <tr><td><code>Level</code></td><td><code>fromPsrString()</code>, <code>toPsrString()</code>, <code>label()</code>, <code>shortLabel()</code></td><td>Map between the enum, PSR-3 strings and display labels. <code>fromPsrString()</code> returns <code>null</code> for an unknown string.</td></tr>
+    <tr><td><code>Formatter</code></td><td><code>format()</code></td><td>Contract for renderers. Implemented by <code>TextFormatter</code>, <code>JsonFormatter</code> and <code>LogfmtFormatter</code>.</td></tr>
+    <tr><td><code>TextFormatter</code></td><td><code>__construct()</code>, <code>withStyles()</code>, <code>withPartsOrder()</code>, <code>withReportTimestamp()</code>, <code>withTimeFormat()</code>, <code>withReportCaller()</code>, <code>withUseColors()</code></td><td>Default human-readable renderer.</td></tr>
+    <tr><td><code>JsonFormatter</code></td><td><code>__construct(bool $reportTimestamp, ?string $timeFormat)</code></td><td>One JSON object per record.</td></tr>
+    <tr><td><code>LogfmtFormatter</code></td><td><code>__construct(bool $reportTimestamp, ?string $timeFormat)</code></td><td>One logfmt line per record.</td></tr>
+    <tr><td><code>Styles</code></td><td><code>default()</code>, <code>snapshot()</code>, <code>copy()</code>, <code>keyStyle()</code>, <code>padLevelText()</code></td><td>Public style slots: <code>levels</code>, <code>keys</code>, <code>values</code>, <code>timestamp</code>, <code>prefix</code>, <code>caller</code>, <code>message</code>, <code>padLevelText</code>.</td></tr>
+    <tr><td><code>PartsOrder</code></td><td><code>default()</code>, <code>syslog()</code>, <code>messageFirst()</code>, <code>has()</code></td><td>Which record parts appear and in what order. The <code>PART_*</code> constants name them.</td></tr>
+    <tr><td><code>PsrBridge</code></td><td><code>__construct(Logger $logger, ?HookRegistry $hooks)</code></td><td>Implements <code>Psr\Log\LoggerInterface</code>. Its <code>log()</code> rejects an unknown level string with <code>InvalidArgumentException</code>.</td></tr>
+    <tr><td><code>Hook\HookRegistry</code></td><td><code>onLevel()</code>, <code>addHook()</code>, <code>remove()</code>, <code>fire()</code></td><td>Per-level callbacks, returning an id you can pass to <code>remove()</code>.</td></tr>
+    <tr><td><code>Hook\Hook</code></td><td><code>onLevel()</code></td><td>Interface for object hooks, registered with <code>addHook()</code>.</td></tr>
+    <tr><td><code>StandardLogAdapter</code></td><td><code>print()</code>, <code>printLn()</code>, <code>fatal()</code>, <code>panic()</code>, <code>printf()</code>, <code>errorf()</code>, <code>fatalf()</code>, <code>panicf()</code>, <code>logger()</code></td><td>Go-style call shape over a <code>Logger</code>. <code>fatal()</code> and <code>panic()</code> throw <code>FatalLoggedException</code>.</td></tr>
+    <tr><td><code>PanicFormatter</code></td><td><code>pretty()</code>, <code>plain()</code>, <code>format()</code>, <code>withTitleStyle()</code>, <code>withExceptionStyle()</code>, <code>withBacktraceStyle()</code>, <code>withMutedStyle()</code></td><td>Renders a crash report for a <code>Throwable</code>.</td></tr>
+    <tr><td><code>FatalLoggedException</code></td><td>(class)</td><td>Thrown after a Fatal record is written. It extends <code>RuntimeException</code>.</td></tr>
+    <tr><td><code>ColorGate</code></td><td><code>allowsColor()</code></td><td>Per-write decision for whether a destination gets ANSI bytes.</td></tr>
+    <tr><td><code>CallerFormatter</code></td><td><code>find()</code></td><td>Finds the nearest caller outside the library, or <code>null</code>.</td></tr>
+    <tr><td><code>RecordKeys</code></td><td><code>claim()</code>, <code>isReserved()</code></td><td>Namespaces context keys that collide with reserved record keys under the <code>ctx_</code> prefix.</td></tr>
+    <tr><td><code>ValueCoercion</code></td><td><code>stringify()</code>, <code>coerce()</code></td><td>Turns arbitrary context values into printable text.</td></tr>
+    </table>
+
+        <!-- api-reference:generated -->
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration and options</h2>
+    <p>Every option is a named argument of <code>Logger::new()</code>. The same values can be changed later with the matching <code>set*()</code> or <code>with*()</code> method.</p>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>formatter</code></td><td><code>?Formatter</code></td><td><code>TextFormatter</code></td><td>Renders each record.</td></tr>
+    <tr><td><code>level</code></td><td><code>?Level</code></td><td><code>Level::Info</code></td><td>Minimum level that is emitted. Lower records are dropped unless written with <code>print()</code>.</td></tr>
+    <tr><td><code>prefix</code></td><td><code>?string</code></td><td><code>null</code></td><td>Text placed before each message.</td></tr>
+    <tr><td><code>reportTimestamp</code></td><td><code>bool</code></td><td><code>true</code></td><td>Include a timestamp in each record.</td></tr>
+    <tr><td><code>timeFormat</code></td><td><code>?string</code></td><td><code>null</code>, meaning <code>Y/m/d H:i:s</code></td><td>PHP date format for the timestamp.</td></tr>
+    <tr><td><code>reportCaller</code></td><td><code>bool</code></td><td><code>false</code></td><td>Include the <code>basename:line</code> of the nearest caller.</td></tr>
+    <tr><td><code>stream</code></td><td><code>mixed</code></td><td>STDOUT</td><td>Resource or openable path that receives records.</td></tr>
+    <tr><td><code>partsOrder</code></td><td><code>?PartsOrder</code></td><td><code>PartsOrder::default()</code></td><td>Which parts appear, and in what order.</td></tr>
+    <tr><td><code>errorStream</code></td><td><code>mixed</code></td><td><code>null</code></td><td>Optional second stream for severe records.</td></tr>
+    <tr><td><code>errorStreamAt</code></td><td><code>?Level</code></td><td><code>Level::Error</code></td><td>Threshold at which records go to <code>errorStream</code>.</td></tr>
+    </table>
+    <p>An invalid stream throws <code>InvalidArgumentException</code> at construction.</p>
+
+    <h2 id="styling" style="margin-top: 40px;">Styling and theming</h2>
+    <p>Each logger owns a <code>Styles</code> instance. Its public arrays <code>levels</code>, <code>keys</code> and <code>values</code> map a level, a generic key role, or an individual field name to a style, and its <code>timestamp</code>, <code>prefix</code>, <code>caller</code> and <code>message</code> properties style the other parts. Set <code>padLevelText</code> to <code>true</code> to pad level labels to a common width. Use <code>keyStyle()</code> to read the style for one field.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
+use SugarCraft\Log\Styles;
+
+$styles = Styles::snapshot();   // an independent copy; default() is the shared instance
+$styles-&gt;padLevelText = true;
+$log = Logger::new();
+$log-&gt;setStyles($styles);</code></pre>
+    <p>Color is chosen at construction by the color-profile probe, where <code>NO_COLOR</code> is honored. <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code> outrank <code>NO_COLOR</code> there. A non-terminal destination still receives plain bytes on every write, and <code>CLICOLOR_FORCE</code> reaches that per-write gate when it is set to any non-empty value other than <code>0</code>.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
     <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-log">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-log/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-log/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/log">charmbracelet/log</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-log/blob/master/examples/demo.php"><code>examples/demo.php</code></a> runs every level, the structured fields, sub-loggers, the JSON and logfmt formatters, and the stdlog adapter in one run.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-log/blob/master/examples/panic-handler.php"><code>examples/panic-handler.php</code></a> installs <code>Log::installPanicHandler()</code> and then triggers a fatal error so the styled panic report is visible.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-log/blob/master/examples/panic-restore.php"><code>examples/panic-restore.php</code></a> restores the terminal after raw mode was entered outside the normal program loop. It uses <code>Tty</code> from <code>sugarcraft/sugar-core</code>, which the package already requires.</li>
     </ul>
+    <p>Run any of them from the package root with <code>php examples/demo.php</code>.</p>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>Run the suite from the package root with <code>vendor/bin/phpunit</code>. The tests cover the logger, each formatter, the record-integrity rules, the PSR-3 bridge, the hook registry, the stdlog adapter, the panic formatter and the locale catalogs. <code>ReadmeSnippetsTest</code> lints and runs every fenced PHP block in the README, so a documented snippet that drifts from the API fails the suite.</p>
 
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Logger</td><td>new()</td><td>Create a new logger</td></tr>
-<tr><td>Logger</td><td>debug(msg, context)</td><td>Log debug message</td></tr>
-<tr><td>Logger</td><td>info(msg, context)</td><td>Log info message</td></tr>
-<tr><td>Logger</td><td>warn(msg, context)</td><td>Log warning message</td></tr>
-<tr><td>Logger</td><td>error(msg, context)</td><td>Log error message</td></tr>
-<tr><td>Logger</td><td>fatal(msg, context)</td><td>Log fatal message</td></tr>
-<tr><td>Logger</td><td>debugf/infof/warnf/errorf/fatalf(format, context, args)</td><td>sprintf siblings per level — slot two is mixed (array = context, scalar = first argument); enabled() guards the formatting</td></tr>
-<tr><td>Logger</td><td>printf(format, context, args)</td><td>sprintf sibling of print() — bypasses the level filter</td></tr>
-<tr><td>Logger</td><td>enabled(Level)</td><td>Whether a level passes the current minLevel</td></tr>
-<tr><td>Logger</td><td>with(array)</td><td>Create child logger with persistent context</td></tr>
-<tr><td>Logger</td><td>withFormatter(Formatter)</td><td>Set output formatter</td></tr>
-<tr><td>Logger</td><td>withMinLevel(Level)</td><td>Set minimum output level</td></tr>
-<tr><td>Logger</td><td>withPrefix(string)</td><td>Set per-line prefix</td></tr>
-<tr><td>Logger</td><td>setReportCaller(bool)</td><td>Enable/disable caller basename:line reporting (best-effort 20-frame walk)</td></tr>
-<tr><td>Logger</td><td>setReportTimestamp(bool)</td><td>Enable/disable timestamp</td></tr>
-<tr><td>Logger</td><td>styles()</td><td>Get Styles object for level/field styling</td></tr>
-<tr><td>Logger</td><td>styles()->keys[name]</td><td>Per-field ANSI style override (time, level, prefix, caller, message, key, value)</td></tr>
-<tr><td>PsrBridge</td><td>new(Logger, ?HookRegistry)</td><td>Wrap a Logger with full PSR-3 API</td></tr>
-<tr><td>PsrBridge</td><td>emergency(msg, ctx)</td><td>PSR-3 emergency — maps to Level::Fatal</td></tr>
-<tr><td>PsrBridge</td><td>alert(msg, ctx)</td><td>PSR-3 alert — maps to Level::Fatal</td></tr>
-<tr><td>PsrBridge</td><td>critical(msg, ctx)</td><td>PSR-3 critical — maps to Level::Fatal</td></tr>
-<tr><td>PsrBridge</td><td>error(msg, ctx)</td><td>PSR-3 error — maps to Level::Error</td></tr>
-<tr><td>PsrBridge</td><td>warning(msg, ctx)</td><td>PSR-3 warning — maps to Level::Warn</td></tr>
-<tr><td>PsrBridge</td><td>notice(msg, ctx)</td><td>PSR-3 notice — maps to Level::Info</td></tr>
-<tr><td>PsrBridge</td><td>info(msg, ctx)</td><td>PSR-3 info — maps to Level::Info</td></tr>
-<tr><td>PsrBridge</td><td>debug(msg, ctx)</td><td>PSR-3 debug — maps to Level::Debug</td></tr>
-<tr><td>PsrBridge</td><td>log(level, msg, ctx)</td><td>Generic PSR-3 log dispatch</td></tr>
-<tr><td>HookRegistry</td><td>onLevel(Level, callable): int</td><td>Register a callback for all events at/above Level (dispatched by PsrBridge or explicit fire())</td></tr>
-<tr><td>HookRegistry</td><td>fire(Level, psrLevel, msg, ctx)</td><td>Dispatch to all matching handlers</td></tr>
-<tr><td>Hook</td><td>onLevel(Level, string, string, array)</td><td>Interface for structured hook implementations</td></tr>
-<tr><td>PartsOrder</td><td>new(?list)</td><td>Config DTO for log-part ordering</td></tr>
-<tr><td>PartsOrder</td><td>default(): self</td><td>Preset: timestamp, level, prefix, caller, message, fields</td></tr>
-<tr><td>PartsOrder</td><td>syslog(): self</td><td>Preset: timestamp, level, message, fields (no prefix/caller)</td></tr>
-<tr><td>PartsOrder</td><td>messageFirst(): self</td><td>Preset: message, level, timestamp, fields</td></tr>
-<tr><td>PartsOrder</td><td>has(PART_*): bool</td><td>Check whether a part is included in the order</td></tr>
-<tr><td>PartsOrder</td><td>PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS</td><td>Part name constants</td></tr>
-<tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk the call stack (bounded at 20 frames), return "basename:line" of the first frame outside the package, or null when none is found</td></tr>
-<tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: charmbracelet/log-aligned int deltas (-4, 0, 4, 8, 12) — deliberately NOT RFC 5424/syslog severities</td></tr>
-<tr><td>TextFormatter</td><td>new(bool, ?string, bool, ?bool, ?Styles, ?PartsOrder)</td><td>Human-readable formatter with ANSI color; <code>useColors</code> is tri-state (null consults the terminal probe), null <code>styles</code>/<code>partsOrder</code> fall back to defaults</td></tr>
-<tr><td>JsonFormatter</td><td>new(bool, ?string)</td><td>JSON object per log line; optional <code>timeFormat</code> (default <code>DateTimeInterface::ATOM</code>)</td></tr>
-<tr><td>LogfmtFormatter</td><td>new(bool, ?string)</td><td>Logfmt key=value format; optional <code>timeFormat</code> (default <code>DateTimeInterface::ATOM</code>)</td></tr>
-<tr><td>Log</td><td>installPanicHandler()</td><td>Install global panic handler (catches fatal errors + uncaught exceptions)</td></tr>
-<tr><td>Log</td><td>restoreTerminal()</td><td>Restore terminal from altscreen mode</td></tr>
-<tr><td>Log</td><td>setLogger(Logger)</td><td>Set the global logger instance</td></tr>
-<tr><td>Log</td><td>info(msg, ctx)</td><td>Static shorthand — delegates to global logger</td></tr>
-<tr><td>Log</td><td>debug/warn/error/fatal(msg, ctx)</td><td>Static shorthands for each level</td></tr>
-</table>
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
+    <h3>Debug lines never appear</h3>
+    <p>The default threshold is <code>Level::Info</code>. Pass <code>level: Level::Debug</code> to <code>Logger::new()</code>, or call <code>setMinLevel(Level::Debug)</code> on an existing logger. The shared logger behind the <code>Log</code> facade is changed with <code>Log::default()-&gt;setMinLevel(Level::Debug)</code>.</p>
+    <h3>Colors appear in a log file, or never appear in a terminal</h3>
+    <p>Files and pipes receive plain bytes by design. The per-write gate turns color on for a non-terminal destination only when <code>CLICOLOR_FORCE</code> is set to any non-empty value other than <code>0</code>, such as <code>1</code> or <code>true</code>. <code>NO_COLOR</code> is read once, when the logger is constructed. Exporting it later does not change a logger that already exists.</p>
+    <h3>Hooks never run for a direct logger call</h3>
+    <p><code>HookRegistry</code> callbacks are dispatched only by <code>PsrBridge</code> or by an explicit <code>fire()</code>. Log through a <code>PsrBridge</code> built with the registry, or call <code>fire()</code> yourself.</p>
+    <h3>A script stops after fatal()</h3>
+    <p>This is intended. The record is written first, then <code>FatalLoggedException</code> is thrown. Catch it at the entry point, as in the fatal recipe above, if the script should exit cleanly with a status code.</p>
+    <h3>A context field is written as ctx_something</h3>
+    <p>The record keys <code>level</code>, <code>msg</code>, <code>time</code>, <code>caller</code>, <code>prefix</code> and <code>_encode_error</code> are reserved. A context field that uses one of those names, or a name already claimed earlier in the same record, is written with a <code>ctx_</code> prefix so it cannot overwrite the record's own parts. Rename the field to avoid the prefix.</p>
+    <h3>reportCaller shows no file and line</h3>
+    <p>Caller detection is best effort. It walks at most 20 frames and omits the caller part when no frame outside the library is found within that bound.</p>
+
+    <h2 id="upstream" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>charmbracelet/log (Go)</th><th>SugarLog (PHP)</th><th>Notes</th></tr>
+    <tr><td>Logger and level functions</td><td><code>Logger</code>, <code>Log</code>, <code>Level</code></td><td>Level deltas match upstream; the methods are PHP-shaped.</td></tr>
+    <tr><td>Formatter interface</td><td><code>Formatter</code>, <code>TextFormatter</code>, <code>JsonFormatter</code>, <code>LogfmtFormatter</code></td><td>Docblocks cite the upstream interface.</td></tr>
+    <tr><td>Caller reporting</td><td><code>CallerFormatter</code>, <code>reportCaller</code></td><td>Bounded frame walk instead of the Go runtime call.</td></tr>
+    <tr><td>Styles</td><td><code>Styles</code></td><td>Mirrors the shape (levels keyed by level, per-field overrides), not the Go type.</td></tr>
+    <tr><td>Standard library log call pattern</td><td><code>StandardLogAdapter</code></td><td>A shape, not an interface. For PSR-3 use <code>PsrBridge</code>.</td></tr>
+    </table>
+    <p>For where SugarLog sits among the other ports, see the project map in <a href="https://github.com/sugarcraft/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>.</p>
+
+    <h2 id="changelog" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package ships no separate changelog file. It is published from the monorepo with the other <code>sugarcraft/*</code> packages on <code>dev-master</code>, so the git history of the <code>sugar-log/</code> directory is the release record. The stability note under Install explains the dev-master requirement.</p>
+
+    <p style="margin-top: 48px;"><a href="https://github.com/sugarcraft/sugar-log" class="btn btn-primary">Source on GitHub →</a></p>
   </div>
-</section>
-
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">The flagship demo, recorded as a GIF with VHS. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-log/.vhs/demo.gif" alt="All log levels + formats">
-                <h3>All log levels + formats</h3>
-                <span class="demo-caption">Debug / Info / Warn / Error / Fatal across Text / JSON / Logfmt formatters.</span>
-            </div>
-        </div>
-    </div>
 </section>

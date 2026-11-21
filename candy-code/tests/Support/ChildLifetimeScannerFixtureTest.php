@@ -158,8 +158,10 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
      *
      * THE GUARD AGAINST OVER-CORRECTING, and it is not hypothetical: the first
      * version of the depth rule compared against a fixed zero, and the second
-     * spawn in `Hooks/ScriptHook.php::executeStaged()` - a retry inside an
+     * spawn then in `Hooks/ScriptHook.php::executeStaged()` - a retry inside an
      * `if`, closed once at the bottom of the method - came back unclassified.
+     * (The hook has since moved onto sugar-async's `ChildRun`, one spawn in
+     * `runChild()`; the shape it exposed is kept here.)
      * Reddening correct code is how the next real offender buys its exemption,
      * so the shape that was wrongly flagged is pinned here in its own right.
      */

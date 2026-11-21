@@ -109,13 +109,13 @@ final class Renderer
 
     public readonly Theme $theme;
     /**
-     * CommonMark parser, built lazily on first {@see render()} and cached
-     * on the instance. Left null by the constructor so the chainable
-     * `with*()` builders (which spin up a fresh instance via {@see mutate()})
-     * do NOT rebuild the parser/Environment on every call — only an actual
-     * render pays that cost, once per instance.
+     * The CommonMark parser and the seed the parse in flight reads, built
+     * lazily on first {@see render()}. Shared by every renderer that
+     * {@see mutate()} derives from this one, so the chainable `with*()`
+     * builders never rebuild the parser/Environment: only the first render
+     * in a family pays that cost.
      */
-    private ?MarkdownParser $parser = null;
+    private ParserBundle $bundle;
 
     /**
      * Per-stock-theme render bundles for {@see renderMarkdown()}
@@ -127,14 +127,21 @@ final class Renderer
     private static array $stockRenderers = [];
 
     /**
-     * Link reference definitions {@see parseSection()} seeds into the parse
-     * in flight, null outside one. Only the stream family sets it, and only
-     * after narrowing to the labels the section could look up
-     * ({@see narrowSeed()}).
-     *
-     * @var list<ReferenceInterface>|null
+     * Upper bound on {@see cached()} entries. A frame loop asks for one or
+     * two (theme, width) pairs; the bound only stops a process that keeps
+     * minting custom themes from holding every one of them alive.
      */
-    private ?array $seedReferences = null;
+    private const CACHE_LIMIT = 32;
+
+    /**
+     * The renderers {@see cached()} handed out, keyed by theme identity and
+     * width, oldest first. Each entry holds its theme, so the object id in
+     * its key cannot be recycled while the entry exists.
+     *
+     * @var array<string, self>
+     */
+    private static array $cache = [];
+
     /**
      * The options in effect, readable after construction (SM-S12): the
      * constructor is their single gate (SM-S50: a non-positive wrapWidth
@@ -161,6 +168,14 @@ final class Renderer
 
     /** Prefix fence lines with a padded, measurable line-number gutter ({@see withLineNumbers()}). */
     public readonly bool $lineNumbers;
+
+    /**
+     * Heading IDs whose sections render folded ({@see withFolds()}), in the
+     * order given. Empty when nothing folds.
+     *
+     * @var list<string>
+     */
+    public readonly array $folds;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
@@ -203,8 +218,10 @@ final class Renderer
         bool $fenceColumnBudget = false,
         ?StyleSheet $styleSheetOverride = null,
         bool $lineNumbers = false,
+        array $folds = [],
     ) {
         $this->theme = $theme ?? Theme::ansi();
+        $this->bundle = new ParserBundle();
         // SM-S50: a zero/negative width is not "off" — off is null. Fail
         // fast at the boundary instead of silently normalising a bug away.
         if ($wrapWidth !== null && $wrapWidth <= 0) {
@@ -224,20 +241,22 @@ final class Renderer
         $this->fenceColumnBudget = $fenceColumnBudget;
         $this->styleSheetOverride = $styleSheetOverride;
         $this->lineNumbers = $lineNumbers;
+        $this->folds = array_values(array_unique($folds));
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
     /**
-     * Lazily build (and memoise) the CommonMark parser. Deferring
-     * construction out of `__construct()` means the `with*()` builders no
-     * longer rebuild the whole Environment + extension set on every call —
-     * the parser is assembled exactly once, on the first render of an
-     * instance. Extension set is identical to the previous eager build, so
+     * Lazily build (and memoise, on the shared {@see ParserBundle}) the
+     * CommonMark parser. Deferring construction out of `__construct()` means
+     * the `with*()` builders do not assemble the Environment + extension set
+     * on every call; the parser is assembled once per family, on its first
+     * render. Extension set is identical to the previous eager build, so
      * render output is byte-for-byte unchanged.
      */
     private function parser(): MarkdownParser
     {
-        if ($this->parser === null) {
+        $bundle = $this->bundle;
+        if ($bundle->parser === null) {
             $env = new Environment();
             $env->addExtension(new CommonMarkCoreExtension());
             $env->addExtension(new TableExtension());
@@ -254,20 +273,22 @@ final class Renderer
             // map the parse resolves references against. Seeded entries go
             // in first, so the section's own duplicates lose to them, which
             // is CommonMark's first-definition-wins across the whole document.
-            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event): void {
-                if ($this->seedReferences === null) {
+            // It closes over the bundle, not $this: the parser is shared by
+            // derived renderers, and each must see the seed it set.
+            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event) use ($bundle): void {
+                if ($bundle->seedReferences === null) {
                     return;
                 }
                 $map = $event->getDocument()->getReferenceMap();
-                foreach ($this->seedReferences as $reference) {
+                foreach ($bundle->seedReferences as $reference) {
                     if (!$map->contains($reference->getLabel())) {
                         $map->add($reference);
                     }
                 }
             });
-            $this->parser = new MarkdownParser($env);
+            $bundle->parser = new MarkdownParser($env);
         }
-        return $this->parser;
+        return $bundle->parser;
     }
 
     public static function ansi(): self
@@ -331,6 +352,40 @@ final class Renderer
         // behind our back.
         $renderer = self::$stockRenderers[spl_object_id($theme)] ??= new self($theme);
         return $renderer->render($markdown);
+    }
+
+    /**
+     * The shared renderer for $theme at $width columns, built on first use
+     * and returned as the same instance after that. A caller that renders on
+     * every frame (a TUI pane, a chat transcript) gets one parser, one
+     * Environment and one stylesheet for the whole session instead of paying
+     * for them per frame (rank 39). Null $theme means {@see Theme::ansi()};
+     * null $width means no wrapping.
+     *
+     * Entries are keyed by the theme object's identity, so two equal themes
+     * that are distinct objects get distinct renderers. Only the most recent
+     * {@see CACHE_LIMIT} pairs are kept; an evicted renderer stays valid for
+     * whoever still holds it.
+     */
+    public static function cached(?Theme $theme = null, ?int $width = null): self
+    {
+        $theme ??= Theme::ansi();
+        $key = spl_object_id($theme) . ':' . ($width ?? 'off');
+        if (isset(self::$cache[$key])) {
+            // Refresh recency: move the entry to the end of the array.
+            $renderer = self::$cache[$key];
+            unset(self::$cache[$key]);
+            self::$cache[$key] = $renderer;
+
+            return $renderer;
+        }
+        $renderer = new self($theme, $width);
+        self::$cache[$key] = $renderer;
+        if (count(self::$cache) > self::CACHE_LIMIT) {
+            array_shift(self::$cache);
+        }
+
+        return $renderer;
     }
 
     /**
@@ -525,11 +580,11 @@ final class Renderer
         // the stream channel and the whole-document channel see the same
         // nodes and stay byte-identical.
 
-        $this->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
+        $this->bundle->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
         try {
             return $this->parser()->parse($section);
         } finally {
-            $this->seedReferences = null;
+            $this->bundle->seedReferences = null;
         }
     }
 
@@ -790,6 +845,40 @@ final class Renderer
     }
 
     /**
+     * Fold the sections under the top-level headings named by $headingIds.
+     * A folded heading renders its own line, then a fold marker, and the
+     * blocks after it are hidden up to the next heading of any level. The
+     * hidden blocks are the body only: a heading nested under a folded one
+     * is a heading of its own and shows, so the fold never has to know about
+     * sections the stream family renders separately.
+     *
+     * IDs are the values {@see headingId()} returns for the heading's rendered
+     * text, the text a reader sees (with emoji expansion on, `:rocket: Launch`
+     * is "launch", not "rocket-launch"). A caller deriving IDs from source
+     * markdown must expand the same way first. An ID that matches no heading is ignored. Pass an empty list to unfold
+     * everything; the returned renderer carries the list given, without repeats.
+     *
+     * @param list<string> $headingIds
+     */
+    public function withFolds(array $headingIds): self
+    {
+        return $this->mutate(folds: $headingIds);
+    }
+
+    /**
+     * The fold ID for a heading whose visible text is $text: lowercase, each
+     * run of characters that are neither letters nor digits becomes a single
+     * hyphen, and the hyphens at both ends are trimmed. Two headings with the
+     * same text share an ID, so folding that ID folds both.
+     */
+    public static function headingId(string $text): string
+    {
+        $slug = preg_replace('/[^\p{L}\p{N}]+/u', '-', mb_strtolower($text)) ?? '';
+
+        return trim($slug, '-');
+    }
+
+    /**
      * Preserve consecutive blank lines in source markdown. By default
      * CommonMark collapses runs of blank lines; with this on, every run of
      * blank lines between two blocks survives into {@see render()}'s output
@@ -944,8 +1033,9 @@ final class Renderer
         ?bool $fenceColumnBudget = null,
         ?StyleSheet $styleSheetOverride = null,
         ?bool $lineNumbers = null,
+        ?array $folds = null,
     ): self {
-        return new self(
+        $derived = new self(
             $theme            ?? $this->theme,
             $wrapWidthSet ? $wrapWidth : $this->wrapWidth,
             $emitHyperlinks   ?? $this->emitHyperlinks,
@@ -959,7 +1049,13 @@ final class Renderer
             $fenceColumnBudget ?? $this->fenceColumnBudget,
             $styleSheetOverride ?? $this->styleSheetOverride,
             $lineNumbers      ?? $this->lineNumbers,
+            $folds            ?? $this->folds,
         );
+        // The parser depends on nothing a builder can change, so the derived
+        // renderer reuses this family's parser instead of building its own.
+        $derived->bundle = $this->bundle;
+
+        return $derived;
     }
 
     public function render(string $markdown): string
@@ -1207,15 +1303,7 @@ final class Renderer
 
     private function renderText(string $literal): string
     {
-        if ($this->sanitize) {
-            $literal = self::stripControls($literal);
-        }
-        if ($this->expandEmoji) {
-            // The parser already decided what is code, what is a destination
-            // and what is text; expansion here rewrites only text (M1), and
-            // the map's values are trusted house constants.
-            $literal = self::expandEmojiShortcodes($literal);
-        }
+        $literal = $this->visibleLiteral($literal);
         if ($this->textCase !== null) {
             $literal = self::applyCase($literal, $this->textCase);
         }
@@ -1500,18 +1588,88 @@ final class Renderer
 
     private function renderChildren(Node $parent): string
     {
+        // Folds apply to the top level only: a heading inside a quote or a
+        // list is never a section boundary, so it can never fold.
+        $folds = $parent instanceof Document && $this->folds !== []
+            ? array_flip($this->folds)
+            : null;
+        $hiding = false;
         $parts = [];
         foreach ($parent->children() as $child) {
+            if ($folds !== null) {
+                if ($child instanceof Heading) {
+                    $hiding = isset($folds[$this->foldIdOf($child)]);
+                } elseif ($hiding) {
+                    continue;
+                }
+            }
             $part = $this->renderNode($child);
-            if ($this->sourceLines !== null && $child instanceof AbstractBlock) {
+            // A folded heading's next block is hidden, so its blank lines
+            // are not padded against it.
+            if ($this->sourceLines !== null && $child instanceof AbstractBlock && !$hiding) {
                 $next = $child->next();
                 if ($next instanceof AbstractBlock) {
                     $part = $this->padBlankLines($part, $child, $next);
                 }
             }
+            if ($hiding && $child instanceof Heading) {
+                $part .= Lang::t('fold.marker') . "\n\n";
+            }
             $parts[] = $part;
         }
         return implode('', $parts);
+    }
+
+    /**
+     * The {@see headingId()} of a heading's visible text (code spans and image
+     * alt text included). The text is what renders, not the source: with
+     * expandEmoji on, `:rocket: Launch` folds as `launch`, the way the reader
+     * sees it, so a caller deriving the ID from the visible heading finds it.
+     */
+    private function foldIdOf(Heading $heading): string
+    {
+        return self::headingId($this->plainText($heading));
+    }
+
+    private function plainText(Node $node): string
+    {
+        $text = '';
+        foreach ($node->children() as $child) {
+            if ($child instanceof Text) {
+                $text .= $this->visibleLiteral($child->getLiteral());
+            } elseif ($child instanceof Code) {
+                // renderCode() expands no shortcodes: a code span shows as written.
+                $text .= $this->sanitize ? self::stripControls($child->getLiteral()) : $child->getLiteral();
+            } elseif ($child instanceof Newline) {
+                // A break shows as a line end, which a reader takes as a word gap.
+                $text .= ' ';
+            } elseif ($child instanceof HtmlInline) {
+                // renderHtmlSpan() shows raw inline HTML as written, tags included.
+                $text .= self::stripControls($child->getLiteral());
+            } else {
+                $text .= $this->plainText($child);
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * A text literal as {@see renderText()} shows it: control bytes swept under
+     * sanitize, shortcodes expanded under expandEmoji. The parser already decided
+     * what is code, what is a destination and what is text; expansion rewrites
+     * only text (M1), and the map's values are trusted house constants.
+     */
+    private function visibleLiteral(string $literal): string
+    {
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        if ($this->expandEmoji) {
+            $literal = self::expandEmojiShortcodes($literal);
+        }
+
+        return $literal;
     }
 
     /**

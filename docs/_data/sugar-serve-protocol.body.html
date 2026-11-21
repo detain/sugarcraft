@@ -1,0 +1,141 @@
+<p class="lede" style="margin-top: 28px;">The wire contract for the <code>candy-code.v1</code> serve protocol, in one small package. Clients that talk to a running <code>candy-code serve</code> read the same discovery record, token file and WebSocket URL through it, so the rule lives in one place. <strong>It only reads:</strong> writing the token, creating the state directory and running the server stay with the host. First-party: original work, with no upstream Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-serve-protocol</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.3 or newer. The package has no runtime dependency beyond PHP. <code>sugarcraft/sugar-mcp-client</code> is a dev-only requirement, used by the test suite to pin the JSON-RPC envelope.</p>
+
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Auth\TokenFile;
+use SugarCraft\ServeProtocol\Discovery\StateDirReader;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
+
+$dir = StateDirReader::existing('/home/me/.local/state/candy-code');
+$token = $dir === null ? null : TokenFile::read($dir);
+$url = WebsocketUrl::from('http://127.0.0.1:7420'); // "ws://127.0.0.1:7420/ws"</code></pre>
+    <p>A runnable version lives in <code>examples/read-state.php</code> (see <a href="#examples">Examples</a>). The URL rule prints the following for a set of addresses:</p>
+    <pre class="code"><code class="language-text">subprotocol: candy-code.v1
+http://127.0.0.1:7420          ws://127.0.0.1:7420/ws
+https://example.test           wss://example.test/ws
+ws://[::1]:7420                ws://[::1]:7420/ws
+http://[fe80::1%25eth0]:8080   ws://[fe80::1%25eth0]:8080/ws
+http://[abc]:8080              refused
+http://::1                     refused
+ftp://127.0.0.1                refused</code></pre>
+
+    <h3 style="margin-top: 40px;">Concepts</h3>
+    <p>The package is the read side of the serve protocol's state. A client looks for the server's state directory, reads the discovery record that names the running process, reads the bearer token, and turns the address the server printed into the WebSocket URL it dials. Most reads return <code>null</code> when there is nothing usable, and an unreadable discovery record answers <code>null</code> just like an absent one. The state directory check throws when the directory is present but not private, and the token read throws when the token file is present but cannot be read, so a caller can tell an absent server from a refused state directory or token.</p>
+    <p>The package also holds the wire constants: the subprotocol name, the frame cap and the approval expiry. These values are the contract. The host reads them from <code>Protocol</code> (through <code>ServerConfig</code>, the dispatcher and <code>PendingAsk</code>), so changing a value here changes the wire the server speaks.</p>
+
+    <h3 style="margin-top: 32px;">The laws</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Read side only</strong><span>Discovery, token and URL helpers read and normalise. A missing file answers null; an unreadable state directory or token file throws, so a token is never silently replaced. An unreadable discovery record answers null.</span></div>
+      <div class="feature"><strong>Private state</strong><span>A state directory that is a symbolic link, a file, the wrong owner or a mode other than 0700 is refused, not followed.</span></div>
+      <div class="feature"><strong>Bounded parsing</strong><span>Discovery records are decoded to a bounded depth and returned raw, so field-level checks stay with the host.</span></div>
+      <div class="feature"><strong>Pinned, not shared</strong><span>The package ships no JSON-RPC codec. Its tests pin the envelope against the codec of <code>sugar-mcp-client</code>, a dev-only requirement. The running <code>candy-code serve</code> builds and reads its frames with that same codec (<code>SugarCraft\McpClient\Protocol\JsonRpc</code>), so a fix made there reaches both. Install <code>sugarcraft/sugar-mcp-client</code> yourself to use its <code>JsonRpc</code> class from your own code.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Tasks</h3>
+    <p><strong>Get the URL of a running server.</strong> <code>LiveRecord::url()</code> reads <code>server.json</code> and answers the record's URL only when the process it names is still the same process. A stale record answers null.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Discovery\LiveRecord;
+
+$url = LiveRecord::url($stateDir); // null when no live server is recorded</code></pre>
+
+    <p><strong>Read the bearer token.</strong> <code>TokenFile::read()</code> returns the 64-character lowercase hex token. A null return means there is no usable token, so the host may mint a new one. An exception means the file exists and could not be read, so the caller must stop rather than replace it.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Auth\TokenFile;
+
+try {
+    $token = TokenFile::read($stateDir);
+} catch (\RuntimeException $e) {
+    // Unreadable: report it and stop. Do not write a new token over it.
+    fwrite(STDERR, $e->getMessage() . PHP_EOL);
+    exit(1);
+}</code></pre>
+
+    <p><strong>Normalise an address the user typed.</strong> <code>WebsocketUrl::from()</code> accepts <code>http(s)://</code> and <code>ws(s)://</code> addresses and returns the <code>/ws</code> URL. Anything else returns null, and so does a malformed IPv6 host. The candy-code host's <code>Attach::websocketUrl</code> delegates here, so both refuse the same inputs.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Url\WebsocketUrl;
+
+$url = WebsocketUrl::from('https://[2001:db8::1]:7420'); // "wss://[2001:db8::1]:7420/ws"
+$none = WebsocketUrl::from('ftp://example.test');        // null</code></pre>
+
+    <p><strong>Check that a state directory is private before using it.</strong> <code>StateDirReader::existing()</code> returns the trimmed path of an existing private directory and null when nothing exists there. It throws when the path exists but is a symbolic link, a file, owned by another user, or not mode 0700.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Discovery\StateDirReader;
+
+$dir = StateDirReader::existing($stateDir); // throws on an unsafe directory</code></pre>
+
+    <p><strong>Read a discovery record without trusting its fields.</strong> <code>DiscoveryRecordReader::read()</code> returns the validated raw array. Field checks such as the pid and the URL belong to the caller, or to <code>LiveRecord</code> for the running-server case.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\ServeProtocol\Discovery\DiscoveryRecordReader;
+use SugarCraft\ServeProtocol\Discovery\LiveRecord;
+
+$record = DiscoveryRecordReader::read($stateDir . '/' . LiveRecord::FILE); // ?array</code></pre>
+
+    <h3 style="margin-top: 40px;">API reference</h3>
+    <p>Every public class in <code>src/</code> is listed. All of them are <code>final</code>, and the helpers that hold only static methods have private constructors, so they are used through their static methods and constants.</p>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method or constant</th><th scope="col">Description</th></tr></thead>
+<tr><td>Protocol</td><td>MAJOR, SUBPROTOCOL, AUTH_SUBPROTOCOL_PREFIX, MAX_SERVER_FRAME_BYTES, ASK_EXPIRY_SECONDS</td><td>The wire constants (<code>candy-code.v1</code>, 4 MiB frame cap, 1800 s ask expiry)</td></tr>
+<tr><td>Url\WebsocketUrl</td><td>static from(string $url): ?string; WS_PATH</td><td><code>http(s)</code> or <code>ws(s)</code> address to its <code>/ws</code> URL; null for anything else, and for malformed IPv6 hosts</td></tr>
+<tr><td>Discovery\StateDirReader</td><td>static existing(string $path): ?string</td><td>An existing private state directory; null when absent; throws when present but not private</td></tr>
+<tr><td>Discovery\DiscoveryRecordReader</td><td>static read(string $path): ?array; MAX_DEPTH</td><td>The raw <code>server.json</code> record; null when absent, unreadable, a symbolic link, not a regular file, or not JSON that decodes to an array within depth 8</td></tr>
+<tr><td>Discovery\LiveRecord</td><td>static url(string $stateDir): ?string; FILE</td><td>The record's URL when the process it names is still the same process; null for an absent, malformed or stale record</td></tr>
+<tr><td>Discovery\ProcessIdentity</td><td>static isSameProcess(int $pid, ?int $startTime): bool</td><td>Whether a pid is still the process that was recorded, by start time where the platform reports it</td></tr>
+<tr><td>Auth\TokenFile</td><td>static read(string $dir): ?string; FILE</td><td>The 64-hex bearer token; null when there is no usable token; throws when unreadable</td></tr>
+<tr><td>Support\PrivateDirCheck</td><td>static refusal(string $dir, string $label, ?int $uid = null): ?string; MODE</td><td>The refusal reason for a path that is not a private directory owned by the current user, or null when it is</td></tr>
+</table>
+
+    <!-- api-reference:generated -->
+
+    <h3 style="margin-top: 40px;">Configuration</h3>
+    <p>The package takes no options. Its fixed values are the wire constants in <code>Protocol</code>, the request path <code>WebsocketUrl::WS_PATH</code> (<code>/ws</code>), the directory mode <code>PrivateDirCheck::MODE</code> (<code>0700</code>), the JSON depth limit <code>DiscoveryRecordReader::MAX_DEPTH</code> (8), and the file names <code>TokenFile::FILE</code> (<code>token</code>) and <code>LiveRecord::FILE</code> (<code>server.json</code>). The state directory is passed in by the caller, so where it lives is the host's choice.</p>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Attaching to a running server</strong> — the <code>attach</code> command (<code>candy-code/src/Cli/Attach.php</code>) and the remote session push (<code>candy-code/src/Session/Import/RemoteSessionPush.php</code>), which both normalise addresses through <code>WebsocketUrl</code>.</li>
+      <li><strong>Discovery tooling</strong> — anything that needs the server's URL or token without starting it.</li>
+    </ul>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <p>Both examples run from the library root after <code>composer install</code>, and neither needs a running server.</p>
+    <ul>
+      <li><code>examples/read-state.php</code> builds a private state directory in the system temp area, writes a discovery record naming its own process and a token file, reads both back through the package, and removes them. It shows the state directory check, the token read, the live URL and the absent-directory answer.</li>
+      <li><code>examples/websocket-url.php</code> prints the dial URL for a set of addresses, and marks as <code>refused</code> the malformed inputs the package rejects on purpose.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-serve-protocol
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite covers each reader and the URL rule. It builds its state trees in temporary directories through <code>tests/Support/TempTree.php</code>. <code>JsonRpcCodecWiringTest</code> needs <code>sugarcraft/sugar-mcp-client</code>, which <code>composer install</code> installs as a dev dependency.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting</h3>
+    <ul>
+      <li><strong><code>StateDirReader::existing()</code> throws "server state directory … is mode 0755, not 0700".</strong> The reader refuses a directory whose mode is not 0700 and does not change it. Run <code>chmod 700</code> on the directory, as the message says.</li>
+      <li><strong><code>StateDirReader::existing()</code> throws "is owned by uid N, not by this user".</strong> The directory belongs to another account. Run the client as the owning user, or point it at that user's own state directory.</li>
+      <li><strong><code>TokenFile::read()</code> throws "exists … but cannot be read; refusing to replace it".</strong> The token file is present but the current user cannot read it. Fix its permissions. The package never rewrites the token, so a replacement is the host's decision to make.</li>
+      <li><strong><code>TokenFile::read()</code> returns null for a token file that exists.</strong> After trimming whitespace, the content must be exactly 64 lowercase hex characters. Uppercase hex, a short value and a symbolic link all read as no usable token. Have the host write a fresh token.</li>
+      <li><strong><code>WebsocketUrl::from('http://::1')</code> returns null.</strong> A bare IPv6 host cannot be split from its port. Bracket the host: <code>http://[::1]:7420</code>.</li>
+      <li><strong><code>LiveRecord::url()</code> returns null while the server appears to run.</strong> The record must hold a positive integer <code>pid</code> and a non-empty <code>url</code>. If <code>procStartTime</code> is present and differs from the process's start time, the pid was reused and the record is stale. Restart the server so it writes a new record.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Upstream</h3>
+    <p>There is no Charmbracelet upstream for this package. The serve protocol is specific to SugarCraft's <code>candy-code</code> agent, so there is no port to map class by class. The host-side code that shares this contract lives in <code>candy-code/src/Server/</code> and <code>candy-code/src/Cli/Attach.php</code>. Those files delegate here: <code>Cli/Attach.php</code> normalises addresses with <code>WebsocketUrl</code>, <code>Server/StateDir.php</code> and <code>Server/DiscoveryFile.php</code> use the readers, <code>Server/Auth/TokenStore.php</code> uses <code>TokenFile</code>, and <code>Server/ServerConfig.php</code> takes its constants from <code>Protocol</code>.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p><code>Protocol::MAJOR</code> (1) is the wire version a client negotiates, and the subprotocol string <code>candy-code.v1</code> carries it. This tree keeps no separate changelog for the package; its history is the git log of <code>sugar-serve-protocol/</code>.</p>
+
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="candy-code.html">candy-code</a> — the host that runs the server and writes the state this package reads.</li>
+      <li><a href="sugar-mcp-client.html">sugar-mcp-client</a> — the JSON-RPC 2.0 codec the test suite pins against.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-serve-protocol/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>

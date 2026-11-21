@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Support;
 
+use SugarCraft\Plugins\Channel\CredentialWriter;
 /**
  * `~/.candy-code/channels.json` — the dedicated 0600 channel-credential
  * store (owner ruling D4, following the McpAuthStore `mcp-auth.json`
@@ -44,8 +45,13 @@ final class CredentialStore
      */
     public const TOKEN_ENV = 'DISCORD_BOT_TOKEN';
 
+    /**
+     * @param ?CredentialWriter $writer the host's single credential writer (O9); every
+     *                                  write goes through it, and a store without one refuses to write
+     */
     public function __construct(
         private readonly string $path,
+        private readonly ?CredentialWriter $writer = null,
     ) {
     }
 
@@ -54,9 +60,10 @@ final class CredentialStore
      * the trusted config dir so a hostile project-tier config redirect can
      * never aim credentials at an attacker path.
      */
-    public static function defaultPath(): string
+    /** The record's path inside the host's configuration directory (plan 4.14). */
+    public static function pathIn(string $configDir): string
     {
-        return \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath() . '/channels.json';
+        return $configDir . '/channels.json';
     }
 
     /**
@@ -75,19 +82,24 @@ final class CredentialStore
      */
     public function mutate(\Closure $mutate): array
     {
-        $next = $mutate($this->read());
-        if (!\is_array($next)) {
-            throw new \RuntimeException('channels store mutation must return the whole record');
+        if ($this->writer === null) {
+            throw new \RuntimeException('channels store writes go through the host writer; this store was built without one');
         }
-        if (($next['version'] ?? self::CURRENT_VERSION) !== self::CURRENT_VERSION) {
-            throw new \RuntimeException('channels store mutation must keep version ' . self::CURRENT_VERSION);
-        }
-        // Stamp on the way out, not just assume on the way in: a store written
-        // from absent must self-describe its schema for the read guard's sake.
-        $next['version'] = self::CURRENT_VERSION;
-        $this->write($next);
 
-        return $next;
+        return $this->writer->mutate(static function (array $data) use ($mutate): array {
+            $next = $mutate($data);
+            if (!\is_array($next)) {
+                throw new \RuntimeException('channels store mutation must return the whole record');
+            }
+            if (($next['version'] ?? self::CURRENT_VERSION) !== self::CURRENT_VERSION) {
+                throw new \RuntimeException('channels store mutation must keep version ' . self::CURRENT_VERSION);
+            }
+            // Stamp on the way out, not just assume on the way in: a store written
+            // from absent must self-describe its schema for the read guard's sake.
+            $next['version'] = self::CURRENT_VERSION;
+
+            return $next;
+        });
     }
 
     /** One Discord account's bot token, or null when it has none. */
@@ -281,43 +293,6 @@ final class CredentialStore
         $row = $contents['platforms'][$platform]['accounts'][$account] ?? null;
 
         return \is_array($row) ? $row : null;
-    }
-
-    /**
-     * Write the store atomically at 0600 (the law above). Pairing writes go
-     * through `mutate()` so unknown sections (the P1 seen-entrypoint ledger)
-     * survive; the file write itself is always whole-record.
-     *
-     * @param array<string, mixed> $contents
-     */
-    public function write(array $contents): void
-    {
-        $dir = \dirname($this->path);
-        if (!\is_dir($dir) && !@mkdir($dir, 0o700, true) && !\is_dir($dir)) {
-            throw new \RuntimeException("channels store directory not creatable: {$dir}");
-        }
-        $json = \json_encode($contents, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR) . "\n";
-
-        $previous = \umask(0o077);
-        $partial = $this->path . '.partial';
-        \clearstatcache(true, $partial);
-        if (@lstat($partial) !== false) {
-            @unlink($partial);
-        }
-        \set_error_handler(static fn (): bool => true);
-        try {
-            if (@file_put_contents($partial, $json) === false) {
-                throw new \RuntimeException("channels store partial not writable: {$partial}");
-            }
-            @chmod($partial, 0o600);
-            if (!@rename($partial, $this->path)) {
-                @unlink($partial);
-                throw new \RuntimeException("channels store rename failed: {$this->path}");
-            }
-        } finally {
-            \umask($previous);
-            \restore_error_handler();
-        }
     }
 
     private static function euidMismatch(int $fileUid): bool

@@ -224,13 +224,12 @@ final class WindowsTaskKill
         // verdict is its exit status, its bytes are nobody's business. A wedged
         // killer (deadline passed with a pipe still open) is stopped; the exit
         // status below then reports the failure honestly.
-        $drain = ChildPump::drain(
-            [1 => $pipes[1], 2 => $pipes[2]],
-            Clock::monotonicSeconds() + self::childBoundSeconds(),
-            0,
-            discard: [1, 2],
-            running: WindowsPipes::runningProbe($process),
-        );
+        $drain = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
+            ->withDeadline(Clock::monotonicSeconds() + self::childBoundSeconds())
+            ->withCap(0)
+            ->withDiscard([1, 2])
+            ->withRunning(WindowsPipes::runningProbe($process))
+            ->pump();
         if (!$drain->closed()) {
             \proc_terminate($process, 9);
         }

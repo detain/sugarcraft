@@ -8,7 +8,7 @@ namespace SugarCraft\Code\Tools\Web\Search;
  * Tavily's hosted search API — a fixed https host, chosen by setting
  * `webSearchBackend` to `tavily` and putting the key in `TAVILY_API_KEY`.
  * POSTed JSON, `Authorization: Bearer`; the query is the only user data that
- * leaves, and the service host is a constant (audit F-W3 by construction).
+ * leaves, and the service host is a constant.
  *
  * Tavily has no safesearch dial; `time_range` maps to its `days` window
  * (day→1, month→30, year→365) and an unmapped spelling is dropped rather

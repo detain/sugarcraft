@@ -57,7 +57,11 @@ final class HeaderControlBytesTest extends TestCase
         return $path;
     }
 
-    /** @return array{0:int,1:string,2:string} */
+    /**
+     * @param list<string> $argv
+     *
+     * @return array{0:int,1:string,2:string}
+     */
     private function runCli(array $argv): array
     {
         $stdout = Stream::memory('w+');

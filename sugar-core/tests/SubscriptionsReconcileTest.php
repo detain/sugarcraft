@@ -317,8 +317,11 @@ final class SubscriptionsReconcileTest extends TestCase
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array
             {
-                $this->cycles++;
-                return [$this, null];
+                // Next model, not an in-place write: the reconcile diff is
+                // what keeps an unchanged subscription running, not identity.
+                $next = clone $this;
+                $next->cycles++;
+                return [$next, null];
             }
             public function view(): string { return ''; }
             public function subscriptions(): ?Subscriptions
@@ -338,11 +341,15 @@ final class SubscriptionsReconcileTest extends TestCase
 
         $reconcile = new \ReflectionMethod(Program::class, 'reconcileWantedSubscriptions');
         $activeProp = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+        $modelProp = new \ReflectionProperty(Program::class, 'model');
 
         $reconcile->invoke($program);
         self::assertCount(1, $activeProp->getValue($program), 'model request starts the tick');
 
-        $model->cycles = 1; // subscriptions() now answers null
+        // The program's next model answers null from subscriptions().
+        $next = clone $model;
+        $next->cycles = 1;
+        $modelProp->setValue($program, $next);
         $reconcile->invoke($program);
         self::assertCount(0, $activeProp->getValue($program), 'removal cancels the timer');
 
@@ -621,7 +628,9 @@ final class SubscriptionsReconcileTest extends TestCase
             public function update(Msg $msg): array
             {
                 if ($msg instanceof KeyMsg && $msg->rune === 'r') {
-                    $this->wanted = (new Subscriptions())->withTick('t', 0.02, $this->second);
+                    $next = clone $this;
+                    $next->wanted = (new Subscriptions())->withTick('t', 0.02, $this->second);
+                    return [$next, null];
                 }
                 return [$this, null];
             }

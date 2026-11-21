@@ -345,8 +345,7 @@ their checksum and signature assets (plus the `candy-code.phar.packages.json` bu
 manifest), as a GitHub Release.
 Nothing else mints a stable artifact.
 
-Since reviews-1103 G6-P the workflow is **gated in CI, not in the tagger's good intentions**
-(owner rulings OD-5/6/7/8). A `gate` job runs before any build: it resolves the tag to its
+The workflow is **gated in CI, not in the tagger's good intentions**. A `gate` job runs before any build: it resolves the tag to its
 commit, refuses (`git merge-base --is-ancestor`) any tag whose commit is not on `master`, and
 polls the `CI` workflow to a **green verdict at that exact SHA** — bounded, fail-closed, so a
 missing or red or still-running CI verdict never publishes. The release job itself carries a
@@ -367,7 +366,7 @@ The procedure for a human is now just the honest half:
    `.phar.pins.json` (sibling pin map), and — once merged to master — a `self-update` run
    against the new tag.
 
-The old reproducibility caveat is closed at the mechanism level (OD-14 pinning half, on top of
+The old reproducibility caveat is closed at the mechanism level (the pinning half, on top of
 the still-documented `@dev` doctrine above): before `composer install` the build runs
 `php scripts/pin-siblings.php inject`, which transiently injects `symlink: false` path
 repositories pinning every `sugarcraft/*` sibling to the exact monorepo commit being released,

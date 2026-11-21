@@ -9,7 +9,7 @@ namespace SugarCraft\Constraints;
  *
  * Solves a list of constraints against a region in the given direction,
  * returning a list of sub-regions. For a well-constrained set the returned
- * widths (or heights) tile the region's total dimension exactly. Four shapes
+ * widths (or heights) tile the region's total dimension exactly. Five shapes
  * deliberately fall outside that guarantee:
  *  - an UNDER-CONSTRAINED set — nothing but fixed Length/Percentage/Ratio
  *    whose sum is below the region — leaves an untiled gap rather than
@@ -26,7 +26,10 @@ namespace SugarCraft\Constraints;
  *    unguarded) — where resolved sizes ride IEEE-754 rounding and an
  *    overflowing final cast makes {@see Region} construction throw a
  *    misleading negative-width `InvalidArgumentException`. Documented, not
- *    guarded: terminal frames never approach that scale.
+ *    guarded: terminal frames never approach that scale;
+ *  - a Max-only set — every member a `Max` — whose caps sum below the region
+ *    leaves the shortfall untiled (`[max(40), max(40)]@100` resolves to 40 and
+ *    40); any Length, Percentage, Ratio, Fill or Min member absorbs it.
  *
  * Mirrors ratatui's layout constraint solving (divergence: Length can inflate
  * under the Max reclaim ladder — ratatui's never does; README Tiling

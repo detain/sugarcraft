@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Backend\Support\SettledPromise;
 use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -58,7 +59,7 @@ final class ForkChannelEofIsUnansweredTest extends TestCase
             'default',
         );
 
-        $resolution = $channel->ask(new ToolCall('call_1', 'Edit', []), self::gateAsk());
+        $resolution = SettledPromise::askAnswer($channel->ask(new ToolCall('call_1', 'Edit', []), self::gateAsk()));
 
         self::assertSame(1, $writes, 'the question was never put');
         self::assertTrue($resolution->cancelled, 'EOF must settle the question as unanswered, not as a decision');
@@ -69,7 +70,7 @@ final class ForkChannelEofIsUnansweredTest extends TestCase
 
         // Every later question settles the same way WITHOUT writing to the
         // dead stream (a write there would end the child mid-turn).
-        $again = $channel->ask(new ToolCall('call_2', 'Edit', ['x' => 1]), self::gateAsk());
+        $again = SettledPromise::askAnswer($channel->ask(new ToolCall('call_2', 'Edit', ['x' => 1]), self::gateAsk()));
         self::assertTrue($again->cancelled);
         self::assertSame(1, $writes);
     }
@@ -108,7 +109,7 @@ final class ForkChannelEofIsUnansweredTest extends TestCase
             self::drain(),
         );
 
-        $resolution = $channel->ask(new ToolCall('call_1', 'Edit', []), self::gateAsk());
+        $resolution = SettledPromise::askAnswer($channel->ask(new ToolCall('call_1', 'Edit', []), self::gateAsk()));
 
         self::assertTrue($resolution->cancelled);
         self::assertFalse($resolution->permits());

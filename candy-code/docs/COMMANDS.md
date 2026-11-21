@@ -37,7 +37,7 @@ Inside the floor the last write wins, ordered project-claude, project-opencode,
 user-claude, user-opencode — so user beats project inside foreign, opencode
 beats claude inside a tier, and XDG beats the legacy `~/.opencode` pair (the
 same convention order `ForeignSkillDiscovery` uses). Foreign-vs-native losses
-are silent (owner ruling R7): the import never announces itself and never
+are silent by design: the import never announces itself and never
 lands on `overrides()`. That silence is the whole point of the floor — a
 cloned `.claude/commands/exit.md` cannot replace `/exit`; imports never win a
 native name.
@@ -254,7 +254,7 @@ Root-**relative** references only, and only ones ending in a `.extension`:
   or `[`, so an email address never resolves as a file.
 
 A resolved reference is still containment-checked against the checkout
-(`ContainedPath::within()`) for **both** tiers, because an included file becomes
+(`\SugarCraft\Core\Util\PathJail::within()`) for **both** tiers, because an included file becomes
 prompt text. It is capped at the same `CommandSpec::MAX_SUBSTITUTION_BYTES`.
 
 This is a command **body's** include form, and it is not the `@file` mention you
@@ -368,7 +368,7 @@ edit it by hand.
 | `/export` | ✓ | | `[md\|html\|json\|jsonl\|text] [file\|--path <file>]` | Export the transcript to a local file, raw bytes unredacted |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
-| `/theme` | ✓ | | — | Switch the colour theme |
+| `/theme` | ✓ | | — | Switch the color theme |
 | `/settings` | ✓ | ✓ | `[search\|reload]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | `[list\|<name>\|use <preset\|default>\|new <focus>\|proposed\|accept <name>]` | List the agent roster, inspect one by name, open a running one's Agent View, or draft a preset and promote it with accept |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect\|enable\|disable> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) and session enable/disable |
@@ -441,14 +441,14 @@ share the typed-name asymmetry —
 a typed pseudo-name meets the unknown-command refusal, never a model turn; the
 dock pair's palette arms instead drive the COMPLETE command text
 (`/pane dock left`) through `Chat::handlePaneCommand()`, the handler the real
-`/pane` row dispatches to. Since CC-UXD-03 the lifecycle trio — `close-tab`,
+`/pane` row dispatches to. The lifecycle trio — `close-tab`,
 `session-pin`, `session-delete` — is no longer in this set: each gained the
 handler its palette arm already ran, so the typed spelling opens the same door
 with the same confirmation.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
-Since this release the palette lists EVERY slash-visible command, and CC-UXD-04
-(reviews-1103) made every row run the real verb: a row whose bare `/<name>` form
+Since this release the palette lists EVERY slash-visible command, and every row
+runs the real verb: a row whose bare `/<name>` form
 means something is an ACTION row — Enter on it dispatches exactly what the typed
 spelling dispatches, what the row shows is what happens. A row is a PREFILL only
 when its bare form needs an argument; running it closes the palette and fills a

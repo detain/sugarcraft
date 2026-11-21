@@ -66,7 +66,8 @@ final class RenderBatchCommand extends Command
         // --jobs=N parallelizes across render-tape child processes. It is
         // refused loudly when not a positive integer; jobs=1 (the default)
         // keeps the in-process serial path byte-identical to before.
-        $jobsRaw = (string) $input->getOption('jobs');
+        $jobsOption = $input->getOption('jobs');
+        $jobsRaw = \is_scalar($jobsOption) ? (string) $jobsOption : '';
         if (!preg_match('/^\d+$/', $jobsRaw) || (int) $jobsRaw < 1) {
             $output->writeln('<error>' . Lang::t('cli.err', ['verb' => 'render-batch', 'message' => Lang::t('batch.jobs_invalid', ['value' => $jobsRaw])]) . '</error>');
             return 1;
@@ -274,11 +275,14 @@ final class RenderBatchCommand extends Command
         if (is_string($override) && $override !== '') {
             return $override;
         }
-        $script = (string) ($_SERVER['SCRIPT_FILENAME'] ?? '');
+        $scriptRaw = $_SERVER['SCRIPT_FILENAME'] ?? '';
+        $script = is_string($scriptRaw) ? $scriptRaw : '';
         if ($script !== '' && is_file($script)) {
             return $script;
         }
-        $argv0 = (string) ($_SERVER['argv'][0] ?? '');
+        $argvList = $_SERVER['argv'] ?? [];
+        $argv0Raw = is_array($argvList) ? ($argvList[0] ?? '') : '';
+        $argv0 = is_string($argv0Raw) ? $argv0Raw : '';
         return $argv0 !== '' && is_file($argv0) ? $argv0 : 'candy-vcr';
     }
 

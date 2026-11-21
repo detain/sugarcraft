@@ -8,7 +8,6 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The settings-file layers behind {@see \SugarCraft\Code\Cli\Bootstrap::readUserConfig()}.
@@ -1155,11 +1154,11 @@ final class LayeredSettings
      * closest sibling):
      *
      *  - `<root>/.candy-code` must resolve STRICTLY inside `<root>`
-     *    ({@see ContainedPath::below()}), so a committed
+     *    ({@see \SugarCraft\Core\Util\PathJail::below()}), so a committed
      *    `.candy-code -> /elsewhere` relocates the whole settings directory
      *    instead of tripping the per-file check;
      *  - each settings file must resolve inside that directory
-     *    ({@see ContainedPath::within()}), so `settings.json -> ~/.ssh/config`
+     *    ({@see \SugarCraft\Core\Util\PathJail::within()}), so `settings.json -> ~/.ssh/config`
      *    is refused on its own even when the directory is genuine.
      *
      * A refused file is the ABSENCE of a layer, not an error. There is no
@@ -1204,14 +1203,14 @@ final class LayeredSettings
         }
 
         $dir = rtrim($projectRoot, '/') . '/' . self::dir();
-        if (!ContainedPath::below($dir, $projectRoot)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($dir, $projectRoot)) {
             return [];
         }
 
         $paths = [];
         foreach ([self::SHARED_PATH, self::LOCAL_PATH] as $relative) {
             $path = rtrim($projectRoot, '/') . '/' . $relative;
-            if (!ContainedPath::within($path, $dir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($path, $dir)) {
                 continue;
             }
 

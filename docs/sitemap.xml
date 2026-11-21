@@ -246,6 +246,36 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-serve-protocol.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-plugins.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-ws-rpc.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-jwt.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-codec.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-clipboard.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://sugarcraft.github.io/lib/sugar-releases.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>

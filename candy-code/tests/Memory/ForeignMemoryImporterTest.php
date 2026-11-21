@@ -163,6 +163,42 @@ final class ForeignMemoryImporterTest extends TestCase
         $this->assertSame("Good\n\nbody good", $this->store->list('agent')[0]->content());
     }
 
+    /**
+     * Named outcome change from the frontmatter fence migration: the old regex
+     * saw no block in two adjacent fences and skipped the file. Split reads an
+     * empty block, so the file is imported with empty metadata and the title
+     * falls back to the filename. Pinned here so the change stays visible.
+     */
+    public function testAdjacentFencesAreImportedWithEmptyMetaInsteadOfSkipped(): void
+    {
+        $dir = $this->claudeMemoryDir($this->projectRoot);
+        file_put_contents($dir . '/adjacent.md', "---\n---\nbody line\n");
+
+        $count = $this->importer->importClaudeCode($this->projectRoot, $this->tempDir . '/claude');
+
+        $this->assertSame(1, $count);
+        $entries = $this->store->list('agent');
+        $this->assertSame("adjacent\n\nbody line", $entries[0]->content());
+        $this->assertSame(['source:claude'], $entries[0]->tags());
+    }
+
+    /**
+     * Named outcome change from the frontmatter fence migration: the old regex
+     * needed a line break after the closing fence, so this file was skipped.
+     * Split reads the closing fence on the last line, so the file is imported
+     * with an empty body. Pinned here so the change stays visible.
+     */
+    public function testBlockClosedOnTheLastLineIsImportedWithAnEmptyBody(): void
+    {
+        $dir = $this->claudeMemoryDir($this->projectRoot);
+        file_put_contents($dir . '/last-line.md', "---\ndescription: Last line\n---");
+
+        $count = $this->importer->importClaudeCode($this->projectRoot, $this->tempDir . '/claude');
+
+        $this->assertSame(1, $count);
+        $this->assertSame('Last line', $this->store->list('agent')[0]->content());
+    }
+
     public function testImportClaudeCodeReturnsZeroWhenTheForeignDirectoryIsAbsent(): void
     {
         $this->assertSame(0, $this->importer->importClaudeCode($this->projectRoot, $this->tempDir . '/nope'));

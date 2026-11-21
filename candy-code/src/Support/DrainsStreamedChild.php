@@ -38,26 +38,22 @@ namespace SugarCraft\Code\Support;
  * arguments. {@see SELECT_RETRIES} rides the signal out and gives up on a
  * genuinely broken descriptor, which fails instantly and forever.
  *
- * WHAT IS NOT SHARED, ON PURPOSE. Two callers sit here with two DIFFERENT
- * volume policies, and folding them into one would change behavior:
+ * ONE CALLER REMAINS. {@see \SugarCraft\Code\Hooks\ScriptHook} used to walk
+ * here too, with a per-stream trim and a marker; it now runs its child on
+ * sugar-async's ChildRun, which owns the same pump, deadline and per-stream
+ * ceiling. What is left is the status line's policy:
  *
- * - **per-stream tail-trim, with a marker** ({@see \SugarCraft\Code\Hooks\ScriptHook}):
- *   each stream is kept to its own ceiling, refused bytes are COUNTED, and every
- *   way out stamps a constant-size note naming the cap and the count, because a
- *   hook's output is a verdict the operator is owed even when it is truncated.
  * - **stop at the cap** ({@see \SugarCraft\Code\Config\StatusLineCommand}):
  *   stderr is read and DISCARDED, stdout is one row of a status bar, and once
  *   the cap is reached there is nothing more a one-row readout can use — so the
  *   drain ENDS and the caller kills the child rather than reading a runaway to
  *   EOF on the TUI's thread. No marker: the segment is blanked upstream.
  *
- * The divergence therefore lives at the two seams this class calls rather than
- * in its loop: $capture decides what a chunk is worth and where it goes, and
- * $keepGoing decides whether the walk still has a reason to run. $onGiveUp is
- * the third: one caller sweeps what is already buffered before letting go, the
- * other has nothing to sweep because its buffer is already all it wants.
+ * The policy lives at the seams this class calls rather than in its loop:
+ * $capture decides what a chunk is worth and where it goes, $keepGoing decides
+ * whether the walk still has a reason to run, and $onGiveUp decides what to do
+ * with what is already buffered before letting go.
  *
- * @see \SugarCraft\Code\Hooks\ScriptHook::drain()
  * @see \SugarCraft\Code\Config\StatusLineCommand::drain()
  */
 final class DrainsStreamedChild
@@ -118,7 +114,7 @@ final class DrainsStreamedChild
      * Nothing downstream may assume the pipe is still theirs to touch.
      *
      * THE READ SET IS THE CHILD'S LIFETIME, and that is load-bearing for the
-     * write branch: `ScriptHook::spawnSpec()` wraps the command in
+     * write branch: `ProcessContainment::spawnSpec()` wraps the command in
      * `setsid -w sh -c`, so the WRAPPER keeps both output pipes' write ends open
      * until the whole run exits — a child hanging up its own STDOUT/STDERR
      * cannot empty this set early. The loop therefore stays alive exactly as

@@ -7,6 +7,7 @@ namespace SugarCraft\Async\Tests;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
 use SugarCraft\Async\DrainResult;
 use SugarCraft\Async\WindowsPipes;
 
@@ -94,6 +95,36 @@ final class ChildPumpBuilderTest extends TestCase
 
         $this->assertSame(DrainResult::EXPIRED, $r->reason);
         $this->assertSame(10.0, ChildPump::DEFAULT_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * Pins the default's value, not just its sign: a clock reading inside the
+     * ten-second window with the child still running must not expire the pump.
+     * A default of 1 s, 5 s or 9.5 s would expire here, and a much longer one
+     * would wait a second time, which the select stub refuses.
+     */
+    public function testDefaultDeadlineDoesNotExpireBeforeTenSecondsHavePassed(): void
+    {
+        $this->requirePosixPipes();
+        // The read at 0.0 fixes the deadline at 10.0. 9.9 is inside it, so the
+        // pump waits once; 11.0 is past it, so the pump stops with no second wait.
+        $seq = [0.0, 9.9];
+        $clock = static function () use (&$seq): float {
+            return array_shift($seq) ?? 11.0;
+        };
+        $waits = 0;
+        $select = static function (array $read, ?array $write, ?array $except, int $seconds, int $micros) use (&$waits): int {
+            if (++$waits > 1) {
+                throw new \RuntimeException('the pump waited again after the default deadline should have passed');
+            }
+
+            return 0;
+        };
+        $p = $this->spawn('sleep(30);');
+        $r = ChildPump::new([1 => $p['pipes'][1]])->withClock($clock)->withSelect($select)->pump();
+
+        $this->assertSame(1, $waits, 'at 9.9 s the default deadline has not passed, so the pump waits');
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
     }
 
     public function testDefaultDeadlineLeavesAQuickChildAlone(): void
@@ -192,6 +223,25 @@ final class ChildPumpBuilderTest extends TestCase
         $this->assertSame('[]', $r->buffer(1));
     }
 
+    public function testThePollArmKeepsBytesBufferedBeforeTheDeadline(): void
+    {
+        // The select arm sweeps what is already buffered when the deadline passes;
+        // the poll arm must do the same, or the last bytes before the deadline vanish.
+        $pipe = tmpfile();
+        fwrite($pipe, 'tail');
+        rewind($pipe);
+
+        $r = ChildPump::new([1 => $pipe])
+            ->withDeadline(1.0)
+            ->withClock(static fn (): float => 2.0)
+            ->withPollPipes(true)
+            ->pump();
+
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertSame('tail', $r->buffer(1));
+        fclose($pipe);
+    }
+
     public function testStdinFeedIsRefusedOnTheWindowsPollArm(): void
     {
         // The poll arm is forced on any runtime; a stdin feed on it must refuse
@@ -205,8 +255,43 @@ final class ChildPumpBuilderTest extends TestCase
                 ->withStdin($p['pipes'][0], 'x')
                 ->pump();
         } finally {
-            fclose($p['pipes'][0]);
+            // The refusal closes the handed-over pipe itself, so only a pipe still open is ours to close.
+            if (is_resource($p['pipes'][0])) {
+                fclose($p['pipes'][0]);
+            }
         }
+    }
+
+    public function testARefusedStdinFeedStillRunsTheReapAndClosesThePipe(): void
+    {
+        // The refusal happens before any read, so the reap and the pipe close are the
+        // only cleanup the caller gets. Both must happen on the refusal path too.
+        $p = $this->spawn('usleep(10000);', true);
+        $stdin = $p['pipes'][0];
+        $reaped = false;
+
+        try {
+            ChildPump::new([1 => $p['pipes'][1]])
+                ->withDeadline(microtime(true) + 5)
+                ->withPollPipes(true)
+                ->withStdin($stdin, 'x')
+                ->withReap(static function () use (&$reaped): void {
+                    $reaped = true;
+                })
+                ->pump();
+            $this->fail('a stdin feed on the poll arm must be refused');
+        } catch (\LogicException) {
+            // expected: the refusal under test
+        }
+
+        // Checked before any cleanup of ours, so a regression that leaves the pipe open shows here.
+        $stillOpen = is_resource($stdin);
+        if ($stillOpen) {
+            fclose($stdin);
+        }
+
+        $this->assertTrue($reaped, 'the reap runs even when the stdin feed is refused');
+        $this->assertFalse($stillOpen, 'the handed-over stdin pipe is closed even when the feed is refused');
     }
 
     public function testHeartbeatFiresWhileTheChildIsSilent(): void
@@ -295,6 +380,7 @@ final class ChildPumpBuilderTest extends TestCase
         yield 'zero slice' => [static fn (ChildPump $p): ChildPump => $p->withSlice(0.0)];
         yield 'zero heartbeat' => [static fn (ChildPump $p): ChildPump => $p->withHeartbeat(0.0, static fn () => null)];
         yield 'non-resource stdin' => [static fn (ChildPump $p): ChildPump => $p->withStdin('not a pipe', 'x')];
+        yield 'zero exit grace' => [static fn (ChildPump $p): ChildPump => $p->withExitGrace(0.0)];
     }
 
     #[DataProvider('badSetters')]
@@ -302,6 +388,52 @@ final class ChildPumpBuilderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $apply(ChildPump::new([]));
+    }
+
+    /**
+     * A probe that reports the child gone ends the select walk one exit grace
+     * later, even though a grandchild still holds the pipe open. The socket
+     * stands in for that pipe: its writer stays open and silent, so EOF never
+     * comes.
+     */
+    public function testExitGraceEndsTheWalkOnceTheProbeReportsTheChildGone(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        // The pump's default clock is the monotonic one: a deadline on another scale never comes due.
+        $started = Clock::monotonicSeconds();
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline($started + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+        $elapsed = Clock::monotonicSeconds() - $started;
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertLessThan(2.0, $elapsed, 'the walk must end one grace after the exit, not at the 5s deadline');
+    }
+
+    /** The control for the grace: with no grace set, the same silent pipe holds the walk to its deadline. */
+    public function testWithoutExitGraceTheWalkRunsToTheDeadline(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 0.3)
+            ->withRunning(static fn (): bool => false)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
     }
 
     public function testStaticDrainKeepsItsBehaviourOverTheBuilder(): void
@@ -313,5 +445,114 @@ final class ChildPumpBuilderTest extends TestCase
 
         $this->assertSame('same', $r->buffer(1));
         $this->assertSame(DrainResult::CLOSED, $r->reason);
+    }
+
+    /**
+     * The grace cut with a pipe still open is an abandonment: the probe reports the
+     * child gone at once, the pipe stays silent, and the walk ends on the grace.
+     */
+    public function testExitGraceCutWithAPipeStillOpenIsReportedAsAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertTrue($r->abandonedAfterExit, 'a pipe cut by the grace while still open was abandoned');
+    }
+
+    /**
+     * A stall longer than the grace between two reads (the process descheduled after
+     * the exit was seen) used to end the walk with the child's unread tail still in
+     * the pipe, and report the pipe abandoned. The cut must take those bytes first,
+     * and a pipe that yields them is draining, not held.
+     */
+    public function testExitGraceCutReadsTheBufferedTailBeforeAbandoningThePipe(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+        // Larger than one read, so the first pass leaves the tail in the kernel.
+        $payload = str_repeat('ab', 10000) . 'END';
+        fwrite($writer, $payload);
+
+        // The first two reads happen at t=0 (the exit is seen, one chunk is read);
+        // every read after that finds the process stalled far past the grace.
+        $calls = 0;
+        $clock = static function () use (&$calls): float {
+            return $calls++ < 2 ? 0.0 : 10.0;
+        };
+
+        $r = ChildPump::new([1 => $reader])
+            ->withClock($clock)
+            ->withDeadline(100.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($writer);
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame($payload, $r->buffer(1), 'the bytes buffered behind the stall must reach the capture');
+        $this->assertFalse($r->abandonedAfterExit, 'a pipe that yielded its tail was draining, not held');
+    }
+
+    /** A pipe that reaches EOF after the exit is read to the end, not abandoned. */
+    public function testAPipeReadToEofAfterTheExitIsNotAbandoned(): void
+    {
+        $this->requirePosixPipes();
+        [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($reader);
+        fwrite($writer, 'tail');
+        fclose($writer);
+
+        $r = ChildPump::new([1 => $reader])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withRunning(static fn (): bool => false)
+            ->withExitGrace(0.2)
+            ->withPollPipes(false)
+            ->pump();
+
+        fclose($reader);
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame('tail', $r->buffer(1));
+        $this->assertFalse($r->abandonedAfterExit);
+    }
+
+    /** Every stdin byte the child accepts is reported to the write hook, and the payload arrives whole. */
+    public function testOnStdinWriteReportsEveryAcceptedByte(): void
+    {
+        $this->requirePosixPipes();
+        [$out, $outWriter] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        [$stdin, $stdinReader] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsResource($out);
+        fclose($outWriter);
+
+        $written = 0;
+        $r = ChildPump::new([1 => $out])
+            ->withDeadline(Clock::monotonicSeconds() + 5.0)
+            ->withStdin($stdin, 'hello stdin')
+            ->withOnStdinWrite(static function (int $bytes) use (&$written): void {
+                $written += $bytes;
+            })
+            ->withPollPipes(false)
+            ->pump();
+
+        $this->assertSame(DrainResult::CLOSED, $r->reason);
+        $this->assertSame(11, $written, 'the hook sees every byte the pipe accepted');
+        $this->assertSame('hello stdin', stream_get_contents($stdinReader));
+
+        fclose($out);
+        fclose($stdinReader);
     }
 }

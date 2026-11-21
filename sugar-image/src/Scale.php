@@ -71,6 +71,33 @@ enum Scale
     case Crop;
 
     /**
+     * The single name table for chicle-style --scale spellings. Lookup is
+     * exact and case-sensitive; callers that accept mixed case lowercase the
+     * input first.
+     */
+    private const NAMES = [
+        'fit'     => self::Fit,
+        'shrink'  => self::ShrinkToFit,
+        'fill'    => self::Fill,
+        'stretch' => self::Stretch,
+        'none'    => self::None,
+        'crop'    => self::Crop,
+    ];
+
+    /**
+     * Parses a --scale spelling into its mode. This is the single name table
+     * for the scale vocabulary: every frontend (candy-image's --scale flag,
+     * and any other caller) resolves names here rather than keeping its own
+     * map, so the spellings cannot drift apart.
+     *
+     * @return self|null the mode for an exact known spelling, null otherwise
+     */
+    public static function fromName(string $name): ?self
+    {
+        return self::NAMES[$name] ?? null;
+    }
+
+    /**
      * Compute source crop rect and destination dimensions for this scale mode.
      *
      * @param int $srcW  Source image width in pixels

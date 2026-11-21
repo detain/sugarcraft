@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView;
 
+use React\EventLoop\Loop;
+use SugarCraft\Async\Await;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\MdView\Lang;
@@ -11,9 +13,11 @@ use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\ColorProfile\AsyncProbe;
 use SugarCraft\ColorProfile\Probe\Capability;
-use SugarCraft\ColorProfile\Probe\TerminalProbe;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\StyleGuide;
 use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -47,10 +51,17 @@ final class RenderCommand extends Command
      * or runaway file (or an attacker-controlled path) from being slurped
      * whole into memory. Mirrors sugar-markdown's MAX_HIGHLIGHT_BYTES.
      */
-    private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
+    private const MAX_THEME_CONFIG_BYTES = StyleGuide::MAX_CONFIG_BYTES;
 
     /** glow's own default document width — the ceiling of the auto ladder. */
     public const AUTO_WIDTH_MAX = 80;
+
+    /**
+     * Seconds the color report may take before the await gives up. Sits above
+     * AsyncProbe's 5 s TERM + 1 s KILL ladder, so a stalled infocmp replays as
+     * "no dump" inside the budget rather than tripping it.
+     */
+    private const COLOR_PROBE_BUDGET_SECONDS = 10.0;
 
     /** @var callable|null */
     private static $colorProbeCallback = null;
@@ -600,24 +611,40 @@ final class RenderCommand extends Command
         throw new \InvalidArgumentException(Lang::t('render.directory_empty', ['path' => $arg]));
     }
 
+    /**
+     * Spellings this CLI has always answered, after `_` becomes `-` and the
+     * name is lowercased. The shared catalog's loose matching would also take
+     * `Tokyo Night`; pickTheme keeps refusing that, so the roster stays here.
+     */
+    private const THEME_NAMES = [
+        'ansi', 'ascii', 'plain', 'no', 'dark', 'light', 'notty', 'auto-no',
+        'dracula', 'tokyo-night', 'tokyonight', 'pink', 'solarized', 'monokai', 'github',
+    ];
+
+    /** CLI-only aliases, answered here rather than by sugar-markdown's catalog. */
+    private const THEME_ALIASES = ['no' => 'plain', 'auto-no' => 'notty'];
+
+    /**
+     * Resolve a theme name. The lookup lives in sugar-markdown's Theme
+     * (P1-12c-mdview): stock names through Theme::byName(), the bundled JSON
+     * slugs through Theme::catalogByName(). The roster and the two aliases
+     * remain this CLI's contract.
+     */
     public static function pickTheme(string $name): Theme
     {
-        return match (strtolower(str_replace('_', '-', $name))) {
-            'ansi'            => Theme::ansi(),
-            'ascii'            => Theme::ascii(),
-            'plain', 'no'      => Theme::plain(),
-            'dark'             => Theme::dark(),
-            'light'            => Theme::light(),
-            'notty', 'auto-no' => Theme::notty(),
-            'dracula'          => Theme::dracula(),
-            'tokyo-night',
-            'tokyonight'       => Theme::tokyoNight(),
-            'pink'             => Theme::pink(),
-            'solarized'        => Theme::fromJson(__DIR__ . '/../themes/solarized.json'),
-            'monokai'          => Theme::fromJson(__DIR__ . '/../themes/monokai.json'),
-            'github'           => Theme::fromJson(__DIR__ . '/../themes/github.json'),
-            default            => throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name])),
-        };
+        $key = strtolower(str_replace('_', '-', $name));
+        if (!in_array($key, self::THEME_NAMES, true)) {
+            throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
+        }
+
+        // The stock names answer from their factories. Only the three bundled
+        // slugs reach catalog(), which reads their JSON files: a built-in name
+        // must not depend on sugar-markdown's themes/ directory being present.
+        $slug = self::THEME_ALIASES[$key] ?? $key;
+
+        return Theme::byName($slug)
+            ?? Theme::catalogByName($slug)
+            ?? throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name]));
     }
 
     /**
@@ -740,18 +767,24 @@ final class RenderCommand extends Command
             if ($capable !== null) {
                 return $capable;
             }
-            // An EMPTY NO_COLOR takes no position (no-color.org: "if present
-            // and not empty"), but sugar-colorprofile's probe disables on ANY
-            // value including empty. Hide the empty value from the probe so
-            // the spec-correct "no opinion" answer reaches it, then restore.
+            // An EMPTY NO_COLOR is treated as unset (no-color.org: "if present
+            // and not empty" takes no position), but sugar-colorprofile's probe
+            // disables on ANY value including empty. So the empty value is
+            // removed from the environment for the probe, then restored.
+            // The putenv hide spans the whole await. The infocmp child never
+            // sees it either way: it runs under the minimal environment from
+            // InfocmpBinary::childEnvironment() (TERM and PATH only). The
+            // ambient environment is read when the report is built and again
+            // by the replay pass when the child settles, so both reads sit
+            // inside this window.
             $noColor = getenv('NO_COLOR');
             if ($noColor === false || $noColor !== '') {
-                $report = TerminalProbe::run();
+                $report = self::awaitTerminalReport();
                 return !$report->has(Capability::NoColor);
             }
             putenv('NO_COLOR');
             try {
-                $report = TerminalProbe::run();
+                $report = self::awaitTerminalReport();
                 return !$report->has(Capability::NoColor);
             } finally {
                 putenv('NO_COLOR=');
@@ -759,6 +792,22 @@ final class RenderCommand extends Command
         } catch (\Throwable) {
             return true; // Fall back to assuming color is available.
         }
+    }
+
+    /**
+     * Await the terminal color report on the shared loop. The terminfo leg
+     * runs as an infocmp child there, bounded by the probe's own 5 s TERM
+     * and 1 s KILL ladder, so the budget only has to outlast that ladder.
+     *
+     * Await refuses to nest inside a running loop, so this stays on the
+     * command's synchronous path; a stalled report surfaces as a
+     * TimeoutException and falls back to color-capable in the caller.
+     */
+    private static function awaitTerminalReport(): ProbeReport
+    {
+        $loop = Loop::get();
+
+        return Await::until(AsyncProbe::report($loop), self::COLOR_PROBE_BUDGET_SECONDS, $loop);
     }
 
     /**
@@ -770,7 +819,7 @@ final class RenderCommand extends Command
      *
      * Two JSON schemas are accepted: a top-level `document` OBJECT marks a
      * glamour style file and routes through
-     * {@see GlamourTheme::toMarkdownTheme()} via the sniff below; anything
+     * {@see StyleGuide::theme()} behind the {@see GlamourDecorationGate} via the sniff below; anything
      * else keeps the historic flat per-element shape. The signatures cannot
      * collide — the flat schema has no `document` key.
      */
@@ -798,8 +847,8 @@ final class RenderCommand extends Command
         }
 
         $decoded = json_decode($raw, associative: true);
-        if (is_array($decoded) && GlamourTheme::isGlamourSchema($decoded)) {
-            return GlamourTheme::fromDecoded($decoded)->toMarkdownTheme();
+        if (is_array($decoded) && StyleGuide::isGlamourSchema($decoded)) {
+            return StyleGuide::fromDecoded(GlamourDecorationGate::admit($decoded))->theme();
         }
 
         // Explicit means explicit (finding 020): an object that feeds

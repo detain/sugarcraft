@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 
 /**
  * Approval cards — the Teams dialect of docs/SPEC.md §8.4. An adaptive card carries the

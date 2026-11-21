@@ -28,4 +28,6 @@ return [
     'blockstack.pop_empty' => 'la pile de blocs est vide',
     'theme.mapper_not_style' => 'Theme::mapStyles() attend que le mapper retourne un Style, reçu : {type}',
     'theme.with_slot_not_style' => 'Theme::with(): « {slot} » n\'est pas un emplacement Style ; emplacements valides : {slots}',
+    'fold.marker' => '▸ replié',
+    'glamour.value_too_large' => 'le thème {key} dépasse le maximum de {limit}',
 ];

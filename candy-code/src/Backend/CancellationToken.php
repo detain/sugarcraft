@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Backend;
 
+use SugarCraft\Async\CancellationSource;
+
 /**
  * A shared, mutable cancel flag threaded from {@see \SugarCraft\Code\Chat}
  * into a {@see \SugarCraft\Code\Backend}'s {@see Backend::completeAsync()}
@@ -39,14 +41,14 @@ namespace SugarCraft\Code\Backend;
  */
 final class CancellationToken
 {
-    private bool $cancelled = false;
+    /**
+     * The hard-cancel state and its listeners live on sugar-async's source, so
+     * every cancellation in the tree shares one implementation. Soft cancel,
+     * tool, agent and steer state stay here: they are candy-code's own semantics.
+     */
+    private readonly CancellationSource $source;
 
     private bool $softCancelled = false;
-
-    /** @var array<int, \Closure(): void> */
-    private array $listeners = [];
-
-    private int $nextListener = 0;
 
     /** @var list<array{steerId: string, text: string}> queued, not yet taken by the turn's parent */
     private array $steers = [];
@@ -68,27 +70,28 @@ final class CancellationToken
 
     private int $nextSteer = 0;
 
+    public function __construct()
+    {
+        $this->source = new CancellationSource();
+    }
+
     public function cancel(): void
     {
-        if ($this->cancelled) {
-            return;
-        }
-
-        $this->cancelled = true;
-
-        // Taken off the token before they run, so each fires exactly once and
-        // a listener that detaches itself (or registers another) cannot
-        // disturb the walk.
-        $listeners = $this->listeners;
-        $this->listeners = [];
-        foreach ($listeners as $listener) {
-            $listener();
-        }
+        $this->source->cancel();
     }
 
     public function isCancelled(): bool
     {
-        return $this->cancelled;
+        return $this->source->isCancelled();
+    }
+
+    /**
+     * The sugar-async token over the same source, for {@see \SugarCraft\Async\ChildRun::withCancellation()}:
+     * cancelling this token cancels it, so a child run on the loop is killed through the same ladder.
+     */
+    public function asyncToken(): \SugarCraft\Async\CancellationToken
+    {
+        return $this->source->token();
     }
 
     /**
@@ -104,7 +107,7 @@ final class CancellationToken
     /** Whether {@see cancelSoft()} (or the stronger {@see cancel()}) was called. */
     public function isSoftCancelled(): bool
     {
-        return $this->softCancelled || $this->cancelled;
+        return $this->softCancelled || $this->source->isCancelled();
     }
 
     /**
@@ -195,18 +198,10 @@ final class CancellationToken
      */
     public function onCancel(\Closure $listener): \Closure
     {
-        if ($this->cancelled) {
-            $listener();
+        $subscription = $this->source->onCancel($listener);
 
-            return static function (): void {
-            };
-        }
-
-        $id = $this->nextListener++;
-        $this->listeners[$id] = $listener;
-
-        return function () use ($id): void {
-            unset($this->listeners[$id]);
+        return static function () use ($subscription): void {
+            $subscription->unsubscribe();
         };
     }
 

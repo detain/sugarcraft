@@ -33,6 +33,7 @@ use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\ReservedSessionGrammar;
 use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Session\Import\ImportRefusedException;
@@ -4015,6 +4016,12 @@ final class Subcommands
     private static function bundles(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb !== null && $verb !== 'install' && self::bundlesScopeFlagsGiven($args)) {
+            // PLG-2a: `--project` and `--user` choose where an install lands.
+            // Update keeps each bundle in the tier it already occupies, so a
+            // scope flag there would promise a move that never happens.
+            return self::bundlesUsage($args, 'cli.bundles.scope_not_install', ['verb' => $verb]);
+        }
         if ($verb === 'list') {
             return self::bundlesList($args);
         }
@@ -4055,7 +4062,15 @@ final class Subcommands
     {
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
-        $discovery = new BundleDiscovery((string) ($args->root ?? ''), $paths);
+        // The same base `bundles install --project` writes to (`--root`, else the
+        // working directory, resolved to its project root): without it `list`
+        // scans `/.candy-code/bundles` and cannot see the bundle the install
+        // just placed.
+        $discovery = new BundleDiscovery(
+            ProjectRoot::lookup((string) ($args->root ?? (\getcwd() ?: ''))),
+            $paths,
+            Bootstrap::trustedBundleChannelNames(),
+        );
         $bundles = $discovery->discover();
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -4130,6 +4145,31 @@ final class Subcommands
     }
 
     /**
+     * The refusal for a staged tree that carries no usable manifest. A manifest
+     * that links outside the tree is named as the link it is, not reported as
+     * absent: "carries no plugin.json" would send the operator looking for a
+     * file that is present.
+     */
+    private static function bundlesNotBundle(string $staged, string $source): void
+    {
+        self::bundlesLine(self::bundlesNotBundleMessage($staged, $source));
+    }
+
+    /**
+     * The words {@see bundlesNotBundle()} prints. Split out so the choice
+     * between "absent" and "linked" is pinned without capturing STDERR, which
+     * an in-process `ob_start()` cannot see.
+     */
+    private static function bundlesNotBundleMessage(string $staged, string $source): string
+    {
+        $link = Bundle::refusedManifest($staged);
+
+        return $link === null
+            ? Lang::t('cli.bundles.install.not_bundle', ['source' => $source])
+            : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $link]);
+    }
+
+    /**
      * Wall-clock ceiling for `bundles install`'s git clone. A ceiling on
      * ONE named child the user asked for, escalated through
      * {@see BoundedShutdown} with its process group — not a blanket timeout
@@ -4194,18 +4234,30 @@ final class Subcommands
             );
         }
 
-        $home = HomeDirectory::owned();
-        if ($home === null) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
-
-            return NonInteractive::EXIT_FAILURE;
+        $project = isset($args->subcommandFlags['--project']);
+        if ($project && isset($args->subcommandFlags['--user'])) {
+            return self::bundlesUsage($args, 'cli.bundles.install.project_user');
         }
 
-        $root = $home . '/.candy-code/bundles';
-        if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+        if ($project) {
+            $root = self::bundlesProjectRoot($args);
+            if ($root === null) {
+                return NonInteractive::EXIT_FAILURE; // bundlesProjectRoot printed its line
+            }
+        } else {
+            $home = HomeDirectory::owned();
+            if ($home === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
 
-            return NonInteractive::EXIT_FAILURE;
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $root = $home . '/.candy-code/bundles';
+            if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
         }
 
         if (is_dir($source) && realpath($source) === realpath($root)) {
@@ -4261,7 +4313,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $source]));
+            self::bundlesNotBundle($staged, $source);
             self::removeTree($scratch);
 
             return NonInteractive::EXIT_FAILURE;
@@ -4303,6 +4355,14 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
         if (!@\rename($staged, $dest)) {
             // Cross-device or non-directory root: fall back to the same
             // copy used for path sources, then drop the scratch.
@@ -4322,6 +4382,131 @@ final class Subcommands
         echo Lang::t('cli.bundles.installed', ['name' => $name, 'dest' => $dest]) . "\n";
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Whether the operator typed `--project` or `--user` on this `bundles`
+     * verb. Both are verb flags, so the parser records them only once the
+     * verb is open; a bare `candy-code --project` never reaches here.
+     */
+    private static function bundlesScopeFlagsGiven(ParsedArgs $args): bool
+    {
+        return isset($args->subcommandFlags['--project']) || isset($args->subcommandFlags['--user']);
+    }
+
+    /**
+     * The `--project` install destination: `<root>/.candy-code/bundles`,
+     * where `<root>` is the project root {@see ProjectRoot} resolves `--root`
+     * or the working directory to — the same base {@see BundleDiscovery} and
+     * the launch read the project tier from, so an install is listed by the
+     * very next `bundles list` in that repository, from any subdirectory of it.
+     * The base is resolved, not taken raw: a raw subdirectory would get its own
+     * `.candy-code/` here, and {@see ProjectRoot} would then treat that
+     * subdirectory as the project, hiding the repository's settings and trust
+     * from every launch below it. The operator typed the scope, so the
+     * directory is created on demand. A symlink in either segment is refused:
+     * the install writes through that path, and a checkout must not be able to
+     * steer the write out of its own tree. Prints its own refusal line and
+     * returns null when it refuses.
+     */
+    private static function bundlesProjectRoot(ParsedArgs $args): ?string
+    {
+        $base = $args->root ?? \getcwd();
+        if ($base === false || !is_dir($base)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_root', ['root' => (string) $base]));
+
+            return null;
+        }
+
+        $base = ProjectRoot::resolve(\rtrim($base, '/'));
+
+        // ProjectRoot answers the home directory itself when the launch sits
+        // there. Installing under it would write the user tier while the
+        // operator asked for the project tier, so refuse instead of collapsing.
+        // Compare against the NAMED home, not the owned one: an unowned home
+        // (world-writable, foreign uid) must still refuse, or the project-tier
+        // install lands in ~/.candy-code/bundles where the default verb refuses.
+        $home = HomeDirectory::resolved();
+        $realHome = $home === null ? false : realpath($home);
+        if ($realHome !== false && realpath($base) === $realHome) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_is_home', ['root' => $base]));
+
+            return null;
+        }
+
+        $root = $base . '/.candy-code/bundles';
+        $dotDir = \dirname($root);
+
+        if (\is_link($dotDir) || \is_link($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_link', ['path' => \is_link($dotDir) ? $dotDir : $root]));
+
+            return null;
+        }
+
+        if (!is_dir($root) && !@\mkdir($root, 0755, true) && !is_dir($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.project_root', ['root' => $base]));
+
+            return null;
+        }
+
+        return $root;
+    }
+
+    /**
+     * The copy of {@see $name} that already sits in the OTHER owned bundle
+     * root, or null when that root holds none. The root being written is the
+     * user root when it resolves to the owned home's bundle directory; every
+     * other root is the project tier. Discovery lists both copies, and `bundles
+     * update` then refuses the name as ambiguous, with no verb to remove either
+     * one, so the install is refused here instead of creating the pair.
+     */
+    private static function bundlesOtherTierHolder(ParsedArgs $args, string $root, string $name): ?string
+    {
+        $home = HomeDirectory::owned();
+        $userRoot = $home === null ? null : $home . '/.candy-code/bundles';
+        $realRoot = realpath($root);
+        $writesUser = $userRoot !== null && $realRoot !== false && realpath($userRoot) === $realRoot;
+
+        $other = $writesUser ? self::bundlesExistingProjectRoot($args) : $userRoot;
+        if ($other === null) {
+            return null;
+        }
+
+        $realOther = realpath($other);
+        if ($realOther === false || $realOther === $realRoot) {
+            return null;
+        }
+
+        $held = $other . '/' . $name;
+
+        return \file_exists($held) ? $held : null;
+    }
+
+    /**
+     * The project-tier bundle root `bundles update` may also walk: the same
+     * `<root>/.candy-code/bundles` {@see bundlesProjectRoot()} installs into,
+     * but read-only and silent. Null when there is no such directory or it is
+     * a symlink — discovery refuses a symlinked bundle floor too, so update
+     * does not reach through one.
+     */
+    private static function bundlesExistingProjectRoot(ParsedArgs $args, bool $migrate = true): ?string
+    {
+        $base = $args->root ?? \getcwd();
+        if ($base === false) {
+            return null;
+        }
+
+        $base = $migrate
+            ? ProjectRoot::resolve(\rtrim($base, '/'))
+            : ProjectRoot::lookup(\rtrim($base, '/'));
+        $root = $base . '/.candy-code/bundles';
+        $dotDir = \dirname($root);
+
+        if (\is_link($dotDir) || \is_link($root) || !is_dir($root)) {
+            return null;
+        }
+
+        return $root;
     }
 
     /**
@@ -4903,7 +5088,7 @@ final class Subcommands
         }
 
         if (!Bundle::hasManifest($staged)) {
-            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $entryName . '@' . $marketplaceName]));
+            self::bundlesNotBundle($staged, $entryName . '@' . $marketplaceName);
             self::removeTree($staged);
 
             return NonInteractive::EXIT_FAILURE;
@@ -4935,6 +5120,14 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        $held = self::bundlesOtherTierHolder($args, $root, $name);
+        if ($held !== null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.other_tier', ['name' => $name, 'path' => $held]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
         if (!@\rename($staged, $dest)) {
             $fallback = self::copyBundleTree($staged, $dest);
 
@@ -4951,7 +5144,7 @@ final class Subcommands
             self::removeTree($staged);
         }
 
-        $recordRefusal = BundleSource::fromEntry($entry, $marketplaceName)->write($dest);
+        $recordRefusal = BundleSource::write(BundleSource::fromEntry($entry, $marketplaceName), $dest);
 
         if ($recordRefusal !== null) {
             self::bundlesLine($recordRefusal);
@@ -5036,49 +5229,113 @@ final class Subcommands
      * an update never leaves a bundle absent. A bundle with no record, or
      * one whose marketplace is gone, is refused per name when named and
      * skipped with a line when the root is scanned — update never invents
-     * a source for what install did not record.
+     * a source for what install did not record. Each bundle is refreshed in
+     * the tier it occupies (user root, or the project root the working
+     * directory holds), so a `--project` install is never moved to the user
+     * tier. Without an owned home the pins are unreadable, and every recorded
+     * bundle is refused by name instead of being re-staged from its record.
      */
     private static function bundlesUpdate(ParsedArgs $args): int
     {
+        // PLG-2a: each bundle is updated in the root it already occupies, so a
+        // `--project` install stays in its project tier. The user root comes
+        // first; the project root is read only when the working directory (or
+        // --root) holds one. An unowned home drops the user root but never the
+        // project root: `bundles install --project` does not consult the home,
+        // so update must still see what it installed.
         $home = HomeDirectory::owned();
-        if ($home === null) {
-            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
-
-            return NonInteractive::EXIT_FAILURE;
+        $candidates = [self::bundlesExistingProjectRoot($args)];
+        if ($home !== null) {
+            \array_unshift($candidates, $home . '/.candy-code/bundles');
         }
 
-        $root = $home . '/.candy-code/bundles';
+        // A working directory that IS the home directory names the user root
+        // again; the realpath check keeps that one root from being walked twice.
+        $roots = [];
+        $seenRoots = [];
+        foreach ($candidates as $candidate) {
+            $real = $candidate === null ? false : realpath($candidate);
+            if ($real === false || isset($seenRoots[$real])) {
+                continue;
+            }
+            $seenRoots[$real] = true;
+            $roots[] = $candidate;
+        }
 
-        if (!is_dir($root)) {
+        if ($roots === []) {
+            if ($home === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
             echo Lang::t('cli.bundles.update.nothing') . "\n";
 
             return NonInteractive::EXIT_OK;
         }
 
+        // The pinned marketplace entries live in the user registry under the
+        // owned home. With no owned home there is no pin to re-resolve, and
+        // update never re-stages from the record's own url or sha (that would
+        // walk around the marketplace install gate), so each recorded bundle
+        // is refused by name below rather than silently skipped or moved.
+        $registry = $home === null ? null : MarketplaceRegistry::loadDefault();
+
         $wanted = $args->subcommandArgs[1] ?? null;
         $named = $wanted !== null && $wanted !== '';
 
+        /** @var list<array{name: string, root: string}> $targets */
+        $targets = [];
+
         if ($named) {
-            if (!is_dir($root . '/' . $wanted)) {
+            $owners = \array_values(\array_filter(
+                $roots,
+                static fn (string $candidate): bool => is_dir($candidate . '/' . $wanted),
+            ));
+
+            if ($owners === []) {
                 self::bundlesLine(Lang::t('cli.bundles.update.unknown', ['name' => (string) $wanted]));
 
                 return NonInteractive::EXIT_FAILURE;
             }
 
-            $names = [(string) $wanted];
+            if (\count($owners) > 1) {
+                // The same name in both tiers: which one to re-stage is the
+                // operator's call, and guessing would move the wrong bytes.
+                self::bundlesLine(Lang::t('cli.bundles.update.ambiguous', ['name' => (string) $wanted]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $targets[] = ['name' => (string) $wanted, 'root' => $owners[0]];
         } else {
-            $names = self::bundlesBundleRootNames($root);
+            foreach ($roots as $candidate) {
+                foreach (self::bundlesBundleRootNames($candidate) as $name) {
+                    $targets[] = ['name' => $name, 'root' => $candidate];
+                }
+            }
         }
 
-        $registry = MarketplaceRegistry::loadDefault();
         $status = NonInteractive::EXIT_OK;
 
-        foreach ($names as $name) {
+        foreach ($targets as ['name' => $name, 'root' => $root]) {
             $dir = $root . '/' . $name;
             $record = BundleSource::read($dir, $root);
 
             if ($record === null) {
                 self::bundlesLine(Lang::t('cli.bundles.update.no_record', ['name' => $name]));
+
+                if ($named) {
+                    $status = NonInteractive::EXIT_FAILURE;
+                }
+
+                continue;
+            }
+
+            if ($registry === null) {
+                // Named per bundle: an unnamed update may refuse several project
+                // bundles in one run, and the operator must see which one it was.
+                self::bundlesLine(Lang::t('cli.bundles.update.no_home', ['name' => $name]));
 
                 if ($named) {
                     $status = NonInteractive::EXIT_FAILURE;
@@ -5129,7 +5386,7 @@ final class Subcommands
             }
 
             if (!Bundle::hasManifest($staged)) {
-                self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $name]));
+                self::bundlesNotBundle($staged, $name);
                 self::removeTree($staged);
                 $status = NonInteractive::EXIT_FAILURE;
 
@@ -5170,7 +5427,7 @@ final class Subcommands
                 continue;
             }
 
-            $write = BundleSource::fromEntry($fresh, $record->marketplace)->write($dir);
+            $write = BundleSource::write(BundleSource::fromEntry($fresh, $record->marketplace), $dir);
 
             if ($write !== null) {
                 self::bundlesLine($write);
@@ -5283,7 +5540,7 @@ final class Subcommands
      */
     private static function bundlesRecommend(ParsedArgs $args): int
     {
-        $root = (string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd();
+        $root = ProjectRoot::lookup((string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd());
         $registry = MarketplaceRegistry::loadDefault();
 
         foreach ($registry->loadErrors() as $error) {
@@ -5310,8 +5567,16 @@ final class Subcommands
             }
         }
 
+        // PLG-2a: a bundle installed with `--project` into this directory is as
+        // installed as one in the user root, so both tiers are excluded. The
+        // two roots coincide when the working directory is the home directory,
+        // and the names are unioned, so that is one name, not two.
         $home = HomeDirectory::owned();
         $installed = $home === null ? [] : self::bundlesBundleRootNames($home . '/.candy-code/bundles');
+        $projectRoot = self::bundlesExistingProjectRoot($args, migrate: false);
+        if ($projectRoot !== null) {
+            $installed = \array_values(\array_unique(\array_merge($installed, self::bundlesBundleRootNames($projectRoot))));
+        }
 
         $recommended = (new BundleRecommender($root, $catalog, $installed))->recommend();
 
@@ -5826,8 +6091,8 @@ final class Subcommands
      * it config'd into existence is refused fail-closed by the host
      * ({@see McpServeHost}) — nothing can be answered in this terminal.
      * The roster is {@see McpServeRoster::build()}'s own
-     * output — the read-only four, classified, never a hand-list widened at
-     * this call site (r1 NIT-2). The host answers until stdin closes and
+     * output — the read-only tools named in {@see McpServeRoster::NAMES},
+     * classified, never a hand-list widened at this call site (r1 NIT-2). The host answers until stdin closes and
      * returns 0 itself; nothing here duplicates its framing or touches
      * `--output-format`, which governs candy-code's own documents, not the
      * MCP wire.
@@ -6490,7 +6755,7 @@ final class Subcommands
      * {@see McpDecision::mcpUserConfigPath()} answers — a non-empty answer
      * exists only because HomeDirectory::owned() vouched for the home, so no
      * bytes of this verb ever land in a home another uid could have planted.
-     * HOW: {@see \SugarCraft\Code\Support\AtomicFileWriter}'s temp-then-rename
+     * HOW: {@see \SugarCraft\Core\Util\AtomicTextFile}'s temp-then-rename
      * with mode 0600 settled before the publish, exactly how McpTrustPins
      * records trust. The PROJECT tier is never written from here or anywhere:
      * `--write project` is refused at the door above, and a checkout is never
@@ -6565,7 +6830,7 @@ final class Subcommands
         }
 
         try {
-            \SugarCraft\Code\Support\AtomicFileWriter::write($userPath, $json . "\n", 0600);
+            \SugarCraft\Core\Util\AtomicTextFile::at($userPath)->withPermissions(0600)->write($json . "\n");
         } catch (\Throwable $e) {
             // Atomic by construction: the rename never happened, so the claim
             // "the file was not changed" is the writer's guarantee, not hope.

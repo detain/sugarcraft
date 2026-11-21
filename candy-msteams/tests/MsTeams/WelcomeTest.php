@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
+use CandyCode\Bundles\MsTeams\Lang;
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FaceHarness;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Lang;
 
 /**
  * The welcome on conversationUpdate: fires when the bot itself is added,
@@ -37,7 +37,7 @@ final class WelcomeTest extends TestCase
         $texts = $this->sentTexts();
         self::assertCount(1, $texts, 'one welcome per add');
         // Asserted against the facade's own output so this holds before and after the lang keys land.
-        self::assertStringStartsWith(\SugarCraft\Code\Lang::t('channels.msteams.welcome.connected'), $texts[0]);
+        self::assertStringStartsWith(\CandyCode\Bundles\MsTeams\Lang::t('channels.msteams.welcome.connected'), $texts[0]);
         if (!\str_contains($texts[0], 'channels.msteams.welcome.')) {
             self::assertStringContainsString('/help', $texts[0]);
         }

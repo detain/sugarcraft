@@ -6,7 +6,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Commands;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProjectRoot;
@@ -36,7 +35,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * `/test`, `deploy/staging.md` gives `/deploy/staging`.
  *
  * Everything walked here is user-controlled: paths are resolved and
- * containment-checked before reading through {@see ContainedPath} — the entry
+ * containment-checked before reading through {@see \SugarCraft\Core\Util\PathJail} — the entry
  * against the directory it was listed from, and EACH TIER'S DIRECTORY against
  * the tree that named it (the checkout for a project's, `$HOME` for the user's)
  * — and a file that fails to parse is logged and skipped rather than aborting
@@ -62,7 +61,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * which DIRECTORY a command came out of:
  *
  *  - `@file` is a bounded read confined to the CHECKOUT, for both tiers, by
- *    {@see CommandSpec::includeFile()}'s {@see ContainedPath} compare. Same
+ *    {@see CommandSpec::includeFile()}'s {@see \SugarCraft\Core\Util\PathJail} compare. Same
  *    boundary as the `*.md` walk below and for the same reason: an included
  *    file becomes prompt text.
  *  - `` !`cmd` `` runs a shell, so the tier decides. A USER-tier command
@@ -514,7 +513,7 @@ final class CommandLoader
             return [];
         }
 
-        if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+        if ($anchoredIn !== null && !\SugarCraft\Core\Util\PathJail::below($dir, $anchoredIn)) {
             // "THE CHECKOUT IT WAS REACHED FROM" is what this said, and the
             // anchor is no longer always a checkout: {@see loadUserCommands()}
             // passes `$HOME`. A refusal naming an operand the caller did not pass
@@ -550,9 +549,9 @@ final class CommandLoader
             // A symlink inside the commands directory can point anywhere;
             // resolve it and require the target to still live under $realDir
             // so a command file cannot smuggle in ~/.ssh/config as a prompt.
-            // {@see ContainedPath} rather than a local prefix compare, so this
+            // {@see \SugarCraft\Core\Util\PathJail} rather than a local prefix compare, so this
             // class is not a fourth spelling of the predicate.
-            if (!ContainedPath::within($file->getPathname(), $realDir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($file->getPathname(), $realDir)) {
                 $skip = Lang::t('cmd.loader.file-outside', ['dir' => $realDir, 'file' => $file->getPathname()]);
                 $this->skippedFiles[$file->getPathname()] = $skip;
                 $this->report($skip);

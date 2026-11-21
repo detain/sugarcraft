@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/sugar-ws-rpc",
+    "description": "WebSocket RPC transport for SugarCraft: a request/response channel with server-push frames over a WebSocket connection, for bundles and hosts that talk to a remote SugarCraft peer.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "websocket",
+        "rpc",
+        "transport",
+        "json-rpc",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-ws-rpc",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-ws-rpc/issues",
+        "source": "https://github.com/sugarcraft/sugar-ws-rpc",
+        "docs": "https://sugarcraft.github.io/lib/sugar-ws-rpc.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\WsRpc\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\WsRpc\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

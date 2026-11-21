@@ -77,8 +77,9 @@ final class GhRunner
     }
 
     /**
-     * Run `gh <args>` retaining at most $maxBytes of each stream (null: no
-     * bound) and hand back the capture's OWN account of the cut — the bytes
+     * Run `gh <args>` retaining at most $maxBytes of each stream (null, or
+     * zero or less, takes {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}, 8 MiB
+     * per stream: there is no unbounded capture) and hand back the capture's OWN account of the cut — the bytes
      * each stream dropped and whether the cut landed mid-line — for a caller
      * that announces truncation itself rather than failing on it.
      *

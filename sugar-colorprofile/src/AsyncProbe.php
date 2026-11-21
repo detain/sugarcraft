@@ -9,7 +9,10 @@ use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\ColorProfile\Probe\InfocmpBinary;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
+use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\ColorProfile\Probe\TerminfoParser;
+use SugarCraft\ColorProfile\Probe\TerminfoReplayProbe;
 
 /**
  * Asynchronous terminal color profile probe using ReactPHP ChildProcess.
@@ -55,8 +58,9 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *
  * A child that RUNS TO COMPLETION settles its verdict into a per-TERM memo
  * (CP-13 — the async twin of the sync surface's dump memo): a repeat call for
- * the same TERM answers from memory without re-spawning, so the two surfaces
- * keep one cache policy for one question.
+ * the same TERM answers from memory without re-spawning. A child the deadline
+ * ladder or a signal killed answered nothing, so it mints no entry and the
+ * next call may spawn again.
  *
  * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
  * this terminal type advertise", not "what will the renderer emit" — callers
@@ -64,6 +68,11 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *
  * The returned promise carries no cancellation handler — cancelling it
  * does not fall back, it only detaches the caller from the result.
+ *
+ * {@see report()} is the full capability report on the same loop contract
+ * (Sixel, KittyKeyboard, ITerm2, Hyperlinks and the TERM_PROGRAM table, not
+ * only the TrueColor verdict). It is the async replacement for the
+ * deprecated synchronous {@see TerminalProbe}.
  *
  * @see Probe for the synchronous baseline detection (chain + terminfo leg)
  */
@@ -223,14 +232,31 @@ final class AsyncProbe
      * surface caches carries the same property, and its table mints entries
      * for clean misses too). The ENV-side half of any negative answer is
      * re-derived from the CURRENT chain per call, so env drift after the
-     * first probe can never be served stale. A child that died nonzero or
-     * was ladder-killed proves nothing: only a zero exit mints an entry.
-     * Cap-full/no-binary/unsettled-shape early returns never consulted the
-     * child, so they never write.
+     * first probe can never be served stale. A completed child (any exit code)
+     * is memoized. A child the deadline ladder or a signal killed, and a failed
+     * launch, mint no entry (CP-13, per the UPSTREAM-PLAN P1-15 behaviour map):
+     * each is transient (load, fork or fd pressure) and must not demote a TERM
+     * that advertises TrueColor for the life of the process. The sync door
+     * ({@see InfocmpBinary::runBounded()}) still records overruns and signal
+     * kills as misses, so the two surfaces differ on whether those two verdicts
+     * are memoized, never on the answer they settle to.
+     * Cap-full, unsafe-TERM and absent-binary early returns never launch a
+     * child and never write.
      *
      * @var array<string, ColorProfile|null>
      */
     private static array $settledMemo = [];
+
+    /**
+     * Dump verdicts for {@see report()}, keyed by lowercased TERM: the capped
+     * stdout of a completed child (any exit code). A child the deadline ladder
+     * or a signal killed, and a failed launch, mint no entry (CP-13), so a
+     * later report may spawn again. The cardinality ceiling is
+     * {@see self::MEMO_MAX_ENTRIES}.
+     *
+     * @var array<string, string|null>
+     */
+    private static array $settledDumps = [];
 
     /**
      * Detect the terminal color profile asynchronously.
@@ -272,15 +298,6 @@ final class AsyncProbe
 
         self::reclaimStaleSlots();
 
-        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
-        $infocmpPath = InfocmpBinary::path();
-        if ($infocmpPath === null) {
-            return \React\Promise\resolve(self::settleFromChain($chain));
-        }
-
         $term = $chain->term();
         if ($term === '' || \strtolower($term) === 'dumb') {
             // Do not fabricate a terminal type. Unknown TERM means the
@@ -304,7 +321,81 @@ final class AsyncProbe
             return \React\Promise\resolve(self::$settledMemo[$memoKey] ?? self::settleFromChain($chain));
         }
 
+        // The memo lookup sits above the in-flight cap and the binary check:
+        // a hit books no slot and spawns nothing, so neither gate may flip
+        // the answer for one TERM with unrelated probe load (report() orders
+        // these the same way).
+        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
+        $infocmpPath = InfocmpBinary::path();
+        if ($infocmpPath === null) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
         $deferred = new Deferred();
+        $spawned = self::spawnInfocmp(
+            $loop,
+            $infocmpPath,
+            $term,
+            $deferred,
+            static function (?int $exitCode, string $stdout) use ($chain, $memoKey): ColorProfile {
+                // A signal kill (null code) is no dump at all: the partial
+                // stdout it left behind is never promoted, mints no entry
+                // (CP-13), and settles to the chain answer exactly as the sync
+                // door does.
+                if ($exitCode === null) {
+                    return self::settleFromChain($chain);
+                }
+
+                // A completed child is a verdict whatever its exit code: its
+                // printed dump is TERM-static.
+                $promoted = TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
+                self::memoWrite($memoKey, $promoted ? ColorProfile::TrueColor : null);
+
+                return $promoted ? ColorProfile::TrueColor : self::settleFromChain($chain);
+            },
+            static function () use ($chain): ColorProfile {
+                // A deadline overrun answered nothing: no entry, so a later
+                // call may retry (CP-13). The caller takes the chain answer.
+                return self::settleFromChain($chain);
+            },
+        );
+        if (!$spawned) {
+            // A failed launch is transient (fork or fd pressure) and says
+            // nothing about the TERM, so it mints no entry (CP-13).
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Launch one bounded infocmp child on $loop and settle $deferred from its
+     * outcome. This is the single spawn ladder every loop-bound surface
+     * ({@see colorProfile()}, {@see report()}) shares: the same slot table,
+     * the same SIGTERM → SIGKILL deadline, the same keep-a-prefix pipes.
+     *
+     * $onExit maps the exit (a null code means the child was killed by a
+     * signal) and its capped stdout to the settled value; $onLadder maps a
+     * deadline overrun to the settled value. The deferred is resolved at most
+     * once, so a late exit after the ladder fired is harmless.
+     *
+     * @param \Closure(?int, string): mixed $onExit
+     * @param \Closure(): mixed             $onLadder
+     *
+     * @return bool false when the child could not be launched: nothing stays
+     *              booked and the caller settles from its own fallback
+     */
+    private static function spawnInfocmp(
+        LoopInterface $loop,
+        string $infocmpPath,
+        string $term,
+        Deferred $deferred,
+        \Closure $onExit,
+        \Closure $onLadder,
+    ): bool {
         // NO WRAPPER TO SWALLOW THE LADDER (CP-28, sugar-colorprofile-029):
         // react v0.6 takes a command STRING (and its constructor contract
         // stays string), PHP proc_open hands that to `sh -c` — and dash
@@ -356,17 +447,22 @@ final class AsyncProbe
                 self::killAndReap($process);
             }
 
-            return \React\Promise\resolve(self::settleFromChain($chain));
+            return false;
         }
 
         // react/child-process 0.6 exposes the child pipes as stream PROPERTIES
         // (created inside start()); Process itself emits only 'exit'. Listening
         // for 'stdout'/'stderr' EVENTS silently never fires — the pump below
         // reads the streams directly.
+        // The cut is exact, not per-chunk: a stream read can carry up to a full
+        // pipe buffer, and appending it whole would let the prefix overshoot the
+        // ceiling and pull a cap name past it into the scan. The sync door
+        // (InfocmpBinary::execOnce) cuts the same way.
         $stdout = '';
         $process->stdout?->on('data', function ($chunk) use (&$stdout): void {
-            if (\strlen($stdout) < self::STDOUT_CAP_BYTES) {
-                $stdout .= $chunk;
+            $room = self::STDOUT_CAP_BYTES - \strlen($stdout);
+            if ($room > 0) {
+                $stdout .= \substr((string) $chunk, 0, $room);
             }
         });
 
@@ -375,8 +471,9 @@ final class AsyncProbe
         // A bounded prefix is retained; everything past the cap is discarded.
         $stderr = '';
         $process->stderr?->on('data', function ($chunk) use (&$stderr): void {
-            if (\strlen($stderr) < self::STDERR_CAP_BYTES) {
-                $stderr .= $chunk;
+            $room = self::STDERR_CAP_BYTES - \strlen($stderr);
+            if ($room > 0) {
+                $stderr .= \substr((string) $chunk, 0, $room);
             }
         });
 
@@ -384,13 +481,15 @@ final class AsyncProbe
         // later KILL it, and settle the caller with the chain answer. A hung
         // infocmp can therefore never strand the promise OR the slot.
         $graceTimer = null;
-        $timeoutTimer = $loop->addTimer(self::timeoutSeconds(), static function () use ($process, $loop, $deferred, $release, $chain, &$graceTimer): void {
+        $laddered = false;
+        $timeoutTimer = $loop->addTimer(self::timeoutSeconds(), static function () use ($process, $loop, $deferred, $release, $onLadder, &$graceTimer, &$laddered): void {
+            $laddered = true;
             $process->terminate();
             $graceTimer = $loop->addTimer(self::graceSeconds(), static function () use ($process): void {
                 self::killAndReap($process);
             });
             $release();
-            $deferred->resolve(self::settleFromChain($chain));
+            $deferred->resolve($onLadder());
         });
         $cancelLadder = static function () use ($loop, $timeoutTimer, &$graceTimer): void {
             $loop->cancelTimer($timeoutTimer);
@@ -406,16 +505,16 @@ final class AsyncProbe
         // $stdout must be captured BY REFERENCE: the accumulator is filled by
         // the data pump after this closure is built, and a by-value copy would
         // hand the exit handler the empty string it had at registration time.
-        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, $release, $cancelLadder, $chain, $term): void {
+        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, &$laddered, $release, $cancelLadder, $onExit): void {
             $cancelLadder();
             $release();
-            $promoted = $exitCode === 0 && TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
-            if ($exitCode === 0) {
-                // TERM-static verdict from a cleanly completed child only
-                // (CP-13): promotion, or the NULL negative sentinel.
-                self::memoWrite(\strtolower($term), $promoted ? ColorProfile::TrueColor : null);
+            // The deadline rung already settled this verdict through $onLadder;
+            // a late exit must not re-run $onExit, which would memoize the
+            // partial dump of a child the ladder killed (CP-13).
+            if ($laddered) {
+                return;
             }
-            $deferred->resolve($promoted ? ColorProfile::TrueColor : self::settleFromChain($chain));
+            $deferred->resolve($onExit($exitCode, $stdout));
         });
 
         // There is deliberately no 'error' listener: react/child-process
@@ -424,7 +523,108 @@ final class AsyncProbe
         // start() — CP-14's catch already settles the caller and frees the
         // cap slot there). The old block could not fire.
 
-        return $deferred->promise();
+        return true;
+    }
+
+    /**
+     * Full terminal capability report on the same loop contract as
+     * {@see colorProfile()}: the infocmp leg runs as a child on the loop you
+     * pass in, and the promise settles with the {@see ProbeReport} the sync
+     * pipeline composes, not a second implementation of it.
+     *
+     * The composition is shared by construction. A recording pass runs the
+     * sync pipeline and notes whether its terminfo leg asked for a dump (every
+     * gate, including suppression, TERM shape and the binary, has run by then,
+     * so a request means a child is genuinely needed). A replaying pass runs
+     * the same pipeline with the child's capped dump at that leg's seam.
+     *
+     * Without a loop the promise resolves in place through the bounded sync
+     * surface, as {@see colorProfile()} does. With a loop, the report is the
+     * environment answer alone when no child can be spawned (cap reached,
+     * binary missing, spawn failure). Otherwise it is the replayed dump, and a
+     * timed-out or signal-killed child replays as "no dump", the same fail-open
+     * the sync door gives.
+     *
+     * @param ?LoopInterface $loop Loop instance to spawn the child on; null resolves synchronously
+     *
+     * @return PromiseInterface<ProbeReport>
+     */
+    public static function report(?LoopInterface $loop = null): PromiseInterface
+    {
+        if ($loop === null) {
+            // Same policy as colorProfile(): nothing is parked on a loop the
+            // caller may never run; the bounded sync door answers in place.
+            return \React\Promise\resolve(TerminalProbe::run());
+        }
+
+        $recording = TerminfoReplayProbe::recording();
+        $environmentReport = $recording->runProbe();
+        $term = $recording->requestedTerm();
+        if ($term === null) {
+            return \React\Promise\resolve($environmentReport);
+        }
+
+        $memoKey = \strtolower($term);
+        if (\array_key_exists($memoKey, self::$settledDumps)) {
+            return \React\Promise\resolve(TerminfoReplayProbe::replaying(self::$settledDumps[$memoKey])->runProbe());
+        }
+
+        self::reclaimStaleSlots();
+
+        $infocmpPath = InfocmpBinary::path();
+        if (\count(self::$inFlight) >= self::MAX_CONCURRENT_PROBES || $infocmpPath === null) {
+            return \React\Promise\resolve($environmentReport);
+        }
+
+        $deferred = new Deferred();
+        $spawned = self::spawnInfocmp(
+            $loop,
+            $infocmpPath,
+            $term,
+            $deferred,
+            static function (?int $exitCode, string $stdout) use ($memoKey): ?string {
+                // A signal kill arrives with a null code (react takes it from
+                // its status refresh). Its partial stdout is no verdict: replaying
+                // it would build the report from a truncated terminfo dump, and
+                // memoizing it would make the truncation permanent. So it replays
+                // as "no dump" and mints no entry (CP-13).
+                if ($exitCode === null) {
+                    return null;
+                }
+
+                // A completed child keeps its capped stdout as the verdict,
+                // whatever its exit code.
+                self::dumpMemoWrite($memoKey, $stdout);
+
+                return $stdout;
+            },
+            static function (): ?string {
+                // A deadline overrun answered nothing: no entry (CP-13), so a
+                // later report may retry.
+                return null;
+            },
+        );
+        if (!$spawned) {
+            // A failed launch is transient, so it mints no entry (CP-13).
+            return \React\Promise\resolve($environmentReport);
+        }
+
+        return $deferred->promise()->then(
+            static fn (?string $dump): ProbeReport => TerminfoReplayProbe::replaying($dump)->runProbe(),
+        );
+    }
+
+    /**
+     * Sole write site of the dump memo behind {@see report()}, enforcing the
+     * same cardinality ceiling as {@see memoWrite()}.
+     */
+    private static function dumpMemoWrite(string $key, ?string $dump): void
+    {
+        if (\count(self::$settledDumps) >= self::MEMO_MAX_ENTRIES) {
+            self::$settledDumps = [];
+        }
+
+        self::$settledDumps[$key] = $dump;
     }
 
     /**
@@ -440,6 +640,7 @@ final class AsyncProbe
         self::$inFlight = [];
         self::$nextToken = 1;
         self::$settledMemo = [];
+        self::$settledDumps = [];
         self::$timeoutOverride = null;
         self::$graceOverride = null;
     }

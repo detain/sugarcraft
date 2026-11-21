@@ -63,24 +63,32 @@ final class WorkerPoolRemediationTest extends TestCase
 
     public function testWorkerTempScriptCleanedOnStop(): void
     {
-        // Baseline BEFORE the pool exists — /tmp may hold stale sc_worker_*
-        // files from unrelated (or crashed) runs; only OUR delta matters.
-        $baseline = glob(sys_get_temp_dir() . '/sc_worker_*');
-
+        // Track the scripts THIS pool created, not a /tmp glob: any other suite
+        // or worker on the host creating sc_worker_* files broke a shared count.
+        // PHP caches TMPDIR, so the test cannot redirect tempnam() either.
         $pool = new WorkerPool($this->loop, 1);
 
         // Dispatch a job to force worker spawning.
         $promise = $pool->dispatch([WorkerPoolTasks::class, 'pid']);
         $this->waitForResult($promise);
 
+        $workers = (new \ReflectionProperty(WorkerPool::class, 'workers'))->getValue($pool);
+        $scripts = [];
+        foreach ($workers as $worker) {
+            if ($worker->scriptPath !== null) {
+                $scripts[] = $worker->scriptPath;
+            }
+        }
+        self::assertNotSame([], $scripts, 'the pool must have spawned a worker with a temp script');
+        foreach ($scripts as $script) {
+            self::assertFileExists($script);
+        }
+
         $pool->stop();
         // After stop: every script this pool created must be gone again.
-        $after = glob(sys_get_temp_dir() . '/sc_worker_*');
-        $this->assertCount(
-            count($baseline),
-            $after,
-            'Temp worker scripts should be cleaned up after stop()'
-        );
+        foreach ($scripts as $script) {
+            self::assertFileDoesNotExist($script, 'Temp worker scripts should be cleaned up after stop()');
+        }
     }
 
     public function testNonCallableArrayRefusedAtTheDoor(): void

@@ -239,4 +239,36 @@ final class RootSurfaceDriftTest extends TestCase
         );
         self::spelledFigure(strtolower($skills[1]), $figures['skills'], 'the skills card built-in count');
     }
+
+    /**
+     * The lede is the first sentence a reader sees, and it spells the same
+     * figures as the cards below it. The card arms above do not read it: its
+     * counts are lowercase and sit inside a sentence, not a card heading.
+     */
+    public function testTheDataBodyLedeSpellsTheLiveProviderAndToolCounts(): void
+    {
+        [, , , $body] = self::rootSurfaces();
+        $figures = self::liveFigures();
+
+        self::assertSame(
+            1,
+            preg_match('#<p class="lede"[^>]*>(.*?)</p>#s', $body, $lede),
+            'docs/_data/candy-code.body.html no longer carries its lede paragraph — re-pin this arm with the page'
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/([a-z-]+) provider type keys over ([a-z-]+) engines/i', $lede[1], $keys),
+            'the lede no longer spells its provider type-key and engine counts — re-pin this arm with the page'
+        );
+        self::spelledFigure(strtolower($keys[1]), $figures['typeKeys'], 'the lede provider type-key count');
+        self::spelledFigure(strtolower($keys[2]), $figures['engines'], 'the lede engine count');
+
+        self::assertSame(
+            1,
+            preg_match('/([a-z-]+) built-in tools on every launch/i', $lede[1], $tools),
+            'the lede no longer spells its per-launch tool count — re-pin this arm with the page'
+        );
+        self::spelledFigure(strtolower($tools[1]), $figures['tools'], 'the lede per-launch tool count');
+    }
 }

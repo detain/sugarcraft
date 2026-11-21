@@ -36,6 +36,9 @@ use SugarCraft\Core\Lang;
  * Unlike the immutable `with*()` value objects elsewhere in sugar-core, this is
  * a live cache: identity matters, so {@see put()} et al. mutate the receiver and
  * {@see resize()} changes the cap in place rather than returning a new map.
+ * The one exception is {@see withTtl()}, which returns a snapshot and leaves the
+ * receiver untouched, so its result must be assigned: `$cache = $cache->withTtl(300.0)`.
+ * Calling it for effect silently leaves the map without expiry.
  * `clone` is allowed and yields an independent snapshot — the entries array is
  * copied, but any object values are shared by reference, exactly as PHP's clone
  * semantics dictate. Unlike {@see Semaphore}, cloning a cache is safe: two maps
@@ -60,6 +63,31 @@ final class LruMap implements \Countable, \IteratorAggregate
 
     /** Entries dropped by the capacity bound — overwrites and removes are not evictions. */
     private int $evictions = 0;
+
+    /** Seconds an entry lives after the put() that wrote it, or null for no expiry. */
+    private ?float $ttl = null;
+
+    /**
+     * Test seam for the clock in seconds; null reads the monotonic hrtime clock.
+     * A wall clock would let an NTP step lengthen or shorten lifetimes.
+     */
+    private ?\Closure $clock = null;
+
+    /**
+     * Expiry instant per key, present only while a TTL is set. Kept beside
+     * {@see $data} rather than folded into it so the untimed path stays as it was.
+     *
+     * Its insertion order is the order entries were stamped, which is also the
+     * order their expiry instants are non-decreasing in (see {@see stamp()}). That
+     * is what lets {@see expireStale()} stop at the first live entry rather than
+     * scan the whole map on every put() at capacity.
+     *
+     * @var array<array-key, float>
+     */
+    private array $expiresAt = [];
+
+    /** The largest expiry instant handed out; {@see stamp()} never goes below it. */
+    private float $latestExpiry = 0.0;
 
     private function __construct(
         private int $capacity,
@@ -101,6 +129,52 @@ final class LruMap implements \Countable, \IteratorAggregate
     }
 
     /**
+     * A copy of this map whose entries expire $seconds after their last put().
+     *
+     * Returns a snapshot rather than mutating, in keeping with the other
+     * `with*()` setters; the entries held at the call are stamped as freshly
+     * written. Expired entries are dropped on the next read that touches them,
+     * and expiry never counts toward {@see evictions()}: that counter is for the
+     * capacity bound alone. Reads do not refresh an entry's lifetime, so a hot
+     * key still expires on schedule.
+     *
+     * The receiver is left untouched: assign the result to use the timed map.
+     *
+     * The default clock is monotonic, so an entry lives its nominal lifetime. An
+     * injected clock that can step backwards is the caller's responsibility: the
+     * stamp floor then keeps entries alive past their nominal expiry.
+     *
+     * @param (\Closure(): float)|null $clock Test seam: the clock in seconds.
+     * @return self<V>
+     * @throws \InvalidArgumentException when $seconds is not a positive finite number.
+     */
+    public function withTtl(float $seconds, ?\Closure $clock = null): self
+    {
+        if (!is_finite($seconds) || $seconds <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('lru_map.ttl_invalid', [
+                'seconds' => (string) $seconds,
+            ]));
+        }
+
+        $next = clone $this;
+        // Entries already past their old lifetime must not be revived by restamping.
+        $next->expireStale();
+        $next->ttl = $seconds;
+        $next->clock = $clock;
+        $next->expiresAt = [];
+
+        // Every survivor takes the same instant, so the previous latest expiry
+        // (which may belong to a longer lifetime) must not floor this one.
+        $expiry = $next->now() + $seconds;
+        $next->latestExpiry = $expiry;
+        foreach (array_keys($next->data) as $key) {
+            $next->expiresAt[$key] = $expiry;
+        }
+
+        return $next;
+    }
+
+    /**
      * Change how many entries the map holds, evicting LRU-first if it now
      * exceeds the new cap.
      *
@@ -129,6 +203,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function get(string $key): mixed
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return null;
         }
@@ -148,6 +223,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function peek(string $key): mixed
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return null;
         }
@@ -163,6 +239,7 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function touch(string $key): bool
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return false;
         }
@@ -183,23 +260,33 @@ final class LruMap implements \Countable, \IteratorAggregate
     {
         // PHP keeps the original position of a re-assigned key, so a plain
         // overwrite would leave a hot entry stuck at the eviction end.
-        unset($this->data[$key]);
+        unset($this->data[$key], $this->expiresAt[$key]);
 
         // Evict before inserting so the capacity test reads the occupancy that
         // excludes the newcomer: a full map then sheds exactly one entry to make
         // room. (The victim is still taken from the head, so the newcomer at the
         // tail is never itself the eviction — the ordering here is about the
         // count, not about which entry is chosen.)
+        // Expired entries are dead weight, not live occupancy: shed them before
+        // deciding whether the map is full, so they never cost a live entry.
+        if (count($this->data) >= $this->capacity) {
+            $this->expireStale();
+        }
         if (count($this->data) >= $this->capacity) {
             $this->evictOldest();
         }
 
         $this->data[$key] = $value;
+        if ($this->ttl !== null) {
+            $this->expiresAt[$key] = $this->stamp();
+        }
     }
 
     /** Whether the key is present, regardless of recency (does not promote). */
     public function has(string $key): bool
     {
+        $this->dropIfExpired($key);
+
         return array_key_exists($key, $this->data);
     }
 
@@ -211,11 +298,12 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function remove(string $key): bool
     {
+        $this->dropIfExpired($key);
         if (!array_key_exists($key, $this->data)) {
             return false;
         }
 
-        unset($this->data[$key]);
+        unset($this->data[$key], $this->expiresAt[$key]);
 
         return true;
     }
@@ -230,6 +318,8 @@ final class LruMap implements \Countable, \IteratorAggregate
     public function clear(): void
     {
         $this->data = [];
+        $this->expiresAt = [];
+        $this->latestExpiry = 0.0;
     }
 
     /**
@@ -245,6 +335,8 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function keys(): array
     {
+        $this->expireStale();
+
         // Reverse for MRU-first, then cast: see the docblock for why strval().
         return array_map('strval', array_reverse(array_keys($this->data)));
     }
@@ -263,6 +355,8 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     public function entries(): array
     {
+        $this->expireStale();
+
         return array_reverse($this->data, true);
     }
 
@@ -275,6 +369,8 @@ final class LruMap implements \Countable, \IteratorAggregate
     /** Entries currently held. */
     public function count(): int
     {
+        $this->expireStale();
+
         return count($this->data);
     }
 
@@ -316,7 +412,7 @@ final class LruMap implements \Countable, \IteratorAggregate
             throw new \LogicException(Lang::t('lru_map.evict_from_empty'));
         }
 
-        unset($this->data[$victim]);
+        unset($this->data[$victim], $this->expiresAt[$victim]);
         $this->evictions++;
     }
 
@@ -325,9 +421,77 @@ final class LruMap implements \Countable, \IteratorAggregate
      */
     private function trimToCapacity(): void
     {
+        $this->expireStale();
+
         while (count($this->data) > $this->capacity) {
             $this->evictOldest();
         }
+    }
+
+    /**
+     * Drop $key when its TTL has run out, so the caller's next check sees a miss.
+     * A key with no expiry, or with no TTL set, costs one array lookup.
+     */
+    private function dropIfExpired(string $key): void
+    {
+        if (!array_key_exists($key, $this->expiresAt) || $this->expiresAt[$key] > $this->now()) {
+            return;
+        }
+
+        unset($this->data[$key], $this->expiresAt[$key]);
+    }
+
+    /**
+     * Drop every entry whose TTL has run out. Expiry is not an eviction.
+     *
+     * Stops at the first live entry: stamps never decrease in insertion order,
+     * so nothing behind it can have expired. Iterating by key rather than with
+     * foreach avoids copying the whole stamp array on the first unset.
+     */
+    private function expireStale(): void
+    {
+        if ($this->expiresAt === []) {
+            return;
+        }
+
+        // One forward pass, then the unsets. Calling array_key_first() per removal
+        // rescans the tombstones each earlier unset left at the head of the hash,
+        // which made a bulk expiry quadratic.
+        $now = $this->now();
+        $expired = [];
+        foreach ($this->expiresAt as $key => $expiry) {
+            if ($expiry > $now) {
+                break;
+            }
+            $expired[] = $key;
+        }
+
+        foreach ($expired as $key) {
+            unset($this->data[$key], $this->expiresAt[$key]);
+        }
+    }
+
+    /**
+     * The expiry instant for an entry written now.
+     *
+     * Floored at the latest instant already handed out, so a clock that steps
+     * backwards cannot stamp an entry ahead of an older one and break the order
+     * {@see expireStale()} depends on. Under a monotonic clock the floor never
+     * applies. Only an injected clock that steps backwards reaches it: the entry
+     * then lives until the old instant instead of its nominal lifetime. The
+     * default hrtime clock never steps, so production stamps are never floored.
+     */
+    private function stamp(): float
+    {
+        $this->latestExpiry = max($this->latestExpiry, $this->now() + (float) $this->ttl);
+
+        return $this->latestExpiry;
+    }
+
+    /** Monotonic seconds: an NTP step cannot move it, unlike the wall clock. */
+    private function now(): float
+    {
+        return $this->clock !== null ? ($this->clock)() : hrtime(true) / 1e9;
     }
 
     /**

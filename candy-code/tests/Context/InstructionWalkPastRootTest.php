@@ -20,7 +20,7 @@ use SugarCraft\Code\Context\InstructionFileLoader;
  *      the user tier; the project tier's copy of the same spellings is
  *      refused by name. A user-tier match is anchored to the home directory
  *      the same way a checkout pattern is anchored to the checkout —
- *      `ContainedPath` judges it, so a symlink out of home is refused by path.
+ *      `sugar-core PathJail` judges it, so a symlink out of home is refused by path.
  *
  * Bootstrap's tier split (forcedInstructions() reading the project-free
  * config view, projectForcedInstructions() returning the residue) is pinned
@@ -365,7 +365,7 @@ final class InstructionWalkPastRootTest extends TestCase
             $loader = new InstructionFileLoader($this->tempDir . '/repo', [$home . '/link.md']);
             $this->assertSame([], $loader->loadForced());
             $reason = $loader->refusedPaths()[$home . '/link.md'] ?? '';
-            $this->assertStringContainsString('outside the user home directory', $reason, 'the home anchor is a real ContainedPath gate, not a string prefix');
+            $this->assertStringContainsString('outside the user home directory', $reason, 'the home anchor is a real sugar-core PathJail gate, not a string prefix');
         } finally {
             $previous === false ? putenv('HOME') : putenv('HOME=' . $previous);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Host\Commands\BackgroundCommand;
@@ -29,9 +30,10 @@ use SugarCraft\Code\Background\BackgroundStopOutcome;
  * session `bg.spawn` starts is announced (`bg.started`) before the answer.
  *
  * `bg.spawn` is code execution, so it needs scope `write` like `session.send`
- * (§8.5). It answers once the daemon has authenticated its handshake — the
- * supervisor waits at most a few seconds for that, the same bounded wait
- * `bg.stop` makes for a stop.
+ * (§8.5). It answers once the daemon has authenticated its handshake: the
+ * handler returns a promise the supervisor's loop settles, so the event loop
+ * never waits on a daemon. `bg.stop` answers the same way once its signal
+ * rungs have run.
  *
  * `bg.inject` closes the gap Appendix A names ("`/bg` results never land back
  * in chat") for a client: the settled session's report — the one the TUI
@@ -68,8 +70,8 @@ final class BgMethods
         return ['items' => \array_values(\array_map($events->summary(...), $events->sessions()))];
     }
 
-    /** @return array<string, mixed> */
-    private static function spawn(CallContext $call, Params $params): array
+    /** @return PromiseInterface<array<string, mixed>> */
+    private static function spawn(CallContext $call, Params $params): PromiseInterface
     {
         if ($call->server->isDraining()) {
             throw RpcError::of(ErrorCode::Busy, 'the server is shutting down', 'draining');
@@ -92,8 +94,18 @@ final class BgMethods
         // source, so no request can escalate past what the operator launched.
         $permissionMode = self::spawnPermissionMode($call->server->config());
 
+        // The cause can name a private path; it stays out of the answer. It does
+        // NOT stay silent (ISS-057): the refusal leaves through the dispatcher's
+        // `RpcError` arm, which answers and never logs, so the caller that hid the
+        // cause is the one that owes it to the server's sink — the same line the
+        // `-32099` arm writes.
+        $refuse = static function (\Throwable $e) use ($call): never {
+            $call->server->logError($e, 'bg.spawn failed');
+
+            throw RpcError::of(ErrorCode::Internal, 'the background session could not be started', 'bg_spawn_failed');
+        };
         try {
-            $session = $events->supervisor()->spawnSession(
+            $launch = $events->supervisor()->spawnSessionAsync(
                 name: $name,
                 agent: $agent,
                 task: $task,
@@ -102,18 +114,19 @@ final class BgMethods
                 permissionAskTimeout: $call->server->config()->askTimeoutSeconds,
             );
         } catch (\Throwable $e) {
-            // The cause can name a private path; it stays out of the answer.
-            // It does NOT stay silent (ISS-057): the refusal below leaves the
-            // dispatcher through its `RpcError` arm, which answers and never
-            // logs, so the caller that hid the cause is the one that owes it
-            // to the server's sink — the same line the `-32099` arm writes.
-            $call->server->logError($e, 'bg.spawn failed');
-
-            throw RpcError::of(ErrorCode::Internal, 'the background session could not be started', 'bg_spawn_failed');
+            $refuse($e);
         }
-        $events->track($session);
 
-        return $events->summary($session);
+        return $launch->then(
+            static function (BackgroundSession $session) use ($events): array {
+                $events->track($session);
+
+                return $events->summary($session);
+            },
+            static function (mixed $e) use ($refuse): never {
+                $refuse($e instanceof \Throwable ? $e : new \RuntimeException('the launch was refused'));
+            },
+        );
     }
 
     /**
@@ -150,16 +163,20 @@ final class BgMethods
         ];
     }
 
-    /** @return array<string, mixed> */
-    private static function stop(CallContext $call, Params $params): array
+    /** @return PromiseInterface<array<string, mixed>> */
+    private static function stop(CallContext $call, Params $params): PromiseInterface
     {
         $bgId = $params->string('bgId', 128);
-        $outcome = self::events($call)->supervisor()->stopSession($bgId);
-        if ($outcome === BackgroundStopOutcome::UnknownSession) {
-            throw RpcError::notFound(\sprintf('no background session %s', $bgId), 'bg_not_found');
-        }
 
-        return ['bgId' => $bgId, 'outcome' => $outcome->value];
+        return self::events($call)->supervisor()->stopSessionAsync($bgId)->then(
+            static function (BackgroundStopOutcome $outcome) use ($bgId): array {
+                if ($outcome === BackgroundStopOutcome::UnknownSession) {
+                    throw RpcError::notFound(\sprintf('no background session %s', $bgId), 'bg_not_found');
+                }
+
+                return ['bgId' => $bgId, 'outcome' => $outcome->value];
+            },
+        );
     }
 
     /** @return array<string, mixed> */

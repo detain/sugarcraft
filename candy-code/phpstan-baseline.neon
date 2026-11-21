@@ -2479,12 +2479,6 @@ parameters:
 			path: src/Tools/UserTools/UserToolLoader.php
 
 		-
-			message: '#^Instanceof between DOMNameSpaceNode\|DOMNode and DOMCdataSection will always evaluate to false\.$#'
-			identifier: instanceof.alwaysFalse
-			count: 1
-			path: src/Tools/Web/HtmlToMarkdown.php
-
-		-
 			message: '#^Parameter &\$folded by\-ref type of method SugarCraft\\Code\\Tui\\AgentLabelFolding\:\:foldGroup\(\) expects list\<string\>, non\-empty\-array\<int, string\> given\.$#'
 			identifier: parameterByRef.type
 			count: 1

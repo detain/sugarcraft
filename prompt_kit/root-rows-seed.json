@@ -171,7 +171,7 @@
         "candy-mail": {
             "readme": {
                 "needles": [
-                    "Email library + CLI — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface."
+                    "Email library + CLI — SMTP, Resend API and Mailgun API transports, attachments, HTML + plain-text multipart, fluent interface."
                 ],
                 "dead": []
             },
@@ -337,7 +337,7 @@
         "sugar-async": {
             "readme": {
                 "needles": [
-                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight) + TTL async cache."
+                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, pendingNotice, singleFlight) + TTL async cache."
                 ],
                 "dead": []
             },
@@ -902,6 +902,104 @@
             "matchups": {
                 "needles": [
                     "gitignore-style ignore matching over injected file contents (no IO)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-plugins": {
+            "readme": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts, the plugin launch context, the prompt-fence escape, and the generic loader, quarantine ledger, registry and manifest reader. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-serve-protocol": {
+            "readme": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — WebSocket subprotocol names, frame cap, discovery and token readers, and address-to-WebSocket URL normalisation."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — subprotocol names"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-plugin-installer": {
+            "readme": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages: stages each plugin to the user or project bundle tree that the root project's `extra.sugar-plugin-installer` selects. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-jwt": {
+            "readme": {
+                "needles": [
+                    "JWT and JWK verification — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "JWT and JWK verification — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-codec": {
+            "readme": {
+                "needles": [
+                    "YAML codec for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "YAML codec — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-clipboard": {
+            "readme": {
+                "needles": [
+                    "Clipboard access for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Clipboard access — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-ws-rpc": {
+            "readme": {
+                "needles": [
+                    "WebSocket RPC transport for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "WebSocket RPC transport — skeleton (namespace and wiring only)"
                 ],
                 "dead": []
             }

@@ -76,9 +76,17 @@ final class AnsiKittyGraphicsTest extends TestCase
         $this->assertSame(self::APC . 'G' . 'm=0;' . self::ST, Ansi::kittyGraphicsEnd());
     }
 
-    public function testClearUnchangedApcGForm(): void
+    public function testClearByIdFreesImageData(): void
     {
-        $this->assertSame(self::APC . 'G' . 'a=d,i=3' . self::ST, Ansi::kittyGraphicsClear(3));
+        // d=I (uppercase) removes the placement and frees the image data.
+        // A bare a=d,i=N would keep the data, and a bare a=d (no d key) would
+        // erase every visible placement instead of image N.
+        $this->assertSame(self::APC . 'G' . 'a=d,d=I,i=3' . self::ST, Ansi::kittyGraphicsClear(3));
+        $this->assertStringNotContainsString('a=d,i=', Ansi::kittyGraphicsClear(3));
+    }
+
+    public function testClearAllKeepsLegacyZeroIdForm(): void
+    {
         $this->assertSame(self::APC . 'G' . 'a=d,i=0' . self::ST, Ansi::kittyGraphicsClear());
     }
 

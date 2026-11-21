@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Modules\System;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
+use SugarCraft\Dashboard\Module\RunLaunch;
 
 /**
  * System module that displays CPU, memory, GPU, and uptime statistics.
@@ -47,13 +51,41 @@ final class SystemModule extends BaseModule
     private bool $gpuSpawnFailed = false;
 
     /**
+     * True while an nvidia-smi sample is on the loop. A hung driver answers
+     * only at its deadline, so a tick that finds one in flight does not stack
+     * a second child behind it.
+     */
+    private bool $gpuInFlight = false;
+
+    /**
+     * Counts every GPU sample started. The newest value names the sample the
+     * latch belongs to: a result from an older, still-hung sample must not clear
+     * the latch a newer sample holds.
+     */
+    private int $gpuSampleSeq = 0;
+
+    /**
+     * Monotonic second the GPU latch was taken, by the tick that asked for the
+     * sample; the latch counts from the child's launch once it has one (see
+     * {@see gpuLatched()}).
+     */
+    private ?float $gpuInFlightSince = null;
+
+    /** When the in-flight sample's child was actually launched; see {@see gpuLatched()}. */
+    private ?RunLaunch $gpuInFlightLaunch = null;
+
+    /**
      * @param float $refreshSeconds sampling cadence; the constructor knob
      *     exists so hosts (and tests) can retune what used to be a frozen
      *     class constant.
+     * @param ?LoopInterface $loop  The loop the host runs. Pass the Program's loop
+     *     when it is not the global one, or nvidia-smi's pipes and timers sit on
+     *     a loop nobody runs and the GPU row never updates.
      */
     public function __construct(
         private readonly float $refreshSeconds = self::TICK_INTERVAL,
         private readonly ?string $name = null,
+        private readonly ?LoopInterface $loop = null,
     ) {
     }
 
@@ -71,14 +103,76 @@ final class SystemModule extends BaseModule
     {
         // Only ticks addressed to this module sample. Everything else — keys,
         // focus changes, resizes — passes through with zero I/O.
+        if ($msg instanceof GpuSampleMsg && $msg->source === $this->name()) {
+            return [$this->withGpuSample($msg), null];
+        }
+
         if (!$msg instanceof TickMsg || !$msg->isFor($this->name())) {
             return [$this, null];
         }
 
-        return [
-            $this->withSystemState(),
-            $this->selfTickCmd(),
-        ];
+        $next = $this->withSystemState();
+        $tick = $next->selfTickCmd();
+        if ($next->gpuLatched() || $next->gpuSpawnFailed) {
+            return [$next, $tick];
+        }
+
+        // nvidia-smi runs on the loop; its answer returns as a GpuSampleMsg. The
+        // tick itself never waits on the child.
+        $next = $next->withGpuInFlight();
+
+        return [$next, $tick === null ? $next->gpuSampleCmd() : Cmd::batch($tick, $next->gpuSampleCmd())];
+    }
+
+    private function withGpuInFlight(): static
+    {
+        $clone = clone $this;
+        $clone->gpuInFlight = true;
+        $clone->gpuInFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->gpuInFlightLaunch = new RunLaunch();
+        $clone->gpuSampleSeq = $this->gpuSampleSeq + 1;
+
+        return $clone;
+    }
+
+    private function withGpuSample(GpuSampleMsg $sample): static
+    {
+        // Only the sample the latch belongs to may settle it. An older sample that
+        // was still hung past the ceiling settles later and is stale; it is dropped.
+        if (!$this->gpuInFlight || $sample->sample !== $this->gpuSampleSeq) {
+            return $this;
+        }
+
+        $clone = $this->withState([
+            'gpuLoad' => $sample->load,
+        ]);
+        $clone->gpuSpawnFailed = $sample->spawnFailed;
+        $clone->gpuInFlight = false;
+        $clone->gpuInFlightSince = null;
+        $clone->gpuInFlightLaunch = null;
+
+        return $clone;
+    }
+
+    /**
+     * A GPU latch holds only while its sample can still settle. The Cmd belongs
+     * to the host, and a host that drops it never delivers a GpuSampleMsg, so
+     * past the settle ceiling the next tick samples again rather than freezing
+     * the GPU row for the rest of the session. The ceiling counts from the
+     * child's launch once the host has run the Cmd, so a late-run sample is never
+     * stacked over while its nvidia-smi is still alive.
+     */
+    private function gpuLatched(): bool
+    {
+        if (!$this->gpuInFlight) {
+            return false;
+        }
+
+        $since = $this->gpuInFlightLaunch?->latchedSince((float) $this->gpuInFlightSince)
+            ?? (float) $this->gpuInFlightSince;
+        $elapsed = hrtime(true) / 1_000_000_000 - $since;
+
+        return $elapsed < BoundedCommand::SETTLE_CEILING_SECONDS;
     }
 
     protected function tickIntervalSeconds(): ?float
@@ -123,7 +217,6 @@ final class SystemModule extends BaseModule
     {
         [$cpuLoad, $idle, $total] = $this->sampleCpu();
         $memLoad = $this->readMemLoad();
-        [$gpuLoad, $spawnFailed] = $this->sampleGpu();
         $uptime = $this->readUptime();
 
         // History must not accumulate unmeasured samples — a sentinel entry
@@ -144,10 +237,11 @@ final class SystemModule extends BaseModule
             array_shift($memHistory);
         }
 
+        // The GPU row is not sampled here: its value arrives on its own message
+        // (see withGpuSample), so the previous reading carries over untouched.
         $clone = $this->withState([
             'cpuLoad' => $cpuLoad,
             'memLoad' => $memLoad,
-            'gpuLoad' => $gpuLoad,
             'uptime' => $uptime,
             'cpuHistory' => $cpuHistory,
             'memHistory' => $memHistory,
@@ -155,7 +249,6 @@ final class SystemModule extends BaseModule
 
         $clone->cpuIdleBase = $idle;
         $clone->cpuTotalBase = $total;
-        $clone->gpuSpawnFailed = $spawnFailed;
 
         return $clone;
     }
@@ -246,23 +339,47 @@ final class SystemModule extends BaseModule
     }
 
     /**
-     * GPU utilization via a bounded nvidia-smi argv run (no shell, deadline,
-     * output cap, guaranteed reap).
-     *
-     * @return array{0: float, 1: bool} load plus the new spawn-failure latch
+     * The GPU sample as a Cmd: nvidia-smi on the loop (no shell, deadline, output
+     * cap, guaranteed reap), settling as a GpuSampleMsg. Only ever built when no
+     * sample is in flight and the spawn latch is clear.
      */
-    private function sampleGpu(): array
+    private function gpuSampleCmd(): \Closure
     {
-        if ($this->gpuSpawnFailed) {
-            return [-1.0, true];
-        }
+        $source = $this->name();
+        $sample = $this->gpuSampleSeq;
+        $loop = $this->loop ?? Loop::get();
+        $launch = $this->gpuInFlightLaunch;
 
-        $result = BoundedCommand::run([
-            'nvidia-smi',
-            '--query-gpu=utilization.gpu',
-            '--format=csv,noheader,nounits',
-        ]);
+        return Cmd::promise(
+            static function () use ($loop, $source, $sample, $launch): PromiseInterface {
+                // Stamped when the host actually runs this Cmd, so the latch counts from the launch.
+                $launch?->markLaunched();
 
+                return BoundedCommand::runAsync(
+                    $loop,
+                    ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
+                )->then(
+                    static function (array $result) use ($source, $sample): Msg {
+                        [$load, $spawnFailed] = self::gpuReading($result);
+
+                        return new GpuSampleMsg($source, $load, $spawnFailed, $sample);
+                    },
+                    // Unexpected rejection: a transient unmeasured tick, never a stuck in-flight latch.
+                    static fn (\Throwable $e): Msg => new GpuSampleMsg($source, -1.0, false, $sample),
+                );
+            },
+        );
+    }
+
+    /**
+     * The pure reading of one nvidia-smi outcome: the GPU percentage (or -1.0
+     * when there is none) plus the spawn-failure latch.
+     *
+     * @param array{output: string, failure: ?string} $result
+     * @return array{0: float, 1: bool}
+     */
+    private static function gpuReading(array $result): array
+    {
         if ($result['failure'] === 'Command could not be started') {
             // Deterministic absence (no binary here): stop attempting spawns.
             return [-1.0, true];

@@ -75,8 +75,8 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 
 $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
-// Probe the terminal — auto()/probe() re-resolve on every call;
-// wrap Detect::cached() to memoise one answer per process.
+// Probe the terminal — probe() re-resolves on every call (wrap Detect::cached()
+// to memoise one answer per process); auto() is already memoised per process.
 $mosaic = Mosaic::probe();
 
 // Force a specific backend
@@ -147,14 +147,22 @@ door; `fromAnimatedFile()` — a container's frame list into an `Animation`
 (see **Supported image formats**); and `fromUrl()`/`fromUrlAsync()` — see
 **Remote images**.
 
-Every backend implements `Renderer`: `render()` for the bytes, `name()` for
-the stable identifier (`sixel`, `kitty`, `iterm2`, `chafa`, `halfblock`,
+Every backend implements `Renderer`. The interface's required methods are
+`render()`, `name()`, `supportsAlpha()`, `isInline()`, `delete()`,
+`renderRgb()`, `present()` and `supportsIdDelete()`; the last three were added
+with the raw-pixel and frame-present paths, so an out-of-tree implementation must
+add them (the `ImageSourceRgbFallback` trait supplies working defaults for
+`renderRgb()`, `present()` and `supportsIdDelete()`). Their roles: `render()`
+for the bytes, `name()` for the stable identifier (`sixel`, `kitty`, `iterm2`, `chafa`, `halfblock`,
 `quarterblock`, `ascii`, `symbols`), `supportsAlpha()` — true for the
 graphics tiers, false for the text tiers, and informational for now (no
 auto-ladder steers on it yet), `isInline()` — true when `render()` emits
 newline-separated cell text that composes directly into a frame, false when
 it emits one opaque escape blob that must ride an out-of-band overlay (see
-**ImageLayer**) — and `delete()` (**Deleting images**). `Mosaic::renderer()`
+**ImageLayer**) — and `delete()` (**Deleting images**). `renderRgb()` takes a
+raw RGBA8 buffer (see below), `present()` draws one frame of a re-displayed
+sequence and retires the frame it replaces, and `supportsIdDelete()` says
+whether `delete()` removes one named frame (Kitty only). `Mosaic::renderer()`
 hands back the live instance, tmux envelope included, and `Mosaic` answers
 `isInline()` itself for callers that should not know the protocol.
 
@@ -200,6 +208,7 @@ Decoding untrusted images is budgeted — the caps are constants on
 |---|---|---|
 | `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file, URL and `fromString()` reads — oversized payloads are refused before GD ever sees them (the in-memory route measures its buffer up front, so every byte-intake path shares one ceiling; the format-signature and pixel budgets below still guard what fits) |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
+| `DecodedImageCache::BYTE_BUDGET` | 32 MiB of decoded pixels (eight slots at most) | the process-wide decode LRU's retained memory: a handle larger than the budget is never kept, so one large sheet cannot pin memory across later decodes under `memory_limit` |
 | `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: a frame whose `width × height` cell footprint exceeds it is refused with a mosaic-owned message before sugar-animation's decoder sees it (mirrors the sibling's own `Decoder::MAX_CELLS`) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
@@ -330,6 +339,59 @@ connector and timeout yourself.
 > `ImageSource::overrideHostResolver()` swaps the guard's address resolution
 > process-wide — it is a test seam for exercising these checks without real
 > DNS, not a configuration knob; leave it alone outside tests.
+
+## Raw pixels, MIME sniffing and URL checks
+
+Three pure helpers sit beside the loaders, for callers that must decide before
+they decode or fetch:
+
+- `ImageSource::sniffMime($bytes)` returns the media type of PNG, JPEG, GIF or
+  WebP bytes by magic number, or `null`. It never refuses; an animated WebP is
+  still labelled `image/webp`.
+- `ImageSource::isFetchableUrl($url, $allowedSchemes = ['http', 'https'])` is a
+  predicate: a host is present and the scheme is allowed, compared
+  case-insensitively. It never throws.
+- `PngPixels::decode($bytes)` returns the stored RGBA8 samples of a still PNG as
+  a `Codec\RawRgba` (`width`, `height`, `rgba`), with no GD quantisation, so
+  alpha 254 stays 254. It returns `null` for anything it declines: a non-PNG
+  prefix, a malformed or CRC-failing stream, 16-bit or interlaced data, an
+  image over `$maxPixels` (default: the 50 MP `ImageSource` cap), or an image
+  whose inflated scanlines exceed 64 MiB (`PngPixels::MAX_RAW_BYTES`). The
+  second limit is what declines a 4096² RGBA frame.
+
+  The decode runs synchronously in pure PHP and its cost grows linearly with
+  the pixel count: about 3.4 s for a 1000×1000 RGBA still and about 14 s for
+  2000×2000 on PHP 8.3.6, so the largest admissible image takes tens of
+  seconds. Decode untrusted bytes off the event loop, or lower `$maxPixels`,
+  before handing them to a presenter.
+
+```php
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\PngPixels;
+
+if (ImageSource::isFetchableUrl($url)) {
+    $image = ImageSource::fromUrl($url);
+}
+
+$pixels = PngPixels::decode($bytes); // null means: fall back to GD
+```
+
+The chunk walk, scanline unfilter and colour expansion behind `PngPixels` are
+shared with the APNG frame path. Two behaviour changes come with the sharing,
+both declared here:
+
+- **APNG tRNS (changed).** A gray (type 0) or RGB (type 2) APNG frame whose
+  `tRNS` names a colour key now marks exact key matches fully transparent.
+  Before, the APNG frame path ignored the key and those pixels stayed opaque.
+- **Scheme case (changed).** The fetch path (`fromUrl()`, including every
+  redirect hop) compares the scheme case-insensitively, the same rule
+  `isFetchableUrl()` uses. `HTTPS://example.test/a.png` now passes the scheme
+  check, where it was refused as "not in the allowed list" before.
+
+`PngPixels::walkChunks()`, `parseIhdr()`, `parsePalette()`, `parseTrns()` and
+`inflateAndUnfilter()` are `public static` only so `ApngDecoder` can call them
+from another class. They are tagged `@internal`, are not part of the supported
+API, and may change without notice.
 
 ## Async and precomputed renders
 
@@ -483,10 +545,11 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 
 `Mosaic::auto()` asks `Detect::probe()` — environment variables first, then a
 DA1/XTWINOPS round trip on the TTY — and `bestBackend()` seats a renderer on
-the answer: kitty → iterm2 → sixel → the symbol-map tier. Both `Mosaic::auto()`
-and `Mosaic::probe()` resolve capabilities on every call; wrap
-`Detect::cached()` at the application boundary to memoise the probe per-process
-(`Detect::reset()` drops the memo). Chafa is not on that
+the answer: kitty → iterm2 → sixel → the symbol-map tier. `Mosaic::auto()` is
+memoised per process (see **Auto memo** below; `Mosaic::resetAutoMemo()` forces
+a fresh probe). `Mosaic::probe()` resolves capabilities on every call; wrap
+`Detect::cached()` at the application boundary to memoise that probe per-process.
+`Detect::reset()` drops both memos. Chafa is not on that
 ladder (its capability slot is written only by `Capability::universal()`), and
 plain half-block appears only when the text-availability slot is itself off, so
 the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
@@ -555,9 +618,11 @@ image (or `''` when the protocol has nothing to remove). The interface
 types `$imageId` as a string — `delete('1')` — even where the protocol
 addresses images numerically: the numeric id Kitty's wire uses is
 assigned at render time and handed to `KittyOptions::place()` or
-`KittyOptions::transmit()` there, and `delete()` simply formats it into
-the APC `a=d;I=<id>` control sequence (the id alone does nothing
-without a number qualifier). iTerm2's Pop carries no id at all — it
+`KittyOptions::transmit()` there, and `delete()` formats it into the APC
+`a=d,d=I,i=<id>` control sequence. The uppercase `d=I` removes the
+placement and frees the image data; a lowercase `d=i` keeps the data, and
+a bare `a=d` with no `d` key erases every visible placement, the frame just
+drawn included. iTerm2's Pop carries no id at all — it
 removes the most recent image from the cursor, so its `delete()` returns
 a constant Pop and ignores the argument — and every text-protocol tier
 (Sixel, HalfBlock, QuarterBlock, Chafa, Ascii, SymbolMap) has no stored
@@ -566,7 +631,7 @@ argument is a placeholder for interface uniformity.
 
 | Renderer | Sequence | Notes |
 |---------|----------|-------|
-| Kitty | APC `a=d` | Deletes specific image by id |
+| Kitty | APC `a=d,d=I,i=<id>` | Deletes specific image by id and frees its data |
 | iTerm2 | OSC 1337 Pop | Removes topmost image from stack; `$imageId` ignored |
 | Sixel | _(none)_ | DECSIXEL has no delete command; returns `''` |
 | HalfBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
@@ -574,6 +639,95 @@ argument is a placeholder for interface uniformity.
 | Chafa | _(none)_ | External command; no persistent image identity; returns `''` |
 | Ascii | _(none)_ | Plain text SGR; character ramp; returns `''` |
 | SymbolMap | _(none)_ | Plain text SGR; glyph-coverage engine; returns `''` |
+
+## Env-only detection, raw RGBA and frame sessions
+
+`Detect::fromEnv(?array $env = null)` classifies the terminal from environment
+variables alone: no tty, no query bytes, no timeout, no tmux process. Pass an
+explicit `name => value` map, or `null` to read the process environment. An
+environment-only Kitty claim is reported unconfirmed, never true (see below).
+`Mosaic::fromEnv()` builds the renderer from that answer, and
+`Mosaic::fromModeString('auto', false)` routes the `auto` mode through it.
+The answer is the env stage of `Detect::probe()`; a DA1 sixel promotion, a
+tmux feature veto and the OSC colour queries need the tty and are absent here.
+
+**Auto memo.** `Mosaic::auto()` is memoised per process: the first call probes,
+later calls return the same `Mosaic`. `Mosaic::resetAutoMemo()` forces the next
+call to probe again, and `Detect::reset()` clears it along with the
+`Detect::cached()` memo. `Mosaic::probe()` is not memoised.
+
+Every renderer also takes a raw straight-alpha RGBA8 buffer through
+`renderRgb($rgba, $pixelWidth, $pixelHeight, $cellsWidth, $cellsHeight = null)`.
+Kitty sends it as `f=32` and iTerm2 as an uncompressed TIFF, so neither builds
+a PNG container. Sixel and the text tiers decode it through an `ImageSource`.
+
+A Kitty `renderRgb()` frame is anonymous: no `i=` names it, so no `delete()`
+can retire it, and calling it once per frame leaves one image in the terminal's
+store per call. A frame loop uses `KittyRenderer::renderRgbFrame($rgba,
+$pixelWidth, $pixelHeight, $cellsWidth, $cellsHeight, $imageId)` instead. It
+carries the id, so the previous frame is retired with `delete($previousId)` once
+the new one is drawn, the same double buffer `present()` runs. For ImageSource
+frames, `GraphicsFrameSession` does this for you.
+
+`GraphicsFrameSession::new($renderer)->withImageId($id)` presents a frame
+sequence without leaking images. Each `present($frame, $width, $height = null)`
+draws the frame under an id from a two-slot double buffer and then retires the
+previous one. On Kitty the new frame lands before the old one is deleted, so
+the screen never shows an empty image cell and the terminal's image store does
+not grow. iTerm2 pops the previous frame before it draws, because its delete
+removes only the topmost image. Sixel and the text tiers have nothing to delete.
+`Renderer::supportsIdDelete()` reports which case applies.
+
+**Kitty is confirmed, not assumed.** An environment claim of Kitty
+(`KITTY_WINDOW_ID`, `TERM=xterm-kitty`, a known `TERM_PROGRAM`) is a hypothesis.
+`Detect::probe()` sends an APC `a=q` query for one 1x1 pixel under image id 31,
+followed by DA1, and `Capability::kitty()` is true only when the terminal
+answers `ESC _ G i=31;OK`. The reply window is 300 ms. A DA1 answer without that
+reply, no answer in the window, or no tty to ask on drops the claim, and the
+ladder decides as it does for any other terminal.
+
+**Kitty over a slow link.** The window covers a round trip of about 300 ms, so
+a remote Kitty terminal (ssh, a Kitty pane across a satellite link) answers in
+time. A reply that arrives after the window is dropped: the claim falls to
+symbols or sixel, and the late bytes are consumed by the input parser, not
+shown. A local terminal returns as soon as the DA1 answer lands, so the window
+costs nothing there; only a silent window waits the full 300 ms.
+
+**No tty, no Kitty.** This is a behavior change for callers that pre-render
+frames. Before it, a Kitty environment claim selected Kitty with no tty at all,
+so `candy-image --format auto photo.png > frame.txt` inside Kitty wrote Kitty
+APC bytes. Now the query needs a tty on stdin and stdout, so that run writes
+symbols text, and a later `cat` of the file in Kitty shows text, not the
+image. To get the Kitty bytes into a file, force the protocol with
+`--format=kitty`, which skips the confirmation. `Mosaic::auto()` keeps that answer: its palette fallback
+grants iTerm2 from the environment, never Kitty, since a Kitty graphics claim
+needs the reply. `Detect::fromEnv()` and `Mosaic::fromEnv()` never ask, so they
+hold no reply and report the environment claim unconfirmed: `Capability::kitty()`
+is false there, and `Mosaic::fromEnv(['TERM' => 'xterm-kitty'])` builds the
+symbols rung. `Mosaic::fromModeString('auto', false)` inherits that answer.
+
+## Sprite sheets, timelines and the decode cache
+
+`SpriteSheet::fromSource($sheet, $cols, $rows)` splits a storyboard or trickplay
+sheet into an equal grid. `->tile($i)` returns tile `$i` in row-major order as an
+`ImageSource`. `Timeline::new($tiles, $durationSeconds)->tileAt($sec)` maps a
+playback position to the tile that covers it, clamping before the start and
+past the end.
+
+Each tile is a crop of the sheet, and `ImageSource::crop()` reads its decode
+through `DecodedImageCache`: a process-wide LRU of eight decoded handles, keyed
+on the content of the bytes. A sheet of any number of tiles costs one decode,
+and two `ImageSource` values built from the same bytes share one. The cache
+owns its handles, so callers read them and never destroy them. The cache is
+bounded by eight slots and by `DecodedImageCache::BYTE_BUDGET` (32 MiB) of
+decoded pixels, whichever is hit first; a sheet larger than the budget is decoded
+on each call and not kept.
+`DecodedImageCache::misses()` counts the decodes, and `reset()` clears the cache.
+
+`ChafaRenderer::renderAsync($image, $width, $height, $loop)` runs the chafa child
+on the event loop through `ChildRun`. The loop keeps running while chafa
+encodes. The repaint memo is kept, so an unchanged frame resolves without a
+spawn. `render()` is unchanged and still blocks.
 
 ## Inside tmux
 
@@ -604,6 +758,25 @@ instead: `ScreenPacketizer` and `ScreenPassthrough`, which live under
 `Passthrough/` behind the shared `PassthroughDecorator` interface. The
 tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
 — sits in the root namespace, not in `Passthrough/`.
+
+**Kitty inside tmux needs the APC reply.** This is a behavior change for tmux
+users. Before it, a Kitty environment claim inside tmux (`TMUX` set with
+`KITTY_WINDOW_ID`, `TERM=xterm-kitty` or a known `TERM_PROGRAM`) selected
+Kitty on its own. Now `Capability::kitty()` is true only when the APC `a=q`
+reply arrives, and that reply has to cross tmux to reach the program. With
+`allow-passthrough` off, tmux is expected to swallow the reply, so the claim is
+dropped and the ladder falls to symbols or sixel. The probe runs before
+`TmuxPassthrough::ensure()` flips the option (that happens when the renderer
+is built), so the automatic flip cannot rescue the first probe. Setting
+`allow-passthrough` to `on` (`set -g allow-passthrough on`) governs passthrough
+in general, but it may not change this outcome: the query is written raw, not
+wrapped, and this library has not measured whether tmux forwards a raw,
+unwrapped APC query to the outer terminal or relays its reply. No tested path
+currently confirms Kitty inside tmux. Treat it as unconfirmed: if no reply
+arrives, the claim is dropped as described above, and symbols or sixel is the
+expected result whatever the option is set to. The query is written raw: there is
+no tmux exception to the reply rule and no DCS passthrough wrap around the
+query.
 
 ## Animation
 
@@ -844,6 +1017,7 @@ SugarCraft\Image
 ├── ApngDecoder            # Pure-PHP APNG frame walk (GD collapses APNG to its base frame)
 ├── FrameTickMsg           # Internal Msg for frame-advance ticks
 ├── ImageLayer             # Per-frame image registry: marker blocks + placements
+├── PngPixels              # Still-PNG pixel decoder (exact samples, shares the APNG chunk walk)
 ├── ImageSource            # Image bytes + metadata + decode budgets (Limits)
 ├── KittyOptions           # Kitty protocol options (transmit / place / compress)
 ├── Lang                   # i18n facade

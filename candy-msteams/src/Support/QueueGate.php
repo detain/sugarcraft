@@ -23,7 +23,7 @@ use React\EventLoop\Timer\TimerInterface;
  * the P1 dispose law, and E646-clean by construction: this is prompt
  * plumbing, no wall-clock bound on any model answer.
  */
-final class QueueGate
+final class QueueGate implements \SugarCraft\Plugins\Bridge\QueueGate
 {
     /** @var array<string, list<string>> */
     private array $pending = [];

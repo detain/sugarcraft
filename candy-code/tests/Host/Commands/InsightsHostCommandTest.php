@@ -152,8 +152,8 @@ final class InsightsHostCommandTest extends TestCase
     {
         $store = $this->insightsStore('shelffail.db');
         $store->createSession('sf-a', 'candy-code', 'm', null, null, '/home/me/alpha');
-        // A FILE where the shelf path needs a directory — the one shape
-        // AtomicFileWriter cannot mkdir its way out of.
+        // A FILE where the shelf path needs a directory. The export writer creates a
+        // missing parent, so only a regular file in the way makes mkdir fail.
         file_put_contents($this->tempDir . '/blocker', 'not a directory');
 
         $reply = (new InsightsHostCommand($this->tempDir . '/blocker/deeper'))

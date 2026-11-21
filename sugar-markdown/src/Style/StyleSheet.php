@@ -27,6 +27,9 @@ final class StyleSheet
     /** @var array<string, array<int, Style>> BlockKind name => depth => Style */
     protected array $styles = [];
 
+    /** The shared base sheet {@see base()} hands out. */
+    private static ?self $base = null;
+
     private function __construct() {}
 
     /**
@@ -36,6 +39,13 @@ final class StyleSheet
      * Deeper nests inherit unless overridden.
      */
     public static function base(): self
+    {
+        // Immutable and theme-independent, so every render shares one sheet
+        // instead of rebuilding it per document (rank 39).
+        return self::$base ??= self::buildBase();
+    }
+
+    private static function buildBase(): self
     {
         $sheet = new self();
 

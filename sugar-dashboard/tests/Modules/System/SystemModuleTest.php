@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Modules\System;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
+use SugarCraft\Dashboard\Modules\System\GpuSampleMsg;
 use SugarCraft\Dashboard\Modules\System\RefreshMsg;
 use SugarCraft\Dashboard\Modules\System\SystemModule;
 
@@ -288,5 +292,121 @@ final class SystemModuleTest extends TestCase
         // series measures from the first tick (no differential needed).
         $this->assertCount(2, $state['cpuHistory']);
         $this->assertCount(3, $state['memHistory']);
+    }
+
+    /**
+     * Regression: nvidia-smi used to run inside the tick, so a hung driver froze
+     * the dashboard for its whole deadline. A tick now returns at once with the
+     * sample on the loop, and its answer is applied when it arrives.
+     */
+    public function testAGpuSampleArrivesAsItsOwnMessageAndIsApplied(): void
+    {
+        $module = new SystemModule();
+        [$ticked, $cmd] = $module->update(new RefreshMsg());
+        $this->assertNotNull($cmd);
+        $this->assertStringNotContainsString('GPU', $ticked->view(), 'no GPU row before its sample settles');
+
+        // The first sample of a fresh module is sample 1.
+        [$sampled, $sampledCmd] = $ticked->update(new GpuSampleMsg('system', 42.0, false, 1));
+        $this->assertNull($sampledCmd);
+        $this->assertStringContainsString('GPU  42%', $sampled->view());
+    }
+
+    /**
+     * Regression: a hung sample that settles after its successor started used to
+     * clear the latch the successor holds, so the next tick started a third child
+     * beside the live one. Only the newest sample may settle the latch.
+     */
+    public function testAStaleGpuSampleDoesNotClearTheLatchOfANewerSample(): void
+    {
+        $module = new SystemModule();
+        [$first] = $module->update(new RefreshMsg());
+        // The first sample is still hung past the ceiling, so the next tick samples again.
+        $this->setGpuInFlightSince($first, $this->gpuInFlightSince($first) - BoundedCommand::SETTLE_CEILING_SECONDS - 1.0);
+        [$second] = $first->update(new RefreshMsg());
+        $this->assertSame(2, $this->gpuSampleSeq($second));
+
+        [$afterStale, $staleCmd] = $second->update(new GpuSampleMsg('system', 9.0, false, 1));
+        $this->assertNull($staleCmd);
+        $this->assertSame($second, $afterStale, 'a stale sample changes nothing');
+
+        // The newer sample still holds the latch, so a tick inside the ceiling issues no third sample.
+        [$again] = $afterStale->update(new RefreshMsg());
+        $this->assertSame(2, $this->gpuSampleSeq($again), 'the live sample keeps the latch');
+
+        [$settled] = $again->update(new GpuSampleMsg('system', 42.0, false, 2));
+        $this->assertStringContainsString('GPU  42%', $settled->view());
+    }
+
+    private function gpuSampleSeq(SystemModule $module): int
+    {
+        return (int) (new \ReflectionProperty(SystemModule::class, 'gpuSampleSeq'))->getValue($module);
+    }
+
+    /**
+     * Regression: the GPU latch used to hold for good when the host dropped the
+     * sample Cmd, so the GPU row froze for the session. Past the settle ceiling
+     * a tick samples again, which shows as a refreshed latch timestamp.
+     */
+    /**
+     * Regression: nvidia-smi ran on the global loop even when the host ran its own,
+     * so its pipes and deadline never fired and the GPU row never updated. The sample
+     * must settle on the loop the module was given.
+     */
+    public function testTheGpuSampleRunsOnTheLoopTheModuleWasGiven(): void
+    {
+        $loop = new StreamSelectLoop();
+        $module = new SystemModule(1.0, 'system', $loop);
+        [, $cmd] = $module->update(new RefreshMsg());
+        $this->assertNotNull($cmd);
+
+        // The tick re-arms beside the sample, so the sample is the second batch member.
+        $batch = $cmd();
+        $sample = $batch instanceof BatchMsg ? $batch->cmds[1]() : $batch;
+
+        $settled = null;
+        $sample->promise->then(static function (Msg $msg) use (&$settled, $loop): void {
+            $settled = $msg;
+            $loop->stop();
+        });
+        $loop->addTimer(10.0, static fn () => $loop->stop());
+        $loop->run();
+
+        $this->assertInstanceOf(GpuSampleMsg::class, $settled, 'the host loop must settle the GPU sample');
+    }
+
+    public function testAGpuSampleDroppedByTheHostIsReissuedAfterTheSettleCeiling(): void
+    {
+        $module = new SystemModule();
+        [$dropped] = $module->update(new RefreshMsg());
+        $backdated = $this->gpuInFlightSince($dropped) - BoundedCommand::SETTLE_CEILING_SECONDS - 1.0;
+        $this->setGpuInFlightSince($dropped, $backdated);
+
+        [$again, $cmd] = $dropped->update(new RefreshMsg());
+
+        $this->assertNotNull($cmd);
+        $this->assertGreaterThan($backdated, $this->gpuInFlightSince($again), 'a fresh GPU sample must be issued');
+    }
+
+    private function gpuInFlightSince(SystemModule $module): float
+    {
+        $since = new \ReflectionProperty(SystemModule::class, 'gpuInFlightSince');
+
+        return (float) $since->getValue($module);
+    }
+
+    private function setGpuInFlightSince(SystemModule $module, float $value): void
+    {
+        (new \ReflectionProperty(SystemModule::class, 'gpuInFlightSince'))->setValue($module, $value);
+    }
+
+    public function testAGpuSampleForAnotherModuleIsIgnored(): void
+    {
+        $module = new SystemModule();
+
+        [$next, $cmd] = $module->update(new GpuSampleMsg('other', 42.0, false, 1));
+
+        $this->assertSame($module, $next);
+        $this->assertNull($cmd);
     }
 }

@@ -1473,7 +1473,7 @@ final class EnvRosterDriftTest extends TestCase
     private const OS_ENV_ROSTER = [
         'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
         'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'TERM', 'COLORFGBG',
-        'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR',
+        'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR', 'COLUMNS', 'NUMBER_OF_PROCESSORS',
         // C-TUI-7.b: emulator identity carriers that survive a multiplexer,
         // read by Support\MacAltNotice's kitty probe (docs row names all three).
         'KITTY_WINDOW_ID', 'GHOSTTY_RESOURCES_DIR', 'WEZTERM_PANE',
@@ -1792,5 +1792,283 @@ final class EnvRosterDriftTest extends TestCase
         }
 
         return array_keys($found);
+    }
+
+    /**
+     * The literal-read leg for names OUTSIDE the CANDY_CODE_ prefix. EnvReadScanner
+     * places only prefixed names, and the non-prefixed ones come from an exact
+     * ambient list, so a `getenv('HTTPS_PROXY')` added to src/ would reach no
+     * oracle while README still promises that every variable CandyCode reads is
+     * documented. This leg takes every upper-case literal handed to getenv(),
+     * $_ENV[] or $_SERVER[] in src/ and demands a row for it on ENVIRONMENT.md
+     * (or on the ambient list). A key reached through a string constant declared
+     * in the same file (`self::NAME`, `static::NAME`, `Owner::NAME`) is followed
+     * to its value, because `getenv(self::PROXY_ENV)` is the same read as the
+     * literal. Blind spots, stated so the claim is not overread: a constant
+     * declared in another file is not resolved, and a variable-name read is not
+     * followed. The prefixed ones keep their own scanner.
+     */
+    public function testEveryLiteralNonPrefixedEnvironmentReadInSrcIsTabulated(): void
+    {
+        $tabulated = array_merge(
+            $this->osTableNames(),
+            $this->colourTableNames(),
+            $this->ambientTableNames(),
+            explode('|', EnvReadScanner::AMBIENT_NAMES),
+        );
+
+        $unlisted = [];
+        foreach ($this->srcSources() as $file => $source) {
+            foreach (self::literalEnvReadsIn($source) as $name) {
+                if (!str_starts_with($name, 'CANDY_CODE_') && !in_array($name, $tabulated, true)) {
+                    $unlisted[$name][] = $file;
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $unlisted,
+            'src/ reads environment variables that docs/ENVIRONMENT.md does not tabulate, so '
+            . 'README\'s "every environment variable CandyCode reads is documented" is false for them — '
+            . 'add a row (and to OS_ENV_ROSTER when it is an OS variable), or stop reading them',
+        );
+    }
+
+    public function testTheLiteralReadScanSeesCallsAndSuperglobalsButNotPlainStrings(): void
+    {
+        $this->assertSame(
+            ['HTTPS_PROXY', 'TZ', 'LANG'],
+            self::literalEnvReadsIn(
+                '<?php function f() { $a = getenv("HTTPS_PROXY"); $b = \\getenv(\'TZ\'); '
+                . '$c = $_SERVER["LANG"] ?? null; return [$a, $b, $c]; }',
+            ),
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php $names = ["HTTPS_PROXY"]; function f($n) { return getenv($n); }'),
+        );
+        $this->assertSame(
+            ['CANDY_CODE_TRAILING_'],
+            self::literalEnvReadsIn('<?php function f() { return getenv("CANDY_CODE_TRAILING_" . $x); }'),
+        );
+    }
+
+    public function testTheLiteralReadScanSeesLowerCaseGetenvNamesAndNamedArguments(): void
+    {
+        $this->assertSame(
+            ['http_proxy', 'no_proxy'],
+            self::literalEnvReadsIn('<?php function f() { return [getenv(\'http_proxy\'), getenv("no_proxy")]; }'),
+            'proxy variables are conventionally lower-case, so getenv() must not drop them',
+        );
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn('<?php function f() { return getenv(name: \'HTTPS_PROXY\'); }'),
+            'a named argument is still the read, the label before it is not',
+        );
+        $this->assertSame(
+            ['NO_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { const N = "NO_PROXY"; function f() { return getenv(name: self::N); } }',
+            ),
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php function f() { return $_SERVER[\'argv\']; }'),
+            'a lower-case $_SERVER key is PHP\'s own entry, not an environment variable',
+        );
+    }
+
+    public function testTheLiteralReadScanFollowsASameFileStringConstant(): void
+    {
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { private const PROXY_ENV = "HTTPS_PROXY"; '
+                . 'function f() { return getenv(self::PROXY_ENV); } }',
+            ),
+        );
+        $this->assertSame(
+            ['NO_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { public const X = \'NO_PROXY\'; '
+                . 'function f() { return $_SERVER[static::X] ?? null; } }',
+            ),
+        );
+        $this->assertSame(
+            ['NO_PROXY', 'HTTPS_PROXY'],
+            self::literalEnvReadsIn(
+                '<?php class A { const P = "HTTPS_PROXY", N = "NO_PROXY"; '
+                . 'function f() { return [getenv(self::N), getenv(self::P)]; } }',
+            ),
+        );
+        // Two classes share the name K with different values: both values are
+        // reported for each read (an over-report that can only ask for extra rows).
+        $this->assertSame(
+            ['HTTPS_PROXY', 'NO_PROXY'],
+            array_values(array_unique(self::literalEnvReadsIn(
+                '<?php class A { const K = "HTTPS_PROXY"; } class B { const K = "NO_PROXY"; '
+                . 'function f() { return getenv(A::K) . getenv(B::K); } }',
+            ))),
+        );
+    }
+
+    public function testAConstantThatIsNotAnEnvironmentKeyOrIsDeclaredElsewhereIsNotAFalseRead(): void
+    {
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn(
+                '<?php class A { private const NAME = "HTTPS_PROXY"; '
+                . 'function f() { return $this->names[self::NAME] ?? null; } }',
+            ),
+            'a constant is only a read when it is the key of getenv() or of $_ENV / $_SERVER',
+        );
+        // The positive arm the zero-fixture pairing rule asks for: the same instrument
+        // must still report the literal key when it IS a getenv() key, or the empty
+        // answers above could mean a dead scanner rather than a correct refusal.
+        $this->assertSame(
+            ['HTTPS_PROXY'],
+            self::literalEnvReadsIn('<?php class A { function f() { return getenv("HTTPS_PROXY"); } }'),
+            'the scanner still reads a literal getenv() key, so the empty answers below are real refusals',
+        );
+        $this->assertSame(
+            [],
+            self::literalEnvReadsIn('<?php class A { function f() { return getenv(Other::PROXY_ENV); } }'),
+            'a constant declared in another file is a documented blind spot, not a silent claim',
+        );
+    }
+
+    /**
+     * @return array<string, string> src/ PHP file path => source text
+     */
+    private function srcSources(): array
+    {
+        $root = \dirname(__DIR__, 2) . '/src';
+        $sources = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if ($file instanceof \SplFileInfo && $file->getExtension() === 'php') {
+                $sources[substr($file->getPathname(), strlen($root) + 1)] = (string) file_get_contents($file->getPathname());
+            }
+        }
+        ksort($sources);
+
+        return $sources;
+    }
+
+    /**
+     * Literal names passed straight to getenv() (any case, the first argument or
+     * a `name:` named argument) or upper-case keys indexed out of $_ENV / $_SERVER,
+     * in source order. Comments and plain strings that are not the first argument
+     * of such a call do not count.
+     *
+     * @return list<string>
+     */
+    private static function literalEnvReadsIn(string $source): array
+    {
+        $tokens = [];
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $tokens[] = $token;
+        }
+        $constants = self::sameFileStringConstants($tokens);
+
+        $names = [];
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; ++$i) {
+            $token = $tokens[$i];
+            if (!\is_array($token)) {
+                continue;
+            }
+            $isGetenv = \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                && preg_match('/(?:^|\\\\)getenv$/i', $token[1]) === 1;
+            $isSuperglobal = $token[0] === T_VARIABLE && ($token[1] === '$_ENV' || $token[1] === '$_SERVER');
+            $open = $tokens[$i + 1] ?? null;
+            if (!($isGetenv && $open === '(') && !($isSuperglobal && $open === '[')) {
+                continue;
+            }
+            // getenv() takes any case (`http_proxy` is read by many HTTP stacks); a
+            // $_SERVER key is only an environment read in upper case, since the
+            // lower-case ones ($_SERVER['argv']) are PHP's own entries, not the environment.
+            $pattern = $isGetenv ? '/^[A-Za-z][A-Za-z0-9_]*$/' : '/^[A-Z][A-Z0-9_]*$/';
+            foreach (self::keyValuesAt($tokens, $i + 2, $constants) as $literal) {
+                if (preg_match($pattern, $literal) === 1) {
+                    $names[] = $literal;
+                }
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * The string value(s) of the key expression starting at $at: a quoted literal,
+     * or a class constant (`self::NAME`, `static::NAME`, `Owner::NAME`) declared as
+     * a string in the same file. A name declared with two different values in the
+     * file yields both, so the scan over-reports rather than hides a read.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array<string, list<string>> $constants
+     * @return list<string>
+     */
+    private static function keyValuesAt(array $tokens, int $at, array $constants): array
+    {
+        $first = $tokens[$at] ?? null;
+        if (\is_array($first) && $first[0] === T_CONSTANT_ENCAPSED_STRING) {
+            return [trim($first[1], "\"'")];
+        }
+        // getenv(name: 'X'): the label is not the key, the value after it is.
+        if (\is_array($first) && $first[0] === T_STRING && ($tokens[$at + 1] ?? null) === ':') {
+            return self::keyValuesAt($tokens, $at + 2, $constants);
+        }
+        $scope = \is_array($first) ? $first[0] : null;
+        $isScope = \in_array($scope, [T_STRING, T_STATIC, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true);
+        $colons = $tokens[$at + 1] ?? null;
+        $member = $tokens[$at + 2] ?? null;
+        if (
+            $isScope
+            && \is_array($colons) && $colons[0] === T_DOUBLE_COLON
+            && \is_array($member) && $member[0] === T_STRING
+        ) {
+            return $constants[$member[1]] ?? [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Every `const NAME = 'value'` declared as a quoted string in one file, including
+     * the comma-separated form `const A = 'x', B = 'y';`. Keyed by constant name.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return array<string, list<string>>
+     */
+    private static function sameFileStringConstants(array $tokens): array
+    {
+        $found = [];
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; ++$i) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_CONST) {
+                continue;
+            }
+            $j = $i + 1;
+            while (
+                isset($tokens[$j], $tokens[$j + 1], $tokens[$j + 2])
+                && \is_array($tokens[$j]) && $tokens[$j][0] === T_STRING
+                && $tokens[$j + 1] === '='
+                && \is_array($tokens[$j + 2]) && $tokens[$j + 2][0] === T_CONSTANT_ENCAPSED_STRING
+            ) {
+                $found[$tokens[$j][1]][] = trim($tokens[$j + 2][1], "\"'");
+                $j += 3;
+                if (($tokens[$j] ?? null) !== ',') {
+                    break;
+                }
+                ++$j;
+            }
+        }
+
+        return $found;
     }
 }

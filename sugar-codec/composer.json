@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/sugar-codec",
+    "description": "YAML codec for SugarCraft: one parser and emitter for the YAML subset that SugarCraft tools read and write, shared instead of per-tool copies.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "yaml",
+        "codec",
+        "serialization",
+        "config",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-codec",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-codec/issues",
+        "source": "https://github.com/sugarcraft/sugar-codec",
+        "docs": "https://sugarcraft.github.io/lib/sugar-codec.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Codec\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Codec\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

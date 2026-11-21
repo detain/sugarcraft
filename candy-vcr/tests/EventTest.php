@@ -113,7 +113,11 @@ final class EventTest extends TestCase
         }
     }
 
-    /** @return array{0:int,1:string} */
+    /**
+     * @param list<string> $argv
+     *
+     * @return array{0:int,1:string}
+     */
     private function runCli(array $argv): array
     {
         $stdout = Stream::memory('w+');

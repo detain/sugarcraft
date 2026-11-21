@@ -64,20 +64,20 @@ echo StatusLine::error('connection refused'), "\n";
   theme by passing styles to the constructor, or chain `Theme::build()` —
   the builder requires all seven slots before `build()` succeeds.
   `Theme::detect()` is the `ansi()` palette downgraded to what the output
-  can show, via sugar-core's `ColorProfile::detect()` — its ladder, in
-  order: `CLICOLOR_FORCE` / `FORCE_COLOR` are resolved first and outrank
+  can show, via sugar-core's `ColorProfile::detectTerminal()` (`detect()`
+  plus the dumb-terminal veto) — its ladder, in order: `CLICOLOR_FORCE` / `FORCE_COLOR` are resolved first and outrank
   tty-ness and `TERM=dumb`, so a forced stream keeps full colour even
   through a pipe; otherwise a non-tty STDOUT (`myapp --help | less`) and
   `TERM=dumb` resolve the same way and emit no escape bytes at all —
   that downgrade drops the bold attribute along with the colour, unlike
-  `NO_COLOR`, which outranks the force vars, drops colour while keeping
+  `NO_COLOR`, which the force vars outrank, drops colour while keeping
   bold, and resolves to the Ascii profile; BSD `CLICOLOR=0` drops colour
   unless forced. The roster authority is sugar-core's `ColorProfile`
   docblock — sugar-cli never re-implements the order. **Every presenter
   called without a theme uses
   `Theme::detect()`**; an explicitly passed theme is rendered as given —
   apply the same downgrade to any preset with
-  `$theme->withColorProfile(\SugarCraft\Core\Util\ColorProfile::detect(null, STDOUT))`
+  `$theme->withColorProfile(\SugarCraft\Core\Util\ColorProfile::detectTerminal(null, STDOUT))`
   (`detect()` throws an `InvalidArgumentException` when a stream you pass
   explicitly is not an open resource; the implicit `STDOUT` substitute
   never errors).
@@ -87,7 +87,7 @@ echo StatusLine::error('connection refused'), "\n";
   honouring the theme instead: `Frame::withTheme($t)` routes the border
   through `$t->muted` (no argument uses `Theme::detect()`),
   `->withPlainBorder()` drops border styling entirely, and
-  `Logo::render(ColorProfile::detect())` re-quantises the tint (`NoTty`
+  `Logo::render(ColorProfile::detectTerminal())` re-quantises the tint (`NoTty`
   removes it). The defaults stay the branded splash — slate seed and
   tint-as-given — so only callers that pass a theme or profile change.
   For fully plain output under every profile pass `Theme::plain()` and,

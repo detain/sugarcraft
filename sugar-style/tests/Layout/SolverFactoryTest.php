@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Constraints\CassowarySolver;
 use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Style\Layout\Constraint;
-use SugarCraft\Style\Layout\Direction;
+use SugarCraft\Constraints\Direction;
 use SugarCraft\Style\Layout\Rect;
 use SugarCraft\Style\Layout\Solver;
 use SugarCraft\Style\Layout\SolverFactory;
@@ -74,11 +74,13 @@ final class SolverFactoryTest extends TestCase
     {
         // The cassowary branch may raise its once-per-process notice; swallow
         // it here — notice SEVERITY and count are pinned elsewhere.
-        $previous = set_error_handler(static fn(): bool => true, E_USER_DEPRECATED | E_USER_WARNING);
+        set_error_handler(static fn(): bool => true, E_USER_DEPRECATED | E_USER_WARNING);
         try {
             return SolverFactory::fromEnvironment();
         } finally {
-            set_error_handler($previous);
+            // set_error_handler() pushes onto a stack and returns the previous
+            // entry; passing it back would push again and leak this handler.
+            restore_error_handler();
         }
     }
 

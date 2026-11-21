@@ -86,4 +86,44 @@ interface Renderer
      * @return string          Raw ANSI escape bytes — write directly to stdout
      */
     public function delete(string $imageId): string;
+
+    /**
+     * Render a raw straight-alpha RGBA8 buffer ({@see \SugarCraft\Image\Codec\RawRgba}
+     * layout: `$pixelWidth × $pixelHeight × 4` bytes, rows top to bottom).
+     *
+     * Kitty transmits the pixels as f=32 and iTerm2 as an uncompressed TIFF,
+     * so neither builds a PNG container. Text tiers and Sixel decode the
+     * buffer through an {@see ImageSource} and render it as {@see render()}
+     * does.
+     *
+     * @param string   $rgba        Raw RGBA8 pixels
+     * @param int      $pixelWidth  Source width in pixels
+     * @param int      $pixelHeight Source height in pixels
+     * @param int      $width       Target width in terminal cells
+     * @param int|null $height      Target height in terminal cells (null = auto)
+     * @throws \InvalidArgumentException when the buffer is not exactly pixelWidth × pixelHeight × 4 bytes
+     */
+    public function renderRgb(string $rgba, int $pixelWidth, int $pixelHeight, int $width, ?int $height = null): string;
+
+    /**
+     * Emit one frame of a sequence that may be re-displayed later.
+     *
+     * `$imageId` names the frame just drawn; `$prevId` (null on the first frame)
+     * names the frame it replaces. Id-addressable backends (see
+     * {@see supportsIdDelete()}) draw the new frame first and delete the old one
+     * afterwards, so the cell grid never shows an empty image. Backends that can
+     * only pop the topmost image (iTerm2) delete before they draw, as
+     * {@see \SugarCraft\Image\AnimationDriver} always has. Backends with nothing
+     * to delete just draw.
+     *
+     * @throws \InvalidArgumentException as {@see render()} does for bad dimensions
+     */
+    public function present(ImageSource $image, int $width, ?int $height, string $imageId, ?string $prevId): string;
+
+    /**
+     * True when {@see delete()} removes one specific frame by its id, so a
+     * replaced frame can be retired after the new one is on screen. Kitty only:
+     * iTerm2's delete pops the topmost image and Sixel has no delete at all.
+     */
+    public function supportsIdDelete(): bool;
 }

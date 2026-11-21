@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Hooks;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
 
@@ -755,7 +754,7 @@ final class HookConfig
      * THE GATE IS EXISTENCE PLUS CONTAINMENT, AND BOTH HALVES PULL WEIGHT.
      * A bare relative token is rewritten ONLY when `$base/<token>` is a
      * real file ({@see is_file()}, so directories and dangling routes are
-     * not) AND stays inside the base ({@see ContainedPath::within()}, so an
+     * not) AND stays inside the base ({@see \SugarCraft\Core\Util\PathJail::within()}, so an
      * escaping `../escape.sh` whose target exists OUTSIDE the base never
      * wins). Guess-free by construction: a token naming nothing keeps the
      * pre-039 behaviour of running as typed against the repo cwd, so the
@@ -795,7 +794,7 @@ final class HookConfig
         }
 
         $candidate = $base . '/' . $first;
-        if (!is_file($candidate) || !ContainedPath::within($candidate, $base)) {
+        if (!is_file($candidate) || !\SugarCraft\Core\Util\PathJail::within($candidate, $base)) {
             return $command;
         }
 

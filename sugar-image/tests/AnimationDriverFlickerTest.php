@@ -10,6 +10,7 @@ use SugarCraft\Image\AnimationDriver;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
+use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
  * Byte-order pins for AnimationDriver::view() per renderer family.
@@ -18,9 +19,9 @@ use SugarCraft\Image\Renderer\Renderer;
  * the image for one draw per tick. These tests pin the fix directly:
  * the committed frame bytes always precede any retire byte, and on Kitty
  * the retire byte names the OTHER double-buffer slot — never the id just
- * transmitted (`a=d,i=X` deletes every placement of image X, including a
+ * transmitted (`a=d,d=I,i=X` deletes image X and its data, including a
  * frame committed microseconds earlier). Commas never occur in base64
- * payload bytes, so 'a=d,i=' substrings are unambiguous wire landmarks.
+ * payload bytes, so 'a=d,d=I,i=' substrings are unambiguous wire landmarks.
  */
 final class AnimationDriverFlickerTest extends TestCase
 {
@@ -57,7 +58,7 @@ final class AnimationDriverFlickerTest extends TestCase
     public function testKittyRetireByteNeverNamesTheFreshlyCommittedId(): void
     {
         // The trap in the naive `$render . $delete` swap while reusing ONE
-        // id: kitty `a=d,i=X` deletes image X wholesale — render-then-
+        // id: kitty `a=d,d=I,i=X` deletes image X wholesale — render-then-
         // delete of the same id erases the frame just committed. The two
         // alternating slots exist exactly to keep the retire byte pointing
         // at the stale image (chafa.c:833 double-buffer parity).
@@ -66,10 +67,10 @@ final class AnimationDriverFlickerTest extends TestCase
         $even = $this->kittyDriver($renderer, index: 0)->view();
         $odd  = $this->kittyDriver($renderer, index: 1)->view();
 
-        $this->assertStringContainsString('a=d,i=11', $even, 'frame 0 retires the odd slot');
-        $this->assertStringNotContainsString('a=d,i=10', $even, 'frame 0 must not self-delete');
-        $this->assertStringContainsString('a=d,i=10', $odd, 'frame 1 retires the even slot');
-        $this->assertStringNotContainsString('a=d,i=11', $odd, 'frame 1 must not self-delete');
+        $this->assertStringContainsString('a=d,d=I,i=11', $even, 'frame 0 retires the odd slot');
+        $this->assertStringNotContainsString('a=d,d=I,i=10', $even, 'frame 0 must not self-delete');
+        $this->assertStringContainsString('a=d,d=I,i=10', $odd, 'frame 1 retires the even slot');
+        $this->assertStringNotContainsString('a=d,d=I,i=11', $odd, 'frame 1 must not self-delete');
     }
 
     public function testKittySlotsAlternateAcrossFrames(): void
@@ -84,6 +85,35 @@ final class AnimationDriverFlickerTest extends TestCase
             $renderer->renderFrame($this->frame, 4, 2, 11) . $renderer->delete('10'),
             $this->kittyDriver($renderer, index: 1)->view(),
         );
+    }
+
+    public function testPassthroughWrappedKittyGetsIdAddressedFramesAndRetire(): void
+    {
+        // Regression: view() dispatched on `instanceof KittyRenderer`, and the
+        // tmux decorator is not a KittyRenderer subclass. The wrapped renderer
+        // then emitted anonymous frames and deleted an id it never assigned, so
+        // every frame stayed in the terminal's image store. The wrapper reports
+        // supportsIdDelete() and forwards present(), so the id-addressed shape
+        // must arrive through it unchanged.
+        $tmux   = new TmuxPassthroughDecorator(new KittyRenderer());
+        $driver = new AnimationDriver(
+            animation: $this->animation,
+            renderer:  $tmux,
+            cellWidth: 4,
+            cellHeight: 2,
+            index:     0,
+            imageId:   10,
+        );
+
+        $bytes = $driver->view();
+
+        $this->assertSame(
+            $tmux->present($this->frame, 4, 2, '10', '11'),
+            $bytes,
+            'the wrapped Kitty frame must be the id-addressed present() shape',
+        );
+        $this->assertStringContainsString('a=d,d=I,i=11', $bytes, 'frame 0 retires the odd slot');
+        $this->assertStringNotContainsString('a=d,d=I,i=10', $bytes, 'frame 0 must not self-delete');
     }
 
     public function testPopSemanticRendererRetiresBeforeCommitting(): void
@@ -139,6 +169,8 @@ final class AnimationDriverFlickerTest extends TestCase
     private function sentinelRenderer(\Closure $deleteBytes): Renderer
     {
         return new class ($deleteBytes) implements Renderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             /** @param \Closure(string): string $deleteBytes */
             public function __construct(private readonly \Closure $deleteBytes) {}
 

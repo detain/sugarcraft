@@ -92,6 +92,22 @@ final class KeyBindingCommandBindingTest extends TestCase
         self::assertNull(KeyBindingsValidator::new()->validate(['command:keys' => null]));
     }
 
+    public function testTheNamespaceBeforeTheColonIsAnyBundleNameNotTheLiteralWord(): void
+    {
+        // The docs describe the prefix as a bundle's name (`reviewkit:review`),
+        // so a word other than `bundle` or `mcp` before the one colon is bindable.
+        foreach (['command:reviewkit:review', 'command:acme-tools:deploy/prod'] as $id) {
+            self::assertNull(
+                KeyBindingsValidator::new()->validate([$id => 'Ctrl+Z']),
+                "a bundle-named namespace must be bindable: '{$id}'",
+            );
+        }
+
+        $refusal = KeyBindingsValidator::new()->validate(['command:acme:deploy:now' => 'Ctrl+Z']);
+        self::assertIsString($refusal, 'a second colon after the namespace must be refused');
+        self::assertStringContainsString(self::NAME_REFUSAL_FRAGMENT, $refusal);
+    }
+
     public function testTheSettingRefusesUnboundableCommandNames(): void
     {
         foreach (['command:', 'command:a:b:c', 'command:has space', 'command:-leading'] as $id) {

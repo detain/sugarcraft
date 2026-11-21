@@ -12,6 +12,11 @@ use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\Http\Responses;
 use SugarCraft\Code\Support\Log;
+use SugarCraft\Plugins\Channel\AcceptsHttpRequests;
+use SugarCraft\Plugins\Channel\ChannelInterface;
+use SugarCraft\Plugins\Channel\DispatchesInboundEvents;
+use SugarCraft\Plugins\Channel\SubscribesToSessionEvents;
+use SugarCraft\Plugins\Channel\WritesCredentials;
 
 /**
  * The register/start/dispose half of the plugin-channel lifecycle (code-chat
@@ -100,6 +105,9 @@ final class ChannelRegistry
         LoopInterface $loop,
         ?\Closure $log = null,
         ?ChannelInboundLog $inbound = null,
+        ?\Closure $settingsFor = null,
+        ?string $stateDir = null,
+        ?\Closure $hostFor = null,
     ): array {
         if ($this->booted) {
             throw new \LogicException('ChannelRegistry::boot() runs once per launch.');
@@ -147,7 +155,23 @@ final class ChannelRegistry
             }
 
             try {
-                $instance->start(ChannelContext::for($entry['bundle'], $instance->name(), $root, $loop, $log, $inbound));
+                $context = ChannelContext::for(
+                    $entry['bundle'],
+                    $instance->name(),
+                    $root,
+                    $loop,
+                    $log,
+                    $inbound,
+                    $settingsFor === null ? [] : $settingsFor($entry['bundle']),
+                    $stateDir,
+                    host: $hostFor === null ? null : $hostFor($entry['bundle']),
+                );
+                // Only an implementer of WritesCredentials receives the single credential writer (O9).
+                if ($instance instanceof WritesCredentials) {
+                    $instance->start($context, $store);
+                } else {
+                    $instance->start($context);
+                }
             } catch (\Throwable $e) {
                 $log(ErrorLog::line($e, 'channel start ' . $entry['class']));
                 $this->unregister($entry['bundle'], $instance->name());

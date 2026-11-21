@@ -13,18 +13,21 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\Backoff;
+use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\McpClient\McpCall;
 use SugarCraft\McpClient\PendingCalls;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 use function React\Promise\reject;
 
@@ -87,16 +90,35 @@ final class RemoteSessionHost
     public const MAX_SNAPSHOT_PAGES = 50;
 
     /**
-     * First wait before redialing a dropped socket (ISS-114); each further
-     * attempt doubles it, capped at {@see RECONNECT_MAX_DELAY_SECONDS}.
+     * First wait before redialing a dropped socket (ISS-114). The ladder then
+     * runs from twice this, doubling per failed attempt, capped at
+     * {@see RECONNECT_MAX_DELAY_SECONDS}: 0.25, 0.5, 1, 2, 4, 4, ...
      */
     public const RECONNECT_BASE_DELAY_SECONDS = 0.25;
 
     /** The reconnect backoff ceiling. */
     public const RECONNECT_MAX_DELAY_SECONDS = 4.0;
 
-    /** Attempts before the drop is final and every {@see onClose()} hears it. */
+    /**
+     * Failed attempts before the drop is final and every {@see onClose()}
+     * hears it. A refused dial, a throwing dial and a resume hello that fails
+     * each count once; a resume the server refuses outright does not count,
+     * it ends the attachment at once.
+     */
     public const RECONNECT_MAX_ATTEMPTS = 12;
+
+    /**
+     * How long a resume's server.hello may go unanswered before its attempt
+     * fails, so the ladder redials. Without it a server that accepts the
+     * upgrade and then stays silent parks the attachment in its reconnecting
+     * state, with no verdict ever reached. The first attempt waits this long;
+     * each failed attempt after it waits one base longer (10s, 20s, 30s ...),
+     * so a slow but answering server is reached on a later redial. The silent
+     * case is bounded by the whole ladder: the hello waits total 78 times this
+     * value, and the first reconnect wait and the pauses between attempts add
+     * about 36 s on top (about 816 s with the default ladder).
+     */
+    public const RESUME_HELLO_SECONDS = 10.0;
 
     private static ?self $launch = null;
 
@@ -112,8 +134,17 @@ final class RemoteSessionHost
      */
     private readonly ?\Closure $reopen;
 
-    /** Delay scheduler seam (ISS-114 tests bound the ladder without waiting). */
+    /** Delay scheduler seam for the first wait (ISS-114 tests bound it without waiting). */
     private readonly ?\Closure $after;
+
+    /** Redial ladder seam: the production ladder unless a test bounds its delays. */
+    private readonly ?Backoff $redialBackoff;
+
+    /** How long a resume's server.hello may stay unanswered ({@see RESUME_HELLO_SECONDS}). */
+    private readonly float $resumeHelloSeconds;
+
+    /** Cancels the redial cycle in flight; close() fires it. */
+    private ?CancellationSource $cancelLadder = null;
 
     /** Bumped per {@see wire()}; listeners of a stale epoch are ignored. */
     private int $epoch = 0;
@@ -184,9 +215,21 @@ final class RemoteSessionHost
         string $initial = '',
         ?\Closure $reopen = null,
         ?\Closure $after = null,
+        ?Backoff $redialBackoff = null,
+        float $resumeHelloSeconds = self::RESUME_HELLO_SECONDS,
     ) {
+        // Checked before the stream is wired: a resume's hello arms this timeout
+        // only after it is sent, so a bad value must fail here, not mid-redial.
+        // The deadline grows per failed attempt up to RECONNECT_MAX_ATTEMPTS times
+        // the base, so the base is judged by that product: a base whose largest
+        // deadline overflows to INF would throw on a later redial, after wire().
+        if ($resumeHelloSeconds <= 0 || !is_finite($resumeHelloSeconds * self::RECONNECT_MAX_ATTEMPTS)) {
+            throw new \InvalidArgumentException('resumeHelloSeconds must be a positive number of seconds whose largest grown deadline stays finite');
+        }
         $this->reopen = $reopen;
         $this->after = $after;
+        $this->redialBackoff = $redialBackoff;
+        $this->resumeHelloSeconds = $resumeHelloSeconds;
         $this->pending = new PendingCalls();
         $this->wire($stream, $initial);
     }
@@ -215,6 +258,11 @@ final class RemoteSessionHost
     {
         $epoch = ++$this->epoch;
         $this->malformedLogged = false;
+        if (isset($this->stream) && $this->stream !== $stream) {
+            // The socket this replaces is dead to the host and its epoch is stale,
+            // so its events are silenced; closing it keeps it from staying attached.
+            $this->stream->close();
+        }
         $this->stream = $stream;
         $this->buffer = new MessageBuffer(
             self::closeFrameChecker(),
@@ -268,7 +316,11 @@ final class RemoteSessionHost
      * once the upgrade completes again; with it, a dropped socket becomes a
      * pause — the host re-helloes with `resume` from its cursor and keeps
      * following its session. Without it the drop is final, as it was.
-     * $after overrides the delay scheduler (tests); it defaults to the loop.
+     * $after overrides the scheduler of the first wait (tests); it defaults to
+     * the loop. $redialBackoff overrides the redial ladder (tests bound its
+     * delays); it keeps the RECONNECT_MAX_ATTEMPTS budget when it is omitted.
+     * $resumeHelloSeconds is the base deadline of each resume's hello, grown
+     * per failed attempt (tests shorten it).
      */
     public static function overStream(
         DuplexStreamInterface $stream,
@@ -276,8 +328,10 @@ final class RemoteSessionHost
         string $initial = '',
         ?\Closure $reopen = null,
         ?\Closure $after = null,
+        ?Backoff $redialBackoff = null,
+        float $resumeHelloSeconds = self::RESUME_HELLO_SECONDS,
     ): self {
-        return new self($stream, $clientName, $initial, $reopen, $after);
+        return new self($stream, $clientName, $initial, $reopen, $after, $redialBackoff, $resumeHelloSeconds);
     }
 
     // ── the launch's attachment ─────────────────────────────────────────
@@ -425,6 +479,7 @@ final class RemoteSessionHost
     public function close(string $reason = 'client closing'): void
     {
         $this->closing = true;
+        $this->cancelLadder?->cancel();
         if (!$this->open) {
             if ($this->reconnecting) {
                 $this->gone($reason, true);
@@ -869,9 +924,9 @@ final class RemoteSessionHost
      * answer are rejected exactly as before, but the listeners, the snapshot
      * and the cursor survive, and the host runs its `server.hello` resume
      * ladder. Without one of those the drop is final, as it always was:
-     * {@see gone()}. Exactly one ladder runs at a time — a resume socket's
-     * own death is consumed as that attempt's failure, never as a fresh
-     * drop.
+     * {@see gone()}. Exactly one ladder runs at a time — a resume socket's own
+     * death rejects the hello it was answering, and that rejection is the
+     * attempt's one failure, never a fresh drop.
      */
     private function dropped(string $reason): void
     {
@@ -882,13 +937,13 @@ final class RemoteSessionHost
         }
         if ($this->reconnecting) {
             if ($this->open && $this->deadEpoch !== $this->epoch) {
-                // A resume socket died mid-attempt: that attempt failed, once —
-                // the close frame and the stream's own close are one verdict.
+                // A resume socket died mid-attempt. Its hello rejects with this
+                // reason, and that rejection is the attempt's failure, counted once
+                // by the ladder: the close frame and the stream's own close are one verdict.
                 $this->deadEpoch = $this->epoch;
                 $this->open = false;
                 $this->closeReason = $reason;
                 $this->rejectPending($reason);
-                $this->failAttempt();
             }
 
             return;
@@ -908,24 +963,20 @@ final class RemoteSessionHost
         $this->reconnecting = true;
         $this->attempt = 0;
         $this->dropReason = $reason;
-        $this->scheduleAttempt();
+        $this->scheduleLadder();
     }
 
-    /** Wait out the backoff, then redial. */
-    private function scheduleAttempt(): void
+    /** Wait out the first backoff, then start the redial ladder. */
+    private function scheduleLadder(): void
     {
-        // S-P06 (R9): the redial ladder is sugar-async's Backoff (no jitter: one
-        // client, one server). $this->attempt is the 0-based failure count.
-        $delay = Backoff::new(self::RECONNECT_BASE_DELAY_SECONDS * 1000.0, 2.0, (int) (self::RECONNECT_MAX_DELAY_SECONDS * 1000))
-            ->secondsForAttempt($this->attempt + 1);
         $after = $this->after ?? static function (float $seconds, \Closure $run): void {
             Loop::addTimer($seconds, static function () use ($run): void {
                 $run();
             });
         };
-        $after($delay, function (): void {
+        $after(self::RECONNECT_BASE_DELAY_SECONDS, function (): void {
             try {
-                $this->tryAttempt();
+                $this->startLadder();
             } catch (\Throwable $e) {
                 // Runs from a Loop timer: a throw here would unwind Loop::run()
                 // and strand the attachment half-open. End it instead.
@@ -934,25 +985,75 @@ final class RemoteSessionHost
         });
     }
 
-    private function tryAttempt(): void
+    /**
+     * Redial through sugar-async's reconnect. Each attempt is one dial plus the
+     * resume hello it leads to, so a refused dial, a throwing dial and a failed
+     * hello each cost one of RECONNECT_MAX_ATTEMPTS. A resume the server refuses
+     * outright is not an attempt: {@see resume()} ends the attachment there.
+     * Closing cancels the cycle through its token; the cancelled rejection is
+     * not a verdict, because close() has already given one.
+     */
+    private function startLadder(): void
     {
         if (!$this->reconnecting || $this->closing || $this->reopen === null) {
             return;
         }
-        $redial = $this->reopen;
-        $redial()->then(
-            function (array $socket): void {
-                if ($this->closing || !$this->reconnecting) {
-                    $socket[0]->close();
-
+        $cancel = new CancellationSource();
+        $this->cancelLadder = $cancel;
+        AsyncOps::reconnect(
+            fn (): PromiseInterface => $this->redial(),
+            $this->redialBackoff ?? self::redialLadder(),
+            $cancel->token(),
+            null,
+            function (int $failedAttempt): void {
+                $this->attempt = $failedAttempt;
+            },
+        )->then(
+            null,
+            function (\Throwable $failure): void {
+                if ($this->closing || !$this->reconnecting || $failure instanceof OperationCancelledException) {
                     return;
                 }
-                $this->resume($socket);
-            },
-            function (): void {
-                $this->failAttempt();
+                $this->gone($this->dropReason . ' ' . Lang::t('host.remote.reconnect_exhausted', ['attempts' => self::RECONNECT_MAX_ATTEMPTS]), true);
             },
         );
+    }
+
+    /**
+     * The redial ladder behind {@see startLadder()}. The first redial is
+     * immediate (the first rung already waited), and each failed attempt then
+     * waits one rung more: 0.5, 1, 2, 4 ... seconds, capped, for
+     * RECONNECT_MAX_ATTEMPTS attempts in all.
+     */
+    private static function redialLadder(): Backoff
+    {
+        return Backoff::new(
+            self::RECONNECT_BASE_DELAY_SECONDS * 2000.0,
+            2.0,
+            (int) (self::RECONNECT_MAX_DELAY_SECONDS * 1000),
+        )->withAttempts(self::RECONNECT_MAX_ATTEMPTS);
+    }
+
+    /**
+     * One redial attempt: dial the endpoint, then resume on the new socket. The
+     * promise settles with the resume's own answer, so a failed hello fails the
+     * attempt. A socket that lands after close() is given back at once.
+     *
+     * @return PromiseInterface<null>
+     */
+    private function redial(): PromiseInterface
+    {
+        $redial = $this->reopen ?? throw new \LogicException('a redial needs a reopen');
+
+        return $redial()->then(function (array $socket): PromiseInterface {
+            if ($this->closing || !$this->reconnecting) {
+                $socket[0]->close();
+
+                return reject(new OperationCancelledException('Reconnect cancelled'));
+            }
+
+            return $this->resume($socket);
+        });
     }
 
     /**
@@ -965,67 +1066,81 @@ final class RemoteSessionHost
      * redial changes that verdict.
      *
      * @param array{0: DuplexStreamInterface, 1: string} $socket
+     * @return PromiseInterface<null> rejects with the hello's failure, or with a timeout when it goes unanswered, which the ladder counts
      */
-    private function resume(array $socket): void
+    private function resume(array $socket): PromiseInterface
     {
         [$stream, $initial] = $socket;
         $this->open = true;
         $this->closeReason = null;
         $this->wire($stream, $initial);
 
-        $this->call('server.hello', $this->helloParams([
+        // A hello that never answers fails the attempt: the timeout's rejection
+        // runs the same abandon() below as a refused hello, freeing the socket.
+        // The deadline grows by one base per failed attempt, so a healthy server
+        // slower than the base is reached on a later redial rather than failing
+        // every attempt the same way; a silent one still ends in the ladder.
+        $deadline = $this->resumeHelloSeconds * ($this->attempt + 1);
+
+        return AsyncOps::withTimeout($this->call('server.hello', $this->helloParams([
             'resume' => [(string) $this->sessionId => $this->lastSeq],
             'snapshotLimit' => $this->snapshotPageRows,
-        ]))->then(
-            function (array $result): void {
-                if (!$this->open) {
-                    return; // this socket died behind us; dropped() has taken over
-                }
-                $this->hello = $result;
-                $entry = (array) ($result['resumed'][(string) $this->sessionId] ?? []);
-                if ($entry === [] || ($entry['error'] ?? null) !== null) {
-                    $this->gone($this->dropReason . ' ' . Lang::t('host.remote.resume_refused', [
-                        'reason' => (string) ($entry['error'] ?? 'the session was not resumed'),
-                    ]));
+        ])), $deadline, null, 'server.hello')->then(function (array $result): void {
+            if (!$this->open) {
+                // This socket died while its hello was being answered: the attempt fails with it.
+                throw new \RuntimeException($this->closeReason ?? 'the resumed socket closed');
+            }
+            $this->hello = $result;
+            $entry = (array) ($result['resumed'][(string) $this->sessionId] ?? []);
+            if ($entry === [] || ($entry['error'] ?? null) !== null) {
+                $this->gone($this->dropReason . ' ' . Lang::t('host.remote.resume_refused', [
+                    'reason' => (string) ($entry['error'] ?? 'the session was not resumed'),
+                ]));
 
-                    return;
-                }
-                if (isset($entry['snapshot'])) {
-                    $this->adoptSnapshot((array) $entry['snapshot'], (int) ($entry['throughSeq'] ?? 0));
-                    // A failed stitch leaves the newest page, not the turn:
-                    // events keep flowing from the reset cursor regardless.
-                    $this->pageOlder($this->snapshotPageRows)->then(null, static function (): void {
-                    });
-                } elseif (isset($entry['fromSeq'])) {
-                    $this->lastSeq = \max($this->lastSeq, (int) ($entry['throughSeq'] ?? $this->lastSeq));
-                }
-                $this->reconnecting = false;
-                $this->attempt = 0;
-            },
-            function (\Throwable $e): void {
-                if (!$this->reconnecting) {
-                    return;
-                }
-                if (!$e instanceof RpcError) {
-                    return; // the hello died with its socket: dropped() already counted this attempt
-                }
-                $this->failAttempt();
-            },
-        );
+                return;
+            }
+            if (isset($entry['snapshot'])) {
+                $this->adoptSnapshot((array) $entry['snapshot'], (int) ($entry['throughSeq'] ?? 0));
+                // A failed stitch leaves the newest page, not the turn:
+                // events keep flowing from the reset cursor regardless.
+                $this->pageOlder($this->snapshotPageRows)->then(null, static function (): void {
+                });
+            } elseif (isset($entry['fromSeq'])) {
+                $this->lastSeq = \max($this->lastSeq, (int) ($entry['throughSeq'] ?? $this->lastSeq));
+            }
+            $this->reconnecting = false;
+            $this->attempt = 0;
+        })->then(null, function (\Throwable $failure) use ($stream): void {
+            // A refused hello or a socket that died mid-hello: the attempt is over
+            // and its socket is the host's no longer.
+            $this->abandon($stream, $failure);
+
+            throw $failure;
+        });
     }
 
-    private function failAttempt(): void
+    /**
+     * Close the socket a failed resume opened, before the ladder redials. It is
+     * marked dead first, so its close event is silenced and it cannot count as a
+     * second verdict. The pause that follows carries the failure as its reason,
+     * as dropped() does; a close that already ended the attachment keeps its own.
+     * Calls issued while the hello was in flight went out on this socket and
+     * will never be answered, so the failure settles them, as dropped() does.
+     */
+    private function abandon(DuplexStreamInterface $stream, \Throwable $failure): void
     {
-        if (!$this->reconnecting || $this->closing) {
-            return;
+        $current = $stream === $this->stream;
+        if ($current) {
+            if ($this->open) {
+                $this->closeReason = $failure->getMessage() !== '' ? $failure->getMessage() : $this->dropReason;
+            }
+            $this->deadEpoch = $this->epoch;
+            $this->open = false;
         }
-        $this->attempt++;
-        if ($this->attempt >= self::RECONNECT_MAX_ATTEMPTS) {
-            $this->gone($this->dropReason . ' ' . Lang::t('host.remote.reconnect_exhausted', ['attempts' => self::RECONNECT_MAX_ATTEMPTS]), true);
-
-            return;
+        $stream->close();
+        if ($current) {
+            $this->rejectPending($failure->getMessage() !== '' ? $failure->getMessage() : $this->dropReason);
         }
-        $this->scheduleAttempt();
     }
 
     /** Requests the current socket cannot answer any more, with why. */

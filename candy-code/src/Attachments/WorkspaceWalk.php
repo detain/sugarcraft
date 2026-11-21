@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Attachments;
 
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * The memoized non-git file listing behind `fs.search` (plan_comparison
@@ -142,7 +141,7 @@ final class WorkspaceWalk
             // inside by construction; the re-check is the browser's own
             // discipline stated out loud, guarding a future edit that lets a
             // component become attacker-influenced.
-            if (!ContainedPath::within($dir, $root)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($dir, $root)) {
                 continue;
             }
             $handle = @\opendir($dir);

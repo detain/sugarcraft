@@ -461,8 +461,9 @@ final class SseLineParser
 
     /**
      * The reader the framing loop pulls through: decoded SSE bytes, `''` at
-     * end of stream, every wait bounded by {@see $waitDeadlineAt}. Public
-     * only for the @internal deadline seam the transport re-exports.
+     * end of stream, every wait bounded by {@see $waitDeadlineAt}.
+     *
+     * @internal Public only for the deadline seam the transport re-exports.
      */
     public function readStreamChunk(): string
     {

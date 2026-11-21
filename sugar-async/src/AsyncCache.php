@@ -88,16 +88,35 @@ final class AsyncCache
         return $this->maxEntries;
     }
 
+    /**
+     * Epoch of the store: advanced by every invalidate() and clear(). A caller
+     * that starts a load records the epoch first and discards the result when
+     * the epoch has moved on, the same guard phlix's stores hand-rolled as a
+     * generation counter. Shared by every handle over the store.
+     */
+    public function generation(): int
+    {
+        return $this->store->generation;
+    }
+
     /** Number of stored values, fresh or stale. In-flight loads are not stored. */
     public function count(): int
     {
         return count($this->store->values);
     }
 
-    /** Stored keys (fresh or stale) in insertion order. */
+    /**
+     * Stored keys (fresh or stale), least-recently-stored first.
+     *
+     * PHP turns a numeric-string key into an int, so the cast restores the
+     * declared string contract: a caller comparing against '123' strictly, or
+     * passing the key to a string-typed function, must not see int 123.
+     *
+     * @return list<string>
+     */
     public function keys(): array
     {
-        return array_keys($this->store->values);
+        return array_map('strval', array_keys($this->store->values));
     }
 
     /** True when the key is fresh OR a load is in flight — the loading-indicator read. */
@@ -248,15 +267,17 @@ final class AsyncCache
     public function invalidate(string $key): void
     {
         unset($this->store->values[$key], $this->store->storedAt[$key]);
+        $this->store->forgetOrder($key);
         $this->store->flights->forget($key);
+        $this->store->generation++;
     }
 
     /** Drop every entry and supersede every in-flight load. */
     public function clear(): void
     {
-        $this->store->values = [];
-        $this->store->storedAt = [];
+        $this->store->clearValues();
         $this->store->flights->forgetAll();
+        $this->store->generation++;
     }
 
     private static function guardMaxEntries(?int $maxEntries): void
@@ -267,31 +288,23 @@ final class AsyncCache
     }
 
     /**
-     * Cap enforcement at adoption time: evict least-recently-stored keys
-     * (equal stamps break insertion-first via a strict '<' scan) until the
-     * store sits at or below the cap. A drain loop, never self-recursion:
-     * a shrink below size would otherwise cost stack depth per excess entry.
-     * The just-adopted key carries the newest stamp, so it is never a
-     * candidate. Flights are untouched — a coalescing load is not a stored
-     * value.
+     * Cap enforcement at adoption time. The least recently stored entry is the
+     * lowest live slot of the adoption order in {@see CacheStore}, so an
+     * eviction never scans the value map. array_key_first() over that map was
+     * not O(1): PHP keeps unset buckets as tombstones at its head until the
+     * table compacts, and each eviction stepped over every tombstone left by
+     * earlier ones. The just-adopted key sits at the newest slot and is never a
+     * candidate. A drain loop, never self-recursion: a shrink below size would
+     * otherwise cost stack depth per excess entry. Flights are untouched; a
+     * coalescing load is not a stored value.
      */
     private function evictOverflow(): void
     {
         if ($this->maxEntries === null) {
             return;
         }
-
         while (count($this->store->values) > $this->maxEntries) {
-            $oldest = array_key_first($this->store->values);
-            $oldestStamp = $this->store->storedAt[$oldest];
-            foreach ($this->store->values as $candidate => $_) {
-                if ($this->store->storedAt[$candidate] < $oldestStamp) {
-                    $oldest = $candidate;
-                    $oldestStamp = $this->store->storedAt[$candidate];
-                }
-            }
-
-            unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
+            $this->store->evictOldest();
         }
     }
 
@@ -301,8 +314,12 @@ final class AsyncCache
         // displaced mid-load by invalidate()/clear() resolved its callers but
         // never writes into the store — the invalidation was the newer truth.
         if ($this->store->flights->end($key, $flight) === true) {
+            // Re-inserting moves the key to the tail of the value map and to the
+            // newest slot of the adoption order: both stay least-recently-stored first.
+            unset($this->store->values[$key]);
             $this->store->values[$key] = $value;
             $this->store->storedAt[$key] = ($this->store->clock)();
+            $this->store->touchOrder($key);
             $this->evictOverflow();
         }
 

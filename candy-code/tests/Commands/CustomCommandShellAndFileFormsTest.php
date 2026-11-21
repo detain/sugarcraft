@@ -25,6 +25,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\ToolCall;
 
 /**
@@ -330,6 +331,52 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         $this->assertLessThan(2.0, $elapsed, 'the budget must bound the wait for the child to exit too');
         $this->assertStringContainsString('early', $out, 'what it printed before detaching is kept');
         $this->assertStringContainsString('was killed after 0.3 seconds', $out);
+    }
+
+    /**
+     * THE BUDGET BOUNDS A BACKGROUNDED JOB THAT HOLDS STDOUT AFTER THE SHELL HAS
+     * EXITED. The shell backgrounds a sleep, records its pid and exits at once;
+     * the sleep keeps the output pipe open. The budget is longer than the
+     * exit grace, so the wait must run to the 4 s deadline, where the process
+     * group is killed: the call returns at the budget with the kill notice, and
+     * the backgrounded job is gone. Before the fix, the grace ended the read at
+     * about 1 s, the call returned exit 0 with no notice, and the sleep lived on.
+     */
+    public function testABackgroundedJobHoldingStdoutIsKilledAtTheBudgetAfterTheShellExits(): void
+    {
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('posix_kill is needed to observe the backgrounded job');
+        }
+        $pidFile = $this->marker('background.pid');
+        $spec = CommandSpec::new(name: 'x', description: 'x', category: 'Custom', template: 'x', tier: 'user');
+
+        $started = microtime(true);
+        $out = $spec->runShellSubstitution(
+            'sleep 30 & echo $! > ' . escapeshellarg($pidFile) . '; printf started',
+            null,
+            4.0,
+        );
+        $elapsed = microtime(true) - $started;
+
+        $this->assertGreaterThanOrEqual(3.5, $elapsed, 'the call must wait out the budget while the pipe is held');
+        $this->assertLessThan(8.0, $elapsed, 'the budget plus the kill ladder bounds the call');
+        $this->assertStringContainsString('started', $out, 'what the shell printed is kept');
+        $this->assertStringContainsString('was killed after 4 seconds', $out);
+
+        $this->assertFileExists($pidFile);
+        $pid = (int) trim((string) file_get_contents($pidFile));
+        $this->assertGreaterThan(0, $pid);
+        $gone = BoundedShutdown::waitBounded(static function () use ($pid): bool {
+            if (!@posix_kill($pid, 0)) {
+                return true;
+            }
+            // A zombie takes no signals but is not running; an orphan can stay one
+            // until its reaper (PID 1 in a container) collects it.
+            $stat = @file_get_contents('/proc/' . $pid . '/stat');
+
+            return is_string($stat) && preg_match('/\) ([A-Za-z]) /', $stat, $m) === 1 && $m[1] === 'Z';
+        }, 3.0);
+        $this->assertTrue($gone, "the backgrounded job (pid {$pid}) outlived the budget");
     }
 
     /**

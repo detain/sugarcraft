@@ -10,7 +10,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * The containment boundaries {@see RuleLoader} takes from
- * {@see \SugarCraft\Code\Support\ContainedPath}, and - the half the plan names
+ * {@see \SugarCraft\Core\Util\PathJail}, and - the half the plan names
  * explicitly - that a refusal is RECORDED rather than silently skipped.
  *
  * Filed beside the boundary rather than with the behavioural suite because the

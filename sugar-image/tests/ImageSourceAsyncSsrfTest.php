@@ -99,6 +99,54 @@ final class ImageSourceAsyncSsrfTest extends TestCase
         $this->await(ImageSource::fromUrlAsync('http://127.0.0.1:9/x'));
     }
 
+    public function testAsyncSchemeGateAcceptsAnUpperCaseSchemeBeforeTheHostGuard(): void
+    {
+        // `HTTPS://` is https (RFC 3986 §3.1). With the scheme accepted, the
+        // private-address guard is what refuses this literal RFC-1918 host. On
+        // master the strict in_array refused the scheme first, with "not in the
+        // allowed list", so this assertion fails there.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('#blocked private/reserved address#');
+
+        $this->await(ImageSource::fromUrlAsync('HTTPS://10.0.0.5/x'));
+    }
+
+    public function testAsyncInitialUrlWithAnUpperCaseSchemeIsFetched(): void
+    {
+        // The async twin of the sync upper-case test: the initial URL's scheme
+        // passes the synchronous validation, and the image decodes end to end.
+        $this->startServer();
+
+        $img = $this->await(ImageSource::fromUrlAsync(
+            "HTTP://127.0.0.1:{$this->port}/poster.png",
+            null,
+            null,
+            allowedHosts: ['127.0.0.1'],
+        ));
+
+        $this->assertInstanceOf(ImageSource::class, $img);
+        $this->assertSame(4, $img->width);
+        $this->assertSame(2, $img->height);
+    }
+
+    public function testAsyncUpperCaseAllowListEntryMatchesALowerCaseUrl(): void
+    {
+        // An upper-case allow-list entry must match the lower-case `http` scheme
+        // of the URL. Master's strict in_array refused this before any fetch.
+        $this->startServer();
+
+        $img = $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/poster.png",
+            null,
+            null,
+            ['HTTP'],
+            allowedHosts: ['127.0.0.1'],
+        ));
+
+        $this->assertInstanceOf(ImageSource::class, $img);
+        $this->assertSame(4, $img->width);
+    }
+
     // ---- redirect-hop guard (real loopback server) ----------------------
 
     public function testAsyncBlocksRedirectHopToMetadataIp(): void

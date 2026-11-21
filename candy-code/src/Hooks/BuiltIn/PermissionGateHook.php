@@ -128,7 +128,7 @@ final readonly class PermissionGateHook implements HookInterface
      * Hands the gate the context's project root because that is the root the
      * tools resolve a relative path against — without it a path rule judged
      * the call's SPELLING, so `Deny Read(/proj/secret.txt)` let `secret.txt`
-     * and a symlink to it through (audit F-J3). An empty root (a context built
+     * and a symlink to it through. An empty root (a context built
      * with no workspace) is passed as null: anchoring at `''` would anchor at
      * `/` and invent paths the tool never opens.
      */

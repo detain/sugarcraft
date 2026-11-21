@@ -64,6 +64,7 @@ final class SignalExitTest extends TestCase
         // the next red is diagnosable from CI output alone.
         $this->assertTrue($run->readUntilCount("\x1b[?2026l", 2, 15.0), 'the loop is running (second frame drawn); ' . $run->liveState()
             . '; sync-out frames seen: ' . substr_count($run->output(), "\x1b[?2026l")
+            . '; host os: ' . PHP_OS_FAMILY
             . '; tail: ' . substr(json_encode(substr($run->output(), -200)) ?: '', 0, 240));
 
         $run->signal($signal);

@@ -15,8 +15,12 @@ use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Async\Await;
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\ServeProtocol\Url\WebsocketUrl;
 use SugarCraft\Code\Backend\RemoteBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
@@ -66,9 +70,6 @@ final class Attach
     /** How long connecting, the handshake and opening the session may take. */
     public const CONNECT_TIMEOUT_SECONDS = 15.0;
 
-    /** The WebSocket path every `candy-code serve` answers on. */
-    public const WS_PATH = '/ws';
-
     /** The flags `attach` accepts (see {@see ParsedArgs::SUBCOMMAND_FLAGS}). */
     public const FLAGS = ['--url'];
 
@@ -108,7 +109,10 @@ final class Attach
                     ? Lang::t('cli.attach.no_server_from', ['dir' => $state->path])
                     : Lang::t('cli.attach.no_server'));
             }
-            $url = (string) self::websocketUrl($record->url);
+            $url = self::websocketUrl($record->url);
+            if ($url === null) {
+                return self::fail(Lang::t('cli.attach.bad_record_url', ['url' => $record->url]));
+            }
         }
 
         $token = self::token($env, $state);
@@ -146,12 +150,13 @@ final class Attach
      * as the session is followed (turns can run for many minutes), and while
      * it is not, the resume ladder keeps trying for its bound.
      *
-     * $after overrides the ladder's delay scheduler (ISS-114 tests); it
-     * defaults to the event loop.
+     * $after overrides the scheduler of the ladder's first wait and
+     * $redialBackoff its redial delays (ISS-114 tests); both default to the
+     * event loop and the production ladder.
      *
      * @return PromiseInterface<RemoteSessionHost>
      */
-    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null): PromiseInterface
+    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null, ?Backoff $redialBackoff = null): PromiseInterface
     {
         return self::stream($url, $token, $loop)->then(
             static fn (array $socket): RemoteSessionHost => RemoteSessionHost::overStream(
@@ -160,6 +165,7 @@ final class Attach
                 $socket[1],
                 static fn (): PromiseInterface => self::stream($url, $token, $loop),
                 $after,
+                $redialBackoff,
             ),
         );
     }
@@ -255,26 +261,14 @@ final class Attach
     /**
      * `ws://host:port/ws` for an `http(s)://` or `ws(s)://` address — the URL
      * `serve` prints and `server.json` records — or null when $url is
-     * neither. A path other than the WebSocket's is replaced, so the
-     * address a browser opens works here as given.
+     * neither, or is a malformed address the library refuses (a bracketed
+     * host that is not an IPv6 literal, an unbracketed IPv6 host, a bad zone
+     * id). A path other than the WebSocket's is replaced, so the address a
+     * browser opens works here as given.
      */
     public static function websocketUrl(string $url): ?string
     {
-        $parts = \parse_url(\trim($url));
-        if (!\is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-        $scheme = match (\strtolower($parts['scheme'])) {
-            'http', 'ws' => 'ws',
-            'https', 'wss' => 'wss',
-            default => null,
-        };
-        if ($scheme === null || $parts['host'] === '') {
-            return null;
-        }
-        $host = \str_contains($parts['host'], ':') && !\str_starts_with($parts['host'], '[') ? '[' . $parts['host'] . ']' : $parts['host'];
-
-        return $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '') . self::WS_PATH;
+        return WebsocketUrl::from($url);
     }
 
     /**
@@ -355,30 +349,23 @@ final class Attach
     /**
      * Run the loop until $promise settles or $seconds pass: its value, its
      * rejection, or null on the timeout.
+     *
+     * A rejection is handed back as a value (the caller tells it from a
+     * session by its type), so the only exception {@see Await::until()} can
+     * throw here is its own budget's {@see TimeoutException}, which is the one
+     * caught: a rejection that happens to be a TimeoutException stays a value.
      */
     private static function await(PromiseInterface $promise, float $seconds): mixed
     {
-        $done = false;
-        $result = null;
-        $promise->then(
-            static function (mixed $value) use (&$done, &$result): void {
-                $done = true;
-                $result = $value;
-                Loop::stop();
-            },
-            static function (\Throwable $e) use (&$done, &$result): void {
-                $done = true;
-                $result = $e;
-                Loop::stop();
-            },
+        $settled = $promise->then(
+            null,
+            static fn (\Throwable $e): \Throwable => $e,
         );
-        if (!$done) {
-            $timer = Loop::addTimer($seconds, static fn () => Loop::stop());
-            Loop::run();
-            Loop::cancelTimer($timer);
+        try {
+            return Await::until($settled, $seconds);
+        } catch (TimeoutException) {
+            return null;
         }
-
-        return $done ? $result : null;
     }
 
     /** The server's own words for a refused upgrade, when it sent JSON. */

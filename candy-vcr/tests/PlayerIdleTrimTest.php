@@ -311,7 +311,11 @@ final class PlayerIdleTrimTest extends TestCase
      */
     private static function neverSelfQuitFactory(): \Closure
     {
-        return static fn ($input, $output, $loop): Program => self::echoProgram($input, $output, $loop, \PHP_INT_MAX);
+        return static function ($input, $output, $loop): Program {
+            \assert(\is_resource($input) && \is_resource($output) && $loop instanceof \React\EventLoop\LoopInterface);
+
+            return self::echoProgram($input, $output, $loop, \PHP_INT_MAX);
+        };
     }
 
     /**

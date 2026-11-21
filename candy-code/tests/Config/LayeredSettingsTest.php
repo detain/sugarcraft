@@ -404,8 +404,8 @@ final class LayeredSettingsTest extends TestCase
      * BOUNDARY TWO, AND THE ONLY CASE THAT ISOLATES IT. The per-file compare is
      * against the settings DIRECTORY, not the project root, and until this test
      * existed nothing said so: a mutation replacing
-     * `ContainedPath::within($path, $dir)` with
-     * `ContainedPath::within($path, $projectRoot)` left this whole suite green,
+     * `\SugarCraft\Core\Util\PathJail::within($path, $dir)` with
+     * `\SugarCraft\Core\Util\PathJail::within($path, $projectRoot)` left this whole suite green,
      * because {@see testASettingsFileSymlinkedOutOfTheProjectIsRefused()} points
      * its link OUTSIDE the checkout, which the root-level compare catches too.
      *
@@ -433,7 +433,7 @@ final class LayeredSettingsTest extends TestCase
         // The fixture must be inside the checkout, or this is boundary one
         // again wearing a different name.
         self::assertTrue(
-            \SugarCraft\Code\Support\ContainedPath::below(
+            \SugarCraft\Core\Util\PathJail::below(
                 $this->projectRoot . '/in-tree-secret.json',
                 $this->projectRoot,
             ),

@@ -1,96 +1,382 @@
-<p class="lede" style="margin-top: 28px;">Terminal AI coding agent. Eleven provider type keys over nine engines (OpenAI, Anthropic, Claude Code, Codex, SGLang, Bedrock, Vertex, Gemini, custom), thirty-eight built-in tools on every launch gated by hooks and a six-mode permission gate, workspace checkpoints with undo and rewind, a context engine that prunes and compacts on its own, sub-agents you can watch and message, memory, skills, MCP, workflows, SQLite sessions, a WebSocket server with a browser UI, and an Agent Client Protocol agent for editors — over a sugar-core render loop with Markdown replies. Runs offline out of the box.</p>
+<p class="lede" style="margin-top: 28px;">Terminal AI coding agent, inspired by <a href="https://github.com/charmbracelet/crush">charmbracelet/crush</a>. It talks to eleven provider type keys over nine engines, runs thirty-eight built-in tools on every launch behind hooks and a six-mode permission gate, keeps per-turn workspace checkpoints with undo and rewind, prunes and compacts its own context, runs sub-agents you can watch and message, and reads skills, memory, MCP servers, workflows and SQLite-backed sessions. It also serves a WebSocket API with a browser UI and an Agent Client Protocol agent for editors, all on the sugar-core render loop with Markdown replies. With no configuration it runs offline on the built-in echo provider.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-code</code></pre>
-    <p style="margin-top: 12px;">The package requires its SugarCraft siblings at <code>@dev</code> stability and carries <code>"minimum-stability": "dev"</code> with <code>"prefer-stable": true</code> itself — a host project pinned to <code>minimum-stability: stable</code> cannot resolve that graph, so require it where dev stability is allowed or run it from a checkout.</p>
+    <p style="margin-top: 12px;">Requires PHP <code>^8.3</code>. The package declares its <code>sugarcraft/*</code> siblings with the <code>@dev</code> constraint (<a href="https://github.com/sugarcraft/candy-code/blob/master/composer.json">composer.json</a>), so a host project must allow dev-stability packages: set <code>"minimum-stability": "dev"</code> with <code>"prefer-stable": true</code> in that host, or run it from a checkout of the monorepo. The package's own <code>composer.json</code> declares both keys (lines 111-112), but Composer reads stability settings from the root project only, so that declaration does not reach a host. A container build is described in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/DOCKER.md">docs/DOCKER.md</a>.</p>
+    <p style="margin-top: 12px;">Winget and Scoop are not documented as install channels, on purpose. Their manifests in <code>candy-code/packaging/winget</code> and <code>candy-code/packaging/scoop</code> are templates with <code>{{VERSION}}</code> and hash placeholders, and no workflow in the repository renders or publishes them, so a Winget or Scoop command here would name an install that does not exist. The install script and the Homebrew formula described in the <a href="https://github.com/sugarcraft/candy-code/blob/master/README.md">README</a> remain the standalone installs. Running candy-code in CI, with the composite action and the GitLab example, is covered in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/CI.md">docs/CI.md</a>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">composer install
-./bin/candy-code
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <p style="margin-top: 8px;">Step 1. Run it with nothing configured. The binary falls back to the offline echo provider, so no network and no key are needed. This is the output of a real run, captured with no provider environment and an empty <code>HOME</code>:</p>
+    <pre class="code"><code class="language-shell">$ candy-code -p "explain the Width helper"
+You said:
 
-# With no configuration it runs the offline EchoProvider through the full
-# engine — zero network, zero keys. Point it at a real model instead:
-export CANDY_CODE_PROVIDER=openai
+&gt; explain the Width helper</code></pre>
+    <p style="margin-top: 8px;">The line <code>candy-code: no provider configured (…); answering from the offline echo provider.</code> goes to stderr, which is why it is not in the output above. <code>-p</code> is the one-shot mode: it never attaches to the terminal and never opens the alternate screen. Run <code>candy-code</code> with no arguments for the full TUI.</p>
+
+    <p style="margin-top: 16px;">Step 2. Point it at a real model. The provider is chosen by <code>CANDY_CODE_PROVIDER</code>, and the provider's own environment variables supply the key (see the providers table below):</p>
+    <pre class="code"><code class="language-shell">export CANDY_CODE_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
-export CANDY_CODE_MODEL=gpt-4o     # optional; provider default otherwise
-./bin/candy-code
+export CANDY_CODE_MODEL=gpt-4o     # optional; the provider default otherwise
+candy-code</code></pre>
+    <p style="margin-top: 8px;">A provider run needs a key and network access, so its output is not captured on this page. The offline run above is the reference output.</p>
 
-# One-shot (never attaches to the TTY, never opens the alt-screen):
-candy-code -p "explain the Width helper"
-candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
+    <p style="margin-top: 16px;">Step 3. One-shot with JSON output, for scripts. The unattended <code>-p</code> mode starts in the <code>default</code> permission mode and refuses any tool call that would ask, so pass <code>--permission-mode</code> when a script needs tools. This is the captured output (the <code>session_id</code> differs on every run):</p>
+    <pre class="code"><code class="language-shell">$ candy-code -p "audit this" --output-format json
+{"schema":1,"result":"You said:\n\n&gt; audit this","refusals":[],"session_id":"3b8c2910e15dae8b"}
 
-    <p style="margin-top: 20px;"><code>CANDY_CODE_PROVIDER</code> accepts <code>openai</code>, <code>azure</code>, <code>anthropic</code>, <code>claude-code</code>, <code>codex</code>, <code>sglang</code>, <code>bedrock</code>, <code>vertex</code>, <code>gemini</code>, <code>openrouter</code> or <code>custom</code> — eleven type keys over nine engines: <code>azure</code> rides the OpenAI engine and <code>openrouter</code> is an OpenAI-compatible preset of the custom one, while <code>claude-code</code> and <code>codex</code> run each turn inside the vendor's own signed-in CLI. To skip PHP SDKs entirely, set <code>CANDY_CODE_BACKEND_CMD</code> to a script that reads JSON history on stdin and writes the reply to stdout. See <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ENVIRONMENT.md">docs/ENVIRONMENT.md</a> for the full environment-variable reference.</p>
+$ candy-code -p "audit this" --output-format json | jq -r .result
+You said:
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+&gt; audit this</code></pre>
+    <p style="margin-top: 8px;">For a provider-free backend, <code>CANDY_CODE_BACKEND_CMD</code> names a script that reads the JSON history on stdin and writes the reply to stdout; <code>CANDY_CODE_BACKEND_CMD_STREAM</code> is the token-stream variant. Every variable is listed in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ENVIRONMENT.md">docs/ENVIRONMENT.md</a>. The step-by-step first run is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TUTORIAL.md">docs/TUTORIAL.md</a>.</p>
+
+    <h3 id="what-it-is" style="margin-top: 32px;">What it is</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Eleven type keys, nine engines</strong><span>One <code>ProviderInterface</code> — OpenAI (and Azure on the same engine), Anthropic, Claude Code CLI, Codex, SGLang, Bedrock, Vertex, Gemini, custom (and OpenRouter on the same engine) — with capability introspection, streaming, function calling, embeddings and per-model cost. The two vendor-CLI routes run each turn inside the vendor's own signed-in child.</span></div>
-      <div class="feature"><strong>Bounded agent loop</strong><span><code>EngineBackend</code> calls the provider, runs the returned tool calls through the hook gate, feeds results back, and repeats until the model answers without calling tools or <code>maxSteps</code> is hit.</span></div>
-      <div class="feature"><strong>Thirty-eight built-in tools on every launch</strong><span><code>Bash</code>, <code>Read</code>, <code>Edit</code>, <code>Write</code>, <code>ApplyPatch</code> (multi-file patches, all or nothing), <code>Glob</code>, <code>Grep</code>, <code>WebFetch</code>, <code>WebSearch</code>, <code>doctor</code>, <code>Skill</code>, <code>Lsp</code>, <code>Memory</code>, <code>RepoMap</code>, <code>Todo</code>, <code>Prune</code>, <code>Compress</code>, <code>Recall</code>, <code>Workflow</code>, <code>Team</code>, <code>AskUser</code>, <code>PlanExit</code>, <code>Schedule</code>, the messaging tools <code>SendMessage</code>, <code>Subagents</code> and <code>InterruptAgent</code>, <code>SkillWorkshop</code> and <code>skills_search</code>, plus <code>GenerateImage</code>/<code>GenerateVideo</code> (text to media on the configured servers), <code>Canvas</code>, <code>Script</code>, <code>ShellSend</code>, <code>NotebookEdit</code>, <code>PtyRun</code>, <code>Ls</code>, <code>ShellOutput</code> and <code>ShellStop</code> — path tools jailed to the project root, edits refused on a file that changed since it was read. <code>Task</code> itself ships whenever the launch carries an agent manager, and the board pair, the Advisor and every trusted MCP server's tools when their backends and settings are live. Implement <code>Tools\Tool</code> for your own.</span></div>
-      <div class="feature"><strong>Hooks that can say no</strong><span>Pre/post-tool-use guards returning allow / deny / modify / ask. Built-ins: <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code>, <code>AuditHook</code>, plus <code>BashEscapeDenyHook</code> when a worktree root is set and <code>PermissionGateHook</code> last, which adapts the six-mode <code>PermissionGate</code> onto the same chain. YAML config and external <code>ScriptHook</code> supported, the latter selecting its outcome by exit code.</span></div>
-      <div class="feature"><strong>Progressive skills</strong><span>Frontmatter <code>SKILL.md</code> files inject prompt context. The system prompt carries only name + description; the model pulls a full body through the <code>Skill</code> tool. Ten built-ins, plus <code>~/.candy-code/skills</code>, <code>&lt;project&gt;/.candy-code/skills</code> and skills imported from Claude Code and opencode.</span></div>
-      <div class="feature"><strong>Sub-agents, teams &amp; worktrees</strong><span>The <code>Task</code> tool delegates to presets with their own model, tools, skills and permission mode — in parallel, nested, in the background or in a git worktree of their own, every run resumable; a preset model the provider does not serve falls back to the session's model. Each run gets a live line, an agents strip and an Agent View with its own transcript, where you can message, pause, cancel or send it to the background (<code>Ctrl+X b</code>). The agent messages, waits on and interrupts its sub-agents with <code>SendMessage</code>, <code>Subagents</code> and <code>InterruptAgent</code>, sub-agents reply to their parent, a parallel batch shares a board, and teammates claim tasks from a shared SQLite board through the <code>Team</code> tool.</span></div>
-      <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines — sequential, fan-out parallel, chained pipeline, and task-then-verifier — from a PHP DSL or YAML, with SIGINT-safe pause and stage-granularity resume, per-task agent presets, hard token and cost budgets that pause the run, and model-authored plans that resume from their longest unchanged prefix.</span></div>
-      <div class="feature"><strong>MCP (Model Context Protocol) client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
-      <div class="feature"><strong>SQLite sessions</strong><span>WAL-mode persistence of sessions, messages and tool calls with FK-enforced cascade, fork/rename/resume, and opt-in retention pruning that never drops a session you named.</span></div>
-      <div class="feature"><strong>Context engine</strong><span>Compaction tiers with absolute token caps and summaries requested ahead of need, in-turn pruning of stale tool output, the agent's own <code>Prune</code>/<code>Compress</code>/<code>Recall</code> tools, re-injection after a compaction, and recovery from overflows, cut-off replies and dropped streams.</span></div>
-      <div class="feature"><strong>Permissions &amp; checkpoints</strong><span>Six permission modes (the TUI asks by default; <code>Alt+M</code> toggles plan mode and the model leaves it with <code>PlanExit</code>, asking you to approve its plan; <code>auto</code> puts security findings to you and can have the title model review the rest), argument-scoped rules; shell lines proven read-only — <code>sed</code> scripts that only read, simple <code>awk</code> programs, <code>for</code>/<code>while read</code> loops over read-only bodies — run unasked (<code>permissions.autoAllowReadOnly</code>); <code>a</code> remembers each part of a chain and answers at once, <code>e</code> edits the scope first, a grant ignores a leading in-project <code>cd</code>, and <code>/permissions mode</code> / <code>/permissions revoke</code> switch the mode and drop grants; an optional bubblewrap sandbox for <code>Bash</code>, and a per-turn workspace checkpoint behind <code>/undo</code>, <code>/redo</code>, <code>/rewind</code> and <code>/diff</code>, with opt-in auto-commit, post-edit lint, LSP diagnostics and auto-test.</span></div>
-      <div class="feature"><strong>Memory</strong><span>Notes indexed into the prompt, a <code>Memory</code> tool with BM25 recall, auto-consolidation at the end of a turn, a periodic dream pass, and a git history you can restore from.</span></div>
-      <div class="feature"><strong>Server mode &amp; web UI</strong><span><code>candy-code serve</code> runs sessions headless behind an authenticated WebSocket speaking <code>candy-code.v1</code>; the <a href="candy-code-web.html">CandyCodeWeb</a> browser UI and <code>candy-code attach</code> drive them. Remote access is gated by <code>--allowed-host</code> and a <code>--allowed-ips</code> client allow-list, and <code>--allow-dir-browse</code> (confined to <code>--browse-root</code>) lets a client pick a new session's project directory — as <code>/new</code>'s folder picker does in the TUI. <code>candy-code acp</code> serves editors — Zed, JetBrains, Neovim — over the Agent Client Protocol on stdio.</span></div>
+      <div class="feature"><strong>Eleven type keys, nine engines</strong><span>One <code>ProviderInterface</code> with capability introspection (<code>supportsStreaming()</code>, <code>supportsVision()</code>, <code>contextWindow()</code>, <code>costPer1kTokens()</code>), streaming, function calling and embeddings. OpenAI and Azure share one engine; Anthropic, Claude Code CLI, Codex, SGLang, Bedrock, Vertex, Gemini, and custom (with OpenRouter as a preset) make up the rest. The Claude Code and Codex routes run each turn inside the vendor's own signed-in CLI.</span></div>
+      <div class="feature"><strong>Bounded agent loop</strong><span><code>EngineBackend::complete()</code> calls the provider, runs the returned tool calls through the hook gate, feeds results back, and repeats until the model answers without calling a tool or <code>maxSteps</code> is reached.</span></div>
+      <div class="feature"><strong>Thirty-eight built-in tools on every launch</strong><span>Shell, file read, edit and write, <code>ApplyPatch</code> (multi-file patches, all or nothing), search, web fetch and search, skills, language server queries (<code>Lsp</code>), memory, repo map, todo, context pruning and compression, workflows, team board, user questions, plan exit, schedules, sub-agent messaging, media generation, canvas pages, scripts, and background and interactive shells. Path tools are jailed to the project root, plus any read-only roots in the user-tier <code>references</code> setting, and an edit is refused on a file that changed since it was read. Six more tools join only when their condition holds; the full list is in the <a href="#tools">tools</a> section. Implement <code>Tools\Tool</code> for your own.</span></div>
+      <div class="feature"><strong>Hooks that can say no</strong><span>Pre- and post-tool-use guards return allow, deny, modify or ask. Built-ins are <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code> and <code>AuditHook</code> (registered by <code>HookManager::registerBuiltIns()</code>), plus <code>BashEscapeDenyHook</code> when a worktree root is set, and <code>PermissionGateHook</code> last, which adapts the six-mode <code>PermissionGate</code> onto the same chain. Hooks load from YAML, and an external <code>ScriptHook</code> chooses its outcome by exit code.</span></div>
+      <div class="feature"><strong>Progressive skills</strong><span>Frontmatter <code>SKILL.md</code> files inject prompt context. The system prompt carries only each skill's name and description; the model loads a full body through the <code>Skill</code> tool. Ten built-ins ship with the app, and you can add more under <code>~/.candy-code/skills</code> and <code>&lt;project&gt;/.candy-code/skills</code>, or import them from Claude Code and opencode.</span></div>
+      <div class="feature"><strong>Sub-agents, teams &amp; worktrees</strong><span>The <code>Task</code> tool delegates to agent presets, each with its own model, tools, skills and permission mode. Runs can go in parallel, nest, run in the background, or run in a git worktree of their own, and each one can be resumed. Each run gets a live line, an agents strip and an Agent View with its own transcript, where you can message, pause, cancel, or send it to the background with <code>Ctrl+X b</code>. <code>SendMessage</code>, <code>Subagents</code> and <code>InterruptAgent</code> steer sub-agents, a parallel batch shares a board, and teammates claim tasks from a shared SQLite board through the <code>Team</code> tool.</span></div>
+      <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines (sequential, fan-out parallel, chained, and task-then-verifier) from a PHP DSL or YAML. A run can be paused at a stage boundary and resumed, each task can name its own agent preset, and hard token and cost budgets pause a run when they are reached.</span></div>
+      <div class="feature"><strong>MCP (Model Context Protocol) client &amp; host</strong><span>A multi-server client over stdio and HTTP reads <code>.mcp.json</code>, with <code>${VAR}</code> interpolation. A project's servers start only after you trust them. The stdio host, <code>candy-code mcp serve</code>, exposes a fixed read-only tool roster (<code>Read</code>, <code>Glob</code>, <code>Grep</code>, <code>Ls</code>, <code>RepoMap</code>) to the client that spawns it. Per-preset <code>mcpServers</code> allowlists are enforced.</span></div>
+      <div class="feature"><strong>SQLite sessions</strong><span>Sessions, messages and tool calls persist in a WAL-mode SQLite database (<code>~/.candy-code/session.db</code>), with foreign-key cascades and fork, rename and resume. Opt-in retention (<code>sessionRetentionDays</code>) removes sessions idle for that long that have no name you gave them, skipping pinned and sub-agent sessions. A title the model generated does not count as a name, so those sessions are removed too. The database is not encrypted.</span></div>
+      <div class="feature"><strong>Context engine</strong><span>Compaction tiers with absolute token caps, summaries requested ahead of need, in-turn pruning of stale tool output, the agent's own <code>Prune</code>, <code>Compress</code> and <code>Recall</code> tools, re-injection after a compaction, and recovery from context overflows, cut-off replies and dropped streams.</span></div>
+      <div class="feature"><strong>Permissions &amp; checkpoints</strong><span>Six permission modes, with rules that match a tool name and an optional argument glob. The TUI asks by default. <code>Alt+M</code> toggles plan mode, and the model leaves plan mode with <code>PlanExit</code>, which puts its plan to you for approval. Shell lines proven read-only, such as simple <code>sed</code> scripts that only read or <code>for</code> and <code>while read</code> loops over read-only bodies, run unasked when <code>permissions.autoAllowReadOnly</code> is on. A per-turn workspace checkpoint sits behind <code>/undo</code>, <code>/redo</code>, <code>/rewind</code> and <code>/diff</code>. An optional sandbox confines <code>Bash</code>: Seatbelt on macOS and Bubblewrap elsewhere, and it is off by default. See <a href="#permissions">permissions and safety</a>.</span></div>
+      <div class="feature"><strong>Memory</strong><span>Notes are indexed into the prompt. A <code>Memory</code> tool saves, edits, deletes and recalls them with BM25 ranking, and the agent consolidates memory at the end of a turn, with a periodic review pass. A git history of the memory directory lets you restore an earlier state.</span></div>
+      <div class="feature"><strong>Server mode &amp; web UI</strong><span><code>candy-code serve</code> runs sessions headless behind an authenticated WebSocket that speaks <code>candy-code.v1</code>. The <a href="candy-code-web.html">CandyCodeWeb</a> browser UI and <code>candy-code attach</code> drive those sessions. Remote access is gated by <code>--allowed-host</code> and <code>--allowed-ips</code>, and <code>--allow-dir-browse</code> (confined to <code>--browse-root</code>) lets a client pick a project directory for a new session. <code>candy-code acp</code> serves editors over the Agent Client Protocol on stdio.</span></div>
       <div class="feature"><strong>Prompts from anywhere</strong><span><code>@file</code>, <code>@diff</code> and <code>@https://…</code> attachments, <code>$skill</code> mentions for one turn, <code>!command</code> shell lines, opt-in <code>AI!</code> comments saved in your editor, <code>/handoff</code> into a fresh session seeded with a state summary, and <code>/newrule</code> to draft a project rule from the conversation.</span></div>
-      <div class="feature"><strong>Real Model–Update–View render loop</strong><span>A sugar-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via SugarMarkdown, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via sugar-image, mouse zones and text selection via sugar-mouse, and a command palette whose fuzzy filter requires every typed character to match. A slash command is offered when any such alignment starts on its first character, so <code>/ab</code> still finds <code>a__ab</code>.</span></div>
+      <div class="feature"><strong>Model–Update–View render loop</strong><span>A sugar-core <code>Model</code> and <code>Program</code> tree with buffer-diffed output: Markdown-rendered replies through SugarMarkdown, a live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images through sugar-image, mouse zones and text selection through sugar-mouse, and a command palette with fuzzy filtering.</span></div>
+    </div>
+    <p style="margin-top: 12px;">How the features above are wired together is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a>. Screen-reader mode, audible cues, reduced motion and contrast are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ACCESSIBILITY.md">docs/ACCESSIBILITY.md</a>.</p>
+
+    <h3 id="providers" style="margin-top: 40px;">Providers and models</h3>
+    <p style="margin-top: 8px;">Select a provider with <code>CANDY_CODE_PROVIDER</code>, which accepts <code>openai</code>, <code>azure</code>, <code>anthropic</code>, <code>claude-code</code>, <code>codex</code>, <code>sglang</code>, <code>bedrock</code>, <code>vertex</code>, <code>gemini</code>, <code>openrouter</code> or <code>custom</code> — the eleven type keys in the table below — or with a <code>provider</code> entry in <code>~/.candy-code/config.json</code>, or from the <code>/model</code> command, which persists the choice. Each type's required and optional keys are validated by <code>ProviderFactory</code> (<code>TYPE_SCHEMAS</code>), and each type's environment reads are in <code>ProviderFactory::defaultConfig()</code>. The engine column names the class that serves the type. Full per-provider setup is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/PROVIDERS.md">docs/PROVIDERS.md</a>, and adding a new type is covered in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ADDING_A_PROVIDER.md">docs/ADDING_A_PROVIDER.md</a>.</p>
+    <div class="table-wrap"><table class="api-table">
+<tr><th>Type key</th><th>Engine (class)</th><th>Environment</th><th>Default model</th></tr>
+<tr><td><code>openai</code></td><td>OpenAIProvider</td><td><code>OPENAI_API_KEY</code> (required), <code>OPENAI_ORG_ID</code>, <code>OPENAI_BASE_URL</code></td><td><code>gpt-4o</code></td></tr>
+<tr><td><code>azure</code></td><td>OpenAIProvider</td><td><code>AZURE_OPENAI_API_KEY</code>; a <code>resource</code> or a full <code>baseUrl</code> in config</td><td><code>gpt-4o</code></td></tr>
+<tr><td><code>anthropic</code></td><td>AnthropicProvider</td><td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_BASE_URL</code></td><td><code>claude-sonnet-4-6</code></td></tr>
+<tr><td><code>claude-code</code></td><td>ClaudeCodeProvider</td><td>none; runs the signed-in <code>claude</code> CLI (<code>claudePath</code>, default <code>claude</code>)</td><td><code>claude-sonnet-4-6</code></td></tr>
+<tr><td><code>codex</code></td><td>CodexProvider</td><td>none; runs the signed-in <code>codex</code> CLI (<code>codexPath</code>, default <code>codex</code>)</td><td><code>gpt-5.1-codex-mini</code></td></tr>
+<tr><td><code>sglang</code></td><td>SglangProvider</td><td><code>OPENAI_BASE_URL</code> (default <code>http://localhost:30000</code>), optional <code>SGLANG_API_KEY</code></td><td><code>Qwen/Qwen3.8-Flash-Next-FP8</code></td></tr>
+<tr><td><code>bedrock</code></td><td>BedrockProvider</td><td><code>AWS_REGION</code> or <code>AWS_DEFAULT_REGION</code> (default <code>us-east-1</code>)</td><td><code>us.anthropic.claude-sonnet-4-6</code></td></tr>
+<tr><td><code>vertex</code></td><td>VertexProvider</td><td><code>GCP_PROJECT_ID</code> (required); location defaults to <code>us-central1</code></td><td><code>claude-sonnet-4-6</code></td></tr>
+<tr><td><code>gemini</code></td><td>GeminiProvider</td><td><code>GEMINI_API_KEY</code>, <code>GEMINI_BASE_URL</code></td><td><code>gemini-2.5-flash</code></td></tr>
+<tr><td><code>openrouter</code></td><td>CustomProvider (OpenAI-compatible preset)</td><td><code>OPENROUTER_API_KEY</code></td><td><code>openai/gpt-4o</code></td></tr>
+<tr><td><code>custom</code></td><td>CustomProvider</td><td><code>OPENAI_BASE_URL</code> (default <code>http://localhost:8080</code>); in config, <code>name</code>, <code>baseUrl</code> and <code>model</code> are required</td><td><code>gpt-4o</code></td></tr>
+    </table></div>
+    <p style="margin-top: 12px;">Types that have a cheaper auxiliary model for titles and other small calls: <code>anthropic</code> and <code>vertex</code> (<code>claude-haiku-4-5</code>), <code>bedrock</code> (<code>us.anthropic.claude-haiku-4-5</code>) and <code>openai</code> (<code>gpt-4o-mini</code>), per <code>ProviderFactory::AUXILIARY_MODEL_BY_TYPE</code>. <code>CANDY_CODE_MODEL</code> overrides the conversation model for whichever provider runs.</p>
+
+        <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <p>Every public class, interface, trait and enum in the SugarCraft\Code namespace has a row, grouped under its namespace with its method table. So do the ten largest public types under <code>src/</code>, wherever they sit. Each other sub-namespace gets one line stating its public type count. The listing is generated from the source PHPDoc; types and methods marked <code>@internal</code> are left out.</p>
+    <!-- api-reference:generated -->
+
+<h3 id="configuration" style="margin-top: 40px;">Configuration</h3>
+    <p style="margin-top: 8px;">Settings come from five layers, read through <code>LayeredSettings</code>. On a key present in more than one file, the highest listed file wins; row 5 is the machine's and outranks the rest.</p>
+    <div class="table-wrap"><table class="api-table">
+<tr><th>#</th><th>File</th><th>Whose</th><th>Read when</th></tr>
+<tr><td>1</td><td><code>&lt;root&gt;/.candy-code/settings.json</code></td><td>the project's, committed</td><td>the project root is listed in <code>trustedProjectSettings</code> and an entry point named it</td></tr>
+<tr><td>2</td><td><code>&lt;root&gt;/.candy-code/settings.local.json</code></td><td>the project's, git-ignored</td><td>same gate as row 1</td></tr>
+<tr><td>3</td><td><code>~/.candy-code/settings.json</code></td><td>yours, hand-authored</td><td>always, when <code>$HOME</code> resolves</td></tr>
+<tr><td>4</td><td><code>~/.candy-code/config.json</code></td><td>yours, partly written by the CLI</td><td>always, or at the file <code>--config &lt;path&gt;</code> names; with no resolvable home directory, a launch refuses</td></tr>
+<tr><td>5</td><td><code>/etc/candy-code/config.json</code></td><td>the machine administrator; read-only to candy-code</td><td>always</td></tr>
+    </table></div>
+    <p style="margin-top: 12px;">Project trust is opt-in. A cloned repository cannot change your settings, and its settings, hooks, <code>.mcp.json</code> and <code>!`cmd`</code> shell blocks are read only after you list the project root under the <code>trustedProject*</code> keys (see <a href="#permissions">permissions and safety</a>). A project's skills, rules and agent presets load from the repository without that listing; only a project skill's pre-approvals (<code>allowed-tools</code>) wait for <code>trustedProjectCommands</code>. Every key, its default and when a change takes effect are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SETTINGS.md">docs/SETTINGS.md</a>. Environment variables are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ENVIRONMENT.md">docs/ENVIRONMENT.md</a>. Themes, keybindings and output styles have their own pages: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/THEMES.md">THEMES.md</a> and <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/KEYBINDINGS.md">KEYBINDINGS.md</a>.</p>
+
+    <h3 id="permissions" style="margin-top: 40px;">Permissions and safety</h3>
+    <p style="margin-top: 8px;">Every tool call passes a <code>PreToolUse</code> hook chain, whose last entry is the <code>PermissionGate</code>. The gate decides in three steps: a circuit breaker that denies <code>rm -rf /</code> and <code>rm -rf ~</code> in every mode, then your rules (first match wins), then the active mode. Set the mode with <code>--permission-mode</code>, <code>CANDY_CODE_PERMISSION_MODE</code>, or <code>permissionMode</code> in config, and switch it in the TUI with <code>/permissions mode</code>. <code>Alt+M</code> toggles plan mode only.</p>
+    <div class="table-wrap"><table class="api-table">
+<tr><th>Mode</th><th>Runs without asking</th><th>Asks, or is refused</th></tr>
+<tr><td><code>default</code></td><td>read tools such as <code>Read</code>, <code>Glob</code> and <code>Grep</code>, and read-only shell lines (<code>ls</code>, <code>git log</code>, <code>grep</code> and similar)</td><td>asks for writes, other shell commands and network calls; <code>-p</code> refuses them</td></tr>
+<tr><td><code>accept-edits</code></td><td>in-project <code>Edit</code> and <code>Write</code>, <code>mkdir</code>, <code>touch</code> and <code>rmdir</code> on paths below the working directory, and read-only shell lines</td><td>every other shell command asks, <code>rm</code>, <code>mv</code> and <code>cp</code> included, as does <code>WebFetch</code></td></tr>
+<tr><td><code>plan</code></td><td>read-only <code>Bash</code>, and Markdown plans in <code>.candy-code/plans/</code></td><td>refuses everything else, and asks for <code>WebFetch</code> and <code>WebSearch</code>; the model leaves with <code>PlanExit</code></td></tr>
+<tr><td><code>auto</code></td><td>calls the <code>SafetyClassifier</code> passes</td><td>a security finding asks; other flagged calls are refused, or reviewed by the title model with <code>autoReview</code></td></tr>
+<tr><td><code>dont-ask</code></td><td>read-only tools, such as <code>Read</code> and <code>Grep</code></td><td>refuses everything else, <code>WebFetch</code> included, without prompting</td></tr>
+<tr><td><code>bypass-permissions</code></td><td>everything, except the circuit breaker and your explicit deny rules</td><td>nothing</td></tr>
+    </table></div>
+    <p style="margin-top: 12px;">Two notes. The circuit breaker and deny rules hold in every mode, <code>bypass-permissions</code> included. The Bash sandbox is off by default (<code>bashSandbox</code>). The security model is summarized in the <a href="#security">security section</a>, and the full gate is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/PERMISSIONS.md">docs/PERMISSIONS.md</a>.</p>
+
+    <h3 id="commands" style="margin-top: 40px;">Commands</h3>
+    <p style="margin-top: 8px;">Slash commands are typed in the TUI or offered from the palette (Ctrl+P). The same names reach the agent as custom commands from <code>.candy-code/commands</code>, which the trust gate governs. The complete reference, with the frontmatter for custom commands, is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/COMMANDS.md">docs/COMMANDS.md</a>.</p>
+<p style="margin-top: 12px;">76 slash commands, one row per spec file under <code>builtin-commands/</code>. The same rows sit in the marker block of <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/COMMANDS.md">docs/COMMANDS.md</a>. Five are palette-only (Ctrl+P, not in the <code>/</code> popup): <code>/new-picker</code>, <code>/docs</code>, <code>/pane-dock-left</code>, <code>/pane-dock-right</code> and <code>/generate-form</code>. Arguments in the Takes column are the row's own argument hint.</p>
+<div class="table-wrap"><table class="api-table">
+<tr><th>Command</th><th>Takes</th><th>What it does</th></tr>
+<tr><td><code>/new</code></td><td><code>[dir]</code></td><td>Start a fresh session, here or in a directory you pick</td></tr>
+<tr><td><code>/new-picker</code></td><td>—</td><td>Start a fresh session in a directory picked from a folder browser</td></tr>
+<tr><td><code>/close-tab</code></td><td>—</td><td>Close the tab deck’s current tab</td></tr>
+<tr><td><code>/sessions</code></td><td><code>[&lt;query&gt;]</code></td><td>List, search and manage sessions</td></tr>
+<tr><td><code>/session-pin</code></td><td>—</td><td>Pin the current session to the front of the list, or unpin it</td></tr>
+<tr><td><code>/session-delete</code></td><td>—</td><td>Open the session list to delete a session</td></tr>
+<tr><td><code>/model</code></td><td><code>[provider [model]]</code></td><td>Switch the active provider, or a provider and its model</td></tr>
+<tr><td><code>/effort</code></td><td><code>[low|medium|high|xhigh|max|auto]</code></td><td>Read or set the reasoning effort tier</td></tr>
+<tr><td><code>/fast</code></td><td><code>[on|off]</code></td><td>Read or set the fast service tier</td></tr>
+<tr><td><code>/share</code></td><td><code>[md|html|json] [path] | serve [--live] [days] | list | revoke [token]</code></td><td>Export the session to a file, or serve and revoke share pages</td></tr>
+<tr><td><code>/export</code></td><td><code>[md|html|json|jsonl|text] [file|--path &lt;file&gt;]</code></td><td>Export the transcript to a local file, raw bytes unredacted</td></tr>
+<tr><td><code>/docs</code></td><td>—</td><td>Open the documentation</td></tr>
+<tr><td><code>/exit</code></td><td>—</td><td>Quit the app</td></tr>
+<tr><td><code>/theme</code></td><td>—</td><td>Switch the color theme</td></tr>
+<tr><td><code>/settings</code></td><td><code>[search|reload]</code></td><td>Show every setting, its value, where it came from and when it applies</td></tr>
+<tr><td><code>/agents</code></td><td><code>[list|&lt;name&gt;|use &lt;preset|default&gt;|new &lt;focus&gt;|proposed|accept &lt;name&gt;]</code></td><td>List the agent roster, inspect one by name, open a running one&#039;s Agent View, or draft a preset and promote it with accept</td></tr>
+<tr><td><code>/mcp</code></td><td><code>&lt;list|add|remove|login|reconnect|enable|disable&gt; [server]</code></td><td>Manage MCP server auth (list/add/remove; login prints the CLI command) and session enable/disable</td></tr>
+<tr><td><code>/keys</code></td><td><code>[reload]</code></td><td>Show the keyboard shortcut reference (or press ?)</td></tr>
+<tr><td><code>/help</code></td><td>—</td><td>List every slash command</td></tr>
+<tr><td><code>/permissions</code></td><td><code>[mode &lt;name&gt; | revoke &lt;n|all&gt; | saved | forget &lt;n|pattern&gt;]</code></td><td>Show this session&#039;s permission mode, its rules and its grants; switch the mode or revoke a grant</td></tr>
+<tr><td><code>/notices</code></td><td>—</td><td>Show every warning this launch raised, un-capped and un-aggregated</td></tr>
+<tr><td><code>/status</code></td><td>—</td><td>Show where this session stands: version, model, context, spend, config, MCP, hooks, serve</td></tr>
+<tr><td><code>/doctor</code></td><td>—</td><td>Run the install checks and report every row</td></tr>
+<tr><td><code>/context</code></td><td><code>--raw [path]</code></td><td>Show what fills the context window: prompt layers, tools, history, cache</td></tr>
+<tr><td><code>/sweep</code></td><td><code>[n]</code></td><td>Prune the tool outputs since your last prompt (or the last n) from what the model sees</td></tr>
+<tr><td><code>/pruning</code></td><td><code>[auto|manual|off|default]</code></td><td>Show or set how this session prunes its context: auto, manual or off</td></tr>
+<tr><td><code>/compress</code></td><td><code>[focus]</code></td><td>Ask the model to compress a closed part of the conversation into a summary</td></tr>
+<tr><td><code>/decompress</code></td><td><code>[bN]</code></td><td>Send a compressed section in full again (no argument: list the sections)</td></tr>
+<tr><td><code>/recompress</code></td><td><code>[bN]</code></td><td>Restore the summary of a section /decompress took back</td></tr>
+<tr><td><code>/hooks</code></td><td><code>[log [n]]</code></td><td>List the hook chain: every registered hook, its matcher and state, plus matchers that failed to evaluate</td></tr>
+<tr><td><code>/rules</code></td><td><code>[name]</code></td><td>List the rule packs, or toggle one for this session</td></tr>
+<tr><td><code>/output-style</code></td><td><code>[name|off]</code></td><td>List the output styles, or select one for this session; <code>off</code> clears it</td></tr>
+<tr><td><code>/newrule</code></td><td><code>[focus]</code></td><td>Have the agent draft a project rule from this conversation</td></tr>
+<tr><td><code>/pane</code></td><td><code>dock &lt;left|right&gt;|toggle [name]</code></td><td>Dock a pane to a side, or toggle its docked state</td></tr>
+<tr><td><code>/layout</code></td><td><code>reset</code></td><td>Reset the pane layout to the launch default</td></tr>
+<tr><td><code>/pane-dock-left</code></td><td>—</td><td>Dock the focused pane to the left</td></tr>
+<tr><td><code>/pane-dock-right</code></td><td>—</td><td>Dock the focused pane to the right</td></tr>
+<tr><td><code>/editor</code></td><td><code>[text]</code></td><td>Compose the prompt in $VISUAL or $EDITOR</td></tr>
+<tr><td><code>/copy</code></td><td><code>[n]</code></td><td>Copy the last assistant reply, or its nth newest fenced code block, to the clipboard</td></tr>
+<tr><td><code>/compact</code></td><td><code>[--self] [focus]</code></td><td>Manually compact chat history to save context</td></tr>
+<tr><td><code>/clear</code></td><td>—</td><td>Clear the transcript, keeping this session</td></tr>
+<tr><td><code>/budget</code></td><td><code>[amount|off]</code></td><td>Show this session&#039;s reported spend, or cap it</td></tr>
+<tr><td><code>/usage</code></td><td><code>[sources|7|30|all]</code></td><td>Show the durable spend ledger folded by day, model and source</td></tr>
+<tr><td><code>/insights</code></td><td><code>[days]</code></td><td>Show insights on session activity and spend across the durable store</td></tr>
+<tr><td><code>/workflow</code></td><td>—</td><td>Run, pause, resume, or inspect a workflow</td></tr>
+<tr><td><code>/memory</code></td><td>—</td><td>Add, list, search, edit, import, clear, or restore memory entries, and show their history</td></tr>
+<tr><td><code>/instructions</code></td><td><code>[open &lt;n|path&gt;]</code></td><td>List the instruction files this session reads, and open one in the editor</td></tr>
+<tr><td><code>/skills</code></td><td><code>[installed|new &lt;name&gt; [description]|proposed|accept &lt;name&gt; [--replace]|reject &lt;name&gt;|enable &lt;name&gt;|disable &lt;name&gt;|reload|history &lt;name&gt;|undo &lt;name&gt;]</code></td><td>List the invocable skills, switch them on or off, review the dream pass drafts: accept or reject one, or step a learned skill back through its history</td></tr>
+<tr><td><code>/init</code></td><td><code>[focus]</code></td><td>Study this project and write or improve its AGENTS.md</td></tr>
+<tr><td><code>/branch</code></td><td>—</td><td>Fork the current session into a new branch</td></tr>
+<tr><td><code>/rename</code></td><td><code>[&lt;name&gt;|--auto]</code></td><td>Rename the current session</td></tr>
+<tr><td><code>/rewind</code></td><td><code>[n] [--chat|--files|--both]</code></td><td>Restore an earlier checkpoint: the conversation, the files, or both</td></tr>
+<tr><td><code>/undo</code></td><td>—</td><td>Take back the last turn, or revert the last auto-commit</td></tr>
+<tr><td><code>/redo</code></td><td>—</td><td>Step forward again over what /rewind or /undo took back</td></tr>
+<tr><td><code>/diff</code></td><td><code>[n] [--print]</code></td><td>Show what changed in the files since a checkpoint</td></tr>
+<tr><td><code>/review</code></td><td><code>[&lt;tree-ish|A..B|A...B&gt;|--pr &lt;n&gt;]</code></td><td>Review the diff against a revision and report findings without editing</td></tr>
+<tr><td><code>/security-review</code></td><td><code>[&lt;ref&gt;]</code></td><td>Security-review the diff against a revision and report findings without editing</td></tr>
+<tr><td><code>/commit</code></td><td><code>&lt;message&gt;</code></td><td>Commit all changed files, drafting the message when you give none</td></tr>
+<tr><td><code>/pr</code></td><td><code>[&lt;focus&gt;]</code></td><td>Push the current branch and open a pull request for it with gh</td></tr>
+<tr><td><code>/bg</code></td><td><code>&lt;task&gt;</code></td><td>Run a task in a background session</td></tr>
+<tr><td><code>/shells</code></td><td><code>[list|output &lt;id&gt; [cursor]|send &lt;id&gt; &lt;keys…&gt;|stop &lt;id&gt;]</code></td><td>List, read output from, and stop background shells</td></tr>
+<tr><td><code>/tasks</code></td><td><code>[list|tail &lt;id&gt;|stop &lt;id&gt;]</code></td><td>List background shells, background sessions and sub-agent runs; tail or stop a background shell</td></tr>
+<tr><td><code>/schedules</code></td><td><code>[list|add &lt;name&gt; &lt;interval&gt; &lt;prompt&gt;|enable|disable|delete &lt;name&gt;]</code></td><td>List, add, enable, disable, and delete scheduled prompt rows</td></tr>
+<tr><td><code>/loop</code></td><td><code>&lt;interval&gt; &lt;prompt&gt;</code></td><td>Re-run a prompt in this session every interval (this process only)</td></tr>
+<tr><td><code>/fork</code></td><td><code>&lt;prompt&gt;</code></td><td>Clone this conversation into a background session</td></tr>
+<tr><td><code>/websearch</code></td><td><code>&lt;query&gt; [--safesearch 0|1|2] [--time-range day|month|year]</code></td><td>Search the web via SearXNG</td></tr>
+<tr><td><code>/goal</code></td><td><code>[&lt;condition&gt;|clear]</code></td><td>Work until a condition is met, judged by the title model after every turn</td></tr>
+<tr><td><code>/grind</code></td><td><code>[&lt;condition&gt;|clear]</code></td><td>Like /goal, with a much longer budget of follow-up rounds</td></tr>
+<tr><td><code>/btw</code></td><td><code>&lt;question&gt;</code></td><td>Ask the title model a side question about this conversation, kept out of it</td></tr>
+<tr><td><code>/recap</code></td><td>—</td><td>Recap where this session left off and what is next (the away-recap, asked now)</td></tr>
+<tr><td><code>/handoff</code></td><td><code>[--remote &lt;url&gt;|focus]</code></td><td>Continue in a new session that starts from a state summary of this one</td></tr>
+<tr><td><code>/generate</code></td><td><code>&lt;prompt&gt; [--steps N] [--size WxH] [--seed N] [--save]</code></td><td>Generate an image on the configured SD server</td></tr>
+<tr><td><code>/generate-form</code></td><td>—</td><td>Open the interactive generation form (image and video tabs)</td></tr>
+<tr><td><code>/sendto</code></td><td><code>&lt;file.png&gt; [--to img2img|inpaint] [--mask FILE]</code></td><td>Import a saved PNG&#039;s parameters back into the generate form</td></tr>
+<tr><td><code>/play</code></td><td><code>&lt;file|artifact-name&gt;</code></td><td>Play a video artifact by name or a local clip by path in the full-screen player</td></tr>
+<tr><td><code>/rendermode</code></td><td><code>&lt;mode&gt;</code></td><td>Show or switch the media render mode (images repaint from the new word, the player starts from it)</td></tr>
+</table></div>
+<p style="margin-top: 12px;">Commands with their own guides: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/GOAL-GRIND.md">/goal and /grind</a> (writing a condition the judge can check), <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SHARE.md">/share and /export</a> (what each file holds and what is sent), <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SCHEDULES.md">/schedules</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/WORKFLOWS.md">/workflow</a>, and <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/MEMORY.md">/memory and /instructions</a>.</p>
+    <h3 id="tools" style="margin-top: 40px;">Tools</h3>
+<p style="margin-top: 12px;">Every plain launch builds <strong>38 built-in tools</strong>. The runtime name is the one a permission rule or <code>allowedTools</code> entry uses; the class is the file under <code>src/Tools/BuiltIn/</code>. The permission class is the one each tool declares with its <code>#[BuiltInTool]</code> attribute, or, for <code>Task</code>, <code>BoardRead</code> and <code>BoardPost</code>, which carry no attribute, the one <code>ToolCatalog</code> declares for them. <strong>read-only</strong> and <strong>no-ask</strong> tools never prompt; <strong>write-capable</strong> tools go through the mode's rules; <strong>mode default</strong> tools fall through to the mode's own answer. See <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/PERMISSIONS.md">PERMISSIONS.md</a>.</p>
+<div class="table-wrap"><table class="api-table">
+<tr><th>Tool</th><th>Class</th><th>Permission class</th><th>What it does</th></tr>
+<tr><td><code>Bash</code></td><td><code>Bash.php</code></td><td>write-capable</td><td>run a shell command with an optional timeout; <code>run_in_background</code> starts a background shell</td></tr>
+<tr><td><code>Read</code></td><td><code>Read.php</code></td><td>read-only</td><td>read a file with line ranges; a file too long for one page gets an outline</td></tr>
+<tr><td><code>Edit</code></td><td><code>Edit.php</code></td><td>write-capable</td><td>replace exact text in a file; one match is required, with looser fallback stages</td></tr>
+<tr><td><code>Glob</code></td><td><code>Glob.php</code></td><td>read-only</td><td>list paths matching a glob pattern</td></tr>
+<tr><td><code>Grep</code></td><td><code>Grep.php</code></td><td>read-only</td><td>search file contents with a regular expression</td></tr>
+<tr><td><code>Write</code></td><td><code>Write.php</code></td><td>write-capable</td><td>create a new file with the given content</td></tr>
+<tr><td><code>WebFetch</code></td><td><code>WebFetch.php</code></td><td>mode default</td><td>fetch the bytes served at one URL</td></tr>
+<tr><td><code>WebSearch</code></td><td><code>WebSearch.php</code></td><td>mode default</td><td>search the web through <code>$CANDY_CODE_SEARCH_ENDPOINT</code> (SearXNG)</td></tr>
+<tr><td><code>doctor</code></td><td><code>Doctor.php</code></td><td>mode default</td><td>probe what this build and deployment actually support</td></tr>
+<tr><td><code>Skill</code></td><td><code>SkillTool.php</code></td><td>read-only</td><td>load a skill body into context by name</td></tr>
+<tr><td><code>Lsp</code></td><td><code>LspTool.php</code></td><td>read-only</td><td>definitions, references, hover, symbols, code actions and diagnostics from a configured language server</td></tr>
+<tr><td><code>Memory</code></td><td><code>MemoryTool.php</code></td><td>no-ask</td><td>view, save, edit, delete and recall persistent memory notes</td></tr>
+<tr><td><code>RepoMap</code></td><td><code>RepoMapTool.php</code></td><td>read-only</td><td>ranked outline of the definitions the project references most, sized to a token budget</td></tr>
+<tr><td><code>Prune</code></td><td><code>Prune.php</code></td><td>no-ask</td><td>drop or distill its own finished tool outputs from what it is sent</td></tr>
+<tr><td><code>Todo</code></td><td><code>Todo.php</code></td><td>no-ask</td><td>the session checklist, rewritten whole on each call</td></tr>
+<tr><td><code>Compress</code></td><td><code>Compress.php</code></td><td>no-ask</td><td>replace a closed range of the conversation with a summary (on a turn started with <code>/compress</code>)</td></tr>
+<tr><td><code>Workflow</code></td><td><code>WorkflowTool.php</code></td><td>write-capable</td><td>run a model-authored YAML plan of staged sub-agents</td></tr>
+<tr><td><code>Recall</code></td><td><code>Recall.php</code></td><td>no-ask</td><td>bring back, word for word, a pruned tool output or a compressed section</td></tr>
+<tr><td><code>Team</code></td><td><code>TeamTool.php</code></td><td>no-ask</td><td>team task board for background teammates: claim, complete, dependencies and messages</td></tr>
+<tr><td><code>ApplyPatch</code></td><td><code>ApplyPatch.php</code></td><td>write-capable</td><td>add, change, move and delete several files in one <code>*** Begin Patch</code> call, all or nothing</td></tr>
+<tr><td><code>AskUser</code></td><td><code>AskUserTool.php</code></td><td>no-ask</td><td>put one question to the user, with optional choices, and wait for the answer</td></tr>
+<tr><td><code>PlanExit</code></td><td><code>PlanExitTool.php</code></td><td>no-ask</td><td>leave plan mode and put the written plan to the user for approval</td></tr>
+<tr><td><code>SendMessage</code></td><td><code>SendMessageTool.php</code></td><td>no-ask</td><td>message a sub-agent it launched, or its parent from inside a sub-agent</td></tr>
+<tr><td><code>Subagents</code></td><td><code>SubagentsTool.php</code></td><td>no-ask</td><td>list, wait for or cancel the sub-agents it launched, and read what they sent back</td></tr>
+<tr><td><code>InterruptAgent</code></td><td><code>InterruptAgentTool.php</code></td><td>no-ask</td><td>make a running sub-agent skip the rest of its current step and read a message first</td></tr>
+<tr><td><code>GenerateImage</code></td><td><code>GenerateImage.php</code></td><td>mode default</td><td>render a still image from a text prompt on the configured Stable Diffusion server</td></tr>
+<tr><td><code>GenerateVideo</code></td><td><code>GenerateVideo.php</code></td><td>mode default</td><td>render a short video from a text prompt on the configured video job server</td></tr>
+<tr><td><code>PtyRun</code></td><td><code>PtyRun.php</code></td><td>write-capable</td><td>run a terminal program on a pseudo-terminal, typing keystrokes and checking the screen it draws</td></tr>
+<tr><td><code>Ls</code></td><td><code>Ls.php</code></td><td>read-only</td><td>list one directory, name-sorted</td></tr>
+<tr><td><code>ShellOutput</code></td><td><code>ShellOutput.php</code></td><td>read-only</td><td>read output from a background shell</td></tr>
+<tr><td><code>ShellStop</code></td><td><code>ShellStop.php</code></td><td>write-capable</td><td>stop a background shell</td></tr>
+<tr><td><code>Schedule</code></td><td><code>ScheduleTool.php</code></td><td>mode default</td><td>create, list or delete schedules that fire recurring background prompts</td></tr>
+<tr><td><code>skills_search</code></td><td><code>SkillsSearch.php</code></td><td>read-only</td><td>find skills by keyword</td></tr>
+<tr><td><code>SkillWorkshop</code></td><td><code>SkillWorkshop.php</code></td><td>write-capable</td><td>save or amend a learned skill in the user tier</td></tr>
+<tr><td><code>Canvas</code></td><td><code>CanvasTool.php</code></td><td>no-ask</td><td>save a self-contained HTML page as a session artifact the web client can display</td></tr>
+<tr><td><code>Script</code></td><td><code>ScriptTool.php</code></td><td>write-capable</td><td>run a short PHP script whose only effects are tool calls</td></tr>
+<tr><td><code>ShellSend</code></td><td><code>ShellSend.php</code></td><td>write-capable</td><td>type keystrokes into an interactive background shell</td></tr>
+<tr><td><code>NotebookEdit</code></td><td><code>NotebookEdit.php</code></td><td>write-capable</td><td>replace, insert or delete one cell of a Jupyter notebook</td></tr>
+</table></div>
+<h4 style="margin-top: 24px;">Conditional and wired tools</h4>
+<p style="margin-top: 8px;">These are in the catalog but not in every launch's set. <code>Task</code> is present whenever the launch carries an agent manager (every live chat does).</p>
+<div class="table-wrap"><table class="api-table">
+<tr><th>Tool</th><th>Class</th><th>Permission class</th><th>When it is offered</th></tr>
+<tr><td><code>mcp_list</code></td><td><code>McpListTool.php</code></td><td>read-only</td><td>when a launch defers an MCP server (lists the deferred tools and their schemas)</td></tr>
+<tr><td><code>mcp_call</code></td><td><code>McpCallTool.php</code></td><td>write-capable</td><td>when a launch defers an MCP server (runs one deferred tool)</td></tr>
+<tr><td><code>Advisor</code></td><td><code>AdvisorTool.php</code></td><td>no-ask</td><td>when <code>advisorModel</code> is set</td></tr>
+<tr><td><code>BoardPost</code></td><td><code>BoardPostTool.php</code></td><td>no-ask</td><td>only to the members of a parallel <code>Task</code> batch, to post to their shared board</td></tr>
+<tr><td><code>BoardRead</code></td><td><code>BoardReadTool.php</code></td><td>read-only</td><td>only to the members of a parallel <code>Task</code> batch, to read their shared board</td></tr>
+<tr><td><code>Task</code></td><td><code>TaskTool.php</code></td><td>write-capable</td><td>when the launch carries an agent manager (every live chat does)</td></tr>
+</table></div>
+<p style="margin-top: 12px;">Tools with their own guides: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/LSP.md">Lsp</a> (language servers and their install), <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/REPO-MAP.md">RepoMap</a> (the ranked symbol map), <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/CONTEXT.md">Prune, Compress and Recall</a> (context management), <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/MEMORY.md">Memory</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/MEDIA.md">GenerateImage and GenerateVideo</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/WORKFLOWS.md">Workflow</a>, and <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SCHEDULES.md">Schedule</a>.</p>
+    <h3 id="sessions" style="margin-top: 40px;">Sessions, checkpoints, undo and rewind</h3>
+    <ul style="margin-top: 8px;">
+      <li><strong>Sessions.</strong> Each conversation is a session in <code>~/.candy-code/session.db</code>. <code>/sessions</code> lists and searches them, <code>/rename</code> names one, <code>/fork</code> and <code>/branch</code> split a conversation, <code>/handoff</code> starts a fresh session from a state summary, and <code>/session-pin</code> keeps one at the top of the list.</li>
+      <li><strong>Checkpoints.</strong> A checkpoint is taken for each turn that edits files. <code>/diff</code> shows what changed since a checkpoint.</li>
+      <li><strong>Undo and rewind.</strong> <code>/undo</code> takes back the last turn, or reverts the last auto-commit. <code>/rewind [n] [--chat|--files|--both]</code> restores an earlier checkpoint for the conversation, the files, or both. <code>/redo</code> steps forward again over what was taken back.</li>
+      <li><strong>Cost and pruning.</strong> <code>/usage</code> folds the durable spend ledger by day, model and source, <code>/budget</code> caps a session's spend, and <code>/pruning</code> sets how the session prunes its context. The context engine behind pruning and compaction is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/CONTEXT.md">docs/CONTEXT.md</a>.</li>
+    </ul>
+    <p style="margin-top: 8px;">The FAQ answers the common versions of these questions: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FAQ.md#how-do-i-undo-what-the-agent-changed">how do I undo what the agent changed</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FAQ.md#how-do-i-keep-a-session-from-being-pruned">how do I keep a session from being pruned</a>, and <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FAQ.md#how-do-i-cap-the-cost">how do I cap the cost</a>.</p>
+
+    <h3 id="hooks-skills-mcp-subagents" style="margin-top: 40px;">Hooks, skills, MCP and sub-agents</h3>
+    <ul style="margin-top: 8px;">
+      <li><strong>Hooks.</strong> Sixteen hook events, starting with <code>PreToolUse</code>. A hook returns allow, deny, modify or ask, and <code>/hooks</code> lists the chain and its log. Full reference: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/HOOKS.md">docs/HOOKS.md</a>.</li>
+      <li><strong>Skills.</strong> A skill is a folder with a <code>SKILL.md</code> file. Ten are built in. <code>/skills</code> lists and toggles them, and the <code>Skill</code> tool loads one by name. Full reference: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SKILLS.md">docs/SKILLS.md</a>.</li>
+      <li><strong>MCP.</strong> Servers listed in <code>.mcp.json</code> are started after you trust the project, and <code>/mcp</code> lists, adds, logs in to and removes them. <code>candy-code mcp serve</code> runs the stdio host. Full reference: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/MCP.md">docs/MCP.md</a>.</li>
+      <li><strong>Sub-agents.</strong> The <code>Task</code> tool runs a preset as a sub-agent, and <code>/agents</code> lists the roster and opens a running agent's view. Presets are authored as described in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/AGENTS_AUTHORING.md">docs/AGENTS_AUTHORING.md</a>; the roster is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/AGENTS.md">docs/AGENTS.md</a>.</li>
+      <li><strong>Plugins.</strong> Claude-format plugin bundles, the surfaces they load and their precedence, and the bundle files that are declined are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/PLUGINS.md">docs/PLUGINS.md</a>.</li>
+    </ul>
+
+    <h3 id="automation" style="margin-top: 40px;">Background work, schedules and workflows</h3>
+    <ul style="margin-top: 8px;">
+      <li><strong>Background work.</strong> Background shells and background sessions, how each is started, listed and stopped: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/BACKGROUND.md">docs/BACKGROUND.md</a>.</li>
+      <li><strong>Schedules.</strong> A schedule is one prompt that repeats on a cadence. <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SCHEDULES.md">docs/SCHEDULES.md</a> covers the rows, the cadence and the <code>Schedule</code> tool.</li>
+      <li><strong>Workflows.</strong> A named sequence of stages, each dispatching a sub-agent. The run, pause, resume and status flow is in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/WORKFLOWS.md">docs/WORKFLOWS.md</a>.</li>
+      <li><strong>Headless driving.</strong> <code>candy-code -p</code> as a machine surface: the JSON and stream-json envelopes, the exit codes, and structured answers, in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FLEET-DRIVING.md">docs/FLEET-DRIVING.md</a>.</li>
+    </ul>
+
+    <h3 id="server" style="margin-top: 40px;">Server, web UI and editors</h3>
+    <ul style="margin-top: 8px;">
+      <li><code>candy-code serve</code> runs sessions headless behind an authenticated WebSocket. It binds <code>127.0.0.1</code> by default; any other address needs <code>--allow-remote</code>. Pin the clients with <code>--allowed-host</code> and <code>--allowed-ips</code>.</li>
+      <li><code>candy-code attach</code> connects a terminal to a running server, and the <a href="candy-code-web.html">CandyCodeWeb</a> page drives the same sessions from a browser.</li>
+      <li><code>candy-code acp</code> runs the Agent Client Protocol on stdio for editors. <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ACP.md">docs/ACP.md</a> has the setup for Zed. JetBrains IDEs and Neovim take the same command and argument in their own ACP agent settings, as the guide describes.</li>
+    </ul>
+    <p style="margin-top: 8px;">The wire protocol and its auth model are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SERVER.md">docs/SERVER.md</a>.</p>
+
+    <h3 id="maintenance" style="margin-top: 40px;">Maintenance: gc, usage and doctor</h3>
+    <p style="margin-top: 8px;"><code>candy-code gc</code> reports and reclaims disk used by the session store. The verbs run from a read-only look to a destructive purge, and the order below is the order to use them in. Only <code>gc purge</code> and <code>gc vacuum</code> write. <code>gc vacuum</code> writes only with <code>--force</code>; <code>gc purge</code> asks you to confirm at the terminal unless you pass <code>--force</code>, and in JSON mode it needs <code>--dry-run</code> or <code>--force</code>.</p>
+    <p style="margin-top: 8px;">The session store is created on the first run. On a machine that has never started candy-code, the commands below stop with <code>cannot open the session store</code>, so start candy-code once first (even <code>candy-code -p "hello"</code>).</p>
+    <pre class="code"><code class="language-shell">candy-code gc status                         # where the bytes are (read-only)
+candy-code gc sessions --sort size --limit 20 # one row per session, real bytes (read-only)
+candy-code gc analyze --top 10                # ranking, growth and orphan counts (read-only)
+candy-code gc purge --older-than 90d --dry-run   # plan the purge; writes nothing
+candy-code gc purge --older-than 90d --force     # the same plan, applied</code></pre>
+    <p style="margin-top: 8px;">Always run <code>--dry-run</code> first and read the plan. <code>gc purge</code> needs at least one filter, strip or clean flag, and it never prunes a session that <code>--keep-latest</code> protects. Each flag is documented in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/GC.md">docs/GC.md</a>.</p>
+    <ul style="margin-top: 8px;">
+      <li><code>candy-code usage</code> prints the durable spend ledger, the CLI form of the <code>/usage</code> command. See <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/USAGE.md">docs/USAGE.md</a>.</li>
+      <li><code>candy-code doctor</code> runs the install checks and reports each row, including the <code>sandbox</code> row that says whether the Bash jail is enabled. <code>/doctor</code> runs the same checks inside a session.</li>
+      <li>Traces of each agent turn can go to an OpenTelemetry collector. What is sent, what never leaves the machine and what happens when the collector is down are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/OBSERVABILITY.md">docs/OBSERVABILITY.md</a>.</li>
+    </ul>
+
+    <h3 id="troubleshooting" style="margin-top: 40px;">Troubleshooting and FAQ</h3>
+    <ul style="margin-top: 8px;">
+      <li>The TUI says "echo" and the model never answers: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FAQ.md#the-tui-says-echo-and-my-model-never-answers-why">FAQ</a>. Provider setup problems are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#provider-and-model-problems">TROUBLESHOOTING</a>.</li>
+      <li><code>candy-code</code> exits 2 immediately and will not start: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#candy-code-exits-2-immediately-and-will-not-start">TROUBLESHOOTING</a>. The exit codes are listed at the top of that page.</li>
+      <li>Skills or MCP tools are missing, or a hook never fires: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#my-skills-are-not-showing-up">skills</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#my-mcp-tools-are-missing">MCP</a>, <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#my-hook-never-fires">hooks</a>.</li>
+      <li>Every Bash call is refused: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#every-bash-call-is-refused">TROUBLESHOOTING</a>. Why a prompt appeared at all: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/FAQ.md#why-did-it-ask-me-before-running-a-command">FAQ</a>.</li>
+      <li>Session store errors: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md#session-store-problems">TROUBLESHOOTING</a>. The full troubleshooting guide has more than twenty entries; start with <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/TROUBLESHOOTING.md">docs/TROUBLESHOOTING.md</a>.</li>
+    </ul>
+
+    <h3 id="security" style="margin-top: 40px;">Security model</h3>
+    <ul style="margin-top: 8px;">
+      <li><strong>Model output is untrusted.</strong> Tool calls, edits and shell commands go through the permission gate; the circuit breaker, your rules and the mode decide each one.</li>
+      <li><strong>Project files are ignored until trusted.</strong> A project's settings, hooks and <code>.mcp.json</code> are read only after you trust the project, and a changed MCP server definition is refused until you approve it again.</li>
+      <li><strong>The server listens on loopback.</strong> <code>candy-code serve</code> binds <code>127.0.0.1</code> by default, and every client must authenticate. Put TLS in front of it before you expose it.</li>
+      <li><strong>Secrets are plain text on disk.</strong> Provider keys saved by <code>candy-code login</code> sit in <code>~/.candy-code/config.json</code> unless you pass <code>--keychain</code>. The session database is not encrypted. The storage options for <code>login</code> are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/CREDENTIALS.md">docs/CREDENTIALS.md</a>.</li>
+      <li><strong>The Bash sandbox is opt-in.</strong> With <code>bashSandbox</code> off, a Bash call runs with your privileges. When it is on, Seatbelt runs on macOS and Bubblewrap on other systems.</li>
+    </ul>
+    <p style="margin-top: 8px;">The threat model, trust boundaries, supported versions and how to report a vulnerability are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/SECURITY.md">docs/SECURITY.md</a>.</p>
+
+    <h3 id="demos" style="margin-top: 40px;">Demos</h3>
+    <p style="margin-top: 8px;">VHS-recorded GIFs of every PHP example shipped with the app; the workflow YAML under <code>examples/workflows/</code> ships without a recording. Six VHS tapes ship in <a href="https://github.com/sugarcraft/candy-code/tree/master/.vhs">.vhs/</a>. Each tape is rendered to a GIF by the CI job in <code>vhs.yml</code>, which commits the result; the GIFs are not rendered by hand.</p>
+    <div class="demo-grid">
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/chat.gif" alt="Chat">
+            <h3>Chat</h3>
+            <span class="demo-caption">A chat session on <code>examples/echo-chat.php</code>, with Markdown-rendered replies. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/chat.tape">chat.tape</a>.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/agents.gif" alt="Agents">
+            <h3>Agents</h3>
+            <span class="demo-caption">The sub-agent dashboard from <code>examples/agent-dashboard.php</code>. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/agents.tape">agents.tape</a>.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/cli.gif" alt="CLI">
+            <h3>CLI</h3>
+            <span class="demo-caption">The command-line help, from <code>./bin/candy-code --help</code>. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/cli.tape">cli.tape</a>.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/diff.gif" alt="Diff">
+            <h3>Diff</h3>
+            <span class="demo-caption">The unified diff rendered for an <code>Edit</code> result, from <code>examples/edit-diff.php</code>. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/diff.tape">diff.tape</a>.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/media-form.gif" alt="Media form">
+            <h3>Media form</h3>
+            <span class="demo-caption">The generation form, from <code>examples/media-demo.php</code>. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/media-form.tape">media-form.tape</a>.</span>
+        </div>
+        <div class="demo-card">
+            <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/permission.gif" alt="Permission">
+            <h3>Permission</h3>
+            <span class="demo-caption">A permission prompt for a guarded tool call, answered with <code>n</code>, from <code>examples/permission-prompt.php</code>. Tape: <a href="https://github.com/sugarcraft/candy-code/blob/master/.vhs/permission.tape">permission.tape</a>.</span>
+        </div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/candy-code">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-code/blob/master/README.md">Full README</a> — the user guide, with an index of every docs page</li>
-      <li><a href="https://github.com/sugarcraft/candy-code/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/crush">crush</a> (Go); SugarCraft is developed as a native PHP project.</li>
+    <h3 id="key-classes" style="margin-top: 40px;">Key classes</h3>
+    <p style="margin-top: 8px;">The public classes a library user is most likely to touch, grouped by namespace under <code>SugarCraft\Code\</code>.</p>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td><code>Providers\ProviderInterface</code></td><td><code>complete(CompleteRequest): CompleteResponse</code></td><td>The single LLM abstraction: one batch completion</td></tr>
+<tr><td><code>Providers\ProviderInterface</code></td><td><code>completeStream(CompleteRequest): Generator</code></td><td>The same call, yielded as streaming chunks</td></tr>
+<tr><td><code>Providers\ProviderInterface</code></td><td><code>supportsStreaming()</code>, <code>supportsVision()</code>, <code>contextWindow()</code>, <code>costPer1kTokens(model, direction)</code></td><td>Capability and cost introspection, so callers do not guess</td></tr>
+<tr><td><code>Backend\EngineBackend</code></td><td><code>new(provider, model)</code></td><td>Factory; bridges the chat <code>Backend</code> seam to the agent engine</td></tr>
+<tr><td><code>Backend\EngineBackend</code></td><td><code>withTools(tools)</code>, <code>withHooks(manager)</code>, <code>withSkillRegistry(registry)</code>, <code>withMaxSteps(n)</code></td><td>Fluent wiring of the agent loop; each call returns a new instance</td></tr>
+<tr><td><code>Backend\EngineBackend</code></td><td><code>complete(history, ?onToken, ?onEvent, …): Message</code></td><td>Runs one bounded agentic turn, emitting tool-lifecycle events</td></tr>
+<tr><td><code>Hooks\HookManager</code></td><td><code>registerBuiltIns(): void</code></td><td>Registers <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code> and <code>AuditHook</code></td></tr>
+<tr><td><code>Hooks\HookManager</code></td><td><code>preToolUse(HookContext): HookResult</code></td><td>Gates a tool call: allow, deny, modify or ask</td></tr>
+<tr><td><code>Hooks\HookManager</code></td><td><code>resolveAsk(ask, approved, feedback)</code></td><td>Settles an answered ask into a final allow or deny</td></tr>
+<tr><td><code>Skills\SkillRegistry</code></td><td><code>findForPrompt(prompt): array</code></td><td>Matches discovered <code>SKILL.md</code> files to the current turn</td></tr>
+<tr><td><code>Skills\SkillRegistry</code></td><td><code>forPaths(paths): array</code></td><td>Path-scoped skills for files a tool just touched</td></tr>
+<tr><td><code>Skills\SkillRegistry</code></td><td><code>isAutoInvocable(name)</code>, <code>isUserInvocable(name)</code>, <code>isContextFork(name)</code></td><td>Frontmatter flags, enforced</td></tr>
+<tr><td><code>Agents\AgentPreset</code></td><td><code>__construct(name, description, tools, disallowedTools, model, permissionMode, maxTurns, skills, mcpServers, …)</code></td><td>Readonly sub-agent descriptor: model, tool allow and deny lists, skills, MCP allowlist, effort, isolation</td></tr>
+<tr><td><code>MCP\McpClient</code></td><td><code>startServers()</code>, <code>stopServers()</code></td><td>Launches and tears down the configured stdio and HTTP MCP servers</td></tr>
+<tr><td><code>MCP\McpClient</code></td><td><code>listTools()</code>, <code>callTool(server, tool, args, …)</code>, <code>callToolByName(tool, args)</code></td><td>Discovers and invokes MCP tools, filtered by the active preset's allowlist</td></tr>
+<tr><td><code>Permissions\PermissionGate</code></td><td><code>evaluate(ToolCall, ?projectRoot, ?sessionId): PermissionDecision</code></td><td>Evaluates a call against the active mode, behind the mode-independent circuit breaker</td></tr>
+<tr><td><code>Permissions\PermissionGate</code></td><td><code>mode(): PermissionMode</code></td><td>One of <code>default</code>, <code>accept-edits</code>, <code>plan</code>, <code>auto</code>, <code>dont-ask</code>, <code>bypass-permissions</code></td></tr>
+<tr><td><code>Workflows\WorkflowEngine</code></td><td><code>run(workflowPath, context, …): WorkflowResult</code></td><td>Executes a YAML multi-stage agent pipeline</td></tr>
+<tr><td><code>Workflows\WorkflowEngine</code></td><td><code>runFromPhp(workflowClass, context): WorkflowResult</code></td><td>The same, from the PHP builder DSL</td></tr>
+<tr><td><code>Workflows\WorkflowEngine</code></td><td><code>pause(id)</code>, <code>resume(id, …)</code>, <code>status(id): WorkflowStatus</code></td><td>Stage-granularity pause and resume across a signal</td></tr>
+<tr><td><code>Session\SessionStore</code></td><td><code>createSession(id, provider, model, ?systemPrompt, ?name, …)</code></td><td>Opens a session row in the SQLite (WAL) store</td></tr>
+<tr><td><code>Session\SessionStore</code></td><td><code>addMessage(sessionId, message)</code>, <code>addToolCall(sessionId, messageId, toolCall)</code></td><td>Appends a turn and its tool calls, foreign-key enforced</td></tr>
+<tr><td><code>Session\SessionStore</code></td><td><code>listSessions(limit)</code>, <code>forkSession(id)</code>, <code>renameSession(id, name)</code></td><td>Back the <code>/sessions</code>, <code>/fork</code> and <code>/rename</code> commands</td></tr>
+<tr><td><code>Session\SessionStore</code></td><td><code>pruneSessions(daysOld, ?exemptSessionId): int</code></td><td>Opt-in retention sweep; never drops a named or resuming session</td></tr>
+</table>
+
+    <h3 id="more" style="margin-top: 32px;">Where to go next</h3>
+    <ul style="margin-top: 8px;">
+      <li>The full docs index, with reading paths: <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/README.md">docs/README.md</a>. The user guide is <a href="https://github.com/sugarcraft/candy-code/blob/master/README.md">README.md</a>.</li>
+      <li>Release notes and version tags: <a href="https://github.com/sugarcraft/candy-code/blob/master/CHANGELOG.md">CHANGELOG.md</a>, and the tags at <a href="https://github.com/sugarcraft/candy-code/tags">github.com/sugarcraft/candy-code/tags</a>.</li>
+      <li>Source on GitHub: <a href="https://github.com/sugarcraft/candy-code">sugarcraft/candy-code</a>. Runnable examples: <a href="https://github.com/sugarcraft/candy-code/tree/master/examples">examples/</a>.</li>
+      <li>Terms used across the docs are defined in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/GLOSSARY.md">GLOSSARY.md</a>. The reasons the system prompt is layered as it is are in <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/PROMPT_ENGINEERING.md">PROMPT_ENGINEERING.md</a>. To build and contribute, start with <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/CONTRIBUTING.md">CONTRIBUTING.md</a>.</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/crush">crush</a> (Go). SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">Key Classes</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>ProviderInterface</td><td>complete(CompleteRequest): CompleteResponse</td><td>The single LLM abstraction — one batch completion</td></tr>
-<tr><td>ProviderInterface</td><td>completeStream(CompleteRequest): \Generator</td><td>Same call, yielded as streaming chunks</td></tr>
-<tr><td>ProviderInterface</td><td>supportsStreaming(), supportsVision(), contextWindow(), costPer1kTokens(model, direction)</td><td>Capability + cost introspection, so callers do not guess</td></tr>
-<tr><td>EngineBackend</td><td>new(provider, model)</td><td>Factory — bridges the chat <code>Backend</code> seam to the agent engine</td></tr>
-<tr><td>EngineBackend</td><td>withTools(tools), withHooks(manager), withSkillRegistry(registry), withMaxSteps(n)</td><td>Fluent wiring of the agent loop (immutable — each returns a new instance)</td></tr>
-<tr><td>EngineBackend</td><td>complete(history, ?onToken, ?onEvent): Message</td><td>Run one bounded agentic turn, emitting tool-lifecycle events</td></tr>
-<tr><td>HookManager</td><td>registerBuiltIns()</td><td>Registers <code>ProtectFilesHook</code>, <code>ConfirmRemoveHook</code>, <code>AuditHook</code></td></tr>
-<tr><td>HookManager</td><td>preToolUse(HookContext): HookResult</td><td>Gate a tool call — allow / deny / modify / ask</td></tr>
-<tr><td>HookManager</td><td>resolveAsk(ask, approved, feedback)</td><td>Settle an answered ASK into a final allow or deny</td></tr>
-<tr><td>SkillRegistry</td><td>findForPrompt(prompt): array</td><td>Match discovered <code>SKILL.md</code> files to the current turn</td></tr>
-<tr><td>SkillRegistry</td><td>forPaths(paths): array</td><td>Path-scoped skills for files a tool just touched</td></tr>
-<tr><td>SkillRegistry</td><td>isAutoInvocable(name), isUserInvocable(name), isContextFork(name)</td><td>Frontmatter flag enforcement, not decoration</td></tr>
-<tr><td>AgentPreset</td><td>__construct(name, description, tools, model, permissionMode, skills, mcpServers, …)</td><td>Readonly sub-agent descriptor — model, tool allow/deny, skills, MCP allowlist, effort, isolation</td></tr>
-<tr><td>McpClient</td><td>startServers(), stopServers()</td><td>Launch / tear down the configured stdio + HTTP MCP servers</td></tr>
-<tr><td>McpClient</td><td>listTools(), callTool(server, tool, args), callToolByName(tool, args)</td><td>Discover and invoke MCP tools, filtered by the active preset's allowlist</td></tr>
-<tr><td>PermissionGate</td><td>evaluate(ToolCall): PermissionDecision</td><td>Evaluate a call against the active mode, with a mode-independent rm-rf circuit breaker</td></tr>
-<tr><td>PermissionGate</td><td>mode(): PermissionMode</td><td>One of <code>default</code>, <code>accept-edits</code>, <code>plan</code>, <code>auto</code>, <code>dont-ask</code>, <code>bypass-permissions</code></td></tr>
-<tr><td>WorkflowEngine</td><td>run(workflowPath, context): WorkflowResult</td><td>Execute a YAML multi-stage agent pipeline</td></tr>
-<tr><td>WorkflowEngine</td><td>runFromPhp(workflowClass, context): WorkflowResult</td><td>Same, from the PHP builder DSL</td></tr>
-<tr><td>WorkflowEngine</td><td>pause(id), resume(id), getStatus(id)</td><td>Stage-granularity pause / resume across a signal</td></tr>
-<tr><td>SessionStore</td><td>createSession(id, provider, model, ?systemPrompt, ?name)</td><td>Open a session row in the SQLite (WAL) store</td></tr>
-<tr><td>SessionStore</td><td>addMessage(sessionId, message), addToolCall(sessionId, messageId, toolCall)</td><td>Append a turn and its tool calls, FK-enforced</td></tr>
-<tr><td>SessionStore</td><td>listSessions(limit), forkSession(id), renameSession(id, name)</td><td>Back the <code>/sessions</code>, <code>/fork</code> and <code>/rename</code> commands</td></tr>
-<tr><td>SessionStore</td><td>pruneSessions(daysOld, ?exemptSessionId): int</td><td>Opt-in retention sweep; never drops a named or resuming session</td></tr>
-</table>
   </div>
-</section>
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/chat.gif" alt="Chat">
-                <h3>Chat</h3>
-                <span class="demo-caption">Full chat session with scrollback + Markdown-rendered replies.</span>
-            </div>
-        </div>
-    </div>
 </section>

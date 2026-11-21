@@ -23,8 +23,20 @@ foreach ($argv as $arg) {
         $themeName = $m[1];
     }
 }
-$theme = Theme::byName($themeName) ?? Theme::ansi();
+// The catalog adds the bundled slugs (solarized, monokai, github) that byName() does not know.
+$theme = Theme::byName($themeName) ?? Theme::catalogByName($themeName);
+if ($theme === null) {
+    fwrite(STDERR, "unknown theme '{$themeName}'; using ansi\n");
+    $theme = Theme::ansi();
+}
 
-$markdown = (string) stream_get_contents(STDIN);
+// Bounded read: a pipe can carry any size, and the renderer's cost grows
+// with what it is given. Past the cap the demo refuses rather than stalling.
+const MAX_INPUT_BYTES = 1048576;
+$markdown = (string) stream_get_contents(STDIN, MAX_INPUT_BYTES + 1);
+if (strlen($markdown) > MAX_INPUT_BYTES) {
+    fwrite(STDERR, 'input exceeds ' . MAX_INPUT_BYTES . " bytes; refusing to render\n");
+    exit(2);
+}
 echo (new Renderer($theme))->render($markdown);
 echo "\n";

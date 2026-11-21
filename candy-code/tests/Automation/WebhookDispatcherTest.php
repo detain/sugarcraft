@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Http\Message\Response;
 use React\Promise\Deferred;
+use SugarCraft\Async\Backoff;
 use SugarCraft\Code\Automation\OutboundWebhookConfig;
 use SugarCraft\Code\Automation\WebhookDispatcher;
 use SugarCraft\Code\Automation\WebhookEvent;
@@ -127,7 +128,8 @@ final class WebhookDispatcherTest extends TestCase
      */
     public function testFiveXxClimbsTheBackoffLadderThenGivesUp(): void
     {
-        $ladder = [0.05, 0.08, 0.11];
+        // Geometric stand-in for the 50/80/110 ms rungs the array used to spell out.
+        $ladder = Backoff::new(50.0, 1.6)->withAttempts(4);
         $dispatcher = $this->dispatcher(
             [['status' => 500], ['status' => 502], ['status' => 503], ['status' => 500]],
             $ladder,
@@ -160,15 +162,56 @@ final class WebhookDispatcherTest extends TestCase
 
     public function testTheDefaultLadderIsTwoEightThirtyAndTheCapsArePinned(): void
     {
-        self::assertSame([2.0, 8.0, 30.0], WebhookDispatcher::BACKOFF_SECONDS);
+        $policy = WebhookDispatcher::retryPolicy();
+        self::assertSame(2.0, $policy->secondsForAttempt(1));
+        self::assertSame(8.0, $policy->secondsForAttempt(2));
+        self::assertSame(30.0, $policy->secondsForAttempt(3));
+        self::assertSame(4, $policy->attempts, 'four total attempts: the first send plus three retries');
+        self::assertTrue($policy->allows(3), 'the third failure still earns a retry');
+        self::assertFalse($policy->allows(4), 'the fourth failure gives the delivery up');
         self::assertSame(10.0, WebhookDispatcher::POST_TIMEOUT_SECONDS);
         self::assertSame(2.0, WebhookDispatcher::CONNECT_TIMEOUT_SECONDS);
         self::assertSame(128, WebhookDispatcher::DEFAULT_QUEUE_LIMIT);
     }
 
+    /**
+     * Regression: the dispatcher handed Backoff the retry count where the
+     * contract takes the 1-based failure index, so a declared budget of N made
+     * N+1 deliveries. A budget of two must be exactly two sends, and the give-up
+     * notice must name the same count.
+     */
+    public function testTheDeclaredAttemptBudgetIsTheNumberOfDeliveries(): void
+    {
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(crossFork: false);
+
+        $dispatcher = $this->dispatcher([['status' => 500], ['status' => 500], ['status' => 200]], Backoff::new(10.0)->withAttempts(2));
+
+        $dispatcher->dispatch($this->event());
+        self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1, 5.0);
+
+        self::assertCount(2, $this->posts, 'withAttempts(2) is two sends, not three');
+        $rows = RuntimeNoticeSink::drain();
+        self::assertCount(1, $rows);
+        self::assertStringContainsString('failed after 2 attempts', $rows[0]);
+    }
+
+    /**
+     * Regression: the hand-kept array could never be unbounded, but a
+     * Backoff without an attempt budget would retry a dead receiver forever
+     * and hold its queue slot for good, so the dispatcher refuses it.
+     */
+    public function testAnUnboundedRetryPolicyIsRefusedBecauseItNeverGivesUp(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('finite retry budget');
+
+        $this->dispatcher([], Backoff::new(10.0));
+    }
+
     public function testFourXxIsFinalTheFirstTime(): void
     {
-        $dispatcher = $this->dispatcher([['status' => 404]], [0.01]);
+        $dispatcher = $this->dispatcher([['status' => 404]], Backoff::new(10.0)->withAttempts(1));
 
         $dispatcher->dispatch($this->event());
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1);
@@ -178,7 +221,7 @@ final class WebhookDispatcherTest extends TestCase
 
     public function testRefusedRedirectIsNeitherFollowedNorRetried(): void
     {
-        $dispatcher = $this->dispatcher([['status' => 302]], [0.01]);
+        $dispatcher = $this->dispatcher([['status' => 302]], Backoff::new(10.0)->withAttempts(1));
 
         $dispatcher->dispatch($this->event());
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1);
@@ -191,7 +234,7 @@ final class WebhookDispatcherTest extends TestCase
 
     public function testTransportRejectionRidesTheLadderAndSucceedsQuietly(): void
     {
-        $dispatcher = $this->dispatcher([['reject' => 'connection refused'], ['status' => 200]], [0.01]);
+        $dispatcher = $this->dispatcher([['reject' => 'connection refused'], ['status' => 200]], Backoff::new(10.0)->withAttempts(2));
         RuntimeNoticeSink::reset();
         RuntimeNoticeSink::arm(crossFork: false);
 
@@ -218,7 +261,7 @@ final class WebhookDispatcherTest extends TestCase
             ['status' => 200],
             ['status' => 503], ['status' => 503], ['status' => 503], ['status' => 503],
         ];
-        $dispatcher = $this->dispatcher($outcomes, [0.002, 0.002, 0.002]);
+        $dispatcher = $this->dispatcher($outcomes, Backoff::new(2.0, 1.0)->withAttempts(4));
 
         $dispatcher->dispatch($this->event());
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1);
@@ -270,7 +313,7 @@ final class WebhookDispatcherTest extends TestCase
         RuntimeNoticeSink::reset();
         RuntimeNoticeSink::arm(crossFork: false);
 
-        $dispatcher = $this->dispatcher([['throw' => true], ['throw' => true], ['throw' => true], ['throw' => true]], [0.002, 0.002, 0.002]);
+        $dispatcher = $this->dispatcher([['throw' => true], ['throw' => true], ['throw' => true], ['throw' => true]], Backoff::new(2.0, 1.0)->withAttempts(4));
 
         self::assertTrue($dispatcher->dispatch($this->event()), 'admitted — its failure is a settled delivery, not an exception');
         self::pumpLoopUntil(static fn (): bool => $dispatcher->settled() === 1, 5.0);
@@ -389,9 +432,9 @@ final class WebhookDispatcherTest extends TestCase
      * exhausted script answers 200.
      *
      * @param list<array<string,mixed>> $outcomes
-     * @param null|list<float> $ladder
+     * @param null|Backoff $ladder
      */
-    private function dispatcher(array $outcomes, ?array $ladder, ?array $endpoints = null, int $limit = 64): WebhookDispatcher
+    private function dispatcher(array $outcomes, ?Backoff $ladder, ?array $endpoints = null, int $limit = 64): WebhookDispatcher
     {
         $posts = &$this->posts;
         $transforms = &$this->appliedTransforms;

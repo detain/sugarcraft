@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol;
 
 use React\EventLoop\TimerInterface;
+use React\Promise\PromiseInterface;
 use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Lang;
@@ -36,6 +37,8 @@ use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
 use SugarCraft\Code\Server\Ws\Outbox;
+use SugarCraft\McpClient\Protocol\JsonRpc;
+use SugarCraft\ServeProtocol\Protocol;
 
 /**
  * The `candy-code.v1` protocol (roadmap O-3b, Appendix O §6): the
@@ -57,7 +60,10 @@ use SugarCraft\Code\Server\Ws\Outbox;
  *  7. an `idempotencyKey` on a side-effecting method: a retry gets the
  *     original answer (5 min, 1,000 per principal — {@see IdempotencyCache});
  *  8. the method, whose {@see RpcError} becomes the error object and whose
- *     any other failure becomes `-32099 internal` without its message.
+ *     any other failure becomes `-32099 internal` without its message. A
+ *     method may answer with a promise (a launch that waits on its daemon):
+ *     the answer goes out when it settles, and a retry of an in-flight
+ *     idempotent call shares that promise rather than starting a second run.
  * A notification (no `id`) runs the same way and is never answered.
  *
  * EVENTS GO OUT THROUGH EACH CLIENT'S {@see Outbox}, never straight onto the
@@ -88,7 +94,14 @@ final class Dispatcher implements MessageHandler
     public const MAX_INFLIGHT = 64;
 
     /** Appendix O §6.1: the largest message this server sends. */
-    public const MAX_SERVER_FRAME_BYTES = 4_194_304;
+    public const MAX_SERVER_FRAME_BYTES = Protocol::MAX_SERVER_FRAME_BYTES;
+
+    /**
+     * The bytes a result frame adds around its value when the id is null:
+     * `{"jsonrpc":"2.0","id":null,"result":` plus the closing brace. The in-process door
+     * measures a result by this rather than building the frame.
+     */
+    private const FRAME_OVERHEAD_BYTES = 37;
 
     /** Appendix O §6.2: `limits.tickIntervalMs`. */
     public const TICK_INTERVAL_SECONDS = 15.0;
@@ -113,6 +126,14 @@ final class Dispatcher implements MessageHandler
 
     /** @var array<string, Client> */
     private array $clients = [];
+
+    /**
+     * Idempotent calls whose answer is still a pending promise, keyed as the
+     * cache keys them. A retry that lands before the first settles joins it.
+     *
+     * @var array<string, PromiseInterface<mixed>>
+     */
+    private array $inFlight = [];
 
     private ?TimerInterface $pumpTimer = null;
 
@@ -359,22 +380,23 @@ final class Dispatcher implements MessageHandler
             // Refused before the parse (CWPD-1): the meter never saw an id,
             // so the answer carries a null one — the shape JsonRpc::decode
             // refusals already use.
-            $client->send(JsonRpc::error(null, RpcError::of(ErrorCode::RateLimited, 'send rate exceeded', null, ['retryAfterMs' => 1000])));
+            $client->send(JsonRpc::error(null, RpcError::of(ErrorCode::RateLimited, 'send rate exceeded', null, ['retryAfterMs' => 1000])->toLibrary()));
 
             return;
         }
 
-        $request = JsonRpc::decode($payload);
-        if (\is_array($request)) {
-            [$error, $id] = $request;
+        $decoded = JsonRpc::decode($payload);
+        if (\is_array($decoded)) {
+            [$error, $id] = $decoded;
             $client->send(JsonRpc::error($id, $error));
 
             return;
         }
+        $request = Request::fromLibrary($decoded);
 
         if (!$client->admit()) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::RateLimited, 'too many requests', null, ['retryAfterMs' => 1000])));
+                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::RateLimited, 'too many requests', null, ['retryAfterMs' => 1000])->toLibrary()));
             }
 
             return;
@@ -382,7 +404,7 @@ final class Dispatcher implements MessageHandler
 
         if (!$client->isInitialized() && $request->method !== ServerMethods::HELLO) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')->toLibrary()));
             }
             $client->outbox()->flush();
             $connection->close(self::CLOSE_NOT_INITIALIZED, 'not initialized');
@@ -432,81 +454,247 @@ final class Dispatcher implements MessageHandler
         $this->idempotency->forgetPrincipal(\hash('sha256', $tokenId));
     }
 
+    /**
+     * The in-process door (PL-5c): runs $method with $params through every gate the wire
+     * runs for a request (the hello gate, the method and its scope, the published params
+     * schema, the viewer session pin, the idempotency cache) and returns the handler's
+     * answer as the wire carries it. The rate meters are not spent, because the caller is
+     * the host itself. A handler that answers with a promise gets a promise back, settled
+     * with that same answer or with the refusal the wire would send.
+     *
+     * The answer's value is encoded and decoded again by {@see wireAnswer()}: invalid UTF-8
+     * is substituted and a result past {@see MAX_SERVER_FRAME_BYTES} is refused `too_large`,
+     * so a caller holds the values a wire client decodes. No JSON-RPC frame is built.
+     *
+     * A refusal throws the RpcError the wire would answer with, carrying the same code,
+     * kind and data. Any other failure is logged the way the wire logs it and surfaces as
+     * `internal` without its message.
+     *
+     * Text that is not UTF-8 is refused as `parse_error` before any gate runs, the same
+     * answer the wire gives: JsonRpc::decode refuses the whole frame, so the wire never
+     * hands the handler bytes the in-process door would have to substitute.
+     *
+     * @param array<string, mixed> $params
+     * @return mixed|PromiseInterface<mixed>
+     * @throws RpcError
+     */
+    public function invoke(Client $client, string $method, array $params): mixed
+    {
+        self::assertUtf8($params);
+
+        $request = new Request(null, false, $method, $params);
+        try {
+            if (!$client->isInitialized() && $method !== ServerMethods::HELLO) {
+                throw RpcError::of(ErrorCode::NotInitialized, 'send server.hello first');
+            }
+
+            $result = $this->run($client, $request);
+            if (!$result instanceof PromiseInterface) {
+                return self::wireAnswer($result);
+            }
+        } catch (RpcError $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->logFailure($client, $request, $e);
+
+            throw RpcError::of(ErrorCode::Internal, 'internal error');
+        }
+
+        return $result->then(
+            static fn (mixed $answer): mixed => self::wireAnswer($answer),
+            function (mixed $e) use ($client, $request): never {
+                $e = $e instanceof \Throwable ? $e : new \RuntimeException('rejected');
+                if ($e instanceof RpcError) {
+                    throw $e;
+                }
+                $this->logFailure($client, $request, $e);
+
+                throw RpcError::of(ErrorCode::Internal, 'internal error');
+            },
+        );
+    }
+
+    /**
+     * Every string the params carry, keys included, must be UTF-8. The wire's decode
+     * refuses a non-UTF-8 frame as a whole, so this walks the same values.
+     *
+     * @throws RpcError
+     */
+    private static function assertUtf8(mixed $value): void
+    {
+        if (\is_string($value)) {
+            if (\preg_match('//u', $value) !== 1) {
+                throw RpcError::of(ErrorCode::ParseError, 'parse error');
+            }
+
+            return;
+        }
+
+        if (\is_array($value)) {
+            foreach ($value as $key => $child) {
+                if (\is_string($key)) {
+                    self::assertUtf8($key);
+                }
+                self::assertUtf8($child);
+            }
+        }
+    }
+
     private function call(Client $client, Request $request): void
     {
         try {
-            $spec = $this->methods->get($request->method)
-                ?? throw RpcError::of(ErrorCode::MethodNotFound, \sprintf('method not found: %s', \substr($request->method, 0, 64)));
-            $call = new CallContext($client, $request, $this->context, $this->methods);
-            $call->requireScope($spec->scope);
-
-            // The published schema is the contract (O-3c): params that break
-            // it never reach the method. The errors name paths, never values.
-            $invalid = ProtocolSchema::paramErrors($spec->name, $request->params);
-            if ($invalid !== []) {
-                throw RpcError::of(ErrorCode::InvalidParams, 'invalid params: ' . $invalid[0], 'invalid_params', ['errors' => \array_slice($invalid, 0, 8)]);
-            }
-
-            $params = Params::of($request->params);
-            // D-13 (reviews-1103 G4-G): a grant pinned to sessions never
-            // answers for another one — and the pin fires BEFORE the
-            // idempotency cache, so replaying a pinned session's key from an
-            // unpinned session cannot smuggle the cached answer past the gate.
-            // A refusal, unlike a success, is never remembered.
-            $viewerSessions = $client->viewerSessions();
-
-            if ($viewerSessions !== null && $client->principal() === 'viewer') {
-                $sessionId = $request->params['sessionId'] ?? null;
-
-                if (\is_string($sessionId) && !\in_array($sessionId, $viewerSessions, true)) {
-                    throw RpcError::of(
-                        ErrorCode::Forbidden,
-                        Lang::t('cli.serve.tokens.session_denied'),
-                        'viewer_session_denied',
-                    );
-                }
-            }
-
-            $key = $spec->sideEffects ? $params->optionalString('idempotencyKey', IdempotencyCache::MAX_KEY_LENGTH) : null;
-            $bucket = $this->idempotencyBucket($client);
-
-            if ($key !== null) {
-                $remembered = $this->idempotency->get($bucket, $spec->name, $key);
-                if ($remembered !== null) {
-                    $this->answer($client, $request, $remembered['answer']);
-
-                    return;
-                }
-            }
-
-            $result = ($spec->handler)($call, $params);
-            if ($key !== null) {
-                $this->idempotency->put($bucket, $spec->name, $key, $result);
-            }
-            $this->answer($client, $request, $result);
-        } catch (RpcError $e) {
-            if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, $e));
-            }
+            $result = $this->run($client, $request);
         } catch (\Throwable $e) {
-            // The message may carry a path, a prompt or a secret: the client
-            // gets the code and the kind, never the text — but the cause goes
-            // to the server's log, which is where SERVER.md promised it (ISS-057).
-            // Session + connection + a per-dispatch token ride the line so two
-            // sessions' failures are separable in server.log (S-O28); the
-            // client still gets only the code and kind.
-            $sessionId = $request->params['sessionId'] ?? null;
-            $this->context->logError($e, \sprintf(
-                '[session=%s conn=%s err=%s] %s failed',
-                \is_string($sessionId) && $sessionId !== '' ? \substr(\preg_replace('/[^A-Za-z0-9_.:-]/', '?', $sessionId) ?? '', 0, 64) : '-',
-                $client->id(),
-                \bin2hex(\random_bytes(4)),
-                $spec->name ?? $request->method,
-            ));
+            $this->refuse($client, $request, $e);
+
+            return;
+        }
+
+        if (!$result instanceof PromiseInterface) {
+            $this->answerOrRefuse($client, $request, $result);
+
+            return;
+        }
+
+        $result->then(
+            fn (mixed $answer) => $this->answerOrRefuse($client, $request, $answer),
+            fn (mixed $e) => $this->refuse($client, $request, $e instanceof \Throwable ? $e : new \RuntimeException('rejected')),
+        );
+    }
+
+    /** Answers a settled result; a result the wire cannot carry is refused like a handler failure. */
+    private function answerOrRefuse(Client $client, Request $request, mixed $answer): void
+    {
+        try {
+            $this->answer($client, $request, $answer);
+        } catch (\Throwable $e) {
+            $this->refuse($client, $request, $e);
+        }
+    }
+
+    /** The wire's answer to a failed call: an RpcError as itself, anything else as `internal`, logged. */
+    private function refuse(Client $client, Request $request, \Throwable $e): void
+    {
+        if ($e instanceof RpcError) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
+                $client->send(JsonRpc::error($request->id, $e->toLibrary()));
+            }
+
+            return;
+        }
+
+        $this->logFailure($client, $request, $e);
+        if ($request->hasId) {
+            $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')->toLibrary()));
+        }
+    }
+
+    /**
+     * The gates and the handler, shared by the wire and the in-process door: returns the
+     * handler's result (a promise when the handler answers later), the remembered answer of
+     * an idempotent retry, or the still-pending answer of one, or throws.
+     *
+     * @return mixed|PromiseInterface<mixed>
+     */
+    private function run(Client $client, Request $request): mixed
+    {
+        $spec = $this->methods->get($request->method)
+            ?? throw RpcError::of(ErrorCode::MethodNotFound, \sprintf('method not found: %s', \substr($request->method, 0, 64)));
+        $call = new CallContext($client, $request, $this->context, $this->methods);
+        $call->requireScope($spec->scope);
+
+        // The published schema is the contract (O-3c): params that break
+        // it never reach the method. The errors name paths, never values.
+        $invalid = ProtocolSchema::paramErrors($spec->name, $request->params);
+        if ($invalid !== []) {
+            throw RpcError::of(ErrorCode::InvalidParams, 'invalid params: ' . $invalid[0], 'invalid_params', ['errors' => \array_slice($invalid, 0, 8)]);
+        }
+
+        $params = Params::of($request->params);
+        // D-13 (reviews-1103 G4-G): a grant pinned to sessions never
+        // answers for another one — and the pin fires BEFORE the
+        // idempotency cache, so replaying a pinned session's key from an
+        // unpinned session cannot smuggle the cached answer past the gate.
+        // A refusal, unlike a success, is never remembered.
+        $viewerSessions = $client->viewerSessions();
+
+        if ($viewerSessions !== null && $client->principal() === 'viewer') {
+            $sessionId = $request->params['sessionId'] ?? null;
+
+            if (\is_string($sessionId) && !\in_array($sessionId, $viewerSessions, true)) {
+                throw RpcError::of(
+                    ErrorCode::Forbidden,
+                    Lang::t('cli.serve.tokens.session_denied'),
+                    'viewer_session_denied',
+                );
             }
         }
+
+        $key = $spec->sideEffects ? $params->optionalString('idempotencyKey', IdempotencyCache::MAX_KEY_LENGTH) : null;
+        $bucket = $this->idempotencyBucket($client);
+
+        if ($key === null) {
+            return ($spec->handler)($call, $params);
+        }
+
+        $remembered = $this->idempotency->get($bucket, $spec->name, $key);
+        if ($remembered !== null) {
+            return $remembered['answer'];
+        }
+
+        $slot = $bucket . "\0" . $spec->name . "\0" . $key;
+        if (isset($this->inFlight[$slot])) {
+            return $this->inFlight[$slot];
+        }
+
+        $result = ($spec->handler)($call, $params);
+        if (!$result instanceof PromiseInterface) {
+            $this->idempotency->put($bucket, $spec->name, $key, $result);
+
+            return $result;
+        }
+
+        // Only a success is remembered, and only once it has settled: a refusal
+        // leaves the key free for the sender's retry, exactly as a sync refusal does.
+        $settled = false;
+        $shared = $result->then(
+            function (mixed $answer) use ($bucket, $spec, $key, $slot, &$settled): mixed {
+                $settled = true;
+                unset($this->inFlight[$slot]);
+                $this->idempotency->put($bucket, $spec->name, $key, $answer);
+
+                return $answer;
+            },
+            function (mixed $e) use ($slot, &$settled): never {
+                $settled = true;
+                unset($this->inFlight[$slot]);
+
+                throw $e instanceof \Throwable ? $e : new \RuntimeException('rejected');
+            },
+        );
+        if (!$settled) {
+            $this->inFlight[$slot] = $shared;
+        }
+
+        return $shared;
+    }
+
+    /**
+     * The message may carry a path, a prompt or a secret: the client gets the code and
+     * the kind, never the text — but the cause goes to the server's log, which is where
+     * SERVER.md promised it (ISS-057). Session + connection + a per-dispatch token ride
+     * the line so two sessions' failures are separable in server.log (S-O28).
+     */
+    private function logFailure(Client $client, Request $request, \Throwable $e): void
+    {
+        $sessionId = $request->params['sessionId'] ?? null;
+        $this->context->logError($e, \sprintf(
+            '[session=%s conn=%s err=%s] %s failed',
+            \is_string($sessionId) && $sessionId !== '' ? \substr(\preg_replace('/[^A-Za-z0-9_.:-]/', '?', $sessionId) ?? '', 0, 64) : '-',
+            $client->id(),
+            \bin2hex(\random_bytes(4)),
+            $request->method,
+        ));
     }
 
     private function answer(Client $client, Request $request, mixed $result): void
@@ -516,12 +704,54 @@ final class Dispatcher implements MessageHandler
         }
         $text = JsonRpc::result($request->id, $result);
         if (\strlen($text) > self::MAX_SERVER_FRAME_BYTES) {
-            $text = JsonRpc::error($request->id, RpcError::of(
-                ErrorCode::Internal,
-                \sprintf('the answer is larger than %d bytes; ask for less', self::MAX_SERVER_FRAME_BYTES),
-                'too_large',
-            ));
+            $text = JsonRpc::error($request->id, self::tooLarge()->toLibrary());
         }
         $client->send($text);
+    }
+
+    /**
+     * A result as the in-process door hands it on: its value encoded under the wire's
+     * flags (so invalid UTF-8 is substituted, as JsonRpc::encode does), refused `too_large`
+     * when the frame the wire would send for it would pass the ceiling, then decoded back so
+     * a caller holds the values a wire client decodes. Nothing is framed here.
+     *
+     * @throws RpcError
+     */
+    public static function wireAnswer(mixed $result): mixed
+    {
+        $text = JsonRpc::encodeValue($result, JsonRpc::MAX_DEPTH_VALUE);
+        if (\strlen($text) + self::FRAME_OVERHEAD_BYTES > self::MAX_SERVER_FRAME_BYTES) {
+            throw self::tooLarge();
+        }
+
+        // The bundle's wire client decodes the whole frame at JsonRpc::MAX_DEPTH. The value sits
+        // inside the frame's envelope, and PHP counts the envelope's own level too, so decoding
+        // the bare value at MAX_DEPTH - 1 accepts exactly the nesting the frame does. Deeper, the
+        // wire client drops the frame undecoded.
+        try {
+            return \json_decode($text, true, JsonRpc::MAX_DEPTH - 1, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw self::tooDeep();
+        }
+    }
+
+    /** The refusal an answer the wire client cannot decode gets, in-process only: the wire drops such a frame. */
+    private static function tooDeep(): RpcError
+    {
+        return RpcError::of(
+            ErrorCode::Internal,
+            \sprintf('the answer nests deeper than %d levels; ask for less', JsonRpc::MAX_DEPTH - 2),
+            'too_deep',
+        );
+    }
+
+    /** The refusal an answer past the frame ceiling gets, on the wire and in-process alike. */
+    private static function tooLarge(): RpcError
+    {
+        return RpcError::of(
+            ErrorCode::Internal,
+            \sprintf('the answer is larger than %d bytes; ask for less', self::MAX_SERVER_FRAME_BYTES),
+            'too_large',
+        );
     }
 }

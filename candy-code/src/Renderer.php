@@ -4645,7 +4645,7 @@ final class Renderer
         // terminal: SugarMarkdown's word wrap is opt-in and off by default
         // (`SugarCraft\Markdown\Renderer::__construct()` nulls a non-positive
         // width), so with no width every paragraph came out on one line.
-        $md = new Markdown($theme->markdown, wrapWidth: $width);
+        $md = Markdown::cached($theme->markdown, $width);
         // Built once per frame, not once per turn: the labels depend only on
         // the theme, and styling them per turn was a fixed cost on every row
         // of a long transcript (audit 15b-10).
@@ -5002,7 +5002,7 @@ final class Renderer
         // renderAssistantTurn(): the model's raw text can smuggle
         // U+E000/U+E001 into the frame and break the mouse-zone scan.
         $raw = Sanitize::stripZoneSentinels($partial);
-        $md = new Markdown($theme->markdown, wrapWidth: $width);
+        $md = Markdown::cached($theme->markdown, $width);
 
         try {
             $body = rtrim(self::streamingMarkdown($md, $theme, $width, $raw));

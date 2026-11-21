@@ -254,8 +254,10 @@ keep-a-prefix stdout cap, an array-form argv launch with no shell in the
 path, the child's stderr drained rather than redirected, and fail-open
 semantics — anything short of a clean, on-time dump leaves the env-anchored
 chain answer standing. Results are memoized per `TERM` for the process
-lifetime (including recorded misses), so a long-lived consumer pays at most
-one child per terminal type; `Probe::_reset()` drains the table in tests.
+lifetime: a completed child (any exit code) and a recorded miss (an overrun or
+a signal kill on this sync door), so a long-lived consumer pays at most one
+child per terminal type. A failed launch is transient and mints no entry, so
+the next call may spawn again. `Probe::_reset()` drains the table in tests.
 
 ### Env-var precedence
 
@@ -613,7 +615,7 @@ the sourced capability table, the `toColorProfile()` bridge and the
 `degradedTo()` walk, all offline and exiting 0 with or without an `infocmp`
 binary on PATH):
 
-- **`Probe\TerminalProbe`** — phased probe returning a **`Probe\ProbeReport`**:
+- **`Probe\TerminalProbe`** (`@deprecated`, REMOVED-IN 2.0.0: use `AsyncProbe::report()`) — phased probe returning a **`Probe\ProbeReport`**:
   phase 1 runs the shared `DetectionChain` for the color-depth rung (so the
   ladder cannot drift between surfaces), phase 2 reads terminfo via
   `infocmp -1`, phase 3 maps `TERM_PROGRAM` advertised capabilities (interactive
@@ -670,6 +672,23 @@ binary on PATH):
   `infocmp` exec rides the same bounded door as the child (previous
   paragraph), but it still blocks the calling thread for up to that ceiling —
   inside a live loop, pass the loop and stay off the tick path.
+
+- **`AsyncProbe::report(?LoopInterface $loop = null)`** — the full capability
+  report (Sixel, KittyKeyboard, ITerm2, Hyperlinks, TrueColor and the
+  `TERM_PROGRAM` table), returned as a promise of a `Probe\ProbeReport`. It is
+  the async replacement for the synchronous `Probe\TerminalProbe`, which is
+  `@deprecated` (REMOVED-IN: 2.0.0). The class is unchanged for backward
+  compatibility and raises no runtime notice. The report is composed by the
+  same pipeline `TerminalProbe::run()` uses: a recording pass finds out whether
+  the terminfo leg needs a child, and a replaying pass feeds that child's
+  capped dump into the same leg (`Probe\TerminfoReplayProbe`, `@internal`).
+  The child spawns only on the loop you pass in, and it shares the one
+  `AsyncProbe` spawn ladder, slot cap and deadline with `colorProfile()`.
+  Completed dumps are memoized per TERM (the cardinality ceiling is the same
+  256 entries); a deadline overrun, a signal kill and a failed launch mint no
+  entry, and a signal-killed child replays as "no dump". Without a loop the
+  promise resolves in place through
+  `TerminalProbe::run()`.
 
 ## Overriding detection
 

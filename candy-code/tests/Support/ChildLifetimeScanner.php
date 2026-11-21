@@ -451,9 +451,11 @@ final class ChildLifetimeScanner
             //
             // THE MINIMUM IS WHAT MAKES IT RIGHT, and comparing against a
             // fixed zero got this wrong in the tree, not in theory: the second
-            // spawn in `Hooks/ScriptHook.php::executeStaged()` sits inside an
-            // `if`, and the `proc_close()` that covers it is at the function's
-            // own level - depth MINUS one from the spawn. Against zero that
+            // spawn in `Hooks/ScriptHook.php::executeStaged()` sat inside an
+            // `if`, and the `proc_close()` that covered it was at the function's
+            // own level - depth MINUS one from the spawn. (The hook now spawns
+            // once, through sugar-async's `ChildRun` in `runChild()`, and the
+            // shape lives on in the scanner fixture.) Against zero that
             // read as conditional, which is a guard reddening correct code,
             // and an exemption row for correct code is where the next real
             // offender hides. Against the running minimum a close that has

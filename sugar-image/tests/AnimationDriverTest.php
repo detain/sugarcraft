@@ -178,6 +178,8 @@ final class AnimationDriverTest extends TestCase
         // docblock's paced-not-non-blocking claim (and this test) must be
         // updated together, not silently.
         $slow = new class implements Renderer {
+        use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
             public function render(ImageSource $image, int $width, ?int $height = null): string
             {
                 \usleep(60_000);
@@ -259,23 +261,33 @@ final class AnimationDriverTest extends TestCase
         $this->assertSame($expected, $out);
     }
 
-    public function testZeroImageIdIsAddressableOnTheKittyWire(): void
+    public function testZeroImageIdIsRefusedAtConstruction(): void
     {
-        $kitty  = new KittyRenderer();
-        $driver = new AnimationDriver(
+        // Was the M2 pin (i=0 serialized as an addressable id). A Kitty delete
+        // of i=0 clears every image, and the double buffer retires slot 0 on
+        // the odd frames, so a 0 base id erased the frame just drawn. Refuse it
+        // when the driver is built.
+        $this->expectException(\InvalidArgumentException::class);
+
+        new AnimationDriver(
             animation:  $this->animation,
-            renderer:   $kitty,
+            renderer:   new KittyRenderer(),
             cellWidth:  4,
             cellHeight: 2,
             imageId:    0,
         );
+    }
 
-        // M2 cure: id 0 used to serialize as null, so the frame was
-        // transmitted with no i= at all and delete() could never target it.
-        $this->assertStringStartsWith("\x1b_Ga=T,i=0,f=100,q=2,c=4,r=2,m=1;\x1b\\", $driver->view());
+    public function testNonzeroImageIdIsAddressableOnTheKittyWire(): void
+    {
+        // M2 edge pair: the id must reach the wire as i=<id>, not null.
+        $driver = (new AnimationDriver(
+            animation:  $this->animation,
+            renderer:   new KittyRenderer(),
+            cellWidth:  4,
+            cellHeight: 2,
+        ))->withImageId(42);
 
-        // Nonzero edge pair for the same serialization flip.
-        $driver = $driver->withImageId(42);
         $this->assertStringStartsWith("\x1b_Ga=T,i=42,f=100,q=2,c=4,r=2,m=1;\x1b\\", $driver->view());
     }
 

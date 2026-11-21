@@ -78,7 +78,14 @@ final class AnimationDriver implements Model
         public readonly int $index = 0,
         public readonly bool $paused = false,
         public readonly int $imageId = 1,
-    ) {}
+    ) {
+        // Kitty `a=d` with i=0 deletes every image on screen, so a double-buffer
+        // slot of 0 would retire the frame just committed. Refuse it here, where
+        // the caller can see it, not mid-playback inside view().
+        if ($imageId < 1) {
+            throw new \InvalidArgumentException("image id must be positive, got {$imageId}");
+        }
+    }
 
     /**
      * Return a tick Cmd for the first frame when not paused.
@@ -130,9 +137,10 @@ final class AnimationDriver implements Model
     /**
      * Emit the current frame, committing it before any retire byte.
      *
-     * Kitty renderers get the double-buffered shape: `renderFrame(new) .
-     * delete(other)` — new frame lands first, the other slot is retired
-     * after, so there is no empty-cell window. All other renderers keep
+     * Id-addressable renderers ({@see Renderer::supportsIdDelete()}, Kitty
+     * and any passthrough wrapper around it) get the double-buffered shape
+     * `present(new, old)`: the new frame lands first, the other slot is
+     * retired after, so there is no empty-cell window. All other renderers keep
      * the original byte stream `delete($imageId) . render($frame)`: for
      * ''-delete backends the order is invisible, and for Pop-based
      * iTerm2/WezTerm deleting after the redraw would retire the frame
@@ -144,12 +152,22 @@ final class AnimationDriver implements Model
     {
         $frame = $this->animation->frames[$this->index];
 
-        if ($this->renderer instanceof KittyRenderer) {
+        // Capability, not class: a Kitty renderer wrapped in a tmux or screen
+        // passthrough decorator reports supportsIdDelete() through the wrapper,
+        // and present() forwards the id-addressed frame and retire to the inner
+        // renderer. An instanceof check here missed the wrapped Kitty and left
+        // every animation frame in the terminal's image store.
+        if ($this->renderer->supportsIdDelete()) {
             $newId = $this->imageId + ($this->index % 2);
             $oldId = $this->imageId + (($this->index + 1) % 2);
 
-            return $this->renderer->renderFrame($frame, $this->cellWidth, $this->cellHeight, $newId)
-                . $this->renderer->delete((string) $oldId);
+            return $this->renderer->present(
+                $frame,
+                $this->cellWidth,
+                $this->cellHeight,
+                (string) $newId,
+                (string) $oldId,
+            );
         }
 
         $delete = $this->renderer->delete((string) $this->imageId);

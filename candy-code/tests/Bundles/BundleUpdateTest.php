@@ -13,6 +13,7 @@ use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\PathMarketplaceFixtureTrait;
 
 /**
  * C-EXT-4.b: `bundles update` — the provenance-driven refresh. Every pin here
@@ -26,6 +27,7 @@ final class BundleUpdateTest extends TestCase
 {
     use TemporaryDirectoryTrait;
     use HomeSandboxTrait;
+    use PathMarketplaceFixtureTrait;
 
     private const SHA_PIN = '1111111111222222222233333333334444444444';
 
@@ -218,36 +220,6 @@ final class BundleUpdateTest extends TestCase
 
         self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('update', 'never-installed'));
         self::assertSame(['alpha'], $this->entriesUnderRoot());
-    }
-
-    /**
-     * Add a path-typed marketplace carrying one installable plugin named
-     * $plugin under ./plugins/$plugin, pinned at {@see self::SHA_PIN}.
-     */
-    private function addPathMarketplace(string $name, string $plugin): string
-    {
-        $source = $this->tempDir . '/' . $name . '-src';
-        mkdir($source . '/.claude-plugin', 0777, true);
-        mkdir($source . '/plugins/' . $plugin . '/.claude-plugin', 0777, true);
-        file_put_contents(
-            $source . '/plugins/' . $plugin . '/.claude-plugin/plugin.json',
-            json_encode(['name' => $plugin, 'version' => '1.0.0']),
-        );
-        file_put_contents($source . '/plugins/' . $plugin . '/UPSTREAM.txt', 'v1 for ' . $plugin);
-        file_put_contents(
-            $source . '/.claude-plugin/marketplace.json',
-            json_encode(['name' => $name, 'owner' => ['name' => 'op'], 'plugins' => [
-                ['name' => $plugin, 'source' => './plugins/' . $plugin],
-            ]]),
-        );
-
-        mkdir($source . '/.git/refs/heads', 0777, true);
-        file_put_contents($source . '/.git/HEAD', "ref: refs/heads/main\n");
-        file_put_contents($source . '/.git/refs/heads/main', self::SHA_PIN . "\n");
-
-        self::assertSame(NonInteractive::EXIT_OK, $this->verb('marketplace', 'add', $source));
-
-        return $source;
     }
 
     /** A plain directory installable through the OLD grammar: no record. */

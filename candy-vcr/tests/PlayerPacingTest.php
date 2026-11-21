@@ -120,7 +120,20 @@ final class PlayerPacingTest extends TestCase
         $this->assertCount(1, $yields, 'exactly the pre-Quit flush yield, no per-event pacing');
         // Arm order: initial step, cap safety-net (armed at play setup),
         // then the flush yield discovered at the Quit boundary.
-        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], $armed);
+        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], array_slice($armed, 0, 3));
+        // sugar-core renders on dirty through a one-shot frame timer capped at one
+        // frame interval (P1-1), so at most ONE frame timer may follow the flush
+        // yield: a render is coalesced, so one pending timer is the whole budget.
+        // Per-event pacing would arm one frame-interval timer per event instead.
+        $tail = array_slice($armed, 3);
+        $this->assertLessThanOrEqual(1, count($tail), 'at most one frame-interval timer may follow the flush yield');
+        foreach ($tail as $frameDelay) {
+            // 0.0 is legitimate: Program::armRender() clamps an already-overdue
+            // frame to max(0.0, interval - elapsed) when real time ran past a
+            // frame interval between the last paint and the dirtying message.
+            $this->assertGreaterThanOrEqual(0.0, $frameDelay);
+            $this->assertLessThanOrEqual(1.0 / 60.0, $frameDelay, 'only a frame-interval timer may follow the flush yield');
+        }
         $this->assertSame(2, $result->outputCount);
         $this->assertSame(1, $result->inputCount);
         $this->assertTrue($result->programQuitCleanly);
@@ -165,13 +178,17 @@ final class PlayerPacingTest extends TestCase
      */
     private static function neverSelfQuitFactory(): \Closure
     {
-        return static fn ($input, $output, $loop): Program => new Program(
-            new EchoModel(quitAfter: \PHP_INT_MAX),
-            new ProgramOptions(
-                input: $input,
-                output: $output,
-                loop: $loop,
-            ),
-        );
+        return static function ($input, $output, $loop): Program {
+            \assert(\is_resource($input) && \is_resource($output) && $loop instanceof \React\EventLoop\LoopInterface);
+
+            return new Program(
+                new EchoModel(quitAfter: \PHP_INT_MAX),
+                new ProgramOptions(
+                    input: $input,
+                    output: $output,
+                    loop: $loop,
+                ),
+            );
+        };
     }
 }

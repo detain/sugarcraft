@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
+use SugarCraft\Plugins\Host\AskExpiry;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
 use CandyCode\Bundles\MsTeams\Bridge\StreamingFace;
 use CandyCode\Bundles\MsTeams\Support\Keys;
@@ -16,8 +17,7 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\Backend\PendingAsk;
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out
@@ -236,7 +236,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
                     $this->approvalTtlSeconds(),
                     function () use ($askId): void {
                         unset($this->approvalTimers[$askId]);
-                        $this->retireApproval($askId, "\u{231B} Approval expired; answer with /approve <askId> once|always|deny while the ask is still open.");
+                        $this->retireApproval($askId, Lang::t('channels.msteams.approval.expired'));
                     },
                 );
             },
@@ -246,7 +246,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 
     /**
      * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
-     * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
+     * refuses the ask at AskExpiry::ASK_EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
      * a live card sitting over a dead ask. Short windows keep the
@@ -259,7 +259,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     {
         $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
         $seconds = \max(60, $minutes * 60);
-        $ceiling = PendingAsk::EXPIRY_SECONDS;
+        $ceiling = AskExpiry::ASK_EXPIRY_SECONDS;
         if ($seconds > $ceiling) {
             $this->log->warn('approval_ttl_clamped', [
                 'configuredMinutes' => $minutes,
@@ -717,11 +717,8 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             unset($this->revealedGroups[\array_key_first($this->revealedGroups)]);
         }
         $this->revealedGroups[$conversationId] = true;
-        // Delivered literal English pending the host-keyspace ruling (the
-        // msteams-09/-10/-14 family posture); rides raw REST like the
-        // pairing notice, NOT safety->outbound — nothing secret in it.
-        $text = "This conversation is not enabled for this bot yet. To allow it, add a row under groups.rows with this conversation id:\n\n"
-            . "`" . $conversationId . "`\n\nThen mention the bot again.";
+        // Rides raw REST like the pairing notice, NOT safety->outbound: nothing secret in it.
+        $text = Lang::t('channels.msteams.group.not_enabled', ['conversationId' => $conversationId]);
         $this->rest->sendActivity($serviceUrl, $conversationId, [
             'type' => 'message',
             'from' => ['id' => $this->appId],
@@ -760,39 +757,39 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
                 continue;
             }
             $name = \is_string($attachment['name'] ?? null) ? \trim($attachment['name']) : '';
-            $name = $name === '' ? 'attachment' : $name;
+            $name = $name === '' ? Lang::t('channels.msteams.media.unnamed_attachment') : $name;
             $declared = \is_string($attachment['contentType'] ?? null) ? \strtolower(\trim($attachment['contentType'])) : '';
             $url = self::inlineUrl($attachment);
             if ($url === '') {
-                $notes[] = "{$name}: no inline content (Graph-hosted media is a P3.5 leg)";
+                $notes[] = Lang::t('channels.msteams.media.note.no_inline', ['name' => $name]);
                 continue;
             }
             $untyped = $declared === '' || $declared === 'application/octet-stream';
             if ($untyped) {
                 if ($untypedFetches >= 2) {
-                    $notes[] = "{$name}: beyond the 2 untyped-attachment budget";
+                    $notes[] = Lang::t('channels.msteams.media.note.untyped_budget', ['name' => $name]);
                     continue;
                 }
                 $untypedFetches++;
             } elseif (\str_starts_with($declared, 'image/')) {
                 if ($declaredImages >= 4) {
-                    $notes[] = "{$name}: beyond the 4-image cap";
+                    $notes[] = Lang::t('channels.msteams.media.note.image_cap', ['name' => $name]);
                     continue;
                 }
                 $declaredImages++;
             } elseif ($declared === 'application/pdf') {
                 if ($declaredDocuments >= 2) {
-                    $notes[] = "{$name}: beyond the 2-document cap";
+                    $notes[] = Lang::t('channels.msteams.media.note.document_cap', ['name' => $name]);
                     continue;
                 }
                 $declaredDocuments++;
             } else {
-                $notes[] = "{$name}: unsupported type {$declared}";
+                $notes[] = Lang::t('channels.msteams.media.note.unsupported_type', ['name' => $name, 'type' => $declared]);
                 continue;
             }
             $declaredSize = (int) ($attachment['size'] ?? 0);
             if ($declaredSize > $maxBytes) {
-                $notes[] = "{$name}: declared " . (int) \ceil($declaredSize / 1048576) . " MB exceeds the {$maxMb} MB cap";
+                $notes[] = Lang::t('channels.msteams.media.note.declared_too_large', ['name' => $name, 'size' => (int) \ceil($declaredSize / 1048576), 'maxMb' => $maxMb]);
                 continue;
             }
             $jobs[] = [
@@ -823,25 +820,25 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             foreach ($settled as $index => $bytes) {
                 $name = $jobs[$index]['name'];
                 if (!\is_string($bytes)) {
-                    $notes[] = "{$name}: fetch failed";
+                    $notes[] = Lang::t('channels.msteams.media.note.fetch_failed', ['name' => $name]);
                     continue;
                 }
                 $mime = MediaSniff::sniff($bytes);
                 if ($mime === null) {
-                    $notes[] = "{$name}: bytes are not a supported image or PDF";
+                    $notes[] = Lang::t('channels.msteams.media.note.not_image_or_pdf', ['name' => $name]);
                     continue;
                 }
                 if (\strlen($bytes) > $maxBytes) {
-                    $notes[] = "{$name}: actually " . (int) \ceil(\strlen($bytes) / 1048576) . ' MB exceeds the cap';
+                    $notes[] = Lang::t('channels.msteams.media.note.actual_too_large', ['name' => $name, 'size' => (int) \ceil(\strlen($bytes) / 1048576)]);
                     continue;
                 }
                 $isImage = \str_starts_with($mime, 'image/');
                 if ($isImage && \count($images) >= 4) {
-                    $notes[] = "{$name}: beyond the 4-image cap";
+                    $notes[] = Lang::t('channels.msteams.media.note.image_cap', ['name' => $name]);
                     continue;
                 }
                 if (!$isImage && \count($documents) >= 2) {
-                    $notes[] = "{$name}: beyond the 2-document cap";
+                    $notes[] = Lang::t('channels.msteams.media.note.document_cap', ['name' => $name]);
                     continue;
                 }
                 $entry = ['name' => $name, 'mime' => $mime, 'data' => \base64_encode($bytes)];
@@ -870,7 +867,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     private function finishMedia(string $key, array $ref, string $text, bool $isMention, array $images, array $documents, array $notes): void
     {
         if ($notes !== []) {
-            $disclosed = '[skipped: ' . \implode('; ', $notes) . ']';
+            $disclosed = Lang::t('channels.msteams.media.skipped', ['notes' => \implode('; ', $notes)]);
             $text = $text === '' ? $disclosed : $text . "\n" . $disclosed;
             $this->log->info('msteams_media_downselect', ['kept' => \count($images) + \count($documents), 'skipped' => \count($notes)]);
         }
@@ -1262,7 +1259,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         $serviceUrl = (string) ($ref['serviceUrl'] ?? '');
         $conversationId = (string) ($ref['conversationId'] ?? '');
         if (!$this->isApprover($actorId)) {
-            $this->sendRaw($serviceUrl, $conversationId, '⛔ Only an approver can manage pairings.');
+            $this->sendRaw($serviceUrl, $conversationId, Lang::t('channels.msteams.pair.not_approver'));
 
             return;
         }
@@ -1272,7 +1269,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             $code = \strtoupper(\trim((string) ($args[1] ?? '')));
             $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
             if ($paired !== null) {
-                $this->sendRaw($serviceUrl, $conversationId, "Paired {$paired}.");
+                $this->sendRaw($serviceUrl, $conversationId, Lang::t('channels.msteams.pair.paired', ['paired' => (string) $paired]));
 
                 return;
             }
@@ -1284,22 +1281,22 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
                 static fn (array $row): bool => ($row['code'] ?? '') === $code,
             );
             $this->sendRaw($serviceUrl, $conversationId, $stillPending
-                ? 'No requester id on this code yet — nothing to pair. Ask them to send a fresh DM, then approve the new code.'
-                : 'No pending pairing matches that code.');
+                ? Lang::t('channels.msteams.pair.no_requester')
+                : Lang::t('channels.msteams.pair.no_match'));
 
             return;
         }
 
         if (!$isDm) {
-            $this->sendRaw($serviceUrl, $conversationId, 'Use a direct message to list pairing codes.');
+            $this->sendRaw($serviceUrl, $conversationId, Lang::t('channels.msteams.pair.use_dm'));
 
             return;
         }
         $rows = $this->pairing->pending($this->account);
         $text = $rows === []
-            ? 'No pending pairings.'
+            ? Lang::t('channels.msteams.pairing.none')
             : \implode("\n", \array_map(
-                static fn (array $row): string => (string) $row['code'] . ' — user ' . (string) $row['userId'],
+                static fn (array $row): string => Lang::t('channels.msteams.pairing.row', ['code' => (string) $row['code'], 'userId' => (string) $row['userId']]),
                 $rows,
             ));
         $this->sendRaw($serviceUrl, $conversationId, $text);
@@ -1323,16 +1320,6 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             'textFormat' => 'markdown',
             'text' => $content,
         ])->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
-    }
-
-    /**
-     * The serve-dial state machine rebuilds the router whenever the local
-     * serve endpoint (re)appears; the faces outlive the dial, so they take
-     * the new router here instead of being re-constructed.
-     */
-    public function rebindRouter(ConversationRouter $router): void
-    {
-        $this->router = $router;
     }
 
     public function accountName(): string
@@ -1416,7 +1403,10 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     /** @param array<string,mixed> $ask */
     private static function approvalSummary(array $ask): string
     {
-        $tool = (string) ($ask['tool'] ?? 'a tool');
+        $tool = (string) ($ask['tool'] ?? '');
+        if ($tool === '') {
+            $tool = Lang::t('channels.msteams.approval.tool_fallback');
+        }
         $reason = (string) ($ask['reason'] ?? '');
         $args = $ask['arguments'] ?? [];
         $rendered = \is_array($args) ? (string) \json_encode($args, \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) : (string) $args;
@@ -1424,6 +1414,6 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             $rendered = \substr($rendered, 0, 400) . '…';
         }
 
-        return \trim("candy-code is asking to run **{$tool}**.\n{$reason}\n```\n{$rendered}\n```");
+        return \trim(Lang::t('channels.msteams.approval.ask', ['tool' => $tool, 'reason' => $reason, 'rendered' => $rendered]));
     }
 }

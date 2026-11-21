@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server;
 
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\ServeProtocol\Protocol;
 
 /**
  * Everything `candy-code serve` binds, admits and serves with, resolved once
@@ -30,16 +31,16 @@ final class ServerConfig
     public const DEFAULT_PORT = 7420;
 
     /** The one WebSocket subprotocol this server speaks (Appendix O §6.1). */
-    public const SUBPROTOCOL = 'candy-code.v1';
+    public const SUBPROTOCOL = Protocol::SUBPROTOCOL;
 
     /**
      * The protocol MAJOR `/api/health` reports. The method and event roster
      * that version names is O-3b's; the integer is the transport's promise.
      */
-    public const PROTOCOL_MAJOR = 1;
+    public const PROTOCOL_MAJOR = Protocol::MAJOR;
 
     /** A non-browser client may carry its token as `candy-code.auth.<token>`. */
-    public const AUTH_SUBPROTOCOL_PREFIX = 'candy-code.auth.';
+    public const AUTH_SUBPROTOCOL_PREFIX = Protocol::AUTH_SUBPROTOCOL_PREFIX;
 
     /**
      * One client message FIELD's byte ceiling (a prompt, a task). Image

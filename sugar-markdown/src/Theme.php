@@ -31,8 +31,7 @@ final class Theme
      * hundred is generous, and without a ceiling a 60-byte style file
      * multiplied into a 1.5 GB str_repeat and died rc 255 below any
      * consumer's own validation. Producers that parse user input SHOULD
-     * refuse over-limit values with a message (candy-mdview's GlamourTheme
-     * does); this belt makes every producer bounded at construction, so a
+     * refuse over-limit values with a message (StyleGuide does); this belt makes every producer bounded at construction, so a
      * forgetful one saturates instead of exhausting memory.
      */
     public const MAX_DOCUMENT_DECORATION = 256;
@@ -459,6 +458,61 @@ final class Theme
             'pink'                  => self::pink(),
             default                 => null,
         };
+    }
+
+    /**
+     * The bundled glamour-style theme files, by catalog slug. They sit in
+     * `themes/` beside `src/`, and {@see catalog()} loads each one once.
+     */
+    private const BUNDLED_THEMES = ['solarized', 'monokai', 'github'];
+
+    /** @var array<string, self>|null */
+    private static ?array $catalog = null;
+
+    /**
+     * Every named theme this package ships, keyed by slug: the stock roster
+     * ({@see names()}) followed by the bundled glamour-style files
+     * (`solarized`, `monokai`, `github`). Each entry is loaded once and the
+     * same instance is returned on every call.
+     *
+     * @return array<string, self>
+     */
+    public static function catalog(): array
+    {
+        if (self::$catalog === null) {
+            $catalog = [];
+            foreach (self::names() as $name) {
+                $catalog[$name] = self::requireName($name);
+            }
+            foreach (self::BUNDLED_THEMES as $slug) {
+                $catalog[$slug] = self::fromFile(dirname(__DIR__) . '/themes/' . $slug . '.json');
+            }
+            self::$catalog = $catalog;
+        }
+
+        return self::$catalog;
+    }
+
+    /**
+     * Look up a theme in {@see catalog()} by a loose name: case, hyphens,
+     * underscores and spaces are ignored, so `Tokyo-Night`, `tokyo_night`
+     * and `tokyonight` name the same theme. Null when nothing answers.
+     */
+    public static function catalogByName(string $name): ?self
+    {
+        $wanted = self::looseName($name);
+        foreach (self::catalog() as $slug => $theme) {
+            if (self::looseName((string) $slug) === $wanted) {
+                return $theme;
+            }
+        }
+
+        return null;
+    }
+
+    private static function looseName(string $name): string
+    {
+        return strtolower(str_replace(['-', '_', ' '], '', trim($name)));
     }
 
     /**

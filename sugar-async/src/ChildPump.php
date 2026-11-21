@@ -63,8 +63,10 @@ namespace SugarCraft\Async;
  * EOF without a read that might block, so the walk ends when the `running`
  * probe says the child exited and a pass finds nothing left: reason CLOSED,
  * meaning "the child is done and its output is read". Bytes a backgrounded
- * grandchild keeps writing after that are read for at most
- * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS}. Without a `running` probe
+ * grandchild keeps writing after the exit are read only until the first pass
+ * that finds nothing, or {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} after the
+ * exit, whichever comes first. This arm does not apply the silence budget of
+ * {@see withExitGrace()} and does not report abandonment. Without a `running` probe
  * the arm cannot tell a finished child from a silent one, so it reads until
  * the deadline and reports EXPIRED — bounded, never wedged.
  *
@@ -76,6 +78,12 @@ final class ChildPump
 {
     /** Bytes taken per ready pipe per iteration — one non-blocking read. */
     public const READ_BYTES = 8192;
+
+    /**
+     * Bytes the expiry sweep may take from one pipe: the default Linux pipe
+     * capacity, so everything a quiet child left buffered is taken in full.
+     */
+    public const SWEEP_BYTES = 65536;
 
     /** Consecutive failed selects ridden out before giving up. */
     public const SELECT_RETRIES = 128;
@@ -106,7 +114,8 @@ final class ChildPump
      *        stream_select() seam: same contract, `$read` and `$write` narrowed in place.
      * @param null|\Closure(): bool $running  Whether the child is still running
      *        ({@see WindowsPipes::runningProbe()}). The Windows arm needs it to
-     *        end before the deadline; the select arm ends on EOF and ignores it.
+     *        end before the deadline; the select arm ends on EOF and reads the
+     *        probe only with {@see withExitGrace()} set.
      * @param null|bool $pollPipes  Force the Windows (true) or select (false)
      *        arm; null picks by the real runtime ({@see WindowsPipes::runtimeNeedsIt()}).
      * @param null|\Closure(int|string, string): void $onChunk  Live feed, every chunk
@@ -115,6 +124,8 @@ final class ChildPump
      * @param null|float $heartbeatSeconds  Interval between heartbeats, or null
      * @param null|\Closure(): void $onBeat  The heartbeat hook
      * @param null|\Closure(): void $reap  Run once after the walk, even on a throw
+     * @param null|float $exitGrace  Select arm: seconds of silence read on after the running probe reports exit
+     * @param null|\Closure(int): void $onStdinWrite  Told the byte count of each accepted stdin write
      */
     private function __construct(
         private readonly array $pipes,
@@ -134,6 +145,8 @@ final class ChildPump
         private readonly ?float $heartbeatSeconds = null,
         private readonly ?\Closure $onBeat = null,
         private readonly ?\Closure $reap = null,
+        private readonly ?float $exitGrace = null,
+        private readonly ?\Closure $onStdinWrite = null,
     ) {
     }
 
@@ -249,6 +262,20 @@ final class ChildPump
     }
 
     /**
+     * Called with the byte count of every stdin write the child accepted, as it
+     * happens. A child that keeps taking its stdin is alive and working, so a caller
+     * with an idle budget counts these writes as activity. Null removes the hook.
+     *
+     * @param null|callable(int): void $onStdinWrite
+     */
+    public function withOnStdinWrite(?callable $onStdinWrite): self
+    {
+        return $this->mutate([
+            'onStdinWrite' => $onStdinWrite === null ? null : \Closure::fromCallable($onStdinWrite),
+        ]);
+    }
+
+    /**
      * Call $onBeat at most every $seconds while the walk is still open. The
      * first beat comes one interval in, not at the start.
      *
@@ -278,6 +305,30 @@ final class ChildPump
     }
 
     /**
+     * Select arm, with a {@see withRunning()} probe: once the probe reports the
+     * child gone, keep reading until the pipes have been silent for $seconds, then
+     * end the walk as CLOSED. The budget counts from the later of the exit and the
+     * last chunk read, so a descendant that keeps writing keeps the walk reading
+     * (up to the deadline), and one that goes quiet is cut $seconds after its last
+     * write. A pipe still open at that cut is reported as abandoned on the result.
+     * The Windows poll arm ignores this budget and ends on the fixed
+     * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS} (see the class docblock).
+     *
+     * A hook can background a child that inherits the output pipes and holds
+     * them open long after its parent has exited, so waiting for EOF would stretch
+     * every such run to the deadline. The Windows arm already ends this way. Null
+     * (the default) keeps the select arm waiting for EOF or the deadline.
+     */
+    public function withExitGrace(?float $seconds): self
+    {
+        if ($seconds !== null && ($seconds <= 0 || !is_finite($seconds))) {
+            throw new \InvalidArgumentException('Exit grace must be a positive finite number of seconds');
+        }
+
+        return $this->mutate(['exitGrace' => $seconds]);
+    }
+
+    /**
      * Read the pipes until they are all at EOF, the deadline passes, or the cap
      * stops the walk, and return what was read and why it stopped.
      *
@@ -295,38 +346,42 @@ final class ChildPump
             ?? (WindowsPipes::runtimeNeedsIt()
                 && array_filter($this->pipes, static fn ($p): bool => !self::isSocket($p)) !== []);
 
-        if ($pollArm && $this->stdinPipe !== null && (string) $this->stdinBytes !== '') {
-            throw new \LogicException(
-                'A stdin feed needs non-blocking pipes, which the Windows poll arm cannot give; '
-                . 'pass the payload to the child as a file instead.',
-            );
-        }
-
-        $clock = $this->clock ?? Clock::monotonicSeconds(...);
-        $deadline = $this->deadline ?? ($clock() + self::DEFAULT_TIMEOUT_SECONDS);
-
-        foreach ($this->pipes as $pipe) {
-            stream_set_blocking($pipe, false);
-        }
-
-        $capture = new ChildCapture(
-            array_keys($this->pipes),
-            $this->discard,
-            $this->maxBytes,
-            $this->onChunk,
-        );
-
+        // The refusal sits inside the try so the reap still runs on it, as withReap()
+        // promises for a throw; the handed-over stdin pipe is closed here for the same reason.
         $feed = null;
-        if ($this->stdinPipe !== null) {
-            if ((string) $this->stdinBytes === '') {
-                fclose($this->stdinPipe);
-            } else {
-                stream_set_blocking($this->stdinPipe, false);
-                $feed = ['pipe' => $this->stdinPipe, 'bytes' => (string) $this->stdinBytes, 'offset' => 0];
-            }
-        }
-
         try {
+            if ($pollArm && $this->stdinPipe !== null && (string) $this->stdinBytes !== '') {
+                fclose($this->stdinPipe);
+
+                throw new \LogicException(
+                    'A stdin feed needs non-blocking pipes, which the Windows poll arm cannot give; '
+                    . 'pass the payload to the child as a file instead.',
+                );
+            }
+
+            $clock = $this->clock ?? Clock::monotonicSeconds(...);
+            $deadline = $this->deadline ?? ($clock() + self::DEFAULT_TIMEOUT_SECONDS);
+
+            foreach ($this->pipes as $pipe) {
+                stream_set_blocking($pipe, false);
+            }
+
+            $capture = new ChildCapture(
+                array_keys($this->pipes),
+                $this->discard,
+                $this->maxBytes,
+                $this->onChunk,
+            );
+
+            if ($this->stdinPipe !== null) {
+                if ((string) $this->stdinBytes === '') {
+                    fclose($this->stdinPipe);
+                } else {
+                    stream_set_blocking($this->stdinPipe, false);
+                    $feed = ['pipe' => $this->stdinPipe, 'bytes' => (string) $this->stdinBytes, 'offset' => 0];
+                }
+            }
+
             return $pollArm
                 ? $this->drainPolled($deadline, $clock, $capture)
                 : $this->drainSelected($deadline, $clock, $capture, $feed);
@@ -393,7 +448,11 @@ final class ChildPump
         $open = $this->pipes;
         $failures = 0;
         $reason = DrainResult::CLOSED;
+        $abandoned = false;
         $beatAt = $this->heartbeatSeconds === null ? null : $clock() + $this->heartbeatSeconds;
+        $exitedAt = null;
+        // The last chunk read: the exit grace counts silence from here, not from the exit.
+        $lastRead = null;
 
         // The feed outlives the output pipes: a child may close stdout and
         // stderr and still read its stdin, so the loop runs until the feed
@@ -411,6 +470,22 @@ final class ChildPump
                 break;
             }
 
+            if ($exitedAt === null && $this->exitGrace !== null && $this->running !== null && !($this->running)()) {
+                $exitedAt = $now;
+            }
+            $quietUntil = null;
+            if ($exitedAt !== null) {
+                $quietUntil = ($lastRead === null ? $exitedAt : max($exitedAt, $lastRead)) + (float) $this->exitGrace;
+                if ($now >= $quietUntil) {
+                    // Silent for the whole grace: a pipe still open here is held by a descendant.
+                    // A stall longer than the grace can leave the child's last bytes unread in the
+                    // kernel, so take them first; only a pipe that still yields nothing is abandoned.
+                    $reason = DrainResult::CLOSED;
+                    $abandoned = $this->sweepOpenPipes($open, $capture);
+                    break;
+                }
+            }
+
             if ($beatAt !== null && $now >= $beatAt) {
                 $this->beat();
                 $beatAt = $clock() + (float) $this->heartbeatSeconds;
@@ -419,6 +494,9 @@ final class ChildPump
             $slice = min($remaining, $this->sliceSeconds);
             if ($beatAt !== null) {
                 $slice = min($slice, max(0.0, $beatAt - $now));
+            }
+            if ($quietUntil !== null) {
+                $slice = min($slice, max(0.0, $quietUntil - $now));
             }
 
             $read = array_values($open);
@@ -440,7 +518,7 @@ final class ChildPump
             $failures = 0;
 
             if ($feed !== null && is_array($write) && in_array($feed['pipe'], $write, true)) {
-                self::writeFeed($feed);
+                $this->writeFeed($feed);
             }
 
             foreach ($open as $slot => $pipe) {
@@ -457,21 +535,97 @@ final class ChildPump
                     continue;
                 }
                 $capture->offer($slot, $chunk);
+                $lastRead = $clock();
             }
         }
 
         if ($reason === DrainResult::EXPIRED || $reason === DrainResult::RETRY_BUDGET_GONE) {
             // Sweep what is already buffered in the kernel before letting go:
-            // a partial reason beats none. Non-blocking, so it cannot park.
+            // a partial reason beats none.
             foreach ($open as $slot => $pipe) {
-                $rest = @stream_get_contents($pipe);
-                if (is_string($rest) && $rest !== '') {
-                    $capture->offer($slot, $rest);
-                }
+                $this->sweepPipe($slot, $pipe, $capture);
             }
         }
 
-        return $capture->result($reason);
+        return $capture->result($reason, $abandoned);
+    }
+
+    /**
+     * The sweep over every pipe still open at a grace cut. Returns true when any
+     * of them yielded nothing, which is the only shape that counts as abandoned:
+     * a pipe that gave bytes was draining, not held.
+     *
+     * @param array<int|string, resource> $open
+     */
+    private function sweepOpenPipes(array $open, ChildCapture $capture): bool
+    {
+        $silent = false;
+        foreach ($open as $slot => $pipe) {
+            if (!$this->sweepPipe($slot, $pipe, $capture)) {
+                $silent = true;
+            }
+        }
+
+        return $silent;
+    }
+
+    /**
+     * The expiry sweep for one pipe: takes what the kernel already holds, up to
+     * {@see SWEEP_BYTES}, then stops. It never walks to EOF: a child still writing
+     * past its deadline refills the pipe as fast as it is read, so such a walk
+     * never ends and buffers without bound. A pipe still yielding past the budget
+     * is one that keeps refilling, so the unread remainder is recorded as
+     * truncation instead of being lost without a trace.
+     *
+     * @param resource $pipe
+     * @return bool true when the sweep took any bytes from the pipe
+     */
+    private function sweepPipe(int|string $slot, $pipe, ChildCapture $capture): bool
+    {
+        $took = false;
+        $budget = self::SWEEP_BYTES;
+        while ($budget > 0) {
+            $chunk = fread($pipe, min(self::READ_BYTES, $budget));
+            if ($chunk === false || $chunk === '') {
+                return $took;
+            }
+            $capture->offer($slot, $chunk);
+            $took = true;
+            $budget -= strlen($chunk);
+        }
+
+        // The budget is spent: one peek tells a pipe that just ended from one with bytes left.
+        $peek = fread($pipe, self::READ_BYTES);
+        if ($peek !== false && $peek !== '') {
+            $capture->offer($slot, $peek);
+            $capture->unread($slot);
+            $took = true;
+        }
+
+        return $took;
+    }
+
+    /**
+     * One read of whatever each pipe has available now; true when any pipe gave bytes.
+     *
+     * @param array<int, resource> $pipes
+     */
+    private function readPolledPass(array $pipes, ChildCapture $capture): bool
+    {
+        $got = false;
+        foreach ($pipes as $slot => $pipe) {
+            // A socket among the pipes reports fstat size 0, but it was
+            // made non-blocking above, so a plain read answers at once.
+            $chunk = self::isSocket($pipe)
+                ? (string) @fread($pipe, self::READ_BYTES)
+                : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
+            if ($chunk !== '') {
+                $capture->offer($slot, $chunk);
+                $got = true;
+            }
+        }
+
+        return $got;
     }
 
     /**
@@ -495,6 +649,10 @@ final class ChildPump
 
             $now = $clock();
             if ($now >= $deadline) {
+                // Same sweep as the select arm: bytes that landed in the last nap
+                // before the deadline are kept, not dropped with the pipe.
+                $this->readPolledPass($pipes, $capture);
+
                 return $capture->result(DrainResult::EXPIRED);
             }
 
@@ -510,18 +668,7 @@ final class ChildPump
                 $exitedAt = $now;
             }
 
-            $got = false;
-            foreach ($pipes as $slot => $pipe) {
-                // A socket among the pipes reports fstat size 0, but it was
-                // made non-blocking above, so a plain read answers at once.
-                $chunk = self::isSocket($pipe)
-                    ? (string) @fread($pipe, self::READ_BYTES)
-                    : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
-                if ($chunk !== '') {
-                    $capture->offer($slot, $chunk);
-                    $got = true;
-                }
-            }
+            $got = $this->readPolledPass($pipes, $capture);
 
             if ($exitedAt !== null && (!$got || $now - $exitedAt >= WindowsPipes::EXIT_DRAIN_GRACE_SECONDS)) {
                 return $capture->result(DrainResult::CLOSED);
@@ -543,7 +690,7 @@ final class ChildPump
      *
      * @param array{pipe: resource, bytes: string, offset: int} $feed  Advanced in place
      */
-    private static function writeFeed(?array &$feed): void
+    private function writeFeed(?array &$feed): void
     {
         if ($feed === null) {
             return;
@@ -554,6 +701,9 @@ final class ChildPump
             $feed['offset'] = strlen($feed['bytes']);
         } else {
             $feed['offset'] += $written;
+            if ($written > 0 && $this->onStdinWrite !== null) {
+                ($this->onStdinWrite)($written);
+            }
         }
 
         if ($feed['offset'] >= strlen($feed['bytes'])) {

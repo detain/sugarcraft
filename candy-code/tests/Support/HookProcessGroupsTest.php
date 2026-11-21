@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Support\HookProcessGroups;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
 /**
  * #14: quitting reaps the hook processes still running. The registry tracks
@@ -17,6 +18,11 @@ use SugarCraft\Code\Support\HookProcessGroups;
  */
 final class HookProcessGroupsTest extends TestCase
 {
+    // WHY: abandonActiveHookGroups() arms a grace poll on the shared Loop::get().
+    // Under load the test's own watch tick can stop the loop before that poll
+    // notices the child is gone, leaving it armed for SharedLoopResidueGuard.
+    use DrainsSharedLoopTrait;
+
     protected function tearDown(): void
     {
         foreach (HookProcessGroups::live() as $pid) {

@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use SugarCraft\Async\Backoff;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\Retry;
 use function React\Promise\reject;
@@ -175,6 +176,61 @@ final class RetryTest extends TestCase
         $this->assertSame([[1, 1, 'down 1'], [2, 2, 'down 2'], [3, 4, 'down 3'], [4, 4, 'down 4']], $delays);
     }
 
+    public function testReconnectClampsItsRedialDelayToTheLadderPlateau(): void
+    {
+        // A 2 h base would arm a 2 h redial; retry() plateaus at
+        // MAX_BACKOFF_SECONDS, and reconnect() must report and arm that same
+        // clamped delay.
+        $loop = Loop::get();
+        $source = CancellationSource::new();
+        $reported = null;
+        $p = Retry::reconnect(
+            static fn () => reject(new \RuntimeException('down')),
+            Backoff::new(7_200_000.0)->withoutJitter(),
+            $source->token(),
+            $loop,
+            function (int $n, int $ms) use (&$reported): void {
+                $reported ??= $ms;
+            },
+        );
+        $p->then(null, static function (): void {
+        });
+        $this->runUntil($loop, static fn (): bool => $reported !== null);
+        $source->cancel();
+
+        self::assertSame((int) (Retry::MAX_BACKOFF_SECONDS * 1000), $reported);
+    }
+
+    public function testReconnectRefusesANonPromiseDialByNameWithoutThrowing(): void
+    {
+        // A bare value from the dial used to be an Error raised inside a loop
+        // timer (or synchronously, on the first attempt). It is now a terminal
+        // refusal that travels the rejection channel, like retry()'s guard.
+        $loop = Loop::get();
+        $calls = 0;
+        $p = Retry::reconnect(
+            function () use (&$calls) {
+                $calls++;
+
+                return null;
+            },
+            Backoff::new(10.0)->withoutJitter(),
+            null,
+            $loop,
+        );
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+        $this->runUntil($loop, function () use (&$err): bool {
+            return $err !== null;
+        });
+
+        $this->assertInstanceOf(\InvalidArgumentException::class, $err);
+        $this->assertStringContainsString('must return a promise; null returned', $err->getMessage());
+        $this->assertSame(1, $calls, 'a refused non-promise is terminal, not redialled');
+    }
+
     public function testReconnectBoundedRejectsWithLastFailure(): void
     {
         $loop = Loop::get();
@@ -236,6 +292,62 @@ final class RetryTest extends TestCase
         $this->assertSame(1, $n, 'no second dial after cancel');
     }
 
+    public function testReconnectCancelFromRetryHookLeavesNoLiveTimer(): void
+    {
+        // Private loop: run() returns as soon as nothing is armed, so the drain
+        // time is exactly the life of any timer the cancelled cycle left behind.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $source = CancellationSource::new();
+        $n = 0;
+        $p = Retry::reconnect(function () use (&$n) {
+            $n++;
+            return reject(new \RuntimeException('x'));
+        }, Backoff::new(2000.0)->withoutJitter()->withAttempts(5), $source->token(), $loop,
+            static function () use ($source): void {
+                $source->cancel();
+            });
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertInstanceOf(OperationCancelledException::class, $err);
+        $this->assertSame(1, $n, 'no second dial after cancel from the hook');
+        $this->assertLessThan(1.0, $drain, 'redial timer armed after the hook cancelled the cycle kept the loop alive');
+    }
+
+    public function testRetryCancelFromProgressHookLeavesNoLiveTimer(): void
+    {
+        // Same shape as the reconnect case: the hook cancels during the backoff
+        // window, so the cancel listener fires before the backoff timer is armed.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $source = CancellationSource::new();
+        $n = 0;
+        $p = Retry::retry(function () use (&$n) {
+            $n++;
+            return reject(new \RuntimeException('x'));
+        }, 5, 2.0, $source->token(), null, 0.0, $loop, null,
+            static function () use ($source): void {
+                $source->cancel();
+            });
+        $err = null;
+        $p->then(null, function (\Throwable $e) use (&$err): void {
+            $err = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertInstanceOf(OperationCancelledException::class, $err);
+        $this->assertSame(1, $n, 'no second attempt after cancel from the hook');
+        $this->assertLessThan(1.0, $drain, 'backoff timer armed after the hook cancelled the cycle kept the loop alive');
+    }
+
     public function testReconnectAlreadyCancelledTokenNeverDials(): void
     {
         $source = CancellationSource::new();
@@ -262,5 +374,28 @@ final class RetryTest extends TestCase
         $p = Retry::reconnect(fn () => $d->promise(), Backoff::new(1), null, Loop::get());
         $p->cancel();
         $this->assertTrue($cancelled);
+    }
+
+    /**
+     * Cancelling the reconnect promise must drop the token registration it made. The
+     * registration otherwise stays on the token until that token fires, however long
+     * the caller keeps it.
+     */
+    public function testACancelledReconnectPromiseRemovesItsTokenRegistration(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+        $registrations = new \ReflectionProperty(CancellationToken::class, 'callbacks');
+
+        $d = new Deferred();
+        $p = Retry::reconnect(fn () => $d->promise(), Backoff::new(1), $token, Loop::get());
+        $p->then(null, static function (): void {
+        });
+        $this->assertCount(1, $registrations->getValue($token), 'the reconnect holds one registration while it runs');
+
+        $p->cancel();
+
+        $this->assertCount(0, $registrations->getValue($token), 'a cancelled reconnect must leave the token');
+        $this->assertFalse($source->isCancelled(), 'the cancel came from the promise, not the token');
     }
 }

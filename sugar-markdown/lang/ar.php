@@ -28,4 +28,6 @@ return [
     'blockstack.pop_empty' => 'مكدّس الكتل فارغ',
     'theme.mapper_not_style' => 'يتوقع Theme::mapStyles() أن تُرجع الدالة كائن Style، بل أرجعت {type}',
     'theme.with_slot_not_style' => 'Theme::with(): «{slot}» ليست خانة Style؛ الخانات الصالحة: {slots}',
+    'fold.marker' => '▸ مطوي',
+    'glamour.value_too_large' => 'تتجاوز السمة {key} الحد الأقصى {limit}',
 ];

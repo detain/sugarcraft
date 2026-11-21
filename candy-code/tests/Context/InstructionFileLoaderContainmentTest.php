@@ -31,7 +31,7 @@ use SugarCraft\Code\Tests\Support\FramedOnTouchTrait;
  * points (`loadRoot()`, `loadForced()`, `loadForPath()`, and the `@import`
  * expansion the first and third run). `loadForced()` and the import gate were
  * already bounded before this file existed; the two controls at the bottom pin
- * that consolidating their compares onto {@see \SugarCraft\Code\Support\ContainedPath}
+ * that consolidating their compares onto {@see \SugarCraft\Core\Util\PathJail}
  * did not change their verdicts.
  *
  * FIXTURES LIVE OUTSIDE ANY CHECKOUT, in this process's temp directory, because

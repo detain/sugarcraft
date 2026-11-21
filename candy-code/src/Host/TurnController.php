@@ -741,7 +741,7 @@ final class TurnController
 
     /**
      * Whether expanding the command file $text names would run a shell, and so
-     * has to leave the host's thread (audit 15b-20).
+     * has to leave the host's thread.
      *
      * True for an MCP prompt placeholder whatever its (not yet fetched) body
      * holds — `prompts/get` is network IO and belongs off the update path for
@@ -911,8 +911,8 @@ final class TurnController
     }
 
     /**
-     * Whether this submission's turn-hook chain has to leave the host's thread
-     * (audit 15b-04): a hook on one of $events runs out of process AND this
+     * Whether this submission's turn-hook chain has to leave the host's thread:
+     * a hook on one of $events runs out of process AND this
      * build can fork. Without pcntl the chain runs synchronously as it always
      * did.
      *
@@ -1068,8 +1068,8 @@ final class TurnController
     /**
      * Run $childWork in a forked child and resolve with what its payload
      * decodes to — the one fork + WNOHANG-poll shape behind every piece of a
-     * submission that leaves the thread: a turn's script hooks (audit 15b-04)
-     * and a command file's shell forms (audit 15b-20).
+     * submission that leaves the thread: a turn's script hooks
+     * and a command file's shell forms.
      *
      * - The child closes the server descriptors it inherited first
      *   ({@see ForkedChild::closeInheritedServerFds()}, a no-op in a TUI),
@@ -1176,7 +1176,7 @@ final class TurnController
 
     /**
      * The user row a submitted prompt becomes, with its mentions attached, plus
-     * one notice per mention that could not be (audit 15b-15).
+     * one notice per mention that could not be.
      *
      * The ONE constructor of a dispatched user turn, used by every route that
      * commits one, so a prompt that happens to cross the 85% tier does not lose
@@ -1428,7 +1428,7 @@ final class TurnController
 
     /**
      * The checkpoint state a dispatch saves: THE STATE BEFORE THE PROMPT, NOT
-     * AFTER IT (audit SES-1). Every row the submission itself added — the
+     * AFTER IT. Every row the submission itself added — the
      * user's line, the hook notes, the 70% reminder — is out, because a resend
      * through the restored draft regenerates all three; the compaction the
      * submission triggered stays in with its reports, because a rewrite is a
@@ -1523,7 +1523,7 @@ final class TurnController
     /**
      * The row's turn count and last-prompt preview, which the session picker
      * shows instead of the system prompt every session shares (Appendix P
-     * §3.1, audit B3). Picker bookkeeping only; never blocks the prompt.
+     * §3.1). Picker bookkeeping only; never blocks the prompt.
      *
      * @param list<Message> $newTurnMessages
      */

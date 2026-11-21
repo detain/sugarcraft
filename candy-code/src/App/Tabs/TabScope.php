@@ -24,6 +24,7 @@ use SugarCraft\Core\SequenceMsg;
 use SugarCraft\Core\Subscription;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\WindowSizeRequest;
 use Throwable;
 
 /**
@@ -56,11 +57,11 @@ final class TabScope
      * Wrapping any of these would hide it from the strict `instanceof`
      * ladder in sugar-core/src/Program.php, silently swallowing quits,
      * prints, terminal handoffs, and screen-stack routing. WindowSizeMsg
-     * sits in this set even though it later reaches the model: Program
-     * consumes its recorder/renderer-reset role first, and a Cmd that
-     * mints a resize does not exist in this app today — if one ever
-     * does, the fix is to unwrap the envelope in that model arm, NOT to
-     * drop this entry and lose the reset for every other producer.
+     * and WindowSizeRequest sit in this set even though they reach the
+     * model: Program turns a WindowSizeRequest into a WindowSizeMsg and
+     * consumes its recorder/renderer-reset role first, so the model gets
+     * an unscoped WindowSizeMsg, the same as every other resize. Wrapping
+     * either one would drop that reset for every producer.
      *
      * @var list<class-string<Msg>>
      */
@@ -72,6 +73,7 @@ final class TabScope
         InterruptMsg::class,
         QuitMsg::class,
         WindowSizeMsg::class,
+        WindowSizeRequest::class,
         SubscriptionsMsg::class,
         ScreenStackPushedMsg::class,
         ScreenStackPoppedMsg::class,
@@ -146,7 +148,7 @@ final class TabScope
         }
 
         if ($msg instanceof TickRequest) {
-            return new TickRequest($msg->seconds, self::cmd($tabKey, $msg->produce));
+            return new TickRequest($msg->seconds, self::cmd($tabKey, $msg->produce), $msg->handle);
         }
 
         if ($msg instanceof EveryRequest) {
@@ -160,13 +162,21 @@ final class TabScope
             // The rejection leg RETURNS a scoped value, so Program's own
             // reject path (raw ExceptionMsg plus the user handler) never
             // fires for tab work — the owning tab's model sees the
-            // failure as an ordinary Msg instead.
-            return new AsyncCmd($msg->promise->then(
-                static fn (mixed $resolved): ?Msg => $resolved instanceof Msg
-                    ? self::msg($tabKey, $resolved)
-                    : null,
-                static fn (Throwable $failure): Msg => new TabScopedMsg($tabKey, new ExceptionMsg($failure)),
-            ));
+            // failure as an ordinary Msg instead. The timeout is Program's
+            // rejection, not the factory's, so it reaches the scoped value
+            // through onFailure; without that a timed-out tab promise
+            // would surface as an unscoped ExceptionMsg at the root.
+            $scopedFailure = static fn (Throwable $failure): Msg => new TabScopedMsg($tabKey, new ExceptionMsg($failure));
+            return new AsyncCmd(
+                $msg->promise->then(
+                    static fn (mixed $resolved): ?Msg => $resolved instanceof Msg
+                        ? self::msg($tabKey, $resolved)
+                        : null,
+                    $scopedFailure,
+                ),
+                $msg->timeoutSeconds,
+                $scopedFailure,
+            );
         }
 
         foreach (self::PASS_THROUGH as $sentinel) {

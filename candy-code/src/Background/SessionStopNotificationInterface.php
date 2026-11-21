@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Background;
 
 /**
  * Optional companion to {@see SessionNotificationInterface} for listeners that
- * want to tell a user-requested stop apart from a failure (audit BG-1).
+ * want to tell a user-requested stop apart from a failure.
  *
  * A separate interface rather than a sixth method on the original contract:
  * adding a method there would break every existing implementer at load time.

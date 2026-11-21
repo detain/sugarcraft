@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\Mode;
@@ -156,13 +157,14 @@ final class GraphicsRendererTest extends TestCase
 
         // APC kitty intro: ESC _ G (0x1b 0x5f 0x47) — the Kitty graphics
         // protocol is APC-framed (xterm ctlseqs `ESC _`), followed by the
-        // `a=T,c=<w>,r=<h>,f=100,m=1;` begin chunk. The leading `a=T` states
-        // the transmit-and-display action: an absent `a=` defaults to
+        // `a=T,i=<id>,f=100,q=2,c=<w>,r=<h>,m=1;` begin chunk. The leading `a=T`
+        // states the transmit-and-display action: an absent `a=` defaults to
         // transmit-without-display (sugar-image 94d16dbb7), so the plain
-        // route must carry it. (The old DCS `ESC P q` pin here was the
-        // DECSIXEL introducer — ANSI audit defect #10, fixed in sugar-core
-        // kittyGraphicsBegin.)
-        $this->assertStringStartsWith("\x1b_Ga=T,c=1,r=1,f=100,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
+        // route must carry it. The `i=` id is what the next frame retires.
+        // (The old DCS `ESC P q` pin here was the DECSIXEL introducer — ANSI
+        // audit defect #10, fixed in sugar-core kittyGraphicsBegin.)
+        $id = self::drawnImageId($output);
+        $this->assertStringStartsWith("\x1b_Ga=T,i={$id},f=100,q=2,c=1,r=1,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
     }
 
     /**
@@ -231,7 +233,8 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1b_Ga=T,c=4,r=2,f=100,m=1;", $output);
+        $id = self::drawnImageId($output);
+        $this->assertStringStartsWith("\x1b_Ga=T,i={$id},f=100,q=2,c=4,r=2,m=1;", $output);
     }
 
     /**
@@ -292,5 +295,162 @@ final class GraphicsRendererTest extends TestCase
         // 800 / 10 = 80 cells wide, 480 / 20 = 24 cells tall.
         $this->assertStringContainsString('width=80', $output);
         $this->assertStringContainsString('height=24', $output);
+    }
+
+    /**
+     * Regression: Kitty frames went out with no image id and were never
+     * deleted, so a video grew the terminal's image store by one image per
+     * frame. Consecutive frames must alternate ids and retire the one they
+     * replace.
+     */
+    public function testKittyFramesAlternateImageIdsAndRetireThePreviousFrame(): void
+    {
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $frame    = self::makeFrame();
+
+        $first  = $renderer->render($frame, Mode::Kitty);
+        $second = $renderer->render($frame, Mode::Kitty);
+        $third  = $renderer->render($frame, Mode::Kitty);
+
+        $slot1 = self::drawnImageId($first);
+        $slot2 = $slot1 + 1;
+
+        $this->assertStringContainsString("i={$slot1},", $first, 'frame 0 draws under slot 1');
+        $this->assertStringNotContainsString('a=d', $first, 'the first frame has nothing to retire');
+
+        $this->assertStringContainsString("i={$slot2},", $second, 'frame 1 draws under slot 2');
+        $this->assertStringContainsString("a=d,d=I,i={$slot1}\x1b\\", $second, 'frame 1 retires slot 1');
+        $this->assertStringNotContainsString("a=d,d=I,i={$slot2}", $second, 'frame 1 must not self-delete');
+
+        $this->assertStringContainsString("i={$slot1},", $third, 'frame 2 reuses slot 1');
+        $this->assertStringContainsString("a=d,d=I,i={$slot2}\x1b\\", $third, 'frame 2 retires slot 2');
+    }
+
+    /**
+     * iTerm2 has no id-addressed delete, so their output stays the
+     * plain per-frame render with no retire bytes.
+     */
+    public function testNonIdDeleteBackendsEmitNoRetireBytes(): void
+    {
+        $frame = self::makeFrame();
+
+        $renderer = new GraphicsRenderer(Mode::Iterm2);
+        $first    = $renderer->render($frame, Mode::Iterm2);
+        $second   = $renderer->render($frame, Mode::Iterm2);
+
+        $this->assertSame($first, $second, 'iTerm2 frames are byte-stable');
+        $this->assertStringNotContainsString('a=d', $second, 'iTerm2 emits no Kitty delete');
+    }
+
+    /**
+     * retirement() deletes both slots of the Kitty pair: the frame a replacing Player
+     * must delete so it does not outlive the session in the terminal's image store.
+     */
+    public function testRetirementDeletesBothSlotsOfTheKittyPair(): void
+    {
+        $frame = self::makeFrame();
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $slot = self::drawnImageId($renderer->render($frame, Mode::Kitty));
+        $renderer->render($frame, Mode::Kitty);
+
+        $kitty = new KittyRenderer();
+        $this->assertSame(
+            $kitty->delete((string) $slot) . $kitty->delete((string) ($slot + 1)),
+            $renderer->retirement(),
+        );
+    }
+
+    /**
+     * A view whose output is never written still advances the session. The frame on
+     * screen is the one written before it, so retirement() must still delete that
+     * slot, not only the newest id.
+     */
+    public function testRetirementStillDeletesTheWrittenFrameAfterAnUnwrittenView(): void
+    {
+        $frame = self::makeFrame();
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $written = self::drawnImageId($renderer->render($frame, Mode::Kitty));
+        $renderer->render($frame, Mode::Kitty); // measured, then discarded: never written
+
+        $this->assertStringContainsString(
+            (new KittyRenderer())->delete((string) $written),
+            $renderer->retirement(),
+            'the frame on screen must be retired even though a later view was never written',
+        );
+    }
+
+    /**
+     * Reading the retirement spends nothing: a discarded view or a second Cmd
+     * computation still sees the same delete, so it is never lost to a rebuild.
+     */
+    public function testRetirementIsStableUntilTheRendererIsReplaced(): void
+    {
+        $frame = self::makeFrame();
+        $renderer = new GraphicsRenderer(Mode::Kitty);
+        $renderer->render($frame, Mode::Kitty);
+
+        $first = $renderer->retirement();
+        $this->assertNotSame('', $first);
+        $this->assertSame($first, $renderer->retirement(), 'reading the retirement must not spend it');
+    }
+
+    /**
+     * Nothing was drawn, so there is nothing for the terminal to retire.
+     */
+    public function testRetirementIsEmptyBeforeAnyDraw(): void
+    {
+        $this->assertSame('', (new GraphicsRenderer(Mode::Kitty))->retirement());
+    }
+
+    /**
+     * Backends that cannot delete by id (Sixel, iTerm2) never owe a retirement.
+     */
+    public function testRetirementIsEmptyForBackendsWithoutIdDelete(): void
+    {
+        $frame = self::makeFrame();
+        $sixel = new GraphicsRenderer(Mode::Sixel);
+        $sixel->render($frame, Mode::Sixel);
+
+        $this->assertSame('', $sixel->retirement());
+    }
+
+    /**
+     * Two live Kitty sessions on one terminal must not share image ids: each one's
+     * frames and retirements address only its own pair, so neither can delete the
+     * other's frame.
+     */
+    public function testConcurrentSessionsOnOneTerminalUseDistinctImageIds(): void
+    {
+        $frame = self::makeFrame();
+        $a = new GraphicsRenderer(Mode::Kitty);
+        $b = new GraphicsRenderer(Mode::Kitty);
+
+        $aFirst = $a->render($frame, Mode::Kitty);
+        $bFirst = $b->render($frame, Mode::Kitty);
+        $aSecond = $a->render($frame, Mode::Kitty);
+
+        $aId = self::drawnImageId($aFirst);
+        $bId = self::drawnImageId($bFirst);
+        self::assertNotSame($aId, $bId, 'two sessions must draw under distinct ids');
+        self::assertStringContainsString(
+            (new KittyRenderer())->delete((string) $aId),
+            $aSecond,
+            'A retires its own previous frame',
+        );
+        self::assertStringNotContainsString(
+            (new KittyRenderer())->delete((string) $bId),
+            $aSecond,
+            'A must never delete the frame B is showing',
+        );
+    }
+
+    /**
+     * The first image id a Kitty draw addresses, read from its `i=` control key.
+     */
+    private static function drawnImageId(string $output): int
+    {
+        self::assertSame(1, preg_match('/\bi=(\d+)/', $output, $m), 'the draw must address an image id');
+
+        return (int) $m[1];
     }
 }

@@ -22,7 +22,7 @@ use SugarCraft\Core\Msg;
 final readonly class CopyCompletedMsg implements Msg
 {
     /**
-     * CF-40 (audit 064): the payload used to be the full absolute
+     * CF-40: the payload used to be the full absolute
      * source => destination map of the ok-set — retained on the undo
      * stack for the life of the session. The legs are homogeneous
      * (one source dir, one destination dir), so the message now carries

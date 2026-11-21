@@ -8,7 +8,6 @@ use RuntimeException;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Code\Support\AtomicFileWriter;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 
 use function array_values;
@@ -172,7 +171,7 @@ final class CapabilityCardStore
                     continue;
                 }
                 $path = $dir . '/' . $fileName;
-                if (is_link($path) || !ContainedPath::below($path, $root)) {
+                if (is_link($path) || !\SugarCraft\Core\Util\PathJail::below($path, $root)) {
                     continue;
                 }
                 $size = filesize($path);

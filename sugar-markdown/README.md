@@ -470,6 +470,89 @@ User-facing strings route through the shipped i18n surface —
 `Lang::t()` (`src/Lang.php`) across the 16 locales in `lang/`; candy-mdview
 consumes localized messages such as `theme.read_failed`.
 
+## Frontmatter
+
+`Frontmatter::split($document)` takes the `---` fenced metadata block off
+the front of a document. It returns `null` when there is no complete block,
+otherwise a `Frontmatter\Split` with the raw `meta` text (the lines between
+the fences, for your own YAML or key/value reader), the `body` after the
+closing fence, and `bodyOffset`, the byte where the body starts. The fence
+is a line of `---` (spaces and tabs allowed after it); `----` is not one.
+An empty block (`---` then `---`) is a valid block with empty `meta`.
+Whitespace-only lines are dropped from the start of `meta` and from the start
+of the body; trailing blank lines in `meta` are kept as written, so trim it
+yourself if you need it exact. CRLF documents work. A byte-order mark is not stripped: strip it first if your
+input may carry one.
+
+```php
+use SugarCraft\Markdown\Frontmatter;
+
+$split = Frontmatter::split("---\nname: demo\n---\n# Body\n");
+$split?->meta;   // "name: demo"
+$split?->body;   // "# Body\n"
+```
+
+## Folds
+
+`withFolds(list<string> $headingIds)` folds the sections under the named
+top-level headings. A folded heading keeps its own line, then a fold marker
+line, and the blocks after it are hidden up to the next heading of any level.
+A heading nested under a folded one is its own section and still shows.
+
+IDs come from `Renderer::headingId($text)` applied to the heading's rendered
+text, not its source: lowercase, each run of characters that are neither letters
+nor digits becomes one hyphen, and the ends are trimmed. With `withEmoji(true)`,
+`# :rocket: Launch` is the text "🚀 Launch", so its ID is `launch`, not
+`rocket-launch`. A TOC built from source text must expand shortcodes first, or
+it will fold nothing. Two headings with the same text share an ID. Folding an ID that
+matches no heading changes nothing, and `withFolds([])` unfolds everything.
+Folds work on the streaming path too, since each section starts at a heading.
+
+```php
+use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
+
+$renderer = (new Renderer(Theme::dark()))->withFolds([Renderer::headingId('Usage')]);
+```
+
+## Cached renderers
+
+`Renderer::cached(?Theme $theme = null, ?int $width = null)` returns the same
+renderer instance for the same theme object and width on every call. A render
+loop that asks for it each frame reuses one parser, one Environment and one
+stylesheet, instead of building them per frame. The cache is keyed by theme
+identity, so two equal but distinct theme objects get two renderers, and it
+holds at most 32 pairs, evicting the least recently used. A renderer already
+handed out stays valid after its entry is evicted.
+
+## Theme catalog
+
+`Theme::catalog()` returns every named theme the package ships, keyed by slug:
+the stock roster (`Theme::names()`) and the bundled glamour-style files
+`solarized`, `monokai` and `github`. Each entry is loaded once. Use
+`Theme::catalogByName($name)` for a loose lookup: case, hyphens, underscores
+and spaces are ignored, so `Tokyo-Night` and `tokyonight` name the same theme.
+It returns `null` for anything else. CLI aliases such as `no` are not part of
+the catalog.
+
+## HTML to Markdown
+
+`Html\HtmlToMarkdown::convert($html, $baseUrl, $charset)` converts an HTML
+document to Markdown: headings, paragraphs, emphasis, links, lists, code,
+quotes and simple tables. It drops `script`, `style`, `nav`, `svg`, `iframe`,
+`noscript`, `template`, `noembed` and `noframes` subtrees whole, and also drops
+any element the page hides itself: one with the `hidden` attribute or an inline
+`display:none` style. Hiding by a stylesheet rule or a class is not evaluated, so
+text a page hides only through its CSS still reaches the model; that is an
+accepted gap. Resolves links against `$baseUrl` with
+`Html\UrlReference::resolve($base, $reference)`, an RFC 3986 resolver. A non-block element that holds
+paragraphs (`details`, `center`, a `span` around blocks) keeps their breaks. The converter returns
+`null` when the caller should fall back to the raw body: for empty input, when
+`ext-dom` is absent, for a body over 512 KiB (refused before parsing), for a body
+the parser refuses, and for a body holding no renderable text (a lone `script`,
+say). The raw bytes that follow a `null` include the text the drop rule removed;
+that is the fallback contract `candy-code`'s WebFetch pins.
+
 ## Renderer options
 
 ```php
@@ -520,16 +603,17 @@ once.
 
 ### API at a glance
 
-- Constructors / factories: the full 13-slot signature —
+- Constructors / factories: the full 14-slot signature —
   `new Renderer(?Theme $theme = null, ?int $wrapWidth = null,
   bool $emitHyperlinks = true, ?string $baseUrl = null,
   bool $tableWrap = false, bool $inlineTableLinks = true,
   bool $tableColumnBudget = false, bool $preservedNewLines = false,
   bool $expandEmoji = false, bool $sanitize = true,
   bool $fenceColumnBudget = false, ?StyleSheet $styleSheetOverride = null,
-  bool $lineNumbers = false)`;
+  bool $lineNumbers = false, array $folds = [])`;
   plus `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
-  `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`.
+  `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`,
+  and the shared per-frame renderer `Renderer::cached($theme, $width)`.
 - Channels: `render()` (whole string), `stream()` (chunk generator),
   `renderSection()` (per-section — the `parseSection()` /
   `renderParsedSection()` pair behind the streaming family is

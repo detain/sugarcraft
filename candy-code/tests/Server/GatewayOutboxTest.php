@@ -6,11 +6,12 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Server\Workspace\ConnectionTarget;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * S-O03: a frame the gateway emits (relay, error reply) rides the connection's
@@ -49,7 +50,7 @@ final class GatewayOutboxTest extends TestCase
 
         $root = $this->fixture->root;
         $rootClients = new \ReflectionProperty(Gateway::class, 'rootClients');
-        $rootClients->setValue($this->gateway, [$root => [$client->connection->id() => $client->connection]]);
+        $rootClients->setValue($this->gateway, [$root => [$client->connection->id() => new ConnectionTarget($client->connection, $this->fixture->dispatcher)]]);
         $relay = new \ReflectionMethod(Gateway::class, 'relay');
 
         $client->clear();

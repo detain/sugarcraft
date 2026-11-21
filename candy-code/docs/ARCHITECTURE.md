@@ -261,7 +261,7 @@ the guard chain; seeding it twice would create a second session row per launch.
 
 `App` copies no state out of the hosted chat except `withSessionId()`, which is
 read back off it rather than re-derived, so the two cannot disagree. Since
-P-TABS.e the shell hosts **many** chats: when the launch carries a tab factory,
+The shell hosts **many** chats: when the launch carries a tab factory,
 `armDeck()` seeds a `SessionDeck` (`src/App/Tabs/`) whose active entry is the
 foreground `Chat` and whose parked entries are chats whose turns keep streaming
 in the background. Every `Cmd` a hosted chat returns rides out wrapped by
@@ -637,7 +637,8 @@ results that answer it, so each result stays paired with its own call.
 
 `Runtime::systemPromptSections()` returns the prompt as an ordered list of
 sections — thirteen slots, though a session that qualifies none of the optional
-ones assembles fewer — and `buildSystemPrompt()` folds that list into the
+ones assembles fewer (the unnumbered agent-instructions layer, 3a, joins only with
+a primary agent preset) — and `buildSystemPrompt()` folds that list into the
 string the model receives. The order of record, each layer named as the code
 names it:
 
@@ -648,6 +649,9 @@ names it:
 3. the tool-guidance layer — one fragment per wired tool that implements
    `PromptGuidance`, ordered by `name()`; the slot appears only when at least
    one fragment is non-empty;
+3a. the agent-instructions layer — the active primary agent preset's body in
+   `<agent-instructions>`, escaped and fenced; the slot appears only when a
+   primary agent preset supplied bytes;
 4. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
    its PSR-4 source directories, memoized per session;
 5. `SymbolMapBlock` — a `<symbol-map>`: the definitions the rest of the
@@ -1292,7 +1296,7 @@ Keyboard focus order and meaning:
   **session tabs** switch whole sessions.
 - **dividers** between panes are grab targets: dragging one resizes the
   panes either side; grabbing a pane's header or its View ▸ Panes row (the
-  same `panetab:` zone since P-MENU.e) drags the pane to a new dock
+  same `panetab:` zone) drags the pane to a new dock
   position.
 - **overlays** intercept every key while open — Esc closes the top-most one;
   the palette's rows are arrow-key navigable before Enter picks.
@@ -1419,12 +1423,12 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    from nothing. Each one that has been found is now either wired or documented
    as a seam — never deleted. Live examples of the seam form: `SkillDiscovery`,
    `App::dispatchSkill()`.
-   (`ForeignMemoryImporter` was on this list until P7.S6 wired it behind
-   `/memory import`, and `src/LSP/` until step 3.F gave it a launcher.)
+   (`ForeignMemoryImporter` was on this list until it was wired behind
+   `/memory import`, and `src/LSP/` until it gained a launcher.)
 2. **Absence is a no-op; present-but-unusable is a refusal.** Applied to
    `config.json`, `hooks.yaml`, `.mcp.json`, `--config`, `--root`, and every
    `CANDY_CODE_*` variable that carries policy.
-3. **One resolution per question.** `HomeDirectory` for `~`, `ContainedPath` for
+3. **One resolution per question.** `HomeDirectory` for `~`, sugar-core's `PathJail` for
    containment, `HookConfig::pattern()` for matcher delimiters,
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists

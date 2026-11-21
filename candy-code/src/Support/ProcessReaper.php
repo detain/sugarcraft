@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use React\EventLoop\LoopInterface;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Bounded shutdown for a `proc_open()` child: SIGTERM, a polled grace period,
@@ -18,25 +19,22 @@ use React\EventLoop\LoopInterface;
  * returned after **7.77s** — it did NOT orphan the child, it blocked for the
  * child's whole remaining lifetime. Two places in this package had already
  * grown the escalation independently
- * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
- * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()},
- * each with its own private `waitForExit()` and its own copy of the three
+ * ({@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
+ * escalation, each with its own private `waitForExit()` and its own copy of the three
  * constants), and E366's sweep found three more call sites needing it. Five
  * hand-rolled copies of a signal-escalation ladder is how one of them ends up
  * with the poll interval or the grace budget subtly different, so the ladder
  * lives here once.
  *
  * THE TWO EXISTING COPIES ARE MIGRATED — E407 folded both
- * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
- * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()}
- * onto the ladder here (their private `waitForExit()`s and grace constants are
+ * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and the streaming backend's
+ * escalation onto the ladder here (their private `waitForExit()`s and grace constants are
  * gone; the budgets they documented are THIS class's constants now), alongside
  * E366's newer consumers. The stdio transport took {@see terminateAndClose()}
  * until phase-2a moved it into `sugarcraft/sugar-mcp-client`, where the teardown now
  * goes through sugar-core's BoundedShutdown — the {@see \SugarCraft\Code\MCP\StdioMcpServer}
- * adapter contributes no ladder of its own. StreamingCommandBackend takes
- * {@see terminateAndAwaitExit()}, because its caller reaps the handle itself
- * to read the child's exit status.
+ * adapter contributes no ladder of its own. The streaming backend now runs its child
+ * through sugar-async's ChildRun, so its kill ladder is the shared one there.
  *
  * E676 FOLDED THE LAST THREE PRIVATE LADDERS. ScriptHook,
      * StatusLineCommand and BackgroundSessionRunner now escalate through
@@ -104,9 +102,8 @@ final class ProcessReaper
      * SIGTERM, poll, signal 9, poll — and STOP THERE: never `proc_close()`.
      *
      * THE VARIANT FOR THE CALLER THAT REAPS ITSELF.
-     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::finish()} closes
-     * the handle on BOTH the expired and the completed path and reads the exit
-     * status out of `proc_close()`'s return; giving it {@see terminateAndClose()}
+     * A caller that closes its own handle and reads the exit status out of
+     * `proc_close()`'s return needs this shape: giving it {@see terminateAndClose()}
      * would double-close (a TypeError on the consumed resource) and hide the
      * status. So the escalation lives here and the reap stays there.
      *
@@ -127,7 +124,7 @@ final class ProcessReaper
         // Already exited on its own — the overwhelmingly common case. Skip
         // straight out so a normal completion pays no signal at all
         // and no part of the escalation budget.
-        if (!self::isRunning($process)) {
+        if (self::isGone($process, $groupPid)) {
             return true;
         }
 
@@ -138,8 +135,8 @@ final class ProcessReaper
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static function () use ($process): bool {
-                return !self::isRunning($process);
+            static function () use ($process, $groupPid): bool {
+                return self::isGone($process, $groupPid);
             },
         );
     }
@@ -232,7 +229,7 @@ final class ProcessReaper
 
         $signal(15);
         $killed = false;
-        $deadline = \microtime(true) + $terminateGrace;
+        $deadline = self::monotonic() + $terminateGrace;
         $timer = null;
         $timer = $loop->addPeriodicTimer(self::POLL_INTERVAL_US / 1_000_000, static function () use (&$timer, &$killed, &$deadline, $loop, $signal, $isGone, $finish, $killGrace, $onEscalate): void {
             if ($isGone()) {
@@ -241,7 +238,7 @@ final class ProcessReaper
 
                 return;
             }
-            if (\microtime(true) < $deadline) {
+            if (self::monotonic() < $deadline) {
                 return;
             }
             if ($killed) {
@@ -255,14 +252,19 @@ final class ProcessReaper
             }
             $signal(9);
             $killed = true;
-            $deadline = \microtime(true) + $killGrace;
+            $deadline = self::monotonic() + $killGrace;
         });
     }
 
     /**
      * Async twin of {@see terminateAndClose()}: ladder on loop timers, then
-     * `proc_close()` once the child is gone (or the budgets ran out — the
-     * least-bad reap, as in the sync path). `$then` gets the exit status.
+     * the reap once the child is gone. `$then` gets the exit status.
+     *
+     * A child that survives signal 9 within its budget is NOT reaped with a
+     * blocking `proc_close()`: that parks the loop thread on exactly the
+     * uninterruptible kernel wait the ladder could not break, freezing every
+     * other connection the gateway serves. The handle is polled by
+     * {@see reapWhenExited()} until the kernel releases the child.
      *
      * @param callable(?int):void|null $then
      */
@@ -278,7 +280,10 @@ final class ProcessReaper
 
             return;
         }
-        if (!self::isRunning($process)) {
+        // A leader that exited on SIGTERM can leave a TERM-ignoring descendant
+        // in its group; isGone() keeps the ladder open for that case. The probe
+        // runs on the loop every tick, so it skips the /proc walk.
+        if (self::isGone($process, $groupPid, false)) {
             $finish(\proc_close($process));
 
             return;
@@ -288,11 +293,114 @@ final class ProcessReaper
             static function (int $signal) use ($process, $groupPid): void {
                 self::signal($process, $groupPid, $signal);
             },
-            static fn (): bool => !self::isRunning($process),
-            static function (bool $gone) use ($process, $finish): void {
+            static fn (): bool => self::isGone($process, $groupPid, false),
+            static function (bool $gone) use ($loop, $process, $finish): void {
+                // Only a poll that saw the exit may take the blocking reap: then
+                // proc_close() cannot wait. Anything else is deferred to the loop.
+                if (!$gone) {
+                    self::reapWhenExited($loop, $process, $finish);
+
+                    return;
+                }
                 $finish(\is_resource($process) ? \proc_close($process) : null);
             },
         );
+    }
+
+    /**
+     * Reap a child on loop timers, never blocking: answer at once when it has
+     * already exited, otherwise poll every {@see POLL_INTERVAL_US} and
+     * `proc_close()` the tick it is seen gone.
+     *
+     * The reap half of {@see terminateAndCloseAsync()} for a child the ladder
+     * could not stop. A synchronous `proc_close()` there waits on the child with
+     * no bound. A non-resource argument answers null, matching the sync contract.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function reapWhenExited(LoopInterface $loop, mixed $process, ?callable $then = null): void
+    {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+        $exitCode = null;
+        if (self::exitedWithCode($process, $exitCode)) {
+            $finish(self::closeReaped($process, $exitCode));
+
+            return;
+        }
+
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            self::POLL_INTERVAL_US / 1_000_000,
+            static function () use (&$timer, $loop, $process, $finish): void {
+                // A teardown that ran while this timer was armed may have closed
+                // the handle; the reap must not run on a consumed resource.
+                if (!\is_resource($process)) {
+                    $loop->cancelTimer($timer);
+                    $finish(null);
+
+                    return;
+                }
+                $exitCode = null;
+                if (!self::exitedWithCode($process, $exitCode)) {
+                    return;
+                }
+
+                $loop->cancelTimer($timer);
+                $finish(self::closeReaped($process, $exitCode));
+            },
+        );
+    }
+
+    /**
+     * Whether the child has exited, capturing its status from the poll that
+     * saw the exit. A signal death reads -1 here and `proc_close()` then
+     * reports -1 as well (the poll consumed the status); a normal exit is
+     * reported as its code by both. -1 is the sentinel the callers branch on.
+     *
+     * @param resource $process
+     */
+    private static function exitedWithCode($process, ?int &$exitCode): bool
+    {
+        $status = \proc_get_status($process);
+        if ($status['running'] === true) {
+            return false;
+        }
+
+        $exitCode = (int) $status['exitcode'];
+
+        return true;
+    }
+
+    /**
+     * Release the handle of a child already seen gone. The poll's status wins
+     * when it captured one; `proc_close()` cannot block here.
+     *
+     * @param resource $process
+     */
+    private static function closeReaped($process, ?int $exitCode): ?int
+    {
+        $reaped = \proc_close($process);
+
+        return $exitCode !== null && $exitCode >= 0 ? $exitCode : $reaped;
+    }
+
+    /**
+     * Monotonic seconds for every grace deadline. The wall clock (microtime)
+     * would let an NTP step stretch or cut the TERM/KILL window, the same
+     * reason sugar-core's BoundedShutdown measures on hrtime().
+     */
+    private static function monotonic(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 
     /**
@@ -300,14 +408,14 @@ final class ProcessReaper
      */
     private static function waitBounded(callable $isGone, float $budgetSeconds): bool
     {
-        $deadline = \microtime(true) + $budgetSeconds;
+        $deadline = self::monotonic() + $budgetSeconds;
 
         do {
             if ($isGone()) {
                 return true;
             }
             \usleep(self::POLL_INTERVAL_US);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonic() < $deadline);
 
         return $isGone();
     }
@@ -401,5 +509,24 @@ final class ProcessReaper
         }
 
         return \proc_get_status($process)['running'] === true;
+    }
+
+    /**
+     * "Is the child gone?" — the leader has exited AND, when the caller named
+     * the group it leads, that group is empty. The leader alone is not enough:
+     * a descendant that ignores SIGTERM outlives its wrapper, and declaring the
+     * child gone then would end the ladder before the signal 9 rung reaches it.
+     * Same rule as {@see \SugarCraft\Core\Util\Proc\BoundedShutdown}'s ladders.
+     * $walkProc false is the loop-safe probe: see BoundedShutdown::groupEmpty().
+     *
+     * @param resource $process
+     */
+    private static function isGone($process, ?int $groupPid, bool $walkProc = true): bool
+    {
+        if (self::isRunning($process)) {
+            return false;
+        }
+
+        return $groupPid === null || BoundedShutdown::groupEmpty($groupPid, $walkProc);
     }
 }

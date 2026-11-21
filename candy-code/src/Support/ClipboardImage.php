@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Support;
 use SugarCraft\Code\Attachments\FileMentions;
 
 /**
- * Read an image off the host clipboard into a file (audit 15b-15, Ctrl+V).
+ * Read an image off the host clipboard into a file (Ctrl+V).
  *
  * A terminal cannot paste an image: bracketed paste carries text, so the
  * pixels a screenshot tool put on the clipboard never reach the app as a
@@ -171,7 +171,7 @@ final class ClipboardImage
 
     /**
      * Remove saved pastes older than {@see STALE_PASTE_MIN_AGE_SECONDS} from
-     * {@see directory()} (audit 15b-15 residual: pastes used to accumulate
+     * {@see directory()} (pastes used to accumulate
      * there forever). On {@see AtomicFileWriter}'s orphan-sweep terms:
      *
      *  - only names of {@see PASTE_NAME_PATTERN}'s shape;

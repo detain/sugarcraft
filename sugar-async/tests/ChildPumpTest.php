@@ -106,6 +106,66 @@ final class ChildPumpTest extends TestCase
         $this->assertLessThan(5.0, $this->now() - $t0);
     }
 
+    public function testDeadlineSweepIsBoundedWhileTheChildKeepsFloodingPastIt(): void
+    {
+        // Regression: the expiry sweep read each pipe to EOF, which a child
+        // still writing never reaches. It buffered without bound and ran for
+        // seconds past the deadline (or exhausted memory).
+        $pipes = $this->spawn('while (true) { fwrite(STDOUT, str_repeat("y", 65536)); }');
+        $t0 = $this->now();
+        $r = ChildPump::drain($pipes, $t0 + 0.3, 4096, $this->now(...), sliceSeconds: 0.05, running: $this->running);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertTrue($r->timedOut());
+        $this->assertSame(4096, strlen($r->buffer(1)));
+        $this->assertGreaterThan(0, $r->droppedBytes(1));
+        $this->assertLessThan(3.0, $this->now() - $t0, 'the sweep must not run on past the deadline');
+    }
+
+    /**
+     * Drives one expiry with the child's burst already in the pipe: the first select
+     * lets the child fill the pipe, then the clock reports the deadline as passed, so
+     * the walk ends after a single read and the sweep takes whatever the kernel holds.
+     */
+    private function expireAfterBurst(array $pipes, int $maxBytes): DrainResult
+    {
+        $expired = false;
+        $clock = static function () use (&$expired): float {
+            return $expired ? 100.0 : 0.0;
+        };
+        $select = static function (array &$read, &$write, &$except, int $s, int $us) use (&$expired) {
+            usleep(400000);
+            $expired = true;
+
+            return @stream_select($read, $write, $except, $s, $us);
+        };
+
+        return ChildPump::drain($pipes, 1.0, $maxBytes, $clock, select: $select, pollPipes: false);
+    }
+
+    public function testDeadlineSweepKeepsEverythingTheKernelHoldsAtExpiry(): void
+    {
+        $this->requirePosixPipes();
+        // Regression: the sweep took one 8 KiB chunk per pipe, so a 60 KiB burst
+        // still buffered at the deadline lost its tail with truncated() false.
+        $pipes = $this->spawn('fwrite(STDOUT, str_repeat("z", 60000)); fflush(STDOUT); sleep(30);');
+        $r = $this->expireAfterBurst($pipes, 1_000_000);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertSame(60000, strlen($r->buffer(1)));
+        $this->assertFalse($r->truncated());
+    }
+
+    public function testDeadlineSweepReportsTruncationWhenItsBudgetRunsOut(): void
+    {
+        $this->requirePosixPipes();
+        // 200 KiB is past the sweep budget: the unread remainder must show as truncation.
+        $pipes = $this->spawn('fwrite(STDOUT, str_repeat("z", 200000)); fflush(STDOUT); sleep(30);');
+        $r = $this->expireAfterBurst($pipes, 1_000_000);
+        $this->assertSame(DrainResult::EXPIRED, $r->reason);
+        $this->assertLessThan(200000, strlen($r->buffer(1)));
+        $this->assertTrue($r->truncated());
+        $this->assertGreaterThan(0, $r->droppedBytes(1));
+    }
+
     public function testInjectedClockDrivesDeadlineWithoutWallTime(): void
     {
         $pipes = $this->spawn('sleep(30);');

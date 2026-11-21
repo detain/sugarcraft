@@ -407,6 +407,10 @@ final class SuiteSkipRoster
                 . 'including this box and the ubuntu CI legs) expectedForLayout() lifts the entry '
                 . 'and the pin asserts native-wrapper preference for real; the predicate IS the '
                 . 'body gate',
+        'SugarCraft\Code\Tests\Cli\HelpTest::testAPoisonedCataloguePageIsSanitizedWithoutLosingItsRows'
+            => 'accepted local red quarantine (owner ruling 2026-11-18, "HelpTest poison"): the body '
+                . 'is kept unchanged and skips itself with markTestSkipped() until the poisoned-catalogue '
+                . 'sanitizing lands; remove this row together with that skip',
     ];
 
     private static ?self $live = null;

@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarClipboard",
+    "description": "SugarClipboard: clipboard access for SugarCraft — a skeleton for now; the clipboard classes and the OSC 52 backend arrive in a later step. Original work; first-party.",
+    "ogTitle": "SugarCraft — SugarClipboard",
+    "ogDescription": "Clipboard access for SugarCraft terminal programs, with a planned OSC 52 backend for use over SSH and inside multiplexers.",
+    "emoji": "",
+    "displayName": "SugarClipboard",
+    "tagline": "Clipboard access — skeleton, no API yet",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">clipboard</span>\n          <span class=\"tag-chip\">osc52</span>\n          <span class=\"tag-chip\">skeleton</span>"
+}

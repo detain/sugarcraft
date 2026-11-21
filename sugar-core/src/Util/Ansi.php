@@ -538,7 +538,7 @@ final class Ansi
 
     /**
      * The classic VT100 line-drawing idiom: DEC Special Graphics into G0
-     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐` (ansicode.txt:223).
+     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐`.
      */
     public static function decSpecialGraphics(): string
     {
@@ -1340,10 +1340,20 @@ final class Ansi
     /**
      * Clear a Kitty graphics protocol image by id (or all if id=0).
      *
+     * A positive id is sent as `d=I` (uppercase): lowercase `d=i` removes the
+     * placements but keeps the image data, so a caller that replaces frames
+     * grows the terminal's image store without bound. Without a `d` key the
+     * action defaults to `a`, which erases every placement on screen, the
+     * frame just drawn included, so the key is always explicit.
+     *
      * Mirrors charmbracelet/x/ansi.KittyRenderer.
      */
     public static function kittyGraphicsClear(int $imageId = 0): string
     {
+        if ($imageId > 0) {
+            return self::APC . 'G' . "a=d,d=I,i=$imageId" . self::ST;
+        }
+
         return self::APC . 'G' . "a=d,i=$imageId" . self::ST;
     }
 

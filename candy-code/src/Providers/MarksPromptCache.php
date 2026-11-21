@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 /**
  * A provider that places prompt-cache breakpoints on its requests, and can
- * say for which model it does (audit A15, P10.S3).
+ * say for which model it does.
  *
  * The question has two halves that only the provider can answer together:
  * whether it was built with the `promptCache` setting on, and whether the

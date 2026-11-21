@@ -1296,8 +1296,8 @@ final class SymbolCitationDriftTest extends TestCase
      * An absence assertion over the whole tree — `assertSame([], $offences)` —
      * is satisfied perfectly by a scanner that reports nothing, which is exactly
      * how eleven of these sat invisible for as long as they did. So a synthetic
-     * `tests/` source that cites a REAL tree method (`pump()`, declared in
-     * `src/Backend/StreamingCommandBackend.php`, not in the fixture) must come
+     * `tests/` source that cites a REAL tree method (`tokenForLine()`, declared in
+     * `src/Backend/StreamingTokenSink.php`, not in the fixture) must come
      * back flagged at its own line, while the three shapes that must NOT flag —
      * a name the fixture declares itself, a `test…` name owned by the see-self
      * shape, and the citation planted inside a STRING LITERAL, which is what
@@ -1306,7 +1306,7 @@ final class SymbolCitationDriftTest extends TestCase
     public function testTheBareSymbolScanRedsOnASourceItHasNeverSeen(): void
     {
         $open = '{@' . 'see ';
-        $existing = 'pump';
+        $existing = 'tokenForLine';
 
         $index = $this->declaredMethodsTreeWide();
         self::assertArrayHasKey($existing, $index, 'the fixture symbol has stopped being a real declaration');
@@ -1325,8 +1325,8 @@ final class SymbolCitationDriftTest extends TestCase
         self::assertSame(4, $rows[0]['line'], 'the violation does not name the citation\'s own line');
         self::assertSame($existing . '()', $rows[0]['token']);
         $declared = implode(' / ', $rows[0]['declared']);
-        self::assertStringContainsString('StreamingCommandBackend::pump()', $declared);
-        self::assertStringContainsString('src/Backend/StreamingCommandBackend.php', $declared);
+        self::assertStringContainsString('StreamingTokenSink::tokenForLine()', $declared);
+        self::assertStringContainsString('src/Backend/StreamingTokenSink.php', $declared);
 
         $host = implode("\n", [
             '<?php',
@@ -1336,7 +1336,7 @@ final class SymbolCitationDriftTest extends TestCase
             ' */',
             'final class BareProbeHost',
             '{',
-            '    private function pump(): void',
+            '    private function tokenForLine(): void',
             '    {',
             '    }',
             '}',

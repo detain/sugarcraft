@@ -57,7 +57,6 @@ final class MailboxTest extends TestCase
             static fn () => $mailbox->peek($id),
             static fn () => $mailbox->unreadCount($id),
             static fn () => $mailbox->inboxSize($id),
-            static fn () => $mailbox->waitForMessage($id, 0.01),
         ];
         foreach ($calls as $n => $call) {
             try {
@@ -101,7 +100,7 @@ final class MailboxTest extends TestCase
 
         $dir = $this->basePath . '/teammate-b';
         $this->assertSame(0o700, fileperms($dir) & 0o777);
-        foreach (['inbox.jsonl', 'inbox.jsonl.read_markers', '.wake'] as $file) {
+        foreach (['inbox.jsonl', 'inbox.jsonl.read_markers'] as $file) {
             $this->assertSame(0o600, fileperms($dir . '/' . $file) & 0o777, $file);
         }
         clearstatcache();
@@ -123,10 +122,6 @@ final class MailboxTest extends TestCase
         );
 
         $mailbox->send('teammate-a', 'teammate-b', $message);
-
-        // Verify wake marker was touched
-        $wakePath = $this->basePath . '/teammate-b/.wake';
-        $this->assertFileExists($wakePath);
 
         // Verify inbox file was created
         $inboxPath = $this->basePath . '/teammate-b/inbox.jsonl';
@@ -450,169 +445,6 @@ final class MailboxTest extends TestCase
         $mailbox = new Mailbox($this->basePath);
 
         $this->assertSame(0, $mailbox->unreadCount('empty-inbox'));
-    }
-
-    // -------------------------------------------------------------------------
-    // waitForMessage
-    // -------------------------------------------------------------------------
-
-    public function testWaitForMessageReturnsImmediatelyWhenMessageAlreadyUnread(): void
-    {
-        $mailbox = new Mailbox($this->basePath);
-
-        $mailbox->send('teammate-a', 'teammate-h', new TeamMessage(
-            id: 'msg-already-there',
-            fromTeammateId: 'teammate-a',
-            toTeammateId: 'teammate-h',
-            type: 'idle',
-            payload: [],
-            sentAt: new \DateTimeImmutable(),
-        ));
-
-        $naps = 0;
-        $message = $mailbox->waitForMessage('teammate-h', 2.0, static function (int $microseconds) use (&$naps): void {
-            $naps++;
-        });
-
-        $this->assertNotNull($message);
-        $this->assertSame('msg-already-there', $message->id);
-        // Already-unread fast path — ASSERTED AS LOOP STATE, NOT AS A STOPWATCH
-        // READING. The earlier `assertLessThan(0.5, $elapsed)` reddened a correct
-        // Mailbox whenever the shard was descheduled past the bound between the
-        // two clock reads, and it proved little either way: a fast machine also
-        // passes a fallen-through poll (one 5 ms nap), while *any* wall bound on
-        // a path designed to return instantly is hostage to the scheduler. Zero
-        // sleeper calls is the exact statement of "the poll loop was never
-        // entered" — the seam resolves only after the fast-path return in
-        // `waitForMessage()`, so the count measures the loop, not the argument.
-        $this->assertSame(
-            0,
-            $naps,
-            'waitForMessage fell through the already-unread fast path into the poll loop',
-        );
-    }
-
-    public function testWaitForMessageReturnsNullAfterBoundedTimeoutWithNoMessage(): void
-    {
-        $mailbox = new Mailbox($this->basePath);
-
-        $start = microtime(true);
-        $message = $mailbox->waitForMessage('teammate-nobody', 0.2);
-        $elapsed = microtime(true) - $start;
-
-        $this->assertNull($message);
-        // Genuinely polled for (roughly) the requested timeout rather than
-        // returning instantly or hanging indefinitely.
-        $this->assertGreaterThanOrEqual(0.15, $elapsed);
-        $this->assertLessThan(1.0, $elapsed);
-    }
-
-    /**
-     * Reproduces the real "wait for the next message" scenario: a message
-     * is sent from a genuinely separate OS process (via pcntl_fork) after a
-     * short delay, and a caller blocked in waitForMessage() must notice and
-     * return the message well before its timeout expires. This is the
-     * closest deterministic proxy to a live cross-process wake available in
-     * CI — skipped when pcntl is unavailable.
-     */
-    public function testWaitForMessageReturnsPromptlyWhenSentFromForkedProcess(): void
-    {
-        if (!function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl required for a genuine cross-process wake test');
-        }
-
-        $basePath = $this->basePath;
-        $mailbox = new Mailbox($basePath);
-
-        $pid = $this->forkTracked();
-        $this->assertNotSame(-1, $pid, 'fork failed');
-
-        if ($pid === 0) {
-            // Child process: wait a beat, then send() from an independent
-            // process so the parent has to observe the wake marker written
-            // by someone else, not merely re-read its own memory state.
-            usleep(150_000);
-            $childMailbox = new Mailbox($basePath);
-            $childMailbox->send('teammate-a', 'teammate-i', new TeamMessage(
-                id: 'fork-msg-1',
-                fromTeammateId: 'teammate-a',
-                toTeammateId: 'teammate-i',
-                type: 'task_result',
-                payload: ['ok' => true],
-                sentAt: new \DateTimeImmutable(),
-            ));
-
-            // Not a plain exit(): that runs PHP's shutdown sequence in this
-            // child, over a COPY of the parent's object graph - every
-            // inherited destructor and every register_shutdown_function
-            // callback. (NOT PHPUnit's after-test hooks; an exiting child
-            // never returns into the runner. {@see
-            // \SugarCraft\Code\Tests\Support\ForkedChildExitConventionTest}
-            // has the probe that separates the two shapes.)
-            ForkedChild::exitNow(0);
-        }
-
-        $start = microtime(true);
-        $message = $mailbox->waitForMessage('teammate-i', 3.0);
-        $elapsed = microtime(true) - $start;
-
-        pcntl_waitpid($pid, $status);
-
-        $this->assertNotNull($message, 'waitForMessage should have received the forked send()');
-        $this->assertSame('fork-msg-1', $message->id);
-        // Comfortably below the 3s deadline — proves it woke on the
-        // child's send() rather than exhausting the timeout.
-        $this->assertLessThan(2.0, $elapsed);
-    }
-
-    /**
-     * Regression guard for the missed-wakeup race: waitForMessage() must
-     * capture the baseline wake token BEFORE its initial firstUnread()
-     * check, not after. If the token were captured after (the original
-     * bug), a send() landing in that window would already be baked into
-     * the "baseline" token, so the poll loop's later comparison would see
-     * no change and `continue` without ever re-scanning the inbox —
-     * silently missing a message that is genuinely sitting there unread.
-     *
-     * The vulnerable window is a couple of statements wide (nanoseconds),
-     * far too narrow to land reliably even via pcntl_fork — see
-     * testWaitForMessageReturnsPromptlyWhenSentFromForkedProcess above,
-     * whose 150ms child delay is orders of magnitude too coarse to ever
-     * probe it. So this asserts the statement order directly from source,
-     * which fails deterministically pre-fix and passes deterministically
-     * post-fix, rather than depending on timing that can't reproduce the
-     * bug at all.
-     */
-    public function testWaitForMessageCapturesWakeTokenBeforeInitialInboxCheck(): void
-    {
-        $reflection = new \ReflectionMethod(Mailbox::class, 'waitForMessage');
-        $filename = $reflection->getFileName();
-        $this->assertNotFalse($filename);
-
-        $lines = file($filename);
-        $this->assertNotFalse($lines);
-        $body = self::declaredSlice(
-            $lines,
-            'waitForMessage',
-            $reflection->getStartLine(),
-            $reflection->getEndLine(),
-        );
-
-        // Match the actual call sites ("$this->…(") rather than a bare
-        // method-name substring, so a comment mentioning either method by
-        // name in prose (e.g. explaining the fix) can't shift the match
-        // position and produce a false pass or fail.
-        $wakeTokenPos = strpos($body, '$this->wakeMarkerToken(');
-        $firstUnreadPos = strpos($body, '$this->firstUnread(');
-
-        $this->assertNotFalse($wakeTokenPos, 'waitForMessage() must call wakeMarkerToken()');
-        $this->assertNotFalse($firstUnreadPos, 'waitForMessage() must call firstUnread()');
-        $this->assertLessThan(
-            $firstUnreadPos,
-            $wakeTokenPos,
-            'wakeMarkerToken() must be captured before the initial firstUnread() check '
-                . '(see R9 review: capturing it after risks a missed-wakeup race).',
-        );
     }
 
     // -------------------------------------------------------------------------

@@ -851,8 +851,8 @@ final class App implements Model
      * The plain-text cursor modeline: what the keyboard currently acts on.
      *
      * Reverse video (SGR 7) carries the row cursor on styling terminals, but
-     * sugar-style answers TERM=dumb (ColorProfile::NoTty) by emitting NO
-     * escape at all — the selected row would become invisible while s/d/
+     * sugar-style answers TERM=dumb as ColorProfile::NoTty (the
+     * ColorProfile::detectTerminal() veto) and emits NO escape at all — the selected row would become invisible while s/d/
      * Enter/Space kept acting on it (candy-git-022). This line names the
      * same target as untruncated text, and the Renderer prints it WITHOUT
      * any Style wrapper so it survives every palette.

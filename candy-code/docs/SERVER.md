@@ -487,8 +487,8 @@ second turn. Answers are kept five minutes, at most 1,000.
 Scope `read` is enough for everything that only looks; the owner holds all four
 scopes (`read`, `write`, `approve`, `admin`) — but the declared scopes are
 not enforced per connection today: the split that bites is owner vs
-non-owner on the principal, and per-connection scope narrowing owes a
-product ruling (CW-PAR-06). "Idempotent" marks the methods
+non-owner on the principal, and per-connection scope narrowing is still
+an open product decision. "Idempotent" marks the methods
 that accept an `idempotencyKey`. Every request's params are checked against
 the method's schema before it runs — a field of the wrong type, or a missing
 required one, is `-32602` naming the field. The full schema of every params,
@@ -1057,7 +1057,7 @@ registers a push subscription first. Three methods cover the lifecycle
 Triggers: a question waiting for an answer and a finished turn each send one
 notification — and only while **no client is following that session**, the
 rule being that push answers absence, never redundancy. Payloads are
-redacted generic text by default (the R13 ruling): `{"kind":
+redacted generic text by default: `{"kind":
 "question"|"finished", "body": "A question is waiting", "sessionId": "…"}`,
 encrypted end-to-end so the push service ferries opaque bytes. The session
 title rides only for opted-in rows. A push service that reports the
@@ -1202,7 +1202,12 @@ What runs where:
 A dropped socket is not the end of the attachment. The window redials
 with exponential backoff — first after 0.25 s, each wait doubling up to 4 s,
 twelve attempts in all — and re-says `server.hello` with
-`resume: {sessionId: cursor}`; the server re-subscribes it and replays whatever
+`resume: {sessionId: cursor}`. That hello gets 10 s to be answered on the
+first redial, and each failed attempt after it adds another 10 s (20 s, 30 s,
+and so on), so a slow but healthy server is reached on a later redial while a
+silent one fails each attempt and the ladder gives up after about 816 s (the
+hello waits total 780 s, and the first 0.25 s wait plus the 35.5 s of pauses
+between attempts make up the rest); the server re-subscribes it and replays whatever
 the dark missed, or resets it from a paged snapshot when the log can no longer
 serve the cursor. A turn running while nobody listens lands in the log and is
 replayed on resume, exactly as a live stream would have been. The verdict stays

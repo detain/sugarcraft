@@ -227,12 +227,15 @@ while (true) {
             continue;
         }
         if ($byte === 'r') {
-            $restored = $snapshot === null ? null : FocusRing::fromJson($snapshot);
-            if ($restored === null) {
+            // Separate from $restored: that flag is the stty-restore once-guard,
+            // and a ring object is truthy, so reusing it would skip the terminal
+            // restore on exit.
+            $loaded = $snapshot === null ? null : FocusRing::fromJson($snapshot);
+            if ($loaded === null) {
                 $render($ring, 'no snapshot');
                 continue;
             }
-            $ring = $restored;
+            $ring = $loaded;
             $render($ring, 'restored');
             continue;
         }

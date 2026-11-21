@@ -297,6 +297,227 @@ Test breadth is hand-built edge pins (`ParserOverflowTest`,
 matrices that pin the bulk fast path to the per-byte path on fixed corpora;
 there is no continuous fuzzing in CI.
 
+## Flat tokenizer and control names
+
+Two smaller entry points sit beside the VT500 machine, for consumers that want
+classified slices rather than handler callbacks.
+
+**`AnsiTokenizer`** turns a byte stream into a `list<Token>`. Create one with
+`AnsiTokenizer::new()`, call `parse($chunk)` for each read, and call
+`flush()` at end of stream. An unfinished sequence at the end of a chunk is
+held for the next `parse()` call. If the held bytes pass
+`AnsiTokenizer::MAX_PENDING_BYTES` (64 KiB), they come back as one TEXT token
+that starts at the ESC, and the tokenizer resynchronizes, so a stuck stream
+cannot grow the buffer. The cap applies to the held partial only, so a large
+chunk that ends in a short partial still holds that partial. The cap bounds
+memory, not time. A held CSI, an ESC held on its C0 controls or intermediates,
+and an unterminated OSC, DCS, APC, SOS or PM body each keep their scan position
+across feeds, so each of their bytes is examined once however many feeds it
+arrives in.
+`Token` carries `type` (`TEXT`, `CONTROL`, `ESC`,
+`CSI`, `OSC`, `DCS`, `APC`, `SOS`, `PM`), `data`, `intermediate`, `params`,
+`final`, and `terminator`, and `paramInts()` reads the parameters as integers.
+The field shape and type values match sugar-core's `Util\Token`. Unlike the
+handler machine, a C1 byte (0x80–0x9F) is ordinary text here: only the 7-bit
+`ESC` spellings open a sequence.
+
+**`Codec\ControlNames`** names the C0 and C1 control bytes. `c0Name()` and
+`c1Name()` return long labels such as `BEL (bell)`. `mnemonic()` returns the
+bare abbreviation (`BEL`, `CSI`, and `DEL` for 0x7F), or `null` for a
+non-control byte. The long labels come from the same table as the mnemonics.
+Every C0 and C1 byte has a mnemonic here, including the 19 C1 bytes that
+candy-ansi-inspect's sanitizer leaves as hex; see the migration map below.
+
+```php
+use SugarCraft\AnsiParser\AnsiTokenizer;
+use SugarCraft\AnsiParser\Codec\ControlNames;
+use SugarCraft\AnsiParser\Token;
+
+$tokenizer = AnsiTokenizer::new();
+foreach ($tokenizer->parse("ok\x1b[31m\x07") as $token) {
+    if ($token->type === Token::CONTROL) {
+        echo ControlNames::c0Name(ord($token->data)), "\n"; // BEL (bell)
+    }
+}
+```
+
+### Migration map (P1-14a)
+
+What each replaced copy does, and where that behavior lives now. Nothing is
+deleted in this change. Each copy is removed in the series step named below,
+and its callers move in that step.
+
+**Behavior map: sugar-core `Util\Parser`** (kept as a deprecated shim until the follow-up consumer step; the copy is not deleted in P1-14b)
+
+| Behavior of the copy | Where it lives now |
+|---|---|
+| Printable and 8-bit bytes accumulate into one TEXT token | `AnsiTokenizer::parse()`, same |
+| C0 controls and DEL: one CONTROL token per byte | `AnsiTokenizer::parse()`, same |
+| `ESC` plus a byte: two-byte ESC token | `AnsiTokenizer::consumeEsc()`, same for two-byte finals. ESC intermediates (`ESC ( 0`, `ESC # 8`) are a declared change (below). An ESC followed by a C0 byte or a UTF-8 lead is a declared change too (below) |
+| CSI: private marker, parameter bytes, intermediate bytes, final 0x40–0x7E | `AnsiTokenizer::consumeCsi()`, same, except an ESC inside the CSI and a C0 byte inside the CSI (declared changes below) |
+| CSI with an invalid final: bare `ESC [` token, then resynchronize | `consumeCsi()`, same |
+| OSC, DCS, APC, SOS, PM closed by BEL or ST, with `terminator` | `AnsiTokenizer::consumeStTerminated()`, same, except an ESC inside the body (declared change below) |
+| Incomplete sequence held across `parse()` calls | `AnsiTokenizer::$pending`, same |
+| `MAX_PENDING_BYTES` = 65536 | `AnsiTokenizer::MAX_PENDING_BYTES`, same value. `AnsiTokenizer` judges it on the held partial, not the buffer (declared change below). The `Util\Parser` shim still judges the whole buffer, as the copy did |
+| `flush()` returns held bytes as one TEXT token and clears them | `AnsiTokenizer::flush()`, same |
+| Token type constants and field names | `SugarCraft\AnsiParser\Token`, same values |
+| `Token::paramInts()` | `SugarCraft\AnsiParser\Token::paramInts()`, same |
+| Construction `new Parser()` | The `Util\Parser` shim keeps `new Parser()` and delegates to `AnsiTokenizer::new()`. Call sites move in the follow-up consumer step |
+| Cap check on the whole buffer (held bytes plus the chunk) | `Util\Parser::parse()` with `AnsiTokenizer::pendingBytes()` (new, read-only), so the shim keeps the copy's rule |
+
+**Declared behavior change (ESC inside a body).** An `ESC` inside a CSI or a
+string body now ends that sequence, as the VT500 `Parser` does. A CSI cut short by
+an ESC is dropped with no token, and the ESC opens the next sequence. A string cut
+short by an ESC (not `ESC \`) is dispatched with an empty `terminator`, and the ESC
+opens the next token. `ESC ESC` drops the first ESC. The copy in `Util\Parser`
+swallowed the ESC into the body, so `ESC ] 0 ; t ESC [ A` gave one OSC token and
+lost the key press. Pinned by `AnsiTokenizerTest::testEscInsideCsiAbortsTheSequenceAndRestarts`,
+`testEscEscRestartsTheSequence`, `testEscInsideOscAbortsTheStringAndKeepsTheNextKey` and
+`testEscInsideDcsAndApcAbortTheString`.
+
+**Declared behavior change (ESC intermediates).** `ESC` followed by 0x20–0x2F
+bytes and then a final 0x30–0x7E is one ESC token: the final goes in `data` and
+the intermediates in `intermediate`, as the VT500 `Parser` dispatches it. So
+`ESC ( 0` is `data` `0`, intermediate `(`, and `ESC # 8` is `data` `8`,
+intermediate `#`. The copy in `Util\Parser` split these after the first byte, so
+the final came back as TEXT and a DEC graphics switch printed as literal
+characters. A sequence cut short by ESC or a non-final byte is dropped with no
+token, as a CSI is. Pinned by `AnsiTokenizerTest::testEscIntermediateDesignationIsOneEscTokenWithNoTextLeak`,
+`testEscDecalnAndS7c1tCarryTheirIntermediates` and `testEscIntermediateAbandonedByEscOrControlResyncs`.
+
+**Declared behavior change (C0 and UTF-8 after ESC, C0 inside CSI).** The copy
+treated the byte after an `ESC` as the ESC's final, and it read a C0 byte inside a
+CSI as part of the CSI body. `AnsiTokenizer` does neither. A C0 byte after `ESC`
+(`ESC 0x00 x`, `ESC 0x18 [ A`) is a CONTROL token that executes, and the ESC carries
+on to the next byte. For `ESC 0x18`, the ESC is dropped. `ESC` followed by a UTF-8
+lead (`ESC é`, bytes `1B C3 A9`) is dropped, and the rune after it is one TEXT token
+with no ESC token, so an Alt+é arrives as the character rather than as an ESC with a
+stray lead byte. A C0 byte inside a CSI (`ESC [ 3 BEL m`) executes first, and the
+CSI is then dispatched with its parameters. The C0 byte is not inside the
+parameters. DEL inside a CSI is ignored and the sequence continues. Copy output:
+`ESC 0x00 x` gave ESC(0x00) + TEXT `x` and now gives CONTROL(0x00) + ESC `x`.
+`ESC 0x18 [ A` gave ESC(0x18) + TEXT `[A` and now gives CONTROL(0x18) + TEXT `[A`.
+`ESC 0xC3 0xA9` gave ESC(0xC3) + TEXT(0xA9) and now gives TEXT(0xC3A9). `ESC [ 3 BEL m`
+gave ESC `[` + TEXT `3` + CONTROL BEL + TEXT `m` and now gives CONTROL BEL + CSI with
+parameter `3` and final `m`. Pinned by `AnsiTokenizerTest::testC0AfterEscExecutesAndTheEscapeGoesOn`,
+`testC0InsideCsiExecutesBeforeTheCsiIsDispatched`, `testEscBeforeAHighByteDoesNotSplitTheRune`
+and `testDelInsideCsiIsIgnoredAndTheSequenceContinues`.
+
+**Declared behavior change.** A chunk longer than 64 KiB whose tail is a short
+unfinished sequence now holds that tail, as a short chunk does. The copy
+judged the cap on the whole buffer, so it emitted the tail as text and
+resynchronized. Checked on the copy and on this class with a chunk of 70,000 bytes
+followed by `ESC [ 38;5;` (the first call), then a chunk `196m` (the second). `Util\Parser` gives TEXT
+(70,000 bytes), then TEXT (`ESC [ 38;5;`), then TEXT (`196m`). `AnsiTokenizer`
+gives TEXT (70,000 bytes) on the first call, then CSI with params `38;5;196`
+and final `m` on the second. Pinned by
+`AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`.
+
+**Declared behavior change (`AnsiTokenizer` only).** A chunk longer than 64 KiB
+whose tail is a short unfinished sequence now holds that tail on
+`AnsiTokenizer`, as a short chunk does. The copy judged the cap on the whole
+buffer, so it emitted the tail as text and resynchronized. `Util\Parser` keeps
+the copy's rule: it judges the cap on the whole buffer and returns the held
+tail as TEXT, so its callers see no change. Checked on the copy, on the shim,
+and on `AnsiTokenizer` with a chunk of 70,000 bytes followed by `ESC [ 38;5;`
+(the first call), then a chunk `196m` (the second). The copy and the shim give
+TEXT (70,000 bytes), then TEXT (`ESC [ 38;5;`), then TEXT (`196m`).
+`AnsiTokenizer` gives TEXT (70,000 bytes) on the first call, then CSI with
+params `38;5;196` and final `m` on the second. The `AnsiTokenizer` behavior is
+pinned by `AnsiTokenizerTest::testShortPartialAfterALargeChunkIsStillHeld`;
+the shim behavior by `ParserTest::testOversizedChunkReturnsShortHeldTailAsTextLikeTheLegacyParser`
+and `ParserTest::testOversizedBacklogCountsBytesHeldFromEarlierFeeds`.
+
+**Behavior map: candy-ansi-inspect `C0C1.php`** (deleted in P4-9e)
+
+- `C0C1::C0`, `C0C1::C1` tables, `c0Name()` and `c1Name()`, including the
+  `C0 0x..` and `C1 0x..` fallbacks → `Codec\ControlNames::C0`, `C1`,
+  `c0Name()`, `c1Name()`. The strings are identical. `ControlNamesTest` pins
+  every label byte for byte.
+
+**Behavior map: candy-ansi-inspect `Inspector::sanitizeLabelBytes()`** (the
+mnemonic arms only, `Inspector.php` around lines 980–1001; the arms stay in the
+Inspector until P4-9e)
+
+- The 46 mnemonic arms (C0 including ESC, DEL, and the C1 bytes IND, NEL, HTS,
+  RI, SS2, SS3, DCS, SOS, CSI, ST, OSC, PM, APC) → `ControlNames::mnemonic()`.
+  Pinned by `ControlNamesTest::testInspectorMnemonicsAreReproduced`.
+- The UTF-8-aware sweep regex and the `\xHH` default arm stay in the Inspector
+  until P4-9e.
+- **Divergence, not yet migrated:** the default arm renders 19 C1 bytes as
+  `\xNN`: 0x80–0x83, 0x86, 0x87, 0x89–0x8C, 0x91–0x97, 0x99, 0x9A.
+  `mnemonic()` names all of them (`mnemonic(0x80) === 'PAD'`). Migrating the
+  Inspector changes its output for these bytes. P4-9e must either keep the hex
+  form for them or change it in its own PR. Pinned by
+  `ControlNamesTest::testC1BytesTheInspectorLeavesAsHexHaveMnemonicsHere`.
+
+**Token types (sugar-core `Util\Token` → this package's `Token`)**
+
+`Util\Token` is not aliased in P1-14b. It stays a separate class, because
+`SgrState::apply*()` is public and typed to `Util\Token`. `Renderer` copies each
+`SugarCraft\AnsiParser\Token` into a `Util\Token` at the boundary
+(`Renderer::legacyToken()`). The alias, and the cut-over of the typed
+callers, wait for the follow-up consumer step. sugar-core already requires
+`sugarcraft/sugar-ansi-parser`, which has no dependencies, so there is no cycle.
+The two classes are still not interchangeable. Files that name `Util\Token` and
+must be checked when the alias lands:
+`sugar-core/src/Renderer.php`, `sugar-core/src/SgrState.php`,
+`sugar-core/tests/SgrStateTest.php`, `sugar-core/tests/Util/ParserTest.php`,
+`candy-code/src/Renderer.php`, and `sugar-flexbox/tests/SgrStateDifferentialTest.php`.
+
+**Unmapped extras (new here, no copy behind them).** `ControlNames::mnemonic()`
+for the 19 C1 bytes listed above, and the public `ControlNames::C0` and
+`ControlNames::C1` tables. Both exist only in this package.
+
+### Consumers the follow-up steps must move (Util\Parser, Util\Token) and P4-9e (C0C1)
+
+Found by `grep -rnF 'Util\Parser'` and `grep -rnF 'C0C1'` over the whole repo
+(excluding `vendor/`), re-run on the P1-14b tree after `sugar-core/src/Renderer.php`
+moved onto `AnsiTokenizer`, so that file no longer appears below. A line listed as
+"use" is an import; "new" is a construction; "doc" is a comment or a `{@see}` link
+with no code use.
+
+Util\Parser (P1-14b):
+
+- Production: `sugar-widgets/src/Help/Help.php:13` (use), `:421` (new);
+  `candy-code/src/Renderer.php:9` (use), `:4519` and `:4557` (new);
+  `sugar-core/src/SgrState.php:401` (doc). `sugar-core/src/Renderer.php` now
+  imports `AnsiTokenizer` and `Util\Token` and has no `Util\Parser` reference.
+- Tests: `sugar-core/tests/RendererTest.php:344` (FQN new);
+  `sugar-core/tests/SgrStateTest.php:8` (use) and 26 `(new Parser())`
+  calls; `sugar-core/tests/Util/ParserTest.php:7` (use) and `:15` (new);
+  `sugar-widgets/tests/Help/HelpTest.php:202` (FQN new);
+  `sugar-widgets/tests/Help/HelpReviewPinsTest.php:9` (use);
+  `candy-code/tests/Renderer/RenderMemoTest.php:13` (use).
+- Docs naming the class: `SECURITY.md:63`.
+
+C0C1 (P4-9e):
+
+- Production: `candy-ansi-inspect/src/AnsiHandler.php:453` (`C0C1::c0Name`) and
+  `:503` (`C0C1::c1Name`).
+- Tests that call the class: `candy-ansi-inspect/tests/C0C1Test.php` (the whole
+  file pins the labels, and `ControlNamesTest` already pins the same strings);
+  `candy-ansi-inspect/tests/SosPmTest.php:8` (use), `:41` and `:46` (calls).
+- Tests that name it only in comments: `candy-ansi-inspect/tests/C1ClassificationSweepTest.php:30`
+  and `candy-ansi-inspect/tests/StreamingInspectorTest.php:295-296`.
+
+### Audit premises corrected by this map
+
+- `candy-ansi-inspect` `C0C1.php` and `Inspector.php:980-1001` are not a
+  duplicate of `Codec\LabelSanitizer`. `LabelSanitizer::clip()` escapes as
+  `\xHH` and clips to a byte limit, and it stays. The duplicate target is
+  `Codec\ControlNames`.
+- `sugar-core` `Util/Parser.php` has callers beyond `Renderer.php`. The list
+  above names every one: production callers in sugar-widgets and candy-code,
+  and the tests.
+- The C0C1.php deletion is P4-9e, not P1-14a. `candy-ansi-inspect` still calls
+  `C0C1` at `AnsiHandler.php:453` and `:503`, and that package is outside this
+  work package's lane. The plan's P1-14 entry, `UPSTREAM-PLAN.md` (section
+  "P1-14"), and the trace row AUD-6 r42 (`reviews/UPSTREAM-TRACE.tsv:223`) still
+  name P1-14a. The move is recorded here and in the PR body's dropped-claim
+  record. Updating the trace row is a planning-tree edit, not part of this
+  branch.
+
 ## Decoders (Codec)
 
 `SugarCraft\AnsiParser\Codec` ships three **pure value decoders** — typed,
