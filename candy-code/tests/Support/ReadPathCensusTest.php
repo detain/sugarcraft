@@ -1556,6 +1556,12 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — the preview\'s bounded cap+1 head read (ISS-010): the PRE-WRITE diff the permission modal '
                 . 'shows, on the same already-jailed path and behind the same size guard as the write arm',
         ],
+        'Tools/Concerns/CapturesProcessOutput.php|file_get_contents' => [
+            'CALLER_SUPPLIED — runCaptured()\'s $stdinFile, read whole into ChildRun\'s stdin payload '
+                . '(ChildRun takes bytes, not a descriptor); the trait holds no boundary. Its one caller, '
+                . 'Workspace\\GitRunner::runWithInput(), passes a tempnam() file it created owner-only (0600) '
+                . 'in the system temp directory, wrote itself and unlinks after the run',
+        ],
         'Tools/Catalog/ToolCatalog.php|scandir' => [
             'NAMES_ONLY — lists the installation\'s own `src/Tools/BuiltIn/*.php` located from '
                 . '`__DIR__` (DH-TOOLS); scandir not glob since DST-1 so the listing reaches inside a '
