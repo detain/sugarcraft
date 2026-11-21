@@ -24,6 +24,17 @@ use SugarCraft\Plugins\Host\RefusedCall;
  *
  * The two copies carry distinct RpcError classes, so an error is compared as
  * the wire frame each copy builds for it; the frame is the contract.
+ *
+ * This pair is an interim state, not the target. The refusal contract is no
+ * longer the blocker: the library RpcError implements `Refusal`, which both
+ * bundles' ServeError read. What is still open (plan_plugin.md 4.12) is the
+ * type split. candy-code's `Request`, `RpcError` and `ErrorCode` are used across
+ * the protocol layer (about 60 and 40 files), and its codec returns them, so
+ * moving the codec means switching those callers to the library types first.
+ * Remaining, in order: switch the callers, move `JsonRpcTest`, point the
+ * `Protocol\JsonRpc` callers in candy-code/src and candy-code/tests at
+ * `SugarCraft\McpClient\Protocol\JsonRpc`, then delete candy-code's codec and
+ * this test with it.
  */
 final class JsonRpcParityTest extends TestCase
 {
