@@ -339,6 +339,44 @@ final class OutputTruncationTest extends TestCase
         $this->assertStringContainsString('truncated:', $result->content());
     }
 
+    /**
+     * Grep's hit-list trim is off under a zero bound, but the returned result is
+     * still held to the 8 MiB ceiling: a failing grep that overruns both streams
+     * used to reach the model at about 16 MiB, because truncateMerged() treats
+     * a non-positive bound as "no clip". A stand-in grep on PATH stands in for
+     * the 9 MiB-per-stream overrun a real tree cannot produce on stderr.
+     */
+    public function testGrepZeroCapHoldsTheReturnedResultToTheCeilingWhenBothStreamsOverrun(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The stand-in grep below is a POSIX shell script.');
+        }
+
+        $bin = $this->root . '/bin';
+        mkdir($bin, 0o777, true);
+        file_put_contents($bin . '/grep', "#!/bin/sh\n"
+            . "yes 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef 2>/dev/null | head -c 9437184\n"
+            . "yes fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 2>/dev/null | head -c 9437184 1>&2\n"
+            . "exit 2\n");
+        chmod($bin . '/grep', 0o755);
+
+        $previousPath = (string) getenv('PATH');
+        putenv('PATH=' . $bin . PATH_SEPARATOR . $previousPath);
+        try {
+            $result = (new Grep(maxOutputBytes: 0))->execute([
+                'pattern' => 'needle',
+                'path' => $this->root,
+                'description' => 'sweep a zero cap over both streams',
+                'id' => 'call_grep_both',
+            ]);
+        } finally {
+            putenv('PATH=' . $previousPath);
+        }
+
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        $this->assertStringContainsString('truncated:', $result->content());
+    }
+
     // =========================================================================
     // Grep
     // =========================================================================

@@ -56,7 +56,8 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * match minified assets or a lockfile, returns tens of thousands of lines
      * that would otherwise be replayed into every following request of the
      * turn. Zero or negative disables the hit-list trim only; the capture itself
-     * stays bounded by {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}.
+     * stays bounded by {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES},
+     * and the returned result is held to that same ceiling.
      *
      * $rgAvailable is decided by the caller at boot — see
      * {@see \SugarCraft\Code\Tools\Concerns\DetectsCapabilities} for why the
@@ -622,7 +623,15 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // promises. Under announce-once that is the first touch of a
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
-        $content = $this->truncateMerged($merged, $section === '' ? $bodyCap : $floor);
+        // A non-positive cap turns the hit-list trim off, not the result's own
+        // ceiling: truncateMerged() treats 0 as "no clip", so the joined stdout
+        // and stderr would reach the model at twice the capture bound. The
+        // default is the one each stream is retained to, as in Bash.
+        $finalCap = $section === '' ? $bodyCap : $floor;
+        $content = $this->truncateMerged(
+            $merged,
+            $finalCap > 0 ? $finalCap : self::DEFAULT_RETAINED_BYTES,
+        );
 
         $skipped = self::presentExcludedDirs($path, $rules);
         if ($skipped !== []) {

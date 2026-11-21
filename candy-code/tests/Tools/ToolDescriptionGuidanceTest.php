@@ -161,7 +161,7 @@ final class ToolDescriptionGuidanceTest extends TestCase
      * a zero or negative bound takes the 8 MiB per-stream default, so the
      * description must state that ceiling and never the no-cap wording.
      */
-    public function testBashDescriptionAdvertisesNoCapWhenTheCapIsDisabled(): void
+    public function testBashDescriptionStatesTheCeilingWhenTheCapIsZero(): void
     {
         $description = (new Bash(maxOutputBytes: 0))->description();
 
