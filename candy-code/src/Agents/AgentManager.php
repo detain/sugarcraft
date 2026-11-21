@@ -18,8 +18,6 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
-use SugarCraft\Code\Providers\ProviderResponseException;
-use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Skills\SkillListingSection;
@@ -140,8 +138,6 @@ final class AgentManager
 
     /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
-     * @param \Closure(ToolCall, SubAgent): (bool|\SugarCraft\Code\Permissions\ApprovalVerdict) $permissionApprover
-     *        Settles a {@see PermissionDecision::Ask} into a real allow/deny. @see evaluateToolCalls()
      * @param ?list<Tool> $toolRegistry The session's model-facing tool set —
      *        {@see \SugarCraft\Code\Cli\Bootstrap::tools()}'s return — from
      *        which {@see resolveGrantedTools()} selects the subset an agent's
@@ -151,12 +147,12 @@ final class AgentManager
      *        {@see \SugarCraft\Code\Cli\Bootstrap::filterToolSet()} rests on.
      *
      *        NULL, THE DEFAULT, IS NOT AN EMPTY REGISTRY. It means the caller
-     *        supplied none, and every sub-agent then reaches its provider with
-     *        `tools: null` exactly as it did before this parameter existed —
-     *        the pre-existing behaviour, kept reachable so a caller that has no
-     *        tool set (every test double in `tests/`) is not forced to invent
-     *        one. An empty ARRAY is a different statement: a registry exists
-     *        and offers nothing, so any declaration at all is refused.
+     *        supplied none, and no grant is resolved: {@see grantedToolsFor()}
+     *        answers null ("no narrowing") and a sub-agent runs on its
+     *        caller's own roster, so a caller that has no tool set (most test
+     *        doubles in `tests/`) is not forced to invent one. An empty ARRAY
+     *        is a different statement: a registry exists and offers nothing,
+     *        so any declaration at all is refused.
      * @param ?list<Tool> $toolUniverse The CEILING that {@see $toolRegistry}
      *        was filtered FROM — the unfiltered built-in + MCP set, before
      *        `allowedTools`/`disabledTools` shrink it. It exists for exactly
@@ -168,23 +164,21 @@ final class AgentManager
      *        cannot produce the ceiling — keeps the old all-or-nothing
      *        refusal: the behaviour that half the truth can support.
      * @param ?string $projectRoot The workspace root a sub-agent's tools
-     *        resolve a relative path against — the session's `--root`. Handed
-     *        to every path-scoped match this class makes, the session gate's
-     *        ({@see evaluateToolCalls()}) and the agent's own grant's
-     *        ({@see refuseCallOutsideGrant()}), so a sub-agent's call is judged
-     *        as the file the tool will open, the same as the main loop's
-     *        (audit F-J3): `Deny Read(/proj/secret.txt)` also stops
-     *        `secret.txt`, `./secret.txt` and a symlink to it, and a symlink
-     *        cannot launder an `Allow`. Null — every caller that has no root,
-     *        most test doubles — keeps the lexical-only matching, which judges
-     *        a path by its spelling alone.
+     *        resolve a relative path against — the session's `--root`. It is
+     *        the default root of the agent's own grant check
+     *        ({@see grantRefusalFor()}) when the caller hands in none, so a
+     *        sub-agent's call is judged as the file the tool will open, the
+     *        same as the main loop's (audit F-J3): `Deny Read(/proj/secret.txt)`
+     *        also stops `secret.txt`, `./secret.txt` and a symlink to it, and a
+     *        symlink cannot launder an `Allow`. Null — every caller that has no
+     *        root, most test doubles — keeps the lexical-only matching, which
+     *        judges a path by its spelling alone.
      */
     public function __construct(
         private ProviderInterface $provider,
         private SkillRegistry $skillRegistry,
         private ?AgentWorkerPool $workerPool = null,
         private ?\Closure $permissionGateFactory = null,
-        private ?\Closure $permissionApprover = null,
         private ?array $toolRegistry = null,
         private ?array $toolUniverse = null,
         private ?string $projectRoot = null,
@@ -219,7 +213,7 @@ final class AgentManager
      * Reports, does not police: malformed and non-string declarations are
      * SKIPPED, not thrown, because a launch notice must not become a new
      * startup crash class — the strict parse every real consumer runs
-     * (`resolveGrantedTools()`, `refuseCallOutsideGrant()`) still refuses
+     * (`resolveGrantedTools()`, `grantRefusalFor()`) still refuses
      * those at the enforceable moment. Non-Tool entries in the universe are
      * likewise skipped here for the same reason; grant resolution throws on
      * them. With no registry or no universe there is nothing to compare, and
@@ -926,8 +920,9 @@ final class AgentManager
      * separates a renderer able to show a sub-agent working from one that can
      * only show its final result.
      *
-     * The value is a snapshot, not a stream: {@see executeSubAgent()} appends
-     * to {@see SubAgent::$output} per streamed chunk and {@see executeAll()}
+     * The value is a snapshot, not a stream: the Task path
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}) writes the run's
+     * newest streamed text to {@see SubAgent::$output} per chunk and {@see executeAll()}
      * settles the out-of-process pool's output back onto the same field, so a
      * caller polling this between frames observes real incremental text. Pull
      * rather than push deliberately — every consumer in this codebase (the
@@ -1036,398 +1031,6 @@ final class AgentManager
     }
 
     /**
-     * Execute a subagent task.
-     *
-     * @throws \RuntimeException When subagent is not found
-     */
-    public function executeSubAgent(string $id): \Generator
-    {
-        $subAgent = $this->subAgent($id);
-        if ($subAgent === null) {
-            throw new \RuntimeException("SubAgent not found: $id");
-        }
-
-        try {
-            $subAgent->status = SubAgent::STATUS_RUNNING;
-            // Stamped here, not in the constructor: createdAt already records
-            // creation, and elapsed telemetry must exclude queue time.
-            $subAgent->startedAt = new \DateTimeImmutable();
-
-            // Build system prompt from agent config
-            $systemPrompt = $subAgent->agent->systemPrompt();
-
-            // APPLY SKILLS, FAIL-CLOSED (E643). A granted-but-missing skill
-            // used to be silently SKIPPED — the identical shape to the tool
-            // grant this class's whole C7 bundle exists to end, one field
-            // over. The preset prompts are ASSERTED to name their granted
-            // skills (AgentDefinitionTest names that pin), so on the skip
-            // path the model reads "consult the
-            // php-best-practices skill you have been granted" with no skill
-            // body anywhere in reach — a prompt that lies, reddening nothing.
-            // Refused, then, at the severity the grant refusal uses: the
-            // sub-agent FAILS with the name in hand, and no lying prompt
-            // reaches a provider. That the trade is loud failures on hosts
-            // missing optional skill files was weighed and chosen — a wrong
-            // answer costs the operator a config fix, a silent lie costs them
-            // the model's judgement.
-            foreach ($subAgent->agent->skillNames as $skillName) {
-                $skill = $this->skillRegistry->get($skillName);
-                if ($skill === null) {
-                    throw new \RuntimeException(sprintf(
-                        'Agent "%s" is granted the skill "%s", which this session\'s SkillRegistry does '
-                        . 'not resolve. A granted skill that cannot be loaded is refused rather than '
-                        . 'skipped: skipping it sends the model a prompt advertising a skill whose body '
-                        . 'it will never receive.',
-                        $subAgent->agent->name,
-                        $skillName,
-                    ));
-                }
-
-                $systemPrompt .= $skill->systemPromptContribution();
-            }
-
-            // Lane D, same layer the batch splice carries: bodies were just
-            // folded above, the listing excludes exactly those names, and an
-            // empty registry appends nothing.
-            $systemPrompt = self::appendPromptLayer(
-                $systemPrompt,
-                $this->skillListingSection($subAgent->agent),
-            );
-
-            // Run completion.
-            //
-            // `tools:` is NOT optional decoration here — omitting it is what
-            // made every sub-agent toolless while its prompt described a
-            // roster. {@see resolveGrantedTools()} carries the whole argument,
-            // including why `null` (no registry, or no declaration) is still a
-            // correct answer rather than a failure.
-            $request = new \SugarCraft\Code\Providers\CompleteRequest(
-                model: $subAgent->agent->model,
-                messages: [
-                    new \SugarCraft\Code\Messages\UserMessage($subAgent->task),
-                ],
-                tools: $this->resolveGrantedTools($subAgent->agent),
-                systemPrompt: $systemPrompt,
-            );
-
-            if ($this->provider->supportsStreaming()) {
-                $subAgent->status = SubAgent::STATUS_STREAMING;
-
-                // Transient-failure retry (Phase 5 item 8), on
-                // the same policy as Runtime's two provider seams so the same
-                // 5xx is not recoverable on the main turn and fatal for a
-                // sub-agent. This loop is INSIDE the outer try, so only a
-                // failure that survives every attempt reaches the catch that
-                // marks the sub-agent FAILED.
-                //
-                // Unlike Runtime::runStreaming(), a mid-stream failure IS
-                // retried here even after real output, because this seam's
-                // observation channel for the OUTPUT is a PULL of a whole field
-                // rather than a push of deltas: consumers read SubAgent::$output
-                // as a snapshot ({@see liveOutput()} says so explicitly), and
-                // the three fields below are restored to their pre-attempt
-                // values. Runtime cannot do that because its $onToken sink is
-                // append-only and there is no un-emit.
-                //
-                // THE SAME PULL ARGUMENT DOES NOT HOLD FOR PERMISSIONS, and
-                // this is why evaluateToolCalls() is NOT called inside the
-                // retried region. A gate evaluation is not a read: it commits
-                // Auto-mode circuit-breaker strikes through
-                // PermissionGate::evaluate() and can block on the
-                // $permissionApprover — a USER-FACING PROMPT with no un-emit,
-                // exactly Runtime's append-only objection applied to a channel
-                // this loop cannot roll back. So each attempt COLLECTS its tool
-                // calls and the accepted attempt's collection is evaluated once
-                // after the loop (E28: before this hoist, a 503 landing after
-                // one Write's tool_calls priced at two prompts and two strikes
-                // for the same call). A discarded attempt now costs the gate
-                // nothing it can see.
-                // N-P4a: `providerRetryAttempts`, read once per sequence.
-                $maxAttempts = TransientFailure::maxAttempts();
-                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-                    $lastAttempt = $attempt === $maxAttempts;
-
-                    // Per-attempt: a rollback rewinds this alongside the
-                    // output, so only the ACCEPTED attempt's calls are ever
-                    // seen by the gate or the approver.
-                    $streamedToolCalls = [];
-
-                    // Snapshot rather than zero: a SubAgent may already carry
-                    // output and usage from before this call, and a retry must
-                    // rewind to where THIS attempt started, not to empty.
-                    $outputBefore = $subAgent->output;
-                    $tokensBefore = $subAgent->tokensUsed;
-                    $costBefore = $subAgent->costUsd;
-
-                    $errorChunk = null;
-                    $thrown = null;
-
-                    try {
-                        foreach ($this->provider->completeStream($request) as $response) {
-                            // COLLECT, do not evaluate (E28). These calls reach
-                            // the gate and the approver only once this attempt
-                            // is accepted — {@see the post-loop evaluation}.
-                            // evaluateToolCalls() itself is unchanged in kind:
-                            // it is no longer gated on `permissionGate !== null`
-                            // because the agent's own grant is enforced in
-                            // there too ({@see refuseCallOutsideGrant()}), and a
-                            // declaration does not stop being the agent's
-                            // statement about itself because the caller
-                            // attached no gate.
-                            if ($response->toolCalls !== null) {
-                                foreach ($response->toolCalls as $toolCall) {
-                                    $streamedToolCalls[] = $toolCall;
-                                }
-                            }
-
-                            // Accumulated per chunk so a mid-flight sub-agent already
-                            // reports real usage; providers report per-chunk deltas,
-                            // hence += rather than assignment.
-                            $subAgent->tokensUsed += $response->tokensUsed;
-                            $subAgent->costUsd += $response->costUsd;
-
-                            $subAgent->output .= $response->content;
-
-                            if ($response->isError) {
-                                $errorChunk = $response;
-                            }
-
-                            yield $subAgent;
-                        }
-                    } catch (\Throwable $e) {
-                        $thrown = $e;
-                    }
-
-                    if ($thrown !== null) {
-                        if ($lastAttempt || !TransientFailure::isTransient($thrown)) {
-                            throw $thrown;
-                        }
-                    } elseif ($errorChunk === null
-                        || $lastAttempt
-                        || !TransientFailure::responseIsTransient($errorChunk)
-                    ) {
-                        break;
-                    }
-
-                    $subAgent->output = $outputBefore;
-                    $subAgent->tokensUsed = $tokensBefore;
-                    $subAgent->costUsd = $costBefore;
-                    $streamedToolCalls = [];
-                    // ISS-074 review fix: the sub-agent wait obeys the same
-                    // server clock as the main chat loops. $thrown is null on
-                    // the error-CHUNK leg — a flattened response has no
-                    // Retry-After to read and nothing to announce — and the
-                    // beat rides the request's own heartbeat seam when a
-                    // caller armed one (this generator has no progress
-                    // callback of its own to slice into).
-                    if ($thrown !== null) {
-                        TransientFailure::announceRateLimit($thrown);
-                    }
-                    TransientFailure::backoff($attempt, failure: $thrown, onBeat: $request->onHeartbeat);
-                }
-
-                // Audit 15e AG-4 (the sub-agent twin of 15a A1): the loop only
-                // breaks holding an error chunk when it will not retry it - not
-                // transient, or the last attempt - so that chunk is this run's
-                // final answer and it is a FAILURE. Falling through used to
-                // settle the sub-agent COMPLETE with empty (or partial) output
-                // and the provider's errorMessage unread, so a 401 or a bad
-                // model id handed its caller nothing, reported as success.
-                // Thrown BEFORE the tool-call evaluation: the calls belong to a
-                // failed response and must not cost a prompt or a gate strike.
-                // The outer catch marks the sub-agent FAILED with this text.
-                if ($errorChunk !== null) {
-                    throw ProviderResponseException::fromResponse($errorChunk);
-                }
-
-                // E28: one evaluation, for the ACCEPTED attempt only. A denial
-                // still ends the sub-agent — it just throws after the stream
-                // has settled rather than mid-stream, which the pull-snapshot
-                // readers of SubAgent::$output cannot distinguish beyond one
-                // streamed chunk that had already arrived anyway.
-                if ($streamedToolCalls !== []) {
-                    $this->evaluateToolCalls($streamedToolCalls, $subAgent);
-                }
-            } else {
-                $response = null;
-
-                // See the streaming branch. Nothing is observable until
-                // complete() returns, so this half has nothing to roll back.
-                // N-P4a: `providerRetryAttempts`, read once per sequence.
-                $maxAttempts = TransientFailure::maxAttempts();
-                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-                    $lastAttempt = $attempt === $maxAttempts;
-
-                    try {
-                        $response = $this->provider->complete($request);
-                    } catch (\Throwable $e) {
-                        if ($lastAttempt || !TransientFailure::isTransient($e)) {
-                            throw $e;
-                        }
-                        // ISS-074 review fix: see the streaming twin above.
-                        TransientFailure::announceRateLimit($e);
-                        TransientFailure::backoff($attempt, failure: $e, onBeat: $request->onHeartbeat);
-
-                        continue;
-                    }
-
-                    if ($lastAttempt || !TransientFailure::responseIsTransient($response)) {
-                        break;
-                    }
-
-                    // ISS-074: flattened error response, no throwable to read
-                    // a server instruction from; the beat still applies if a
-                    // caller armed one.
-                    TransientFailure::backoff($attempt, onBeat: $request->onHeartbeat);
-                }
-
-                // Audit 15e AG-4: see the matching throw in the streaming
-                // branch. A final isError response (permanent, or still
-                // failing on the last attempt) fails the sub-agent with the
-                // provider's own text instead of completing it with ''.
-                if ($response->isError) {
-                    throw ProviderResponseException::fromResponse($response);
-                }
-
-                // Evaluate tool calls through the agent's grant and then the
-                // permission gate if set. See the streaming branch for why the
-                // gate-presence precondition is gone.
-                if ($response->toolCalls !== null) {
-                    $this->evaluateToolCalls($response->toolCalls, $subAgent);
-                }
-
-                $subAgent->output = $response->content;
-                $subAgent->tokensUsed += $response->tokensUsed;
-                $subAgent->costUsd += $response->costUsd;
-            }
-
-            $subAgent->status = SubAgent::STATUS_COMPLETE;
-            $subAgent->completedAt = new \DateTimeImmutable();
-        } catch (\Throwable $e) {
-            $subAgent->status = SubAgent::STATUS_FAILED;
-            $subAgent->error = $e->getMessage();
-            // Failure is terminal too: without stamping the end of the span,
-            // elapsedSeconds() would keep counting against wall-clock forever
-            // and render a dead sub-agent as still working.
-            $subAgent->completedAt ??= new \DateTimeImmutable();
-            throw $e;
-        }
-    }
-
-    /**
-     * Evaluate tool calls through the agent's own grant and then through the
-     * sub-agent's permission gate. Either refusal fails the sub-agent
-     * immediately.
-     *
-     * TWO CHECKS, IN THIS ORDER, ANSWERING DIFFERENT QUESTIONS.
-     * {@see refuseCallOutsideGrant()} asks whether the AGENT declared this
-     * capability at all; the gate asks whether the SESSION's policy permits it.
-     * Passing the first is not permission and passing the second is not a
-     * grant. THIS METHOD USED TO RETURN EARLY WHEN NO GATE WAS ATTACHED, which
-     * was right while the gate was the only check here and is wrong now: an
-     * agent's declaration is its own statement about itself and does not become
-     * unenforceable because the caller owns no UI.
-     *
-     * ASK is routed to {@see $permissionApprover}, the seam that makes it a
-     * question instead of a dead end. Before it, every Ask was an immediate
-     * hard failure, which made {@see PermissionMode::Auto}'s whole 3-strike
-     * circuit breaker unreachable for sub-agents: its ESCALATION path — three
-     * consecutive blocks of one category escalating from Deny to Ask so a
-     * human can intervene — behaved exactly like the Deny it was escalating
-     * away from, only with a worse message. (Pre-existing; verified against
-     * the pre-P1.1 baseline, not a regression from that step.)
-     *
-     * Deliberately the same contract {@see \SugarCraft\Code\Runtime::settleAsk()}
-     * uses for the identical problem on the main loop, so an approver written
-     * once works on both: literal `true` grants and NOTHING else does. A
-     * `(bool)` cast would make every {@see \SugarCraft\Code\Permissions\PermissionReply}
-     * — `Reject` included, since every enum case is a truthy object — read as
-     * permission, which is exactly how ForeignAgentPresetRegistry once granted
-     * tool access it should have refused.
-     *
-     * With no approver attached the behaviour is unchanged and fails CLOSED:
-     * a sub-agent whose caller owns no UI must not run a call the gate refused
-     * to decide on its own.
-     *
-     * @param array<ToolCall> $toolCalls
-     * @throws \RuntimeException When a tool call falls outside the agent's own
-     *         grant, is denied by the gate, or an Ask goes unanswered/refused
-     */
-    private function evaluateToolCalls(array $toolCalls, SubAgent $subAgent): void
-    {
-        foreach ($toolCalls as $toolCall) {
-            // FIRST, AND UNCONDITIONALLY. Two different questions are being
-            // asked and the agent's own is the cheaper one to answer: the grant
-            // needs no gate, no approver and no user, so settling it here keeps
-            // a call the agent never asked for from ever reaching a blocking
-            // approval prompt.
-            $this->refuseCallOutsideGrant($toolCall, $subAgent);
-
-            if ($subAgent->permissionGate === null) {
-                continue;
-            }
-
-            // WITH THE ROOT, as the main loop's PermissionGateHook does: a
-            // root-less evaluate() matches a path rule against the spelling
-            // only, so `secret.txt` walked past `Deny Read(/proj/secret.txt)`
-            // here while the same call on the main loop was denied (F-J3).
-            $decision = $subAgent->permissionGate->evaluate($toolCall, $this->projectRoot);
-
-            if ($decision === \SugarCraft\Code\Permissions\PermissionDecision::Deny) {
-                $this->refuseToolCall($toolCall, $subAgent, 'denied by permission gate');
-            }
-
-            if ($decision !== \SugarCraft\Code\Permissions\PermissionDecision::Ask) {
-                continue;
-            }
-
-            if ($this->permissionApprover === null) {
-                $this->refuseToolCall(
-                    $toolCall,
-                    $subAgent,
-                    'requires approval and no approver is attached to this manager',
-                );
-            }
-
-            // A literal `true` or a permitting ApprovalVerdict (1.C-2); the
-            // verdict's feedback, and whether anybody answered at all, reach
-            // the failure the sub-agent reports.
-            $verdict = \SugarCraft\Code\Permissions\ApprovalVerdict::of(($this->permissionApprover)($toolCall, $subAgent));
-            if (!$verdict->permits()) {
-                $this->refuseToolCall(
-                    $toolCall,
-                    $subAgent,
-                    $verdict->denialMessage($verdict->isUnanswered()
-                        ? 'requires approval and nobody answered'
-                        : 'refused at the permission prompt'),
-                );
-            }
-        }
-    }
-
-    /**
-     * Stop a sub-agent on a refused tool call.
-     *
-     * One exit for all three refusal reasons so a sub-agent can never be left
-     * marked RUNNING after its work was refused — the shape the Ask branch got
-     * wrong by carrying its own near-duplicate of this.
-     *
-     * @throws \RuntimeException always
-     */
-    private function refuseToolCall(ToolCall $toolCall, SubAgent $subAgent, string $reason): never
-    {
-        $subAgent->status = SubAgent::STATUS_FAILED;
-        $subAgent->error = sprintf(
-            'Tool call "%s" %s (mode: %s)',
-            $toolCall->name,
-            $reason,
-            $subAgent->permissionGate?->mode()->value ?? 'unknown',
-        );
-
-        throw new \RuntimeException($subAgent->error);
-    }
-
-    /**
      * The preset's tool bundle for the MAIN chat's backend (C-AGT-4.a): the
      * same resolution {@see createSubAgent()} runs for a delegated child,
      * including the C-AGT-3 MCP dispatcher scoping and the bridge filter —
@@ -1465,15 +1068,15 @@ final class AgentManager
      * The tool objects an agent's DECLARATION names, or null when this manager
      * has no registry to resolve them against.
      *
-     * WHY THIS EXISTS. `AgentDefinition::$defaultTools` reached
+     * WHY THIS EXISTS. `AgentDefinition::$defaultTools` reaches
      * {@see Agent::$tools} faithfully — {@see Agent::fromDefinition()} passes it
-     * straight through — and then died here: {@see executeSubAgent()} built its
-     * {@see CompleteRequest} with no `tools` argument, which
-     * {@see CompleteRequest::__construct()} defaults to `null`, and EVERY
-     * provider gates its tool block on `$request->tools !== null`. So a preset
-     * declaring `['Read', 'Grep', 'Bash(git *)']` reached the model with no
-     * tools whatsoever while its system prompt described the ones it had. The
-     * prompt lied to the model and nothing reddened.
+     * straight through — but a declaration is not a roster: every run path
+     * ({@see grantedToolsFor()} for the Task path, {@see resolveBatchGrants()}
+     * for {@see executeAll()}, {@see toolsForPrimary()} for the main chat)
+     * needs the tool objects it names. Without this resolution a preset
+     * declaring `['Read', 'Grep', 'Bash(git *)']` would reach the model with no
+     * tools whatsoever while its system prompt described the ones it had —
+     * EVERY provider gates its tool block on `$request->tools !== null`.
      *
      * WHY IT IS NOT `tools: $agent->tools`. The two sides speak different types.
      * A declaration is a STRING in {@see PermissionRule}'s pattern dialect; a
@@ -1491,7 +1094,7 @@ final class AgentManager
      * predicate it delegates to; `filterToolSet()` itself holds no matcher. The ARGUMENT half of `Bash(git *)` cannot be
      * expressed on the wire at all — a tool schema has no place to say "only
      * git commands" — so it is NOT dropped here: it is enforced per call by
-     * {@see refuseCallOutsideGrant()}, which is where the arguments exist.
+     * {@see grantRefusalFor()}, which is where the arguments exist.
      *
      * FAILS LOUD, NEVER OPEN. A declaration that resolves to nothing throws
      * rather than being skipped. Skipping is the tempting shape and it is this
@@ -1647,7 +1250,7 @@ final class AgentManager
         // stripped the WHOLE `Bash` tool, so a `reviewer` granted `Bash(git *)`
         // could no longer run `git status` — the denial defeated the grant it
         // was meant to narrow. The per-call half in
-        // {@see refuseCallOutsideGrant()} applies the full list, arguments and
+        // {@see grantRefusalFor()} applies the full list, arguments and
         // all, which is where `Bash(git push*)` actually bites.
         $this->namePatterns($agent, $agent->disallowedTools, 'disallowedTools');
 
@@ -1728,13 +1331,14 @@ final class AgentManager
             //
             // LIST-TIME IS ENFORCEMENT HERE, honestly stated: a narrowed-
             // away bridge never reaches the provider request, and no
-            // sub-agent path can execute past its roster — the in-process
-            // loop validates calls and completes without executing any
-            // (this class holds no `execute()` call), and the fork worker
-            // advertises rehydrated doubles whose `execute()` throws
-            // ("tool execution is a parent-side act", E647) and speaks no
-            // tool-call frame. {@see refuseCallOutsideGrant()} stays the
-            // untouched declaration-level second layer.
+            // sub-agent path can execute past its roster — the Task path
+            // runs on exactly the roster {@see grantedToolsFor()} returns,
+            // and the fork worker advertises rehydrated doubles whose
+            // `execute()` throws ("tool execution is a parent-side act",
+            // E647) and speaks no tool-call frame. {@see grantRefusalFor()},
+            // which {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}
+            // asks on every call a Task run makes, stays the
+            // declaration-level second layer.
             if ($tool instanceof McpToolBridge
                 && !McpRouter::serverAllowed($tool->descriptor()->serverName, $agent->mcpServers)) {
                 continue;
@@ -1914,19 +1518,26 @@ final class AgentManager
     }
 
     /**
-     * Refuse a call the agent's own declaration does not cover.
+     * Why $subAgent's own declaration refuses $toolCall, or null when it
+     * admits it — a verdict, not a thrown stop.
      *
      * THE ARGUMENT HALF OF A GRANT IS ENFORCED PER CALL, NEVER ON THE ROSTER.
      * The roster {@see resolveGrantedTools()} builds can only carry tool NAMES —
      * `Bash(git *)` puts the whole `Bash` tool on the wire, because a tool
      * schema has no field that says "git commands only". Handing a reviewer
-     * preset the unconstrained `Bash` it never asked for would be a widening
-     * committed inside the fix for a lie, so the constraint is applied to the
-     * CALL, where the arguments finally exist. The judgement itself is
-     * {@see grantRefusalFor()}, shared by the two paths that run a sub-agent:
-     * this method stops {@see executeSubAgent()}'s run on a refusal, and the
-     * live Task path's {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}
-     * denies the one call and lets the run continue (step 4.2).
+     * preset the unconstrained `Bash` it never asked for would be a widening,
+     * so the constraint is applied to the CALL, where the arguments finally
+     * exist.
+     *
+     * PUBLIC BECAUSE THE TASK PATH NEEDS IT AS A VERDICT, NOT AN ABORT
+     * (step 4.2). {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} narrows the
+     * sub-agent's roster by tool NAME only, so the argument half of a grant —
+     * `Bash(git *)` — and every argument-scoped denial —
+     * `disallowedTools: ['Bash(git push*)']` — are left to this check.
+     * {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} asks it on
+     * every PreToolUse of the delegated run and DENIES the call with the
+     * returned reason, so the model is told why and the run continues — a
+     * refused call is a tool result, not the end of the sub-agent.
      *
      * {@see PermissionRule} with {@see PermissionAction::Allow} is the matcher,
      * not a second one, and its `Allow` arm is the reason this is worth doing:
@@ -1937,8 +1548,8 @@ final class AgentManager
      *
      * NOT THE PERMISSION GATE'S JOB, AND NOT A REPLACEMENT FOR IT. The gate
      * answers "does this SESSION's policy allow this call"; this answers "did
-     * this AGENT ask for this capability". A sub-agent is subject to both, in
-     * that order, and this one runs even when no gate is attached — a
+     * this AGENT ask for this capability". A sub-agent is subject to both, this
+     * one first, and this one applies even when no gate is attached — a
      * declaration is the agent's own statement about itself and does not become
      * unenforceable because the caller owns no UI.
      *
@@ -1950,36 +1561,6 @@ final class AgentManager
      * opposite kind of statement and IS enforced on its own: a preset that
      * names a tool it refuses has said something, whether or not it also
      * enumerated what it wants.
-     *
-     * @throws \RuntimeException When the call is refused by the agent's
-     *         denylist, falls outside its grant, or either list cannot be
-     *         parsed.
-     */
-    private function refuseCallOutsideGrant(ToolCall $toolCall, SubAgent $subAgent): void
-    {
-        $why = $this->grantRefusalFor($toolCall, $subAgent);
-        if ($why !== null) {
-            $this->refuseToolCall($toolCall, $subAgent, $why);
-        }
-    }
-
-    /**
-     * Why $subAgent's own declaration refuses $toolCall, or null when it
-     * admits it — the judgement {@see refuseCallOutsideGrant()} acts on, as a
-     * value rather than a thrown stop.
-     *
-     * PUBLIC BECAUSE THE LIVE TASK PATH NEEDS IT AS A VERDICT, NOT AN ABORT
-     * (step 4.2). The engine path
-     * ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}) narrows the
-     * sub-agent's roster by tool NAME only, so before this the argument half of
-     * a grant — `Bash(git *)` — and every argument-scoped denial —
-     * `disallowedTools: ['Bash(git push*)']` — were enforced only by
-     * {@see executeSubAgent()}, which nothing in `src/` calls: a `reviewer`
-     * delegated through Task ran ANY Bash command the session gate allowed.
-     * {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} now asks this
-     * on every PreToolUse of the delegated run and DENIES the call with the
-     * returned reason, so the model is told why and the run continues — a
-     * refused call is a tool result, not the end of the sub-agent.
      *
      * $root overrides the manager's own {@see $projectRoot} for the path
      * halves: the hook hands in the root the delegated run's tools actually
@@ -2025,7 +1606,8 @@ final class AgentManager
         // where a grant must require EVERY segment to.
         //
         // Both lists are matched WITH the root, for the session gate's reason
-        // ({@see evaluateToolCalls()}): `disallowedTools: ['Read(/proj/.env)']`
+        // ({@see \SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook} hands
+        // its gate the root too): `disallowedTools: ['Read(/proj/.env)']`
         // must stop `.env` and a symlink to it, and `tools: ['Write(src/*)']`
         // must not grant `src/link` when the link leaves `src/`. The same
         // union/intersection split covers paths: a denial fires on ANY
@@ -2072,7 +1654,7 @@ final class AgentManager
 
         if ($declarations === []) {
             // A denylist WITHOUT a grant narrows nothing else: silence about
-            // `tools` is still silence. See refuseCallOutsideGrant()'s doc-block.
+            // `tools` is still silence. See this method's doc-block.
             return null;
         }
 
@@ -2109,7 +1691,7 @@ final class AgentManager
      * One of an agent's pattern lists, validated, reduced to its tool-NAME
      * halves.
      *
-     * One place {@see resolveGrantedTools()} and {@see refuseCallOutsideGrant()}
+     * One place {@see resolveGrantedTools()} and {@see grantRefusalFor()}
      * both go through for BOTH lists, so a pattern cannot be well-formed enough
      * to grant a tool and malformed at the moment a call arrives. Keys are
      * preserved so a caller can report WHICH entry failed against the original
@@ -2126,10 +1708,9 @@ final class AgentManager
      * That matters because a malformed rule does not fail closed, it fails
      * INERT: `new PermissionRule('Bash(rm -rf *', Deny)` constructs, yields a
      * null argument pattern and a tool-NAME pattern of `Bash(rm -rf *`, and
-     * matches nothing that exists. So on the registry-less path — which is
-     * every production caller today — the two calls in
-     * {@see refuseCallOutsideGrant()} are the ONLY validation a denylist ever
-     * gets. They are pinned there by
+     * matches nothing that exists. So on the registry-less path the two
+     * calls in {@see grantRefusalFor()} are the ONLY validation a denylist
+     * ever gets. They are pinned there by
      * AgentManagerTest::testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant
      * and its `tools` sibling, one per call, after deleting either one was
      * measured green across the whole suite.
@@ -2320,8 +1901,8 @@ final class AgentManager
             $subAgent = $this->subAgents[$result->agentId] ?? null;
             if ($subAgent !== null) {
                 // The pool executes out-of-process, so the SubAgent object held
-                // here never sees the streaming loop that executeSubAgent() uses
-                // to accumulate usage. Mirroring AgentResult's numbers back is
+                // here sees none of the run's streamed usage as it accrues.
+                // Mirroring AgentResult's numbers back is
                 // what keeps the telemetry accessors truthful on this path --
                 // which is the only path Chat/WorkflowEngine actually take.
                 $subAgent->startedAt ??= $result->startedAt;
@@ -2388,13 +1969,14 @@ final class AgentManager
      * path. Two members with different roles ran with whichever prompt the
      * request-carrier wrote, the same sibling-governance defect the
      * tool-grant resolver above exists to end, one field over. The splice
-     * mirrors executeSubAgent()'s — the declared prompt plus every granted
-     * skill — with the raw prompt rather than the composed systemPrompt(),
+     * is the one {@see systemPromptFor()} hands the Task path — the declared
+     * prompt plus every granted skill — with the raw prompt rather than the composed systemPrompt(),
      * because env is the session's voice and the shared prompt keeps it;
      * see the DECLARED comment inside.
      *
-     * THE MERGE IS ADDITIVE, BY DECISION. executeSubAgent() has no shared
-     * prompt to honour — it owns the request end to end — but executeAll's
+     * THE MERGE IS ADDITIVE, BY DECISION. The Task path
+     * ({@see systemPromptFor()}) passes no shared prompt — its engine owns
+     * the rest of the run's request — but executeAll's
      * callers (Chat's batch turn, a workflow stage) carry session context in
      * that field that nothing else re-supplies. Dropping it would trade one
      * wrong prompt for a whole class of contextless runs. So a declaring

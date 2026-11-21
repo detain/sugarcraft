@@ -14,6 +14,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Permissions\PermissionAction;
+use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
@@ -195,10 +196,13 @@ final class AgentManagerProjectRootTest extends TestCase
 
     /**
      * Production wiring: {@see Bootstrap::agentManager()} hands the manager the
-     * session root, so the built-in `coder`'s gate — built from the same
+     * session root. The built-in `coder`'s gate — built from the same
      * `permissionRules` the main loop reads — denies `secret.txt` under an
-     * absolute rule. Driven through the manager's own evaluation seam, since
-     * the launch's provider returns no tool calls.
+     * absolute rule when judged at that root, and the manager's own grant
+     * check ({@see AgentManager::grantRefusalFor()}) falls back to it when its
+     * caller hands in none, so an agent's absolute denylist entry stops the
+     * relative spelling. Driven through those seams directly, since the
+     * launch's provider returns no tool calls.
      */
     public function testBootstrapHandsTheManagerTheSessionRoot(): void
     {
@@ -218,18 +222,21 @@ final class AgentManagerProjectRootTest extends TestCase
 
         try {
             $manager = Bootstrap::agentManager($this->root);
-            $subAgent = $manager->createSubAgent('coder', 'read it', PermissionMode::BypassPermissions);
+            $read = new ToolCall('Read', ['file_path' => 'secret.txt']);
 
-            $evaluate = new \ReflectionMethod(AgentManager::class, 'evaluateToolCalls');
-            $caught = null;
-            try {
-                $evaluate->invoke($manager, [new ToolCall('Read', ['file_path' => 'secret.txt'])], $subAgent);
-            } catch (\RuntimeException $e) {
-                $caught = $e;
-            }
+            $coder = $manager->createSubAgent('coder', 'read it', PermissionMode::BypassPermissions);
+            $this->assertNotNull($coder->permissionGate);
+            $this->assertSame(
+                PermissionDecision::Deny,
+                $coder->permissionGate->evaluate($read, $this->root),
+                'the launch-built sub-agent gate must judge `secret.txt` as the file under --root',
+            );
 
-            $this->assertNotNull($caught, 'the launch-built sub-agent gate must judge `secret.txt` as the file under --root');
-            $this->assertStringContainsString('denied by permission gate', $caught->getMessage());
+            $manager->register($this->agent(disallowedTools: ['Read(' . $this->root . '/secret.txt)']));
+            $rooted = $manager->createSubAgent('rooted', 'read it', PermissionMode::BypassPermissions);
+            $refusal = $manager->grantRefusalFor($read, $rooted);
+            $this->assertNotNull($refusal, 'the manager judges the agent\'s own denylist at the session root it was handed');
+            $this->assertStringContainsString('is refused by the denylist', $refusal);
         } finally {
             $this->restoreBackendSelectionEnv();
             $originalHome === false ? putenv('HOME') : putenv('HOME=' . $originalHome);

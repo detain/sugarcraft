@@ -2638,19 +2638,13 @@ final class Bootstrap
      *        second disk scan; the sub-agents this manager runs resolve their
      *        `skills:` names against it, so sharing the instance also means a
      *        skill disabled in the user config is disabled for sub-agents too.
-     * @param \Closure(\SugarCraft\Code\ToolCall, \SugarCraft\Code\Agents\SubAgent): bool|null $approver
-     *        Settles a sub-agent's {@see \SugarCraft\Code\Permissions\PermissionDecision::Ask}.
-     *        Null leaves it failing closed — see
-     *        {@see AgentManager::evaluateToolCalls()}. Nothing supplies one
-     *        yet: the caller that should is {@see Chat}, which owns the
-     *        blocking prompt UI, and that wiring is its own change.
      *
      * @throws PermissionConfigException when the permission config is present
      *         and unusable — raised HERE, on the launch path, rather than from
      *         inside the gate factory at {@see AgentManager::createSubAgent()}
      *         time. See the eager read in the body.
      */
-    public static function agentManager(?string $root = null, ?SkillRegistry $skills = null, ?\Closure $approver = null): AgentManager
+    public static function agentManager(?string $root = null, ?SkillRegistry $skills = null): AgentManager
     {
         $root = self::requireRoot($root);
         [$provider, $model] = self::provider();
@@ -2726,7 +2720,6 @@ final class Bootstrap
                 // sub-agent's `/permissions` must not claim otherwise.
                 Lang::t('cli.launch_source.preset_mode'),
             ),
-            permissionApprover: $approver,
             toolRegistry: self::toolSetUnder($toolUniverse, self::readUserConfig()),
             toolUniverse: $toolUniverse,
             // The root the tools above resolve against, so a sub-agent's path
