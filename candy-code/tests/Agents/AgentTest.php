@@ -16,7 +16,10 @@ use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\ProcessExecutor;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Context\EnvironmentBlock;
+use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\EmbeddingsRequest;
@@ -24,6 +27,7 @@ use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\FlattensSourceProseTrait;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Workflows\Tasks;
 use SugarCraft\Code\Workflows\WorkflowBuilder;
 use SugarCraft\Code\Workflows\WorkflowEngine;
@@ -2119,17 +2123,26 @@ final class AgentTest extends TestCase
      *
      * This is the measurement P3.S6 turns on. The `Runtime` assembler re-renders
      * once per step of the agentic loop, which is what gave P3.S5's write signal
-     * something to suppress; the agent assembler has no agentic loop at all -
-     * `AgentManager::executeSubAgent()` builds one `CompleteRequest` and hands
-     * it to one completion, and the transient-failure retry around that
-     * completion re-sends the SAME request object rather than rebuilding it. So
-     * there is no second render inside a dispatch for a write signal to
-     * suppress, and no "step after a write" for it to be suppressed on.
+     * something to suppress. The old direct-call sub-agent entry point this
+     * drove before had no loop and rendered the AGENT assembler
+     * (`Agent::systemPrompt()`, environment block included) into its one
+     * request. A Task delegation - the live path, driven here since CC1C-c2b -
+     * does not render the agent assembler at all: it speaks the agent's own
+     * prompt (`AgentManager::systemPromptFor()`, no environment block) as the
+     * delegated transcript's system turn, and the environment block the run
+     * reads is the `Runtime` assembler's, in the request's `systemPrompt`,
+     * rooted where the engine is rooted (its git section rides the step's
+     * `<turn-context>` row). Both halves are pinned below: the system turn
+     * carries no `<env>`, and the whole request carries exactly one, with one
+     * staged-diff section.
      *
-     * PINNED AS A DECISION, NOT AS AN ACCIDENT. If a later change gives the
-     * agent path a real step loop, the provider is called more than once and
-     * this reds - which is the moment the P3.S6 disposition has to be revisited
-     * rather than a moment nobody notices.
+     * PINNED AS A DECISION, NOT AS AN ACCIDENT. A reply with no tool calls is
+     * one step, so the provider is asked for exactly one completion and the
+     * `Runtime` assembler renders once. If a later change makes a no-tool reply
+     * cost more than one step, or puts a second environment block in front of
+     * the run (the agent assembler's beside the engine's), this reds - which
+     * is the moment the P3.S6 disposition has to be revisited rather than a
+     * moment nobody notices.
      *
      * BOTH POLARITIES ARE IN HERE: the chunk count is varied from one to twenty
      * and the answer must not move. A test run at a single chunk count cannot
@@ -2141,8 +2154,10 @@ final class AgentTest extends TestCase
 
         foreach ([1, 20] as $chunks) {
             $provider = new class ($chunks) implements ProviderInterface {
-                /** @var list<?string> */
-                public array $systemPrompts = [];
+                /** @var list<string> everything one request put in front of the model, per call */
+                public array $requestTexts = [];
+                /** @var list<string> the delegated transcript's system turns */
+                public array $agentTurns = [];
                 public int $streamCalls = 0;
 
                 public function __construct(private int $chunks) {}
@@ -2189,7 +2204,7 @@ final class AgentTest extends TestCase
 
                 public function complete(CompleteRequest $request): CompleteResponse
                 {
-                    $this->systemPrompts[] = $request->systemPrompt;
+                    $this->recordSystemTurns($request);
 
                     return new CompleteResponse(content: 'done');
                 }
@@ -2197,7 +2212,7 @@ final class AgentTest extends TestCase
                 public function completeStream(CompleteRequest $request): \Generator
                 {
                     $this->streamCalls++;
-                    $this->systemPrompts[] = $request->systemPrompt;
+                    $this->recordSystemTurns($request);
 
                     for ($i = 0; $i < $this->chunks; $i++) {
                         yield new CompleteResponse(content: "chunk{$i} ");
@@ -2208,15 +2223,40 @@ final class AgentTest extends TestCase
                 {
                     throw new \LogicException('the P3.S6 counting provider is never asked for embeddings');
                 }
+
+                /** The request's system turns (where the agent prompt rides), and all of its text. */
+                private function recordSystemTurns(CompleteRequest $request): void
+                {
+                    foreach ($request->messages as $message) {
+                        if ($message instanceof Message && $message->role() === 'system') {
+                            $this->agentTurns[] = $message->content();
+                        }
+                    }
+                    $this->requestTexts[] = implode("\n", [
+                        (string) $request->systemPrompt,
+                        ...array_map(
+                            static fn (mixed $message): string => $message instanceof Message ? $message->content() : '',
+                            $request->messages,
+                        ),
+                    ]);
+                }
             };
 
             $manager = new AgentManager($provider, new SkillRegistry());
             $manager->register(self::probeAgent(EnvironmentBlock::capture($repo, 'stub-model')));
 
-            $subAgent = $manager->createSubAgent('p3s6-probe', 'do the thing');
-            foreach ($manager->executeSubAgent($subAgent->id) as $_) {
-                // drain the generator; the assertions are on what the provider saw
+            $storeDir = sys_get_temp_dir() . '/sc_p3s6_task_' . bin2hex(random_bytes(6));
+            try {
+                $result = (new TaskTool($manager, suspended: new SuspendedDelegations($storeDir)))
+                    ->withEngine(EngineBackend::new($provider, 'stub-model')->withRoot($repo))
+                    ->execute(['description' => 'P3.S6 probe', 'prompt' => 'do the thing', 'agent' => 'p3s6-probe', 'id' => 'task-call']);
+            } finally {
+                foreach (glob($storeDir . '/*') ?: [] as $file) {
+                    @unlink($file);
+                }
+                @rmdir($storeDir);
             }
+            $this->assertFalse($result->isError(), $result->content());
 
             $this->assertSame(
                 1,
@@ -2226,17 +2266,25 @@ final class AgentTest extends TestCase
             );
             $this->assertCount(
                 1,
-                $provider->systemPrompts,
-                "one dispatch handed the provider more than one system prompt at {$chunks} chunks",
+                $provider->agentTurns,
+                "one dispatch handed the provider more than one agent system turn at {$chunks} chunks",
             );
-
-            $handed = $provider->systemPrompts[0];
-            $this->assertIsString($handed);
             $this->assertStringStartsWith(
                 'P3S6 PROBE PROMPT',
-                $handed,
-                'the prompt the provider received is not the one Agent::systemPrompt() assembled',
+                $provider->agentTurns[0],
+                'the system turn the provider received is not the agent\'s own prompt',
             );
+            $this->assertSame(
+                0,
+                substr_count($provider->agentTurns[0], '<env>'),
+                'the delegation rendered the agent assembler\'s environment block beside the engine\'s',
+            );
+
+            // The run's environment block is the Runtime assembler's: its
+            // static half in the request's system prompt, its git section
+            // (the diffs) in the `<turn-context>` row the step sends.
+            $this->assertCount(1, $provider->requestTexts);
+            $handed = $provider->requestTexts[0];
             $this->assertSame(
                 1,
                 substr_count($handed, '<env>'),
@@ -2414,16 +2462,15 @@ final class AgentTest extends TestCase
      *
      * WHY A SECOND TEST AND NOT AN EDIT TO THE FIRST.
      * {@see testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()}
-     * drives `AgentManager::executeSubAgent()`, which
-     * `/usr/bin/grep -rn -- '->executeSubAgent(' src/ bin/` finds no caller for
-     * anywhere in `src/` or `bin/`. That test pins a real property of a dormant
-     * path and it stays. What it cannot see is the per-RUN question, because
+     * drives one Task delegation, which renders its agent prompt once per
+     * delegation. That test pins a real property of the live delegation path
+     * and it stays. What it cannot see is the per-RUN question, because
      * the shape that asks it is a loop in a different file:
      * `WorkflowEngine::executePipelineStage()`'s `foreach ($nestedStages as $nestedStage)`
      * encloses a render, `executeVerificationStage()` renders twice
      * straight-line, and `WorkflowEngine::runFromWorkflow()`'s outer stage loop
-     * reaches the sequential, pipeline, verification-pair and parallel renders once per stage - and unlike the
-     * dormant pair, that engine is LIVE from `bin/candy-code` via
+     * reaches the sequential, pipeline, verification-pair and parallel renders once per stage - and that
+     * engine is LIVE from `bin/candy-code` via
      * `Bootstrap::workflowEngine()`, wired as the `workflowEngine:` argument of
      * `Bootstrap::chat()`'s `new Chat(`.
      *
