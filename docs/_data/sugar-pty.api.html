@@ -41,8 +41,8 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public readonly MasterPty $master, public readonly string $buffer = &#039;&#039;, public readonly ?string $lastMatch = null, public readonly ?string $before = null, public readonly int $readChunk = self::DEFAULT_READ_CHUNK, public readonly ?Recorder $recorder = null, public readonly ?int $maxBuffer = self::DEFAULT_MAX_BUFFER, public readonly ?int $searchWindow = null)</code></td><td></td></tr>
-<tr><td><code>static on(MasterPty $master, int $readChunk = self::DEFAULT_READ_CHUNK, ?Recorder $recorder = null): self</code></td><td>Open a fresh expect session on the given master. Equivalent to pexpect&#039;s <code>pexpect.spawn(...)</code> after the child has been forked — this lib expects the caller to handle the spawn separately so the master can be reused across multiple Expect chains.</td></tr>
+<tr><td><code>__construct(public readonly MasterPty $master, public readonly string $buffer = &#039;&#039;, public readonly ?string $lastMatch = null, public readonly ?string $before = null, public readonly int $readChunk = self::DEFAULT_READ_CHUNK, public readonly ?Recorder $recorder = null, public readonly ?int $maxBuffer = self::DEFAULT_MAX_BUFFER, public readonly ?int $searchWindow = null, public readonly ?LoopInterface $loop = null)</code></td><td></td></tr>
+<tr><td><code>static on(MasterPty $master, int $readChunk = self::DEFAULT_READ_CHUNK, ?Recorder $recorder = null, ?LoopInterface $loop = null): self</code></td><td>Open a fresh expect session on the given master. Equivalent to pexpect&#039;s <code>pexpect.spawn(...)</code> after the child has been forked — this lib expects the caller to handle the spawn separately so the master can be reused across multiple Expect chains.</td></tr>
 <tr><td><code>send(string $bytes): self</code></td><td>Write raw bytes to the master without any newline conversion. Returns a new Expect carrying the same buffered state.</td></tr>
 <tr><td><code>sendLine(string $line, string $eol = &quot;\n&quot;): self</code></td><td>Convenience wrapper: append <code>$eol</code> to <code>$line</code> before sending. Mirrors pexpect&#039;s <code>sendline()</code> — default eol is <code>\n</code>, override for telnet-style <code>\r\n</code> or pure-CR terminals.</td></tr>
 <tr><td><code>withRecorder(?Recorder $recorder): self</code></td><td>Attach (or detach) a Recorder to tee sent bytes and received output into a cassette. Pass null to detach.</td></tr>
@@ -51,6 +51,7 @@
 <tr><td><code>expect(string $needle, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Block until <code>$needle</code> appears in the master&#039;s output, or the timeout elapses. Returns a new Expect whose <code>$lastMatch</code> is the needle and whose <code>$before</code> is everything that appeared between the previous match and this one.</td></tr>
 <tr><td><code>expectAny(array $needles, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Like expect() but races several needles in parallel. Returns the new Expect for whichever needle matched first (earliest byte offset in the buffer); ties broken by first in the array.</td></tr>
 <tr><td><code>expectPattern(string $regex, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Like expect() but the needle is a PCRE pattern. Returns a new Expect whose <code>$lastMatch</code> is the actual matched substring (not the regex source).</td></tr>
+<tr><td><code>expectAsync(string|array $needle, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC, bool $isPattern = false, ?Child $child = null): PromiseInterface</code></td><td>The non-blocking form of expectAny() and expectPattern(): it reads on the Expect&#039;s event loop and returns a promise instead of blocking until a match.</td></tr>
 <tr><td><code>expectEof(float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Wait for the master to signal EOF on the PTY. EOF is SUCCESS here: the returned Expect carries the pre-EOF output in <code>$before</code> and a null <code>$lastMatch</code>.</td></tr>
 <tr><td><code>collectWindow(float $windowSeconds, float $deadline, int $maxBytes, int $retained = 0, int $dropped = 0, ?string $regex = null, ?Child $child = null, ?\Closure $heartbeat = null, ?\Closure $onChunk = null): ExpectWindow</code></td><td>One bounded read window that never throws on a timeout, an EOF or a child exit: the outcome is the return value, so a scripted session keeps one result row per planned step whatever the child does.</td></tr>
 </tbody>
@@ -309,13 +310,14 @@
 </table>
 <h3>SugarCraft\Pty\Exception</h3>
 <h4 id="api-sugarcraft-pty-exception-expecteofexception"><code>ExpectEofException</code> <small>final class</small></h4>
-<p>Raised when \SugarCraft\Pty\Expect::expect() (or a sibling matcher) is waiting on the master and the child closes its end / the kernel returns EOF before any needle matches.</p>
+<p>Raised when \SugarCraft\Pty\Expect::expect() (or a sibling matcher) is waiting on the master and the child closes its end / the kernel returns EOF before any needle matches, or, for \SugarCraft\Pty\Expect::expectAsync(), when the child it was given exits first.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(string $message, public readonly array $needles, public readonly string $buffer)</code></td><td></td></tr>
 <tr><td><code>static forNeedles(array $needles, string $buffer): self</code></td><td></td></tr>
 <tr><td><code>static forPattern(string $regex, string $buffer): self</code></td><td></td></tr>
+<tr><td><code>static forChildExit(array $needles, int $exitCode, string $buffer, bool $pattern = false): self</code></td><td>The child exited, and the drain of what it wrote last brought no match.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-exception-expecttimeoutexception"><code>ExpectTimeoutException</code> <small>final class</small></h4>

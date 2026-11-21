@@ -288,6 +288,24 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 (0.1 s no-progress window — every accepted byte restarts it) raises
 `RuntimeException` instead of spinning.
 
+`expectAsync(string|array $needle, float $timeoutSec = 5.0, bool $isPattern = false, ?Child $child = null)`
+is the non-blocking form. Bind a loop with `Expect::on($master, loop: $loop)`
+and it returns a `React\Promise\PromiseInterface` that resolves with the
+matched text (the needle, or the substring a pattern matched). It rejects with
+`ExpectTimeoutException` on timeout, and with `ExpectEofException` on master
+EOF or when `$child` exits without a match (after a 0.1 s drain of its last
+output). Bytes arrive through `$loop->addReadStream()` on the master's
+stream, the timeout is a one-shot timer, and the exit comes from the child's
+`onExit()`; no periodic timer is armed. An Expect without a loop throws
+`InvalidArgumentException`, and a master with no stream (ConPTY) throws
+`RuntimeException`, both synchronously.
+
+```php
+Expect::on($master, loop: $loop)
+    ->expectAsync('login: ', 5.0, child: $child)
+    ->then(fn (string $prompt) => $master->write("alice\n"));
+```
+
 `collectWindow(float $windowSeconds, float $deadline, int $maxBytes, int $retained = 0, int $dropped = 0, ?string $regex = null, ?Child $child = null, ?Closure $heartbeat = null, ?Closure $onChunk = null)`
 is the non-throwing alternative for scripted steps that must always yield a
 result row. It returns an `ExpectWindow` (`output`, `matched`, `childExited`,
