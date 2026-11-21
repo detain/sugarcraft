@@ -66,11 +66,13 @@ use PHPUnit\Framework\TestCase;
  *      helper calls (`$this->h()`, `self::h()`, `static::h()`, transitively,
  *      depth-bounded with a visited set), the walk `census_indirect_assert.php`
  *      measured at round 59. E613 measured ZERO offenders then; the tree at
- *      this commit holds TEN — all `catch (\RuntimeException)` in
+ *      61cde19c5 held TEN — all `catch (\RuntimeException)` in
  *      Agents/AgentManagerTest.php, code written after that measurement, each
  *      one this census's own record-for-later fix shape whose SUBJECT is a
- *      helper that asserts internally. That population is pinned as a
- *      SHRINK-ONLY ROSTER by {@see self::indirectSwallowRoster()}, asserted
+ *      helper that asserts internally. CC1C-c2a repaired all ten (the helper
+ *      now returns the refusal and the caller asserts), so the population is
+ *      ZERO again. It stays pinned as a SHRINK-ONLY ROSTER by
+ *      {@see self::indirectSwallowRoster()}, now empty, asserted
  *      inside {@see self::testNoTestSwallowsTheFailureStandingNextToIt()} — a
  *      new indirect swallow reddens the census immediately, and a roster row
  *      may only be deleted, never added to, because an exemption row for
@@ -524,9 +526,9 @@ final class SwallowingCatchCensusTest extends TestCase
      * shape this census has always refused. An INDIRECT one (the assertion
      * reached through a same-file helper, E572.1) is a queued repair list
      * pinned by {@see self::indirectSwallowRoster()}: the ten AgentManagerTest
-     * sites post-date E613's zero measurement, and the detector is worth
-     * shipping on the day it first bites — a new indirect swallow reddens here
-     * immediately, and the only legitimate edits to the roster are deletions.
+     * sites post-dated E613's zero measurement and were repaired in CC1C-c2a,
+     * so the list is empty — a new indirect swallow reddens here immediately,
+     * and the only legitimate edits to the roster are deletions.
      *
      * The third list is not a catch at all: the handler pairing census
      * (E572.2) pins every unrestored `set_error_handler` install, of which the
@@ -711,14 +713,16 @@ final class SwallowingCatchCensusTest extends TestCase
     }
 
     /**
-     * The queued indirect swallows (E572.1), as measured at 61cde19c5.
+     * The queued indirect swallows (E572.1): NONE.
      *
-     * TEN sites, all `catch (\RuntimeException)` in Agents/AgentManagerTest.php
-     * — record-for-later shapes whose SUBJECT is `captureSubAgentRequest()`, a
-     * helper that asserts internally (`assertInstanceOf(CompleteRequest::class,
-     * $captured, 'the provider was never called')`). They post-date E613's
-     * zero measurement; the census caught them the first run after the
-     * indirect arm shipped, which is what a detector is for.
+     * Measured at 61cde19c5 there were TEN, all `catch (\RuntimeException)` in
+     * Agents/AgentManagerTest.php — record-for-later shapes whose SUBJECT was
+     * `captureSubAgentRequest()`, a helper that asserts internally. They
+     * post-dated E613's zero measurement; the census caught them the first run
+     * after the indirect arm shipped, which is what a detector is for.
+     * CC1C-c2a repaired every one: the refusals now come back from
+     * `subAgentGrantRefusal()` as a string the caller asserts on, with no
+     * catch at all.
      *
      * SHRINK-ONLY. A row leaves when the owning lane repairs the site (the
      * helper returns its evidence and the caller asserts, or the catch names
@@ -730,21 +734,7 @@ final class SwallowingCatchCensusTest extends TestCase
      */
     private static function indirectSwallowRoster(): array
     {
-        $roster = [
-            'Agents/AgentManagerTest.php::testAMalformedDeclarationIsRefused catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAMalformedDenylistEntryIsRefusedAndNamesTheField catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testANonStringDeclarationIsRefused catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testANonToolRegistryEntryIsRefused catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testANonToolUniverseEntryIsRefused catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAnEmptyRegistryRefusesEveryDeclaration catch(\\RuntimeException)',
-            'Agents/AgentManagerTest.php::testAnUnresolvableGrantIsRefusedRatherThanDropped catch(\\RuntimeException)',
-        ];
-        sort($roster);
-
-        return $roster;
+        return [];
     }
 
     /**

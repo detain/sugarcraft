@@ -12,22 +12,35 @@ use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Agents\Team;
 use SugarCraft\Code\Agents\TeamConfig;
 use SugarCraft\Code\Agents\TeamManager;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook;
+use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTool;
+use SugarCraft\Code\Messages\Message as TypedMessage;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Providers\EmbeddingsRequest;
+use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\McpToolBridge;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolCall as WireToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 
 /**
  * Tests for AgentManager - manages agents and sub-agents.
@@ -47,6 +60,10 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * {@see testATeamBuiltThroughTheManagerPersistsIntoTheSandboxHome()} proves the
  * Team's files land in the sandbox HOME, which a redirect that stopped reaching
  * the writer would fail - without reading the real home at all.
+ *
+ * Every test that RUNS a sub-agent drives it through {@see TaskTool}'s engine
+ * path (CC1C-c2a), the one every production registration binds; the
+ * manager's own sequential runner is retired.
  */
 final class AgentManagerTest extends TestCase
 {
@@ -58,6 +75,9 @@ final class AgentManagerTest extends TestCase
 
     /** The throwaway root holding this test's sandbox HOME and registry dirs. */
     private string $sandboxDir;
+
+    /** @var array<string, Tool> one {@see recordingTool()} per name, for the whole test */
+    private array $recordingTools = [];
 
     protected function setUp(): void
     {
@@ -301,21 +321,6 @@ final class AgentManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // executeSubAgent()
-    // -------------------------------------------------------------------------
-
-    public function testExecuteSubAgentNotFoundThrowsException(): void
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('SubAgent not found: nonexistent-id');
-
-        // Consume the generator to trigger the exception
-        foreach ($this->agentManager->executeSubAgent('nonexistent-id') as $_) {
-            // No-op
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // Live telemetry: subAgentsOf() / elapsedSeconds() / tokensUsed() / costUsd()
     // §5 E6 -- the render site previously hardcoded 0, 0, 0.0
     // because no per-agent telemetry accessor existed at all.
@@ -396,44 +401,47 @@ final class AgentManagerTest extends TestCase
         $this->assertEqualsWithDelta(0.30, $this->agentManager->costUsd('sum-agent'), 0.0001);
     }
 
-    public function testExecuteSubAgentStampsStartedAtAndAccumulatesStreamingUsage(): void
+    public function testATaskRunStampsStartedAtAndAccumulatesStreamingUsage(): void
     {
         $this->agentManager->register($this->createAgent(name: 'telemetry-agent'));
-        $subAgent = $this->agentManager->createSubAgent('telemetry-agent', 'Stream usage');
+        // The row is minted by the run itself, so there is nothing stamped
+        // before it starts.
+        $this->assertSame([], $this->agentManager->runs());
 
-        $this->assertNull($subAgent->startedAt);
-
-        $this->provider->method('supportsStreaming')->willReturn(true);
-        $this->provider->method('completeStream')->willReturn((function (): \Generator {
-            yield new CompleteResponse(content: 'a', tokensUsed: 10, costUsd: 0.01);
-            yield new CompleteResponse(content: 'b', tokensUsed: 5, costUsd: 0.02);
-        })());
-
+        $manager = $this->agentManager;
         $seenMidFlight = [];
-        foreach ($this->agentManager->executeSubAgent($subAgent->id) as $result) {
-            $seenMidFlight[] = $result->tokensUsed;
-        }
+        $startedBeforeTheProvider = null;
+        $provider = $this->streamingProviderFrom(static function () use ($manager, &$seenMidFlight, &$startedBeforeTheProvider): \Generator {
+            $startedBeforeTheProvider = $manager->runs()[0]->startedAt;
+            yield new CompleteResponse(content: 'a', tokensUsed: 10, costUsd: 0.01);
+            $seenMidFlight[] = $manager->runs()[0]->tokensUsed;
+            yield new CompleteResponse(content: 'b', tokensUsed: 5, costUsd: 0.02);
+            $seenMidFlight[] = $manager->runs()[0]->tokensUsed;
+        });
 
+        [$result, $subAgent] = $this->delegateOnTask($manager, 'telemetry-agent', $provider);
+
+        $this->assertFalse($result->isError(), $result->content());
         // Would be [0, 0] / 0 / 0.0 against the pre-E6 code, which never
         // touched usage at all.
         $this->assertSame([10, 15], $seenMidFlight);
+        $this->assertInstanceOf(\DateTimeImmutable::class, $startedBeforeTheProvider, 'startedAt is stamped as the run starts, before the provider answers');
         $this->assertInstanceOf(\DateTimeImmutable::class, $subAgent->startedAt);
         $this->assertSame(15, $this->agentManager->tokensUsed('telemetry-agent'));
         $this->assertEqualsWithDelta(0.03, $this->agentManager->costUsd('telemetry-agent'), 0.0001);
     }
 
-    public function testExecuteSubAgentRecordsUsageOnTheNonStreamingPath(): void
+    public function testATaskRunRecordsUsageOnTheNonStreamingPath(): void
     {
         $this->agentManager->register($this->createAgent(name: 'blocking-agent'));
-        $subAgent = $this->agentManager->createSubAgent('blocking-agent', 'One shot');
 
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')->willReturn(
-            new CompleteResponse(content: 'done', tokensUsed: 42, costUsd: 0.5),
+        [$result, $subAgent] = $this->delegateOnTask(
+            $this->agentManager,
+            'blocking-agent',
+            new ScriptedProvider([new CompleteResponse(content: 'done', tokensUsed: 42, costUsd: 0.5)]),
         );
 
-        iterator_to_array($this->agentManager->executeSubAgent($subAgent->id));
-
+        $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(42, $subAgent->tokensUsed);
         $this->assertSame(42, $this->agentManager->tokensUsed('blocking-agent'));
         $this->assertEqualsWithDelta(0.5, $this->agentManager->costUsd('blocking-agent'), 0.0001);
@@ -443,7 +451,7 @@ final class AgentManagerTest extends TestCase
     public function testExecuteAllMirrorsPoolTelemetryOntoTheRegisteredSubAgents(): void
     {
         // executeAll() via AgentWorkerPool is the path Chat/WorkflowEngine take,
-        // so telemetry has to survive it -- not just executeSubAgent().
+        // so telemetry has to survive it -- not just the Task tool's own run.
         $executor = new class implements ExecutorInterface {
             public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
             {
@@ -496,21 +504,14 @@ final class AgentManagerTest extends TestCase
      * attempt — so exactly one prompt, on a stream that still really
      * retried (both half-assertions below; either one alone is satisfiable
      * by a provider that never retried at all).
+     *
+     * On the Task path the same law holds in Runtime: a sequence's tool calls
+     * are collected per attempt and dispatched after the accepted one only.
      */
     public function testAMidStreamRetryApprovesEachToolCallExactlyOnce(): void
     {
         $prompts = 0;
-        $manager = new AgentManager(
-            provider: $this->provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: static fn(\SugarCraft\Code\Permissions\PermissionMode $mode)
-                => new \SugarCraft\Code\Permissions\PermissionGate($mode),
-            permissionApprover: static function () use (&$prompts): bool {
-                $prompts++;
-
-                return true;
-            },
-        );
+        $manager = new AgentManager(provider: $this->provider, skillRegistry: $this->skillRegistry);
         $manager->register(new Agent(
             name: 'retry-gate-agent',
             description: 'retry-gate-agent description',
@@ -522,34 +523,45 @@ final class AgentManagerTest extends TestCase
             hooks: [],
             isActive: true,
         ));
-        $subAgent = $manager->createSubAgent(
+
+        $call = new WireToolCall('call-1', 'Write', ['path' => 'x.txt']);
+        // The rolled-back attempt streams the tool call and then fails
+        // transiently. It streams no TEXT with it: Runtime continues a reply
+        // that already reached the screen instead of re-running it, and does
+        // not continue one that carried a tool call at all, so an attempt
+        // with both would fail the run rather than retry it.
+        $provider = new ScriptedProvider([
+            [
+                new CompleteResponse(content: '', toolCalls: [$call]),
+                new CompleteResponse(content: '', isError: true, errorTransient: true),
+            ],
+            [
+                new CompleteResponse(content: 'partial', toolCalls: [$call]),
+                new CompleteResponse(content: ' done'),
+            ],
+            [new CompleteResponse(content: 'reported')],
+        ], streams: true);
+
+        [$result, $subAgent] = $this->delegateOnTask(
+            $manager,
             'retry-gate-agent',
-            'Gate retry',
-            \SugarCraft\Code\Permissions\PermissionMode::Default,
-        );
+            $provider,
+            engineTools: [$this->recordingTool('Write')],
+            sessionGate: new PermissionGate(PermissionMode::Default),
+            approver: static function () use (&$prompts): bool {
+                $prompts++;
 
-        $call = new \SugarCraft\Code\ToolCall(name: 'Write', arguments: ['path' => 'x.txt'], id: 'call-1');
-
-        $this->provider->method('supportsStreaming')->willReturn(true);
-        $attempt = 0;
-        $this->provider->method('completeStream')->willReturnCallback(
-            function () use (&$attempt, $call): \Generator {
-                $attempt++;
-                yield new CompleteResponse(content: 'partial', toolCalls: [$call]);
-                if ($attempt === 1) {
-                    yield new CompleteResponse(content: '', isError: true, errorTransient: true);
-
-                    return;
-                }
-                yield new CompleteResponse(content: ' done');
+                return true;
             },
         );
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
-        $this->assertSame(2, $attempt, 'the transient error must still have driven exactly one retry');
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(3, $provider->requests, 'the transient error must still have driven exactly one retry, then the step after the tool call');
+        $this->assertEquals($provider->requests[0]->messages, $provider->requests[1]->messages, 'the retry re-sends the same step, it does not continue a dropped reply');
         $this->assertSame(1, $prompts, 'a rolled-back attempt must not ask the user about a discarded tool call');
-        $this->assertSame('partial done', $subAgent->output);
+        $this->assertCount(1, $this->recordingTool('Write')->calls, 'the accepted attempt\'s call ran once');
+        $this->assertSame(['partial done'], $this->delegatedAssistantTurns($provider->requests[2]), 'the accepted attempt\'s text, once');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
     /**
@@ -730,109 +742,99 @@ final class AgentManagerTest extends TestCase
     public function testFailedSubAgentFreezesElapsedSeconds(): void
     {
         $this->agentManager->register($this->createAgent(name: 'fail-agent'));
-        $subAgent = $this->agentManager->createSubAgent('fail-agent', 'doomed task');
 
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')->willThrowException(new \RuntimeException('provider down'));
+        [$result, $subAgent] = $this->delegateOnTask(
+            $this->agentManager,
+            'fail-agent',
+            new ScriptedProvider([new \RuntimeException('provider down')]),
+        );
 
-        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
-        // holding it inside this try handed the catch its own failure object. See
-        // {@see \SugarCraft\Code\Tests\SwallowingCatchCensusTest} for the family.
-        $caught = null;
-
-        try {
-            iterator_to_array($this->agentManager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'executeSubAgent() should rethrow the provider failure');
-        $this->assertSame('provider down', $caught->getMessage());
+        $this->assertTrue($result->isError(), 'the Task result must carry the provider failure');
+        $this->assertStringContainsString('sub-agent "fail-agent" failed: provider down', $result->content());
 
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertSame('sub-agent "fail-agent" failed: provider down', $subAgent->error);
         $this->assertNotNull($subAgent->completedAt);
 
         $frozen = $this->agentManager->elapsedSeconds('fail-agent');
         $this->assertSame($frozen, $this->agentManager->elapsedSeconds('fail-agent'));
     }
 
-    public function testExecuteSubAgentSuccessNonStreaming(): void
+    public function testATaskRunSucceedsNonStreaming(): void
     {
         $agent = $this->createAgent(name: 'exec-agent', prompt: 'Exec prompt');
         $this->agentManager->register($agent);
 
-        $subAgent = $this->agentManager->createSubAgent('exec-agent', 'Execute test');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(content: 'Execution result'));
-
+        $manager = $this->agentManager;
         $results = [];
-        foreach ($this->agentManager->executeSubAgent($subAgent->id) as $result) {
-            $results[] = $result;
-        }
+        [$result, $subAgent] = $this->delegateOnTask(
+            $manager,
+            'exec-agent',
+            new ScriptedProvider([new CompleteResponse(content: 'Execution result')]),
+            emitter: static function (SubAgentActivity $activity) use ($manager, &$results): void {
+                $output = $manager->runs()[0]->output;
+                if ($activity->op === SubAgentActivity::OP_PROGRESS && $output !== '') {
+                    $results[] = $output;
+                }
+            },
+        );
 
-        // Non-streaming mode does not yield intermediate results
-        $this->assertCount(0, $results);
+        // Non-streaming mode carries no per-chunk intermediates: the reply
+        // reaches the row once, whole, where a stream lands chunk by chunk.
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame(['writing: Execution result'], $results);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
         $this->assertSame('Execution result', $subAgent->output);
         $this->assertInstanceOf(\DateTimeImmutable::class, $subAgent->completedAt);
     }
 
-    public function testExecuteSubAgentSuccessStreaming(): void
+    public function testATaskRunSucceedsStreaming(): void
     {
         $agent = $this->createAgent(name: 'stream-agent', prompt: 'Stream prompt');
         $this->agentManager->register($agent);
 
-        $subAgent = $this->agentManager->createSubAgent('stream-agent', 'Stream test');
-
-        $this->provider->method('supportsStreaming')->willReturn(true);
-        $this->provider->method('completeStream')
-            ->willReturn($this->createStreamingResponse(['First ', 'second ', 'third']));
-
+        $manager = $this->agentManager;
         $results = [];
-        foreach ($this->agentManager->executeSubAgent($subAgent->id) as $result) {
-            $results[] = $result;
-        }
+        [$result, $subAgent] = $this->delegateOnTask(
+            $manager,
+            'stream-agent',
+            new ScriptedProvider([iterator_to_array($this->createStreamingResponse(['First ', 'second ', 'third']), false)], streams: true),
+            emitter: static function (SubAgentActivity $activity) use ($manager, &$results): void {
+                $output = $manager->runs()[0]->output;
+                if ($activity->op === SubAgentActivity::OP_PROGRESS && $output !== '') {
+                    $results[] = $output;
+                }
+            },
+        );
 
+        $this->assertFalse($result->isError(), $result->content());
         $this->assertCount(3, $results);
+        $this->assertSame(['writing: First', 'writing: First second', 'writing: First second third'], $results, 'one intermediate output per streamed chunk');
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
         $this->assertSame('First second third', $subAgent->output);
     }
 
-    public function testExecuteSubAgentHandlesException(): void
+    public function testATaskRunHandlesException(): void
     {
         $agent = $this->createAgent(name: 'error-agent', prompt: 'Error prompt');
         $this->agentManager->register($agent);
 
-        $subAgent = $this->agentManager->createSubAgent('error-agent', 'Error test');
+        [$result, $subAgent] = $this->delegateOnTask(
+            $this->agentManager,
+            'error-agent',
+            new ScriptedProvider([new \RuntimeException('Provider error')]),
+        );
 
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willThrowException(new \RuntimeException('Provider error'));
-
-        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
-        // holding it inside this try handed the catch its own failure object. See
-        // {@see \SugarCraft\Code\Tests\SwallowingCatchCensusTest} for the family.
-        $caught = null;
-
-        try {
-            foreach ($this->agentManager->executeSubAgent($subAgent->id) as $_) {
-                // No-op
-            }
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'Expected exception was not thrown');
-        $this->assertSame('Provider error', $caught->getMessage());
+        $this->assertTrue($result->isError(), 'Expected the provider error on the Task result');
+        $this->assertStringContainsString('Provider error', $result->content());
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-        $this->assertSame('Provider error', $subAgent->error);
+        $this->assertSame('sub-agent "error-agent" failed: Provider error', $subAgent->error);
     }
 
-    public function testExecuteSubAgentPermissionGateDenySetsFailedStatus(): void
+    public function testATaskRunsPermissionGateDenyRefusesTheCall(): void
     {
-        // Custom gate factory that returns a gate which denies Bash tool calls
+        // A gate factory whose gate denies Bash: the run's own DontAsk gate,
+        // stricter than the session's, judges every call beside it.
         $denyGate = new PermissionGate(PermissionMode::DontAsk);
 
         $customAgentManager = new AgentManager(
@@ -841,84 +843,44 @@ final class AgentManagerTest extends TestCase
             workerPool: null,
             permissionGateFactory: fn() => $denyGate,
         );
+        $customAgentManager->register($this->createAgent(name: 'deny-agent', prompt: 'Deny agent'));
 
-        $agent = $this->createAgent(name: 'deny-agent', prompt: 'Deny agent');
-        $customAgentManager->register($agent);
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'deny-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+        );
 
-        $subAgent = $customAgentManager->createSubAgent('deny-agent', 'Execute with deny');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(
-                content: 'Result',
-                toolCalls: [
-                    new ToolCall(name: 'Bash', arguments: ['command' => 'make build']),
-                ],
-            ));
-
-        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
-        // holding it inside this try handed the catch its own failure object. See
-        // {@see \SugarCraft\Code\Tests\SwallowingCatchCensusTest} for the family.
-        $caught = null;
-
-        try {
-            foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-                // No-op
-            }
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
-        $this->assertStringContainsString('denied by permission gate', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-        $this->assertStringContainsString('denied by permission gate', $subAgent->error);
+        // The refusal is the denied call's result, and the run goes on past
+        // it: a refused call is not a failed run on the Task path.
+        $this->assertSame(['Hook denied: Permission mode \'dont-ask\' of agent "deny-agent" does not allow Bash.'], $turns);
+        $this->assertSame([], $this->recordingTool('Bash')->calls, 'the denied call never ran');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+        $this->assertNull($subAgent->error);
     }
 
-    public function testExecuteSubAgentPermissionGateAskThrowsRuntimeException(): void
+    public function testATaskRunsPermissionGateAskWithNoApproverRefusesTheCall(): void
     {
-        // Custom gate factory that returns a gate which asks (not denies) for Bash tool calls
-        // Default mode: `make build` is not a read-only command, so it returns Ask
-        $askGate = new PermissionGate(PermissionMode::Default);
-
+        // Default mode: `make build` is not a read-only command, so the
+        // session gate asks, and nothing is attached to answer.
         $customAgentManager = new AgentManager(
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
-            permissionGateFactory: fn() => $askGate,
+        );
+        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'ask-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+            sessionMode: PermissionMode::Default,
         );
 
-        $agent = $this->createAgent(name: 'ask-agent', prompt: 'Ask agent');
-        $customAgentManager->register($agent);
-
-        $subAgent = $customAgentManager->createSubAgent('ask-agent', 'Execute with ask');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(
-                content: 'Result',
-                toolCalls: [
-                    new ToolCall(name: 'Bash', arguments: ['command' => 'make build']),
-                ],
-            ));
-
-        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
-        // holding it inside this try handed the catch its own failure object. See
-        // {@see \SugarCraft\Code\Tests\SwallowingCatchCensusTest} for the family.
-        $caught = null;
-
-        try {
-            foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-                // No-op
-            }
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
-        $this->assertStringContainsString('no approver is attached', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-        $this->assertStringContainsString('no approver is attached', $subAgent->error);
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('no approver is attached', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Bash')->calls, 'an unanswered ask never runs the call');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
     /**
@@ -927,7 +889,7 @@ final class AgentManagerTest extends TestCase
      * 3-strike escalation unreachable for sub-agents: escalating from Deny to
      * Ask produced the same dead sub-agent, only with a worse message.
      */
-    public function testExecuteSubAgentPermissionGateAskIsRoutedToTheApprover(): void
+    public function testATaskRunsPermissionGateAskIsRoutedToTheApprover(): void
     {
         $asked = [];
 
@@ -935,69 +897,47 @@ final class AgentManagerTest extends TestCase
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
-            permissionGateFactory: fn() => new PermissionGate(PermissionMode::Default),
-            permissionApprover: static function (ToolCall $call, SubAgent $subAgent) use (&$asked): bool {
-                $asked[] = [$call->name, $subAgent->id];
+        );
+        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+
+        [$subAgent] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'ask-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+            sessionMode: PermissionMode::Default,
+            approver: static function (WireToolCall $call) use (&$asked, $customAgentManager): bool {
+                $asked[] = [$call->name(), $customAgentManager->runs()[0]->id];
 
                 return true;
             },
         );
 
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
-        $subAgent = $customAgentManager->createSubAgent('ask-agent', 'Execute with ask');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(
-                content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
-            ));
-
-        foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-            // No-op
-        }
-
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
         $this->assertNull($subAgent->error);
         $this->assertSame([['Bash', $subAgent->id]], $asked);
+        $this->assertSame([['command' => 'make build']], $this->recordingTool('Bash')->calls, 'the approved call ran');
     }
 
-    public function testExecuteSubAgentPermissionGateAskFailsWhenTheApproverRefuses(): void
+    public function testATaskRunsPermissionGateAskIsRefusedWhenTheApproverRefuses(): void
     {
         $customAgentManager = new AgentManager(
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
-            permissionGateFactory: fn() => new PermissionGate(PermissionMode::Default),
-            permissionApprover: static fn(): bool => false,
+        );
+        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'ask-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+            sessionMode: PermissionMode::Default,
+            approver: static fn(): bool => false,
         );
 
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
-        $subAgent = $customAgentManager->createSubAgent('ask-agent', 'Execute with ask');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(
-                content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
-            ));
-
-        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
-        // holding it inside this try handed the catch its own failure object. See
-        // {@see \SugarCraft\Code\Tests\SwallowingCatchCensusTest} for the family.
-        $caught = null;
-
-        try {
-            foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-                // No-op
-            }
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
-        $this->assertStringContainsString('refused at the permission prompt', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertSame(['Permission denied: Allow Bash to run? (permission mode: default)'], $turns, 'refused at the permission prompt');
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
     /**
@@ -1005,32 +945,25 @@ final class AgentManagerTest extends TestCase
      * literal `true` grants. Every PermissionReply case is a truthy object, so
      * a cast would turn a Reject into permission.
      */
-    public function testExecuteSubAgentPermissionGateAskRequiresLiteralTrue(): void
+    public function testATaskRunsPermissionGateAskRequiresLiteralTrue(): void
     {
         $customAgentManager = new AgentManager(
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
-            permissionGateFactory: fn() => new PermissionGate(PermissionMode::Default),
-            permissionApprover: static fn(): mixed => 'yes, go ahead',
+        );
+        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+
+        [, $turns] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'ask-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+            sessionMode: PermissionMode::Default,
+            approver: static fn(): mixed => 'yes, go ahead',
         );
 
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
-        $subAgent = $customAgentManager->createSubAgent('ask-agent', 'Execute with ask');
-
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(
-                content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
-            ));
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/refused at the permission prompt/');
-
-        foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-            // No-op
-        }
+        $this->assertSame(['Permission denied: Allow Bash to run? (permission mode: default)'], $turns, 'a truthy non-true answer is refused at the permission prompt');
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
     }
 
     /**
@@ -1050,37 +983,34 @@ final class AgentManagerTest extends TestCase
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
-            permissionGateFactory: fn() => $gate,
-            permissionApprover: static function () use (&$escalations): bool {
-                $escalations++;
-
-                return true;
-            },
         );
-
         $customAgentManager->register($this->createAgent(name: 'auto-agent', prompt: 'Auto agent'));
-        $subAgent = $customAgentManager->createSubAgent('auto-agent', 'Execute', PermissionMode::Auto);
 
-        // Three of the SAME dangerous category in one batch: the first two are
-        // denied outright (which fails the sub-agent), so the batch has to be
-        // delivered as one response to reach the third strike.
+        // Three of the SAME dangerous category: the first two are denied
+        // outright, so the third strike is the one the run delivers.
         // Not a security finding, which would ask at once (roadmap 5.11-2).
         $dangerous = new ToolCall(name: 'Bash', arguments: ['command' => 'git push --force origin main']);
-        $this->provider->method('supportsStreaming')->willReturn(false);
-        $this->provider->method('complete')
-            ->willReturn(new CompleteResponse(content: 'Result', toolCalls: [$dangerous]));
 
         // Strikes 1 and 2 are plain denials.
         $this->assertSame(PermissionDecision::Deny, $gate->evaluate($dangerous));
         $this->assertSame(PermissionDecision::Deny, $gate->evaluate($dangerous));
 
         // Strike 3 escalates to Ask, which the approver now settles.
-        foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
-            // No-op
-        }
+        [$subAgent] = $this->delegateEmittingCalls(
+            $customAgentManager,
+            'auto-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'git push --force origin main'])],
+            sessionGate: $gate,
+            approver: static function () use (&$escalations): bool {
+                $escalations++;
+
+                return true;
+            },
+        );
 
         $this->assertSame(1, $escalations);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+        $this->assertCount(1, $this->recordingTool('Bash')->calls, 'the approved third strike ran');
     }
 
     // -------------------------------------------------------------------------
@@ -2034,13 +1964,16 @@ final class AgentManagerTest extends TestCase
     // The sub-agent TOOL GRANT (C7).
     //
     // AgentDefinition::$defaultTools reached Agent::$tools faithfully and then
-    // died: executeSubAgent() built its CompleteRequest with no `tools`
-    // argument, CompleteRequest defaults that to null, and every provider that
-    // reads the field gates on `$request->tools !== null`. On THAT method a
-    // preset reached the model with NO tools while its system prompt described
-    // the roster it thought it had.
+    // died: the manager's old sequential runner built its CompleteRequest with
+    // no `tools` argument, CompleteRequest defaults that to null, and every
+    // provider that reads the field gates on `$request->tools !== null`. On
+    // THAT method a preset reached the model with NO tools while its system
+    // prompt described the roster it thought it had. The runner is gone
+    // (CC1C-c2a moved these tests onto TaskTool's engine path, which resolves
+    // the same grant through AgentManager::grantedToolsFor()); the request
+    // observed below is the one that path sends.
     //
-    // SCOPED TO executeSubAgent() ON PURPOSE, because the sentence above is not
+    // SCOPED TO THAT PATH ON PURPOSE, because the sentence above is not
     // true of every path and an earlier version of this header implied it was.
     // The live parallel path is executeAll() -> AgentWorkerPool, and
     // WorkflowEngine builds its request with `tools: $firstTask->tools`, where
@@ -2103,21 +2036,14 @@ final class AgentManagerTest extends TestCase
      *        carry onto the Agent — E696-α narrows MCP bridges by it at
      *        resolution; omit (empty) for the allow-all default every
      *        built-in preset ships.
+     * @param list<\SugarCraft\Code\Tools\Tool> $engineTools the session tool
+     *        set the run's engine offers; empty (the default) offers none, so
+     *        a roster that resolves to no narrowing reaches the wire as null
      */
-    private function captureSubAgentRequest(array $grant, ?array $registry, ?array $universe = null, array $mcpServers = []): CompleteRequest
+    private function captureSubAgentRequest(array $grant, ?array $registry, ?array $universe = null, array $mcpServers = [], array $engineTools = []): CompleteRequest
     {
-        $captured = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')
-            ->willReturnCallback(function (CompleteRequest $request) use (&$captured): CompleteResponse {
-                $captured = $request;
-
-                return new CompleteResponse(content: 'done');
-            });
-
         $manager = new AgentManager(
-            provider: $provider,
+            provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             toolRegistry: $registry,
             toolUniverse: $universe,
@@ -2135,12 +2061,13 @@ final class AgentManagerTest extends TestCase
             mcpServers: $mcpServers,
         ));
 
-        $subAgent = $manager->createSubAgent('granted', 'do the thing');
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
+        [$result] = $this->delegateOnTask($manager, 'granted', $provider, engineTools: $engineTools);
 
-        $this->assertInstanceOf(CompleteRequest::class, $captured, 'the provider was never called');
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(1, $provider->requests, 'the provider was never called');
 
-        return $captured;
+        return $provider->requests[0];
     }
 
     /** @param ?list<\SugarCraft\Code\Tools\Tool> $tools */
@@ -2301,16 +2228,23 @@ final class AgentManagerTest extends TestCase
      * EMPTY roster, not to null: null would re-admit every bridge through
      * TaskTool's `$granted ?? $engine->tools()` fallback, which is the exact
      * leak this item is about.
+     *
+     * Observed where it bites: the engine offers the refused bridge, and the
+     * run's request carries no tools at all — the empty roster reaches the
+     * wire as no tool block (Runtime sends an empty list as null), where a
+     * null roster would have carried the engine's bridge.
      */
     public function testAnAllowlistRefusingEveryOfferedBridgeEmptiesTheRosterRatherThanNullingIt(): void
     {
+        $offered = [$this->mcpBridge('beta')];
         $request = $this->captureSubAgentRequest(
             [],
-            [$this->mcpBridge('beta')],
+            $offered,
             mcpServers: ['alpha'],
+            engineTools: $offered,
         );
 
-        $this->assertSame([], self::toolNames($request->tools));
+        $this->assertNull($request->tools, 'the refused bridge the engine offers must not reach the run');
     }
 
     /**
@@ -2357,43 +2291,8 @@ final class AgentManagerTest extends TestCase
      */
     public function testANonStringAllowListEntryFailsLoudWhereABridgeIsNarrowedAndStaysSilentWhereNoneIs(): void
     {
-        // Built inline, NOT via captureSubAgentRequest: the throwing leg wraps
-        // its iteration in a catch, and a same-file helper asserting inside a
-        // try would be the indirect-swallow shape SwallowingCatchCensus names
-        // (E612) — the helper's own failure could ride out as $caught.
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(content: 'done'));
-
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            toolRegistry: [$this->mcpBridge('alpha')],
-        );
-        $manager->register(new Agent(
-            name: 'malformed',
-            description: 'malformed description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: ['mcp__*'],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            mcpServers: [42],
-        ));
-
-        $subAgent = $manager->createSubAgent('malformed', 'do the thing');
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'a malformed entry that a bridge meets must not read as a rule that matches nothing');
-        $this->assertStringContainsString('non-empty string', $caught->getMessage());
+        $refusal = $this->subAgentGrantRefusal(['mcp__*'], [$this->mcpBridge('alpha')], mcpServers: [42]);
+        $this->assertStringContainsString('non-empty string', $refusal, 'a malformed entry that a bridge meets must not read as a rule that matches nothing');
 
         $request = $this->captureSubAgentRequest(
             ['Bash'],
@@ -2414,15 +2313,8 @@ final class AgentManagerTest extends TestCase
      */
     public function testACallToANarrowedAwayBridgeOutsideTheDeclarationIsRefusedByTheGrant(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [new ToolCall(name: 'mcp__beta__ping', arguments: [])],
-        ));
-
         $manager = new AgentManager(
-            provider: $provider,
+            provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             toolRegistry: array_merge(
                 $this->fakeRegistry('Bash'),
@@ -2442,18 +2334,27 @@ final class AgentManagerTest extends TestCase
             mcpServers: ['alpha'],
         ));
 
-        $subAgent = $manager->createSubAgent('scoped', 'do the thing');
-        $caught = null;
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'Result', toolCalls: [new WireToolCall('c1', 'mcp__beta__ping', [])]),
+            new CompleteResponse(content: 'reported'),
+        ]);
+        [$result, $subAgent] = $this->delegateOnTask($manager, 'scoped', $provider);
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame(['mcp__alpha__ping'], self::toolNames($provider->requests[0]->tools), 'the roster never advertises the dropped server');
+        $this->assertSame(
+            ['Tool not found: mcp__beta__ping'],
+            $this->delegatedToolTurns($provider->requests[1]),
+            'a call to the dropped server outside the declaration must still be refused',
+        );
 
-        $this->assertNotNull($caught, 'a call to the dropped server outside the declaration must still be refused');
-        $this->assertStringContainsString('is refused by the MCP server allowlist', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        // The grant verdict the Task path installs beside the roster states the
+        // tighter reason for the same call.
+        $verdict = (new SubAgentGrantHook($manager, $subAgent))
+            ->execute(new HookContext('s', 'mcp__beta__ping', [], '', '', 'm', 'p', ''));
+        $this->assertFalse($verdict->permitsExecution());
+        $this->assertStringContainsString('is refused by the MCP server allowlist', $verdict->message);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status, 'a refused call is not a failed run on the Task path');
     }
 
     /**
@@ -2573,18 +2474,11 @@ final class AgentManagerTest extends TestCase
      */
     public function testAnUnresolvableGrantIsRefusedRatherThanDropped(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read', 'Reed'], $this->fakeRegistry('Bash', 'Read'));
 
-        try {
-            $this->captureSubAgentRequest(['Read', 'Reed'], $this->fakeRegistry('Bash', 'Read'));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'an unresolvable grant must not be silently dropped');
-        $this->assertStringContainsString('"Reed"', $caught->getMessage());
-        $this->assertStringContainsString('match no tool this session offers', $caught->getMessage());
-        $this->assertStringNotContainsString('"Read"', $caught->getMessage());
+        $this->assertStringContainsString('"Reed"', $refusal, 'an unresolvable grant must not be silently dropped');
+        $this->assertStringContainsString('match no tool this session offers', $refusal);
+        $this->assertStringNotContainsString('"Read"', $refusal);
     }
 
     /**
@@ -2594,16 +2488,9 @@ final class AgentManagerTest extends TestCase
      */
     public function testAnEmptyRegistryRefusesEveryDeclaration(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read'], []);
 
-        try {
-            $this->captureSubAgentRequest(['Read'], []);
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('the registry is empty', $caught->getMessage());
+        $this->assertStringContainsString('the registry is empty', $refusal);
     }
 
     /**
@@ -2611,85 +2498,41 @@ final class AgentManagerTest extends TestCase
      */
     public function testAMalformedDeclarationIsRefused(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Bash(git *'], $this->fakeRegistry('Bash'));
 
-        try {
-            $this->captureSubAgentRequest(['Bash(git *'], $this->fakeRegistry('Bash'));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('unterminated', $caught->getMessage());
+        $this->assertStringContainsString('unterminated', $refusal);
     }
 
     /** @see testAMalformedDeclarationIsRefused — the same rule, one type down. */
     public function testANonStringDeclarationIsRefused(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal([42], $this->fakeRegistry('Bash'));
 
-        try {
-            $this->captureSubAgentRequest([42], $this->fakeRegistry('Bash'));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('declares a tools entry of type int', $caught->getMessage());
+        $this->assertStringContainsString('declares a tools entry of type int', $refusal);
     }
 
     /** A registry holding something that is not a Tool is refused, not skipped. */
     public function testANonToolRegistryEntryIsRefused(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read'], ['Read']);
 
-        try {
-            $this->captureSubAgentRequest(['Read'], ['Read']);
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('is a string, not a', $caught->getMessage());
+        $this->assertStringContainsString('is a string, not a', $refusal);
     }
 
     // -------------------------------------------------------------------------
     // Per-call enforcement of the grant's ARGUMENT half.
+    //
+    // ON THE TASK PATH (CC1C-c2a). Every per-call test from here down runs the
+    // sub-agent through TaskTool's engine loop. The verdict is
+    // AgentManager::grantRefusalFor(), which SubAgentGrantHook asks ahead of
+    // the session gate; the history below names the manager's retired
+    // sequential runner (evaluateToolCalls(), refuseCallOutsideGrant()), whose
+    // checks that verdict carries. A refused call comes back to the model as
+    // that call's error result and the run goes on past it — the deliberate
+    // difference the CC1C-c1 inventory records — so each test asserts the
+    // refusal text the model received, that the refused tool never ran, and,
+    // where it pinned one, the row's settled status.
     // -------------------------------------------------------------------------
-
-    /**
-     * @param list<string> $grant
-     * @return array{AgentManager, SubAgent}
-     */
-    private function grantedSubAgentEmitting(array $grant, ToolCall $call, ?PermissionGate $gate): array
-    {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [$call],
-        ));
-
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: $gate === null ? null : static fn(): PermissionGate => $gate,
-            toolRegistry: $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep'),
-        );
-        $manager->register(new Agent(
-            name: 'reviewer',
-            description: 'reviewer description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: $grant,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-        ));
-
-        return [$manager, $manager->createSubAgent('reviewer', 'review it')];
-    }
 
     /**
      * The `Bash(git *)` decision, in the direction that makes it worth having:
@@ -2698,19 +2541,14 @@ final class AgentManagerTest extends TestCase
      */
     public function testACallOutsideTheGrantsArgumentHalfIsRefused(): void
     {
-        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
-            ['Read', 'Grep', 'Bash(git *)'],
-            new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /']),
-            new PermissionGate(PermissionMode::BypassPermissions),
+        $manager = $this->emittingCallsManager('reviewer', ['Read', 'Grep', 'Bash(git *)'], registry: ['Bash', 'Read', 'Edit', 'Grep']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'reviewer',
+            [new WireToolCall('c1', 'Bash', ['command' => 'rm -rf /'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
-
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
 
         // NOT "the gate would have allowed this". MEASURED on PHP 8.3.6:
         // PermissionGate(BypassPermissions) answers Deny for
@@ -2719,23 +2557,27 @@ final class AgentManagerTest extends TestCase
         // earlier version of this line said BypassPermissions "settles the
         // GATE, never the grant", which reads as a claim the gate would have
         // let the call through; it would not.
-        $this->assertNotNull($caught, 'the grant is checked before the gate, so its refusal is the one reported');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
-        $this->assertStringContainsString('Bash(git *)', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is outside the tool grant', $turns[0], 'the grant is checked before the gate, so its refusal is the one reported');
+        $this->assertStringContainsString('Bash(git *)', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Bash')->calls, 'the refused call never ran');
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status, 'a refused call is not a failed run on the Task path');
     }
 
     /** The same grant admits the call it was written for. */
     public function testACallInsideTheGrantsArgumentHalfIsAllowedThrough(): void
     {
-        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
-            ['Read', 'Grep', 'Bash(git *)'],
-            new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
-            new PermissionGate(PermissionMode::BypassPermissions),
+        $manager = $this->emittingCallsManager('reviewer', ['Read', 'Grep', 'Bash(git *)'], registry: ['Bash', 'Read', 'Edit', 'Grep']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'reviewer',
+            [new WireToolCall('c1', 'Bash', ['command' => 'git status'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertSame(['Bash ok'], $turns);
+        $this->assertSame([['command' => 'git status']], $this->recordingTool('Bash')->calls);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
         $this->assertNull($subAgent->error);
     }
@@ -2746,22 +2588,18 @@ final class AgentManagerTest extends TestCase
      */
     public function testAChainedEscapeCannotRideInOnAMatchingFirstSegment(): void
     {
-        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
-            ['Bash(git *)'],
-            new ToolCall(name: 'Bash', arguments: ['command' => 'git log && rm -rf /']),
-            new PermissionGate(PermissionMode::BypassPermissions),
+        $manager = $this->emittingCallsManager('reviewer', ['Bash(git *)'], registry: ['Bash', 'Read', 'Edit', 'Grep']);
+
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'reviewer',
+            [new WireToolCall('c1', 'Bash', ['command' => 'git log && rm -rf /'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is outside the tool grant', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
     }
 
     /**
@@ -2770,46 +2608,33 @@ final class AgentManagerTest extends TestCase
      * to return early on. An agent's declaration is its own statement about
      * itself; it does not become unenforceable because the caller owns no UI.
      *
-     * HOW A GATELESS SUB-AGENT REACHES executeSubAgent(), because the obvious
-     * route does not: `createSubAgent()` always attaches one, and
-     * `SubAgent::$permissionGate` is readonly, so it cannot be cleared
-     * afterwards. The reachable path is `executeAll()`, which registers
-     * CALLER-BUILT SubAgents into the very same `$subAgents` map that
-     * `getSubAgent()` and `executeSubAgent()` read — and `SubAgent`'s
-     * constructor defaults that parameter to null. Registering through
-     * reflection reproduces that state without also running `executeAll()`'s
-     * pool and its `finally`, which would settle the sub-agent before this test
-     * could observe it.
+     * WHAT "NO GATE" MEANS ON THE TASK PATH. `createSubAgent()` always
+     * attaches a gate to the row, but TaskTool consults it only when its mode
+     * is STRICTER than the session's, and here the engine carries no session
+     * gate and the agent declares no mode — so no gate judges the call, and
+     * the grant hook is all that stands in front of the tool. With no registry
+     * the run inherits the engine's whole set, so the undeclared Edit is on
+     * its roster and only the grant can refuse it.
      */
     public function testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate(): void
     {
-        [$manager, $registered] = $this->grantedSubAgentEmitting(
-            ['Read'],
-            new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
-            null,
+        $manager = $this->emittingCallsManager('reviewer', ['Read']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'reviewer',
+            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            engineTools: ['Read'],
         );
 
-        $subAgent = new SubAgent(
-            id: 'gateless_' . bin2hex(random_bytes(6)),
-            agent: $registered->agent,
-            task: 'review it',
+        $this->assertFalse(
+            $subAgent->permissionGate?->mode()->isStricterThan(PermissionMode::Default) ?? false,
+            'the premise of this test: the run\'s own gate is no stricter than the absent session gate, so no gate judged the call',
         );
-        $this->assertNull($subAgent->permissionGate, 'the premise of this test');
-
-        $map = new \ReflectionProperty(AgentManager::class, 'subAgents');
-        $map->setValue($manager, [$subAgent->id => $subAgent] + $map->getValue($manager));
-
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'the grant must be enforced with no gate attached');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
-        $this->assertStringContainsString('(mode: unknown)', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('Tool call "Edit"', $turns[0]);
+        $this->assertStringContainsString('is outside the tool grant', $turns[0], 'the grant must be enforced with no gate attached');
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
     }
 
     /**
@@ -2819,14 +2644,17 @@ final class AgentManagerTest extends TestCase
      */
     public function testAnAgentWithNoDeclarationIsNotPolicedByTheGrant(): void
     {
-        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
-            [],
-            new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
-            new PermissionGate(PermissionMode::BypassPermissions),
+        $manager = $this->emittingCallsManager('reviewer', [], registry: ['Bash', 'Read', 'Edit', 'Grep']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'reviewer',
+            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertSame(['Edit ok'], $turns);
+        $this->assertSame([['file_path' => '/etc/passwd']], $this->recordingTool('Edit')->calls);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
@@ -2846,18 +2674,8 @@ final class AgentManagerTest extends TestCase
      */
     private function captureSubAgentRequestWithDenylist(array $grant, array $deny, ?array $registry): CompleteRequest
     {
-        $captured = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')
-            ->willReturnCallback(function (CompleteRequest $request) use (&$captured): CompleteResponse {
-                $captured = $request;
-
-                return new CompleteResponse(content: 'done');
-            });
-
         $manager = new AgentManager(
-            provider: $provider,
+            provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             toolRegistry: $registry,
         );
@@ -2874,12 +2692,13 @@ final class AgentManagerTest extends TestCase
             disallowedTools: $deny,
         ));
 
-        $subAgent = $manager->createSubAgent('denied', 'do the thing');
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
+        [$result] = $this->delegateOnTask($manager, 'denied', $provider);
 
-        $this->assertInstanceOf(CompleteRequest::class, $captured, 'the provider was never called');
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(1, $provider->requests, 'the provider was never called');
 
-        return $captured;
+        return $provider->requests[0];
     }
 
     // -------------------------------------------------------------------------
@@ -3018,17 +2837,10 @@ final class AgentManagerTest extends TestCase
     /** Both lists are validated identically, and the message says which one was read. */
     public function testAMalformedDenylistEntryIsRefusedAndNamesTheField(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read'], $this->fakeRegistry('Bash', 'Read'), deny: ['Bash(rm']);
 
-        try {
-            $this->captureSubAgentRequestWithDenylist(['Read'], ['Bash(rm'], $this->fakeRegistry('Bash', 'Read'));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('disallowedTools pattern "Bash(rm"', $caught->getMessage());
-        $this->assertStringContainsString('unterminated', $caught->getMessage());
+        $this->assertStringContainsString('disallowedTools pattern "Bash(rm"', $refusal);
+        $this->assertStringContainsString('unterminated', $refusal);
     }
 
     /**
@@ -3038,44 +2850,19 @@ final class AgentManagerTest extends TestCase
      */
     public function testTheDenylistRefusesACallTheGrantWouldHaveAdmitted(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'git push --force'])],
-        ));
+        $manager = $this->emittingCallsManager('careful', ['Bash(git *)'], ['Bash(git push*)'], registry: ['Bash', 'Read']);
 
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
-            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'careful',
+            [new WireToolCall('c1', 'Bash', ['command' => 'git push --force'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
-        $manager->register(new Agent(
-            name: 'careful',
-            description: 'careful description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: ['Bash(git *)'],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            disallowedTools: ['Bash(git push*)'],
-        ));
-        $subAgent = $manager->createSubAgent('careful', 'ship it');
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'the grant admits `git push --force`; only the denylist stops it');
-        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is refused by the denylist', $turns[0], 'the grant admits `git push --force`; only the denylist stops it');
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status, 'a refused call is not a failed run on the Task path');
     }
 
     /**
@@ -3089,32 +2876,7 @@ final class AgentManagerTest extends TestCase
      */
     public function testTheDenylistFiresOnAChainWhereOnlyOneSegmentIsDenied(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'git status && git push --force'])],
-        ));
-
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
-            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
-        );
-        $manager->register(new Agent(
-            name: 'chained',
-            description: 'chained description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: ['Bash(git *)'],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            disallowedTools: ['Bash(git push*)'],
-        ));
-        $subAgent = $manager->createSubAgent('chained', 'ship it');
+        $manager = $this->emittingCallsManager('chained', ['Bash(git *)'], ['Bash(git push*)'], registry: ['Bash', 'Read']);
 
         // The premise, asserted rather than assumed: the GRANT admits this
         // command outright, so anything that stops it came from the denylist.
@@ -3123,16 +2885,16 @@ final class AgentManagerTest extends TestCase
                 ->matches(new ToolCall('Bash', ['command' => 'git status && git push --force'])),
         );
 
-        $caught = null;
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'chained',
+            [new WireToolCall('c1', 'Bash', ['command' => 'git status && git push --force'])],
+            sessionMode: PermissionMode::BypassPermissions,
+        );
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'a denied segment must not ride in on its neighbours');
-        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is refused by the denylist', $turns[0], 'a denied segment must not ride in on its neighbours');
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
     }
 
     /**
@@ -3141,42 +2903,18 @@ final class AgentManagerTest extends TestCase
      */
     public function testADenylistWithNoGrantIsStillEnforced(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
-        ));
+        $manager = $this->emittingCallsManager('noedit', [], ['Edit']);
 
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'noedit',
+            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
-        $manager->register(new Agent(
-            name: 'noedit',
-            description: 'noedit description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: [],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            disallowedTools: ['Edit'],
-        ));
-        $subAgent = $manager->createSubAgent('noedit', 'edit it');
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is refused by the denylist', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
     }
 
     /**
@@ -3186,34 +2924,17 @@ final class AgentManagerTest extends TestCase
      */
     public function testADenylistDoesNotRefuseACallItDoesNotName(): void
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: [new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts'])],
-        ));
+        $manager = $this->emittingCallsManager('noedit2', [], ['Edit']);
 
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'noedit2',
+            [new WireToolCall('c1', 'Read', ['file_path' => '/etc/hosts'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
-        $manager->register(new Agent(
-            name: 'noedit2',
-            description: 'noedit2 description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: [],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            disallowedTools: ['Edit'],
-        ));
-        $subAgent = $manager->createSubAgent('noedit2', 'read it');
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertSame(['Read ok'], $turns);
+        $this->assertSame([['file_path' => '/etc/hosts']], $this->recordingTool('Read')->calls);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
@@ -3228,77 +2949,30 @@ final class AgentManagerTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * @param list<ToolCall> $calls
-     * @param list<string>   $grant
-     * @param list<string>   $deny
-     * @return array{AgentManager, SubAgent}
-     */
-    private function subAgentEmittingCalls(
-        array $calls,
-        array $grant,
-        array $deny = [],
-        ?PermissionMode $mode = null,
-        ?\Closure $approver = null,
-        ?array $registry = null,
-    ): array {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturn(new CompleteResponse(
-            content: 'Result',
-            toolCalls: $calls,
-        ));
-
-        $manager = new AgentManager(
-            provider: $provider,
-            skillRegistry: $this->skillRegistry,
-            permissionGateFactory: $mode === null ? null : static fn(): PermissionGate => new PermissionGate($mode),
-            permissionApprover: $approver,
-            toolRegistry: $registry,
-        );
-        $manager->register(new Agent(
-            name: 'multi',
-            description: 'multi description',
-            prompt: 'Test prompt',
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: $grant,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            disallowedTools: $deny,
-        ));
-
-        return [$manager, $manager->createSubAgent('multi', 'do both')];
-    }
-
-    /**
      * EVERY call in a response is evaluated, not just the first. The refusal
      * must name the SECOND call's tool, which is the half a `break` after the
      * first iteration silently loses.
      */
     public function testASecondToolCallInTheSameResponseIsAlsoGrantChecked(): void
     {
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+        $manager = $this->emittingCallsManager('multi', ['Read']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
             [
-                new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts']),
-                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+                new WireToolCall('c1', 'Read', ['file_path' => '/etc/hosts']),
+                new WireToolCall('c2', 'Edit', ['file_path' => '/etc/passwd']),
             ],
-            ['Read'],
-            mode: PermissionMode::BypassPermissions,
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'the loop must not stop after the first call');
-        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
-        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertCount(2, $turns, 'the loop must not stop after the first call');
+        $this->assertSame('Read ok', $turns[0]);
+        $this->assertStringContainsString('Tool call "Edit"', $turns[1]);
+        $this->assertStringContainsString('is outside the tool grant', $turns[1]);
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status, 'a refused call is not a failed run on the Task path');
     }
 
     /**
@@ -3308,39 +2982,29 @@ final class AgentManagerTest extends TestCase
      */
     public function testASecondToolCallIsGrantCheckedWithNoGateAttached(): void
     {
-        [$manager, $registered] = $this->subAgentEmittingCalls(
+        $manager = $this->emittingCallsManager('multi', ['Read']);
+
+        [$subAgent, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
             [
-                new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts']),
-                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+                new WireToolCall('c1', 'Read', ['file_path' => '/etc/hosts']),
+                new WireToolCall('c2', 'Edit', ['file_path' => '/etc/passwd']),
             ],
-            ['Read'],
         );
 
-        // Same reachable gateless state testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate
-        // documents: createSubAgent() always attaches a gate and the field is
-        // readonly, so the caller-built SubAgent executeAll() registers is the
-        // shape that reaches executeSubAgent() with none.
-        $subAgent = new SubAgent(
-            id: 'multigateless_' . bin2hex(random_bytes(6)),
-            agent: $registered->agent,
-            task: 'do both',
+        // Same gateless state testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate
+        // documents: no session gate on the engine, and the run's own gate no
+        // stricter than the default it would be compared with.
+        $this->assertFalse(
+            $subAgent->permissionGate?->mode()->isStricterThan(PermissionMode::Default) ?? false,
+            'the premise of this test',
         );
-        $this->assertNull($subAgent->permissionGate, 'the premise of this test');
-
-        $map = new \ReflectionProperty(AgentManager::class, 'subAgents');
-        $map->setValue($manager, [$subAgent->id => $subAgent] + $map->getValue($manager));
-
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'the gate-null arm must continue, not return');
-        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
-        $this->assertStringContainsString('(mode: unknown)', $caught->getMessage());
+        $this->assertCount(2, $turns, 'the gate-null arm must continue, not return');
+        $this->assertSame('Read ok', $turns[0]);
+        $this->assertStringContainsString('Tool call "Edit"', $turns[1]);
+        $this->assertStringContainsString('is outside the tool grant', $turns[1]);
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
     }
 
     /**
@@ -3350,26 +3014,22 @@ final class AgentManagerTest extends TestCase
      */
     public function testASecondToolCallIsAlsoDenylistChecked(): void
     {
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+        $manager = $this->emittingCallsManager('multi', ['Bash(git *)'], ['Bash(git push*)']);
+
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
             [
-                new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
-                new ToolCall(name: 'Bash', arguments: ['command' => 'git push --force']),
+                new WireToolCall('c1', 'Bash', ['command' => 'git status']),
+                new WireToolCall('c2', 'Bash', ['command' => 'git push --force']),
             ],
-            ['Bash(git *)'],
-            ['Bash(git push*)'],
-            mode: PermissionMode::BypassPermissions,
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+        $this->assertCount(2, $turns);
+        $this->assertSame('Bash ok', $turns[0]);
+        $this->assertStringContainsString('is refused by the denylist', $turns[1]);
+        $this->assertSame([['command' => 'git status']], $this->recordingTool('Bash')->calls);
     }
 
     /**
@@ -3390,17 +3050,7 @@ final class AgentManagerTest extends TestCase
     public function testAnOutOfGrantCallNeverReachesTheApprover(): void
     {
         $asked = [];
-
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
-            [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
-            ['Read'],
-            mode: PermissionMode::Default,
-            approver: static function (ToolCall $call) use (&$asked): bool {
-                $asked[] = $call->name;
-
-                return true;
-            },
-        );
+        $manager = $this->emittingCallsManager('multi', ['Read']);
 
         // The premise, asserted rather than assumed: this gate really does
         // answer Ask for this call, so a grant check that ran second would
@@ -3411,17 +3061,22 @@ final class AgentManagerTest extends TestCase
                 ->evaluate(new ToolCall('Edit', ['file_path' => '/etc/passwd'])),
         );
 
-        $caught = null;
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
+            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            sessionMode: PermissionMode::Default,
+            approver: static function (WireToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name();
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
+                return true;
+            },
+        );
 
-        $this->assertNotNull($caught, 'the grant must settle this before the gate is consulted');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('is outside the tool grant', $turns[0], 'the grant must settle this before the gate is consulted');
         $this->assertSame([], $asked, 'a call the agent never asked for must not reach the approver');
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
     }
 
     /**
@@ -3432,21 +3087,22 @@ final class AgentManagerTest extends TestCase
     public function testACallInsideTheGrantDoesReachTheApprover(): void
     {
         $asked = [];
+        $manager = $this->emittingCallsManager('multi', ['Edit']);
 
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
-            [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
-            ['Edit'],
-            mode: PermissionMode::Default,
-            approver: static function (ToolCall $call) use (&$asked): bool {
-                $asked[] = $call->name;
+        [$subAgent] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
+            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            sessionMode: PermissionMode::Default,
+            approver: static function (WireToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name();
 
                 return true;
             },
         );
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
         $this->assertSame(['Edit'], $asked);
+        $this->assertSame([['file_path' => '/etc/passwd']], $this->recordingTool('Edit')->calls, 'the approver\'s yes is what let the call through');
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
@@ -3466,24 +3122,7 @@ final class AgentManagerTest extends TestCase
     public function testASecondCallIsStillCheckedAfterTheFirstWasApproved(): void
     {
         $asked = [];
-
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
-            [
-                // `Bash` and not `Read`: under Default the gate auto-ALLOWS a
-                // read-only tool, and an Allow `continue`s past the approver —
-                // which is the very path this test has to avoid, since the hole
-                // is specific to a call that was ASKED about and approved.
-                new ToolCall(name: 'Bash', arguments: ['command' => 'git push']),
-                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
-            ],
-            ['Bash(git *)'],
-            mode: PermissionMode::Default,
-            approver: static function (ToolCall $call) use (&$asked): bool {
-                $asked[] = $call->name;
-
-                return true;
-            },
-        );
+        $manager = $this->emittingCallsManager('multi', ['Bash(git *)']);
 
         $this->assertSame(
             PermissionDecision::Ask,
@@ -3492,18 +3131,31 @@ final class AgentManagerTest extends TestCase
             'the premise: call #1 must reach the approver, not be auto-allowed',
         );
 
-        $caught = null;
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
+            [
+                // `Bash` and not `Read`: under Default the gate auto-ALLOWS a
+                // read-only tool, and an Allow skips the approver — which is
+                // the very path this test has to avoid, since the hole is
+                // specific to a call that was ASKED about and approved.
+                new WireToolCall('c1', 'Bash', ['command' => 'git push']),
+                new WireToolCall('c2', 'Edit', ['file_path' => '/etc/passwd']),
+            ],
+            sessionMode: PermissionMode::Default,
+            approver: static function (WireToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name();
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
+                return true;
+            },
+        );
 
         $this->assertSame(['Bash'], $asked, 'the first call is in the grant and is approved');
-        $this->assertNotNull($caught, 'approving call #1 must not un-police call #2');
-        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertCount(2, $turns, 'approving call #1 must not un-police call #2');
+        $this->assertSame('Bash ok', $turns[0]);
+        $this->assertStringContainsString('Tool call "Edit"', $turns[1]);
+        $this->assertStringContainsString('is outside the tool grant', $turns[1]);
+        $this->assertSame([], $this->recordingTool('Edit')->calls);
     }
 
     /**
@@ -3528,12 +3180,7 @@ final class AgentManagerTest extends TestCase
      */
     public function testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant(): void
     {
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
-            [new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /'])],
-            [],
-            ['Bash(rm -rf *'],
-            mode: PermissionMode::BypassPermissions,
-        );
+        $manager = $this->emittingCallsManager('multi', [], ['Bash(rm -rf *']);
 
         // The premise, measured rather than assumed: this pattern really does
         // degrade into a name pattern that matches nothing, so nothing else in
@@ -3545,17 +3192,17 @@ final class AgentManagerTest extends TestCase
         $this->assertNull($degraded->argumentPattern());
         $this->assertFalse($degraded->matches(new ToolCall('Bash', ['command' => 'rm -rf /'])));
 
-        $caught = null;
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
+            [new WireToolCall('c1', 'Bash', ['command' => 'rm -rf /'])],
+            sessionMode: PermissionMode::BypassPermissions,
+        );
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'a malformed denial must throw, not silently never match');
-        $this->assertStringContainsString('disallowedTools pattern "Bash(rm -rf *"', $caught->getMessage());
-        $this->assertStringContainsString('unterminated', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('disallowedTools pattern "Bash(rm -rf *"', $turns[0], 'a malformed denial must refuse, not silently never match');
+        $this->assertStringContainsString('unterminated', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
     }
 
     /**
@@ -3565,23 +3212,19 @@ final class AgentManagerTest extends TestCase
      */
     public function testAMalformedGrantIsRefusedAtCallTimeWithNoRegistry(): void
     {
-        [$manager, $subAgent] = $this->subAgentEmittingCalls(
-            [new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts'])],
-            ['Read(x'],
-            mode: PermissionMode::BypassPermissions,
+        $manager = $this->emittingCallsManager('multi', ['Read(x']);
+
+        [, $turns] = $this->delegateEmittingCalls(
+            $manager,
+            'multi',
+            [new WireToolCall('c1', 'Read', ['file_path' => '/etc/hosts'])],
+            sessionMode: PermissionMode::BypassPermissions,
         );
 
-        $caught = null;
-
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('tools pattern "Read(x"', $caught->getMessage());
-        $this->assertStringContainsString('unterminated', $caught->getMessage());
+        $this->assertCount(1, $turns);
+        $this->assertStringContainsString('tools pattern "Read(x"', $turns[0]);
+        $this->assertStringContainsString('unterminated', $turns[0]);
+        $this->assertSame([], $this->recordingTool('Read')->calls);
     }
 
     /**
@@ -3610,50 +3253,27 @@ final class AgentManagerTest extends TestCase
         $ceiling = $this->fakeRegistry('Read', 'Grep', 'Bash');
 
         // FIRST: with both sets, the disabled tool narrows out and the grant
-        // survives — no throw, no Bash, Read still delivered.
+        // survives — no refusal, no Bash, Read still delivered.
         $request = $this->captureSubAgentRequest(['Read', 'Bash'], $narrowed, $ceiling);
         $this->assertSame(['Read'], self::toolNames($request->tools));
 
         // SECOND: a name the ceiling never had is still refused, and the
         // message says so rather than sending the reader to the config file.
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read', 'Reed'], $narrowed, $ceiling);
 
-        try {
-            $this->captureSubAgentRequest(['Read', 'Reed'], $narrowed, $ceiling);
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'a never-existing tool must refuse even with the ceiling in hand');
-        $this->assertStringContainsString('"Reed"', $caught->getMessage());
-        $this->assertStringContainsString('match no tool this session offers', $caught->getMessage());
-        $this->assertStringContainsString('never existed rather than being disabled by policy', $caught->getMessage());
+        $this->assertStringContainsString('"Reed"', $refusal, 'a never-existing tool must refuse even with the ceiling in hand');
+        $this->assertStringContainsString('match no tool this session offers', $refusal);
+        $this->assertStringContainsString('never existed rather than being disabled by policy', $refusal);
 
         // THIRD: WITHOUT the ceiling the old indistinguishability stands —
         // a policy narrowing and a typo produce the identical refusal, which
         // is the reason the wiring passes both sets.
-        $noCeiling = null;
+        $noCeiling = $this->subAgentGrantRefusal(['Read', 'Bash'], $narrowed);
+        $typo = $this->subAgentGrantRefusal(['Read', 'Reed'], $narrowed);
 
-        try {
-            $this->captureSubAgentRequest(['Read', 'Bash'], $narrowed);
-        } catch (\RuntimeException $e) {
-            $noCeiling = $e;
-        }
-
-        $this->assertNotNull($noCeiling, 'null universe must keep the all-or-nothing refusal');
-
-        $typo = null;
-
-        try {
-            $this->captureSubAgentRequest(['Read', 'Reed'], $narrowed);
-        } catch (\RuntimeException $e) {
-            $typo = $e;
-        }
-
-        $this->assertNotNull($typo);
         $this->assertSame(
-            str_replace('"Bash"', '<absent>', (string) $noCeiling?->getMessage()),
-            str_replace('"Reed"', '<absent>', (string) $typo?->getMessage()),
+            str_replace('"Bash"', '<absent>', $noCeiling),
+            str_replace('"Reed"', '<absent>', $typo),
             'without a universe, policy-narrowed and typo\'d declarations produce the identical refusal',
         );
     }
@@ -3685,16 +3305,9 @@ final class AgentManagerTest extends TestCase
      */
     public function testANonToolUniverseEntryIsRefused(): void
     {
-        $caught = null;
+        $refusal = $this->subAgentGrantRefusal(['Read'], $this->fakeRegistry('Grep'), ['Read']);
 
-        try {
-            $this->captureSubAgentRequest(['Read'], $this->fakeRegistry('Grep'), ['Read']);
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught);
-        $this->assertStringContainsString('Tool universe entry', $caught->getMessage());
+        $this->assertStringContainsString('Tool universe entry', $refusal);
     }
 
     // -------------------------------------------------------------------------
@@ -3920,20 +3533,8 @@ final class AgentManagerTest extends TestCase
      */
     private function managerGrantingSkill(): array
     {
-        $sink = new \stdClass();
-        $sink->request = null;
-
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturnCallback(
-            function (CompleteRequest $request) use ($sink): CompleteResponse {
-                $sink->request = $request;
-
-                return new CompleteResponse(content: 'done');
-            },
-        );
         $manager = new AgentManager(
-            provider: $provider,
+            provider: $this->provider,
             skillRegistry: new SkillRegistry(),
         );
         $manager->register(new Agent(
@@ -3948,29 +3549,25 @@ final class AgentManagerTest extends TestCase
             isActive: true,
         ));
 
-        return [$manager, $sink, 'skillful'];
+        return [$manager, 'skillful'];
     }
 
     public function testAGrantedSkillThatDoesNotResolveFailsTheSubAgentRatherThanBeingSkipped(): void
     {
-        [$manager, $sink, $name] = $this->managerGrantingSkill();
-        $subAgent = $manager->createSubAgent($name, 'audit it');
+        [$manager, $name] = $this->managerGrantingSkill();
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
 
-        $caught = null;
+        [$result, $subAgent] = $this->delegateOnTask($manager, $name, $provider);
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNull(
-            $sink->request,
+        $this->assertSame(
+            [],
+            $provider->requests,
             'a prompt advertising an unresolvable skill must not reach the provider',
         );
-        $this->assertNotNull($caught, 'a granted-but-missing skill must refuse, not skip');
-        $this->assertStringContainsString('"security-audit"', $caught->getMessage());
-        $this->assertStringContainsString('SkillRegistry does not resolve', $caught->getMessage());
+        $this->assertTrue($result->isError(), 'a granted-but-missing skill must refuse, not skip');
+        $this->assertStringContainsString('"security-audit"', (string) $subAgent->error);
+        $this->assertStringContainsString('SkillRegistry does not resolve', (string) $subAgent->error);
+        $this->assertStringContainsString((string) $subAgent->error, $result->content());
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
     }
 
@@ -3978,8 +3575,8 @@ final class AgentManagerTest extends TestCase
     {
         // THE OTHER POLARITY: fail-closed must not become fail-always. A skill
         // the registry does resolve keeps the pre-fix behaviour — its body is
-        // appended and the provider sees it.
-        [$manager, $sink, $name] = $this->managerGrantingSkill();
+        // appended and the provider sees it, in the run's system turn.
+        [$manager, $name] = $this->managerGrantingSkill();
 
         $registry = (new \ReflectionProperty(AgentManager::class, 'skillRegistry'))->getValue($manager);
         $this->assertInstanceOf(SkillRegistry::class, $registry);
@@ -3987,12 +3584,15 @@ final class AgentManagerTest extends TestCase
             Skill::parse("---\ndescription: Audits PHP\n---\n\nAudit checklist body", 'security-audit'),
         ]);
 
-        $subAgent = $manager->createSubAgent($name, 'audit it');
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
+        [$result] = $this->delegateOnTask($manager, $name, $provider);
 
-        $this->assertNotNull($sink->request, 'a resolvable skill must not fail the sub-agent');
-        $this->assertStringContainsString('## Skill: security-audit', (string) $sink->request->systemPrompt);
-        $this->assertStringContainsString('Audit checklist body', (string) $sink->request->systemPrompt);
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertNotSame([], $provider->requests, 'a resolvable skill must not fail the sub-agent');
+        $systemTurn = $provider->requests[0]->messages[0];
+        $this->assertSame('system', $systemTurn->role());
+        $this->assertStringContainsString('## Skill: security-audit', $systemTurn->content());
+        $this->assertStringContainsString('Audit checklist body', $systemTurn->content());
     }
 
     // -------------------------------------------------------------------------
@@ -4036,9 +3636,11 @@ final class AgentManagerTest extends TestCase
         $this->assertStringNotContainsString('"Read"', $warnings[0], 'a still-offered tool is not a narrowing');
 
         // WARN, NOT REFUSE — the same roster runs, narrowed to Read.
-        $subAgent = $manager->createSubAgent('coder', 'do it');
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'ok')]);
+        [$result, $subAgent] = $this->delegateOnTask($manager, 'coder', $provider);
+        $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+        $this->assertSame(['Read'], self::toolNames($provider->requests[0]->tools));
     }
 
     public function testARosterNameTheCeilingNeverHadIsSilentAtLoadAndRefusedAtGrant(): void
@@ -4055,16 +3657,13 @@ final class AgentManagerTest extends TestCase
             'a typo gets no launch notice — its moment is grant resolution',
         );
 
-        $caught = null;
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'ok')]);
+        [$result, $subAgent] = $this->delegateOnTask($manager, 'broken', $provider);
 
-        try {
-            iterator_to_array($manager->executeSubAgent($manager->createSubAgent('broken', 'x')->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'E639\'s refuse path owns the never-existing polarity');
-        $this->assertStringContainsString('"Reed"', $caught->getMessage());
+        $this->assertTrue($result->isError(), 'E639\'s refuse path owns the never-existing polarity');
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertSame([], $provider->requests);
+        $this->assertStringContainsString('"Reed"', (string) $subAgent->error);
     }
 
     /**
@@ -4121,6 +3720,313 @@ final class AgentManagerTest extends TestCase
 
         $this->assertCount(1, $warnings, 'the parseable narrowed name warns; the malformed one is left to the strict path');
         $this->assertStringContainsString('"Bash"', $warnings[0]);
+    }
+
+    // -------------------------------------------------------------------------
+    // The Task delegation path (CC1C-c2a). Every sub-agent run above goes
+    // through TaskTool's engine path, the one every production registration
+    // binds, on the session manager these tests build.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Run one delegation of $agentName through {@see TaskTool} and hand back
+     * the tool's result and the row the session manager settled for it.
+     *
+     * @param list<Tool> $engineTools the session's tool set, which the run
+     *        inherits when its agent's grant resolves to no narrowing
+     * @param (\Closure(SubAgentActivity): void)|null $emitter the run's frames;
+     *        given one, the activity clock steps a second per read, so every
+     *        due frame is sent
+     * @return array{ToolResult, SubAgent}
+     */
+    private function delegateOnTask(
+        AgentManager $manager,
+        string $agentName,
+        ProviderInterface $provider,
+        array $engineTools = [],
+        ?PermissionGate $sessionGate = null,
+        ?\Closure $approver = null,
+        ?\Closure $emitter = null,
+    ): array {
+        $engine = EngineBackend::new($provider, 'm')->withTools($engineTools);
+        if ($sessionGate !== null) {
+            $engine = $engine->withPermissionGate($sessionGate);
+        }
+        if ($approver !== null) {
+            $engine = $engine->withPermissionApprover($approver);
+        }
+
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->sandboxDir . '/suspended')))
+            ->withEngine($engine);
+        if ($emitter !== null) {
+            $now = 0.0;
+            $task = $task->withSubAgentEmitter($emitter)->withActivityClock(static function () use (&$now): float {
+                return $now += 1.0;
+            });
+        }
+
+        $before = count($manager->runs());
+        $result = $task->execute(['description' => 'Delegated check', 'prompt' => 'do the thing', 'agent' => $agentName, 'id' => 'task-call']);
+        $runs = $manager->runs();
+        $this->assertCount($before + 1, $runs, 'the Task call ran exactly one delegation on the session manager');
+
+        return [$result, $runs[$before]];
+    }
+
+    /**
+     * Delegate to $agentName, whose first step answers with $calls and whose
+     * second reports, and hand back the settled row and the tool turns that
+     * second step carried back to the model. Every tool the session offers
+     * is a {@see recordingTool()}: the ones $calls name, the registry's, and
+     * $engineTools.
+     *
+     * @param list<WireToolCall> $calls
+     * @param list<string> $engineTools further session tool names
+     * @return array{SubAgent, list<string>}
+     */
+    private function delegateEmittingCalls(
+        AgentManager $manager,
+        string $agentName,
+        array $calls,
+        ?PermissionMode $sessionMode = null,
+        ?PermissionGate $sessionGate = null,
+        ?\Closure $approver = null,
+        array $engineTools = [],
+    ): array {
+        $names = array_values(array_unique([
+            ...array_keys($this->recordingTools),
+            ...array_map(static fn (WireToolCall $call): string => $call->name(), $calls),
+            ...$engineTools,
+        ]));
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'Result', toolCalls: $calls),
+            new CompleteResponse(content: 'reported'),
+        ]);
+
+        [$result, $subAgent] = $this->delegateOnTask(
+            $manager,
+            $agentName,
+            $provider,
+            engineTools: array_map(fn (string $name): Tool => $this->recordingTool($name), $names),
+            sessionGate: $sessionGate ?? ($sessionMode === null ? null : new PermissionGate($sessionMode)),
+            approver: $approver,
+        );
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(2, $provider->requests, 'the run carried its tool results back to the model');
+
+        return [$subAgent, $this->delegatedToolTurns($provider->requests[1])];
+    }
+
+    /**
+     * A session manager with one agent, $name, declaring $grant and $deny.
+     *
+     * @param list<mixed> $grant
+     * @param list<string> $deny
+     * @param ?list<string> $registry the session registry's tool names (each a
+     *        {@see recordingTool()}), or null for no registry — where the run
+     *        then inherits the engine's whole set and only the grant check
+     *        stands between a call and the tool
+     */
+    private function emittingCallsManager(string $name, array $grant, array $deny = [], ?array $registry = null): AgentManager
+    {
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: $registry === null ? null : array_map(fn (string $tool): Tool => $this->recordingTool($tool), $registry),
+        );
+        $manager->register(new Agent(
+            name: $name,
+            description: "$name description",
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: $deny,
+        ));
+
+        return $manager;
+    }
+
+    /**
+     * Refuse a delegation at grant resolution and hand back the reason: the
+     * Task result is an error, the row is FAILED with that reason, and the
+     * provider is never called.
+     *
+     * @param list<mixed> $grant
+     * @param ?list<mixed> $registry
+     * @param ?list<mixed> $universe
+     * @param list<mixed> $mcpServers
+     * @param list<string> $deny
+     */
+    private function subAgentGrantRefusal(array $grant, ?array $registry, ?array $universe = null, array $mcpServers = [], array $deny = []): string
+    {
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: $registry,
+            toolUniverse: $universe,
+        );
+        $manager->register(new Agent(
+            name: 'granted',
+            description: 'granted description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: $deny,
+            mcpServers: $mcpServers,
+        ));
+
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
+        [$result, $subAgent] = $this->delegateOnTask($manager, 'granted', $provider);
+
+        $this->assertTrue($result->isError(), 'a grant that does not resolve must refuse the delegation');
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertSame([], $provider->requests, 'a refused grant never reaches the provider');
+        $this->assertNotNull($subAgent->error);
+        $this->assertStringContainsString($subAgent->error, $result->content());
+
+        return $subAgent->error;
+    }
+
+    /**
+     * One tool per name for the whole test, recording each call's arguments.
+     *
+     * @return Tool&object{calls: list<array<string, mixed>>}
+     */
+    private function recordingTool(string $name): Tool
+    {
+        return $this->recordingTools[$name] ??= new class ($name) implements Tool {
+            /** @var list<array<string, mixed>> */
+            public array $calls = [];
+
+            public function __construct(private readonly string $name)
+            {
+            }
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function description(): string
+            {
+                return "records {$this->name} calls";
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object'];
+            }
+
+            public function execute(array $args): ToolResult
+            {
+                $id = (string) ($args['id'] ?? '');
+                unset($args['id']);
+                $this->calls[] = $args;
+
+                return new ToolResult(toolCallId: $id, content: $this->name . ' ok');
+            }
+        };
+    }
+
+    /**
+     * @return list<string> the tool turns $request carried, in order
+     */
+    private function delegatedToolTurns(CompleteRequest $request): array
+    {
+        return array_values(array_map(
+            static fn (TypedMessage $message): string => $message->content(),
+            array_filter($request->messages, static fn (TypedMessage $message): bool => $message->role() === 'tool'),
+        ));
+    }
+
+    /**
+     * @return list<string> the assistant turns $request carried, in order
+     */
+    private function delegatedAssistantTurns(CompleteRequest $request): array
+    {
+        return array_values(array_map(
+            static fn (TypedMessage $message): string => $message->content(),
+            array_filter($request->messages, static fn (TypedMessage $message): bool => $message->role() === 'assistant'),
+        ));
+    }
+
+    /**
+     * A streaming provider whose stream is $stream's generator, so a test can
+     * look at the row between two chunks.
+     *
+     * @param \Closure(CompleteRequest): \Generator<CompleteResponse> $stream
+     */
+    private function streamingProviderFrom(\Closure $stream): ProviderInterface
+    {
+        return new class ($stream) implements ProviderInterface {
+            public function __construct(private \Closure $stream)
+            {
+            }
+
+            public function name(): string
+            {
+                return 'generator';
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return true;
+            }
+
+            public function supportsFunctionCalling(): bool
+            {
+                return true;
+            }
+
+            public function supportsVision(): bool
+            {
+                return false;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
+            public function supportsJsonSchema(): bool
+            {
+                return false;
+            }
+
+            public function contextWindow(): int
+            {
+                return 100000;
+            }
+
+            public function costPer1kTokens(string $model, string $direction): ?float
+            {
+                return 0.0;
+            }
+
+            public function complete(CompleteRequest $request): CompleteResponse
+            {
+                throw new \LogicException('this provider only streams');
+            }
+
+            public function completeStream(CompleteRequest $request): \Generator
+            {
+                return ($this->stream)($request);
+            }
+
+            public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+            {
+                return new EmbeddingsResponse([]);
+            }
+        };
     }
 
     private function createAgent(
