@@ -74,12 +74,14 @@ final class TaskToolExecuteMergeTest extends TestCase
                 }
             });
 
+        $caught = null;
         try {
             $task->execute(self::delegation());
-            $this->fail('the emitter failure must still reach the caller');
         } catch (\RuntimeException $e) {
-            $this->assertSame('activity socket closed', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'the emitter failure must still reach the caller');
+        $this->assertSame('activity socket closed', $caught->getMessage());
 
         $runs = $manager->runs();
         $this->assertCount(1, $runs);
