@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Posix;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Pty\Posix\PosixChild;
 use SugarCraft\Pty\TerminationPolicy;
 
@@ -147,6 +148,35 @@ final class PosixChildKillOnDropTest extends TestCase
 
         $this->assertFalse(self::liveNonZombie($pid), 'a discarded kill-on-drop handle must end the child');
         $this->assertFalse($receiver->killOnDrop(), 'the receiver must not have gained the duty');
+    }
+
+    public function testAPendingWaitAsyncDoesNotKeepTheKillOnDropHandleAlive(): void
+    {
+        // The review repro: the onExit() listener captured the handle, so
+        // unset() never reached the destructor and the child kept running.
+        $loop = new StreamSelectLoop();
+        $child = $this->spawnTermTrapper()->withKillOnDrop($this->termPolicy());
+        $pid = $child->pid();
+
+        $exit = null;
+        $child->waitAsync($loop, 0.01)->then(static function (int $code) use (&$exit): void {
+            $exit = $code;
+        });
+        unset($child);
+
+        $this->assertFalse(self::liveNonZombie($pid), 'a pending waitAsync() must not stop the drop from ending the child');
+
+        $safety = $loop->addTimer(5.0, static fn () => $loop->stop());
+        $check = $loop->addPeriodicTimer(0.01, static function () use (&$exit, $loop): void {
+            if ($exit !== null) {
+                $loop->stop();
+            }
+        });
+        $loop->run();
+        $loop->cancelTimer($safety);
+        $loop->cancelTimer($check);
+
+        $this->assertSame(128 + 9, $exit, 'the pending promise must settle with the exit status the drop left');
     }
 
     public function testDroppingAKillOnDropHandleAfterTheExitSendsNothing(): void

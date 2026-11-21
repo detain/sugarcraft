@@ -73,9 +73,10 @@ final class PosixChild extends ChildProcess implements Child
      * handle, so in `$child->withKillOnDrop()->withKillOnDrop($other)` the
      * dropped middle handle does not kill the child.
      *
-     * Destructors run when the last reference goes, which includes a pending
-     * {@see onExit()} or waitAsync() on this handle: their listeners hold it
-     * until the child exits.
+     * A pending {@see onExit()} or waitAsync() on this handle does not keep it
+     * alive: their listeners hold a handle on the same child without the drop
+     * duty, so dropping this one still tears the child down, and the pending
+     * callback or promise then settles with the exit status.
      *
      * Mirrors tokio's `Command::kill_on_drop(true)` (no charmbracelet
      * upstream: Go has no destructors).
@@ -102,6 +103,27 @@ final class PosixChild extends ChildProcess implements Child
             // stays running, and the reap below leaves it alone.
         }
         parent::__destruct();
+    }
+
+    /**
+     * A handle on the same child without the drop duty, for a pending
+     * onExit() listener to hold, so the listener never pins a kill-on-drop
+     * handle and so never stops its drop from running.
+     *
+     * @internal
+     */
+    protected function exitWatchHandle(): self
+    {
+        if ($this->dropPolicy === null) {
+            return $this;
+        }
+        // The clone keeps $dropOwner bound by reference; only this view's own
+        // policy and token are cleared, so it never carries the duty.
+        $view = $this->shareHandle();
+        $view->dropPolicy = null;
+        $view->dropToken = null;
+
+        return $view;
     }
 
     /** @param array{dropPolicy: TerminationPolicy} $changes */

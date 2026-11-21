@@ -27,6 +27,9 @@ final class ChildOnExitTest extends TestCase
 
     private const SAFETY_SECONDS = 5.0;
 
+    /** ChildPollTrait::SIGCHLD_WATCHDOG_SECONDS: the disposition check, not an exit poll. */
+    private const WATCHDOG_SECONDS = 1.0;
+
     /** @var list<PosixChild> */
     private array $spawned = [];
 
@@ -98,7 +101,7 @@ final class ChildOnExitTest extends TestCase
             $calls[] = $code;
         });
 
-        $this->assertSame([], $loop->periodicTimers, 'the SIGCHLD path must arm no periodic timer');
+        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers, 'the SIGCHLD path must arm no exit poll, only the disposition check');
         $this->assertSame([\SIGCHLD], $loop->signalsAdded, 'the listener must ride the loop\'s own SIGCHLD');
 
         $this->runBounded($loop, static function () use (&$calls): bool {
@@ -106,7 +109,7 @@ final class ChildOnExitTest extends TestCase
         });
 
         $this->assertSame([2], $calls);
-        $this->assertSame([], $loop->periodicTimers);
+        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers);
         $this->assertSame([\SIGCHLD], $loop->signalsRemoved, 'the listener must be removed once it fired');
         $this->assertSame(\SIG_DFL, \pcntl_signal_get_handler(\SIGCHLD), 'the loop must hand SIGCHLD back once its last listener goes');
     }
@@ -198,6 +201,36 @@ final class ChildOnExitTest extends TestCase
 
         $this->assertSame([6], $calls);
         $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
+    }
+
+    public function testAHandlerInstalledAfterArmingHandsTheWaitToThePoll(): void
+    {
+        $this->requireSigchld();
+
+        // The review repro: a SIGCHLD handler installed with pcntl_signal()
+        // after waitAsync() replaces the loop's listener, which then never
+        // hears the exit. The disposition check must notice and poll.
+        $loop = new RecordingLoop();
+        $child = $this->spawnShell('sleep 0.2; exit 8');
+
+        $exit = null;
+        $child->waitAsync($loop, 0.01)->then(static function (int $code) use (&$exit): void {
+            $exit = $code;
+        });
+        $this->assertSame([\SIGCHLD], $loop->signalsAdded);
+
+        $foreign = static function (): void {
+        };
+        \pcntl_signal(\SIGCHLD, $foreign);
+
+        $this->runBounded($loop, static function () use (&$exit): bool {
+            return $exit !== null;
+        });
+
+        $this->assertSame(8, $exit, 'a wait whose listener was displaced must still resolve');
+        $this->assertSame([self::WATCHDOG_SECONDS, 0.01], $loop->periodicTimers, 'the displaced listener must hand over to the fallback poll');
+        $this->assertSame([\SIGCHLD], $loop->signalsRemoved);
+        $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'removing the listener must put the displacing handler back');
     }
 
     public function testASecondLoopTakesThePollSoBothLoopsHearTheirChildren(): void
@@ -295,7 +328,7 @@ final class ChildOnExitTest extends TestCase
             $exit = $code;
         });
 
-        $this->assertSame([], $loop->periodicTimers, 'waitAsync must not arm the 15 ms poll where SIGCHLD is delivered');
+        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers, 'waitAsync must not arm the 15 ms poll where SIGCHLD is delivered');
         $this->runBounded($loop, static function () use (&$exit): bool {
             return $exit !== null;
         });

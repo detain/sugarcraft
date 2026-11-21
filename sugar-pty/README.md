@@ -423,7 +423,9 @@ child and leaves a running one alone.
 
 Keep the result: it is the new handle, not a flag set on `$child`. A bare
 `$child->withKillOnDrop();` statement drops that handle at once, which
-tears the still-running child down while `$child` lives on.
+tears the still-running child down while `$child` lives on. A pending
+`onExit()` or `waitAsync()` on the handle does not keep it alive, so the
+drop still runs and the pending callback then gets the exit status.
 
 ```php
 $child = $child->withKillOnDrop(TerminationPolicy::new()->withGraceSeconds(0.5));
@@ -539,7 +541,7 @@ application can drive PTY sessions without stalling its loop:
   contract (exit code / `0` no-child / `-1` still-running-at-teardown).
 - **`PosixChild::onExit($loop, $fn)`** — runs `$fn` once with the exit
   status when the child exits, woken by `SIGCHLD` through the loop's own
-  `addSignal()`; no periodic timer is armed. Returns a closure that
+  `addSignal()`; the child is not polled on a timer. Returns a closure that
   detaches `$fn` if it has not run yet.
 - **`PosixChild::waitAsync()`** — promise-returning `wait()`, built on
   `onExit()`; cancelling the promise detaches its listener only.
@@ -585,11 +587,17 @@ with the loop's `addSignal()` so the loop multiplexes it with every other
 listener; each wakeup probes only this child (`waitpid(pid, WNOHANG)`).
 They fall back to a periodic `exited()` probe (15 ms by default) only where
 `SIGCHLD` cannot be delivered: no `ext-pcntl`, a loop without signal
-support, or a `SIGCHLD` handler the loop does not own (one installed with
-`pcntl_signal()` directly, such as `SignalForwarder::attachSigchld()`, or
-`SIG_IGN`), which the loop's listener would otherwise replace. Install such
-a handler before calling `onExit()`, not after. `ReactPump` still polls
-`exited()` at its `selectTimeoutUs` cadence.
+support, a second loop while another loop holds `onExit()` listeners
+(`SIGCHLD` has one process-wide handler, so only one loop at a time gets
+signal delivery), or a `SIGCHLD` handler the loop does not own (one
+installed with `pcntl_signal()` directly, such as
+`SignalForwarder::attachSigchld()`, or `SIG_IGN`), which the loop's listener
+would otherwise replace. A handler installed after `onExit()` silences the
+loop's listener; a once-a-second check of the `SIGCHLD` disposition notices
+and switches to the fallback probe, so the exit is still reported, up to
+about a second late, and the handler is put back when the listener goes.
+Install such a handler before calling `onExit()` to avoid that delay.
+`ReactPump` still polls `exited()` at its `selectTimeoutUs` cadence.
 
 The blocking APIs (`PosixPump::run()`, `Child::wait()`,
 `MultiPump::run()`) are unchanged — the async layer is purely
