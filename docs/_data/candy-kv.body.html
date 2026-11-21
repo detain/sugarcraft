@@ -103,6 +103,8 @@ $store->transaction('work', function () use ($store): void {
     <tr><td>Ttl</td><td><code>inRange(int $seconds)</code></td><td>The valid TTL range, 1 to 999999999 seconds</td></tr>
     </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Configuration and data directory</h2>
     <p>candy-kv reads two environment variables, and neither one is required. The data directory is <code>$XDG_CONFIG_HOME/skate</code> when that is set, otherwise <code>~/.config/skate</code>. The directory keeps the pre-rename <em>skate</em> name on disk, so installs from before the rename keep working.</p>
     <table class="api-table">

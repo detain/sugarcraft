@@ -81,7 +81,7 @@ final class EnhancedSessionStore
     }
 
     /**
-     * Take the single-writer lock on $sessionId (audit SES-3(b)), or null when
+     * Take the single-writer lock on $sessionId, or null when
      * another TUI holds it. See {@see SessionLock} for what the lock is and why
      * a failure to lock opens the session writable rather than read-only.
      *

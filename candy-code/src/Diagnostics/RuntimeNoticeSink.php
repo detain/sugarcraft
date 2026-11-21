@@ -865,7 +865,7 @@ final class RuntimeNoticeSink
     /**
      * Where this process's complete record of a notice is — `full text on
      * stderr`, `full text in ~/.candy-code/logs/candy-code.log` — or
-     * {@see FULL_TEXT_NOT_KEPT} (audit C4).
+     * {@see FULL_TEXT_NOT_KEPT}.
      *
      * Two cases keep nothing a reader can open, and both say so rather than
      * point at a place that is empty: {@see warn()}'s C2a skip (transport

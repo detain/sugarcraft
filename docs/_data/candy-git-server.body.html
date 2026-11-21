@@ -148,6 +148,8 @@ $puller-&gt;runOnce();                  // from cron: pull every due mirror now
     <tr><td><code>Support\Version</code></td><td><code>resolve(string $archive, string $fallback)</code>, <code>fromPharMetadata(string $archivePath)</code>, <code>isDev(string $version)</code>, <code>displayLabel(string $archive, string $fallback)</code></td><td>The version resolver. The compiled-in version is the <code>VERSION</code> constant in <code>bin/candy-git-server</code>, <code>0.1.0</code>, and a phar build stamp replaces it.</td></tr>
     </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Configuration</h2>
     <p>Create <code>config.yaml</code> in the data directory. <code>candy-git-server init</code> writes a skeleton with every key. The census below is the authoritative list of which keys <code>Config</code> parses and which code path consults each one. A key marked <em>dead</em> is accepted and held on the object, but nothing reads it yet. Changing it changes nothing.</p>
 

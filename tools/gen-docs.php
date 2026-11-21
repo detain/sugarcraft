@@ -584,8 +584,7 @@ function splice_api_reference(string $slug, string $dataDir, string $body): stri
     // dropped-from-ENABLED fragment would be spliced but never regenerated or
     // compared, so its page could go stale under a green gate.
     if (!ApiReference::enabled($slug)) {
-        fwrite(STDERR, "gen-docs: docs/_data/$slug.api.html exists but $slug is not in ApiReference::ENABLED "
-            . '(pilot scope is ' . implode(', ', ApiReference::ENABLED) . "); remove the fragment or enable the lib in tools/gen-api-reference.php\n");
+        fwrite(STDERR, "gen-docs: docs/_data/$slug.api.html exists but $slug is not in ApiReference::ENABLED; remove the fragment or enable the lib in tools/gen-api-reference.php\n");
         exit(2);
     }
     $fragment = rtrim((string) file_get_contents($fragmentPath));

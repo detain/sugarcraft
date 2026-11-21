@@ -1381,7 +1381,7 @@ final class ArgvParser
     }
 
     /**
-     * The filesystem half of operand handling (audit CLI-2): turn a first
+     * The filesystem half of operand handling: turn a first
      * operand that names an existing directory into the root, and the words
      * after it into the TUI's first prompt.
      *

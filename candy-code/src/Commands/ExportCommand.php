@@ -17,7 +17,7 @@ use SugarCraft\Code\Tools\PathJail;
 
 /**
  * Implements `/export [format] [file|--path <file>]`: write the transcript to
- * a LOCAL file with its RAW bytes (plan W4-B, audit 2026-10-21; the SEC-4
+ * a LOCAL file with its RAW bytes (plan W4-B; the SEC-4
  * ruling's other half, and the discoverable save path the end-user reviews
  * asked for).
  *

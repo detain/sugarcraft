@@ -2343,7 +2343,7 @@ final class Chat implements Model
     }
 
     /**
-     * Turn on the single-writer session lock (audit SES-3(b)) and take it for
+     * Turn on the single-writer session lock and take it for
      * the session this Chat has open.
      *
      * When another TUI already holds that session, the Chat comes back
@@ -2370,7 +2370,7 @@ final class Chat implements Model
 
     /**
      * Submit $prompt as this session's first prompt once {@see init()} runs —
-     * the leftover command-line words (audit CLI-2(b)). Null or blank clears it.
+     * the leftover command-line words. Null or blank clears it.
      */
     public function withInitialPrompt(?string $prompt): self
     {
@@ -8414,8 +8414,7 @@ final class Chat implements Model
      * turn (double-Escape). The row is otherwise the restart row
      * {@see reviveCheckpointMessage()} builds; only the reason differs,
      * because "by restart" was false for a session that never restarted and
-     * the model reads this text on the next request (audit R15, the 15b-02
-     * residual). {@see isInterruptedResult()} matches it too, so it draws the
+     * the model reads this text on the next request. {@see isInterruptedResult()} matches it too, so it draws the
      * same struck-through `⊘ interrupted` state.
      */
     public const CANCELLED_TOOL_CALL = 'Tool call interrupted: the user cancelled the turn';
@@ -10656,7 +10655,7 @@ final class Chat implements Model
 
     /**
      * Run a command line on the user's behalf — a menu-bar row, Ctrl+N,
-     * the shell's provider picker — WITHOUT touching the draft (audit 15b-05).
+     * the shell's provider picker — WITHOUT touching the draft.
      *
      * WHY THIS EXISTS. The shell used to run these by feeding synthetic
      * keystrokes into {@see update()}: Backspace/Delete until the box was
@@ -17875,7 +17874,7 @@ final class Chat implements Model
 
     /**
      * Whether a bare Tab completes an `@file` mention — or a `$skill` one
-     * (roadmap 5.14l) — rather than cycling panes (audit 15b-15): the caret
+     * (roadmap 5.14l) — rather than cycling panes: the caret
      * ends such a token in the draft and no modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
      * the reason its docblock gives - a shell that yields Tab on a condition
      * update() does not answer turns Tab into a dead key.

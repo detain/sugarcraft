@@ -11,6 +11,7 @@ use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Server\ErrorLog;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * One open session's events, fanned out to the clients subscribed to it

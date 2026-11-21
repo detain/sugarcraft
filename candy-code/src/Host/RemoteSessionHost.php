@@ -23,11 +23,11 @@ use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\McpClient\McpCall;
 use SugarCraft\McpClient\PendingCalls;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 use function React\Promise\reject;
 

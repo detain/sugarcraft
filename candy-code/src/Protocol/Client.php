@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Server\Ws\Peer;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * One connected client as the protocol sees it: its connection and

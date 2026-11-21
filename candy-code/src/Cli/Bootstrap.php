@@ -5798,7 +5798,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user, at launch, which instruction files and enabled skill
-     * bodies the system prompt leaves out (audit 15d-09 / C3 residual R1).
+     * bodies the system prompt leaves out.
      *
      * Since C3 an instruction document over its budget — or one refused for
      * resolving outside the checkout, or an `@import` that does not fit — is a
@@ -5955,7 +5955,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user, at launch, that `maxToolSteps` or `maxOutputTokens` holds
-     * a value the resolvers will not use (audit 15d-16 residual R12).
+     * a value the resolvers will not use.
      *
      * Both resolvers answer null for nonsense — a fraction of a step, zero, a
      * negative, a non-number, a value too large for an integer — and null is
@@ -6012,7 +6012,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Tell the user when this TUI session's diagnostics are not going to the
-     * home log (audit R16 follow-up, raised by w9-diag-usage).
+     * home log.
      *
      * Since R16 the redirect never leaves `error_log()` on the tty: it walks
      * `~/.candy-code/logs/candy-code.log`, then a private temp-dir log, then
@@ -9768,7 +9768,7 @@ public static function useMaxCost(?string $maxCost): void
 
     /**
      * Install the operator's `secretEnvAllowlist` on
-     * {@see ProcessContainment::useSecretEnvAllowlist()} — audit F-E1.
+     * {@see ProcessContainment::useSecretEnvAllowlist()}.
      *
      * Called from {@see tools()} and {@see hooks()}, the two builders of the
      * spawn sites the scrub covers (Bash/Grep and script hooks), so whichever

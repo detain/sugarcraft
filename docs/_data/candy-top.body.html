@@ -71,6 +71,8 @@ php candy-top.phar self-update --rollback</code></pre>
 <tr><td><code>Input\KeyTable</code></td><td><code>rows()</code>, <code>keyRows()</code>, <code>bindings()</code></td><td>The key table. The help overlay and <code>--help</code> both read it.</td></tr>
 </table>
 
+        <!-- api-reference:generated -->
+
     <h2 style="margin-top: 40px;">Configuration</h2>
     <p>The config file is <code>$XDG_CONFIG_HOME/candy-top/config.conf</code>, or <code>~/.config/candy-top/config.conf</code> when <code>XDG_CONFIG_HOME</code> is unset or not absolute. <code>--config &lt;path&gt;</code> reads another file and makes it the save target. The format is btop's: <code>#</code> comments and <code>name = value</code> lines, with strings in double quotes. Unknown keys are skipped, and a value that fails validation is dropped with a warning on stderr, while the option keeps its previous value.</p>
     <p>The schema declares 115 options, and 105 of them persist to the file. The table lists the options most people change, with the defaults from <code>Config\Schema</code>. <code>examples/config-defaults.php</code> prints the same defaults from the code.</p>

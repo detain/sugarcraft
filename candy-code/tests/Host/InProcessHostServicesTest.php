@@ -16,7 +16,6 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Message;
@@ -25,6 +24,7 @@ use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * PL-5c: the in-process HostServices against a real serve host (no socket), checked

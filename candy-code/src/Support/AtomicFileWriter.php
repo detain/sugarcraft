@@ -112,7 +112,7 @@ final class AtomicFileWriter
     /**
      * Replace the bytes of a file the user owns — a workspace source file the
      * Edit/Write tools rewrite — without ever exposing a truncated version of
-     * it, and without changing what the file IS (audit F-T7).
+     * it, and without changing what the file IS.
      *
      * {@see write()} publishes a file this package owns, so a fresh inode at a
      * caller-chosen mode is exactly right there. A user's file is different:

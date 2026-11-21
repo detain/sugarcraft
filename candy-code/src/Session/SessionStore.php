@@ -719,7 +719,7 @@ final class SessionStore
     /**
      * The branch checked out in the git work tree containing $dir, or null
      * outside a repository or on a detached HEAD — what a new session records
-     * as `git_branch` (audit B1: the picker's Ctrl+B filter compared against a
+     * as `git_branch` (the picker's Ctrl+B filter compared against a
      * column nothing ever wrote).
      *
      * Read from `HEAD` rather than by running git: it is called on the launch

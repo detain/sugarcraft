@@ -10,7 +10,7 @@ This is original work. Plugin hosting is specific to SugarCraft, so there is no 
 composer require sugarcraft/sugar-plugins
 ```
 
-Requires PHP 8.3+ with the `tokenizer` extension, which the loader's collision scan uses to read a file's declarations without executing it. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries) and `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base).
+Requires PHP 8.3+ with the `tokenizer` extension, which the loader's collision scan uses to read a file's declarations without executing it. The library depends on `psr/http-message` (the webhook contract), `react/event-loop` (the loop a context carries), `sugarcraft/sugar-core` (the `SugarCraft\Core\I18n` translation registry behind the `Lang` base) and `sugarcraft/sugar-mcp-client` (the `SugarCraft\McpClient\Protocol\Refusal` contract that `RefusedCall` extends, so a refusal reads the same on the wire and in-process).
 
 ## What it provides
 

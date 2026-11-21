@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\Edit;
 
 /**
- * The text of an Edit that matched too often or not at all (audit 0.11).
+ * The text of an Edit that matched too often or not at all.
  *
  * "not unique (3 matches)" and "not found" were the whole of what a model got
  * back, so the usual next move was a blind retry or a full re-Read. These say

@@ -50,7 +50,8 @@ composer require sugarcraft/sugar-mcp-client
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
 | `Protocol\JsonRpc` | The `candy-code.v1` JSON-RPC 2.0 codec: `decode()` reads one client message, `result()` / `error()` / `notification()` / `encode()` build the four wire shapes this protocol uses; `encodeValue()` encodes a bare value (no envelope) under the same wire flags (invalid UTF-8 substituted) and the `MAX_DEPTH_VALUE` (511-level) depth budget; undecodable text comes back as an `RpcError`, never null |
 | `Protocol\Request` | One decoded client message: a request (it has an `id` and is answered) or a notification, exposing `id`, `hasId`, `method` and `params` |
-| `Protocol\RpcError` | A `candy-code.v1` method's refusal, thrown by a method and answered as a JSON-RPC error: an `ErrorCode`, a `kind` and `data`; `of()`, `invalidParams()` and `notFound()` build the common cases |
+| `Protocol\RpcError` | A `candy-code.v1` method's refusal, thrown by a method and answered as a JSON-RPC error: an `ErrorCode`, a `kind` and `data`; `of()`, `invalidParams()` and `notFound()` build the common cases. It implements `Protocol\Refusal`. |
+| `Protocol\Refusal` | The refusal contract a bundle reads on either door: `refusalKind()` (the wire's `data.kind`) and `refusalData()` (the wire's `data` object, retry hint included). `SugarCraft\Plugins\Host\RefusedCall` extends it |
 | `Protocol\ErrorCode` | The `candy-code.v1` error codes as an int-backed enum, with `kind()` and `isRetryable()` |
 
 ## Quick start

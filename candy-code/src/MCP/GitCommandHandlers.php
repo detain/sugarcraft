@@ -102,7 +102,7 @@ final readonly class GitCommandHandlers
 
     /**
      * The per-call bound a `.mcp.json` `"type": "git"` entry's `timeout` key
-     * asks for, in seconds (audit R18, residual of GIT-2).
+     * asks for, in seconds.
      *
      * WHY it is configurable: {@see DEFAULT_TIMEOUT_SECONDS} is sized for a
      * pre-commit hook that runs a linter or a test suite, but a repository

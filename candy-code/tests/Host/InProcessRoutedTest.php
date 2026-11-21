@@ -17,7 +17,6 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Workspace\Gateway;
@@ -25,6 +24,7 @@ use SugarCraft\Code\Server\Workspace\WorkspaceHostClient;
 use SugarCraft\Code\Tests\Host\Support\CallDeadlineLoop;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\McpClient\PendingCalls;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 use SugarCraft\Plugins\Host\RefusedCall;
 
 /**

@@ -157,12 +157,22 @@
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#two-transports">Two transports</a></li>
             <li class="toc-h3"><a href="#quickstart-in-process-bash">Quickstart — in-process bash</a></li>
             <li class="toc-h3"><a href="#quickstart-host-sshd-legacy">Quickstart — host-sshd legacy</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver">SugarCraft\SshServer</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-channel">SugarCraft\SshServer\Channel</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-channel-msg">SugarCraft\SshServer\Channel\Msg</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-middleware">SugarCraft\SshServer\Middleware</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-middleware-auth">SugarCraft\SshServer\Middleware\Auth</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-middleware-subsystem">SugarCraft\SshServer\Middleware\Subsystem</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-sshserver-transport">SugarCraft\SshServer\Transport</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#the-client-gets-exit-status-129-and-the-child-never-starts">The client gets exit status 129 and the child never starts</a></li>
             <li class="toc-h3"><a href="#the-client-gets-exit-status-0-and-nothing-ran">The client gets exit status 0 and nothing ran</a></li>
@@ -172,6 +182,7 @@
             <li class="toc-h3"><a href="#runchild-throws-ptyexception">runChild() throws PtyException</a></li>
             <li class="toc-h3"><a href="#output-is-cut-off-partway-through">Output is cut off partway through</a></li>
             <li class="toc-h3"><a href="#one-abusive-client-locks-out-a-whole-bastion">One abusive client locks out a whole bastion</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
             <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#middleware-pipeline">Middleware pipeline</a></li>
@@ -184,13 +195,6 @@
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ssh-server</code></pre>
-
-    <h3 id="two-transports" style="margin-top: 32px;">Two transports</h3>
-    <p>What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction:</p>
-    <ul>
-      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
-      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
-    </ul>
 
     <h3 id="quickstart-in-process-bash" style="margin-top: 32px;">Quickstart — in-process bash</h3>
     <pre class="code"><code class="language-php">// /opt/wish/server.php — invoked by sshd ForceCommand
@@ -226,6 +230,13 @@ exit(Server::new()
 
     <p>The <code>wishuser</code> in both <code>Auth</code> allowlists is what the sshd <code>Match</code> block makes true: under <code>ForceCommand</code> the entry script runs <em>as the target account</em>, so <code>$s-&gt;user</code> is that account on every connection, and an allowlist of human names refuses 100% of logins with exit <code>Server::EXIT_DENIED</code>. Per-user separation needs per-user <code>Match</code> blocks or <code>authorized_keys</code> <code>command=</code> entries, each running its own entry script.</p>
 
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>The server runs a middleware pipeline inside the process that sshd spawns under <code>ForceCommand</code>. It opens no listener of its own. What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction, and there are two transports:</p>
+    <ul>
+      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
+      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
+    </ul>
+
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>InProcessTransport (default)</strong><span>sugar-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
@@ -246,13 +257,13 @@ exit(Server::new()
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Server</td><td>new()</td><td>Start an empty middleware pipeline — this library opens no listener: the pipeline runs inside the process sshd (or your supervisor) spawns under <code>ForceCommand</code></td></tr>
 <tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
 <tr><td>Server</td><td>withTransport(Transport)</td><td>Override the active transport (default: InProcessTransport)</td></tr>
-<tr><td>Server</td><td>withKeepalive(int)</td><td>Add keepalive middleware with the given interval</td></tr>
+<tr><td>Server</td><td>withKeepalive(int)</td><td>Arm an idle keepalive beat on the server (opt-in); stored on the server, not added to the <code>use()</code> middleware stack</td></tr>
 <tr><td>Server</td><td>serve(?Session, ?Context)</td><td>Start the server (builds a fresh root <code>Context::background()</code> automatically when none is passed; supply a cancellable context to make cancel-propagation reachable through the public API)</td></tr>
 <tr><td>Context</td><td>background()</td><td>Root context — never done, not cancelable</td></tr>
 <tr><td>Context</td><td>withValue(string $k, mixed $v)</td><td>Return a new context with $k → $v attached</td></tr>
@@ -304,6 +315,462 @@ exit(Server::new()
 <tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
 </table>
 
+    <h3 id="configuration" style="margin-top: 32px;">Configuration</h3>
+    <p>Each option is set on <code>Server</code> or on the middleware that owns it. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Server::withTransport(Transport)</code>: Transport, default <code>InProcessTransport</code>. Selects the transport the middleware stack runs under.</li>
+      <li><code>Server::withKeepalive(int $intervalSeconds)</code>: int. Keepalive is opt-in and off unless <code>withKeepalive()</code> is called; <code>Server::$keepalive</code> stays null until then. <code>60</code> is the argument default, not a shipped default. Once armed, it sends a NUL byte to the child's stdin when the pump loop has been idle for this many seconds. This is not an SSH-level keepalive.</li>
+      <li><code>Logger</code> sink: string, resource or null, default <code>$SSH_SERVER_LOG</code> when set, else stderr. Where the one-line JSON session records go. Files the logger creates are <code>0600</code>.</li>
+      <li><code>new RateLimit($statePath, $burst, $ratePerSec, ..., $failClosed)</code>: int, float, bool, default <code>5</code>, <code>0.5</code>, <code>false</code>. Per-IP token bucket. With <code>$failClosed</code> left false, a connection is let through when the state file cannot be read.</li>
+      <li><code>Auth::__construct(array $users, array $keyFingerprints, ...)</code>: list, default empty lists. The allowlists. With both empty, every session is admitted.</li>
+      <li><code>Server::EXIT_DENIED</code>: int, default <code>129</code>. The exit status a refused session returns to the SSH client.</li>
+    </ul>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>. Several need an sshd <code>ForceCommand</code> setup to log in through, and <code>showcase.php</code> runs without one.</p>
+    <ul>
+      <li><code>hello-server.php</code>: The smallest end-to-end server: a session banner, used as a deployment smoke test.</li>
+      <li><code>spawn-bash.php</code>: The default in-process supervisor. It spawns a login bash in a sugar-pty for each connecting user.</li>
+      <li><code>spawn-program.php</code>: A SugarCraft <code>Program</code> mounted inside a sugar-pty subprocess.</li>
+      <li><code>run-program.php</code>: The wrapper program that <code>spawn-program.php</code> runs as the PTY child.</li>
+      <li><code>showcase.php</code>: Drives the middleware pipeline against a synthesised session in one process, with Logger, RateLimit and a custom middleware.</li>
+    </ul>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-ssh-server
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The suite boots through <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code> before any test arms a timer on the shared event loop. <code>sugar-testing</code> is a <code>require-dev</code> dependency.</p>
+
+    <!-- GENERATED by tools/gen-api-reference.php from sugar-ssh-server/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-ssh-server -->
+<p>Only methods declared in <code>sugar-ssh-server/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-sshserver">SugarCraft\SshServer</h3>
+<h4 id="api-sugarcraft-sshserver-cancellationexception"><code>CancellationException</code> <small>final class</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context cancelled: &lt;reason&gt;</code> — a bare throw used to be the only shape this channel could carry. <code>Context::cancel()</code> hands a supplied Throwable through to <code>err()</code> verbatim, so <code>cancel(new CancellationException(&#039;hangup received&#039;))</code> is the blessed way to attach a why without defining a class of your own.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-context"><code>Context</code> <small>final class</small></h4>
+<p>Immutable context object carrying cancellation, deadlines, and key-value metadata across the middleware chain.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static background(): self</code></td><td>Root context — never done, no values, not cancelable.</td></tr>
+<tr><td><code>withValue(string $k, mixed $v): self</code></td><td>Attach a key-value pair and return a new derived Context.</td></tr>
+<tr><td><code>withDeadline(\DateTimeImmutable $deadline): self</code></td><td>Return a new derived Context with the given deadline.</td></tr>
+<tr><td><code>withCancelable(): self</code></td><td>Return a new derived Context with an active cancellation signal.</td></tr>
+<tr><td><code>cancel(?\Throwable $reason = null): bool</code></td><td>Mark this Context (and all derived contexts) as cancelled.</td></tr>
+<tr><td><code>done(): bool</code></td><td>Returns true when this Context — or any ancestor it was derived from — has been cancelled, or when a deadline in the chain has expired.</td></tr>
+<tr><td><code>err(): ?\Throwable</code></td><td>Returns the cancellation or deadline error, or null if not done.</td></tr>
+<tr><td><code>deadline(): ?\DateTimeImmutable</code></td><td>The earliest deadline in this context&#039;s chain, or null when no node carries one.</td></tr>
+<tr><td><code>value(string $k): mixed</code></td><td>Look up a value by key, walking the parent chain.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-deadlineexceededexception"><code>DeadlineExceededException</code> <small>final class</small></h4>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(string $reason = &#039;&#039;)</code></td><td>The optional reason rides the fixed text as <code>context deadline exceeded: &lt;reason&gt;</code>. With no reason the message is the plain fixed string, so anything matching on it today keeps matching.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-ssh-server.</p>
+<h4 id="api-sugarcraft-sshserver-middleware"><code>Middleware</code> <small>interface</small></h4>
+<p>SSH session middleware contract.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next)</code></td><td>May return void (synchronous) or a \React\Promise\PromiseInterface (asynchronous). The transport will wait for the promise to settle before continuing the chain.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-server"><code>Server</code> <small>final class</small></h4>
+<p>SSH session entry point.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>use(Middleware $m): self</code></td><td>Append a middleware to the stack.</td></tr>
+<tr><td><code>withMiddleware(Middleware ...$ms): self</code></td><td>Append several middlewares at once, in order, clone-and-return — the varargs spelling of use(), mirroring the Go option-list form.</td></tr>
+<tr><td><code>onSession(callable $fn): self</code></td><td>Append a session hook to the stack without writing a class.</td></tr>
+<tr><td><code>withTransport(Transport $t): self</code></td><td>Override the active transport. Defaults to InProcessTransport when not called.</td></tr>
+<tr><td><code>transport(): Transport</code></td><td></td></tr>
+<tr><td><code>withLocale(string $code): self</code></td><td>Arm a catalogue locale for the notices this server renders.</td></tr>
+<tr><td><code>withKeepalive(int $intervalSeconds = 60): self</code></td><td>Arm an idle keepalive beat for sessions this server serves.</td></tr>
+<tr><td><code>serve(?Session $session = null, ?Context $ctx = null): int</code></td><td>Build the Session from the current environment (or use the injected one) and ask the active transport to run the middleware chain. Returns when the chain finishes — for a terminal subprocess (Spawn / BubbleTea) that&#039;s when the inner process exits or the SSH client disconnects.</td></tr>
+<tr><td><code>static resolveStatus(Session $session): int</code></td><td>The one answer to &#039;what code does this session leave behind?&#039;.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-session"><code>Session</code> <small>final class</small></h4>
+<p>Per-connection session metadata exposed to middleware.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $user = &#039;&#039;, public readonly string $clientHost = &#039;&#039;, public readonly int $clientPort = 0, public readonly string $serverHost = &#039;&#039;, public readonly int $serverPort = 0, public readonly string $term = &#039;xterm-256color&#039;, public readonly int $cols = self::DEFAULT_COLS, public readonly int $rows = self::DEFAULT_ROWS, public readonly ?string $tty = null, public readonly ?string $command = null, public readonly string $lang = &#039;C.UTF-8&#039;, public readonly ?string $sessionId = null, public readonly ?string $authMethod = null, public readonly ?string $keyFingerprint = null, public readonly ?string $clientVersion = null, public readonly ?string $serverVersion = null)</code></td><td></td></tr>
+<tr><td><code>static fromEnvironment(): self</code></td><td>Read the current sshd environment and build a Session.</td></tr>
+<tr><td><code>isInteractive(): bool</code></td><td></td></tr>
+<tr><td><code>withProtocolMetadata(?string $sessionId, ?string $authMethod, ?string $keyFingerprint, ?string $clientVersion, ?string $serverVersion): self</code></td><td>Create a new Session with protocol metadata populated.</td></tr>
+<tr><td><code>withSize(int $cols, int $rows): self</code></td><td>Create a new Session with a different terminal geometry, carrying every other field — protocol metadata included (parse-once/carry: rebuilds must never silently drop sessionId/authMethod/versions).</td></tr>
+<tr><td><code>exitStatus(): ?int</code></td><td>The child&#039;s exit code once a spawner has run one, else null.</td></tr>
+<tr><td><code>recordExitStatus(int $status): void</code></td><td>Transport-only: called by the transport loop as its child settles (see \SugarCraft\SshServer\Transport\ChildSpawner), which is the only place a child&#039;s exit code is known.</td></tr>
+<tr><td><code>refused(): bool</code></td><td>True when a middleware stopped this session rather than serving it.</td></tr>
+<tr><td><code>markRefused(): void</code></td><td>Say that this session was refused, so the process can exit nonzero.</td></tr>
+<tr><td><code>toLogContext(): array</code></td><td>The fields a session-start/end record is made of.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-streamhelper"><code>StreamHelper</code> <small>final class</small></h4>
+<p>Opens or validates the stderr-style report stream shared by middleware.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static chmodOpenedFile($stream, string $path, int $mode): void</code></td><td>Set a file mode through a path name, but only while that name still resolves to the inode the caller actually opened.</td></tr>
+<tr><td><code>static openOrValidate(mixed $stream, string $target = &#039;php://stderr&#039;, string $mode = &#039;w&#039;): mixed</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transport"><code>Transport</code> <small>interface</small></h4>
+<p>Pluggable strategy that decides HOW the middleware stack runs for a connected session.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>run(Context $ctx, Session $session, array $stack): int</code></td><td>Run the middleware <code>$stack</code> against <code>$session</code>. Implementations choose whether to walk the stack inline (HostSshd) or set up extra plumbing (InProcess) before delegating to terminal middleware that drive the actual user-visible behaviour.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transportaware"><code>TransportAware</code> <small>interface</small></h4>
+<p>Contract for middleware that needs the active transport injected.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>setTransport(ChildSpawner $transport): void</code></td><td>Receive the transport driving the current stack.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-channel">SugarCraft\SshServer\Channel</h3>
+<h4 id="api-sugarcraft-sshserver-channel-channelhandler"><code>ChannelHandler</code> <small>interface</small></h4>
+<p>Interface for handling SSH channel-level messages.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>cols(): int</code></td><td>Current columns the handler wants the spawned PTY to carry.</td></tr>
+<tr><td><code>rows(): int</code></td><td>Current rows the handler wants the spawned PTY to carry.</td></tr>
+<tr><td><code>handlePtyReq(PtyReqMsg $msg, Session $session): void</code></td><td>Handle a PTY request message.</td></tr>
+<tr><td><code>handleWindowChange(WindowChangeMsg $msg, Session $session): void</code></td><td>Handle a window-change message.</td></tr>
+<tr><td><code>handleShell(ShellMsg $msg, Session $session): void</code></td><td>Handle a shell request message.</td></tr>
+<tr><td><code>handleExec(ExecMsg $msg, Session $session): void</code></td><td>Handle an exec request message.</td></tr>
+<tr><td><code>handleSignal(SignalMsg $msg, Session $session): void</code></td><td>Handle a signal message.</td></tr>
+<tr><td><code>handleEnv(EnvMsg $msg, Session $session): void</code></td><td>Handle an environment variable request message.</td></tr>
+<tr><td><code>handleBreak(BreakMsg $msg, Session $session): void</code></td><td>Handle a break request message.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-channelmsg"><code>ChannelMsg</code> <small>abstract class</small></h4>
+<p>Base class for all SSH channel-level messages.</p>
+<h4 id="api-sugarcraft-sshserver-channel-defaultchannelhandler"><code>DefaultChannelHandler</code> <small>final class</small></h4>
+<p>Default channel handler wiring the common case: PTY + shell.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly ?ChildSpawner $spawner = null, ?Session $session = null, private readonly array $acceptEnv = [], private readonly ?string $shell = null, private readonly array $allowedExec = [], ?callable $execGate = null, $stderr = null)</code></td><td></td></tr>
+<tr><td><code>handlePtyReq(PtyReqMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleWindowChange(WindowChangeMsg $msg, Session $session): void</code></td><td>Apply a peer&#039;s window change. A zero in either dimension means the sender declared nothing for it, and the current size is KEPT — the pty-req leg already resolved the session/default fallback once, and a mid-session non-declaration must not demote a known terminal to the 80×24 floor.</td></tr>
+<tr><td><code>handleShell(ShellMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleExec(ExecMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>execAllowed(Session $session, array $argv): bool</code></td><td>May this decoded request be spawned?</td></tr>
+<tr><td><code>handleSignal(SignalMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleEnv(EnvMsg $msg, Session $session): void</code></td><td>Store a peer-supplied environment variable, within the budget.</td></tr>
+<tr><td><code>handleBreak(BreakMsg $msg, Session $session): void</code></td><td>Receive the RFC 4254 <code>break</code> signal — and do nothing with it.</td></tr>
+<tr><td><code>cols(): int</code></td><td></td></tr>
+<tr><td><code>rows(): int</code></td><td></td></tr>
+<tr><td><code>ptyAllocated(): ?bool</code></td><td></td></tr>
+<tr><td><code>envVars(): array</code></td><td></td></tr>
+<tr><td><code>shellRequested(): bool</code></td><td></td></tr>
+<tr><td><code>execRequested(): bool</code></td><td></td></tr>
+<tr><td><code>pendingCommand(): array</code></td><td></td></tr>
+<tr><td><code>static decodeCommandString(string $command): array</code></td><td>Split a command string into argv tokens.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-delegatingchannelhandler"><code>DelegatingChannelHandler</code> <small>abstract class</small></h4>
+<p>Partial-override base for ChannelHandler: forward everything to a delegate, then override only the verbs you actually care about.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(protected readonly ChannelHandler $delegate)</code></td><td></td></tr>
+<tr><td><code>cols(): int</code></td><td></td></tr>
+<tr><td><code>rows(): int</code></td><td></td></tr>
+<tr><td><code>handlePtyReq(PtyReqMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleWindowChange(WindowChangeMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleShell(ShellMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleExec(ExecMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleSignal(SignalMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleEnv(EnvMsg $msg, Session $session): void</code></td><td></td></tr>
+<tr><td><code>handleBreak(BreakMsg $msg, Session $session): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-channel-msg">SugarCraft\SshServer\Channel\Msg</h3>
+<h4 id="api-sugarcraft-sshserver-channel-msg-breakmsg"><code>BreakMsg</code> <small>final class</small></h4>
+<p>Break channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $breakLengthMs = 0)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-envmsg"><code>EnvMsg</code> <small>final class</small></h4>
+<p>Environment channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $name, public readonly string $value)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-execmsg"><code>ExecMsg</code> <small>final class</small></h4>
+<p>Exec channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $command)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-ptyreqmsg"><code>PtyReqMsg</code> <small>final class</small></h4>
+<p>PTY request channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly bool $wantPty, public readonly string $term = &#039;&#039;, public readonly int $cols = 80, public readonly int $rows = 24, public readonly int $widthPx = 0, public readonly int $heightPx = 0)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-shellmsg"><code>ShellMsg</code> <small>final class</small></h4>
+<p>Shell channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly bool $wantShell, public readonly string $subsystem = &#039;&#039;)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-signalmsg"><code>SignalMsg</code> <small>final class</small></h4>
+<p>Signal channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $signalName)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-channel-msg-windowchangemsg"><code>WindowChangeMsg</code> <small>final class</small></h4>
+<p>Window-change channel message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $cols, public readonly int $rows, public readonly int $widthPx = 0, public readonly int $heightPx = 0)</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-middleware">SugarCraft\SshServer\Middleware</h3>
+<h4 id="api-sugarcraft-sshserver-middleware-asyncmiddleware"><code>AsyncMiddleware</code> <small>abstract class</small></h4>
+<p>Abstract base for middleware that needs to perform async I/O before delegating to the next handler.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): PromiseInterface</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-auth"><code>Auth</code> <small>final class</small></h4>
+<p>Username / public-key allowlist gate.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $users = [], array $keyFingerprints = [], $stderr = null, ?callable $fingerprintValidator = null, array $userKeys = [])</code></td><td></td></tr>
+<tr><td><code>static allowingUsers(array $users): self</code></td><td>Gate on usernames only, constructed so it cannot be unarmed.</td></tr>
+<tr><td><code>static pairs(array $userKeys): self</code></td><td>Gate on the name↔key pairing, constructed so it cannot be unarmed.</td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-authratelimitbridge"><code>AuthRateLimitBridge</code> <small>final class</small></h4>
+<p>Turns an auth-gate refusal into a token-bucket penalty.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly Middleware $gate, private readonly RateLimit $rateLimit, private readonly float $penalty = 3.0)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-bubbletea"><code>BubbleTea</code> <small>final class</small></h4>
+<p>Terminal middleware that mounts a SugarCraft Program for the connected user — the legacy HostSshd-style entry point.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(callable $factory)</code></td><td></td></tr>
+<tr><td><code>setTransport(ChildSpawner $transport): void</code></td><td>TransportAware seam invoked by InProcessTransport at stack-walk time. The mere presence of an injected ChildSpawner means we&#039;re under in-process mode and inline Program execution would conflict with the bytes-pump loop — so flag it for <code>handle()</code> to refuse.</td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-closuremiddleware"><code>ClosureMiddleware</code> <small>final class</small></h4>
+<p>A middleware that IS a closure — the one-liner door on the stack.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(callable $fn)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next)</code></td><td>MiddlewareTypingContract: pass-through exemption — see that guard&#039;s const for why this one declaration carries no native return type.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-keepalive"><code>Keepalive</code> <small>final class</small></h4>
+<p>The keepalive interval — a value, not a middleware.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly int $intervalSeconds = 60)</code></td><td></td></tr>
+<tr><td><code>interval(): int</code></td><td>Get the keepalive interval in seconds.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-logger"><code>Logger</code> <small>final class</small></h4>
+<p>Connect / disconnect logger.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct($target = null)</code></td><td></td></tr>
+<tr><td><code>static auto(): self</code></td><td>Resolve the sink from the deployment environment: the configured <code>SSH_SERVER_LOG</code> file when present, stderr otherwise. Prefer this over <code>new Logger()</code> in boot code so the resolution is visible at the call site.</td></tr>
+<tr><td><code>static toFile(string $path): self</code></td><td>Append to <code>$path</code>, creating it <code>0600</code> when it does not exist.</td></tr>
+<tr><td><code>static toStream($stream): self</code></td><td>Write to an already-open resource the caller keeps (a pipe into the daemon&#039;s logger, a test buffer). Not closed by this middleware.</td></tr>
+<tr><td><code>static toStderr(): self</code></td><td>Explicitly choose the process error stream. Under <code>ForceCommand</code> that is the connecting client&#039;s extended-data channel — use it only where that is what you want (a local run, a tool, a test).</td></tr>
+<tr><td><code>target(): string</code></td><td>Which sink this instance resolved to, as a short machine-readable description: <code>file:&lt;path&gt;</code>, <code>stderr</code>, or <code>stream</code>. The client-visible hazard of <code>stderr</code> is why this is public.</td></tr>
+<tr><td><code>__destruct()</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-ratelimit"><code>RateLimit</code> <small>final class</small></h4>
+<p>Connection rate-limiter using token-buckets persisted to a file.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly string $statePath, private readonly int $burst = 5, private readonly float $ratePerSec = 0.5, $stderr = null, private readonly bool $failClosed = false, private readonly ?int $userBurst = null, private readonly ?float $userRatePerSec = null)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+<tr><td><code>penalize(Session $session, float $tokens = 1.0): void</code></td><td>Charge an extra <code>$tokens</code> against a session&#039;s buckets without the accept/reject semantics of a connect. Intended to be called from an auth-failure hook so repeated bad credentials drain the limiter faster than connection attempts alone.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-spawn"><code>Spawn</code> <small>final class</small></h4>
+<p>Terminal middleware that spawns a child process inside the active transport&#039;s PTY supervisor.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(callable $factory)</code></td><td></td></tr>
+<tr><td><code>setTransport(ChildSpawner $transport): void</code></td><td>Duck-typed seam invoked by InProcessTransport at stack-walk time so this middleware doesn&#039;t have to be aware of which transport drives the Server. Production code never calls this directly.</td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-subsystem"><code>Subsystem</code> <small>final class</small></h4>
+<p>Middleware that dispatches SSH subsystem requests to a registered SubsystemHandler.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>register(string $name, SubsystemHandler $handler): void</code></td><td>Register a handler for a named subsystem.</td></tr>
+<tr><td><code>has(string $name): bool</code></td><td>Returns true when a handler is registered for the given name.</td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-middleware-auth">SugarCraft\SshServer\Middleware\Auth</h3>
+<h4 id="api-sugarcraft-sshserver-middleware-auth-authmethods"><code>AuthMethods</code> <small>final class</small></h4>
+<p>Records an informational list of accepted authentication methods in Context and echoes it to the client.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $methods, $stdout = null, bool $announce = false)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+<tr><td><code>static fromContext(Context $ctx): array</code></td><td>Read the informational auth-methods list back from a Context (convenience for downstream middleware / logging). This is the list the operator declared via the constructor — it is NOT proof that any method actually authenticated the session.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-auth-certificateauth"><code>CertificateAuth</code> <small>final class</small></h4>
+<p>X.509 certificate gate -- reads a certificate the deployment exports.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(callable $validate, bool $required = true, $stderr = null)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-auth-keyboardinteractive"><code>KeyboardInteractive</code> <small>final class</small></h4>
+<p>Challenge-response keyboard-interactive authentication.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $challenges, ?callable $validate = null, string $name = &#039;&#039;, string $instruction = &#039;&#039;, $stdout = null, $stdin = null, $stderr = null)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-auth-passwordauth"><code>PasswordAuth</code> <small>final class</small></h4>
+<p>Password-authentication gate.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(callable $validate, $stderr = null)</code></td><td></td></tr>
+<tr><td><code>handle(Context $ctx, Session $session, callable $next): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-middleware-subsystem">SugarCraft\SshServer\Middleware\Subsystem</h3>
+<h4 id="api-sugarcraft-sshserver-middleware-subsystem-sftpstub"><code>SftpStub</code> <small>final class</small></h4>
+<p>QUARANTINED EXAMPLE — demo wiring only, never for production use.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>handle(Context $ctx, Session $session): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-middleware-subsystem-subsystemhandler"><code>SubsystemHandler</code> <small>interface</small></h4>
+<p>Handles SSH subsystem requests.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>handle(Context $ctx, Session $session): void</code></td><td>Handle the subsystem request.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-sshserver-transport">SugarCraft\SshServer\Transport</h3>
+<h4 id="api-sugarcraft-sshserver-transport-childspawner"><code>ChildSpawner</code> <small>interface</small></h4>
+<p>Marker interface for transports that can spawn a child process inside a controlled PTY and pump bytes on its behalf.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>runChild(Session $session, array $cmd, ?array $env = null): int</code></td><td>Spawn <code>$cmd</code> inside a fresh PTY and pump bytes between the supervisor&#039;s STDIN/STDOUT and the master fd until the child exits, returns the exit code.</td></tr>
+<tr><td><code>signalChild(int $signal): void</code></td><td>Forward a signal to the live child process.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transport-dispatchesmiddlewarestack"><code>DispatchesMiddlewareStack</code> <small>trait</small></h4>
+<p>Shared middleware-stack walk owning the library&#039;s single promise settle point.</p>
+<h4 id="api-sugarcraft-sshserver-transport-hostsshdtransport"><code>HostSshdTransport</code> <small>final class</small></h4>
+<p>Legacy transport — runs the middleware stack directly in the supervisor process. STDIN/STDOUT are the slave side of sshd&#039;s PTY (sshd allocated it for the SSH session and exposed it via the inherited file descriptors).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>run(Context $ctx, Session $session, array $stack): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transport-inprocesstransport"><code>InProcessTransport</code> <small>final class</small></h4>
+<p>Default transport — allocates a <code>sugar-pty</code> master/slave pair via the injected (or factory-resolved) PtySystem, spawns the user&#039;s cmd as a subprocess with <code>controllingTerminal: true</code>, and pumps bytes between the supervisor&#039;s STDIN/STDOUT and the PTY master via PosixPump.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?PtySystem $system = null)</code></td><td></td></tr>
+<tr><td><code>withSizeProvider(callable $provider): self</code></td><td>Returns a clone of this transport with the given size provider — used by SIGWINCH forwarding to query the host&#039;s PTY winsize. Production code rarely needs to call this.</td></tr>
+<tr><td><code>armKeepalive(int $intervalSeconds): void</code></td><td>Begin emitting the keepalive beat: at most one per transport, replaced (not stacked) by later calls.</td></tr>
+<tr><td><code>setKeepaliveCallback(callable $callback): void</code></td><td>Register a callback to be invoked in the pump loop whenever <code>stream_select</code> reports no ready streams (idle timeout).</td></tr>
+<tr><td><code>setChannelHandler(ChannelHandler $handler): void</code></td><td>Set the channel handler for dispatching SSH channel messages.</td></tr>
+<tr><td><code>pty(): MasterPty</code></td><td>Returns the active master PTY for the current session. Valid only while a session is actively being pumped — callers must not store the reference across pump-loop boundaries. Its single legitimate caller in this library is the armed keepalive beat (armKeepalive()); the accessor stays public so custom pump callbacks registered via setKeepaliveCallback() can reach the master too.</td></tr>
+<tr><td><code>run(Context $ctx, Session $session, array $stack): int</code></td><td></td></tr>
+<tr><td><code>runChild(Session $session, array $cmd, ?array $env = null, $stdin = null, $stdout = null, ?Context $ctx = null): int</code></td><td>Spawn <code>$cmd</code> as a subprocess inside a fresh PTY and pump bytes between the caller&#039;s STDIN/STDOUT (or the supervisor&#039;s process stdio if those are null) and the PTY master until the child exits or one of the stdio streams hits EOF.</td></tr>
+<tr><td><code>signalChild(int $signal): void</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transport-keepalivearming"><code>KeepaliveArming</code> <small>interface</small></h4>
+<p>The one pump-idle hook that \SugarCraft\SshServer\Server::withKeepalive() arms.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>armKeepalive(int $intervalSeconds): void</code></td><td>Begin emitting the keepalive beat: at most one per transport, replaced (not stacked) by later calls.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sshserver-transport-promiseawait"><code>PromiseAwait</code> <small>final class</small></h4>
+<p>Shared synchronous-promise await helper.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static settle(PromiseInterface $promise, float $timeout = 30.0, ?Context $ctx = null): void</code></td><td>Synchronously wait for a promise to settle.</td></tr>
+</tbody>
+</table>
+
     <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
 
     <h3 id="the-client-gets-exit-status-129-and-the-child-never-starts" style="margin-top: 24px;">The client gets exit status 129 and the child never starts</h3>
@@ -329,6 +796,14 @@ exit(Server::new()
 
     <h3 id="one-abusive-client-locks-out-a-whole-bastion" style="margin-top: 24px;">One abusive client locks out a whole bastion</h3>
     <p>The <code>ip:</code> bucket in <code>RateLimit</code> keys on the direct TCP peer, so a bastion, a load balancer or a <code>ProxyJump</code> hop collapses many operators into one bucket. Enable the username bucket (<code>$userBurst</code>), or move throttling to the fronting layer. Keep the state file and its lock on a local filesystem, because <code>flock</code> on NFS can be silently absent.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The server is inspired by charmbracelet/wish, which is also cited in the docblocks. Other classes mirror Go concepts directly.</p>
+    <ul>
+      <li><code>Context</code>: Go <code>context.Context</code>: <code>Done()</code> and <code>Deadline()</code> semantics</li>
+      <li>Promise handling in the transports: charmbracelet/wish <code>PromiseDispatch.awaitPromise</code></li>
+      <li><code>HostSshdTransport</code>: sugar-ssh-server's own pre-PTY-upgrade architecture, kept for existing deployments. It has no upstream counterpart.</li>
+    </ul>
 
     <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
     <p>The package has no separate changelog file and no release tag in the monorepo, so its history is the commit log of <code>sugar-ssh-server/</code>, mirrored on <a href="https://github.com/sugarcraft/sugar-ssh-server/commits/master">GitHub</a>. One change to know about when you upgrade: <code>Server</code> is immutable. Before audit sugar-ssh-server-008, <code>use()</code> changed the server in place. It now returns a new server, so a bare <code>$server->use($m);</code> no longer registers anything.</p>

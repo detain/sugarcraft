@@ -9,7 +9,7 @@ use SugarCraft\Code\Chat;
 
 /**
  * Internal Msg carrying a file-based command's expanded prompt back from the
- * forked child that expanded it (audit 15b-20).
+ * forked child that expanded it.
  *
  * WHY THE EXPANSION RUNS OFF update(): a template's `` !`…` `` forms are real
  * shell commands sharing a {@see \SugarCraft\Code\Commands\CommandSpec::SHELL_BUDGET_SECONDS}

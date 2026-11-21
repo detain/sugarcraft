@@ -5761,7 +5761,7 @@ final class Runtime
 
     /**
      * Which instruction documents one prompt build inlines and which it defers
-     * to a pointer line — audit 15d-09 / C3's budget, as one definition.
+     * to a pointer line — C3's budget, as one definition.
      *
      * The same budget-and-pointer design as the standing rules: one running
      * budget per build in loader order, the pointer fence's worst case reserved
@@ -5942,7 +5942,7 @@ final class Runtime
 
     /**
      * The enabled skills whose bodies the most recent prompt build deferred
-     * for budget, keyed by skill name, mapped to why (audit R1).
+     * for budget, keyed by skill name, mapped to why.
      *
      * Before this, a deferral existed only as the pointer line inside the
      * prompt it was missing from: nothing a caller, a doctor report or a test

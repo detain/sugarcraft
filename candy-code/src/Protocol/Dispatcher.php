@@ -37,6 +37,7 @@ use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
 use SugarCraft\Code\Server\Ws\Outbox;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 use SugarCraft\ServeProtocol\Protocol;
 
 /**
@@ -379,22 +380,23 @@ final class Dispatcher implements MessageHandler
             // Refused before the parse (CWPD-1): the meter never saw an id,
             // so the answer carries a null one — the shape JsonRpc::decode
             // refusals already use.
-            $client->send(JsonRpc::error(null, RpcError::of(ErrorCode::RateLimited, 'send rate exceeded', null, ['retryAfterMs' => 1000])));
+            $client->send(JsonRpc::error(null, RpcError::of(ErrorCode::RateLimited, 'send rate exceeded', null, ['retryAfterMs' => 1000])->toLibrary()));
 
             return;
         }
 
-        $request = JsonRpc::decode($payload);
-        if (\is_array($request)) {
-            [$error, $id] = $request;
+        $decoded = JsonRpc::decode($payload);
+        if (\is_array($decoded)) {
+            [$error, $id] = $decoded;
             $client->send(JsonRpc::error($id, $error));
 
             return;
         }
+        $request = Request::fromLibrary($decoded);
 
         if (!$client->admit()) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::RateLimited, 'too many requests', null, ['retryAfterMs' => 1000])));
+                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::RateLimited, 'too many requests', null, ['retryAfterMs' => 1000])->toLibrary()));
             }
 
             return;
@@ -402,7 +404,7 @@ final class Dispatcher implements MessageHandler
 
         if (!$client->isInitialized() && $request->method !== ServerMethods::HELLO) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+                $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')->toLibrary()));
             }
             $client->outbox()->flush();
             $connection->close(self::CLOSE_NOT_INITIALIZED, 'not initialized');
@@ -575,7 +577,7 @@ final class Dispatcher implements MessageHandler
     {
         if ($e instanceof RpcError) {
             if ($request->hasId) {
-                $client->send(JsonRpc::error($request->id, $e));
+                $client->send(JsonRpc::error($request->id, $e->toLibrary()));
             }
 
             return;
@@ -583,7 +585,7 @@ final class Dispatcher implements MessageHandler
 
         $this->logFailure($client, $request, $e);
         if ($request->hasId) {
-            $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
+            $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')->toLibrary()));
         }
     }
 
@@ -702,7 +704,7 @@ final class Dispatcher implements MessageHandler
         }
         $text = JsonRpc::result($request->id, $result);
         if (\strlen($text) > self::MAX_SERVER_FRAME_BYTES) {
-            $text = JsonRpc::error($request->id, self::tooLarge());
+            $text = JsonRpc::error($request->id, self::tooLarge()->toLibrary());
         }
         $client->send($text);
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Skills;
 
 /**
- * Every read of a skill's files off disk, bounded (audit 15d-27).
+ * Every read of a skill's files off disk, bounded.
  *
  * The prompt budgets {@see \SugarCraft\Code\Context\CompactorConfig} holds
  * enabled skill bodies to cap only what is SPLICED into a request; until this
