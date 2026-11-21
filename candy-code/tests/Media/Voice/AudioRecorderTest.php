@@ -348,6 +348,93 @@ final class AudioRecorderTest extends TestCase
         }
     }
 
+    public function testCancelOfATermTrappingRecorderReturnsAtOnceAndKillsItOnTheLoop(): void
+    {
+        $this->recorderAdoptFakeHome();
+        $this->recorderPlantShim('arecord', "trap '' INT TERM; sleep 30");
+
+        $result = AudioRecorder::start(VoiceConfig::fromSettings([
+            'voice.baseUrl' => 'https://example.invalid/v1',
+        ]));
+        self::assertNotNull($result['recording']);
+        $recording = $result['recording'];
+
+        $live = new ReflectionProperty(AudioRecorder::class, 'live');
+        $process = $live->getValue()[$recording->path]['process'] ?? null;
+        self::assertIsResource($process);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+        self::assertGreaterThan(0, $pid);
+
+        self::assertNotSame('', $this->recorderWaitFor(
+            fn (): string => (string) (@\file_get_contents((string) $this->recorderBinDir . '/arecord.log') ?: ''),
+            2.0,
+        ));
+        \usleep(100_000);
+
+        // The Esc press runs inside update() with the loop live: the old
+        // synchronous ladder held it for the whole TERM grace.
+        $began = \hrtime(true);
+        AudioRecorder::cancel($recording);
+        $issueSeconds = (\hrtime(true) - $began) / 1e9;
+
+        self::assertLessThan(0.2, $issueSeconds, 'cancel must not wait on the TERM grace');
+        self::assertFileDoesNotExist($recording->path, 'cancel deletes the take at once');
+        self::assertTrue(AudioRecorder::stopping(), 'the dying child is still tracked, so a new take waits for the microphone');
+        $late = AudioRecorder::stop($recording)();
+        self::assertInstanceOf(AsyncCmd::class, $late);
+        $lateAnswer = 'unsettled';
+        $late->promise->then(static function (mixed $value) use (&$lateAnswer): void {
+            $lateAnswer = $value;
+        });
+        self::assertNull($lateAnswer, 'a stop of a cancelled take answers no Msg and never transcribes the deleted file');
+
+        $loop = Loop::get();
+        $ticks = 0;
+        $heartbeat = $loop->addPeriodicTimer(0.05, static function () use (&$ticks, $loop): void {
+            $ticks++;
+            if (!AudioRecorder::stopping()) {
+                $loop->stop();
+            }
+        });
+        $leash = $loop->addTimer(5.0, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($heartbeat);
+        $loop->cancelTimer($leash);
+
+        self::assertFalse(AudioRecorder::stopping(), 'the cancel ladder settled on the loop');
+        self::assertGreaterThan(5, $ticks, 'the loop kept ticking while the ladder ran');
+        self::assertFalse(\is_resource($process), 'the handle was reaped');
+        self::assertFalse(\file_exists('/proc/' . $pid) && self::recorderIsLiveProc($pid), 'the recorder process is gone');
+    }
+
+    public function testASecondStopOfAPendingTakeAnswersNoMsgAndLeavesTheFirstToSettle(): void
+    {
+        $this->recorderAdoptFakeHome();
+        $this->recorderPlantShim('arecord', 'sleep 30');
+
+        $result = AudioRecorder::start(VoiceConfig::fromSettings([
+            'voice.baseUrl' => 'https://example.invalid/v1',
+        ]));
+        self::assertNotNull($result['recording']);
+        $recording = $result['recording'];
+
+        $first = AudioRecorder::stop($recording);
+        $second = AudioRecorder::stop($recording)();
+        self::assertInstanceOf(AsyncCmd::class, $second);
+
+        $answered = 'unsettled';
+        $second->promise->then(static function (mixed $value) use (&$answered): void {
+            $answered = $value;
+        });
+
+        self::assertNull($answered, 'the second Cmd settles at once with no Msg: it never signals the child');
+        self::assertTrue(AudioRecorder::stopping(), 'the second stop leaves the first stop in charge of the child');
+
+        $stopped = $this->recorderSettleStop($recording, $first);
+        self::assertSame($recording, $stopped->recording, 'the first stop still answers with the take');
+        self::assertFalse(AudioRecorder::stopping());
+    }
+
     public function testAVanishedBinaryIsRefusedAtProbeNotSpawnedBlind(): void
     {
         $this->recorderAdoptFakeHome();

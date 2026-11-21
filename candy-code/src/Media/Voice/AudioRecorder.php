@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Media\Voice;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\App\VoiceTakeStoppedMsg;
@@ -15,6 +16,8 @@ use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use Throwable;
+
+use function React\Promise\resolve;
 
 /**
  * Captures one microphone take to a WAV file (C-TUI-6.l, GAP-MOD-23).
@@ -51,10 +54,12 @@ use Throwable;
  * ({@see BoundedShutdown::escalateAsync()} for the ladder), so a recorder
  * that ignores SIGINT costs the TUI nothing while the grace runs (AUD §7
  * rank 6: the old blocking stop froze the UI for up to about 2.5 s). A
- * cancel (Esc, or the shutdown hook) skips the finalize — the take is being
- * thrown away — and escalates straight to teardown, deleting the file. The
- * cancel keeps the synchronous ladder ({@see BoundedShutdown::escalate()}):
- * the shutdown hook runs with no loop left to yield to.
+ * cancel (Esc) skips the finalize — the take is being thrown away — deletes
+ * the file at once and runs the TERM/KILL ladder on the same loop timers, so
+ * the Esc press returns at once too. Only the exit path
+ * ({@see teardownAll()}) keeps the synchronous ladder
+ * ({@see BoundedShutdown::escalate()}): the shutdown hook runs with no loop
+ * left to yield to, and it finishes any cancel still in flight.
  *
  * NO AUDIO BYTES ARE EVER LOGGED. Nothing here reads the file: the child
  * writes it, {@see Transcriber::transcribe()} uploads it once and unlinks
@@ -97,6 +102,15 @@ final class AudioRecorder
      * @var array<string, mixed>
      */
     private static array $stopping = [];
+
+    /**
+     * The ladder timer of each cancel still in flight, keyed by WAV path, so
+     * the exit path and {@see resetForTesting()} can disarm it once they have
+     * torn the child down themselves.
+     *
+     * @var array<string, TimerInterface>
+     */
+    private static array $cancelTimers = [];
 
     /**
      * First backend on PATH, or '' when neither exists. Injectable so the
@@ -248,16 +262,22 @@ final class AudioRecorder
      * when the take left no readable sample behind, since an
      * interrupted-then-killed recorder can die before writing anything.
      *
-     * The take leaves the live set at once, so a second stop or a cancel of
-     * the same take cannot signal it twice; the child stays reachable through
-     * the pending-stop set until the ladder sees it gone. A take with no
-     * recorder behind it resolves on the Cmd's first run.
+     * The take leaves the live set at once, so a cancel of the same take
+     * cannot signal it twice, and a second stop of a take whose child is
+     * still pending returns a Cmd that resolves to no Msg: only the first
+     * Cmd drives the ladder and answers with the take. The child stays
+     * reachable through the pending-stop set until the ladder sees it gone.
+     * A take with no recorder behind it resolves on the Cmd's first run.
      *
      * @return \Closure(): \SugarCraft\Core\AsyncCmd
      */
     public static function stop(AudioRecording $recording): \Closure
     {
         $entry = self::$live[$recording->path] ?? null;
+
+        if ($entry === null && \array_key_exists($recording->path, self::$stopping)) {
+            return Cmd::promise(static fn (): PromiseInterface => resolve(null));
+        }
 
         if ($entry !== null) {
             unset(self::$live[$recording->path]);
@@ -286,20 +306,27 @@ final class AudioRecorder
         });
     }
 
-    /** True while a stop Cmd is still waiting on a recorder child. */
+    /** True while a stop Cmd or a cancel is still waiting on a recorder child. */
     public static function stopping(): bool
     {
         return self::$stopping !== [];
     }
 
-    /** Throw the take away: no finalize wait, delete the file either way. */
+    /**
+     * Throw the take away: no finalize wait, delete the file either way. The
+     * TERM/KILL ladder runs on loop timers, because the Esc press that calls
+     * this runs inside update() with the loop live; the child stays in the
+     * pending set until the ladder sees it gone, so a new take is refused
+     * while it may still hold the microphone and the exit path still
+     * reaches it.
+     */
     public static function cancel(AudioRecording $recording): void
     {
         $entry = self::$live[$recording->path] ?? null;
 
         if ($entry !== null) {
             unset(self::$live[$recording->path]);
-            self::teardown($entry['process']);
+            self::teardownAsync($recording->path, $entry['process']);
         }
 
         @\unlink($recording->path);
@@ -323,6 +350,7 @@ final class AudioRecorder
             self::teardown($process);
         }
 
+        self::disarmCancelTimers();
         self::$live = [];
         self::$stopping = [];
     }
@@ -355,6 +383,7 @@ final class AudioRecorder
             self::teardown($process);
         }
 
+        self::disarmCancelTimers();
         self::$live = [];
         self::$stopping = [];
     }
@@ -522,9 +551,61 @@ final class AudioRecorder
     }
 
     /**
+     * The cancel's ladder: TERM then KILL on loop timers with the same
+     * budgets as {@see teardown()}, the child held in the pending set until
+     * it is seen gone (or its kill budget is spent, when the reap is left to
+     * {@see BoundedShutdown::reapWhenExited()}).
+     */
+    private static function teardownAsync(string $path, mixed $process): void
+    {
+        if (!\is_resource($process)) {
+            return;
+        }
+
+        if (self::gone($process)) {
+            self::reap($process);
+
+            return;
+        }
+
+        $loop = Loop::get();
+        self::$stopping[$path] = $process;
+        self::$cancelTimers[$path] = BoundedShutdown::escalateAsync(
+            $loop,
+            static function (int $signal) use ($process): void {
+                self::signal($process, $signal);
+            },
+            static fn (): bool => self::gone($process),
+            static function (bool $gone) use ($loop, $path, $process): void {
+                if ($gone) {
+                    self::reap($process);
+                } elseif (\is_resource($process)) {
+                    BoundedShutdown::reapWhenExited($loop, $process);
+                }
+
+                if ((self::$stopping[$path] ?? null) === $process) {
+                    unset(self::$stopping[$path], self::$cancelTimers[$path]);
+                }
+            },
+            self::TERMINATE_GRACE_SECONDS,
+            self::KILL_GRACE_SECONDS,
+        );
+    }
+
+    /** Disarm every cancel ladder still on the loop; its child was already torn down. */
+    private static function disarmCancelTimers(): void
+    {
+        foreach (self::$cancelTimers as $timer) {
+            Loop::get()->cancelTimer($timer);
+        }
+
+        self::$cancelTimers = [];
+    }
+
+    /**
      * TERM then KILL through the shared synchronous ladder, then close the
-     * handle. Used by cancel and the exit path only; {@see stop()} runs the
-     * same budgets on the loop.
+     * handle. Used by the exit path only; {@see stop()} and {@see cancel()}
+     * run the same budgets on the loop.
      */
     private static function teardown(mixed $process): void
     {
