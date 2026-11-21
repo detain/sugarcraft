@@ -1409,9 +1409,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * that recorded no card has none to settle — updateRun() finds no file.
      *
      * A row the run already settled keeps its outcome: a throw after a
-     * truthful COMPLETE does not make the work it reported undone, and a
-     * card already off RUNNING keeps its outcome too. Nothing is swallowed;
-     * the caller sees the same throwable it saw before.
+     * truthful COMPLETE does not make the work it reported undone. Its card
+     * is then left as the run's own settle wrote it — even when that write
+     * failed and left it RUNNING, since the row's outcome is decided and the
+     * throw's message is not why the run ended. A card already off RUNNING
+     * keeps its outcome too. Nothing is swallowed; the caller sees the same
+     * throwable it saw before.
      *
      * @param \Closure(): ToolResult $run
      */
@@ -1420,12 +1423,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         try {
             return $run();
         } catch (\Throwable $e) {
-            if (!$subAgent->isComplete() && !$subAgent->isStopped()) {
+            $settled = $subAgent->isComplete() || $subAgent->isStopped();
+            if (!$settled) {
                 $subAgent->status = SubAgent::STATUS_FAILED;
                 $subAgent->error = $e->getMessage();
                 $subAgent->completedAt ??= new \DateTimeImmutable();
             }
-            if ($cardScope !== null) {
+            if ($cardScope !== null && !$settled) {
                 $error = $e->getMessage();
                 \SugarCraft\Code\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($error): array {
                     if ($card['status'] !== \SugarCraft\Code\Agents\Live\AgentRunCards::STATUS_RUNNING) {

@@ -151,6 +151,50 @@ final class TaskToolExecuteMergeTest extends TestCase
     }
 
     /**
+     * A row that already settled COMPLETE keeps its card out of the throw's
+     * reach: when the run's own card settle was lost (AgentRunCards::updateRun()
+     * answers null on a failed lock or write) and the finished frame then
+     * throws, the card must not be rewritten to FAILED with the throw's
+     * message — the run delivered its report, and its row says so.
+     */
+    public function testAThrowAfterASettledRowDoesNotFailItsCard(): void
+    {
+        $session = 'merge-' . bin2hex(random_bytes(5));
+        $manager = self::sessionManager([]);
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new(new ScriptedProvider([new CompleteResponse(content: 'reported')]), 'm')->withSessionId($session))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($session): void {
+                if ($activity->op !== SubAgentActivity::OP_FINISHED) {
+                    return;
+                }
+                // Stand in for the settle write $finish lost: the card is back
+                // to RUNNING, the row already COMPLETE.
+                $runId = AgentRunCards::runs($session)[0]['runId'];
+                AgentRunCards::updateRun($session, $runId, static fn (array $card): array => [
+                    'status' => AgentRunCards::STATUS_RUNNING,
+                    'error' => '',
+                    'finishedAt' => 0,
+                ] + $card);
+
+                throw new \RuntimeException('activity socket closed');
+            });
+
+        $caught = null;
+        try {
+            $task->execute(self::delegation());
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'the emitter failure must still reach the caller');
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $manager->runs()[0]->status);
+        $cards = AgentRunCards::runs($session);
+        $this->assertCount(1, $cards);
+        $this->assertNotSame(SubAgentActivity::OUTCOME_FAILED, $cards[0]['status'], 'a settled row keeps its card from a later throw');
+        $this->assertSame('', $cards[0]['error'], 'the throw\'s message is not why the run ended');
+    }
+
+    /**
      * The row reads STREAMING once provider output arrives, as
      * executeSubAgent() marked its streaming runs — RUNNING before the first
      * delta, STREAMING while the run is under way, terminal at the end.
