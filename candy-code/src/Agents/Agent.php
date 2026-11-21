@@ -470,8 +470,8 @@ final readonly class Agent
      *
      * Resolution order is caller-supplied block, then the block attached to
      * this agent, then a freshly captured one. The final fallback is what
-     * keeps this reachable: every existing caller (AgentManager,
-     * ProcessExecutor, WorkflowEngine) passes no argument, so the block
+     * keeps this reachable: the existing callers (ProcessExecutor, App, and
+     * WorkflowEngine's unmarked leg) pass no argument, so the block
      * reaches real subagent prompts without those call sites changing.
      * Callers holding a session snapshot should pass it, since capture()
      * shells out to git.
@@ -481,8 +481,8 @@ final readonly class Agent
      * question is about and this is where the next reader lands.
      *
      * READ THE LINE NUMBERS BELOW AS DIRECTIONS, NOT AS FACTS UNDER TEST. This
-     * doc-block carries 4 distinct citations of the form file-dot-php-colon-line
-     * in 4 occurrences. TWO figures need TWO commands, because one pipeline
+     * doc-block carries 2 distinct citations of the form file-dot-php-colon-line
+     * in 2 occurrences. TWO figures need TWO commands, because one pipeline
      * cannot produce both - the second is the first without its `sort -u`:
      *
      *   distinct:
@@ -494,9 +494,8 @@ final readonly class Agent
      * the `sort -u` pipeline attached - so the second figure had no generator at
      * all, which is the defect the paragraph is about happening inside the
      * paragraph.
-     * WHAT IS TRUE: 4 and 4 - re-measured by the two pipelines above after the
-     * round-62 stale-citation sweep re-anchored this block's drifted line numbers
-     * to symbols; the previous pair was 31 / 54.
+     * WHAT IS TRUE: 2 and 2 - re-measured by the two pipelines above; the
+     * pair was 31 / 54 when the wrong sentence was written.
      * HOW MEASURED: both commands above, run from `candy-code/`, at
      * `f958ba8e6` - the merge that WROTE the wrong pair - and again at
      * `bb4a311d0`. Identical at both, 31 / 54. So this is not later drift:
@@ -605,7 +604,7 @@ final readonly class Agent
      *   - `WorkflowEngine::runFromWorkflow()`'s
      * `foreach ($workflow->stages as $stageIndex => $stage)` reaches the
      * sequential, pipeline, verification-pair and parallel renders once per stage.
-     *   - And this is the LIVE half, unlike the two dormant sites in the roster
+     *   - And this is the LIVE half, unlike the dormant site in the roster
      *     below: `Bootstrap::workflowEngine()` is wired as the
      * `workflowEngine:` argument of `Bootstrap::chat()`'s `new Chat(`, the same
      * construction point as `agentManager:`, so it is reachable from `bin/candy-code`.
@@ -725,111 +724,65 @@ final readonly class Agent
      * The parameter-list pin named above reds exactly as designed and is
      * re-pinned in-step by the same commit that lands the field.
      *
-     * THE ROSTER, AND ITS REACHABILITY, WHICH THE FIRST REVISION DID NOT STATE.
-     * EIGHT call sites, derived and pinned by
-     * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()};
-     * re-derived here with `/usr/bin/grep -rn -- '->systemPrompt(' src/ bin/`,
-     * SIX are production-reachable and TWO are dormant:
+     * THE ROSTER, AND ITS REACHABILITY. The production call sites are derived
+     * and pinned, keyed on the file, by
+     * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()},
+     * which is the authority for the count; re-derive them with
+     * `/usr/bin/grep -rn -- '->systemPrompt(' src/ bin/` and set aside the
+     * property reads and the quotations. Today they are:
      *
-     *   - LIVE: the five in `WorkflowEngine` named above, and
-     *     {@see ProcessExecutor::spawnWorker()},
-     * which those five reach through `AgentWorkerPool::executeOne()`.
-     *   - DORMANT, TWO OF THEM: {@see AgentManager::executeSubAgent()}, which `Renderer.php:164-166` and
-     *     `AgentDefinition.php:137` already record as callerless; and
-     *     `App::dispatchSkill()`, whose own in-code comment says "Nothing calls dispatchSkill() in production
-     *     yet".
+     *   - LIVE: the two legs of `WorkflowEngine::renderStagePrompt()`, through
+     *     which every per-stage render named above reaches this assembler, and
+     *     {@see ProcessExecutor::spawnWorker()}, which those stages reach
+     *     through `AgentWorkerPool::executeOne()`.
+     *   - DORMANT: `App::dispatchSkill()`, whose own in-code comment says
+     *     "Nothing calls dispatchSkill() in production yet".
      *
-     *     RE-DERIVE THE FIRST WITH THE EXCLUSION, WHICH IS LOAD-BEARING:
-     *     `/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/
-     *     bin/` prints nothing and exits 1. Drop `--exclude=Agent.php` and it
-     *     exits 0 with TWO hits, both of them inside THIS DOC-BLOCK - the
-     *     wrapped command you are reading now, and the transcript that spells
-     *     it out again a few paragraphs below. The count is not a coincidence
-     *     and does not need a line number to check: it is exactly the number
-     *     of times this block writes the search string out, so it moves only
-     *     if an editor adds or removes a spelling, and never on line drift.
-     *     (An earlier revision said "exactly ONE hit ... THIS DOC-BLOCK'S OWN
-     *     LINE" and was wrong by one because the block had grown a second
-     *     spelling since; the revision before THAT wrote the command without
-     *     the exclusion at all and asserted it "finds nothing", so the command
-     *     as printed falsified its own stated result the moment anybody ran
-     *     it. Both are the same defect: prose about a command, not re-derived
-     *     after the prose around it changed.) The exclusion is named here
-     *     rather than quietly dropped so that what is written is what
-     *     reproduces.
+     * A TASK DELEGATION IS NOT ON THE ROSTER. {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}
+     * speaks the agent's own prompt as the delegated transcript's system turn
+     * ({@see AgentManager::systemPromptFor()}, no environment block), and the
+     * environment block that run reads is the `Runtime` assembler's, rendered
+     * by the engine the run is delegated to.
      *
-     * AND THE STEP TEXT SAYS OTHERWISE - recorded here because nothing else in
-     * this diff can record it. prompt_plan.md's P3.S6 Goal names
-     * `AgentManager::executeSubAgent()` as the terminus of a LIVE production path. It is
-     * not one, and the command above is the whole of the argument. MEASURED
-     * from `candy-code/`:
+     * THE PATH THAT IS LIVE, every hop re-derived over this tree rather than
+     * reasoned about: `bin/candy-code` builds `Bootstrap::app($args->root)`;
+     * `Bootstrap::app()` calls `Bootstrap::chat()` (the `Chat` construction
+     * lives inside it); `chat()` hands the `Chat` its engine through the
+     * `workflowEngine:` argument, built by `Bootstrap::workflowEngine()`;
+     * `Chat::workflowRun()` calls `$engine->run($workflowName, $context)`
+     * inside the `\Fiber` it opens; and `WorkflowEngine::run()` reaches this
+     * assembler through the per-stage renders - `executeStage()`,
+     * `executePipelineStage()`, the `executeVerificationStage()` pair, and
+     * `executeParallelStage()`. That is why every measurement in this
+     * doc-block is taken against `WorkflowEngine`.
      *
-     *     $ /usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/
-     *     $ echo $?
-     *     1
-     *
-     * No output, exit 1. `executeSubAgent()` has no caller anywhere in `src/`
-     * or `bin/`, so the Goal's path stops one hop short of the line it names,
-     * and a step briefed to classify a LIVE seam was pointed at a dormant one.
-     *
-     * THE PATH THAT IS ACTUALLY LIVE, every hop re-derived over this tree
-     * rather than reasoned about: `bin/candy-code:423` builds
-     * `Bootstrap::app($args->root)`; `Bootstrap::app()` calls
-     * `Bootstrap::chat()` (the `Chat`
-     * construction lives inside it); `chat()` hands the `Chat` its engine through the
-     * `workflowEngine:` argument, built by
-     * `Bootstrap::workflowEngine()`;
-     * `Chat::workflowRun()` calls
-     * `$engine->run($workflowName, $context)` inside the `\Fiber` it opens;
-     * and `WorkflowEngine::run()` reaches this assembler through the five
-     * per-stage renders - `executeStage()`, `executePipelineStage()`, the
-     * `executeVerificationStage()` pair, and `executeParallelStage()`.
-     *
-     * That is why every measurement in this doc-block is taken against
-     * `WorkflowEngine` and not against `AgentManager`. `prompt_plan.md` is
-     * outside P3.S6's declared file list, so the step text cannot be corrected
-     * from here; the correction is recorded at the API the claim is about, and
-     * escalated to the orchestrator with the rest.
-     *
-     * (A review of this step wrote "five reachable, three dormant". That sums
-     * to eight but splits it wrongly: `ProcessExecutor::spawnWorker()` is reached from
-     * every WorkflowEngine stage. Six and two are the derived numbers.)
-     *
-     * WHICH OF THE EIGHT ARE DRIVEN BY A TEST, AND WHICH ARE CLASSIFIED BY
-     * READING. This is stated plainly because the classification is the whole
+     * WHICH RENDERS ARE DRIVEN BY A TEST, AND WHICH ARE CLASSIFIED BY READING.
+     * This is stated plainly because the classification is the whole
      * deliverable and a reader is entitled to know how much of it is executed.
-     * FOUR ARE DRIVEN:
+     * THREE ARE DRIVEN:
      *
-     *   - `AgentManager::executeSubAgent()`, by
-     *     {@see \SugarCraft\Code\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()};
      *   - `ProcessExecutor::spawnWorker()`, by
      *     {@see \SugarCraft\Code\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()};
      *   - `WorkflowEngine::executePipelineStage()`'s nested-pipeline render, by
      *     {@see \SugarCraft\Code\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()};
      *   - `WorkflowEngine::executeStage()`'s plain sequential-stage render reached
-     * from the outer `foreach ($workflow->stages ...)` in `runFromWorkflow()`, by
+     *     from the outer `foreach ($workflow->stages ...)` in `runFromWorkflow()`, by
      *     {@see \SugarCraft\Code\Tests\Agents\AgentTest::testARealWorkflowEngineSequentialStageChainRendersTheAgentAssemblerOncePerStage()}.
      *
-     * FOUR ARE CLASSIFIED BY READING ONLY - no test enters them, and a wiring
-     * applied at any of them would not red anything in this diff:
-     * `App::dispatchSkill()`, and `executeVerificationStage()`'s straight-line
-     * pair plus `executeParallelStage()`'s single `$firstAgent->systemPrompt()`. The two per-step seams this
-     * doc-block calls out by name are now BOTH driven - the nested-`$nestedStages` loop and
-     * the outer stages loop - but `executeVerificationStage()`'s double render is
-     * not, and neither is the dormant `App::dispatchSkill()`. Do not read the
-     * roster as four-driven-implies-eight-covered.
+     * CLASSIFIED BY READING ONLY - no test enters them, and a wiring applied at
+     * any of them would not red anything: `App::dispatchSkill()`, and
+     * `executeVerificationStage()`'s straight-line pair plus
+     * `executeParallelStage()`'s single `$firstAgent->systemPrompt()`. Do not
+     * read the roster as three-driven-implies-all-covered.
      *
-     * Taken ONE AT A TIME the eight are still once-per-dispatch: each builds
-     * one `CompleteRequest` and hands it to one completion, there is no agentic
-     * loop inside a dispatch, and the transient-failure retry inside
-     * `executeSubAgent()` re-sends the SAME request object rather than
-     * rebuilding it. Driven at one streamed chunk and at twenty by
-     * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()},
-     * which drives the DORMANT `executeSubAgent()` path and measures what its
-     * name has to be read carefully to mean: renders reaching ONE
-     * `CompleteRequest`, not renders per workflow run. It is retained because
-     * that per-dispatch property is real and worth pinning; the per-run
-     * property is the new test's subject.
+     * Taken ONE AT A TIME each render is once-per-dispatch: each builds one
+     * `CompleteRequest` and hands it to one completion, and there is no agentic
+     * loop inside a dispatch. The Task delegation's own property - it renders
+     * the `Runtime` assembler once per step and never this one - is pinned at
+     * one streamed chunk and at twenty by
+     * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()}.
+     * Those measure renders reaching ONE dispatch, not renders per workflow
+     * run; the per-run property is the WorkflowEngine tests' subject.
      *
      * A NUMBER IN THE OTHER DIRECTION, so this is not read as "the second
      * assembler is cheap". It is the expensive one per call.
@@ -970,12 +923,12 @@ final readonly class Agent
      *   write-signal argument above is about attaching a BLOCK and is untouched
      *   by passing a DIRECTORY: each stage still captures and renders its own
      *   block, at the root the launch resolved. `ProcessExecutor::spawnWorker()`'s second render
-     * renders the SubAgent's OWN agent, which on
-     *   the live path is that same fresh one. The one consumer that does read
-     *   a registered agent's block is {@see AgentManager::executeSubAgent()}
-     * - dormant, by the `--exclude=Agent.php`
-     *   command above, which prints nothing and exits 1. So the mark's whole
-     *   audience is a path with no caller.
+     *   renders the SubAgent's OWN agent, which on the live path is that same
+     *   fresh one. And the Task path, the one that does run a registered
+     *   agent, never renders its block: it splices the agent's raw prompt
+     *   ({@see AgentManager::systemPromptFor()}) and its engine renders the
+     *   `Runtime` assembler's block instead. So no live render reads a
+     *   registered agent's block, and the mark would have no audience.
      *
      *   SECOND, IT WOULD CHANGE DEFAULT BEHAVIOUR UNCONDITIONALLY, which is
      *   the same ground `App::dispatchSkill()`'s attachment was declined on. A once-per-launch

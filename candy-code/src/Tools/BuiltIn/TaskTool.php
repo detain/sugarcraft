@@ -51,12 +51,11 @@ use SugarCraft\Code\Usage;
  * The model-callable Task tool: delegate one bounded task to a sub-agent from
  * the session's agent roster and return the sub-agent's final text (P8.13).
  *
- * This is the seam the whole sub-agent machinery was built toward but never had:
- * {@see AgentManager::createSubAgent()} and {@see AgentManager::executeAll()}
- * existed, `Chat::executeAgents()` reached them only through slash-command
- * plumbing, and `src/Renderer.php`'s header recorded the absence in terms —
- * "nothing in src/ or bin/ calls createSubAgent()/executeSubAgent() directly,
- * because there is no Task/Agent tool". The name deliberately mirrors the
+ * This is the model's one way into the sub-agent machinery:
+ * {@see AgentManager::createSubAgent()} builds the run's row and this tool
+ * drives it, on the calling engine or through
+ * {@see AgentManager::executeAll()}; `Chat::executeAgents()` is the
+ * slash-command door to the same manager. The name deliberately mirrors the
  * upstream delegation tool rather than the unrelated `SugarCraft\Code\Agents\Task`
  * value object, which this class neither reads nor extends; the `Tool` suffix
  * on the class follows the `LspTool`/`SkillTool` precedent, the bare wire name
@@ -1392,8 +1391,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * Run $run, and when it throws, leave $subAgent's row terminal before the
      * throwable goes on: FAILED, the throwable's message as its error, and its
-     * end of span stamped — the guarantee `AgentManager::executeSubAgent()`
-     * gave every run it drove (CC1C-c1).
+     * end of span stamped, so no run this tool drives is left looking live
+     * after it died.
      *
      * {@see runOnEngine()} settles every outcome it handles itself — a turn
      * that fails part-way arrives as a TurnInterrupted and is settled there —
@@ -1881,8 +1880,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $subAgent->runModel = $engine->model();
         $subAgent->status = SubAgent::STATUS_RUNNING;
         $subAgent->startedAt = new \DateTimeImmutable();
-        // CC1C-c1, from `AgentManager::executeSubAgent()`: the row reads
-        // STREAMING once the provider's output starts arriving, so the
+        // The row reads STREAMING once the provider's output starts arriving, so the
         // dashboard tells "streaming" from "working" for a run held in THIS
         // process (no fork: the row is the manager's own and nothing projects
         // over it; forked, the parent's projected row already flips on the
@@ -1984,8 +1982,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // run (a resumed run keeps counting from it); bill() later replaces
         // the live figure with the settled one.
         //
-        // CC1C-c1, ported from `AgentManager::executeSubAgent()`: the row also
-        // rises on every streamed CHUNK ($observeChunkUsage), not only once
+        // The row also rises on every streamed CHUNK ($observeChunkUsage), not only once
         // the provider response completes. A chunk's figure is provisional —
         // a retry can drop the attempt it came from — so the step observer
         // takes back what the chunks added since the last step and adds the
@@ -2377,8 +2374,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         // P-B2: the run's prose, as `text` items — the parent's
                         // live line shows the newest fragment when the run is
                         // writing rather than calling tools. The row's output
-                        // gets it too, per chunk, as executeSubAgent() gave it:
-                        // one `writing:` trail line holding the burst's newest
+                        // gets it too, per chunk: one `writing:` trail line
+                        // holding the burst's newest
                         // text, so a prose-only run is live while it streams.
                         onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse, $markStreaming, $subAgent, &$prose, &$proseBase, &$lines): void {
                             $onProgress();

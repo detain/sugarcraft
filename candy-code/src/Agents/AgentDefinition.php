@@ -90,11 +90,9 @@ final readonly class AgentDefinition
             // and non-inert redirection outright (audit F-P5), so this admits
             // `git status` and refuses `git log && rm -rf /`. That
             // is enforced per call by {@see AgentManager::grantRefusalFor()} —
-            // on the live `Task` path through the delegated run's
+            // on the `Task` path through the delegated run's
             // {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}, which
-            // denies the call (step 4.2; before it, only the uncalled
-            // `executeSubAgent()` path checked, so a delegated reviewer ran
-            // any Bash the session allowed). The roster
+            // denies the call (step 4.2). The roster
             // {@see AgentManager::resolveGrantedTools()} sends can only carry
             // the NAME half, because a tool schema has no field for "git
             // commands only".
@@ -127,47 +125,23 @@ final readonly class AgentDefinition
             name: $name,
             description: 'System design and architecture',
             // The last clause states this preset's METHOD, the way the other
-            // five do, and it still must not assert a tool grant. The reason
-            // has changed, so the reason is rewritten rather than deleted.
+            // five do, and it does not assert a tool grant.
             //
-            // WHAT THIS SAID: that $defaultTools "is not something the field
-            // can make true", because it reached Agent::$tools and was
-            // thereafter only copied and serialised, with
-            // AgentManager::executeSubAgent() building its CompleteRequest
-            // with no `tools` field at all.
+            // The grant is enforced rather than described. $defaultTools
+            // reaches Agent::$tools; the Task path narrows the run's roster to
+            // it ({@see AgentManager::grantedToolsFor()}, resolved by
+            // {@see AgentManager::resolveGrantedTools()} against the registry
+            // {@see \SugarCraft\Code\Cli\Bootstrap::agentManager()} hands
+            // the manager); {@see AgentManager::executeAll()} resolves it the
+            // same way for a pool batch; and a call outside it is denied per
+            // call by {@see AgentManager::grantRefusalFor()} through
+            // {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}.
             //
-            // WHAT IS TRUE NOW: part of that is fixed, and the part matters
-            // less than the first draft of this paragraph claimed.
-            // {@see AgentManager::executeSubAgent()} does pass `tools:`,
-            // resolved from this very field by
-            // {@see AgentManager::resolveGrantedTools()}, and a call outside
-            // the grant is refused by
-            // {@see AgentManager::refuseCallOutsideGrant()}. So the field CAN
-            // make a roster true — on that method, and TWO separate things
-            // still stop it being true of a launched sub-agent:
-            //
-            //   1. No production caller hands AgentManager a tool registry.
-            //      {@see \SugarCraft\Code\Cli\Bootstrap::agentManager()}
-            //      passes none, so `resolveGrantedTools()` returns null.
-            //   2. executeSubAgent() ITSELF has no production caller. MEASURED
-            //      by grepping `src/` and `bin/`: the live paths are
-            //      {@see AgentManager::executeAll()} (from `Chat::executeAgents()`
-            //      and `WorkflowEngine`), which forwards ONE caller-built
-            //      CompleteRequest into {@see AgentWorkerPool::executeAll()} and
-            //      calls neither of the two methods above.
-            //
-            // WHY THIS STILL EARNS ITS PLACE: a prompt that asserts "you have
-            // read-only tools" would be false on exactly the paths that run
-            // today, and would go on being false silently — the failure this
-            // whole item exists to end.
-            //
-            // WHAT WOULD ACTUALLY EARN THE CLAUSE BACK — and an earlier version
-            // of this note got this wrong, naming only (1). Satisfying (1)
-            // alone restores a clause that is STILL false, because a launched
-            // sub-agent takes the executeAll() path in (2). The test is not
-            // "does Bootstrap pass a registry" but "does the path a launched
-            // sub-agent actually takes resolve this field into its request".
-            // Restore the clause when that is true, and not before.
+            // WHY THE PROMPT STILL DOES NOT NAME THE TOOLS: the roster a run
+            // gets is this field INTERSECTED with the session's own tool set,
+            // so `disabledTools: ["Grep"]` narrows it without touching this
+            // file. A prompt listing the tools would then describe a roster
+            // the run does not have, and nothing would red.
             prompt: 'You are a software architect. Read enough of the existing code to describe '
                 . 'the design that is actually there before proposing a different one. Offer at '
                 . 'least two options with their trade-offs, recommend one, and state what would '

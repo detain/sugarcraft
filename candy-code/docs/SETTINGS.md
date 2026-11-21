@@ -369,7 +369,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `mcp.enabled` | `Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()` | **no** |
 | `mcp.lazySchemaTokens` | `Bootstrap::mcpToolShape()` → `McpToolShape::derive()`, at the first MCP tool build of the launch | **no** |
 | `connectTimeoutSeconds` | `HttpClientDefaults::connectTimeoutSeconds()`, when a provider client is built | yes |
-| `providerRetryAttempts` | `Runtime::runStreaming()`, `runBatch()`, `AgentManager::executeSubAgent()` → `TransientFailure::maxAttempts()` | yes |
+| `providerRetryAttempts` | `Runtime::runStreaming()`, `runBatch()` → `TransientFailure::maxAttempts()` | yes |
 | `providerRetryBaseBackoffMs` | `TransientFailure::backoff()` → `baseBackoffMicroseconds()` | yes |
 | `debug.skills` | `SkillLoader` (each skip, at launch) → `debugSkipsRequested()` → `DebugFlags::requested()` | **no** |
 | `debug.commands` | `CommandLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()` | **no** |

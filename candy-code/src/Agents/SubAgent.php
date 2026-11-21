@@ -29,9 +29,11 @@ final class SubAgent
     /**
      * When execution actually began, as distinct from {@see $createdAt}.
      * A sub-agent can sit `pending` in the pool for a long time, so elapsed
-     * *work* time has to be measured from the moment
-     * {@see AgentManager::executeSubAgent()} started it — measuring from
-     * creation would report queue time as work time (§5 E6).
+     * *work* time has to be measured from the moment its run started it
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} stamps it as the row
+     * goes RUNNING; {@see AgentManager::executeAll()} copies the pool's
+     * figure) — measuring from creation would report queue time as work time
+     * (§5 E6).
      */
     public ?\DateTimeImmutable $startedAt = null;
     /**
@@ -42,9 +44,9 @@ final class SubAgent
      */
     public ?\DateTimeImmutable $completedAt = null;
     /**
-     * Tokens consumed so far, accumulated per streaming chunk by
-     * {@see AgentManager::executeSubAgent()} rather than only at completion,
-     * so a still-running sub-agent reports real usage instead of 0.
+     * Tokens consumed so far, accumulated per streamed chunk on the Task path
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}) rather than only at
+     * completion, so a still-running sub-agent reports real usage instead of 0.
      */
     public int $tokensUsed = 0;
     /** Dollar cost accumulated alongside {@see $tokensUsed}. */

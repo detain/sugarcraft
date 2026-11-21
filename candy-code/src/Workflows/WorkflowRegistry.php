@@ -226,9 +226,9 @@ final class WorkflowRegistry
      *        anything to evaluate. Read this parameter's safety story as
      *        "declarative, and its declared capability is gated", NOT as
      *        "identical enforcement to a typed delegation" — a typed delegation
-     *        through {@see \SugarCraft\Code\Agents\AgentManager::executeSubAgent()}
-     *        does evaluate real tool calls, and no production caller reaches
-     *        that path either.
+     *        through the Task tool ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool})
+     *        does evaluate real tool calls, each one against the session gate
+     *        and the agent's own grant.
      *
      *        So a `.php` file sitting in a project directory is not a workflow at
      *        all here: it is not listed and not loaded, which is also what stops

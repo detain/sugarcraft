@@ -21,15 +21,12 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * WHY THIS IS A CLASSIFIER AND NOT A RETRY LOOP
  * ---------------------------------------------
  * The call sites' rollback obligations genuinely differ — {@see
- * \SugarCraft\Code\Runtime::runBatch()} has nothing to undo, {@see
+ * \SugarCraft\Code\Runtime::runBatch()} has nothing to undo, while {@see
  * \SugarCraft\Code\Runtime::runStreaming()} has four accumulators and an
- * append-only token sink it cannot un-emit, and {@see
- * \SugarCraft\Code\Agents\AgentManager::executeSubAgent()} mutates a shared
- * {@see \SugarCraft\Code\Agents\SubAgent} that has already been yielded to a
- * consumer — so a shared `attempt(callable)` wrapper would have to take a
- * reset closure per site AND could not be used at all in AgentManager, whose
- * loop body `yield`s. Four short explicit loops that each name what they roll
- * back are more honest than one wrapper with three escape hatches. What IS
+ * append-only token sink it cannot un-emit — so a shared `attempt(callable)`
+ * wrapper would have to take a reset closure per site. Short explicit loops
+ * that each name what they roll back are more honest than one wrapper with
+ * an escape hatch per caller. What IS
  * shared, and what would otherwise drift out of step between them, is the
  * *policy*: what counts as transient, how many attempts, how long to wait.
  *
@@ -45,9 +42,8 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * failed attempt already executed: a `Bash` that already ran `rm`, an `Edit`
  * that already wrote, a `Write` that already created. That is a replay, not a
  * retry. `runCompleteInChild()` is also only the FORKED path, so a retry there
- * would leave the synchronous `complete()` route and both AgentManager call
- * sites unprotected — the same 5xx recovered or fatal depending on which entry
- * point the user came through.
+ * would leave the synchronous `complete()` route unprotected — the same 5xx
+ * recovered or fatal depending on which entry point the user came through.
  *
  * The single provider call is the seam that retries nothing but itself, so
  * that is where the four loops live.
@@ -59,9 +55,8 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * permanent. Fail-closed matters more than coverage here for two reasons.
  * Retrying an auth failure three times only triples the delay before the user
  * sees the real problem. And the wrapped call sites throw non-transport
- * exceptions through the same seam: a
- * {@see \SugarCraft\Code\Agents\AgentManager::evaluateToolCalls()} permission
- * denial is raised inside the very `foreach` that reads the stream, and a
+ * exceptions through the same seam: whatever is raised inside the `foreach`
+ * that reads a stream reaches the same catch as a transport failure, and a
  * deny-list would have retried it.
  *
  * Recognised as transient:
@@ -159,9 +154,8 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * {@see totalBackoffMicroseconds()} rather than the tens of seconds a
  * server-side retry budget would use. Handing this to the event loop instead
  * would mean re-entering the provider from a timer callback, i.e. restructuring
- * both retry loops that call this ({@see \SugarCraft\Code\Runtime} and
- * {@see \SugarCraft\Code\Agents\AgentManager}); the bound above is what
- * makes that unnecessary.
+ * both retry loops that call this (in {@see \SugarCraft\Code\Runtime}); the
+ * bound above is what makes that unnecessary.
  *
  * DOMAIN OF THAT FIGURE, because it was first written next to the wrong noun:
  * `totalBackoffMicroseconds()` is per PROVIDER CALL, not per turn.

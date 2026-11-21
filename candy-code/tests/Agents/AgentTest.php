@@ -1756,7 +1756,9 @@ final class AgentTest extends TestCase
      * @var array<string, int>
      */
     private const AGENT_ASSEMBLER_CALL_SITES = [
-        'src/Agents/AgentManager.php' => 1,
+        // AgentManager's one call left with its old in-process sub-agent
+        // entry point (CC1C-c3): a Task delegation splices the agent's raw
+        // prompt through systemPromptFor() and never calls the assembler.
         'src/Agents/ProcessExecutor.php' => 1,
         'src/App/App.php' => 1,
         // Five seams became two (2026-11-11, cc-fix-1111 M-11): the engine's
@@ -1884,14 +1886,15 @@ final class AgentTest extends TestCase
         );
 
         $this->assertSame(
-            5,
+            4,
             array_sum($census),
             'prompt_plan.md P3.S6 states eight production call sites; Runtime::markWriteSinceLastRender()'
                 . "'s doc-block states nine. This is the derivation that settles it. "
                 . 'FIVE since cc-fix-1111 M-11 (2026-11-11), which re-dispositioned P3.S6 per register '
                 . 'option (a): the engine\'s five per-stage seams collapsed into two inside '
                 . 'WorkflowEngine::renderStagePrompt(), so the eight-vs-nine prose disagreement above '
-                . 'stands as history and five live calls is the new settled derivation.',
+                . 'stands as history. FOUR since CC1C-c3 deleted AgentManager\'s in-process sub-agent '
+                . 'entry point and the one call it held.',
         );
     }
 

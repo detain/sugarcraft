@@ -183,13 +183,10 @@ use SugarCraft\Code\App\ToolResultsMsg;
  * The OTHER route opened with E675: `Tools\BuiltIn\TaskTool`
  * (P8.13) is the model-turn delegation path —
  * `Bootstrap::chat()` binds the session's one `AgentManager` into the tool
- * feed, a `Task` call dispatches a roster agent through
- * `AgentManager::executeAll()`, and that reaches `createSubAgent()` for the
- * batch member. What still has no `src/` caller is `executeSubAgent()`'s
- * in-process streaming path — the tool rides the pool path, not it — so the
- * old sentence "there is no Task/Agent tool; delegation from a model turn
- * remains unavailable" (#45) is false on its first half and
- * true only on the in-process pair.
+ * feed, and a `Task` call builds a roster agent's run with
+ * `AgentManager::createSubAgent()` and drives it — on the calling engine
+ * when the tool is bound to one, through `AgentManager::executeAll()` and
+ * the worker pool when it is not. Delegation from a model turn is live.
  *
  * What that does NOT mean is a permanent agent strip on every launch:
  * `Bootstrap::agentRoster()` registers its agents INACTIVE, and

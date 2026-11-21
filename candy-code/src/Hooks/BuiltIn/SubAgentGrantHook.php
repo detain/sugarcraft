@@ -24,12 +24,11 @@ use SugarCraft\Code\ToolCall;
  * through the calling engine's own tool loop, narrowed to the preset's grant by
  * tool NAME ({@see AgentManager::grantedToolsFor()}) — a tool schema cannot say
  * "git commands only", so `Bash(git *)` puts the whole `Bash` tool on the wire.
- * The per-call half lived in {@see AgentManager::evaluateToolCalls()}, reachable
- * only from `executeSubAgent()`, which nothing in `src/` calls. So the built-in
- * `reviewer`, declared `['Read', 'Grep', 'Bash(git *)']`, ran ANY Bash command
- * the session gate allowed, and `disallowedTools: ['Bash(git push*)']` bit
- * nothing. The PreToolUse chain is the one place the engine path already gates
- * every call — rewrites re-scanned, the root handed in — so the check rides it
+ * Without a per-call check the built-in `reviewer`, declared
+ * `['Read', 'Grep', 'Bash(git *)']`, would run ANY Bash command the session
+ * gate allowed, and `disallowedTools: ['Bash(git push*)']` would bite nothing.
+ * The PreToolUse chain is the one place the engine path already gates every
+ * call — rewrites re-scanned, the root handed in — so the check rides it
  * rather than adding a second dispatch-time call site.
  *
  * THE MATCHER IS {@see AgentManager::grantRefusalFor()}, not a second one: the
@@ -41,8 +40,7 @@ use SugarCraft\Code\ToolCall;
  *
  * A REFUSAL IS A DENIED CALL, NOT A FAILED RUN. The model gets the reason as the
  * call's result and may carry on inside its grant, the same as any other hook
- * denial — the stop-the-run shape belongs to the dormant `executeSubAgent()`
- * path, which has no transcript to continue.
+ * denial.
  *
  * NOT AN OPT-OUT. {@see \SugarCraft\Code\Backend\EngineBackend::resolveHookManager()}
  * registers it on the sub-agent's per-turn chain even under `withoutHooks()`,

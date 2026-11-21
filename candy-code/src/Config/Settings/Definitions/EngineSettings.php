@@ -112,7 +112,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.providerRetryAttempts.label'))
                 ->withHelp(Lang::t('settings.providerRetryAttempts.help'))
                 ->withReaderSymbol(TransientFailure::class . '::maxAttempts')
-                ->withReadBy('`Runtime::runStreaming()`, `runBatch()`, `AgentManager::executeSubAgent()` → `TransientFailure::maxAttempts()`'),
+                ->withReadBy('`Runtime::runStreaming()`, `runBatch()` → `TransientFailure::maxAttempts()`'),
             SettingDefinition::new('providerRetryBaseBackoffMs', SettingType::Int, intdiv(TransientFailure::BASE_BACKOFF_MICROSECONDS, 1000))
                 ->withCategory(SettingCategory::Advanced)
                 ->withRiskClass(RiskClass::Tuning)

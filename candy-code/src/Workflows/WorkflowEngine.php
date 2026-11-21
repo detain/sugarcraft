@@ -597,17 +597,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        1. Every {@see SubAgent} this engine builds carries it, so the
      *           field holds this launch's policy rather than the `null` every
      *           workflow-spawned sub-agent used to be built with. Read as a
-     *           correct DORMANT value, not as enforcement: the only code that
-     *           reads `SubAgent::$permissionGate` is inside
-     *           {@see AgentManager::executeSubAgent()}'s streaming-provider
-     *           path, and this engine
-     *           never enters it — every dispatch here goes through
+     *           correct value, not as enforcement: the only code that reads
+     *           `SubAgent::$permissionGate` is the Task path
+     *           ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}, which hands
+     *           it to {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}
+     *           as the preset's mode gate), and this engine never enters it —
+     *           every dispatch here goes through
      *           `AgentWorkerPool::executeOne()` or `executeAll()`, and the
      *           manager's `executeAll()` drains the pool without touching the
-     *           field. An earlier version of this note claimed the threading
-     *           un-short-circuits `evaluateToolCalls()`; that short-circuit is
-     *           unreachable from here whatever the field holds, which is
-     *           precisely why item 2 and not item 1 is the enforcement.
+     *           field. That is precisely why item 2 and not item 1 is the
+     *           enforcement.
      *        2. Before any stage is dispatched — and, since a stage 5 refusal
      *           must not cost four stages of real work, before the FIRST stage
      *           of the run at all ({@see firstDeclarationRefusal()}) — every
