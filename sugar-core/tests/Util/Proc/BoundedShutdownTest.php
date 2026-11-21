@@ -338,7 +338,13 @@ final class BoundedShutdownTest extends TestCase
 
         // pid 1 is alive on every Linux host. A non-root uid gets EPERM from the
         // signal-0 probe, which means alive; reading it as gone is the bug that
-        // ended a ladder early against a child that had changed uid.
+        // ended a ladder early against a child that had changed uid. A root runner
+        // (or a container whose pid 1 shares this uid) signals pid 1 and never
+        // reaches the EPERM branch, so the test only means something when the
+        // probe really fails with EPERM here.
+        if (@\posix_kill(1, 0) || \posix_get_last_error() !== 1) {
+            self::markTestSkipped('pid 1 is signalable by this uid, so the EPERM case is not reachable on this host');
+        }
         self::assertFalse(BoundedShutdown::pidExited(1));
     }
 
@@ -382,11 +388,6 @@ final class BoundedShutdownTest extends TestCase
     }
 
     /**
-     * @param list<string> $argv
-     *
-     * @return resource
-     */
-    /**
      * A process group whose every member this uid cannot signal, so
      * `kill(-pgid, 0)` answers EPERM. Null when the host shows none (a root
      * test runner signals everything, so it never has one).
@@ -421,6 +422,11 @@ final class BoundedShutdownTest extends TestCase
         self::assertFalse(BoundedShutdown::groupEmpty($group, false), 'the loop-driven probe agrees');
     }
 
+    /**
+     * @param list<string> $argv
+     *
+     * @return resource
+     */
     private function spawn(array $argv)
     {
         $process = \proc_open($argv, [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);

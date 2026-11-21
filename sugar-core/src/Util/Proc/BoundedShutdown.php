@@ -218,7 +218,8 @@ final class BoundedShutdown
      * @param callable(int):void $signal delivers one rung signal (15 or 9)
      * @param callable():bool $isGone a cheap, non-blocking exited?-poll
      * @param callable():void|null $onEscalate fired once BETWEEN the rungs,
-     *        when SIGTERM did not land — for families that log the escalation
+     *        when SIGTERM did not land — for families that log the escalation.
+     *        A throw is logged with error_log() and does not stop the ladder.
      *
      * @return bool whether the child is gone by the end of the budgets. The
      *         result is reported, not acted on: after signal 9 the only way
@@ -475,14 +476,18 @@ final class BoundedShutdown
      * of the ladder: an observer that throws must not leave the child running
      * with no SIGKILL sent, nor escape a loop tick and stop the loop.
      *
+     * The throw is not rethrown, but it is not silent either: it is written to
+     * error_log(), because a `$done` that throws before it resolves a caller's
+     * promise would otherwise leave that caller waiting with no trace.
+     *
      * @param callable(mixed...):void $hook
      */
     private static function observe(callable $hook, mixed ...$args): void
     {
         try {
             $hook(...$args);
-        } catch (\Throwable) {
-            // Advisory by contract: the outcome was already decided by the ladder.
+        } catch (\Throwable $e) {
+            \error_log('BoundedShutdown: an observer hook threw and was ignored: ' . $e->getMessage());
         }
     }
 
