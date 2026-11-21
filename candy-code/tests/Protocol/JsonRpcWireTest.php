@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\Request;
 use SugarCraft\Code\Protocol\RpcError;
+use SugarCraft\McpClient\Protocol\ErrorCode as LibErrorCode;
 use SugarCraft\McpClient\Protocol\JsonRpc;
 use SugarCraft\McpClient\Protocol\Request as LibRequest;
 use SugarCraft\Plugins\Host\RefusedCall;
@@ -127,6 +128,29 @@ final class JsonRpcWireTest extends TestCase
         self::assertInstanceOf(RefusedCall::class, $refusal);
         self::assertSame('too_many_turns', $refusal->refusalKind());
         self::assertSame(['kind' => 'too_many_turns', 'retryAfterMs' => 500, 'retryable' => true], $refusal->refusalData());
+    }
+
+    public function testEveryCandyErrorCodeHasTheSameLibraryCaseAndValue(): void
+    {
+        $candy = [];
+        foreach (ErrorCode::cases() as $case) {
+            $candy[$case->name] = $case->value;
+        }
+        $library = [];
+        foreach (LibErrorCode::cases() as $case) {
+            $library[$case->name] = $case->value;
+        }
+
+        self::assertSame($library, $candy, 'candy-code ErrorCode and sugar-mcp-client ErrorCode must carry the same cases and values');
+    }
+
+    public function testEveryCandyErrorCodeConvertsToTheLibraryCodecWithoutAValueError(): void
+    {
+        foreach (ErrorCode::cases() as $case) {
+            $library = RpcError::of($case, 'refused')->toLibrary();
+
+            self::assertSame($case->value, $library->errorCode->value, $case->name);
+        }
     }
 
     public function testNotificationFrameIsPinned(): void
