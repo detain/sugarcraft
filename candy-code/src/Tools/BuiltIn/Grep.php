@@ -573,9 +573,14 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // simply gives up the difference — and what keeps this probe no
         // tighter than the final clip below, which is the property the
         // announce-once mark depends on.
+        // A non-positive cap has no floor of its own, so the probe takes the
+        // budget the final clip falls back to (the 8 MiB ceiling less the
+        // nudges, see $finalCap below). Left at 0, the probe read the whole
+        // capture — up to 16 MiB across both streams — and a rule hit past the
+        // final cut was announced for the session but never shown.
         $floor = $this->maxOutputBytes > 0
             ? max(1, $bodyCap - $ceiling - 1)
-            : 0;
+            : max(1, self::DEFAULT_RETAINED_BYTES - $nudgeCost);
         // A probe SAVES nothing (saveSpill: false): the final clip below may be
         // a different cut, and a probe that saved left an orphaned spill file
         // whenever the output fell between the floor and $bodyCap.

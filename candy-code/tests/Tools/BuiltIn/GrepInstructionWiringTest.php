@@ -854,6 +854,53 @@ final class GrepInstructionWiringTest extends TestCase
         self::assertSame(['/a', '/b'], $loader->emittedPaths());
     }
 
+    /**
+     * A zero cap clips the final result at the 8 MiB ceiling, so the probe
+     * that decides which instruction rules are announced must read at that
+     * same ceiling. Unbounded, a hit past the final cut was announced (and its
+     * rule marked spent for the session) while the model never saw the hit.
+     *
+     * A stand-in `rg` on PATH replays a stdout just under the ceiling whose
+     * only hit is its last line, and a stderr that pushes the merged text past
+     * the ceiling, so the hit falls between the probe's cut and the final one.
+     */
+    public function testAZeroCapAnnouncesARuleOnlyForAHitTheModelReceives(): void
+    {
+        $ceiling = 8 * 1024 * 1024;
+        mkdir($this->dir . '/scoped', 0o777, true);
+        file_put_contents($this->dir . '/scoped/CLAUDE.md', "SCOPED-RULE-BETA\n");
+
+        $bin = $this->dir . '-bin';
+        mkdir($bin, 0o777, true);
+        $hit = $this->dir . '/scoped/a.php:1:needle' . "\n";
+        $noise = $this->dir . '/big/noise.txt:1:' . str_repeat('x', 59) . "\n";
+        file_put_contents($bin . '/out.txt', str_repeat($noise, intdiv($ceiling - 1024 - strlen($hit), strlen($noise))) . $hit);
+        file_put_contents($bin . '/err.txt', str_repeat("warn\n", 400));
+        file_put_contents($bin . '/rg', "#!/bin/sh\ncat " . escapeshellarg($bin . '/out.txt') . "\ncat " . escapeshellarg($bin . '/err.txt') . " >&2\n");
+        chmod($bin . '/rg', 0o755);
+
+        $oldPath = (string) getenv('PATH');
+        putenv('PATH=' . $bin . PATH_SEPARATOR . $oldPath);
+        try {
+            $grep = new Grep(
+                $this->dir,
+                maxOutputBytes: 0,
+                instructionLoader: new InstructionFileLoader($this->dir),
+                rgAvailable: true,
+            );
+            $content = $this->grep($grep);
+        } finally {
+            putenv('PATH=' . $oldPath);
+            exec('rm -rf ' . escapeshellarg($bin));
+        }
+
+        self::assertStringStartsWith($this->dir . '/big/noise.txt:1:', $content, 'the stand-in rg ran: the replayed output leads the result');
+        self::assertLessThanOrEqual($ceiling + 4096, strlen($content), 'a zero cap still holds the result to the 8 MiB ceiling');
+        if (str_contains($content, 'SCOPED-RULE-BETA')) {
+            self::assertStringContainsString('scoped/a.php:1:needle', $content, 'an announced rule must govern a hit the model was shown');
+        }
+    }
+
     // =========================================================================
 
     private function grep(Grep $tool): string

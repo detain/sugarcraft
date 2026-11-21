@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Tools;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\McpToolBridge;
 
 /**
@@ -117,11 +118,26 @@ final class McpToolBridgeResultCapTest extends TestCase
         self::assertStringContainsString('[truncated:', $content);
     }
 
-    public function testANonPositiveCapDisablesIt(): void
+    public function testANonPositiveCapStillLeavesAnAnswerUnderTheCeilingUntouched(): void
     {
         $content = $this->bridge(0)->execute(['bytes' => 100_000])->content();
 
-        self::assertSame(100_000 + strlen(McpOutputFence::header('big', 'dump')) + 1, strlen($content), 'cap off still carries the fence');
+        self::assertSame(100_000 + strlen(McpOutputFence::header('big', 'dump')) + 1, strlen($content), 'the 8 MiB ceiling leaves a 100 KB answer whole');
+        self::assertStringNotContainsString('[truncated:', $content);
+    }
+
+    /**
+     * Owner ruling A: a null, zero or negative output bound takes the 8 MiB
+     * default, never "no cap". Without this an MCP server returning a dump of
+     * any size would be replayed verbatim into every later request of the turn.
+     */
+    public function testANonPositiveCapTakesTheEightMiBCeilingNotNoCap(): void
+    {
+        $bytes = Bash::DEFAULT_RETAINED_BYTES + 100_000;
+        $content = $this->bridge(0)->execute(['bytes' => $bytes])->content();
+
+        self::assertLessThanOrEqual(Bash::DEFAULT_RETAINED_BYTES, strlen($content), 'a zero cap holds the answer to the 8 MiB ceiling');
+        self::assertStringContainsString('[truncated:', $content, 'and announces the clip');
     }
 
     /**
