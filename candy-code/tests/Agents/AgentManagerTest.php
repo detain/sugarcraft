@@ -20,12 +20,15 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook;
 use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\Messages\Message as TypedMessage;
+use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\EmbeddingsRequest;
@@ -68,6 +71,14 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
 final class AgentManagerTest extends TestCase
 {
     use HomeSandboxTrait;
+
+    /**
+     * The question the factory's Default gate puts through SubAgentGrantHook
+     * for `make build` in ask-agent's run ({@see subAgentAskingManager()}).
+     * The session gate's own question names no agent, so matching this
+     * proves which gate asked.
+     */
+    private const SUB_AGENT_GATE_QUESTION = 'Allow Bash to run? (agent "ask-agent" runs in permission mode: default)';
 
     private ProviderInterface $provider;
     private SkillRegistry $skillRegistry;
@@ -530,14 +541,17 @@ final class AgentManagerTest extends TestCase
         // transiently. It streams no TEXT with it: Runtime continues a reply
         // that already reached the screen instead of re-running it, and does
         // not continue one that carried a tool call at all, so an attempt
-        // with both would fail the run rather than retry it.
+        // with both would fail the run rather than retry it. What it does
+        // stream is REASONING, which a retry may repaint and so may carry:
+        // the text the retried-away attempt streamed, which the transcript
+        // must not keep.
         $provider = new ScriptedProvider([
             [
-                new CompleteResponse(content: '', toolCalls: [$call]),
+                new CompleteResponse(content: '', toolCalls: [$call], reasoning: 'retried-away thought'),
                 new CompleteResponse(content: '', isError: true, errorTransient: true),
             ],
             [
-                new CompleteResponse(content: 'partial', toolCalls: [$call]),
+                new CompleteResponse(content: 'partial', toolCalls: [$call], reasoning: 'accepted thought'),
                 new CompleteResponse(content: ' done'),
             ],
             [new CompleteResponse(content: 'reported')],
@@ -562,6 +576,22 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(1, $prompts, 'a rolled-back attempt must not ask the user about a discarded tool call');
         $this->assertCount(1, $this->recordingTool('Write')->calls, 'the accepted attempt\'s call ran once');
         $this->assertSame(['partial done'], $this->delegatedAssistantTurns($provider->requests[2]), 'the accepted attempt\'s text, once');
+
+        // Every field of every row the run itself wrote into the transcript
+        // the last step sent: the accepted attempt's reasoning rides it once
+        // (the control), the retried-away attempt's never. The harness's
+        // system and user rows are left out because the turn-context row
+        // carries the checkout's git diff, which would quote this file.
+        $transcript = (string) json_encode(array_map(
+            static fn (TypedMessage $message): array => $message->toArray(),
+            array_values(array_filter(
+                $provider->requests[2]->messages,
+                static fn (TypedMessage $message): bool => in_array($message->role(), ['assistant', 'tool'], true),
+            )),
+        ));
+        $this->assertSame(1, substr_count($transcript, 'accepted thought'), 'the accepted attempt\'s reasoning is in the transcript, once');
+        $this->assertSame(0, substr_count($transcript, 'retried-away thought'), 'the retried-away attempt\'s streamed text is in the transcript zero times');
+        $this->assertStringNotContainsString('retried-away thought', $subAgent->output);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
@@ -860,26 +890,32 @@ final class AgentManagerTest extends TestCase
         $this->assertNull($subAgent->error);
     }
 
+    /**
+     * The sub-agent's OWN gate asks here, not the session's: the session
+     * allows Bash by rule, and the factory's Default-mode gate, stricter than
+     * the session's accept-edits, is the one SubAgentGrantHook puts the call
+     * to (the question names the agent, which the session gate's does not).
+     *
+     * NOT A BYPASS SESSION, unlike the approver tests below: a bypass session
+     * answers an ask nobody is attached to with allow (Runtime::gate(), owner
+     * ruling 2026-10-06), so there the call would run. Accept-edits is the
+     * strictest mode the Default gate still outranks that does not.
+     */
     public function testATaskRunsPermissionGateAskWithNoApproverRefusesTheCall(): void
     {
-        // Default mode: `make build` is not a read-only command, so the
-        // session gate asks, and nothing is attached to answer.
-        $customAgentManager = new AgentManager(
-            provider: $this->provider,
-            skillRegistry: $this->skillRegistry,
-            workerPool: null,
-        );
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
-
         [$subAgent, $turns] = $this->delegateEmittingCalls(
-            $customAgentManager,
+            $this->subAgentAskingManager(),
             'ask-agent',
             [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
-            sessionMode: PermissionMode::Default,
+            sessionGate: new PermissionGate(
+                PermissionMode::AcceptEdits,
+                [new PermissionRule('Bash', PermissionAction::Allow)],
+            ),
         );
 
         $this->assertCount(1, $turns);
         $this->assertStringContainsString('no approver is attached', $turns[0]);
+        $this->assertStringContainsString(self::SUB_AGENT_GATE_QUESTION, $turns[0], 'the sub-agent gate asked, not the session gate');
         $this->assertSame([], $this->recordingTool('Bash')->calls, 'an unanswered ask never runs the call');
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
@@ -889,25 +925,25 @@ final class AgentManagerTest extends TestCase
      * unconditional hard failure, which made PermissionMode::Auto's whole
      * 3-strike escalation unreachable for sub-agents: escalating from Deny to
      * Ask produced the same dead sub-agent, only with a worse message.
+     *
+     * The ask is the sub-agent gate's: under a bypass session the session
+     * gate allows, so the only question is the one the factory's Default
+     * gate raises through SubAgentGrantHook. The approver records the ask it
+     * was handed, and the agent-naming question is what proves its source.
+     * The approver is given the call and the ask, never the run, so the
+     * record holds what it can see.
      */
     public function testATaskRunsPermissionGateAskIsRoutedToTheApprover(): void
     {
         $asked = [];
 
-        $customAgentManager = new AgentManager(
-            provider: $this->provider,
-            skillRegistry: $this->skillRegistry,
-            workerPool: null,
-        );
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
-
         [$subAgent] = $this->delegateEmittingCalls(
-            $customAgentManager,
+            $this->subAgentAskingManager(),
             'ask-agent',
             [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
-            sessionMode: PermissionMode::Default,
-            approver: static function (WireToolCall $call) use (&$asked, $customAgentManager): bool {
-                $asked[] = [$call->name(), $customAgentManager->runs()[0]->id];
+            sessionMode: PermissionMode::BypassPermissions,
+            approver: static function (WireToolCall $call, HookResult $ask) use (&$asked): bool {
+                $asked[] = [$call->name(), $call->arguments(), $ask->message];
 
                 return true;
             },
@@ -915,28 +951,28 @@ final class AgentManagerTest extends TestCase
 
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
         $this->assertNull($subAgent->error);
-        $this->assertSame([['Bash', $subAgent->id]], $asked);
+        $this->assertSame([['Bash', ['command' => 'make build'], self::SUB_AGENT_GATE_QUESTION]], $asked);
         $this->assertSame([['command' => 'make build']], $this->recordingTool('Bash')->calls, 'the approved call ran');
     }
 
     public function testATaskRunsPermissionGateAskIsRefusedWhenTheApproverRefuses(): void
     {
-        $customAgentManager = new AgentManager(
-            provider: $this->provider,
-            skillRegistry: $this->skillRegistry,
-            workerPool: null,
-        );
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+        $asked = [];
 
         [$subAgent, $turns] = $this->delegateEmittingCalls(
-            $customAgentManager,
+            $this->subAgentAskingManager(),
             'ask-agent',
             [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
-            sessionMode: PermissionMode::Default,
-            approver: static fn(): bool => false,
+            sessionMode: PermissionMode::BypassPermissions,
+            approver: static function (WireToolCall $call, HookResult $ask) use (&$asked): bool {
+                $asked[] = $ask->message;
+
+                return false;
+            },
         );
 
-        $this->assertSame(['Permission denied: Allow Bash to run? (permission mode: default)'], $turns, 'refused at the permission prompt');
+        $this->assertSame([self::SUB_AGENT_GATE_QUESTION], $asked, 'the sub-agent gate\'s ask reached the approver once');
+        $this->assertSame(['Permission denied: ' . self::SUB_AGENT_GATE_QUESTION], $turns, 'refused at the permission prompt');
         $this->assertSame([], $this->recordingTool('Bash')->calls);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
@@ -948,23 +984,42 @@ final class AgentManagerTest extends TestCase
      */
     public function testATaskRunsPermissionGateAskRequiresLiteralTrue(): void
     {
-        $customAgentManager = new AgentManager(
+        $asked = [];
+
+        [, $turns] = $this->delegateEmittingCalls(
+            $this->subAgentAskingManager(),
+            'ask-agent',
+            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
+            sessionMode: PermissionMode::BypassPermissions,
+            approver: static function (WireToolCall $call, HookResult $ask) use (&$asked): mixed {
+                $asked[] = $ask->message;
+
+                return 'yes, go ahead';
+            },
+        );
+
+        $this->assertSame([self::SUB_AGENT_GATE_QUESTION], $asked, 'the sub-agent gate\'s ask reached the approver once');
+        $this->assertSame(['Permission denied: ' . self::SUB_AGENT_GATE_QUESTION], $turns, 'a truthy non-true answer is refused at the permission prompt');
+        $this->assertSame([], $this->recordingTool('Bash')->calls);
+    }
+
+    /**
+     * A manager whose sub-agents carry a Default-mode gate of their own from
+     * the factory, whatever mode the session asks for, with ask-agent
+     * registered. Under a session less strict than Default, Task hands that
+     * gate to SubAgentGrantHook and its Ask arm judges every call.
+     */
+    private function subAgentAskingManager(): AgentManager
+    {
+        $manager = new AgentManager(
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             workerPool: null,
+            permissionGateFactory: static fn (): PermissionGate => new PermissionGate(PermissionMode::Default),
         );
-        $customAgentManager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
+        $manager->register($this->createAgent(name: 'ask-agent', prompt: 'Ask agent'));
 
-        [, $turns] = $this->delegateEmittingCalls(
-            $customAgentManager,
-            'ask-agent',
-            [new WireToolCall('c1', 'Bash', ['command' => 'make build'])],
-            sessionMode: PermissionMode::Default,
-            approver: static fn(): mixed => 'yes, go ahead',
-        );
-
-        $this->assertSame(['Permission denied: Allow Bash to run? (permission mode: default)'], $turns, 'a truthy non-true answer is refused at the permission prompt');
-        $this->assertSame([], $this->recordingTool('Bash')->calls);
+        return $manager;
     }
 
     /**
@@ -2350,7 +2405,13 @@ final class AgentManagerTest extends TestCase
         );
 
         // The grant verdict the Task path installs beside the roster states the
-        // tighter reason for the same call.
+        // tighter reason for the same call. THE RUN CANNOT SHOW THAT TEXT, so
+        // it is checked by a direct call: Runtime refuses a call to a tool the
+        // run's roster lacks as "Tool not found" BEFORE the PreToolUse chain
+        // runs, and the roster always lacks this bridge, because grant
+        // resolution drops a server outside the allowlist from the registry
+        // and from an inherited engine set alike. The hook's refusal only
+        // reaches a run for a call on its roster.
         $verdict = (new SubAgentGrantHook($manager, $subAgent))
             ->execute(new HookContext('s', 'mcp__beta__ping', [], '', '', 'm', 'p', ''));
         $this->assertFalse($verdict->permitsExecution());
