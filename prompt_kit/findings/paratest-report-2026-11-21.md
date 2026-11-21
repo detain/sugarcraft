@@ -676,6 +676,75 @@ All in-process `STDIN` uses outside candy-code are harmless except one:
     the deferred end-of-plan figure refresh.
 - **§10 step 4 (flakes)** was not started. Class A starts with McpConcurrentStartupTest.
 
+Round 2 took on the floor; see §11.8.
+
+### 11.8 Round 2: candy-code wall-time fixes
+
+Round 2 was done in the same copy after an upstream merge (`25b118c5c2`). Its baseline is the K=32 run on
+that merged tree: wall 146.0 s, total test time 3,611 s, longest file ProcessExecutorTest 77.4 s. At K=32,
+3,611 / 32 = 113 s is more than the longest file, so total work set the wall. The fixes therefore went for
+root causes in the expensive files rather than for splits. Each was profiled first with a SIGUSR1 sampling
+profiler (2 ms ticks).
+
+| | Commit | Root cause and fix |
+|---|---|---|
+| a | 4db7b9bc22 | `PaletteAction::label()` re-mapped every built-in command per palette row, several times a frame. Now a per-locale index, `BuiltInCommands::forPaletteAction()`. |
+| b | 9e8e149be1 | `StartupSummary::cheapFacts()` spawned `git rev-parse` + `git status` for the version string on every render. Now memoized per process. |
+| c | dccd125fd1 | `ContextMeter::rawTokens()` re-estimated the whole transcript twice a frame. Each message's share is now kept in a WeakMap (messages are readonly). |
+| d | 49ae58dd8e | `SettingsSchema::byKey()` scanned every definition. Now a per-locale index. |
+| e | c6231e8d51 | The menu bar re-derived every label each frame. Now memoized by description text. |
+| f | de55eb23f7 | Two E646 tests sat out the real 15 s heartbeat window. `ProcessExecutor` takes `heartbeatTimeoutSeconds` (default 15, pinned); the tests use 3 s. |
+| g | 550dea10e6 | Each spawned `bin/candy-code` compiled its 429 files from nothing (CLI opcache dies with the process). `tests/Support/ChildOpcache` gives spawn sites a per-test-process opcache file cache, with temp directories blacklisted. |
+| h | e8a0b350e6 | sugar-core `Width::wrapAnsi()` walked plain ASCII grapheme by grapheme. Runs of printable ASCII are now taken in slices. |
+| i | b55b63055e | Same shortcut for `truncateAnsi()`, `takeAnsi()` and `dropAnsi()`, through `Width::asciiRun()`. |
+| j | 89ebfb82d9 | TreeWideGuardRosterTest's taint resolver re-scanned the tokens on every fixpoint pass and compiled one pattern per tainted name. Sites are now read once, and the names are matched with one alternation. |
+| k | 160a325667 | DuplicatedTestHelperDriftTest tokenized each source about ten times. Its declaration scan is memoized for the class's lifetime. |
+
+Evidence that behavior did not change:
+- **h and i:** a differential fuzz against the pre-change `Width` class, 600,020 inputs across the four
+  walkers, found 0 differences.
+- **j:** a snapshot of the resolver's output over all 2,249 files under `tests/` is identical.
+- **Full run:** the K=32 run after a-k (33,816 tests) has only the 6 known drift reds.
+
+Per file, baseline K=32 vs the K=32 run after a-k:
+
+| File | Before | After | Fixes |
+|---|---|---|---|
+| PaletteScrollAnchorTest | 61.5 s | 15.2 s | a, b, e |
+| PaletteClickTest | 57.9 s | 12.0 s | a |
+| RendererTest | 33.8 s | 6.7 s | h (one case 24.9 → 0.8 s alone) |
+| KeyHelpTest | 73.7 s | 49.9 s | c, i |
+| ProcessExecutorTest | 77.4 s | 54.8 s | f |
+| ShellContrastTest | 71.4 s | 51.0 s | i |
+| AgentSplitCompositorTest | 41.6 s | 21.7 s | b |
+| BinCandyCodeDispatchTest | 59.3 s | 46.0 s | g (50 → 32 s alone) |
+| DuplicatedTestHelperDriftTest | 29.5 s | 15.5 s | k (34.7 → 14.8 s alone) |
+| UntouchedDockWidthSweepTest | 20.8 s | 9.4 s | a-e |
+| ScreenReaderPaletteTailTest | 12.4 s | 1.9 s | a-e |
+| TreeWideGuardRosterTest | 35.3 s | 29.3 s | j |
+
+Whole run: wall 152.6 s; total test time 3,686 s; longest file ProcessExecutorTest 54.8 s.
+- **Why the totals did not improve:** the per-file gains add up to 398 s. They are offset by 473 s of small
+  losses spread over files no fix touched, mostly process- and timing-bound ones (LSP, serve, session).
+- **Why that is contention:** other sessions were running phpunit and phpdup on the same 64-CPU box, and
+  load reached 56 during the run. Across the 427 files over 2 s, the after/before ratio has a median of 1.01,
+  with p10 0.82 and p90 1.32: noise around unchanged.
+- **What would settle the wall:** an A/B run on a quiet box. The per-file rows above are the attributable
+  result. The floor dropped from 77 s to 55 s, so at K=32 total work now sets the wall by a wider margin.
+
+Bare `php -r ''` costs 97 ms on this host (about 70 extensions; `php -n` 15 ms). That share of every spawn
+is the environment, not the code.
+
+**Product finding, not fixed (owner's call):** `ToolIpcFiles::sweepOnce()`, which runs at every launch,
+globs the real temp directory 7 times:
+- 5 prefixes in `sweep()`;
+- `BackgroundSupervisor::sweepStaleIpcDirs()`;
+- `sweepStalePoolDirs()`.
+
+Each glob reads the whole directory. On this box's `/tmp` (472,439 entries) that adds 2.4 s to every launch:
+an offline `-p` run takes 3.3 s, against 0.83 s with an empty TMPDIR. One readdir pass would remove about six
+sevenths of that. The suite is unaffected, because its children get a 1.5k-entry sandbox TMPDIR.
+
 ---
 
 ## Sources
