@@ -196,6 +196,93 @@ final class ExpectWindowTest extends TestCase
         self::assertSame(3, $result->dropped);
     }
 
+    public function testATwoByteGlyphSeveredAtTheCapIsCutWhole(): void
+    {
+        // 'x' + é is 3 bytes; a cap of 2 would tear the two-byte é, so only 'x' survives.
+        $result = Expect::on(self::master(["x\u{e9}"]))
+            ->collectWindow(0.2, self::farDeadline(), 2);
+
+        self::assertSame('x', $result->output);
+        self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'));
+        self::assertSame(1, $result->retained);
+        self::assertSame(2, $result->dropped);
+    }
+
+    public function testAFourByteGlyphSeveredAtTheCapIsCutWhole(): void
+    {
+        // 'a' + U+1F600 is 5 bytes. Caps 2 and 3 both split the four-byte glyph, so
+        // the cut must back off to the lone 'a' and never retain a torn F0 lead.
+        foreach ([2, 3] as $cap) {
+            $result = Expect::on(self::master(["a\u{1F600}"]))
+                ->collectWindow(0.2, self::farDeadline(), $cap);
+
+            self::assertSame('a', $result->output, "cap {$cap} must not retain a torn four-byte lead");
+            self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'));
+            self::assertSame(1, $result->retained);
+            self::assertSame(4, $result->dropped);
+        }
+    }
+
+    public function testAWholeFourByteGlyphOnTheCapEdgeIsKept(): void
+    {
+        // 'a' + U+1F600 is exactly 5 bytes: a cap of 5 keeps the whole glyph.
+        $result = Expect::on(self::master(["a\u{1F600}"]))
+            ->collectWindow(0.2, self::farDeadline(), 5);
+
+        self::assertSame("a\u{1F600}", $result->output);
+        self::assertSame(5, $result->retained);
+        self::assertSame(0, $result->dropped);
+    }
+
+    public function testTheCapStopsOnAnAsciiBoundaryWithoutBackingOff(): void
+    {
+        // ASCII needs no codepoint backing off: a cap of 2 keeps exactly 'ab'.
+        $result = Expect::on(self::master(['abcd']))
+            ->collectWindow(0.2, self::farDeadline(), 2);
+
+        self::assertSame('ab', $result->output);
+        self::assertSame(2, $result->retained);
+        self::assertSame(2, $result->dropped);
+    }
+
+    public function testTheSessionTotalBacksOffAMultiByteGlyphInTheNextWindow(): void
+    {
+        // The session already holds 3 of a 5-byte cap, so 2 bytes of room remain.
+        // A 3-byte glyph cannot fit whole, so none of it may be retained.
+        $result = Expect::on(self::master(["\u{4F60}"]))
+            ->collectWindow(0.2, self::farDeadline(), 5, 3, 0);
+
+        self::assertSame('', $result->output);
+        self::assertSame(3, $result->retained);
+        self::assertSame(3, $result->dropped);
+    }
+
+    public function testAnIncompleteGlyphAtTheCapEdgeIsNotRetainedAcrossChunks(): void
+    {
+        // The first read ends mid-glyph and fills the cap exactly. Nothing can
+        // complete the sequence once the cap is reached, so it must not be kept.
+        $result = Expect::on(self::master(["ab\xE4\xBD", "\xA0cd"]))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'), 'the retained output must be valid UTF-8');
+        self::assertSame('abcd', $result->output);
+        self::assertSame(4, $result->retained);
+        self::assertSame(3, $result->dropped, 'the three bytes of the glyph are counted as dropped');
+    }
+
+    public function testAContinuationRunAfterACutIsNotRetained(): void
+    {
+        // The cut at 'abc' leaves a codepoint's lead behind; the next read opens with
+        // its tail, which must be given up rather than retained as a lone byte.
+        $result = Expect::on(self::master(["abc\xE4\xBD", "\xA0xyz"]))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'), 'the retained output must be valid UTF-8');
+        self::assertSame('abcx', $result->output);
+        self::assertSame(4, $result->retained);
+        self::assertSame(5, $result->dropped);
+    }
+
     // ------------------------------------------------------------ match verdict
 
     public function testAMatchEndsTheWindowEarly(): void
@@ -255,6 +342,21 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->matched);
         self::assertTrue($result->wallHit, 'a window cut short by the deadline reports a wall hit');
         self::assertFalse($result->childExited);
+    }
+
+    public function testAChildExitNearTheDeadlineDoesNotOvershootIt(): void
+    {
+        // The child is gone before the first read, so the post-exit drain runs with
+        // about 60 ms of deadline left. An unclamped drain would spend two quiet
+        // 50 ms reads on top of that, overshooting the deadline by roughly 90 ms.
+        $started = \microtime(true);
+        $result = Expect::on(self::master([]))
+            ->collectWindow(5.0, \microtime(true) + 0.06, 100, 0, 0, null, self::child(true));
+
+        $elapsed = \microtime(true) - $started;
+        self::assertLessThan(0.12, $elapsed, 'the post-exit drain must stay inside the wall deadline');
+        self::assertTrue($result->childExited);
+        self::assertFalse($result->wallHit, 'the child exit closed the window before the deadline was hit');
     }
 
     public function testAPastDeadlineReturnsAtOnceAsAWallHit(): void

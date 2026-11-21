@@ -604,7 +604,7 @@ final class Expect
                 $childExited = true;
                 // The final repaint can land a hair after the exit is observed;
                 // one bounded drain keeps it inside this window.
-                $finalWindow = $this->drainMaster();
+                $finalWindow = $this->drainMaster($deadline);
                 if ($onChunk !== null && $finalWindow !== '') {
                     $onChunk($finalWindow);
                 }
@@ -623,16 +623,22 @@ final class Expect
     }
 
     /**
-     * Read the master until it answers nothing twice in a row, chunk-capped.
+     * Read the master until it answers nothing twice in a row, chunk-capped and
+     * clamped to the caller's wall deadline so a late child exit cannot overshoot it.
      */
-    private function drainMaster(): string
+    private function drainMaster(float $deadline): string
     {
         $seen = '';
         $quiet = 0;
         $budget = self::DRAIN_MAX_CHUNKS;
 
         while ($quiet < self::DRAIN_QUIET_READS && $budget-- > 0) {
-            $chunk = $this->master->read(self::WINDOW_READ_BYTES, self::DRAIN_READ_TIMEOUT_SECONDS);
+            $left = $deadline - \microtime(true);
+            if ($left <= 0.0) {
+                break;
+            }
+
+            $chunk = $this->master->read(self::WINDOW_READ_BYTES, \min(self::DRAIN_READ_TIMEOUT_SECONDS, $left));
             if ($chunk === null || $chunk === '') {
                 ++$quiet;
 
@@ -659,21 +665,54 @@ final class Expect
             return [$buffer, $retained, $dropped];
         }
 
+        // An earlier cut may have dropped the lead of a codepoint whose tail now
+        // opens this chunk. Once the buffer ends on a whole codepoint, a continuation
+        // run at the head of the chunk has no lead left to join, so it is given up.
+        if ($buffer !== '' && self::utf8SafeByteCut($buffer, \strlen($buffer)) === \strlen($buffer)) {
+            $orphans = 0;
+            while ($orphans < 3 && $orphans < \strlen($chunk) && (\ord($chunk[$orphans]) & 0xc0) === 0x80) {
+                $orphans++;
+            }
+            if ($orphans > 0) {
+                $chunk = \substr($chunk, $orphans);
+                $dropped += $orphans;
+                if ($chunk === '') {
+                    return [$buffer, $retained, $dropped];
+                }
+            }
+        }
+
         $room = $cap - $retained;
         if ($room <= 0) {
             return [$buffer, $retained, $dropped + \strlen($chunk)];
         }
 
         if (\strlen($chunk) <= $room) {
-            return [$buffer . $chunk, $retained + \strlen($chunk), $dropped];
+            $buffer .= $chunk;
+            $retained += \strlen($chunk);
+        } else {
+            // The cap is a byte budget, so a raw substr at $room can tear a multi-byte
+            // sequence and leave a lone continuation byte in the transcript. Back the
+            // cut off to a codepoint boundary; the bytes given up are counted as dropped.
+            $cut = self::utf8SafeByteCut($chunk, $room);
+            $buffer .= \substr($chunk, 0, $cut);
+            $retained += $cut;
+            $dropped += \strlen($chunk) - $cut;
         }
 
-        // The cap is a byte budget, so a raw substr at $room can tear a multi-byte
-        // sequence and leave a lone continuation byte in the transcript. Back the
-        // cut off to a codepoint boundary; the bytes given up are counted as dropped.
-        $cut = self::utf8SafeByteCut($chunk, $room);
+        // Once the cap is reached nothing more is retained, so a trailing sequence
+        // that is still incomplete would stay torn for good. Give those bytes back.
+        if ($retained === $cap) {
+            $safe = self::utf8SafeByteCut($buffer, \strlen($buffer));
+            $torn = \strlen($buffer) - $safe;
+            if ($torn > 0) {
+                $buffer = \substr($buffer, 0, $safe);
+                $retained -= $torn;
+                $dropped += $torn;
+            }
+        }
 
-        return [$buffer . \substr($chunk, 0, $cut), $retained + $cut, $dropped + \strlen($chunk) - $cut];
+        return [$buffer, $retained, $dropped];
     }
 
     /**
