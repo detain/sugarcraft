@@ -626,11 +626,14 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // A non-positive cap turns the hit-list trim off, not the result's own
         // ceiling: truncateMerged() treats 0 as "no clip", so the joined stdout
         // and stderr would reach the model at twice the capture bound. The
-        // default is the one each stream is retained to, as in Bash.
+        // default is the one each stream is retained to, as in Bash. The
+        // nudges are appended after this clip, so their length is charged
+        // against that default here, as it is against a positive cap above;
+        // otherwise a zero cap returns the body at the full ceiling plus them.
         $finalCap = $section === '' ? $bodyCap : $floor;
         $content = $this->truncateMerged(
             $merged,
-            $finalCap > 0 ? $finalCap : self::DEFAULT_RETAINED_BYTES,
+            $finalCap > 0 ? $finalCap : max(1, self::DEFAULT_RETAINED_BYTES - $nudgeCost),
         );
 
         $skipped = self::presentExcludedDirs($path, $rules);

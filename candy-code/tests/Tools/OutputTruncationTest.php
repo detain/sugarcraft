@@ -7,6 +7,9 @@ namespace SugarCraft\Code\Tests\Tools;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\Glob;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 
 /**
@@ -352,29 +355,86 @@ final class OutputTruncationTest extends TestCase
             self::markTestSkipped('The stand-in grep below is a POSIX shell script.');
         }
 
-        $bin = $this->root . '/bin';
-        mkdir($bin, 0o777, true);
-        file_put_contents($bin . '/grep', "#!/bin/sh\n"
+        $result = $this->withStandInGrep(
+            "#!/bin/sh\n"
             . "yes 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef 2>/dev/null | head -c 9437184\n"
             . "yes fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 2>/dev/null | head -c 9437184 1>&2\n"
-            . "exit 2\n");
-        chmod($bin . '/grep', 0o755);
-
-        $previousPath = (string) getenv('PATH');
-        putenv('PATH=' . $bin . PATH_SEPARATOR . $previousPath);
-        try {
-            $result = (new Grep(maxOutputBytes: 0))->execute([
+            . "exit 2\n",
+            fn () => (new Grep(maxOutputBytes: 0))->execute([
                 'pattern' => 'needle',
                 'path' => $this->root,
                 'description' => 'sweep a zero cap over both streams',
                 'id' => 'call_grep_both',
-            ]);
-        } finally {
-            putenv('PATH=' . $previousPath);
-        }
+            ]),
+        );
 
         $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
         $this->assertStringContainsString('truncated:', $result->content());
+    }
+
+    /**
+     * The skill nudge is appended after the clip, so under a zero cap it used to
+     * ride on top of a body already held to the full 8 MiB ceiling. The stand-in
+     * grep reports one hit in a directory a skill claims, so the nudge fires and
+     * the bound must hold with it counted.
+     */
+    public function testAZeroCapChargesASkillNudgeAgainstTheCeiling(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The stand-in grep below is a POSIX shell script.');
+        }
+
+        $registry = new SkillRegistry();
+        $registry->register([
+            'php-audit' => Skill::parse(
+                "---\ndescription: Security audit for PHP code\npaths:\n  - /**/*.php\n---\nbody\n",
+                'php-audit',
+            ),
+        ]);
+
+        $hit = $this->root . '/src/App.php';
+        $result = $this->withStandInGrep(
+            "#!/bin/sh\n"
+            . "printf '%s\\n' '" . $hit . ":1:needle'\n"
+            . "yes 0123456789abcdef 2>/dev/null | head -c 9437184\n"
+            . "yes fedcba9876543210 2>/dev/null | head -c 9437184 1>&2\n"
+            . "exit 2\n",
+            fn () => (new Grep(maxOutputBytes: 0, skillNudge: SkillPathNudge::new($registry)))->execute([
+                'pattern' => 'needle',
+                'path' => $this->root,
+                'description' => 'sweep a zero cap with a skill nudge',
+                'id' => 'call_grep_nudge',
+            ]),
+        );
+
+        $this->assertStringContainsString('php-audit', $result->content());
+        $this->assertStringContainsString('truncated:', $result->content());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024, strlen($result->content()));
+    }
+
+    /**
+     * Installs $script as `grep` ahead of PATH for the duration of $run, then
+     * removes it. tearDown() unlinks only direct children of the root, so a bin/
+     * left behind would raise two warnings on every run and leak into the system
+     * temp directory.
+     */
+    private function withStandInGrep(string $script, callable $run): mixed
+    {
+        $bin = $this->root . '/bin';
+        $grep = $bin . '/grep';
+        mkdir($bin, 0o777, true);
+        file_put_contents($grep, $script);
+        chmod($grep, 0o755);
+
+        $previousPath = (string) getenv('PATH');
+        putenv('PATH=' . $bin . PATH_SEPARATOR . $previousPath);
+        try {
+            return $run();
+        } finally {
+            putenv('PATH=' . $previousPath);
+            unlink($grep);
+            rmdir($bin);
+        }
     }
 
     // =========================================================================
