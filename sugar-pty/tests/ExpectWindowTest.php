@@ -15,8 +15,7 @@ use SugarCraft\Pty\ExpectWindow;
  * {@see Expect::collectWindow()} is the non-throwing window engine behind a
  * scripted PTY session: it reports a match, retains bytes under a session-wide
  * cap, counts what the cap refused, cuts UTF-8 safely, and clamps every read to
- * a wall deadline. Its cases mirror the byte-budget checks that the candy-code
- * PtyDriver suite pins against its private copy of the same logic.
+ * a wall deadline. Each case pins one edge of that contract directly.
  */
 final class ExpectWindowTest extends TestCase
 {
@@ -416,7 +415,6 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->wallHit, 'the child exit closed the window before the deadline was hit');
     }
 
-    // Deliberately diverges from PtyDriver, which reports no wall hit for a past-entry deadline.
     public function testAPastDeadlineReturnsAtOnceAsAWallHit(): void
     {
         $started = \microtime(true);
@@ -472,7 +470,7 @@ final class ExpectWindowTest extends TestCase
     {
         // The master closes at once but the child stays alive, so the window waits
         // for an exit, a match or the deadline. The deadline is what ends it: that is
-        // a wall hit, as PtyDriver::collectWindow reports it, not a silent close.
+        // a wall hit, not a silent close.
         $started = \microtime(true);
         $result = Expect::on(self::master(['abc', '']))
             ->collectWindow(5.0, \microtime(true) + 0.2, 100, 0, 0, '/x/', self::child(false));
@@ -490,7 +488,7 @@ final class ExpectWindowTest extends TestCase
     public function testAChildThatExitsAfterMasterEofIsStillReportedAsExited(): void
     {
         // A child that closes its tty then exits 0.3 s later: the master reports EOF
-        // at once, but the window must keep waiting for the exit, as PtyDriver does.
+        // at once, but the window must keep waiting for the exit.
         $exitAt = \microtime(true) + 0.3;
         $child = new class ($exitAt) implements Child {
             public function __construct(private float $exitAt)
@@ -694,5 +692,27 @@ final class ExpectWindowTest extends TestCase
         self::assertSame('mo', $result->output);
         self::assertSame(2, $result->retained);
         self::assertSame(2, $result->dropped);
+    }
+
+    public function testTheSuccessorWindowDoesNotReplayTheConsumedBuffer(): void
+    {
+        $expect = Expect::on(self::master(['ok> more', ' tail']))->expect('> ');
+        $first = $expect->collectWindow(0.2, self::farDeadline(), 100);
+
+        self::assertSame('more tail', $first->output, 'the buffered bytes and the master bytes both belong to the first window');
+        self::assertSame('', $first->next->buffer, 'the successor carries no buffer');
+
+        $second = $first->next->collectWindow(0.2, self::farDeadline(), 100, $first->retained, $first->dropped);
+
+        self::assertSame('', $second->output, 'the consumed buffer must not be reported a second time');
+        self::assertSame($first->retained, $second->retained, 'no bytes are counted twice against the session cap');
+    }
+
+    public function testAWindowWithNoBufferedInputHandsBackItsOwnInstance(): void
+    {
+        $expect = Expect::on(self::master(['abc']));
+        $result = $expect->collectWindow(0.2, self::farDeadline(), 100);
+
+        self::assertSame($expect, $result->next);
     }
 }

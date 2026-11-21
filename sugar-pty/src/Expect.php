@@ -544,12 +544,15 @@ final class Expect
      * The window ends at the first of: the regex matching the window's retained
      * output, the child exiting, the window length elapsing, or the wall deadline
      * passing. Master EOF stops the reads but not the wait: a child that closes its
-     * tty and exits a moment later is still reported as exited, matching
-     * `PtyDriver::collectWindow`. With no child to wait for, EOF ends the window.
-     * Each read is clamped to the time left in the window, so the deadline binds
-     * even against a silent master. A buffer left by an earlier `expect*` call is the
-     * window's first input: those bytes were read past that call's match, so the window
-     * reports them and does not read them from the master again.
+     * tty and exits a moment later is still reported as exited. With no child to wait
+     * for, EOF ends the window. Each read is clamped to the time left in the window, so
+     * the deadline binds even against a silent master. A buffer left by an earlier
+     * `expect*` call is the window's first input: those bytes were read past that call's
+     * match, so the window reports them and does not read them from the master again.
+     * The window consumes that buffer. The returned {@see ExpectWindow::$next} carries the
+     * same master and state with the buffer cleared, and the following window must run on
+     * it. This instance is readonly and still holds the buffer, so a second window run on
+     * it reports those bytes again.
      * An invalid regex throws `\InvalidArgumentException`, as `expectPattern` does.
      *
      * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
@@ -618,7 +621,7 @@ final class Expect
             if ($chunk === '') {
                 // Master EOF: no byte can follow, so stop reading. `eof` tells it from a
                 // quiet window. A child that closed its tty may still exit a moment later,
-                // so the wait for that exit continues below, as PtyDriver::collectWindow does.
+                // so the wait for that exit continues below.
                 $eof = true;
             }
             if ($chunk !== null && $chunk !== '') {
@@ -665,14 +668,15 @@ final class Expect
         }
 
         // A deadline already past on entry ends the window with no read and still counts
-        // as a wall hit. PtyDriver::collectWindow never flags that case: its loop exits
-        // before any read, so its wallHit stays false. A port that replaces PtyDriver must
-        // map that difference explicitly rather than assume parity.
+        // as a wall hit: the deadline is what ended the window, whether or not a read happened.
         // EOF does not suppress it: with a live child the window keeps waiting past EOF,
-        // so a deadline that passes there is a wall hit, as PtyDriver reports it.
+        // so a deadline that passes there is a wall hit too.
         $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
 
-        return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped, $eof);
+        // The buffer is consumed by this window, so the successor starts with none.
+        $next = $pending === '' ? $this : $this->mutate(['buffer' => '']);
+
+        return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped, $eof, $next);
     }
 
     /**
@@ -719,8 +723,7 @@ final class Expect
         }
 
         // Only the cap refuses bytes: a continuation run at the head of a chunk is
-        // retained like any other byte, so `dropped` keeps meaning "refused by the cap"
-        // and the transcript matches PtyDriver::retain byte for byte.
+        // retained like any other byte, so `dropped` means exactly the bytes the cap refused.
         $room = $cap - $retained;
         if ($room <= 0) {
             return [$buffer, $retained, $dropped + \strlen($chunk)];
