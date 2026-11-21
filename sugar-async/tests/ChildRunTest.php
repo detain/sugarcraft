@@ -670,6 +670,125 @@ final class ChildRunTest extends TestCase
     }
 
     /**
+     * Regression: a beat that throws while run() waits for the exit after the output
+     * has closed. The throw used to leave with no kill and no proc_close(), so the
+     * child outlived the run. It must be killed and reaped before the throw leaves.
+     */
+    public function testAHeartbeatThatThrowsAfterTheOutputClosedKillsTheChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to see whether the child survived');
+        }
+        $pid = 0;
+        $start = $this->now();
+        try {
+            ChildRun::new($this->php('fclose(STDOUT); fclose(STDERR); sleep(30);'))
+                ->withTimeout(20.0)
+                ->withOnSpawn(static function (int $spawned) use (&$pid): void {
+                    $pid = $spawned;
+                })
+                ->withHeartbeat(0.2, static function (): void {
+                    throw new \LogicException('beat failed');
+                })
+                ->run();
+            $this->fail('the heartbeat throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('beat failed', $e->getMessage());
+        } finally {
+            $alive = $pid > 0 && \posix_kill($pid, 0);
+            if ($alive) {
+                \posix_kill($pid, 9);
+            }
+        }
+
+        $this->assertGreaterThan(0, $pid, 'onSpawn never saw the child');
+        $this->assertFalse($alive, 'the child outlived a heartbeat throw in the post-close wait');
+        $this->assertLessThan(10.0, $this->now() - $start, 'the run waited on the child instead of killing it');
+    }
+
+    /** The kill seam is told the pid while the child is still alive, and the ladder still kills it. */
+    public function testOnKillSeesTheLiveChildBeforeTheLadder(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to probe the child');
+        }
+        $spawned = 0;
+        $told = [];
+        $r = ChildRun::new(['sleep', '30'])
+            ->withTimeout(0.3)
+            ->withOnSpawn(static function (int $pid) use (&$spawned): void {
+                $spawned = $pid;
+            })
+            ->withOnKill(static function (int $pid) use (&$told): void {
+                $told[] = [$pid, \posix_kill($pid, 0)];
+            })
+            ->run();
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertSame([[$spawned, true]], $told, 'onKill runs once, with the spawned pid, before any signal');
+        $this->assertFalse(\posix_kill($spawned, 0), 'the ladder still killed the child');
+    }
+
+    /** A throwing kill seam does not stop the ladder: the child dies, then the throw propagates. */
+    public function testAThrowingOnKillStillKillsTheChild(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill')) {
+            $this->markTestSkipped('needs posix_kill to probe the child');
+        }
+        $spawned = 0;
+        try {
+            ChildRun::new(['sleep', '30'])
+                ->withTimeout(0.3)
+                ->withOnSpawn(static function (int $pid) use (&$spawned): void {
+                    $spawned = $pid;
+                })
+                ->withOnKill(static function (int $pid): void {
+                    throw new \LogicException('seam failed');
+                })
+                ->run();
+            $this->fail('the seam throw must reach the caller');
+        } catch (\LogicException $e) {
+            $this->assertSame('seam failed', $e->getMessage());
+        }
+
+        $this->assertGreaterThan(0, $spawned);
+        $alive = \posix_kill($spawned, 0);
+        if ($alive) {
+            \posix_kill($spawned, 9);
+        }
+        $this->assertFalse($alive, 'a throwing seam left the child alive');
+    }
+
+    /**
+     * withKillGrace() shortens the ladder. The child ignores SIGTERM, so it lives
+     * through the whole TERM grace and dies only to SIGKILL: at the 1 s default the
+     * run takes at least 1.3 s, at a 0.2 s grace well under that.
+     */
+    public function testWithKillGraceShortensTheTermRung(): void
+    {
+        $this->requirePosixPipes();
+        $start = $this->now();
+        $r = ChildRun::new(['/bin/sh', '-c', 'trap "" TERM; exec sleep 30'])
+            ->withTimeout(0.3)
+            ->withKillGrace(0.2, 0.5)
+            ->run();
+        $elapsed = $this->now() - $start;
+
+        $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+        $this->assertGreaterThanOrEqual(0.45, $elapsed, 'the TERM grace was skipped');
+        $this->assertLessThan(1.2, $elapsed, 'the run took the default TERM grace, not the one set');
+    }
+
+    public function testWithKillGraceRejectsANonPositiveGrace(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ChildRun::new(['true'])->withKillGrace(0.5, 0.0);
+    }
+
+    /**
      * The heartbeat is a liveness signal and never a verdict: beating does not end a run.
      */
     public function testAHeartbeatDoesNotEndTheRun(): void

@@ -112,6 +112,9 @@ final class ChildRun
      * @param bool $groupLeader  True when a containment wrapper made the child lead its own group, so its pid is the group
      * @param bool $setsidWrapped  True when the child was started behind a containment wrapper that makes it a
      *                             group leader ({@see withSetsidWrapped()})
+     * @param float $terminateGrace  Seconds the kill ladder waits after SIGTERM before SIGKILL
+     * @param float $killGrace  Seconds the kill ladder waits after SIGKILL before the reap is left to run late
+     * @param null|\Closure(int): void $onKill  run() only: told the child's pid before the kill ladder's first signal, or null
      */
     private function __construct(
         private readonly array $argv,
@@ -131,6 +134,9 @@ final class ChildRun
         private readonly ?\Closure $onHeartbeat = null,
         private readonly bool $groupLeader = false,
         private readonly bool $setsidWrapped = false,
+        private readonly float $terminateGrace = BoundedShutdown::TERMINATE_GRACE_SECONDS,
+        private readonly float $killGrace = BoundedShutdown::KILL_GRACE_SECONDS,
+        private readonly ?\Closure $onKill = null,
     ) {
     }
 
@@ -330,6 +336,43 @@ final class ChildRun
     }
 
     /**
+     * The kill ladder's two graces: the seconds it waits after SIGTERM before it sends
+     * SIGKILL, and after SIGKILL before it stops waiting and leaves the child to a late
+     * reap. The defaults are BoundedShutdown's, one second each. A caller whose own
+     * deadline has already spent its patience passes shorter ones. run() and launch()
+     * both use them.
+     */
+    public function withKillGrace(float $terminateSeconds, float $killSeconds): self
+    {
+        foreach ([$terminateSeconds, $killSeconds] as $seconds) {
+            if ($seconds <= 0 || !is_finite($seconds)) {
+                throw new \InvalidArgumentException('Kill graces must be positive finite numbers of seconds');
+            }
+        }
+
+        return $this->mutate(['terminateGrace' => $terminateSeconds, 'killGrace' => $killSeconds]);
+    }
+
+    /**
+     * Kill seam: called once, with the child's pid, right before run()'s kill ladder
+     * sends its first signal, whatever started the ladder (the deadline, the idle
+     * budget, a cancel, a pipe failure or a throw from a callback). The child has not
+     * been signalled yet, so the caller can reach what the ladder cannot. On Windows
+     * the ladder ends at proc_terminate(), which kills only the direct child, and a
+     * caller walks the child's process tree from here. The ladder still runs after
+     * the hook, and still runs when the hook throws; the throw then propagates.
+     *
+     * run() only: launch() runs its ladder on loop timers, and a hook that blocks
+     * would stall the loop. Null removes it.
+     *
+     * @param null|callable(int): void $onKill
+     */
+    public function withOnKill(?callable $onKill): self
+    {
+        return $this->mutate(['onKill' => $onKill === null ? null : \Closure::fromCallable($onKill)]);
+    }
+
+    /**
      * Heartbeat: $onBeat is called at most every $seconds for as long as the child
      * runs, so a caller can keep a liveness watchdog fed through a silent child. The
      * first call comes one interval in. run() beats while it reads the pipes and while
@@ -439,6 +482,8 @@ final class ChildRun
             $this->heartbeatSeconds,
             $this->onHeartbeat,
             $this->setsidWrapped,
+            $this->terminateGrace,
+            $this->killGrace,
         );
     }
 
@@ -475,6 +520,16 @@ final class ChildRun
             $signal = self::signalOf($status);
 
             return false;
+        };
+        // The pid the kill seam is told. The probe records it on its first poll; a run
+        // the probe never polled reads it here, through the probe, so no exit is lost.
+        // Each kill site reads it before the wrapper group, which that exit can name.
+        $pidOf = static function () use ($running, &$spawnPid): int {
+            if ($spawnPid === 0) {
+                $running();
+            }
+
+            return $spawnPid;
         };
 
         // Set when the walk must end early: the pump's clock then reads the deadline,
@@ -550,8 +605,8 @@ final class ChildRun
                 $r = $pump->pump();
             } catch (\Throwable $e) {
                 self::closeAll($pipes);
-                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
-                BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
+                $pid = $pidOf();
+                $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
                 throw $e;
             }
 
@@ -566,21 +621,30 @@ final class ChildRun
 
                     return self::result($r, $exitCode, ChildResult::EXITED, $signal);
                 }
-                $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat, $signal);
+                try {
+                    $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat, $signal);
+                } catch (\Throwable $e) {
+                    // The heartbeat threw while the child still ran: it is killed and reaped
+                    // before the throw leaves, as in the pipe phase above. The wait only
+                    // closes the handle on the exit it returns, so the handle is still open.
+                    $pid = $pidOf();
+                    $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
+                    throw $e;
+                }
                 if ($code !== null) {
                     return self::result($r, $code, ChildResult::EXITED, $signal);
                 }
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
-                $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
-                $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
+                $pid = $pidOf();
+                $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
                 $status = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
 
                 return self::result($r, $code, $status);
             }
 
-            $wrapper = $this->reapedWrapperGroup($exitCode, $spawnPid);
-            $code = BoundedShutdown::terminateBounded($proc, groupPid: self::killGroup($proc, $group, $wrapper));
+            $pid = $pidOf();
+            $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
             $status = match (true) {
                 $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
                 $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
@@ -591,6 +655,26 @@ final class ChildRun
         } finally {
             $cancelSubscription?->unsubscribe();
         }
+    }
+
+    /**
+     * run()'s kill ladder: the kill seam first, while the child is still unsignalled,
+     * then the BoundedShutdown rungs on this run's graces, then the reap. The ladder
+     * runs even when the seam throws, so a throwing seam never leaves the child alive.
+     *
+     * @param resource $proc
+     */
+    private function killAndReap($proc, ?int $group, ?int $wrapper, int $pid): ?int
+    {
+        try {
+            if ($this->onKill !== null && $pid > 0) {
+                ($this->onKill)($pid);
+            }
+        } finally {
+            $code = BoundedShutdown::terminateBounded($proc, $this->terminateGrace, $this->killGrace, self::killGroup($proc, $group, $wrapper));
+        }
+
+        return $code;
     }
 
     /**

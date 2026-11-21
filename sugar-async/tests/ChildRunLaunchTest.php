@@ -1430,4 +1430,57 @@ final class ChildRunLaunchTest extends TestCase
         $loop->run();
         $this->assertSame($settledAt, $beats, 'no beat fires after the run has settled');
     }
+
+    /**
+     * launch() reports a signal death the way run() does: exitCode keeps the -1
+     * sentinel and the signal number rides beside it. launch() used to drop the
+     * number, so the same SIGTERM death read signal 15 from run() and null here.
+     */
+    public function testLaunchCarriesTheSignalNumberOfASignalDeath(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])->withTimeout(5.0)->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
+    public function testLaunchReportsNoSignalForAnExitCode(): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'exit 3'])->withTimeout(5.0)->launch($loop));
+
+        $this->assertSame(3, $r->exitCode);
+        $this->assertNull($r->signal);
+    }
+
+    /** launch() runs its kill ladder on the graces withKillGrace() set, as run() does. */
+    public function testBuildLaunchForwardsTheKillGracesToTheLaunch(): void
+    {
+        $this->requirePosixPipes();
+        $proc = proc_open(['sleep', '5'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+        try {
+            $run = ChildRun::new(['sleep', '5'])->withKillGrace(0.25, 0.75);
+            $build = new \ReflectionMethod(ChildRun::class, 'buildLaunch');
+            $build->setAccessible(true);
+
+            /** @var ChildRunLaunch $launch */
+            $launch = $build->invoke($run, new StreamSelectLoop(), $proc, $pipes, null, null, new \React\Promise\Deferred());
+
+            $this->assertSame(0.25, $this->reflect(ChildRunLaunch::class, 'terminateGrace')->getValue($launch));
+            $this->assertSame(0.75, $this->reflect(ChildRunLaunch::class, 'killGrace')->getValue($launch));
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            proc_terminate($proc);
+            proc_close($proc);
+        }
+    }
 }

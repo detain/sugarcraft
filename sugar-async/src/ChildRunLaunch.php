@@ -70,6 +70,9 @@ final class ChildRunLaunch
 
     private ?int $exitCode = null;
 
+    /** The signal that ended the child, when the status poll that saw the exit reported one. */
+    private ?int $signal = null;
+
     private float $exitedAt = 0.0;
 
     /** The kill ladder has started, for the deadline, the idle budget or a cancel. */
@@ -118,6 +121,8 @@ final class ChildRunLaunch
      * @param null|float $heartbeatSeconds  Interval of the heartbeat timer, or null for none
      * @param null|\Closure(): void $onHeartbeat  The heartbeat hook, called on that interval until the run settles
      * @param bool $setsidWrapped  The child is a setsid wrapper that may not have led its group at the spawn read. Only then does the handle's pid stand in for the group once the child has exited; an unwrapped child leads no group of its own
+     * @param float $terminateGrace  Seconds the kill ladder waits after SIGTERM before SIGKILL
+     * @param float $killGrace  Seconds the kill ladder waits after SIGKILL before the run settles without the exit
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -136,6 +141,8 @@ final class ChildRunLaunch
         private readonly ?float $heartbeatSeconds = null,
         private readonly ?\Closure $onHeartbeat = null,
         private readonly bool $setsidWrapped = false,
+        private readonly float $terminateGrace = BoundedShutdown::TERMINATE_GRACE_SECONDS,
+        private readonly float $killGrace = BoundedShutdown::KILL_GRACE_SECONDS,
     ) {
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
@@ -145,7 +152,7 @@ final class ChildRunLaunch
 
     public function start(): void
     {
-        $this->spawnPid = (int) proc_get_status($this->proc)['pid'];
+        $this->spawnPid = (int) $this->readStatus()['pid'];
         $this->latchLiveGroup();
         $this->lastActivityAt = Clock::monotonicSeconds();
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
@@ -373,9 +380,25 @@ final class ChildRunLaunch
 
         // Before the status read: the group is only readable while the leader lives.
         $this->latchLiveGroup();
+        if ($this->exited) {
+            return true;
+        }
+
+        return $this->readStatus()['running'] === false;
+    }
+
+    /**
+     * Every status read in the launch goes through here, so whichever read first sees
+     * the exit records it. The read that reaps the child is the only one that carries
+     * the signal of a signal death: a later read reports the -1 sentinel alone.
+     *
+     * @return array<string, mixed>
+     */
+    private function readStatus(): array
+    {
         $status = proc_get_status($this->proc);
-        if ($status['running'] !== false) {
-            return false;
+        if ($status['running'] !== false || $this->exited) {
+            return $status;
         }
 
         $this->exited = true;
@@ -383,8 +406,11 @@ final class ChildRunLaunch
         // Raw, as ChildRun::run() keeps it: a signal-killed child reports -1, and
         // a null here would read as "could not be reaped" and hide the failure.
         $this->exitCode = (int) $status['exitcode'];
+        if (($status['signaled'] ?? false) === true && isset($status['termsig'])) {
+            $this->signal = (int) $status['termsig'];
+        }
 
-        return true;
+        return $status;
     }
 
     /** The cancel token fired: the kill ladder runs as it does for the deadline. */
@@ -439,8 +465,8 @@ final class ChildRunLaunch
                     $this->finish($this->outcome());
                 }
             },
-            BoundedShutdown::TERMINATE_GRACE_SECONDS,
-            BoundedShutdown::KILL_GRACE_SECONDS,
+            $this->terminateGrace,
+            $this->killGrace,
         );
     }
 
@@ -487,7 +513,14 @@ final class ChildRunLaunch
     private function latchLiveGroup(): void
     {
         if ($this->groupPid === null && $this->liveGroup === null && !$this->exited) {
-            $this->liveGroup = Containment::groupId($this->proc);
+            // Containment::groupId()'s reading, on a status read that records an exit it
+            // sees: a leader that died just now is reaped by this read, and its signal
+            // would be lost to a read that discards the status.
+            $status = $this->readStatus();
+            $pid = (int) $status['pid'];
+            if ($status['running'] === true && $pid > 0 && \function_exists('posix_getpgid')) {
+                $this->liveGroup = \posix_getpgid($pid) === $pid ? $pid : null;
+            }
         }
     }
 
@@ -573,6 +606,7 @@ final class ChildRunLaunch
             $r->droppedBytes(1) + $r->droppedBytes(2),
             $r->droppedBytes(2),
             $this->abandonedPipes,
+            $this->signal,
         ));
     }
 

@@ -460,6 +460,14 @@ pid at spawn, while the child is certainly alive, so the kill rungs signal the r
 group. Leave both false for an unwrapped child: it shares this process's group, and a
 group kill would signal this process.
 
+`withKillGrace($terminateSeconds, $killSeconds)` sets the kill ladder's two graces: the
+wait after SIGTERM before SIGKILL, and the wait after SIGKILL. The defaults are
+`BoundedShutdown`'s, one second each; `run()` and `launch()` both use them.
+`withOnKill($fn)` is a `run()`-only seam: `$fn` is told the child's pid once, before the
+ladder's first signal, so a caller can reach what the ladder cannot (on Windows, a
+`taskkill /T` walk of the child's tree). The ladder still runs after it, and still runs
+when it throws.
+
 `ChildPump::new($pipes)` is the builder under `ChildRun`, usable on its own over pipes
 you opened: `withDeadline()`, `withCap()`, `withOnChunk()` (live feed),
 `withStdin($pipe, $bytes)`, `withHeartbeat($seconds, $fn)`, `withReap($fn)` (runs once
