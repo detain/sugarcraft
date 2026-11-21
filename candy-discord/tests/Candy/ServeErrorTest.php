@@ -88,7 +88,7 @@ final class ServeErrorTest extends TestCase
         $error = ServeError::fromHost('session.send', $refusal);
 
         self::assertSame('busy', $error->kind);
-        self::assertSame(['kind' => 'busy', 'retryable' => true, 'retryAfterMs' => 500], $error->data);
+        self::assertSame(['kind' => 'busy', 'retryAfterMs' => 500, 'retryable' => true], $error->data);
     }
 
     public function testALibraryNotFoundRefusalKeepsItsKind(): void

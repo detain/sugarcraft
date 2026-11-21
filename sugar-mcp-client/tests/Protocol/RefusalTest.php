@@ -33,7 +33,7 @@ final class RefusalTest extends TestCase
         $error = RpcError::of(ErrorCode::Busy, 'session is busy', null, ['retryAfterMs' => 500]);
 
         self::assertSame('busy', $error->refusalKind());
-        self::assertSame(['kind' => 'busy', 'retryable' => true, 'retryAfterMs' => 500], $error->refusalData());
+        self::assertSame(['kind' => 'busy', 'retryAfterMs' => 500, 'retryable' => true], $error->refusalData());
     }
 
     public function testRefusalDataIsTheWireDataObject(): void
