@@ -151,7 +151,14 @@ final class NavigatingScreenRoot implements Model, ScreenStackCapable
 {
     use SubscriptionCapable;
 
-    public function __construct(public ScreenStack $screens = new ScreenStack()) {}
+    /**
+     * @param list<string> $poppedFrom the breadcrumb that was on the stack when a
+     *        ScreenStackPoppedMsg last removed a screen; empty if none arrived
+     */
+    public function __construct(
+        public ScreenStack $screens = new ScreenStack(),
+        public array $poppedFrom = [],
+    ) {}
 
     public function screens(): ScreenStack { return $this->screens; }
 
@@ -167,7 +174,8 @@ final class NavigatingScreenRoot implements Model, ScreenStackCapable
             return [new self($this->screens->push($msg->screen)), null];
         }
         if ($msg instanceof \SugarCraft\Core\Msg\ScreenStackPoppedMsg) {
-            return [new self($this->screens->pop()), null];
+            // Quit from the pop itself, so the run ends only once the pop has landed.
+            return [new self($this->screens->pop(), $this->screens->breadcrumb()), Cmd::quit()];
         }
         return [$this, null];
     }
@@ -497,7 +505,12 @@ final class ProgramScreenStackIntegrationTest extends TestCase
         fclose($out);
     }
 
-    /** Pins the Closure-wrapped PopScreenCmd twin of the push case above. */
+    /**
+     * Pins the Closure-wrapped PopScreenCmd twin of the push case above. The
+     * root records the breadcrumb it popped from, so the assertion needs the
+     * push to have landed first and the pop to have arrived; an empty stack
+     * alone would also be what a dropped push leaves behind.
+     */
     public function testAPopScreenCmdReturnedFromUpdateLeavesTheStackEmpty(): void
     {
         [$in, $out, $writer] = $this->pipes();
@@ -507,11 +520,12 @@ final class ProgramScreenStackIntegrationTest extends TestCase
         $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'p'));
         $loop->addTimer(0.1, static fn () => $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'o')));
 
-        $loop->addTimer(0.3, static fn () => $program->quit());
+        // The backstop only ends a run that never popped; the root quits on the pop.
         $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
+        $this->assertSame(['Item 1'], $final->poppedFrom);
         $this->assertTrue($final->screens->isEmpty());
 
         fclose($writer);
