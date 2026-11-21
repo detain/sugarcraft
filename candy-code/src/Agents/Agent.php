@@ -757,7 +757,9 @@ final readonly class Agent
      * CLASSIFIED BY READING ONLY - no test enters them, and a wiring applied at
      * any of them would not red anything: `App::dispatchSkill()`, and
      * `executeVerificationStage()`'s straight-line pair plus
-     * `executeParallelStage()`'s single `$firstAgent->systemPrompt()`. Do not
+     * `executeParallelStage()`'s single environment render (its
+     * `$this->environmentPrompt($firstAgent)`, which reaches `systemPrompt()`
+     * through `renderStagePrompt()`). Do not
      * read the roster as three-driven-implies-all-covered.
      *
      * Taken ONE AT A TIME each render is once-per-dispatch: each builds one
@@ -813,8 +815,12 @@ final readonly class Agent
      * other. NOT every caller that goes through the worker pool:
      * `Chat::executeAgents()` also goes through the pool and is not one of the
      * eight call sites at all. The PARALLEL stage (`executeParallelStage()`) is a third shape
-     * again - `$firstAgent->systemPrompt()` builds one `$defaultRequest`, the
-     * per-task agents built in the `foreach` below it call nothing, and
+     * again - `$this->stageSystemPrompt($firstAgent, $environment = $this->environmentPrompt($firstAgent))`
+     * renders the environment half once for `$defaultRequest` (through
+     * `renderStagePrompt()`, which calls `systemPrompt()` on the stage agent,
+     * or on a fresh preset-less copy of a preset-bearing one), the per-task
+     * agents built in the `foreach` below it reuse that `$environment` and
+     * render nothing, and
      * `AgentWorkerPool::executeAll()` copies `$request->systemPrompt` onto each
      * per-agent request - so N parallel tasks cost N+1 renders, not 2N.
      * `App::dispatchSkill()`'s own comment says the two consumers "must agree";
@@ -892,18 +898,15 @@ final readonly class Agent
      *   answers ZERO against `/usr/bin/grep -c 'new Agent(' ...` SEVEN: every
      *   one of the five per-stage renders builds a fresh {@see Agent} and
      *   passes no block at all, so each falls through to the last-resort
-     *   capture in the method below. WHAT THAT CAPTURE ANCHORS AT MOVED ONCE
-     *   SINCE THIS PARAGRAPH WAS WRITTEN, and the three-part form because the
-     *   signal disposition above is unchanged by it: it used to read
-     *   `EnvironmentBlock::capture((string) getcwd(), ...)`; it now reads
-     *   `EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), ...)`,
-     *   because P3.audit-fix-3 F5 closed the directory half of the two-assembler
-     *   seam - a `--root <dir>` run whose process started elsewhere was told the
-     *   process directory here while `Runtime` told it the session root, exactly
-     *   the orienting-line mismatch that capture site exists to prevent. The
-     *   write-signal argument above is about attaching a BLOCK and is untouched
-     *   by passing a DIRECTORY: each stage still captures and renders its own
-     *   block, at the root the launch resolved. `ProcessExecutor::spawnWorker()`'s second render
+     *   capture in the method below,
+     *   `EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), ...)`.
+     *   It anchors at the session root rather than the process directory so a
+     *   `--root <dir>` run whose process started elsewhere is told the same
+     *   root here as `Runtime` tells it - the orienting-line mismatch that
+     *   capture site exists to prevent. The write-signal argument above is
+     *   about attaching a BLOCK and is untouched by passing a DIRECTORY: each
+     *   stage still captures and renders its own block, at the root the
+     *   launch resolved. `ProcessExecutor::spawnWorker()`'s second render
      *   renders the SubAgent's OWN agent, which on the live path is that same
      *   fresh one. And the Task path, the one that does run a registered
      *   agent, never renders its block: it splices the agent's raw prompt
