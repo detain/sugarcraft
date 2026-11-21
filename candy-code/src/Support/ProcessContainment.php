@@ -8,6 +8,7 @@ use SugarCraft\Async\ChildPump;
 use SugarCraft\Async\Containment;
 use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * THE ONE CONTAINMENT CHOKE POINT for every `proc_open()` in this package.
@@ -776,7 +777,7 @@ final class ProcessContainment
      * Signals are INTEGER LITERALS, never the SIGTERM/SIGKILL constants:
      * those come from ext-pcntl and this runs on teardown paths that must
      * not themselves fatal on a build without it (same rule as
-     * {@see ProcessReaper}).
+     * {@see BoundedShutdown}).
      *
      * On Windows there is no group kill to reach for (ext-posix is absent
      * and `proc_terminate()` only closes the direct child handle, leaving
@@ -1081,7 +1082,7 @@ final class ProcessContainment
             if ($termGraceSeconds <= 0.0) {
                 @\posix_kill($pid, 9);
             } else {
-                ProcessReaper::escalate(
+                BoundedShutdown::escalate(
                     static function (int $signal) use ($pid): void {
                         @\posix_kill($pid, $signal);
                     },
@@ -1110,7 +1111,7 @@ final class ProcessContainment
             return;
         }
 
-        ProcessReaper::escalate(
+        BoundedShutdown::escalate(
             $deliver,
             static function () use ($members): bool {
                 foreach ($members as $member) {
@@ -1168,13 +1169,14 @@ final class ProcessContainment
      * $termGraceSeconds > 0 is killTree()'s SIGTERM-first ladder on the same
      * terms (audit R3 residual: AgentWorkerPool's cancel, which asks a stage
      * to wind down rather than shooting it): once the walk settles the frozen
-     * set gets 15 (and SIGCONT, so a stopped member can act on it), and a
-     * timer — not ProcessReaper::escalate()'s usleep() — polls until every
-     * member is gone or the grace is spent, when 9 goes to whatever is left.
-     * The promise resolves after that 9 (or as soon as the set is gone), so it
-     * still means "the tree has been dealt with". A shutdown that interrupts
-     * the grace finishes with 9 at once: a process that is exiting has no
-     * grace left to give.
+     * set is handed to {@see graceThenKill()}, which runs sugar-core's
+     * {@see BoundedShutdown::escalateAsync()} ladder over it — 15 (and SIGCONT,
+     * so a stopped member can act on it), a loop-timer poll (not the sync
+     * ladder's usleep()) until every member is gone or the grace is spent, then
+     * 9 to whatever is left. The promise resolves once that 9 has gone out (or
+     * as soon as the set is gone), so it still means "the tree has been dealt
+     * with". A shutdown that interrupts the grace finishes with 9 at once: a
+     * process that is exiting has no grace left to give.
      *
      * Same degradations as killTree(): without /proc or ext-posix's getpgrp
      * this is the direct `posix_kill($pid, 9)`, resolved at once — or, with a
@@ -1232,11 +1234,8 @@ final class ProcessContainment
         $walk = ['members' => [$pid => true], 'stable' => 0, 'passes' => 0];
         $timer = null;
         $done = false;
-        // Set once the walk has settled and SIGTERM went out: the deliverer
-        // for the frozen set and the moment its grace runs out.
-        $grace = null;
 
-        $finish = static function () use (&$walk, &$timer, &$done, &$grace, $pid, $self, $stop, $cont, $ownGroup, $loop): bool {
+        $finish = static function () use (&$walk, &$timer, &$done, $pid, $self, $stop, $cont, $ownGroup, $loop): bool {
             if ($done) {
                 return false;
             }
@@ -1246,13 +1245,6 @@ final class ProcessContainment
                 $timer = null;
             }
             unset(self::$pendingTreeKills[$pid]);
-            if ($grace !== null) {
-                // In (or at the end of) the SIGTERM grace: the walk is done
-                // and the set is fixed, so only the 9 is left.
-                ($grace['deliver'])(9);
-
-                return true;
-            }
             // A walk cut short (the shutdown sweep) runs its remaining passes
             // here, to the same bound killTree() uses; one that already
             // settled or hit the bound goes straight to the kill.
@@ -1272,7 +1264,7 @@ final class ProcessContainment
 
         $timer = $loop->addPeriodicTimer(
             self::TREE_FREEZE_POLL_US / 1_000_000,
-            static function () use (&$walk, &$done, &$timer, &$grace, $pid, $self, $stop, $cont, $ownGroup, $termGraceSeconds, $finish, $deferred, $loop): void {
+            static function () use (&$walk, &$done, &$timer, $pid, $self, $stop, $cont, $ownGroup, $termGraceSeconds, $finish, $deferred, $loop): void {
                 if ($done) {
                     return;
                 }
@@ -1286,44 +1278,28 @@ final class ProcessContainment
 
                     return;
                 }
-                if ($grace !== null) {
-                    $gone = true;
-                    foreach ($grace['members'] as $member) {
-                        if (self::alive($member)) {
-                            $gone = false;
-
-                            break;
-                        }
-                    }
-                    if ($gone) {
-                        // Every member acted on SIGTERM: nothing is left for
-                        // a 9, so settle without sending one (escalate()'s
-                        // early return).
-                        $done = true;
-                        $loop->cancelTimer($timer);
-                        $timer = null;
-                        unset(self::$pendingTreeKills[$pid]);
-                        $deferred->resolve(null);
-
-                        return;
-                    }
-                    if (\microtime(true) >= $grace['deadline'] && $finish()) {
-                        $deferred->resolve(null);
-                    }
-
-                    return;
-                }
                 if (!self::freezePass($walk, $pid, $self, $stop) && $walk['passes'] < self::TREE_FREEZE_MAX_PASSES) {
                     return;
                 }
                 if ($termGraceSeconds > 0.0) {
+                    // The walk has settled and the set is fixed: retire the
+                    // walk (its timer and its shutdown entry) and hand the
+                    // frozen set to the shared grace ladder, which registers
+                    // its own shutdown entry under the same root pid (the
+                    // walk's first member) and sends the 9 if the loop stops.
+                    $done = true;
+                    $loop->cancelTimer($timer);
+                    $timer = null;
+                    unset(self::$pendingTreeKills[$pid]);
                     $members = \array_keys($walk['members']);
-                    $grace = [
-                        'members' => $members,
-                        'deliver' => self::treeDeliverer($members, $ownGroup, $cont),
-                        'deadline' => \microtime(true) + $termGraceSeconds,
-                    ];
-                    ($grace['deliver'])(15);
+                    self::graceThenKill(
+                        self::treeDeliverer($members, $ownGroup, $cont),
+                        $members,
+                        $termGraceSeconds,
+                        $loop,
+                    )->then(static function () use ($deferred): void {
+                        $deferred->resolve(null);
+                    });
 
                     return;
                 }
@@ -1337,26 +1313,32 @@ final class ProcessContainment
     }
 
     /**
-     * The degraded (no /proc, or no getpgrp) grace ladder of
-     * {@see killTreeAsync()}: 15 now, poll on a timer until every pid is gone
-     * or the grace is spent, then 9. Registered with the shutdown sweep like
-     * a walk, so a loop that stops mid-grace still sends the 9.
+     * The grace ladder of {@see killTreeAsync()}, for the degraded (no /proc,
+     * or no getpgrp) root-only kill and for a frozen tree once its walk has
+     * settled: sugar-core's {@see BoundedShutdown::escalateAsync()} rungs over
+     * $deliver — 15 now, a loop-timer poll until every pid is gone or the grace
+     * is spent, then 9 — with NO confirmation budget after the 9 (the kill
+     * window is 0.0): this ladder never reaps, the caller's own bounded reap is
+     * the confirmation. Registered with the shutdown sweep under $pids[0], so a
+     * loop that stops mid-grace still sends the 9.
+     *
+     * An inherited copy of the poll in a fork that runs a loop reads the set as
+     * gone (so the ladder stops without a rung) and never settles the parent's
+     * promise or registry.
      *
      * @param \Closure(int): void $deliver
-     * @param list<int> $pids
+     * @param non-empty-list<int> $pids
      * @return \React\Promise\PromiseInterface<null>
      */
     private static function graceThenKill(\Closure $deliver, array $pids, float $graceSeconds, \React\EventLoop\LoopInterface $loop): \React\Promise\PromiseInterface
     {
-        $deliver(15);
         $deferred = new \React\Promise\Deferred();
-        $deadline = \microtime(true) + $graceSeconds;
         $self = self::currentPid();
         $key = $pids[0];
         $timer = null;
         $done = false;
 
-        $finish = static function (bool $kill) use (&$timer, &$done, $deliver, $key, $loop): bool {
+        $settle = static function () use (&$timer, &$done, $key, $loop): bool {
             if ($done) {
                 return false;
             }
@@ -1366,44 +1348,45 @@ final class ProcessContainment
                 $timer = null;
             }
             unset(self::$pendingTreeKills[$key]);
-            if ($kill) {
-                $deliver(9);
-            }
 
             return true;
         };
 
         self::armPendingTreeKillSweep();
-        self::$pendingTreeKills[$key] = static fn(): bool => $finish(true);
+        self::$pendingTreeKills[$key] = static function () use ($settle, $deliver): bool {
+            if (!$settle()) {
+                return false;
+            }
+            $deliver(9);
 
-        $timer = $loop->addPeriodicTimer(
-            self::TREE_FREEZE_POLL_US / 1_000_000,
-            static function () use (&$timer, &$done, $pids, $deadline, $self, $finish, $deferred, $loop): void {
-                if ($done) {
-                    return;
-                }
+            return true;
+        };
+
+        $timer = BoundedShutdown::escalateAsync(
+            $loop,
+            $deliver,
+            static function () use ($pids, $self): bool {
                 if ($self !== self::currentPid()) {
-                    if ($timer !== null) {
-                        $loop->cancelTimer($timer);
-                    }
-
-                    return;
+                    return true;
                 }
-                $gone = true;
                 foreach ($pids as $pid) {
                     if (self::alive($pid)) {
-                        $gone = false;
-
-                        break;
+                        return false;
                     }
                 }
-                if (!$gone && \microtime(true) < $deadline) {
+
+                return true;
+            },
+            static function () use ($settle, $self, $deferred): void {
+                if ($self !== self::currentPid()) {
                     return;
                 }
-                if ($finish(!$gone)) {
+                if ($settle()) {
                     $deferred->resolve(null);
                 }
             },
+            $graceSeconds,
+            0.0,
         );
 
         return $deferred->promise();
