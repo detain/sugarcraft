@@ -26,12 +26,12 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * CC1C-c1: the behaviour `AgentManager::executeSubAgent()` had and the live
+ * CC1C-c1: the behaviour the old direct-call sub-agent entry point had and the live
  * Task path lacked, merged into {@see TaskTool} ahead of that method's
  * removal. One test per merged behaviour, each driven through the real engine
  * loop on the in-process row the session's {@see AgentManager} holds.
  *
- * What executeSubAgent() did that TaskTool already does under another name is
+ * What that entry point did that TaskTool already does under another name is
  * recorded in the CC1C-c1 commit message and is not re-pinned here. The two
  * entries that message filed as present but were not have since been merged:
  * per-chunk usage telemetry (TaskTool's chunk usage observer raises the row on
@@ -69,7 +69,7 @@ final class TaskToolExecuteMergeTest extends TestCase
 
     /**
      * A throw from outside the turn boundary leaves the row terminal, as
-     * executeSubAgent()'s catch-all did: FAILED with the message and an end
+     * the old entry point's catch-all did: FAILED with the message and an end
      * of span when the run had not settled, and the settled outcome kept
      * when it had. The throwable still reaches the caller either way.
      *
@@ -294,7 +294,7 @@ final class TaskToolExecuteMergeTest extends TestCase
 
     /**
      * The row reads STREAMING once provider output arrives, as
-     * executeSubAgent() marked its streaming runs — RUNNING before the first
+     * the old entry point marked its streaming runs — RUNNING before the first
      * delta, STREAMING while the run is under way, terminal at the end.
      */
     public function testTheRowReadsStreamingOnceProviderOutputArrives(): void
@@ -332,7 +332,7 @@ final class TaskToolExecuteMergeTest extends TestCase
 
     /**
      * The row's tokens and cost rise on every streamed chunk, as
-     * executeSubAgent() folded each chunk's usage, not only once a provider
+     * the old entry point folded each chunk's usage, not only once a provider
      * response completes; the step's billed usage then replaces the chunk
      * figures instead of being added to them.
      */
@@ -373,7 +373,7 @@ final class TaskToolExecuteMergeTest extends TestCase
 
     /**
      * A run that only writes prose is live while it streams, as
-     * executeSubAgent() appended each chunk to the row's output: the row
+     * the old entry point appended each chunk to the row's output: the row
      * carries the burst's newest text on one `writing:` trail line, so
      * liveRuns() lists it mid-stream instead of treating it as silent until
      * it settles.

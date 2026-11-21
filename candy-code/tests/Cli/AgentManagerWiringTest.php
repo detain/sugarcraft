@@ -316,8 +316,9 @@ final class AgentManagerWiringTest extends TestCase
         try {
             $this->assertSame('', $manager->liveOutput('coder'));
 
-            // What executeSubAgent()'s streaming loop does per chunk, done here
-            // without a network provider: append, and observe between appends.
+            // A row growing chunk by chunk as a streaming run's output does,
+            // done here without a network provider: append, and observe
+            // between appends.
             $coder->output .= "first chunk\n";
             $this->assertSame("first chunk\n", $manager->liveOutput('coder'));
 

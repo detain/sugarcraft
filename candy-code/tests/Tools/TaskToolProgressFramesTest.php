@@ -229,7 +229,7 @@ final class TaskToolProgressFramesTest extends TestCase
     }
 
     /**
-     * CC1C-c1, ported from `AgentManager::executeSubAgent()`: the row counts
+     * CC1C-c1, ported from the old direct-call sub-agent entry point: the row counts
      * a streamed response chunk by chunk, so one long reply does not leave
      * it flat until the reply completes — and once the step bills, the
      * chunk figures are replaced by the step's, never added to it.

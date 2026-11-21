@@ -34,7 +34,8 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  *
  * The regression: the engine path narrowed the roster by tool NAME only, and
  * the per-call half ({@see AgentManager::grantRefusalFor()}) was reachable only
- * from `executeSubAgent()`, which nothing calls. So the built-in `reviewer`,
+ * from the old direct-call sub-agent entry point, which nothing called. So the
+ * built-in `reviewer`,
  * declared `['Read', 'Grep', 'Bash(git *)']`, ran any Bash command the session
  * gate allowed. Every test drives a scripted sub-agent through the real engine
  * loop and asserts on what the Bash tool was actually asked to run.
