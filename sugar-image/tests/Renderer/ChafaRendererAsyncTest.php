@@ -110,6 +110,11 @@ SH;
      * Run $loop until $promise settles (or a 20 s safety stop fires), and
      * return ['ok' => value] or ['err' => throwable].
      *
+     * The loop runs only while the promise is still pending. A promise that
+     * settled synchronously (an unavailable binary rejects before any spawn)
+     * runs its callback, and so `$loop->stop()`, inside `then()`, before
+     * `run()`; that stop is lost, and the loop sat out the whole 20 s guard.
+     *
      * @return array{ok?: mixed, err?: \Throwable}|null
      */
     private function settle(StreamSelectLoop $loop, PromiseInterface $promise): ?array
@@ -125,9 +130,11 @@ SH;
                 $loop->stop();
             },
         );
-        $guard = $loop->addTimer(20.0, static fn () => $loop->stop());
-        $loop->run();
-        $loop->cancelTimer($guard);
+        if ($outcome === null) {
+            $guard = $loop->addTimer(20.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($guard);
+        }
 
         return $outcome;
     }
