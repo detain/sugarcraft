@@ -46,6 +46,7 @@ final class ScriptsShellHygieneTest extends TestCase
         'bootstrap-org-repos.sh' => 'one-shot org provisioning; data shape guarded by ProvisioningRosterTest',
         'packagist.sh' => 'manual release helper (create/update node mirror entries)',
         'parallel-tests.sh' => 'the candy-code shard runner; semantics guarded by the trio + RT-26 tuning pins',
+        'paratest.sh' => 'local ParaTest runner (LPT file order + worker stdin prelude); not wired into CI while paratest is not in require-dev',
         'rename-remote.sh' => 'one-shot remote rename helper',
         'set-org-default-master.sh' => 'one-shot default-branch flip; data shape guarded by ProvisioningRosterTest',
         'sync-sugarcraft-local.sh' => 'manual sync-sugarcraft runner with no CI gate',
