@@ -30,8 +30,9 @@ use SugarCraft\Core\Lang;
  * over callables, which is what lets the same sequence serve a `proc_open()`
  * resource, a containment-wrapped process group, and a `pcntl_fork()`ed pid
  * whose liveness is a `WNOHANG` poll — the three shapes that previously grew
- * five separate private ladders downstream (candy-code's `ProcessReaper`
- * absorbed four of them; sugar-dashboard's `ExternalModule::terminateBounded()`
+ * five separate private ladders downstream (candy-code's former
+ * `ProcessReaper`, since deleted in favor of this class, absorbed four of
+ * them; sugar-dashboard's `ExternalModule::terminateBounded()`
  * and sugar-video's `BoundedReaper` were documented per-lib copies of the
  * same rungs). Callers bring their own budgets; the sequence never varies.
  *
@@ -762,8 +763,9 @@ final class BoundedShutdown
     /**
      * Whether no live member remains in the process group $groupPid.
      *
-     * Public so a sibling ladder (candy-code's ProcessReaper) applies the same
-     * group rule instead of its own leader-only check. An empty group answers
+     * Public so a caller's own ladder (sugar-async's ChildRunLaunch,
+     * candy-code's CapturesProcessOutput) applies the same group rule instead
+     * of its own leader-only check. An empty group answers
      * at once; a non-empty one is re-scanned at most every
      * {@see REAP_POLL_SECONDS}, and between scans it answers "not empty".
      * The ladder therefore notices a drained group up to one poll cadence late,

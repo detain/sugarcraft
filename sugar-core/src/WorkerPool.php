@@ -1067,9 +1067,9 @@ PHP;
     /**
      * Grace-poll, SIGTERM, poll, SIGKILL — the bounded reap ladder.
      *
-     * A per-package copy of the tree's house pattern (candy-code
-     * ProcessReaper, sugar-forms BoundedReaper — sugar-video and sugar-dashboard
-     * folded their copies onto this package's {@see Util\Proc\BoundedShutdown}):
+     * A per-package copy of the tree's house pattern (sugar-forms
+     * BoundedReaper — candy-code, sugar-video and sugar-dashboard folded their
+     * copies onto this package's {@see Util\Proc\BoundedShutdown}):
      * sugar-core is a foundation library
      * and may not depend on any of them for one helper. After this returns,
      * the child is exited on every path the ladder can reach, so the
