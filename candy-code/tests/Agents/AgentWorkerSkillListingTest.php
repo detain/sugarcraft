@@ -12,19 +12,23 @@ use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillListingSection;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 
 /**
  * Skills QA lane D: the fenced Level-1 `<available-skills>` listing the main
  * chat assembles per turn must reach SUB-AGENT worker prompts too, through
- * AgentManager's two splice points (the batch map behind the engine path's
- * systemPromptFor() and the pool's per-member requests, plus the dormant
- * in-process executeSubAgent()).
+ * AgentManager's splice points: systemPromptFor(), which a Task delegation's
+ * engine run speaks, and the batch map behind the pool's per-member requests.
  *
  * The assertions are structural against SkillListingSection's public consts —
  * never a re-typed copy of its body — so a geometry change there lands here
@@ -219,32 +223,40 @@ final class AgentWorkerSkillListingTest extends TestCase
     }
 
     /**
-     * The dormant in-process carrier gets the same layer as the batch splice
-     * (the splice docblocks claim parity; this pins it). The streaming door is
-     * closed on the double, so the single-shot complete() request is the one
-     * whose systemPrompt is captured.
+     * The Task delegation's engine run speaks the same layer as the batch
+     * splice (the splice docblocks claim parity; this pins it end to end):
+     * the system prompt the provider receives on a TaskTool run carries the
+     * granted body above the fenced listing.
      */
-    public function testTheInProcessCarrierAppendsTheListingAfterItsBodies(): void
+    public function testATaskDelegationSpeaksTheListingAfterItsBodies(): void
     {
-        $capturedPrompt = null;
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('complete')->willReturnCallback(
-            function (CompleteRequest $request) use (&$capturedPrompt): CompleteResponse {
-                $capturedPrompt = $request->systemPrompt;
-
-                return new CompleteResponse(content: ' ok');
-            },
-        );
-
-        $manager = new AgentManager($provider, $this->registryHolding(['alpha', 'beta']));
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'ok')]);
+        $manager = new AgentManager($this->createMock(ProviderInterface::class), $this->registryHolding(['alpha', 'beta']));
         $manager->register($this->workerAgent('in-process', skillNames: ['alpha']));
-        $subAgent = $manager->createSubAgent('in-process', 'do the thing');
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $storeDir = sys_get_temp_dir() . '/sc_skill_listing_task_' . bin2hex(random_bytes(6));
+        try {
+            $result = (new TaskTool($manager, suspended: new SuspendedDelegations($storeDir)))
+                ->withEngine(EngineBackend::new($provider, 'm'))
+                ->execute(['description' => 'Listing check', 'prompt' => 'do the thing', 'agent' => 'in-process', 'id' => 'task-call']);
+        } finally {
+            foreach (glob($storeDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($storeDir);
+        }
 
-        $this->assertIsString($capturedPrompt);
-        // systemPrompt() prepends the <env> block on this carrier; the layer
-        // law is relative order, not absolute bytes.
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(1, $provider->requests);
+        // The engine run speaks the agent's prompt as the delegated
+        // transcript's system turn, beside the engine's own system prompt.
+        $systemTurns = array_values(array_filter(
+            $provider->requests[0]->messages,
+            static fn (mixed $message): bool => $message instanceof Message && $message->role() === 'system',
+        ));
+        $this->assertCount(1, $systemTurns, 'the delegated run carries the agent prompt as one system turn');
+        $capturedPrompt = $systemTurns[0]->content();
+        // The layer law is relative order, not absolute bytes.
         $this->assertStringContainsString('You are worker.', $capturedPrompt);
         $this->assertStringContainsString('## Skill: alpha', $capturedPrompt);
         $this->assertStringContainsString(SkillListingSection::OPEN, $capturedPrompt);
@@ -253,7 +265,7 @@ final class AgentWorkerSkillListingTest extends TestCase
         $this->assertLessThan(
             (int) strpos($capturedPrompt, SkillListingSection::OPEN),
             (int) strpos($capturedPrompt, '## Skill: alpha'),
-            'bodies first, listing last, on this carrier too',
+            'bodies first, listing last, on the Task path too',
         );
     }
 }
