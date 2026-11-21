@@ -306,10 +306,37 @@ final class OutputTruncationTest extends TestCase
 
         $this->assertFalse($result->isError());
         $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        // The result is now clipped to the 8 MiB ceiling, marker included, so the
+        // omitted figure is at least the capture's 1 MiB drop and not exactly it.
         $this->assertMatchesRegularExpression(
-            '/\.\.\. \[truncated: 1048576 of 9437184 bytes omitted\./',
+            '/\.\.\. \[truncated: \d+ of 9437184 bytes omitted\./',
             $result->content(),
         );
+        preg_match('/\.\.\. \[truncated: (\d+) of/', $result->content(), $m);
+        $this->assertGreaterThanOrEqual(1048576, (int) $m[1]);
+    }
+
+    /**
+     * The 8 MiB ceiling bounds the RETURNED result, not only each stream. With
+     * both streams overrunning and a failing exit, the joined stdout and stderr
+     * used to reach the model at about 16 MiB, because a non-positive bound
+     * skips the final clip.
+     */
+    public function testAZeroCapHoldsTheReturnedResultToTheCeilingWhenBothStreamsOverrun(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The pipeline below needs a POSIX yes(1) and head(1).');
+        }
+
+        $result = (new Bash(maxOutputBytes: 0))->execute([
+            'command' => 'yes 0123456789abcdef 2>/dev/null | head -c ' . (9 * 1024 * 1024)
+                . '; yes fedcba9876543210 2>/dev/null | head -c ' . (9 * 1024 * 1024) . ' 1>&2; exit 3',
+            'id' => 'call_6_both',
+        ]);
+
+        $this->assertTrue($result->isError());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        $this->assertStringContainsString('truncated:', $result->content());
     }
 
     // =========================================================================

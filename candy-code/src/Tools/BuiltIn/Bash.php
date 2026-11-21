@@ -282,7 +282,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 number_format($this->maxOutputBytes),
             )
             : sprintf(
-                'This instance sets no output cap of its own: each stream is retained up to %s bytes (8 MiB), and anything past that is dropped with a PARTIAL marker.',
+                'This instance sets no output cap of its own: each stream is retained up to %s bytes (8 MiB), and the returned result is held to that same total, with anything past it dropped with a PARTIAL marker.',
                 number_format(self::DEFAULT_RETAINED_BYTES),
             );
 
@@ -765,11 +765,14 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // the merge knows whether the stderr the capture clipped is even part
         // of this answer, and whether the failure explanation still has to be
         // fitted in alongside a large stdout.
+        // A non-positive cap leaves truncateMerged() nothing to clip to, so the
+        // joined stdout and stderr would reach the model at twice the ceiling.
+        // The default is the same one the capture retained each stream to.
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $this->truncateMerged(
                 $this->mergeCapturedOutput($run),
-                $this->maxOutputBytes,
+                $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::DEFAULT_RETAINED_BYTES,
             ),
             isError: $run['exitCode'] !== 0,
             // Structure for the transcript row only: the text above is what
