@@ -587,43 +587,36 @@ final class ScriptHookTest extends TestCase
      * ISS-090(d): THE DRAIN ITSELF IS BOUNDED.
      *
      * {@see testALargeStderrMessageSurvivesTheDrainAndIsThenClipped} proves the
-     * downstream clip counts what the drain delivered; nothing bounded what the
-     * drain would deliver. 130 × 8 KiB on stdout: the buffer stops at exactly
-     * MAX_DRAIN_BYTES — a whole number of reads, so the refused figure is the
-     * two chunks never let in — and the stamp names both. The reflection is
-     * deliberate: every downstream clip would hide the raw cap behind its own
-     * marker, and the whole point of this cap is the RAW volume that reaches
-     * those clips.
+     * downstream clip counts what the run delivered; nothing bounded what the
+     * run would deliver. 1,026 × 8 KiB on stdout: ChildRun keeps exactly
+     * MAX_DRAIN_BYTES (8 MiB, its own default ceiling) — a whole number of
+     * reads, so the refused figure is the two chunks never let in — and the
+     * stamp names both. The reflection is deliberate: every downstream clip
+     * would hide the raw cap behind its own marker, and the whole point of this
+     * cap is the RAW volume that reaches those clips.
      */
     public function testTheDrainStopsAtTheByteCapAndStampsWhatItRefused(): void
     {
         $hook = new ScriptHook('cap_hook', HookEvent::PreToolUse, '.*', 'true', '');
-        $drain = new \ReflectionMethod($hook, 'drain');
-
-        $pipes = [];
-        $proc = proc_open(
-            [PHP_BINARY, '-r', 'for ($i = 0; $i < 130; ++$i) { echo str_repeat("A", 8192); }'],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
+        $run = (new \ReflectionMethod($hook, 'runChild'))->invoke(
+            $hook,
+            [PHP_BINARY, '-r', '$s = str_repeat("A", 8192); for ($i = 0; $i < 1026; ++$i) { echo $s; }'],
+            null,
+            \SugarCraft\Code\Support\ProcessContainment::scrubbedEnv(),
+            '',
+            15.0,
         );
-        $this->assertIsResource($proc);
-        fclose($pipes[0]);
+        $this->assertInstanceOf(\SugarCraft\Async\ChildResult::class, $run);
+        $stdout = (new \ReflectionMethod(ScriptHook::class, 'capped'))
+            ->invoke(null, $run->stdout, $run->droppedBytes - $run->droppedStderrBytes);
 
-        try {
-            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 15.0);
-        } finally {
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
-        }
-
-        $this->assertFalse($timedOut, 'the cap is not a deadline and must not report one');
-        $this->assertSame('', $stderr);
-        $marker = ' … [hook output capped at 1048576 bytes; 16384 further bytes dropped]';
+        $this->assertFalse($run->timedOut(), 'the cap is not a deadline and must not report one');
+        $this->assertSame('', $run->stderr);
+        $marker = ' … [hook output capped at 8388608 bytes; 16384 further bytes dropped]';
         $this->assertStringStartsWith(str_repeat('A', 4096), $stdout);
         $this->assertStringEndsWith($marker, $stdout);
         $this->assertSame(
-            1048576 + \strlen($marker),
+            8388608 + \strlen($marker),
             \strlen($stdout),
             'the kept window plus one constant-size stamp — the stamp itself must not reopen the cap',
         );
@@ -704,18 +697,18 @@ final class ScriptHookTest extends TestCase
     /**
      * THE DRAIN MUST NOT BUSY-WAIT while it waits out a silent hook.
      *
-     * This is the assertion `DRAIN_SLICE_SECONDS` did not have, and without it
-     * the constant survives being mutated to `0.0`: every deadline assertion in
-     * this file still passes, because a zero slice expires ON TIME — it just
-     * spends the entire budget in a `stream_select()` that returns instantly,
-     * at 100% of a core, on the TUI's own thread, for up to sixty seconds.
-     * "Bounded" and "not spinning" are two properties and only one of them was
-     * being tested.
+     * Without it a zero select slice survives: every deadline assertion in this
+     * file still passes, because a zero slice expires ON TIME — it just spends
+     * the entire budget in a `stream_select()` that returns instantly, at 100%
+     * of a core, on the TUI's own thread, for up to sixty seconds. "Bounded" and
+     * "not spinning" are two properties and only one of them was being tested.
+     * The slice is ChildRun's pump's now (CC-1); the property is still this
+     * hook's to pin.
      *
-     * Measured in the CHILD, around `execute()` itself, so the figure is this
-     * drain's CPU and not the harness's: the hook sleeps for two seconds and
-     * writes nothing, so at the shipped 200ms slice the parent wakes about ten
-     * times and does nothing else at all.
+     * Measured in the CHILD, around `execute()` itself, so the figure is the
+     * run's CPU and not the harness's: the hook sleeps for two seconds and
+     * writes nothing, so the parent wakes a few times a second and does nothing
+     * else at all.
      */
     public function testTheDrainWaitsWithoutSpinning(): void
     {

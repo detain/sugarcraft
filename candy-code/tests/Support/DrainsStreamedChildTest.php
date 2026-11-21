@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Support\DrainsStreamedChild;
 
 /**
- * The shared stream pump behind ScriptHook and StatusLineCommand, exercised
+ * The stream pump behind StatusLineCommand (ScriptHook now runs on ChildRun), exercised
  * directly. These pin the two ways a streamed child can finish on its own: EOF
  * on both pipes with each stream's bytes kept in order, and a child that writes
  * nothing and exits, which must close the walk at once rather than wait out the
