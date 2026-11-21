@@ -8,6 +8,7 @@ use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Tests\Support\ChildOpcache;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 
 /**
@@ -793,7 +794,7 @@ PHP;
         ];
 
         $process = \proc_open(
-            [\PHP_BINARY, $binary, ...$argv],
+            [\PHP_BINARY, ...ChildOpcache::iniArgs(), $binary, ...$argv],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             \dirname(__DIR__, 2),
