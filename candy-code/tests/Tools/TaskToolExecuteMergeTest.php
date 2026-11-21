@@ -13,7 +13,9 @@ use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Support\ToolCancelRequests;
 use SugarCraft\Code\Tests\Support\RosterAgent;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
@@ -28,7 +30,9 @@ use SugarCraft\Code\Tools\ToolResult;
  * loop on the in-process row the session's {@see AgentManager} holds.
  *
  * What executeSubAgent() did that TaskTool already does under another name is
- * recorded in the CC1C-c1 commit message and is not re-pinned here.
+ * recorded in the CC1C-c1 commit message and is not re-pinned here; the one
+ * entry that message filed as present but is not (per-chunk usage telemetry)
+ * is recorded as not merged at TaskTool's step usage observer.
  */
 final class TaskToolExecuteMergeTest extends TestCase
 {
@@ -41,6 +45,7 @@ final class TaskToolExecuteMergeTest extends TestCase
 
     protected function tearDown(): void
     {
+        ToolCancelRequests::forget();
         foreach (glob($this->storeDir . '/*') ?: [] as $file) {
             @unlink($file);
         }
@@ -196,6 +201,80 @@ final class TaskToolExecuteMergeTest extends TestCase
         $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, AgentRunCards::statusOf($cards[0]), 'a settled run never reads as running for the life of the session');
         $this->assertGreaterThan(0, $cards[0]['finishedAt'], 'the card records when the run ended');
         $this->assertSame('', $cards[0]['error'], 'the throw\'s message is not why the run ended');
+    }
+
+    /**
+     * A row the run already settled FAILED or STOPPED keeps that outcome when
+     * its finished frame then throws: the provider's error text and the
+     * cancel are why the run ended, not the socket that broke afterwards, and
+     * the card keeps the outcome and error its own settle wrote.
+     *
+     * @return array<string, array{\Closure(): ProviderInterface, list<string>, string, string}>
+     */
+    public static function settledUnfinishedRuns(): array
+    {
+        return [
+            'failed on a provider error' => [
+                static fn (): ProviderInterface => new ScriptedProvider([new \RuntimeException('401 Unauthorized')]),
+                [],
+                SubAgent::STATUS_FAILED,
+                SubAgentActivity::OUTCOME_FAILED,
+            ],
+            'stopped by a cancel' => [
+                static fn (): ProviderInterface => new ScriptedProvider([new CompleteResponse(content: 'reported')]),
+                ['task-call'],
+                SubAgent::STATUS_STOPPED,
+                SubAgentActivity::OUTCOME_CANCELLED,
+            ],
+        ];
+    }
+
+    /**
+     * @param \Closure(): ProviderInterface $provider
+     * @param list<string> $cancelled call ids the user asked to stop
+     */
+    #[DataProvider('settledUnfinishedRuns')]
+    public function testALateThrowKeepsAFailedOrStoppedRowsOutcome(\Closure $provider, array $cancelled, string $expectedStatus, string $expectedCardStatus): void
+    {
+        ToolCancelRequests::listen(static fn (): array => $cancelled);
+        $session = 'merge-' . bin2hex(random_bytes(5));
+        $manager = self::sessionManager([]);
+        $settled = null;
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new($provider(), 'm')->withSessionId($session))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($manager, $session, &$settled): void {
+                if ($activity->op !== SubAgentActivity::OP_FINISHED) {
+                    return;
+                }
+                $row = $manager->runs()[0];
+                $settled = ['status' => $row->status, 'error' => $row->error, 'card' => AgentRunCards::runs($session)[0]];
+
+                throw new \RuntimeException('activity socket closed');
+            });
+
+        $caught = null;
+        try {
+            $task->execute(self::delegation() + ['id' => 'task-call']);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'the emitter failure must still reach the caller');
+        $this->assertSame('activity socket closed', $caught->getMessage());
+        $this->assertNotNull($settled, 'the run settled and sent its finished frame');
+        $this->assertSame($expectedStatus, $settled['status'], 'the run settled itself before the throw');
+        $this->assertNotSame('', (string) $settled['error']);
+
+        $row = $manager->runs()[0];
+        $this->assertSame($expectedStatus, $row->status, 'a settled outcome is not rewritten by a later throw');
+        $this->assertSame($settled['error'], $row->error, 'the run\'s own reason is kept, never the throw\'s message');
+        $this->assertNotNull($row->completedAt);
+
+        $cards = AgentRunCards::runs($session);
+        $this->assertCount(1, $cards);
+        $this->assertSame($expectedCardStatus, $settled['card']['status']);
+        $this->assertSame($expectedCardStatus, $cards[0]['status'], 'the card keeps the outcome its own settle wrote');
+        $this->assertSame($settled['card']['error'], $cards[0]['error'], 'the card\'s error is not the throw\'s message');
+        $this->assertSame($expectedCardStatus, AgentRunCards::statusOf($cards[0]));
     }
 
     /**

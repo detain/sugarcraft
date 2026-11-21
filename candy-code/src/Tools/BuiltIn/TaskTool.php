@@ -1976,6 +1976,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // run settles. The baseline is whatever the row carried before this
         // run (a resumed run keeps counting from it); bill() later replaces
         // the live figure with the settled one.
+        //
+        // CC1C-c1, NOT MERGED, REDIRECTED: `AgentManager::executeSubAgent()`
+        // folded tokensUsed/costUsd on every stream CHUNK, so its row rose
+        // during one long streamed response. This observer runs on
+        // UsageUpdated, which EngineBackend emits once per completed provider
+        // response, and onToken carries only the text delta — so this row
+        // stays flat until the response finishes. Matching it needs an
+        // engine-side per-chunk usage signal; it is not present here under
+        // another name.
         $baseTokens = $subAgent->tokensUsed;
         $baseCost = $subAgent->costUsd;
         $observeUsage = static function (?Usage $usage) use ($subAgent, &$stats, $flushIfDue): void {
