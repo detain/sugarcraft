@@ -278,12 +278,21 @@ final class BootstrapMcpDisableEnvTest extends TestCase
     }
 
     /**
-     * NOTHING ELSE SETS IT. Every file under scripts/ is walked; only the
-     * shard launcher carries the variable at all, so the export cannot creep
-     * into a CI-facing helper that serial runs also source.
+     * NOTHING ELSE SETS IT. Every file under scripts/ is walked; only the two
+     * suite launchers carry the variable at all, so the export cannot creep
+     * into a CI-facing helper that serial runs also source. The second one,
+     * scripts/paratest.sh, launches the same suite under ParaTest from the same
+     * checkout root, for the same E737 reason, and is held to the same shape:
+     * one live line, a command prefix on the launch, never an export.
      */
     public function testTheShardLauncherStaysTheOnlyScriptThatSetsTheGate(): void
     {
+        $paratest = (string) file_get_contents(\dirname(__DIR__, 3) . '/scripts/paratest.sh');
+        $paratestSetters = array_values(preg_grep('/CANDY_CODE_MCP_DISABLE=/', self::nonCommentLines($paratest)) ?: []);
+        self::assertCount(1, $paratestSetters, 'exactly one live line of paratest.sh may set the gate: ' . implode(' | ', $paratestSetters));
+        self::assertMatchesRegularExpression('/^\t+CANDY_CODE_MCP_DISABLE=1 env /', $paratestSetters[0], 'paratest.sh must set the gate as a command prefix on the launch');
+        self::assertStringNotContainsString('export CANDY_CODE_MCP_DISABLE', $paratest, 'a bare export would leak the gate into the runner shell and beyond');
+
         $scriptsDir = \dirname(__DIR__, 3) . '/scripts';
         $carriers = [];
         foreach (scandir($scriptsDir) ?: [] as $entry) {
@@ -296,7 +305,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
             }
         }
 
-        self::assertSame(['parallel-tests.sh'], $carriers, 'scripts/ must gain exactly one setter of the gate: the shard launcher');
+        self::assertSame(['parallel-tests.sh', 'paratest.sh'], $carriers, 'scripts/ may carry the gate only in the two suite launchers');
     }
 
     // -------------------------------------------------------------------------
