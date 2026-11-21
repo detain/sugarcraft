@@ -2615,26 +2615,38 @@ final class AgentManagerTest extends TestCase
      * the grant hook is all that stands in front of the tool. With no registry
      * the run inherits the engine's whole set, so the undeclared Edit is on
      * its roster and only the grant can refuse it.
+     *
+     * THE PREMISE IS PROVED BY BEHAVIOR, NOT READ OFF THE ROW. The second call
+     * is a GRANTED `Bash` that writes: any gate judging it would put it to the
+     * prompt, and with no approver that prompt refuses it. It runs, so no gate
+     * judged the run's calls — which reading the row's gate mode cannot show,
+     * because the row always carries one.
      */
     public function testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate(): void
     {
-        $manager = $this->emittingCallsManager('reviewer', ['Read']);
+        $manager = $this->emittingCallsManager('reviewer', ['Read', 'Bash']);
 
         [$subAgent, $turns] = $this->delegateEmittingCalls(
             $manager,
             'reviewer',
-            [new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd'])],
+            [
+                new WireToolCall('c1', 'Edit', ['file_path' => '/etc/passwd']),
+                new WireToolCall('c2', 'Bash', ['command' => 'touch /tmp/gateless-probe']),
+            ],
             engineTools: ['Read'],
         );
 
-        $this->assertFalse(
-            $subAgent->permissionGate?->mode()->isStricterThan(PermissionMode::Default) ?? false,
-            'the premise of this test: the run\'s own gate is no stricter than the absent session gate, so no gate judged the call',
-        );
-        $this->assertCount(1, $turns);
+        $this->assertCount(2, $turns);
         $this->assertStringContainsString('Tool call "Edit"', $turns[0]);
         $this->assertStringContainsString('is outside the tool grant', $turns[0], 'the grant must be enforced with no gate attached');
         $this->assertSame([], $this->recordingTool('Edit')->calls);
+        $this->assertSame(
+            'Bash ok',
+            $turns[1],
+            'the premise of this test: a granted write ran unprompted with no approver, so no gate judged the run\'s calls',
+        );
+        $this->assertSame([['command' => 'touch /tmp/gateless-probe']], $this->recordingTool('Bash')->calls);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
     /**
@@ -2981,7 +2993,14 @@ final class AgentManagerTest extends TestCase
     // `break;` to the end of evaluateToolCalls()'s loop -- so only call #1 is
     // ever grant-checked, denylist-checked or gate-checked -- SURVIVED the
     // whole candy-code suite. So did turning the gate-null `continue` into a
-    // `return`. Both are pinned below.
+    // `return`. Both were pinned below against executeSubAgent(). On the Task
+    // path (CC1C-c2a) the `break` shape is pinned as before: every call is
+    // its own SubAgentGrantHook verdict. evaluateToolCalls()'s gate-null
+    // `continue` is NOT re-pinned here: it lives only on the dormant
+    // executeSubAgent() path, which no test in this file drives and CC1C-c3
+    // deletes. Its Task-path counterpart is the hook's `modeGate === null`
+    // arm, which must still grant-check the call; the gateless test below
+    // proves by behavior that no gate judged the run.
     // -------------------------------------------------------------------------
 
     /**
@@ -3012,35 +3031,37 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
-     * The same loop, with NO gate attached — the arm whose `continue` a `return`
-     * would silently convert into "grant-check the first call only". Without an
-     * assertion here, `continue`->`return` is invisible across the whole suite.
+     * The same loop, with NO gate judging the run — the state in which a
+     * gate-null shortcut could skip the grant for every call after the first.
+     * Call #1 is a GRANTED `Bash` that writes: any gate judging it would put it
+     * to the prompt, and with no approver that prompt refuses it. It runs, so
+     * no gate judged the run (the premise, proved by behavior), and call #2
+     * must still be grant-checked.
      */
     public function testASecondToolCallIsGrantCheckedWithNoGateAttached(): void
     {
-        $manager = $this->emittingCallsManager('multi', ['Read']);
+        $manager = $this->emittingCallsManager('multi', ['Read', 'Bash']);
 
         [$subAgent, $turns] = $this->delegateEmittingCalls(
             $manager,
             'multi',
             [
-                new WireToolCall('c1', 'Read', ['file_path' => '/etc/hosts']),
+                new WireToolCall('c1', 'Bash', ['command' => 'touch /tmp/gateless-probe']),
                 new WireToolCall('c2', 'Edit', ['file_path' => '/etc/passwd']),
             ],
         );
 
-        // Same gateless state testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate
-        // documents: no session gate on the engine, and the run's own gate no
-        // stricter than the default it would be compared with.
-        $this->assertFalse(
-            $subAgent->permissionGate?->mode()->isStricterThan(PermissionMode::Default) ?? false,
-            'the premise of this test',
+        $this->assertCount(2, $turns, 'the gateless run must evaluate the second call, not stop after the first');
+        $this->assertSame(
+            'Bash ok',
+            $turns[0],
+            'the premise of this test: a granted write ran unprompted with no approver, so no gate judged the run\'s calls',
         );
-        $this->assertCount(2, $turns, 'the gate-null arm must continue, not return');
-        $this->assertSame('Read ok', $turns[0]);
+        $this->assertSame([['command' => 'touch /tmp/gateless-probe']], $this->recordingTool('Bash')->calls);
         $this->assertStringContainsString('Tool call "Edit"', $turns[1]);
         $this->assertStringContainsString('is outside the tool grant', $turns[1]);
         $this->assertSame([], $this->recordingTool('Edit')->calls);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
     /**
