@@ -573,6 +573,125 @@ final class ExpectWindowTest extends TestCase
         self::assertLessThan(1.0, \microtime(true) - $started, 'the exit drain stays short');
     }
 
+    public function testAFinalFrameWrittenJustAfterTheDeadlineByAnExitingChildIsStillMatched(): void
+    {
+        // The last read runs the clock out to the deadline and the window closes with
+        // the child still alive. The program then paints BYE at D+0.01 s and exits at
+        // D+0.03 s. The post-deadline exit grace sees that exit and drains the final
+        // frame, so the step still matches instead of reporting a wall hit.
+        $deadline = \microtime(true) + 0.1;
+        $master = new class ($deadline + 0.01) implements MasterPty {
+            private bool $painted = false;
+
+            public function __construct(private float $paintAt)
+            {
+            }
+
+            public function read(int $len = 8192, ?float $timeout = 0.05): ?string
+            {
+                if (!$this->painted && \microtime(true) >= $this->paintAt) {
+                    $this->painted = true;
+
+                    return 'BYE';
+                }
+                if ($timeout !== null && $timeout > 0.0) {
+                    \usleep((int) ($timeout * 1_000_000));
+                }
+
+                return null;
+            }
+
+            public function write(string $bytes): int
+            {
+                return \strlen($bytes);
+            }
+
+            public function resize(int $cols, int $rows): void
+            {
+            }
+
+            public function size(): array
+            {
+                return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0];
+            }
+
+            public function stream(): mixed
+            {
+                throw new \LogicException('window master has no real stream');
+            }
+
+            public function setBlocking(bool $blocking): void
+            {
+            }
+
+            public function close(): void
+            {
+            }
+
+            public function isClosed(): bool
+            {
+                return false;
+            }
+
+            public function fd(): int
+            {
+                return -1;
+            }
+        };
+        $child = new class ($deadline + 0.03) implements Child {
+            public function __construct(private float $exitAt)
+            {
+            }
+
+            public function pid(): int
+            {
+                return 1;
+            }
+
+            public function exited(): bool
+            {
+                return \microtime(true) >= $this->exitAt;
+            }
+
+            public function wait(): int
+            {
+                return 0;
+            }
+
+            public function exitCode(): ?int
+            {
+                return 0;
+            }
+
+            public function kill(int $signal): void
+            {
+            }
+        };
+
+        $started = \microtime(true);
+        $result = Expect::on($master)->collectWindow(5.0, $deadline, 100, 0, 0, '/BYE/', $child);
+
+        self::assertTrue($result->matched, 'a final frame painted by a child exiting just past the deadline must match');
+        self::assertSame('BYE', $result->output);
+        self::assertTrue($result->childExited);
+        self::assertFalse($result->wallHit, 'the child exit closed the window, so it is not a wall hit');
+        self::assertLessThan(1.0, \microtime(true) - $started, 'the exit grace and drain stay short');
+    }
+
+    public function testALiveChildAtTheDeadlineIsStillAWallHitAfterTheShortExitGrace(): void
+    {
+        // A child that never exits gets only the short post-deadline exit grace; the
+        // window then reports the wall hit and leaves the master unread.
+        $started = \microtime(true);
+        $result = Expect::on(self::master([]))
+            ->collectWindow(5.0, \microtime(true) + 0.1, 100, 0, 0, '/x/', self::child(false));
+
+        self::assertLessThan(0.5, \microtime(true) - $started, 'the exit grace past the deadline is bounded');
+        self::assertFalse($result->matched);
+        self::assertFalse($result->childExited);
+        self::assertTrue($result->wallHit);
+    }
+
     public function testAPastDeadlineReturnsAtOnceAsAWallHit(): void
     {
         $started = \microtime(true);

@@ -557,6 +557,8 @@ final class Expect
      * the deadline binds even against a silent master. The one exception is the short
      * drain after a child exit: it runs to the later of the deadline and 0.1 s past the
      * exit, so a last frame painted as the deadline passes is still read and matched.
+     * A window the deadline closes on a live child waits up to 0.1 s more for an exit
+     * and, if one comes, runs that same drain.
      * A buffer left by an earlier
      * `expect*` call is the window's first input: those bytes were read past that call's
      * match, so the window reports them and does not read them from the master again.
@@ -656,19 +658,7 @@ final class Expect
 
             if ($child?->exited() === true) {
                 $childExited = true;
-                // The final repaint can land a hair after the exit is observed;
-                // one bounded drain keeps it inside this window.
-                $finalWindow = $this->drainMaster(\max($deadline, \microtime(true) + self::EXIT_DRAIN_SECONDS));
-                if ($finalWindow !== '') {
-                    $this->recorder?->recordOutput($finalWindow);
-                }
-                if ($onChunk !== null && $finalWindow !== '') {
-                    $onChunk($finalWindow);
-                }
-                [$output, $retained, $dropped] = self::retainCapped($output, $finalWindow, $maxBytes, $retained, $dropped);
-                if ($regex !== null && $matched === false && \preg_match($regex, $output) === 1) {
-                    $matched = true;
-                }
+                [$output, $retained, $dropped, $matched] = $this->exitDrain($deadline, $maxBytes, $output, $retained, $dropped, $regex, $matched, $onChunk);
 
                 break;
             }
@@ -683,6 +673,21 @@ final class Expect
             }
         }
 
+        // The wall deadline can close the window between a last frame and the exit that
+        // follows it. A child that exits within the exit-drain floor past the deadline
+        // still has that frame read and matched, as an exit seen inside the window does.
+        // A child still running then leaves its bytes on the master for the caller.
+        if ($matched !== true && !$childExited && $child !== null && \microtime(true) >= $deadline) {
+            $graceEnd = \microtime(true) + self::EXIT_DRAIN_SECONDS;
+            while (!$child->exited() && \microtime(true) < $graceEnd) {
+                \usleep((int) (self::EOF_EXIT_POLL_SECONDS * 1_000_000));
+            }
+            if ($child->exited()) {
+                $childExited = true;
+                [$output, $retained, $dropped, $matched] = $this->exitDrain($deadline, $maxBytes, $output, $retained, $dropped, $regex, $matched, $onChunk);
+            }
+        }
+
         // A deadline already past on entry ends the window with no read and still counts
         // as a wall hit: the deadline is what ended the window, whether or not a read happened.
         // EOF does not suppress it: with a live child the window keeps waiting past EOF,
@@ -693,6 +698,39 @@ final class Expect
         $next = $pending === '' ? $this : $this->mutate(['buffer' => '']);
 
         return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped, $eof, $next);
+    }
+
+    /**
+     * The bounded drain after a child exit: the final repaint can land a hair after
+     * the exit is observed, so it is read, recorded, retained and matched here.
+     * Returns [output, retained, dropped, matched].
+     *
+     * @param (\Closure(string): void)|null $onChunk
+     * @return array{0: string, 1: int, 2: int, 3: ?bool}
+     */
+    private function exitDrain(
+        float $deadline,
+        int $maxBytes,
+        string $output,
+        int $retained,
+        int $dropped,
+        ?string $regex,
+        ?bool $matched,
+        ?\Closure $onChunk,
+    ): array {
+        $finalWindow = $this->drainMaster(\max($deadline, \microtime(true) + self::EXIT_DRAIN_SECONDS));
+        if ($finalWindow !== '') {
+            $this->recorder?->recordOutput($finalWindow);
+            if ($onChunk !== null) {
+                $onChunk($finalWindow);
+            }
+        }
+        [$output, $retained, $dropped] = self::retainCapped($output, $finalWindow, $maxBytes, $retained, $dropped);
+        if ($regex !== null && $matched === false && \preg_match($regex, $output) === 1) {
+            $matched = true;
+        }
+
+        return [$output, $retained, $dropped, $matched];
     }
 
     /**
