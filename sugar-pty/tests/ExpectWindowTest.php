@@ -435,6 +435,25 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->wallHit);
     }
 
+    public function testAWallDeadlineThatPassesAfterMasterEofWithALiveChildIsAWallHit(): void
+    {
+        // The master closes at once but the child stays alive, so the window waits
+        // for an exit, a match or the deadline. The deadline is what ends it: that is
+        // a wall hit, as PtyDriver::collectWindow reports it, not a silent close.
+        $started = \microtime(true);
+        $result = Expect::on(self::master(['abc', '']))
+            ->collectWindow(5.0, \microtime(true) + 0.2, 100, 0, 0, '/x/', self::child(false));
+
+        $elapsed = \microtime(true) - $started;
+        self::assertGreaterThanOrEqual(0.15, $elapsed, 'the window waits for the deadline when the child stays alive');
+        self::assertLessThan(1.0, $elapsed, 'the window must end at the deadline, not after its 5 s length');
+        self::assertSame('abc', $result->output);
+        self::assertTrue($result->eof);
+        self::assertFalse($result->matched);
+        self::assertFalse($result->childExited);
+        self::assertTrue($result->wallHit, 'a deadline passing after EOF with a live child is a wall hit');
+    }
+
     public function testAChildThatExitsAfterMasterEofIsStillReportedAsExited(): void
     {
         // A child that closes its tty then exits 0.3 s later: the master reports EOF

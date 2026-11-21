@@ -292,9 +292,10 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 is the non-throwing alternative for scripted steps that must always yield a
 result row. It returns an `ExpectWindow` (`output`, `matched`, `childExited`,
 `wallHit`, and the session `retained`/`dropped` totals to thread into the next
-window). It ends on the first of a regex match, a child exit, the master's EOF
-(`eof` is set), the window length, or the absolute wall `$deadline` (each read is
-clamped to it). An invalid regex throws `\InvalidArgumentException`. Bytes past
+window). It ends on the first of a regex match, a child exit, the window length, or the
+absolute wall `$deadline` (each read is clamped to it). Master EOF (`eof` is set)
+stops the reads; it ends the window only when no `$child` is passed, and with a
+child the window keeps waiting for that child's exit, a match, or the deadline. An invalid regex throws `\InvalidArgumentException`. Bytes past
 `$maxBytes` are counted as dropped, and a chunk that overruns the cap is cut at a
 UTF-8 codepoint boundary.
 

@@ -649,7 +649,9 @@ final class Expect
         // A deadline already past on entry ends the window with no read and still counts
         // as a wall hit. PtyDriver::collectWindow flags it only after a read, so a port
         // that replaces PtyDriver must map that case explicitly rather than assume parity.
-        $wallHit = $matched !== true && !$childExited && !$eof && \microtime(true) >= $deadline;
+        // EOF does not suppress it: with a live child the window keeps waiting past EOF,
+        // so a deadline that passes there is a wall hit, as PtyDriver reports it.
+        $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
 
         return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped, $eof);
     }
