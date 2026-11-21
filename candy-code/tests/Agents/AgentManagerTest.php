@@ -2993,11 +2993,12 @@ final class AgentManagerTest extends TestCase
     // `break;` to the end of evaluateToolCalls()'s loop -- so only call #1 is
     // ever grant-checked, denylist-checked or gate-checked -- SURVIVED the
     // whole candy-code suite. So did turning the gate-null `continue` into a
-    // `return`. Both were pinned below against executeSubAgent(). On the Task
+    // `return`. Both were pinned below against the old direct-call sub-agent
+    // entry point. On the Task
     // path (CC1C-c2a) the `break` shape is pinned as before: every call is
     // its own SubAgentGrantHook verdict. evaluateToolCalls()'s gate-null
     // `continue` is NOT re-pinned here: it lives only on the dormant
-    // executeSubAgent() path, which no test in this file drives and CC1C-c3
+    // direct-call sub-agent path, which no test in this file drives and CC1C-c3
     // deletes. Its Task-path counterpart is the hook's `modeGate === null`
     // arm, which must still grant-check the call; the gateless test below
     // proves by behavior that no gate judged the run.
