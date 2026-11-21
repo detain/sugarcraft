@@ -155,9 +155,11 @@ final class TaskToolExecuteMergeTest extends TestCase
      * reach: when the run's own card settle was lost (AgentRunCards::updateRun()
      * answers null on a failed lock or write) and the finished frame then
      * throws, the card must not be rewritten to FAILED with the throw's
-     * message — the run delivered its report, and its row says so.
+     * message — the run delivered its report, and its row says so — and it
+     * must not stay RUNNING with this live pid either, or statusOf() reads
+     * the finished run as running for as long as the session lives.
      */
-    public function testAThrowAfterASettledRowDoesNotFailItsCard(): void
+    public function testAThrowAfterASettledRowSettlesItsCardToTheRunsOwnOutcome(): void
     {
         $session = 'merge-' . bin2hex(random_bytes(5));
         $manager = self::sessionManager([]);
@@ -190,7 +192,9 @@ final class TaskToolExecuteMergeTest extends TestCase
         $this->assertSame(SubAgent::STATUS_COMPLETE, $manager->runs()[0]->status);
         $cards = AgentRunCards::runs($session);
         $this->assertCount(1, $cards);
-        $this->assertNotSame(SubAgentActivity::OUTCOME_FAILED, $cards[0]['status'], 'a settled row keeps its card from a later throw');
+        $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, $cards[0]['status'], 'the lost settle is written again with the run\'s own outcome, never the throw\'s');
+        $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, AgentRunCards::statusOf($cards[0]), 'a settled run never reads as running for the life of the session');
+        $this->assertGreaterThan(0, $cards[0]['finishedAt'], 'the card records when the run ended');
         $this->assertSame('', $cards[0]['error'], 'the throw\'s message is not why the run ended');
     }
 

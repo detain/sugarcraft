@@ -1033,7 +1033,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         if ($this->engine !== null) {
             $engine = $this->engine;
             $manager = $this->agentManager;
-            $result = $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (): ToolResult => $this->runOnEngine(
+            $result = $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (\Closure $onSettle): ToolResult => $this->runOnEngine(
                 $engine,
                 $manager,
                 $subAgent,
@@ -1042,6 +1042,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $suspension === null ? null : ['id' => $resumeId] + $suspension,
                 is_string($args['description'] ?? null) ? $args['description'] : '',
                 $requestedModel,
+                onSettle: $onSettle,
             ));
 
             $lead = array_values(array_filter([$backgroundNote, $forkNote], static fn (?string $note): bool => $note !== null));
@@ -1374,7 +1375,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $engine = $this->engine;
         $manager = $this->agentManager;
 
-        return $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (): ToolResult => $this->runOnEngine(
+        return $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (\Closure $onSettle): ToolResult => $this->runOnEngine(
             $engine,
             $manager,
             $subAgent,
@@ -1384,6 +1385,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             requestedModel: trim((string) $skill->model),
             declaredEffort: Effort::tryFrom(trim((string) $skill->effort)),
             declaredEffortBy: sprintf('skill "%s"', $skill->name),
+            onSettle: $onSettle,
         ));
     }
 
@@ -1409,19 +1411,25 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * that recorded no card has none to settle — updateRun() finds no file.
      *
      * A row the run already settled keeps its outcome: a throw after a
-     * truthful COMPLETE does not make the work it reported undone. Its card
-     * is then left as the run's own settle wrote it — even when that write
-     * failed and left it RUNNING, since the row's outcome is decided and the
-     * throw's message is not why the run ended. A card already off RUNNING
-     * keeps its outcome too. Nothing is swallowed; the caller sees the same
-     * throwable it saw before.
+     * truthful COMPLETE does not make the work it reported undone, and the
+     * throw's message is never recorded as why it ended. When the run's own
+     * card settle was lost (updateRun() answers null on a failed lock or
+     * write) and the card still reads RUNNING, it is written again with the
+     * outcome $run's settle meant — handed over through the $onSettle hook
+     * before that write — or, for a row settled without one, the outcome its
+     * status names. A card already off RUNNING keeps its outcome. Nothing is
+     * swallowed; the caller sees the same throwable it saw before.
      *
-     * @param \Closure(): ToolResult $run
+     * @param \Closure(\Closure(string, string, ?string): void): ToolResult $run
+     *        handed the hook its card settle reports to
      */
     private function settlingOnThrow(SubAgent $subAgent, ?string $cardScope, \Closure $run): ToolResult
     {
+        $meant = null;
         try {
-            return $run();
+            return $run(static function (string $outcome, string $error, ?string $resumeId) use (&$meant): void {
+                $meant = ['outcome' => $outcome, 'error' => $error, 'resumeId' => $resumeId];
+            });
         } catch (\Throwable $e) {
             $settled = $subAgent->isComplete() || $subAgent->isStopped();
             if (!$settled) {
@@ -1429,16 +1437,23 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $subAgent->error = $e->getMessage();
                 $subAgent->completedAt ??= new \DateTimeImmutable();
             }
-            if ($cardScope !== null && !$settled) {
-                $error = $e->getMessage();
-                \SugarCraft\Code\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($error): array {
+            if ($cardScope !== null) {
+                $settle = match (true) {
+                    !$settled => ['outcome' => SubAgentActivity::OUTCOME_FAILED, 'error' => $e->getMessage(), 'resumeId' => null],
+                    $meant !== null => $meant,
+                    $subAgent->isComplete() => ['outcome' => SubAgentActivity::OUTCOME_COMPLETE, 'error' => '', 'resumeId' => null],
+                    $subAgent->status === SubAgent::STATUS_STOPPED => ['outcome' => SubAgentActivity::OUTCOME_CANCELLED, 'error' => (string) $subAgent->error, 'resumeId' => null],
+                    default => ['outcome' => SubAgentActivity::OUTCOME_FAILED, 'error' => (string) $subAgent->error, 'resumeId' => null],
+                };
+                \SugarCraft\Code\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($settle): array {
                     if ($card['status'] !== \SugarCraft\Code\Agents\Live\AgentRunCards::STATUS_RUNNING) {
                         return $card;
                     }
 
                     return [
-                        'status' => SubAgentActivity::OUTCOME_FAILED,
-                        'error' => $error,
+                        'status' => $settle['outcome'],
+                        'error' => $settle['error'],
+                        'resumeId' => $settle['resumeId'] ?? $card['resumeId'],
                         'finishedAt' => (int) floor(microtime(true) * 1000),
                     ] + $card;
                 });
@@ -1471,6 +1486,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // fields for THIS run only. Null/'' preserve today's read.
         ?Effort $declaredEffort = null,
         string $declaredEffortBy = '',
+        // Told the card settle $finish meant to write, before it writes it,
+        // so settlingOnThrow() can repeat it when that write was lost.
+        ?\Closure $onSettle = null,
     ): ToolResult {
         // @region setup
         $agentName = $subAgent->agent->name;
@@ -2055,13 +2073,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // story of what it got through — rather than going blank on the
         // dashboard at exactly the moment a human looks.
         $finish = function (string $status, string $report, ?string $error, string $outcome, ?string $resumeId) use (
-            $subAgent, $emit, $foldThink, $frame, $flushLog, $log, $cardScope,
+            $subAgent, $emit, $foldThink, $frame, $flushLog, $log, $cardScope, $onSettle,
         ): void {
             $foldThink();
             // The log is complete BEFORE the finished frame leaves: the
             // parent reads it into the child session the moment it lands.
             $flushLog();
             $log?->status($status, $outcome, $error);
+            if ($onSettle !== null) {
+                $onSettle($outcome, $error ?? '', $resumeId);
+            }
             // Roadmap 4.4: settled on its card before anyone is told, so a
             // `Subagents wait` that wakes on the frame reads the outcome.
             if ($cardScope !== null) {
