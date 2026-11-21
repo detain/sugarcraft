@@ -868,6 +868,26 @@ final class GenApiReferenceTest extends TestCase
         self::assertSame(100.0, $result['percent']);
     }
 
+    public function testASubNamespaceWithPinnedAndUnpinnedClassesCountsOnlyThePinnedOnesAsShown(): void
+    {
+        // Big holds ten large classes that rank in the top ten, plus one small class that does not. The
+        // index line must state the full count (11) and how many of them have a row above (10); counting
+        // the group instead of the rows shown would print "11 of them", and no other fixture catches that.
+        $files = [
+            'candy-code/src/Big/Small.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Big;\n\n/** Small. */\nfinal class Small\n{\n}\n",
+        ];
+        for ($i = 1; $i <= 10; $i++) {
+            $files["candy-code/src/Big/Big$i.php"] = self::heavyClass('SugarCraft\\Code\\Big', "Big$i");
+        }
+        $root = $this->fixtureRoot($files);
+        $html = \ApiReference::generate($root, 'candy-code');
+
+        self::assertStringContainsString('<h4 id="api-sugarcraft-code-big-big1">', $html);
+        self::assertStringNotContainsString('api-sugarcraft-code-big-small', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Big</code>: 11 public classes, 10 of them with a row above</li>', $html);
+        self::assertStringNotContainsString('11 of them', $html);
+    }
+
     public function testALineLeadingInternalTagExcludesTheTypeAndTheMethodFromThePage(): void
     {
         // The tag at the start of its own line hides the seam, and the summary above it is what the
