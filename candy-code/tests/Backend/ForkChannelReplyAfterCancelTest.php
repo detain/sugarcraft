@@ -77,7 +77,28 @@ final class ForkChannelReplyAfterCancelTest extends TestCase
         self::assertTrue($resolved[0]->cancelled, 'a late reply rewrote the settlement');
 
         if (\is_int($turnChild)) {
-            self::assertArrayNotHasKey($turnChild, $tracked->getValue(), 'the cancelled turn child was never reaped');
+            // A settled cancel means the tree was signalled and the child
+            // reaped, OR handed to the straggler sweep: reapChildAsync() polls
+            // for 20 x 5 ms, and a killed child descheduled on a loaded box can
+            // outlive that (EngineBackend::$unreapedChildren). Asserting only
+            // the first branch went red once in a K=32 ParaTest run at load
+            // 62. What must hold is that the child is collected, by the reap
+            // or by the next sweep, so the sweep is driven here, bounded.
+            if (\array_key_exists($turnChild, $tracked->getValue())) {
+                $sweep = new \ReflectionMethod(EngineBackend::class, 'sweepUnreapedChildren');
+                $loop = Loop::get();
+                $poll = $loop->addPeriodicTimer(0.02, static function () use ($sweep, $tracked, $turnChild, $loop): void {
+                    $sweep->invoke(null);
+                    if (!\array_key_exists($turnChild, $tracked->getValue())) {
+                        $loop->stop();
+                    }
+                });
+                $guard = $loop->addTimer(5.0, static fn () => $loop->stop());
+                $loop->run();
+                $loop->cancelTimer($poll);
+                $loop->cancelTimer($guard);
+            }
+            self::assertArrayNotHasKey($turnChild, $tracked->getValue(), 'the cancelled turn child was neither reaped nor collected by the straggler sweep');
         }
     }
 }
