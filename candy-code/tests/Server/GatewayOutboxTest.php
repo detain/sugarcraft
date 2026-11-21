@@ -6,12 +6,12 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Workspace\ConnectionTarget;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * S-O03: a frame the gateway emits (relay, error reply) rides the connection's

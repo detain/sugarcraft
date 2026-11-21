@@ -6,10 +6,10 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Server\Ws\ProtocolPendingHandler;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * Roadmap O-3b, Appendix O §6.9: a client that cannot keep up costs its own

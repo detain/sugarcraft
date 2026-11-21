@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol;
 
+use SugarCraft\McpClient\Protocol\ErrorCode as LibErrorCode;
+use SugarCraft\McpClient\Protocol\RpcError as LibRpcError;
 use SugarCraft\Plugins\Host\RefusedCall;
 
 /**
@@ -57,6 +59,15 @@ final class RpcError extends \RuntimeException implements RefusedCall
     public function refusalData(): array
     {
         return $this->toArray()['data'];
+    }
+
+    /**
+     * This refusal as the library codec's RpcError, for the wire: the same code, message,
+     * kind and data, so the frame it builds is the frame this copy builds.
+     */
+    public function toLibrary(): LibRpcError
+    {
+        return LibRpcError::of(LibErrorCode::from($this->errorCode->value), $this->getMessage(), $this->kind, $this->data);
     }
 
     /**

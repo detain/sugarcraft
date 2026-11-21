@@ -15,7 +15,6 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
@@ -23,6 +22,7 @@ use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
 use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * Multi-root `serve` (roadmap O-7, Appendix O §4.1 "Phase 7"): the
@@ -352,7 +352,7 @@ final class Gateway implements MessageHandler
 
         if (\in_array($method, self::METHODS, true)) {
             if (!isset($this->greeted[$connection->id()])) {
-                $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+                $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')->toLibrary()));
 
                 return;
             }
@@ -368,7 +368,7 @@ final class Gateway implements MessageHandler
         try {
             $root = $this->routeOf($params);
         } catch (RpcError $e) {
-            $this->send($connection, JsonRpc::error($id, $e));
+            $this->send($connection, JsonRpc::error($id, $e->toLibrary()));
 
             return;
         }
@@ -383,7 +383,7 @@ final class Gateway implements MessageHandler
             return;
         }
         if (!isset($this->greeted[$connection->id()])) {
-            $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+            $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')->toLibrary()));
 
             return;
         }
@@ -441,7 +441,7 @@ final class Gateway implements MessageHandler
                 throw RpcError::of(ErrorCode::Forbidden, 'a viewer may only reach a workspace that is already running', 'owner_only');
             }
         } catch (RpcError $e) {
-            $this->send($connection, JsonRpc::error($id, $e));
+            $this->send($connection, JsonRpc::error($id, $e->toLibrary()));
 
             return false;
         }
@@ -557,7 +557,7 @@ final class Gateway implements MessageHandler
             },
             function (\Throwable $e) use ($connection, $id, $root): void {
                 if ($connection->isOpen()) {
-                    $this->send($connection, JsonRpc::error($id, $this->asRefusal($root, $e)));
+                    $this->send($connection, JsonRpc::error($id, $this->asRefusal($root, $e)->toLibrary()));
                 }
             },
         );
@@ -772,7 +772,7 @@ final class Gateway implements MessageHandler
                         $this->send($connection, JsonRpc::result($id, ['root' => $root, 'primary' => false, 'running' => true, 'pid' => $host->pid()]));
                     },
                     function (\Throwable $e) use ($connection, $id): void {
-                        $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
+                        $this->send($connection, JsonRpc::error($id, ($e instanceof RpcError ? $e : RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed'))->toLibrary()));
                     },
                 );
 
@@ -798,7 +798,7 @@ final class Gateway implements MessageHandler
             $host->rpc()->call('server.health')->then(
                 function (array $health) use ($connection, $id, $root): void {
                     if ((int) ($health['turnsRunning'] ?? 0) > 0) {
-                        $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Busy, 'a turn is running in that workspace; cancel it or close with force', 'turn_running')));
+                        $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Busy, 'a turn is running in that workspace; cancel it or close with force', 'turn_running')->toLibrary()));
 
                         return;
                     }
@@ -806,11 +806,11 @@ final class Gateway implements MessageHandler
                     $this->send($connection, JsonRpc::result($id, ['closed' => true]));
                 },
                 static function (\Throwable $e) use ($connection, $id): void {
-                    $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
+                    $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')->toLibrary()));
                 },
             );
         } catch (RpcError $e) {
-            $this->send($connection, JsonRpc::error($id, $e));
+            $this->send($connection, JsonRpc::error($id, $e->toLibrary()));
         }
     }
 
