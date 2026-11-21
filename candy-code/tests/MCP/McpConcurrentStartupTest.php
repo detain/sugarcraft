@@ -18,6 +18,13 @@ final class McpConcurrentStartupTest extends TestCase
     /** Seconds each fixture server holds its `initialize` reply. */
     private const DELAY = 2.0;
 
+    /**
+     * Fallback hold for a gated fixture, released early by the test. A blocking
+     * beginStartup() would sit out this whole hold, so the bound below it has
+     * room for a loaded shard that is slow to spawn the fixture processes.
+     */
+    private const GATED_HOLD = 30.0;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -56,19 +63,23 @@ final class McpConcurrentStartupTest extends TestCase
 
     public function testBeginStartupReturnsBeforeAnyServerIsReady(): void
     {
-        $client = new McpClient($this->writeConfig(['alpha', 'beta']));
+        $release = $this->tempDir . '/release';
+        $client = new McpClient($this->writeConfig(['alpha', 'beta'], self::GATED_HOLD, $release));
 
         $started = \microtime(true);
         try {
             $client->beginStartup();
             $elapsed = \microtime(true) - $started;
 
-            // A blocking wait cannot return before a fixture's DELAY-second reply, so
-            // this bound catches it while leaving room for a loaded shard to start slowly.
-            $this->assertLessThan(self::DELAY, $elapsed, 'beginStartup() waited for a handshake');
+            // The fixtures hold their reply until the release file appears, which
+            // happens only after this check, so a blocking wait would sit out the
+            // whole GATED_HOLD fallback. A 2 s bound against a 2 s reply tripped
+            // when a loaded shard took 3 s just to spawn the two processes.
+            $this->assertLessThan(self::GATED_HOLD, $elapsed, 'beginStartup() waited for a handshake');
             $this->assertSame(['alpha' => 'starting', 'beta' => 'starting'], $client->startupStates());
             $this->assertSame([], $client->startedSnapshot(), 'a starting server must not offer tools yet');
 
+            \touch($release);
             $client->startAllBlocking();
             $this->assertSame(['alpha' => 'ready', 'beta' => 'ready'], $client->startupStates());
             $this->assertSame(['alpha', 'beta'], \array_keys($client->startedSnapshot()));
@@ -108,14 +119,19 @@ final class McpConcurrentStartupTest extends TestCase
     /**
      * @param list<string> $names
      */
-    private function writeConfig(array $names, float $delay = self::DELAY): string
+    private function writeConfig(array $names, float $delay = self::DELAY, ?string $releaseFile = null): string
     {
+        $args = [$this->fixtureScript(), (string) $delay];
+        if ($releaseFile !== null) {
+            $args[] = $releaseFile;
+        }
+
         $servers = [];
         foreach ($names as $name) {
             $servers[$name] = [
                 'type' => 'stdio',
                 'command' => PHP_BINARY,
-                'args' => [$this->fixtureScript(), (string) $delay],
+                'args' => $args,
                 'env' => new \stdClass(),
             ];
         }
@@ -128,7 +144,8 @@ final class McpConcurrentStartupTest extends TestCase
 
     /**
      * A stdio server that holds its `initialize` reply for the given seconds
-     * and answers `tools/list` at once.
+     * and answers `tools/list` at once. Given a release file, it holds the
+     * reply only until that file exists, with the seconds as the fallback.
      */
     private function fixtureScript(): string
     {
@@ -136,13 +153,22 @@ final class McpConcurrentStartupTest extends TestCase
         \file_put_contents($path, <<<'PHP'
             <?php
             $delay = (float) ($argv[1] ?? 0);
+            $release = $argv[2] ?? null;
             while (($line = fgets(STDIN)) !== false) {
                 $msg = json_decode($line, true);
                 if (!is_array($msg) || !isset($msg['id'])) {
                     continue;
                 }
                 if (($msg['method'] ?? '') === 'initialize' && $delay > 0) {
-                    usleep((int) ($delay * 1000000));
+                    if ($release === null) {
+                        usleep((int) ($delay * 1000000));
+                    } else {
+                        $deadline = microtime(true) + $delay;
+                        while (!file_exists($release) && microtime(true) < $deadline) {
+                            usleep(10000);
+                            clearstatcache();
+                        }
+                    }
                 }
                 $result = ($msg['method'] ?? '') === 'initialize'
                     ? ['protocolVersion' => '2024-11-05', 'capabilities' => new stdClass()]
