@@ -229,6 +229,45 @@ final class TaskToolProgressFramesTest extends TestCase
     }
 
     /**
+     * CC1C-c1, ported from `AgentManager::executeSubAgent()`: the row counts
+     * a streamed response chunk by chunk, so one long reply does not leave
+     * it flat until the reply completes — and once the step bills, the
+     * chunk figures are replaced by the step's, never added to it.
+     */
+    public function testAStreamedResponseCountsItsChunksBeforeItCompletes(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            [
+                new CompleteResponse(content: 'looking ', tokensUsed: 100, costUsd: 0.01),
+                new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])], tokensUsed: 200, costUsd: 0.02),
+            ],
+            [
+                new CompleteResponse(content: 'the ', tokensUsed: 30, costUsd: 0.003),
+                new CompleteResponse(content: 'report', tokensUsed: 20, costUsd: 0.002),
+            ],
+        ], streams: true);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 5));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$probe, new TaskTool($manager)]);
+
+        /** @var list<SubAgentActivity> $frames */
+        $frames = [];
+        $emitter = static function (SubAgentActivity $activity) use (&$frames): void {
+            $frames[] = $activity;
+        };
+
+        $result = (new TaskTool($manager))->withEngine($engine, null, $emitter)->withActivityClock(self::eagerClock())->execute(self::call());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $tokens = array_map(static fn (SubAgentActivity $f): int => $f->tokensUsed, $frames);
+        $this->assertContains(330, $tokens, 'the second reply\'s first chunk is counted while that reply still streams');
+        $this->assertSame(350, $tokens[count($tokens) - 1], 'the finished beat carries the settled total');
+        $row = $manager->subAgentsOf('coder')[0];
+        $this->assertSame(350, $row->tokensUsed, 'chunk figures are replaced by the step\'s billed usage, not added to it');
+        $this->assertEqualsWithDelta(0.035, $row->costUsd, 1e-9);
+    }
+
+    /**
      * A tool call in the trail says what it did, the way the transcript row
      * does — the model's description, or the argument dump — not just which
      * tool ran.

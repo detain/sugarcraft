@@ -2013,7 +2013,10 @@ final class Runtime
                             // still has to reach the screen.
                             $onProgress($response->reasoning);
                         }
-                        $usages[] = self::foldUsage($response);
+                        $usages[] = $chunkUsage = self::foldUsage($response);
+                        if ($this->chunkUsageObserver !== null && $chunkUsage !== null) {
+                            ($this->chunkUsageObserver)($chunkUsage);
+                        }
 
                         // Folded alongside the usage above: whatever frame carried
                         // the ceiling verdict, the turn is marked (E707, round 81).
@@ -6666,6 +6669,27 @@ final class Runtime
 
     /** See {@see withTurnInbox()}. */
     private ?\SugarCraft\Code\Backend\TurnInbox $turnInbox = null;
+
+    /**
+     * A copy that hands each streamed chunk's folded usage to $observer the
+     * moment {@see runStreaming()} folds it, so a delegated run's row can
+     * count a long response while it streams. The observer sees every
+     * attempt's chunks, including ones a retry later drops; the step's
+     * AssistantMessage usage stays the billed figure. A clone, like
+     * {@see withTurnInbox()}.
+     *
+     * @param \Closure(?Usage): void $observer
+     */
+    public function withChunkUsageObserver(\Closure $observer): self
+    {
+        $copy = clone $this;
+        $copy->chunkUsageObserver = $observer;
+
+        return $copy;
+    }
+
+    /** See {@see withChunkUsageObserver()}. */
+    private ?\Closure $chunkUsageObserver = null;
 
     /**
      * The session memo this Runtime reads its PerSession layers through:

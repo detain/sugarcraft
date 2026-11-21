@@ -833,6 +833,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * @see withServiceTier()
          */
         private readonly ?string $serviceTier = null,
+        /**
+         * Told each streamed chunk's usage as the Runtime folds it, before
+         * the response settles — see {@see withChunkUsageObserver()}. Set
+         * only on a delegated run, by
+         * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}, so its Agents row
+         * rises during one long streamed response instead of staying flat
+         * until {@see $stepUsageObserver} bills it. Display-only, and
+         * provisional: it sees retried and discarded chunks too, so the
+         * observer must let the step's billed usage replace what it added.
+         *
+         * @var (\Closure(?Usage): void)|null
+         */
+        private readonly ?\Closure $chunkUsageObserver = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1620,6 +1633,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The same engine, reporting each streamed chunk's usage to $observer as
+     * it arrives — see {@see $chunkUsageObserver}. Null takes it off.
+     *
+     * @param (\Closure(?Usage): void)|null $observer
+     */
+    public function withChunkUsageObserver(?\Closure $observer): self
+    {
+        return $this->mutate(['chunkUsageObserver' => $observer]);
+    }
+
+    /**
      * The same engine, capping each turn's concurrent delegated runs at
      * $slots (clamped to at least 1) — see {@see $maxConcurrentDelegations}.
      * Null caps nothing — the {@see \SugarCraft\Code\Agents\AgentPoolConfig}
@@ -1983,6 +2007,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         )->withTurnContextPersisted();
         if ($inbox !== null) {
             $runtime = $runtime->withTurnInbox($inbox);
+        }
+        if ($this->chunkUsageObserver !== null) {
+            $runtime = $runtime->withChunkUsageObserver($this->chunkUsageObserver);
         }
 
         // Roadmap 3.B-3 / 3.D-2: the turn's own PreCompact chain, for the

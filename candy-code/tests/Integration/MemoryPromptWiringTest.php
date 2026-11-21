@@ -449,6 +449,7 @@ final class MemoryPromptWiringTest extends TestCase
             // did not carry it, so the pair assertion below was red at ded8ed677.
             'withJsonSchema' => fn(EngineBackend $b): EngineBackend => $b->withJsonSchema(['type' => 'object']),
             'withStepUsageObserver' => fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
+            'withChunkUsageObserver' => fn(EngineBackend $b): EngineBackend => $b->withChunkUsageObserver(static function (): void {}),
             'withSubAgentGrant' => fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(null),
             'withMaxConcurrentDelegations' => fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(2),
             'withSessionId' => fn(EngineBackend $b): EngineBackend => $b->withSessionId('memory-session'),

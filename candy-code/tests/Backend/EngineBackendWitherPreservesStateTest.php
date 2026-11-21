@@ -123,6 +123,10 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
                 ['stepUsageObserver'],
             ],
+            'withChunkUsageObserver' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withChunkUsageObserver(static function (): void {}),
+                ['chunkUsageObserver'],
+            ],
             // Step 4.2: a delegated turn's argument-scoped preset grant.
             'withSubAgentGrant' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(
@@ -370,6 +374,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             reasoningEffort: 'xhigh',
             turnInbox: self::blank(\SugarCraft\Code\Backend\MailboxTurnInbox::class),
             wrapUpAtPercent: 50,
+            chunkUsageObserver: static function (): void {},
         );
     }
 

@@ -1977,19 +1977,28 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // run (a resumed run keeps counting from it); bill() later replaces
         // the live figure with the settled one.
         //
-        // CC1C-c1, NOT MERGED, REDIRECTED: `AgentManager::executeSubAgent()`
-        // folded tokensUsed/costUsd on every stream CHUNK, so its row rose
-        // during one long streamed response. This observer runs on
-        // UsageUpdated, which EngineBackend emits once per completed provider
-        // response, and onToken carries only the text delta — so this row
-        // stays flat until the response finishes. Matching it needs an
-        // engine-side per-chunk usage signal; it is not present here under
-        // another name.
+        // CC1C-c1, ported from `AgentManager::executeSubAgent()`: the row also
+        // rises on every streamed CHUNK ($observeChunkUsage), not only once
+        // the provider response completes. A chunk's figure is provisional —
+        // a retry can drop the attempt it came from — so the step observer
+        // takes back what the chunks added since the last step and adds the
+        // step's billed usage in its place.
         $baseTokens = $subAgent->tokensUsed;
         $baseCost = $subAgent->costUsd;
-        $observeUsage = static function (?Usage $usage) use ($subAgent, &$stats, $flushIfDue): void {
-            $subAgent->tokensUsed += $usage?->totalTokens ?? 0;
-            $subAgent->costUsd += $usage?->costUsd ?? 0.0;
+        $provisional = ['tokens' => 0, 'cost' => 0.0];
+        $observeChunkUsage = static function (?Usage $usage) use ($subAgent, &$provisional, $flushIfDue): void {
+            $tokens = $usage?->totalTokens ?? 0;
+            $cost = $usage?->costUsd ?? 0.0;
+            $subAgent->tokensUsed += $tokens;
+            $subAgent->costUsd += $cost;
+            $provisional['tokens'] += $tokens;
+            $provisional['cost'] += $cost;
+            $flushIfDue();
+        };
+        $observeUsage = static function (?Usage $usage) use ($subAgent, &$stats, &$provisional, $flushIfDue): void {
+            $subAgent->tokensUsed += ($usage?->totalTokens ?? 0) - $provisional['tokens'];
+            $subAgent->costUsd += ($usage?->costUsd ?? 0.0) - $provisional['cost'];
+            $provisional = ['tokens' => 0, 'cost' => 0.0];
             // One response's total is its prompt plus its reply — the size
             // of the context that request carried, which is what "current
             // context" means for a row.
@@ -2255,6 +2264,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ->withMaxSteps($maxTurns)
             ->withSiblingSpend($this->siblingSpend)
             ->withStepUsageObserver($observeUsage)
+            ->withChunkUsageObserver($observeChunkUsage)
             ->withTurnInbox($turnInbox);
 
         // A blank final report used to end the delegation as a refusal on
