@@ -32,7 +32,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "sugarcraft/sugar-testing": "dev-master"
+        "sugarcraft/sugar-testing": "dev-master",
+        "brianium/paratest": "~7.4.9"
     },
     "suggest": {
         "ext-uv": "Drives the faster ReactPHP loop, but its deadline clock refreshes once per iteration: timers armed after a long synchronous idle are already overdue. Test suites that bound waits with timers need sugar-testing's LoopPin::pinStableClock() from tests/bootstrap.php (see the README 'Testing with AsyncOps' section).",
