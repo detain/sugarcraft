@@ -107,6 +107,9 @@ final class RouteTraitParityTest extends TestCase
         // C-TUI-6.m: the two voice answers, claimed by HandlesSessionSurface
         // (insert at caret / notice row) — rows land in-step with the arms.
         'VoiceFailedMsg',
+        // P4-12 CC-3: the recorder stop Cmd's answer, claimed by
+        // HandlesSessionSurface (hand the take to the transcriber).
+        'VoiceTakeStoppedMsg',
         'VoiceTranscribedMsg',
         'WindowSizeMsg',
     ];

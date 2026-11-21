@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Media\Voice;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\VoiceTakeStoppedMsg;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use Throwable;
 
 /**
@@ -38,11 +44,17 @@ use Throwable;
  * settled on the temp inode before any audio ever hits the disk, and the
  * recorder's own truncation keeps that mode (same inode).
  *
- * STOP IS SIGINT, THEN THE LADDER. arecord and sox finalize the WAV header
- * on SIGINT, so a stopped take is a readable file; only if the child
- * ignores it does the TERM/KILL escalation ladder run. A cancel (Esc, or
- * the shutdown hook) skips the finalize — the take is being thrown away —
- * and escalates straight to teardown, deleting the file.
+ * STOP IS SIGINT, THEN THE LADDER, AND IT IS A CMD. arecord and sox
+ * finalize the WAV header on SIGINT, so a stopped take is a readable file;
+ * only if the child ignores it does the TERM/KILL escalation ladder run.
+ * {@see stop()} returns that sequence as a Cmd whose waits are loop timers
+ * ({@see BoundedShutdown::escalateAsync()} for the ladder), so a recorder
+ * that ignores SIGINT costs the TUI nothing while the grace runs (AUD §7
+ * rank 6: the old blocking stop froze the UI for up to about 2.5 s). A
+ * cancel (Esc, or the shutdown hook) skips the finalize — the take is being
+ * thrown away — and escalates straight to teardown, deleting the file. The
+ * cancel keeps the synchronous ladder ({@see BoundedShutdown::escalate()}):
+ * the shutdown hook runs with no loop left to yield to.
  *
  * NO AUDIO BYTES ARE EVER LOGGED. Nothing here reads the file: the child
  * writes it, {@see Transcriber::transcribe()} uploads it once and unlinks
@@ -63,7 +75,7 @@ final class AudioRecorder
     /** Bytes a finalized WAV header occupies: a take no larger than this captured no samples. */
     public const WAV_HEADER_BYTES = 44;
 
-    /** SIGINT finalizes the header on both backends; integer literal per the ProcessReaper caller law. */
+    /** SIGINT finalizes the header on both backends; an integer literal per the BoundedShutdown signal rule. */
     private const SIGNAL_INTERRUPT = 2;
 
     /** How long a well-behaved recorder may take to act on SIGINT before the ladder runs. */
@@ -75,6 +87,16 @@ final class AudioRecorder
 
     /** @var array<string, array{process: mixed, startedAt: float}> live takes keyed by WAV path */
     private static array $live = [];
+
+    /**
+     * Takes whose stop Cmd has been issued but whose recorder has not been
+     * seen gone yet, keyed by WAV path. Kept so a stop Cmd that never runs
+     * (a dropped Cmd, a test that only inspects it) still leaves the child
+     * reachable by {@see resetForTesting()} and the shutdown teardown.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $stopping = [];
 
     /**
      * First backend on PATH, or '' when neither exists. Injectable so the
@@ -219,22 +241,55 @@ final class AudioRecorder
     }
 
     /**
-     * SIGINT (header finalize), a bounded grace, then the TERM/KILL ladder.
-     * Returns false when the take left no readable sample behind — an
+     * End a take, as a Cmd: SIGINT (header finalize), a bounded grace, then
+     * the TERM/KILL ladder, every wait a loop timer so the TUI keeps
+     * painting. The Cmd resolves to a {@see VoiceTakeStoppedMsg} once the
+     * recorder is gone (or its kill budget is spent); `hasAudio` is false
+     * when the take left no readable sample behind, since an
      * interrupted-then-killed recorder can die before writing anything.
+     *
+     * The take leaves the live set at once, so a second stop or a cancel of
+     * the same take cannot signal it twice; the child stays reachable through
+     * the pending-stop set until the ladder sees it gone. A take with no
+     * recorder behind it resolves on the Cmd's first run.
+     *
+     * @return \Closure(): \SugarCraft\Core\AsyncCmd
      */
-    public static function stop(AudioRecording $recording): bool
+    public static function stop(AudioRecording $recording): \Closure
     {
         $entry = self::$live[$recording->path] ?? null;
 
         if ($entry !== null) {
             unset(self::$live[$recording->path]);
-            self::signal($entry['process'], self::SIGNAL_INTERRUPT);
-            self::waitBounded($entry['process'], self::INTERRUPT_GRACE_SECONDS);
-            self::teardown($entry['process']);
+            self::$stopping[$recording->path] = $entry['process'];
         }
 
-        return self::hasAudio($recording->path);
+        return Cmd::promise(static function () use ($recording): PromiseInterface {
+            $deferred = new Deferred();
+            $settle = static function () use ($recording, $deferred): void {
+                unset(self::$stopping[$recording->path]);
+                $deferred->resolve(new VoiceTakeStoppedMsg($recording, self::hasAudio($recording->path)));
+            };
+
+            $process = self::$stopping[$recording->path] ?? null;
+
+            if ($process === null || self::gone($process)) {
+                self::reap($process);
+                $settle();
+
+                return $deferred->promise();
+            }
+
+            self::interruptThenEscalate(Loop::get(), $process, $settle);
+
+            return $deferred->promise();
+        });
+    }
+
+    /** True while a stop Cmd is still waiting on a recorder child. */
+    public static function stopping(): bool
+    {
+        return self::$stopping !== [];
     }
 
     /** Throw the take away: no finalize wait, delete the file either way. */
@@ -248,6 +303,28 @@ final class AudioRecorder
         }
 
         @\unlink($recording->path);
+    }
+
+    /**
+     * Synchronous teardown of every recorder this process still holds, live
+     * or mid-stop, for the exit path: once the process is exiting no loop
+     * timer will run, so a pending stop Cmd would otherwise leave its child
+     * behind. Live takes are deleted (an abandoned take is a cancelled one);
+     * a take whose stop was already issued keeps its file.
+     */
+    public static function teardownAll(): void
+    {
+        foreach (self::$live as $path => $entry) {
+            self::teardown($entry['process']);
+            @\unlink($path);
+        }
+
+        foreach (self::$stopping as $process) {
+            self::teardown($process);
+        }
+
+        self::$live = [];
+        self::$stopping = [];
     }
 
     /** A take whose file holds more than a bare header carries samples. */
@@ -274,7 +351,12 @@ final class AudioRecorder
             self::teardown($entry['process']);
         }
 
+        foreach (self::$stopping as $process) {
+            self::teardown($process);
+        }
+
         self::$live = [];
+        self::$stopping = [];
     }
 
     /** Create one directory at 0700; an existing one is verified by the caller's PrivateDir gate, never re-permissioned. */
@@ -358,36 +440,103 @@ final class AudioRecorder
         ProcessContainment::terminate($process, $signal);
     }
 
-    private static function waitBounded(mixed $process, float $seconds): bool
+    /**
+     * The stop sequence on loop timers: SIGINT, a poll of up to
+     * {@see INTERRUPT_GRACE_SECONDS}, then {@see BoundedShutdown::escalateAsync()}
+     * with the same TERM and KILL budgets the synchronous teardown uses.
+     * `$then` runs once the child is seen gone, or once the kill budget is
+     * spent: a child that outlives signal 9 is in an uninterruptible kernel
+     * wait, so its reap is left to {@see BoundedShutdown::reapWhenExited()}
+     * rather than holding the take back from the user.
+     *
+     * @param \Closure(): void $then
+     */
+    private static function interruptThenEscalate(LoopInterface $loop, mixed $process, \Closure $then): void
     {
-        $deadline = \microtime(true) + $seconds;
+        self::signal($process, self::SIGNAL_INTERRUPT);
+        $deadline = self::now() + self::INTERRUPT_GRACE_SECONDS;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            self::POLL_INTERVAL_US / 1_000_000,
+            static function () use (&$timer, $loop, $process, $deadline, $then): void {
+                if (self::gone($process)) {
+                    $loop->cancelTimer($timer);
+                    self::reap($process);
+                    $then();
 
-        do {
-            if (self::gone($process)) {
-                return true;
-            }
+                    return;
+                }
 
-            \usleep(self::POLL_INTERVAL_US);
-        } while (\microtime(true) < $deadline);
+                if (self::now() < $deadline) {
+                    return;
+                }
 
-        return self::gone($process);
+                $loop->cancelTimer($timer);
+                BoundedShutdown::escalateAsync(
+                    $loop,
+                    static function (int $signal) use ($process): void {
+                        self::signal($process, $signal);
+                    },
+                    static fn (): bool => self::gone($process),
+                    static function (bool $gone) use ($loop, $process, $then): void {
+                        if ($gone) {
+                            self::reap($process);
+                        } elseif (\is_resource($process)) {
+                            BoundedShutdown::reapWhenExited($loop, $process);
+                        }
+
+                        $then();
+                    },
+                    self::TERMINATE_GRACE_SECONDS,
+                    self::KILL_GRACE_SECONDS,
+                );
+            },
+        );
     }
 
+    /**
+     * A closed handle counts as gone: the shutdown teardown may close a child
+     * while its stop Cmd's timers are still armed.
+     */
     private static function gone(mixed $process): bool
     {
+        if (!\is_resource($process)) {
+            return true;
+        }
+
         return (bool) (\proc_get_status($process)['running'] ?? false) === false;
     }
 
-    /** TERM then KILL through the shared ladder, then close the handle. */
+    /** Close a handle the poll already saw exit, so the close cannot wait. */
+    private static function reap(mixed $process): void
+    {
+        if (\is_resource($process)) {
+            @\proc_close($process);
+        }
+    }
+
+    /** Monotonic seconds, the clock {@see BoundedShutdown} runs its deadlines on. */
+    private static function now(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    /**
+     * TERM then KILL through the shared synchronous ladder, then close the
+     * handle. Used by cancel and the exit path only; {@see stop()} runs the
+     * same budgets on the loop.
+     */
     private static function teardown(mixed $process): void
     {
         if (!\is_resource($process)) {
             return;
         }
 
-        ProcessReaper::escalate(
-            static fn(int $signal) => self::signal($process, $signal),
-            static fn(): bool => self::gone($process),
+        BoundedShutdown::escalate(
+            static function (int $signal) use ($process): void {
+                self::signal($process, $signal);
+            },
+            static fn (): bool => self::gone($process),
             self::TERMINATE_GRACE_SECONDS,
             self::KILL_GRACE_SECONDS,
         );

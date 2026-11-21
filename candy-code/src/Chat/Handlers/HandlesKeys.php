@@ -34,8 +34,6 @@ use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
-use SugarCraft\Code\Media\Voice\AudioRecorder;
-use SugarCraft\Code\Media\Voice\TranscribeCmd;
 use SugarCraft\Code\Media\Voice\VoiceSession;
 use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
@@ -1297,14 +1295,14 @@ trait HandlesKeys
      * the status bar carries "● rec" for as long as it is rolling, and the
      * design keeps that cue static — no clock, no extra tick.
      *
-     * Stopping returns the take to {@see TranscribeCmd::cmd()}, whose shape
-     * mirrors {@see StatusLineCommand::cmd()} (the HandlesRunControl arm
-     * above is the direct-call precedent). The one case the engine cannot
-     * answer kindly is a stop while an EARLIER transcription still holds
-     * the latch: `cmd()` returns null and the take would strand its WAV in
-     * the cache. That file is audio the user meant to throw away the moment
-     * they pressed the chord again, so it is discarded through the
-     * recorder's own cancel and the press says so loudly.
+     * Stopping returns the recorder's stop Cmd ({@see VoiceSession::stop()}):
+     * the SIGINT finalize grace and the TERM/KILL ladder run on loop timers,
+     * never inside this key press (P4-12 CC-3, AUD §7 rank 6). The take
+     * reaches {@see \SugarCraft\Code\Media\Voice\TranscribeCmd::cmd()}
+     * when the Cmd's {@see \SugarCraft\Code\App\VoiceTakeStoppedMsg}
+     * comes back through HandlesSessionSurface, which also owns the busy
+     * refusal for a stop that lands while an earlier transcription holds
+     * the latch.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -1318,16 +1316,7 @@ trait HandlesKeys
                 : $this->withSettingsToast($refusal, \SugarCraft\Toast\ToastType::Warning);
         }
 
-        $take = VoiceSession::stop();
-        $cmd = $take === null ? null : TranscribeCmd::cmd($take);
-
-        if ($take !== null && $cmd === null) {
-            AudioRecorder::cancel($take);
-
-            return $this->withSettingsToast(Lang::t('chat.voice.busy'), \SugarCraft\Toast\ToastType::Warning);
-        }
-
-        return [$this, $cmd];
+        return [$this, VoiceSession::stop()];
     }
 
     /**

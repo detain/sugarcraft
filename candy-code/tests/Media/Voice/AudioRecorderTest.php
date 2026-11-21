@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Media\Voice;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
 use ReflectionMethod;
+use ReflectionProperty;
+use SugarCraft\Code\App\VoiceTakeStoppedMsg;
 use SugarCraft\Code\Media\Voice\AudioRecording;
 use SugarCraft\Code\Media\Voice\AudioRecorder;
 use SugarCraft\Code\Media\Voice\VoiceConfig;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * C-TUI-6.l recorder laws: the design's argv ladder is pinned shape for
@@ -244,8 +249,9 @@ final class AudioRecorderTest extends TestCase
             . ' size=' . var_export(@\filesize($path), true)
             . ' marker=' . var_export(is_file($path . '.done'), true));
 
-        self::assertTrue(AudioRecorder::stop($result['recording']),
-            'the shim wrote samples; stop must read them back');
+        $stopped = $this->recorderSettleStop($result['recording']);
+        self::assertSame($result['recording'], $stopped->recording, 'the stop answers with the take it ended');
+        self::assertTrue($stopped->hasAudio, 'the shim wrote samples; stop must read them back');
         self::assertFileExists($result['recording']->path, 'stop keeps the finalized file for the caller');
 
         $idle = new AudioRecording(
@@ -254,7 +260,92 @@ final class AudioRecorderTest extends TestCase
             120,
             \microtime(true),
         );
-        self::assertFalse(AudioRecorder::stop($idle), 'a take with nothing behind it answers false, not an exception');
+        self::assertFalse($this->recorderSettleStop($idle)->hasAudio,
+            'a take with nothing behind it answers false, not an exception');
+    }
+
+    public function testStopReturnsACmdAndLeavesTheTakeAtOnce(): void
+    {
+        $this->recorderAdoptFakeHome();
+        $this->recorderPlantShim('arecord', 'sleep 30');
+
+        $result = AudioRecorder::start(VoiceConfig::fromSettings([
+            'voice.baseUrl' => 'https://example.invalid/v1',
+        ]));
+        self::assertNotNull($result['recording']);
+
+        $cmd = AudioRecorder::stop($result['recording']);
+
+        self::assertInstanceOf(\Closure::class, $cmd, 'stop hands back a Cmd, never a verdict');
+        self::assertTrue(AudioRecorder::stopping(), 'the child stays tracked until the Cmd sees it gone');
+
+        $stopped = $this->recorderSettleStop($result['recording'], $cmd);
+
+        self::assertFalse(AudioRecorder::stopping(), 'a settled stop forgets the child');
+        self::assertFalse($stopped->hasAudio, 'the sleeping shim captured nothing, and the answer says so');
+    }
+
+    public function testATermTrappingRecorderIsKilledWithinTheGraceBoundWithoutBlockingTheLoop(): void
+    {
+        $this->recorderAdoptFakeHome();
+        // SIG_IGN survives exec, so the sleep the shim waits on ignores INT
+        // and TERM too: only the KILL rung can end this take.
+        $this->recorderPlantShim('arecord', "trap '' INT TERM; sleep 30");
+
+        $result = AudioRecorder::start(VoiceConfig::fromSettings([
+            'voice.baseUrl' => 'https://example.invalid/v1',
+        ]));
+        self::assertNotNull($result['recording']);
+        $recording = $result['recording'];
+
+        $live = new ReflectionProperty(AudioRecorder::class, 'live');
+        $process = $live->getValue()[$recording->path]['process'] ?? null;
+        self::assertIsResource($process);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+        $group = BoundedShutdown::groupId($process);
+        self::assertGreaterThan(0, $pid);
+
+        // Let the shim install its traps before the first signal lands.
+        self::assertNotSame('', $this->recorderWaitFor(
+            fn (): string => (string) (@\file_get_contents((string) $this->recorderBinDir . '/arecord.log') ?: ''),
+            2.0,
+        ));
+        \usleep(100_000);
+
+        $loop = Loop::get();
+        $ticks = 0;
+        $heartbeat = $loop->addPeriodicTimer(0.05, static function () use (&$ticks): void {
+            $ticks++;
+        });
+
+        $began = \hrtime(true);
+        $async = AudioRecorder::stop($recording)();
+        $issueSeconds = (\hrtime(true) - $began) / 1e9;
+
+        try {
+            $stopped = $this->recorderRunUntilSettled($async);
+        } finally {
+            $loop->cancelTimer($heartbeat);
+        }
+
+        $elapsed = (\hrtime(true) - $began) / 1e9;
+
+        self::assertLessThan(0.5, $issueSeconds, 'issuing the stop must not wait on the recorder');
+        self::assertInstanceOf(VoiceTakeStoppedMsg::class, $stopped, 'the stop Cmd never settled');
+        // SIGINT grace 1.5 s, TERM grace 0.5 s, KILL grace 0.5 s: the trapped
+        // child outlives the first two rungs and dies on the third.
+        self::assertGreaterThanOrEqual(1.9, $elapsed, 'the INT and TERM graces were honored before KILL');
+        self::assertLessThan(2.5 + 1.0, $elapsed, 'the child died within the grace bound');
+        self::assertGreaterThan(10, $ticks, 'the loop kept ticking while the ladder ran');
+        self::assertFalse(\is_resource($process), 'the handle was reaped');
+        self::assertFalse(\file_exists('/proc/' . $pid) && self::recorderIsLiveProc($pid), 'the recorder process is gone');
+        if ($group !== null && \function_exists('posix_kill')) {
+            $deadline = \microtime(true) + 1.0;
+            while (@\posix_kill(-$group, 0) && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertFalse(@\posix_kill(-$group, 0), 'the KILL rung reached the trapped sleep in the group too');
+        }
     }
 
     public function testAVanishedBinaryIsRefusedAtProbeNotSpawnedBlind(): void
@@ -299,6 +390,49 @@ final class AudioRecorderTest extends TestCase
         self::assertTrue(\chmod($dir . '/' . $name, 0o755));
 
         return $dir;
+    }
+
+    /** Run a stop Cmd on the loop until it answers, with a hard leash. */
+    private function recorderSettleStop(AudioRecording $recording, ?\Closure $cmd = null): VoiceTakeStoppedMsg
+    {
+        $async = ($cmd ?? AudioRecorder::stop($recording))();
+        $stopped = $this->recorderRunUntilSettled($async);
+        self::assertInstanceOf(VoiceTakeStoppedMsg::class, $stopped, 'the stop Cmd never settled');
+
+        return $stopped;
+    }
+
+    private function recorderRunUntilSettled(mixed $async): ?object
+    {
+        self::assertInstanceOf(AsyncCmd::class, $async);
+
+        $loop = Loop::get();
+        $settled = null;
+        $async->promise->then(static function (object $value) use (&$settled, $loop): void {
+            $settled = $value;
+            $loop->stop();
+        });
+
+        if ($settled === null) {
+            $leash = $loop->addTimer(10.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($leash);
+        }
+
+        return $settled;
+    }
+
+    /** A zombie still has a /proc entry; only a running or sleeping one counts as live. */
+    private static function recorderIsLiveProc(int $pid): bool
+    {
+        $stat = @\file_get_contents('/proc/' . $pid . '/stat');
+        if (!\is_string($stat)) {
+            return false;
+        }
+
+        $close = \strrpos($stat, ')');
+
+        return $close !== false && ($stat[$close + 2] ?? 'Z') !== 'Z';
     }
 
     /** Poll a shim-side effect with a hard bound: a regression fails here, it never hangs. */

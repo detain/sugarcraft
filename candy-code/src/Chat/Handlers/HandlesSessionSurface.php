@@ -54,6 +54,8 @@ use SugarCraft\Code\Events\ReasoningDelta;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Media\PreviewSlots;
+use SugarCraft\Code\Media\Voice\AudioRecorder;
+use SugarCraft\Code\Media\Voice\TranscribeCmd;
 use SugarCraft\Code\Events\TokenDelta;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolProgress;
@@ -120,6 +122,7 @@ use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\App\VoiceFailedMsg;
+use SugarCraft\Code\App\VoiceTakeStoppedMsg;
 use SugarCraft\Code\App\VoiceTranscribedMsg;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\PermissionRequestMsg;
@@ -355,6 +358,26 @@ trait HandlesSessionSurface
             }
 
             return [$this->withInput($this->input->insertString($this->mentionFor($msg->path) . ' ')), null];
+        }
+
+        // P4-12 CC-3: the recorder's stop Cmd answered — the child has let
+        // go of the take, so it goes to the transcriber now. The one case the
+        // engine cannot answer kindly is a stop while an EARLIER
+        // transcription still holds the latch: `cmd()` returns null and the
+        // take would strand its WAV in the cache. That file is audio the user
+        // meant to throw away the moment they pressed the chord again, so it
+        // is discarded through the recorder's own cancel and the press says
+        // so loudly.
+        if ($msg instanceof VoiceTakeStoppedMsg) {
+            $transcribe = TranscribeCmd::cmd($msg->recording);
+
+            if ($transcribe === null) {
+                AudioRecorder::cancel($msg->recording);
+
+                return $this->withSettingsToast(Lang::t('chat.voice.busy'), \SugarCraft\Toast\ToastType::Warning);
+            }
+
+            return [$this, $transcribe];
         }
 
         // C-TUI-6.m (`chat.voice`): the transcriber's answer lands at the

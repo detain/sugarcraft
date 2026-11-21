@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Media\Voice;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\VoiceTakeStoppedMsg;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Media\Voice\AudioRecorder;
 use SugarCraft\Code\Media\Voice\AudioRecording;
 use SugarCraft\Code\Media\Voice\TranscribeCmd;
 use SugarCraft\Code\Media\Voice\VoiceSession;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\AsyncCmd;
 
 /**
  * C-TUI-6.l session laws: the gate answers OFF before any hardware or
- * filesystem touch, a second start is refused while a take rolls, and stop
- * hands the recording back even when it is silent (the transcribe path is
+ * filesystem touch, a second start is refused while a take rolls, and stop's
+ * Cmd hands the recording back even when it is silent (the transcribe path is
  * what turns silence into the visible no-audio refusal — the session must
  * not swallow the take here).
  *
@@ -92,11 +94,39 @@ final class VoiceSessionTest extends TestCase
         $this->vcsPlantRecording($recording);
         self::assertTrue(VoiceSession::active());
 
-        $handed = VoiceSession::stop();
+        $cmd = VoiceSession::stop();
 
-        self::assertSame($recording, $handed, 'the take rides back to the caller even when silent');
-        self::assertFalse(VoiceSession::active());
+        self::assertInstanceOf(\Closure::class, $cmd, 'stop answers with the recorder\'s Cmd');
+        self::assertFalse(VoiceSession::active(), 'the session closes at the press, not when the Cmd settles');
+
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+        $handed = null;
+        $async->promise->then(static function (object $msg) use (&$handed): void {
+            $handed = $msg;
+        });
+
+        self::assertInstanceOf(VoiceTakeStoppedMsg::class, $handed, 'a take with no child behind it settles on the first run');
+        self::assertSame($recording, $handed->recording, 'the take rides back to the caller even when silent');
+        self::assertFalse($handed->hasAudio);
         self::assertFileExists($take, 'stop() finalizes the file; deleting it is the transcribe path');
+    }
+
+    public function testStartIsRefusedWhileAnEarlierStopIsStillWaitingOnItsRecorder(): void
+    {
+        $pending = new \ReflectionProperty(AudioRecorder::class, 'stopping');
+        $pending->setValue(null, ['/definitely/not/a/real/take.wav' => null]);
+
+        try {
+            $refusal = VoiceSession::start();
+        } finally {
+            $pending->setValue(null, []);
+        }
+
+        self::assertIsString($refusal);
+        self::assertStringContainsString('already in progress', $refusal,
+            'the old recorder may still hold the microphone until its stop settles');
+        self::assertFalse(VoiceSession::active());
     }
 
     public function testCancelDeletesTheTakeAndEndsTheSession(): void

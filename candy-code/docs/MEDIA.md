@@ -191,7 +191,9 @@ neither exists (stock macOS and Windows included) it reports
 `no recorder binary was found` rather than faking a take. The cap is passed
 into the child's own argv (`-d <max>` / `trim 0 <max>`) so an orphaned
 recorder stops itself; stopping sends SIGINT, which finalizes the WAV
-header, followed by a bounded TERM/KILL ladder. Takes land at 0600 under
+header, followed by a bounded TERM/KILL ladder. The stop runs as a Cmd on
+the event loop, so the screen keeps updating while a slow recorder winds
+down; the take goes to the transcriber once the recorder has exited. Takes land at 0600 under
 `~/.candy-code/cache/voice/` inside the PrivateDir-verified 0700 root. A
 process that exits with a live take cancels it.
 
