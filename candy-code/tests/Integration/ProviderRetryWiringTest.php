@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Hooks\HookManager;
@@ -27,6 +28,7 @@ use SugarCraft\Code\Providers\ProviderResponseException;
 use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
@@ -49,6 +51,9 @@ use SugarCraft\Code\Tools\ToolResult;
  */
 final class ProviderRetryWiringTest extends TestCase
 {
+    /** The suspension store a delegated run saves into, removed in tearDown. */
+    private ?string $suspendedDir = null;
+
     private static function transient(): ServerException
     {
         return new ServerException(
@@ -554,11 +559,19 @@ final class ProviderRetryWiringTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // AgentManager. Same policy, different rollback, and a deliberately
-    // different mid-stream gate.
+    // A delegated sub-agent (CC1C-c2b). It runs through TaskTool's engine
+    // path, the one every production registration binds, so it is the
+    // Runtime's own policy above, read off the sub-agent's row and the Task
+    // result.
     // -------------------------------------------------------------------------
 
-    private function subAgent(ProviderInterface $provider): array
+    /**
+     * Delegate one `worker` run through {@see TaskTool} on an engine over
+     * $provider, and hand back the Task result and the row it settled.
+     *
+     * @return array{ToolResult, SubAgent}
+     */
+    private function runWorkerOnTask(ProviderInterface $provider): array
     {
         $manager = new AgentManager($provider, new SkillRegistry());
         $manager->register(new Agent(
@@ -571,69 +584,95 @@ final class ProviderRetryWiringTest extends TestCase
             skillNames: [],
             hooks: [],
             isActive: true,
+            inheritsModel: true,
         ));
-        $subAgent = $manager->createSubAgent('worker', 'do the thing');
 
-        return [$manager, $subAgent];
+        $this->suspendedDir = sys_get_temp_dir() . '/sc_retry_task_' . bin2hex(random_bytes(6));
+        $result = (new TaskTool($manager, suspended: new SuspendedDelegations($this->suspendedDir)))
+            ->withEngine(EngineBackend::new($provider, 'test-model'))
+            ->execute(['description' => 'Retry check', 'prompt' => 'do the thing', 'agent' => 'worker', 'id' => 'task-call']);
+
+        $runs = $manager->runs();
+        $this->assertCount(1, $runs, 'the Task call ran exactly one delegation');
+
+        return [$result, $runs[0]];
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->suspendedDir !== null) {
+            foreach (glob($this->suspendedDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($this->suspendedDir);
+            $this->suspendedDir = null;
+        }
     }
 
     /**
-     * Mid-stream retry IS allowed here, unlike in {@see Runtime::runStreaming()},
-     * because `SubAgent::$output` is read by consumers as a whole-value snapshot
-     * rather than pushed as deltas — so restoring the field is a correct undo.
-     * The assertion that matters is the ONCE: `partialpartial complete` would
-     * mean the rollback did not happen.
+     * A delegated run streams into a sink (its row's live output), so a
+     * stream that fails after its first text is CONTINUED, as
+     * {@see testAStreamThatFailsAfterEmittingToAConsumerIsContinuedNotRestarted()}
+     * pins for the main loop: the retry asks for the rest of the reply, and
+     * the row's report carries each byte once. `partialpartial` would mean
+     * the dropped attempt's text was replayed.
      */
-    public function testASubAgentStreamRetriesMidStreamAndRollsBackItsOutput(): void
+    public function testASubAgentStreamRetriesMidStreamAndCarriesTheReplyOnce(): void
     {
         $provider = new ScriptedProvider([
             ScriptedAttempt::chunksThenThrow(['partial'], self::transient()),
-            ScriptedAttempt::chunks(['complete answer']),
+            ScriptedAttempt::chunks([' complete answer']),
         ]);
-        [$manager, $subAgent] = $this->subAgent($provider);
+        [$result, $subAgent] = $this->runWorkerOnTask($provider);
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(2, $provider->attempts());
-        $this->assertSame('complete answer', $subAgent->output);
+        $this->assertSame('partial complete answer', $subAgent->output);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
+    /**
+     * The attempt the retry drops is billed for nothing. It carries usage
+     * and no text: an attempt that streamed text is continued, not dropped
+     * (the test above), so a usage-only chunk is the shape a dropped attempt
+     * takes on this path, as in {@see testARetryDoesNotDoubleCountUsage()}.
+     */
     public function testASubAgentRetryRollsBackUsageToo(): void
     {
         $provider = new ScriptedProvider([
             ScriptedAttempt::responsesThenThrow(
-                [new CompleteResponse(content: 'partial', tokensUsed: 40, costUsd: 0.004)],
+                [new CompleteResponse(content: '', tokensUsed: 40, costUsd: 0.004)],
                 self::transient(),
             ),
             ScriptedAttempt::responses([new CompleteResponse(content: 'done', tokensUsed: 10, costUsd: 0.001)]),
         ]);
-        [$manager, $subAgent] = $this->subAgent($provider);
+        [$result, $subAgent] = $this->runWorkerOnTask($provider);
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame(2, $provider->attempts());
         $this->assertSame('done', $subAgent->output);
         $this->assertSame(10, $subAgent->tokensUsed, '50 would mean the failed attempt was still billed');
         $this->assertEqualsWithDelta(0.001, $subAgent->costUsd, 1.0e-9);
     }
 
+    /**
+     * A permanent failure is not retried, and it fails the run: the Task
+     * result carries the provider's error to the parent (TaskTool reports a
+     * failed delegation rather than rethrowing it) and the row is FAILED.
+     */
     public function testASubAgentPermanentFailureStillFailsTheSubAgentOnce(): void
     {
         $provider = new ScriptedProvider([
             ScriptedAttempt::throws(self::permanent()),
             ScriptedAttempt::chunks(['never reached']),
         ]);
-        [$manager, $subAgent] = $this->subAgent($provider);
+        [$result, $subAgent] = $this->runWorkerOnTask($provider);
 
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-            $this->fail('a 401 must reach the caller');
-        } catch (ClientException) {
-            // expected
-        }
-
+        $this->assertTrue($result->isError(), 'a 401 must reach the parent as a failed delegation');
+        $this->assertStringContainsString('401 Unauthorized', $result->content());
         $this->assertSame(1, $provider->attempts());
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertStringContainsString('401 Unauthorized', (string) $subAgent->error);
     }
 
     public function testASubAgentBatchTransientFailureIsRetried(): void
@@ -642,10 +681,9 @@ final class ProviderRetryWiringTest extends TestCase
             ScriptedAttempt::throws(self::transient()),
             ScriptedAttempt::batch('recovered'),
         ], streams: false);
-        [$manager, $subAgent] = $this->subAgent($provider);
+        [$result, $subAgent] = $this->runWorkerOnTask($provider);
 
-        iterator_to_array($manager->executeSubAgent($subAgent->id));
-
+        $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(2, $provider->attempts());
         $this->assertSame('recovered', $subAgent->output);
     }
