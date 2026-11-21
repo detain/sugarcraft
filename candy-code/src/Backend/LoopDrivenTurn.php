@@ -40,7 +40,7 @@ final class LoopDrivenTurn
     /**
      * How long a bare suspension waits before the turn resumes: one loop turn
      * at the cadence the blocking `usleep()` it replaces used
-     * ({@see \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US}, 5 ms).
+     * ({@see \SugarCraft\Core\Util\Proc\BoundedShutdown::POLL_INTERVAL_US}, 5 ms).
      *
      * WHY A TIMER AND NOT A RESUME AT ONCE. {@see \SugarCraft\Code\Agents\AgentWorkerPool::idle()}
      * suspends with no value and expects its driver to resume it later. Resuming

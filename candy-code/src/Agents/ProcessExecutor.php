@@ -8,9 +8,9 @@ use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Process-based executor using proc_open() for true parallelism.
@@ -2050,7 +2050,7 @@ PHP;
             usleep(100_000); // 100ms
         }
 
-        // Still running — SIGKILL (literal 9, per the ProcessReaper/
+        // Still running — SIGKILL (literal 9, per the BoundedShutdown/
         // ProcessContainment rule: the pcntl constant is optional on this path).
         if (is_resource($process)) {
             ProcessContainment::terminate($process, 9);
@@ -2177,12 +2177,13 @@ PHP;
      * code (measured red in the aa lane: a worker that died with code 5 was
      * reported as a clean EOF).
      *
-     * The honest instrument: a BOUNDED reap first (ProcessReaper's polled
-     * wait — the exit is imminent if the EOF is true, so a short budget
-     * resolves the overwhelmingly common delayed-reap case), then the status
-     * read; null when the budget lands with the child still running. Null
-     * keeps the generic branch as the outcome — an unknown must not claim a
-     * code either way. The budget is deliberately NOT raised past
+     * The honest instrument: a BOUNDED reap first
+     * (BoundedShutdown::hasExited()'s polled wait — the exit is imminent if
+     * the EOF is true, so a short budget resolves the overwhelmingly common
+     * delayed-reap case), then the status read; null when the budget lands
+     * with the child still running. Null keeps the generic branch as the
+     * outcome — an unknown must not claim a code either way. The budget is
+     * deliberately NOT raised past
      * {@see self::EXIT_REAP_BUDGET_SECONDS}: this wait sits on the result
      * path of every worker turn, and the aa lesson (verbatim in ci.yml) says
      * stretched reap budgets trade a wrong answer for a slow one.
@@ -2200,7 +2201,7 @@ PHP;
             return $status['exitcode'] ?? -1;
         }
 
-        if (!ProcessReaper::waitForExit($process, self::EXIT_REAP_BUDGET_SECONDS)) {
+        if (!BoundedShutdown::hasExited($process, self::EXIT_REAP_BUDGET_SECONDS)) {
             return null;
         }
 

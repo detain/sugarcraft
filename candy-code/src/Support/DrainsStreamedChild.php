@@ -20,11 +20,12 @@ namespace SugarCraft\Code\Support;
  * reachable while the child is silent (nothing wakes a select when the only
  * thing that has changed is the clock).
  *
- * {@see \SugarCraft\Code\Support\ProcessReaper} folded the sibling family —
- * the term-then-await EXIT ladders — and its E676 note is explicit that the
- * budgets stayed where they were pinned. This class does the same for the READ
- * half, and for the same reason: five hand-rolled copies of one loop is how
- * one of them ends up with a subtly different ride-out.
+ * E676 folded the sibling family — the term-then-await EXIT ladders — onto
+ * one ladder, now sugar-core's
+ * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown}, and left the budgets
+ * where they were pinned. This class does the same for the READ half, and
+ * for the same reason: five hand-rolled copies of one loop is how one of them
+ * ends up with a subtly different ride-out.
  *
  * THE `false` RIDE-OUT IS THE PART THAT IS EASY TO LOSE. PHP's
  * `stream_select()` is not installed with `SA_RESTART`, so any signal delivered

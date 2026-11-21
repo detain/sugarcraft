@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
- * The bounded-poll cadence has one home, {@see ProcessReaper::POLL_INTERVAL_US}.
- * The backends and the worker pool alias it instead of restating the literal.
+ * The bounded-poll cadence has one home, sugar-core's
+ * {@see BoundedShutdown::POLL_INTERVAL_US}. The backends and the worker pool
+ * alias it instead of restating the literal.
  */
 final class PollCadenceCensusTest extends TestCase
 {
-    public function testCadenceLiteralAppearsOnlyInProcessReaper(): void
+    public function testCadenceLiteralAppearsOnlyInBoundedShutdown(): void
     {
         $files = [
             'Agents/AgentWorkerPool.php',
@@ -28,6 +29,6 @@ final class PollCadenceCensusTest extends TestCase
             $src = (string) file_get_contents(__DIR__ . '/../../src/' . $f);
             $this->assertDoesNotMatchRegularExpression('/\b5_?000\b|=\s*0\.005\b/', $src, $f);
         }
-        $this->assertSame(5000, ProcessReaper::POLL_INTERVAL_US);
+        $this->assertSame(5000, BoundedShutdown::POLL_INTERVAL_US);
     }
 }

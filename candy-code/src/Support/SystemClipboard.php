@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
+
 /**
  * Hand copied text to the host's clipboard tool, alongside the OSC 52 write.
  *
@@ -192,7 +194,7 @@ final class SystemClipboard
         // proc_get_status() has observed the exit, proc_close() reports -1.
         $exitCode = $written ? self::waitForExit($process, $deadline) : null;
         if ($exitCode === null) {
-            ProcessReaper::escalate(
+            BoundedShutdown::escalate(
                 static function (int $signal) use ($process): void {
                     ProcessContainment::terminate($process, $signal);
                 },

@@ -131,7 +131,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // E366 HIGH, E699 GATED. Third-party stdio MCP server held in
         // `$this->process` for the life of the client. The old reason text
         // ("fclose + a bare `proc_close()`") predates the code: `disconnect()`
-        // has since delegated to ProcessReaper and, since E699, passes the
+        // has since delegated to sugar-core BoundedShutdown and, since E699, passes the
         // ProcessContainment group id, so the CLI's grandchildren die with it.
         // What still stands is the half this row licenses: the child inherits
         // whatever fds ≥3 the host had open at spawn (the spawn rides the
@@ -212,7 +212,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         'Tools/Sandbox/EgressProxyProcess.php::start' => [
             'count' => 1,
             'reason' => 'egress proxy child held in $this->process for the launch; stop() and '
-                . '__destruct() run ProcessReaper::terminateAndClose over the group recorded at '
+                . '__destruct() run BoundedShutdown::terminateBounded over the group recorded at '
                 . 'spawn time (ProcessContainment::groupId, ISS-014), and the child independently '
                 . 'exits on stdin EOF or a parent-pid change — the proxy socket can never outlive '
                 . 'the launch that created it',
@@ -677,7 +677,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
     private const SHORT_VIA_HELPER = [
         'Providers/ClaudeCodeProvider.php::completeStream' => [
             'count' => 1,
-            'reason' => 'reaped by ProcessReaper::terminateAndClose() in a generator finally, '
+            'reason' => 'reaped by BoundedShutdown::terminateBounded() in a generator finally, '
                 . 'which runs on normal completion, on an exception, and on a consumer that '
                 . 'breaks out of the foreach and destroys the generator mid-body. The short '
                 . 'verdict rests entirely on the CLOSING_HELPERS row for that helper; if that '
@@ -687,7 +687,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         'Providers/CodexProvider.php::completeStream' => [
             'count' => 1,
             'reason' => 'same shape as the ClaudeCodeProvider sibling row above — reaped by '
-                . 'ProcessReaper::terminateAndClose() in the generator finally (with the '
+                . 'BoundedShutdown::terminateBounded() in the generator finally (with the '
                 . 'containment group id), so the short verdict rests entirely on that '
                 . 'CLOSING_HELPERS row; if it is ever wrong this site is a long-lived exposed '
                 . 'spawn and nothing else in this file would say so.',
@@ -698,7 +698,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'method — ONE site serves read and store (store() reuses spawn(), so no '
                 . 'second proc_open is minted). Every path out of it after the successful '
                 . 'proc_open() (hit, miss, timeout) closes the two read pipes and runs '
-                . 'ProcessReaper::terminateAndClose() (with the group id recorded while the '
+                . 'BoundedShutdown::terminateBounded() (with the group id recorded while the '
                 . 'handle is alive on the timeout path), and the stdin pipe is closed on every '
                 . 'path too — written-then-closed on the store arm, closed-unwritten on read. '
                 . 'The pre-spawn missing-binary return '
@@ -713,7 +713,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'finally below is what this row is keyed on): every path out of a successful '
                 . 'proc_open() — normal EOF end, wall-clock expiry, a throw from the loop\'s own '
                 . 'bookkeeping — closes the parent bridge end and the three pipes and runs '
-                . 'ProcessReaper::terminateAndClose() with the group id recorded while the '
+                . 'BoundedShutdown::terminateBounded() with the group id recorded while the '
                 . 'child was alive, so TERM reaches the script\'s whole process group before '
                 . 'KILL and proc_close always follows. The pre-spawn refusals (missing chdir, '
                 . 'unresolvable jail binary, staging failure, socketpair failure) hold no '
@@ -2268,7 +2268,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         class Fixture {
             public function viaHelper(array $pipes): void {
                 $h = proc_open('x', [2 => ['pipe', 'w']], $pipes);
-                ProcessReaper::terminateAndClose($h);
+                BoundedShutdown::terminateBounded($h);
             }
         }
         PHP;
@@ -2298,7 +2298,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'the fixture must be SHORT, or it is not exercising the promotion at all.',
         );
         self::assertSame(
-            'processreaper::terminateandclose',
+            'boundedshutdown::terminatebounded',
             $viaHelper[0]['closedBy'],
             'a short verdict produced by a CLOSING_HELPERS row must name the row. With this '
                 . 'null, the roster below can only ever be empty and the assertion over the '

@@ -9,13 +9,13 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\App\StatusLineResultMsg;
 use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ToolIpcFiles;
 
 /**
@@ -998,13 +998,12 @@ final class StatusLineCommand
      */
     private static function terminateAndEscalate($process): void
     {
-        // E676: the proc_open families share ProcessReaper::escalate. It is
-        // NOT package-wide: ProcessContainment::killTree()/killTreeAsync()
-        // run sugar-core's BoundedShutdown ladder, so a rung change made
-        // here does not reach frozen-tree kills. The 0.5 s budgets are this
-        // segment's pinned worst-case arithmetic (see REFRESH_SECONDS'
-        // docblock) and stay at the call site.
-        ProcessReaper::escalate(
+        // E676: the proc_open families share sugar-core's
+        // BoundedShutdown::escalate, the same ladder that
+        // ProcessContainment::killTree()/killTreeAsync() run. The 0.5 s
+        // budgets are this segment's pinned worst-case arithmetic (see
+        // REFRESH_SECONDS' docblock) and stay at the call site.
+        BoundedShutdown::escalate(
             static function (int $signal) use ($process): void {
                 ProcessContainment::terminate($process, $signal);
             },

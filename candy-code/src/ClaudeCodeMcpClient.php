@@ -7,8 +7,8 @@ namespace SugarCraft\Code;
 use RuntimeException;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\ExchangeLock;
 use SugarCraft\McpClient\McpMessage;
 use SugarCraft\McpClient\RequestIdSequence;
@@ -1425,7 +1425,7 @@ final class ClaudeCodeMcpClient
      * WHY THE PIPES ARE CLOSED FIRST, and why that is not by itself enough. A
      * stdio MCP server's documented exit signal is EOF on its stdin, so closing
      * the pipes gives a well-behaved server the chance to leave on its own — and
-     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndClose()}
+     * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
      * checks `proc_get_status()` before signalling, so a server that takes it
      * pays no signal and no part of the escalation budget. A server that ignores
      * EOF is exactly the case the ladder below exists for; EOF is a courtesy, not
@@ -1488,7 +1488,7 @@ final class ClaudeCodeMcpClient
         // as StdioMcpServer::stop() does — this child is a CLI that spawns
         // grandchildren of its own, and a bare pid signal would orphan them
         // with the pipes already closed.
-        ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
+        BoundedShutdown::terminateBounded($this->process, groupPid: ProcessContainment::groupId($this->process));
         $this->lock?->destroy();
         $this->lock = null;
 

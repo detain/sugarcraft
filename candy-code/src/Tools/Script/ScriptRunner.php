@@ -6,8 +6,8 @@ namespace SugarCraft\Code\Tools\Script;
 
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The engine half of Code Mode: run one model-written PHP script in a child
@@ -340,7 +340,7 @@ final class ScriptRunner
             // self-exited script's surviving children ride the group kill
             // too. The id rides the standard ladder (TERM, bounded wait,
             // KILL, bounded wait), then proc_close.
-            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process)) ?? -1;
+            $exitCode = BoundedShutdown::terminateBounded($process, groupPid: ProcessContainment::groupId($process)) ?? -1;
             self::discardScratch($scratch);
         }
 

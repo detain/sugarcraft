@@ -195,7 +195,7 @@ final class AgentWorkerPool
     public const RESULT_DIR_PREFIX = 'sc_pool_';
 
     /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
-    private const WAIT_POLL_INTERVAL_USEC = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
+    private const WAIT_POLL_INTERVAL_USEC = \SugarCraft\Core\Util\Proc\BoundedShutdown::POLL_INTERVAL_US;
 
     /**
      * {@see reapTerminatedWorkers()}'s bounded WNOHANG window: 20 attempts x
@@ -208,14 +208,14 @@ final class AgentWorkerPool
      */
     private const REAP_ATTEMPTS = 20;
 
-    private const REAP_POLL_MICROSECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
+    private const REAP_POLL_MICROSECONDS = \SugarCraft\Core\Util\Proc\BoundedShutdown::POLL_INTERVAL_US;
 
     /**
      * How long {@see terminateWorker()} lets a cancelled worker's tree act on
      * SIGTERM before it SIGKILLs what is left. Spent only on a member that
      * ignores or traps the signal — a tree that dies on it ends the wait at
      * once — and on the caller's thread, so it is short: ScriptHook's and
-     * StatusLineCommand's 0.5 s, not ProcessReaper's 1.0 s default.
+     * StatusLineCommand's 0.5 s, not BoundedShutdown's 1.0 s default.
      */
     private const TERMINATE_GRACE_SECONDS = 0.5;
 

@@ -80,7 +80,8 @@ final class ChildLifetimeScanner
      *
      * MEASURED, not anticipated. Scanning a concurrent lane's `src/` with this
      * class showed exactly that: `Providers/ClaudeCodeProvider.php` spells its
-     * reap `ProcessReaper::terminateAndClose($process)` where this tree still
+     * reap through a bounded-ladder helper (today
+     * `BoundedShutdown::terminateBounded($process)`) where this tree still
      * spells `proc_close($process)`, and the site went from short-lived to
      * "nothing returns, stores or proc_close()s it" on a change that added a
      * bounded SIGTERM->SIGKILL ladder.
@@ -97,9 +98,10 @@ final class ChildLifetimeScanner
      * WHAT THIS DOC-BLOCK USED TO CLAIM AND WHY THE WARNING IS NOW TWO
      * ROSTERS. It said "a row here is a claim that the helper really closes"
      * and left it at that, and the very commit that wrote the sentence also
-     * added `processreaper::reapifexited` underneath it. WHAT IS TRUE NOW,
-     * read off that helper's own source rather than its name:
-     * `ProcessReaper::reapIfExited()` waits WITHOUT signalling and, when the
+     * added the launcher reap (`reapIfExited`, today
+     * `boundedshutdown::reapifexited`) underneath it. WHAT IS TRUE NOW, read
+     * off that helper's own source rather than its name:
+     * `BoundedShutdown::reapIfExited()` waits WITHOUT signalling and, when the
      * child is still running at the end of the budget, `return null`s with
      * the handle untouched - by design, for a launcher that must not SIGTERM
      * the process mid-double-fork. It is a conditional best-effort reap, so
@@ -119,11 +121,6 @@ final class ChildLifetimeScanner
      * @var array<string, string>
      */
     public const CLOSING_HELPERS = [
-        'processreaper::terminateandclose'
-            => 'SIGTERM, a polled grace period, signal 9, then proc_close() - the only early '
-                . 'return is the !is_resource() idempotency guard, where there is no live handle '
-                . 'to close in the first place. Every path that is handed a live child ends in '
-                . 'proc_close().',
         'boundedshutdown::terminatebounded'
             => 'sugar-core/src/Util/Proc/BoundedShutdown.php: skips signals when the child has '
                 . 'already exited, else SIGTERM, a polled grace period, signal 9 and a bounded '
@@ -150,11 +147,12 @@ final class ChildLifetimeScanner
      * @var array<string, string>
      */
     public const BEST_EFFORT_REAPERS = [
-        'processreaper::reapifexited'
-            => 'waits WITHOUT signalling and returns null with the handle untouched when the '
-                . 'child is still running at the end of the budget, so it closes on some paths '
-                . 'and not others. Deliberate: it exists for a launcher that must not signal a '
-                . 'process in the middle of a double fork.',
+        'boundedshutdown::reapifexited'
+            => 'sugar-core/src/Util/Proc/BoundedShutdown.php: waits WITHOUT signalling and '
+                . 'returns null with the handle untouched when the child is still running at the '
+                . 'end of the budget, so it closes on some paths and not others. Deliberate: it '
+                . 'exists for a launcher that must not signal a process in the middle of a double '
+                . 'fork.',
     ];
 
     /** `proc_open` appearing as something other than a direct global call. */
@@ -722,7 +720,7 @@ final class ChildLifetimeScanner
      * {@see BEST_EFFORT_REAPERS} members return an exit status too. Whether
      * they reap on every path is a question about the CHILD's lifetime, which
      * {@see classifyLocal()} asks separately with its own branch; conflating
-     * the two here would make `return ProcessReaper::reapIfExited($h);` read
+     * the two here would make `return BoundedShutdown::reapIfExited($h);` read
      * as the handle escaping, which it is not.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens

@@ -113,7 +113,7 @@ final class Runtime
      */
     private const REAP_ATTEMPTS = 20;
 
-    private const REAP_POLL_MICROSECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
+    private const REAP_POLL_MICROSECONDS = \SugarCraft\Core\Util\Proc\BoundedShutdown::POLL_INTERVAL_US;
 
     /**
      * The one-line authority preamble rendered inside every

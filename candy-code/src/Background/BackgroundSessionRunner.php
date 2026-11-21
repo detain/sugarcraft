@@ -16,8 +16,8 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Usage;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The agent loop that a `/bg` background session actually runs.
@@ -1451,7 +1451,7 @@ final class BackgroundSessionRunner
      * the constant here would make the shape wrong to copy. Same literal, and
      * the same reason, as
      * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
-     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndAwaitExit()}.
+     * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateAndAwaitExit()}.
      *
      * `\SIGTERM` IS NAMED PLAINLY, and that is the one story this file tells
      * about ext-pcntl rather than two. It was written `\defined('SIGTERM') ?
@@ -1467,7 +1467,7 @@ final class BackgroundSessionRunner
      * {@see signalWorker()}.
      *
      * E676: the rung SEQUENCE (term, bounded window, kill, bounded window)
-     * is {@see \SugarCraft\Code\Support\ProcessReaper::escalate()} now —
+     * is {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::escalate()} now —
      * one ladder for every family; what stays HERE are this family's means
      * ({@see signalWorker()} + {@see workerGone()}), its pinned 2.0 s
      * budgets, and its post-mortem log lines. The literal 15 escalate()
@@ -1482,7 +1482,7 @@ final class BackgroundSessionRunner
      */
     private function stopWorker(int $worker): void
     {
-        $reaped = ProcessReaper::escalate(
+        $reaped = BoundedShutdown::escalate(
             function (int $signal) use ($worker): void {
                 $this->signalWorker($worker, $signal);
             },
@@ -1521,7 +1521,7 @@ final class BackgroundSessionRunner
      * ONE bounded `WNOHANG` poll — true when the worker is reaped or gone.
      *
      * The window that used to loop here is a rung budget of
-     * {@see ProcessReaper::escalate()} since E676; this answers a single poll
+     * {@see BoundedShutdown::escalate()} since E676; this answers a single poll
      * and never waits. Never an unflagged `pcntl_waitpid()`, for the reason
      * {@see \SugarCraft\Code\Runtime::reapKilled()} gives at its own call
      * site: the wait is only bounded if the signal landed, and whether it

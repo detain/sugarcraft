@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Code\Attachments\FileMentions;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Read an image off the host clipboard into a file (Ctrl+V).
@@ -278,7 +279,7 @@ final class ClipboardImage
 
         $exitCode = self::waitForExit($process, microtime(true) + self::TIMEOUT_SECONDS);
         if ($exitCode === null) {
-            ProcessReaper::escalate(
+            BoundedShutdown::escalate(
                 static function (int $signal) use ($process): void {
                     ProcessContainment::terminate($process, $signal);
                 },

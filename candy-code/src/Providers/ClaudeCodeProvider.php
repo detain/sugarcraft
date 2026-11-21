@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\ModelWindows;
@@ -16,7 +17,6 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
@@ -524,7 +524,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
                 }
             }
 
-            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
+            $exitCode = BoundedShutdown::terminateBounded($process, groupPid: ProcessContainment::groupId($process));
 
             // After the reap, never before: the child reads the file at
             // startup, but nothing says when that is.
