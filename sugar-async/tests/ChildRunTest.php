@@ -698,6 +698,45 @@ final class ChildRunTest extends TestCase
     }
 
     /**
+     * Regression: a group that is only readable after onSpawn's wait. The wrapper is
+     * not declared with withGroupLeader() or withSetsidWrapped(), so the group comes
+     * from the kernel read. A read taken before onSpawn runs sees the group still
+     * unset, and the leader exits at once, so the timeout kill must take the group
+     * the spawn measured after onSpawn returned, not a pre-onSpawn read.
+     */
+    public function testAGroupMeasuredAfterOnSpawnSurvivesTheLeaderExiting(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !\function_exists('posix_getpgid') || PHP_OS_FAMILY === 'Windows' || !is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, posix_getpgid, /usr/bin/setsid and a POSIX host');
+        }
+        $pidFile = tempnam(sys_get_temp_dir(), 'childrun-after-spawn-');
+        try {
+            $r = ChildRun::new(['/usr/bin/setsid', '-w', '/bin/sh', '-c', 'sleep 30 & echo $! > ' . escapeshellarg((string) $pidFile) . '; exit 0'])
+                ->withOnSpawn(static function (int $pid): void {
+                    $until = microtime(true) + 2.0;
+                    while (($group = @\posix_getpgid($pid)) !== false && $group !== $pid && microtime(true) < $until) {
+                        usleep(500);
+                    }
+                })
+                ->withExitGrace(null)
+                ->withTimeout(0.5)
+                ->run();
+
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $grandchild = (int) trim((string) file_get_contents((string) $pidFile));
+            $this->assertGreaterThan(0, $grandchild, 'the fixture never started its backgrounded part');
+            $deadline = microtime(true) + 2.0;
+            while (\posix_kill($grandchild, 0) && microtime(true) < $deadline) {
+                usleep(20000);
+            }
+            $this->assertFalse(\posix_kill($grandchild, 0), 'the group measured after onSpawn must reach the grandchild');
+        } finally {
+            @unlink((string) $pidFile);
+        }
+    }
+
+    /**
      * Regression: a cancel that lands after the probe has reaped a setsid-wrapped shell.
      * The shell exits at once and leaves a subshell and a sleep holding stdout, both in
      * its group. The subshell's line arrives a second later and cancels the run, so the

@@ -662,20 +662,24 @@ final class ChildRun
 
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
         }
-        // Read before onSpawn runs: a wrapped child's group is reliably readable only
-        // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
-        $group = $this->groupFor($proc);
         if ($this->onSpawn !== null) {
+            // Read before onSpawn runs: a wrapped child's group is reliably readable only
+            // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
+            $earlyGroup = $this->groupFor($proc);
             try {
                 ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
             } catch (\Throwable $e) {
-                self::abandonSpawn($proc, $pipes, $staged, $group, $loop);
+                self::abandonSpawn($proc, $pipes, $staged, $earlyGroup, $loop);
 
                 throw $e;
             }
         }
 
-        return [$proc, $pipes, $staged, $group];
+        // The success path measures after onSpawn, where a caller such as
+        // ProcessContainment::awaitGroupLeader() has waited for the wrapper to lead its
+        // group; a read taken before that wait can miss the group and leave a
+        // backgrounded job unreached by the kill rungs.
+        return [$proc, $pipes, $staged, $this->groupFor($proc)];
     }
 
     /**
