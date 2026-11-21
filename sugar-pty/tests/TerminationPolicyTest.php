@@ -143,6 +143,29 @@ final class TerminationPolicyTest extends TestCase
         $this->assertSame(31, TerminationPolicy::new()->withSignal(31)->signal);
     }
 
+    /**
+     * Only Linux is known to reach 64; every other family is held to the
+     * POSIX-shared 1..31, so a BSD host never accepts a signal its kernel
+     * would refuse at teardown.
+     *
+     * @return iterable<string, array{string, int}>
+     */
+    public static function signalCeilings(): iterable
+    {
+        yield 'Linux' => ['Linux', 64];
+        yield 'Darwin' => ['Darwin', 31];
+        yield 'BSD' => ['BSD', 31];
+        yield 'Solaris' => ['Solaris', 31];
+    }
+
+    #[DataProvider('signalCeilings')]
+    public function testTheSignalCeilingFollowsTheOsFamily(string $family, int $max): void
+    {
+        $maxSignal = new \ReflectionMethod(TerminationPolicy::class, 'maxSignal');
+
+        $this->assertSame($max, $maxSignal->invoke(null, $family));
+    }
+
     public function testTheLibcGroupProbeTellsALiveGroupFromAGoneOne(): void
     {
         [$child, $grandchild] = $this->spawnGroupWithGrandchild();
@@ -328,6 +351,24 @@ final class TerminationPolicyTest extends TestCase
         $this->assertLessThan(self::GRACE + self::KILL_GRACE + self::SLACK, $elapsed);
     }
 
+    /**
+     * The child ignores SIGHUP but dies on SIGTERM, so it ends before the
+     * grace only if the configured first signal is the one delivered. A
+     * deliverer that sent SIGHUP on rung 15 would wait out the whole grace
+     * and leave the end to SIGKILL.
+     */
+    public function testApplyDeliversTheConfiguredFirstSignal(): void
+    {
+        $child = $this->spawnHangupTrapper();
+        $policy = $this->fastPolicy()->withSignal(15)->withGraceSeconds(5.0);
+
+        $started = \hrtime(true);
+        $this->assertTrue($policy->apply($child));
+        $elapsed = (\hrtime(true) - $started) / 1e9;
+
+        $this->assertLessThan(5.0, $elapsed, 'SIGTERM, not SIGHUP, must be the first signal sent');
+    }
+
     public function testApplyEndsAChildThatHonorsHangupBeforeTheGraceRunsOut(): void
     {
         $child = $this->spawnReady('echo ready; exec sleep 30');
@@ -392,6 +433,30 @@ final class TerminationPolicyTest extends TestCase
         $this->assertTrue($settled, 'the async ladder must resolve true once SIGKILL lands');
         $this->assertTrue($child->exited());
         $this->assertGreaterThanOrEqual(self::GRACE, $elapsed);
+    }
+
+    /**
+     * The async probe must hold the ladder open while a grandchild that
+     * ignores SIGHUP outlives the shell, so the group SIGKILL rung still
+     * reaches it.
+     */
+    public function testApplyAsyncGroupReachKillsAGrandchildThatTrapsHangup(): void
+    {
+        [$child, $grandchild] = $this->spawnGroupWithGrandchild();
+        $loop = new StreamSelectLoop();
+        $settled = null;
+
+        $safety = $loop->addTimer(self::GRACE + self::KILL_GRACE + self::SLACK, static fn () => $loop->stop());
+        $this->fastPolicy()->applyAsync($child, $loop)->then(static function (bool $gone) use (&$settled, $loop, $safety): void {
+            $settled = $gone;
+            $loop->cancelTimer($safety);
+        });
+        $loop->run();
+
+        $this->assertTrue($settled, 'the async ladder must resolve true once the group is gone');
+        $this->assertTrue($child->exited());
+        $this->assertTrue(BoundedShutdown::groupEmpty($child->pid()), 'the grandchild must die with the group');
+        $this->assertFalse(self::liveNonZombie($grandchild));
     }
 
     public function testCancellingApplyAsyncStopsTheLadder(): void

@@ -351,10 +351,18 @@ final class TerminationPolicy
      * The host's highest signal number: SIGRTMAX on Linux, NSIG - 1 on
      * Darwin. An out-of-range signal fails here, not as a kill() error at
      * teardown time.
+     *
+     * Any other family (the BSDs, Solaris) gets 31, the range every POSIX
+     * host shares: their ceilings differ per OS (OpenBSD stops at 32), and a
+     * too-high guess would let a signal through that kill() then refuses,
+     * which the ladder reads as "not gone" until both budgets run out.
      */
-    private static function maxSignal(): int
+    private static function maxSignal(string $osFamily = \PHP_OS_FAMILY): int
     {
-        return \PHP_OS_FAMILY === 'Darwin' ? 31 : 64;
+        return match ($osFamily) {
+            'Linux' => 64,
+            default => 31,
+        };
     }
 
     /** @param array<string, mixed> $changes */
