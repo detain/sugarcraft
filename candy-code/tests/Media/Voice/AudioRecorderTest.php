@@ -435,6 +435,50 @@ final class AudioRecorderTest extends TestCase
         self::assertFalse(AudioRecorder::stopping());
     }
 
+    public function testTeardownAllKillsTheChildOfAStopStillPendingAtExit(): void
+    {
+        $this->recorderAdoptFakeHome();
+        // INT and TERM ignored, so the stop Cmd's ladder cannot finish before
+        // the exit path runs: the child sits only in the pending-stop set.
+        $this->recorderPlantShim('arecord', "trap '' INT TERM; sleep 30");
+
+        $result = AudioRecorder::start(VoiceConfig::fromSettings([
+            'voice.baseUrl' => 'https://example.invalid/v1',
+        ]));
+        self::assertNotNull($result['recording']);
+        $recording = $result['recording'];
+
+        $live = new ReflectionProperty(AudioRecorder::class, 'live');
+        $process = $live->getValue()[$recording->path]['process'] ?? null;
+        self::assertIsResource($process);
+        $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+        self::assertGreaterThan(0, $pid);
+
+        self::assertNotSame('', $this->recorderWaitFor(
+            fn (): string => (string) (@\file_get_contents((string) $this->recorderBinDir . '/arecord.log') ?: ''),
+            2.0,
+        ));
+        \usleep(100_000);
+
+        // The Cmd runs (SIGINT sent, poll timer armed) but the loop never
+        // ticks again, as at process exit.
+        $async = AudioRecorder::stop($recording)();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+        self::assertSame([], $live->getValue(), 'the take left the live set, so only the stopping set holds it');
+        self::assertTrue(AudioRecorder::stopping());
+        self::assertTrue(self::recorderIsLiveProc($pid), 'the INT-ignoring child outlived the stop signal');
+
+        AudioRecorder::teardownAll();
+
+        self::assertFalse(AudioRecorder::stopping(), 'the exit path forgets the pending stop');
+        self::assertFalse(\is_resource($process), 'the exit path closed the pending child handle');
+        self::assertFalse(\file_exists('/proc/' . $pid) && self::recorderIsLiveProc($pid), 'the pending recorder is gone');
+        self::assertFileExists($recording->path, 'a take whose stop was issued keeps its file');
+
+        // The stop Cmd's armed poll sees the closed handle as gone and settles.
+        self::assertInstanceOf(VoiceTakeStoppedMsg::class, $this->recorderRunUntilSettled($async));
+    }
+
     public function testAVanishedBinaryIsRefusedAtProbeNotSpawnedBlind(): void
     {
         $this->recorderAdoptFakeHome();
