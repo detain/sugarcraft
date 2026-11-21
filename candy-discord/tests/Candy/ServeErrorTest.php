@@ -76,4 +76,27 @@ final class ServeErrorTest extends TestCase
         self::assertSame($cause, $error->getPrevious());
         self::assertSame('candy-code refused the request', $error->userReason());
     }
+
+    public function testALibraryRefusalKeepsItsKindAndRetryHint(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::of(
+            \SugarCraft\McpClient\Protocol\ErrorCode::Busy,
+            'session is busy',
+            null,
+            ['retryAfterMs' => 500],
+        );
+        $error = ServeError::fromHost('session.send', $refusal);
+
+        self::assertSame('busy', $error->kind);
+        self::assertSame(['kind' => 'busy', 'retryable' => true, 'retryAfterMs' => 500], $error->data);
+    }
+
+    public function testALibraryNotFoundRefusalKeepsItsKind(): void
+    {
+        $refusal = \SugarCraft\McpClient\Protocol\RpcError::notFound('gone', 'session_not_found');
+        $error = ServeError::fromHost('session.get', $refusal);
+
+        self::assertSame('session_not_found', $error->kind);
+        self::assertSame(['kind' => 'session_not_found'], $error->data);
+    }
 }

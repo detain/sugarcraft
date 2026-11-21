@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Candy;
 
-use SugarCraft\Plugins\Host\RefusedCall;
+use SugarCraft\McpClient\Protocol\Refusal;
 
 /**
  * A serve-side failure with its kind in front: callers branch on the kind, which for a refused
@@ -34,7 +34,7 @@ class ServeError extends \RuntimeException
         if ($e instanceof self) {
             return $e;
         }
-        if ($e instanceof RefusedCall) {
+        if ($e instanceof Refusal) {
             return new self($e->refusalKind(), "channel-bridge: {$method}: " . $e->getMessage(), $e->refusalData(), $e);
         }
 
