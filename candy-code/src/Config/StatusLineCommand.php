@@ -665,7 +665,8 @@ final class StatusLineCommand
      * legacy closed pipe.
      *
      * WHY `@` ON THE PAYLOAD PATH — THE EARLY-EXIT CONTRACT, borrowed from
-     * {@see \SugarCraft\Code\Hooks\ScriptHook}'s stdin pump: the ordinary
+     * the stdin pump that {@see \SugarCraft\Code\Hooks\ScriptHook} once ran by
+     * hand, before its child moved to ChildRun: the ordinary
      * status command (`git branch --show-current`) never reads stdin and is
      * gone before the bytes are consumed. PHP ignores SIGPIPE, so the dead
      * reader answers the write (or the close's flush of still-buffered

@@ -1406,8 +1406,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      * and the kill ladder. What this method adds is the hook's own wiring:
      *
      * - NO EXIT GRACE: a backgrounded grandchild that keeps the output pipes
-     *   open holds the run to its deadline, where the group is killed and the
-     *   hook is denied as it always was — a hook has not answered until its
+     *   open holds the run to its deadline on POSIX, where the group is killed
+     *   and the hook is denied as it always was; the Windows runtime ends the
+     *   read shortly after the exit instead. A hook has not answered until its
      *   output is done.
      * - THE GROUP: a `setsid -w` wrapper leads its own process group, so the
      *   deadline kill reaches whatever the hook backgrounded. On Windows the
