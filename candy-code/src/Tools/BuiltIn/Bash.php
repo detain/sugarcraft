@@ -68,7 +68,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * warning — so the bound applies during capture as well as after it (see
      * {@see CapturesProcessOutput::runCaptured()}). Zero or negative no longer
      * means unbounded: capture falls back to {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}
-     * per stream, and only the post-capture trim is skipped.
+     * per stream, and the returned result is clipped to that same 8 MiB ceiling.
      *
      * $includeGitInstructions, $commitAttribution and $prAttribution are the
      * `includeGitInstructions` and `attribution` layered settings (step 0.3),
