@@ -407,9 +407,9 @@ final class ChildRun
             return self::cancelledResult();
         }
 
-        [$proc, $pipes, $staged, $group] = $this->spawn();
+        [$proc, $pipes, $staged, $group, $status] = $this->spawn();
         try {
-            return $this->collect($proc, $pipes, $group);
+            return $this->collect($proc, $pipes, $group, $status);
         } finally {
             // The collect() above reaps the child before it returns, so the staged stdin is no longer read.
             if ($staged !== null) {
@@ -441,13 +441,13 @@ final class ChildRun
         }
 
         try {
-            [$proc, $pipes, $staged, $group] = $this->spawn($loop);
+            [$proc, $pipes, $staged, $group, $status] = $this->spawn($loop);
         } catch (\Throwable $e) {
             return reject($e);
         }
 
         $deferred = new Deferred();
-        $this->buildLaunch($loop, $proc, $pipes, $staged, $group, $deferred)->start();
+        $this->buildLaunch($loop, $proc, $pipes, $staged, $group, $deferred, $status)->start();
 
         return $deferred->promise();
     }
@@ -460,6 +460,7 @@ final class ChildRun
      *
      * @param resource $proc
      * @param array<int, resource> $pipes
+     * @param null|ChildStatus $status  The spawn's status recorder, or null for a fresh one
      */
     private function buildLaunch(
         LoopInterface $loop,
@@ -468,6 +469,7 @@ final class ChildRun
         ?string $staged,
         ?int $group,
         Deferred $deferred,
+        ?ChildStatus $status = null,
     ): ChildRunLaunch {
         return new ChildRunLaunch(
             $loop,
@@ -488,6 +490,7 @@ final class ChildRun
             $this->setsidWrapped,
             $this->terminateGrace,
             $this->killGrace,
+            $status,
         );
     }
 
@@ -497,31 +500,33 @@ final class ChildRun
      * @param resource $proc
      * @param array<int, resource> $pipes
      */
-    private function collect($proc, array $pipes, ?int $group): ChildResult
+    private function collect($proc, array $pipes, ?int $group, ChildStatus $status): ChildResult
     {
         $clock = Clock::monotonicSeconds(...);
         $deadline = $clock() + $this->timeout;
 
-        // The probe keeps the status it reads: a proc_get_status() after the
-        // child has been reaped reports -1, so the exit code is taken here.
+        // The probe reads through the spawn's recorder, which keeps the status of the
+        // read that first saw the exit: that read may have been a spawn-time one, and a
+        // proc_get_status() after the reap reports neither the code nor the signal.
         // The pid is kept with it: a reaped setsid wrapper names the group its job stayed in.
         $exitCode = null;
         $signal = null;
         $spawnPid = 0;
-        $running = static function () use ($proc, &$exitCode, &$signal, &$spawnPid): bool {
+        $running = static function () use ($status, &$exitCode, &$signal, &$spawnPid): bool {
             if ($exitCode !== null) {
                 return false;
             }
-            $status = @\proc_get_status($proc);
-            if (!\is_array($status)) {
-                return false;
-            }
-            $spawnPid = (int) $status['pid'];
-            if ($status['running'] === true) {
+            $read = $status->read();
+            $spawnPid = $status->pid();
+            if ($read['running'] === true) {
                 return true;
             }
-            $exitCode = (int) $status['exitcode'];
-            $signal = self::signalOf($status);
+            if (!$status->exited()) {
+                // The handle answered nothing: gone, with no exit to report.
+                return false;
+            }
+            $exitCode = $status->exitCode();
+            $signal = $status->signal();
 
             return false;
         };
@@ -610,7 +615,7 @@ final class ChildRun
             } catch (\Throwable $e) {
                 self::closeAll($pipes);
                 $pid = $pidOf();
-                $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
+                $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
                 throw $e;
             }
 
@@ -626,13 +631,13 @@ final class ChildRun
                     return self::result($r, $exitCode, ChildResult::EXITED, $signal);
                 }
                 try {
-                    $code = self::awaitExitAfterClose($proc, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat, $signal);
+                    $code = self::awaitExitAfterClose($proc, $status, $deadline, $clock, $this->idleTimeout, $lastActivity, $stop, $beat, $signal);
                 } catch (\Throwable $e) {
                     // The heartbeat threw while the child still ran: it is killed and reaped
                     // before the throw leaves, as in the pipe phase above. The wait only
                     // closes the handle on the exit it returns, so the handle is still open.
                     $pid = $pidOf();
-                    $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
+                    $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
                     throw $e;
                 }
                 if ($code !== null) {
@@ -641,21 +646,21 @@ final class ChildRun
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
                 $pid = $pidOf();
-                $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
-                $status = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
+                $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+                $outcome = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
 
-                return self::result($r, $code, $status);
+                return self::result($r, $code, $outcome);
             }
 
             $pid = $pidOf();
-            $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid);
-            $status = match (true) {
+            $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+            $outcome = match (true) {
                 $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
                 $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
                 default => ChildResult::PIPE_FAILED,
             };
 
-            return self::result($r, $exitCode ?? $code, $status, $signal);
+            return self::result($r, $exitCode ?? $code, $outcome, $signal);
         } finally {
             $cancelSubscription?->unsubscribe();
         }
@@ -668,14 +673,14 @@ final class ChildRun
      *
      * @param resource $proc
      */
-    private function killAndReap($proc, ?int $group, ?int $wrapper, int $pid): ?int
+    private function killAndReap($proc, ?int $group, ?int $wrapper, int $pid, ChildStatus $status): ?int
     {
         try {
             if ($this->onKill !== null && $pid > 0) {
                 ($this->onKill)($pid);
             }
         } finally {
-            $code = BoundedShutdown::terminateBounded($proc, $this->terminateGrace, $this->killGrace, self::killGroup($proc, $group, $wrapper));
+            $code = BoundedShutdown::terminateBounded($proc, $this->terminateGrace, $this->killGrace, self::killGroup($proc, $group, $wrapper, $status));
         }
 
         return $code;
@@ -696,7 +701,7 @@ final class ChildRun
      * @param callable(): float $clock
      * @param null|\Closure(): void $beat  The throttled heartbeat, beaten once per slice while the wait lasts
      */
-    private static function awaitExitAfterClose($proc, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop, ?\Closure $beat = null, ?int &$signal = null): ?int
+    private static function awaitExitAfterClose($proc, ChildStatus $status, float $deadline, callable $clock, ?float $idleTimeout, float $lastActivity, ?string &$stop, ?\Closure $beat = null, ?int &$signal = null): ?int
     {
         while (true) {
             if ($stop !== null) {
@@ -706,7 +711,7 @@ final class ChildRun
                 $beat();
             }
             $remaining = max(0.0, $deadline - $clock());
-            $code = self::reapIfExited($proc, min($remaining, self::IDLE_BEAT_SECONDS), $clock, $signal);
+            $code = self::reapIfExited($proc, $status, min($remaining, self::IDLE_BEAT_SECONDS), $clock, $signal);
             if ($code !== null) {
                 return $code;
             }
@@ -723,21 +728,22 @@ final class ChildRun
      * BoundedShutdown::reapIfExited() for a child whose output has closed, with the
      * signal kept. The poll that reaps the child reads a signal death as exit code
      * -1 and carries the number only in termsig, and proc_close() after that poll
-     * reports -1 again, so the number has to be taken from the poll itself.
+     * reports -1 again, so the number is taken from the recorder, which kept the
+     * status of whichever read saw the exit first.
      *
      * @param resource $proc
      * @param callable(): float $clock
      */
-    private static function reapIfExited($proc, float $budget, callable $clock, ?int &$signal): ?int
+    private static function reapIfExited($proc, ChildStatus $status, float $budget, callable $clock, ?int &$signal): ?int
     {
         $until = $clock() + $budget;
         while (true) {
-            $status = \proc_get_status($proc);
-            if ($status['running'] !== true) {
-                $signal = self::signalOf($status);
+            $read = $status->read();
+            if ($read['running'] !== true) {
+                $signal = $status->signal();
                 \proc_close($proc);
 
-                return (int) $status['exitcode'];
+                return $status->exitCode() ?? (int) $read['exitcode'];
             }
             if ($clock() >= $until) {
                 return null;
@@ -747,27 +753,16 @@ final class ChildRun
     }
 
     /**
-     * The number of the signal that ended a child, from a status poll that saw
-     * the child die of one; null for an exit, or a status that carries no signal.
-     *
-     * @param array<string, mixed> $status a proc_get_status() result
-     */
-    private static function signalOf(array $status): ?int
-    {
-        if (($status['signaled'] ?? false) !== true || !isset($status['termsig'])) {
-            return null;
-        }
-
-        return (int) $status['termsig'];
-    }
-
-    /**
      * The spawn: the child's stdin is a pipe, or on the Windows runtime a staged
      * file when there is a payload. Returns the process, its pipes (no key 0 when
      * the stdin is a file) and the staged file to remove once the child is reaped.
      * A launch passes its loop, so an abandoned child is reaped on a timer.
      *
-     * @return array{0: resource, 1: array<int, resource>, 2: ?string, 3: ?int}
+     * The last element is the child's status recorder. Every status read from here on
+     * goes through it, the spawn's own group and pid reads included, so a child that
+     * dies before the run starts reading keeps the signal that ended it.
+     *
+     * @return array{0: resource, 1: array<int, resource>, 2: ?string, 3: ?int, 4: ChildStatus}
      */
     private function spawn(?LoopInterface $loop = null): array
     {
@@ -802,14 +797,15 @@ final class ChildRun
 
             throw new \RuntimeException('ChildRun: could not start ' . $this->argv[0]);
         }
+        $status = new ChildStatus($proc);
         if ($this->onSpawn !== null) {
             // Read before onSpawn runs: a wrapped child's group is reliably readable only
             // while the child is alive, and abandonSpawn() needs it if onSpawn throws.
-            $earlyGroup = $this->groupFor($proc);
+            $earlyGroup = $this->groupFor($status);
             try {
-                ($this->onSpawn)((int) (proc_get_status($proc)['pid'] ?? 0));
+                ($this->onSpawn)($status->pid());
             } catch (\Throwable $e) {
-                self::abandonSpawn($proc, $pipes, $staged, $earlyGroup, $loop);
+                self::abandonSpawn($proc, $pipes, $staged, $earlyGroup, $loop, $status);
 
                 throw $e;
             }
@@ -819,7 +815,7 @@ final class ChildRun
         // ProcessContainment::awaitGroupLeader() has waited for the wrapper to lead its
         // group; a read taken before that wait can miss the group and leave a
         // backgrounded job unreached by the kill rungs.
-        return [$proc, $pipes, $staged, $this->groupFor($proc)];
+        return [$proc, $pipes, $staged, $this->groupFor($status), $status];
     }
 
     /**
@@ -835,8 +831,9 @@ final class ChildRun
      * @param resource $proc
      * @param array<int, resource> $pipes
      */
-    private static function abandonSpawn($proc, array $pipes, ?string $staged, ?int $group = null, ?LoopInterface $loop = null): void
+    private static function abandonSpawn($proc, array $pipes, ?string $staged, ?int $group = null, ?LoopInterface $loop = null, ?ChildStatus $status = null): void
     {
+        $status ??= new ChildStatus($proc);
         foreach ($pipes as $pipe) {
             if (is_resource($pipe)) {
                 fclose($pipe);
@@ -844,14 +841,14 @@ final class ChildRun
         }
         // The spawn-time read can precede the wrapper's own setsid, so the kill rung's
         // live fallback is what reaches a group the child only now leads.
-        $target = self::killGroup($proc, $group);
+        $target = self::killGroup($proc, $group, null, $status);
         if ($target !== null && \function_exists('posix_kill')) {
             @\posix_kill(-$target, 9);
         }
         @proc_terminate($proc, 9);
 
         if ($loop !== null) {
-            self::reapAbandonedOnLoop($loop, $proc, $staged);
+            self::reapAbandonedOnLoop($loop, $proc, $staged, $status);
 
             return;
         }
@@ -871,20 +868,20 @@ final class ChildRun
      *
      * @param resource $proc
      */
-    private static function reapAbandonedOnLoop(LoopInterface $loop, $proc, ?string $staged): void
+    private static function reapAbandonedOnLoop(LoopInterface $loop, $proc, ?string $staged, ChildStatus $status): void
     {
         $deadline = Clock::monotonicSeconds() + BoundedShutdown::KILL_GRACE_SECONDS;
         $timer = null;
         $timer = $loop->addPeriodicTimer(
             self::ABANDON_POLL_SECONDS,
-            static function () use (&$timer, $loop, $proc, $staged, $deadline): void {
+            static function () use (&$timer, $loop, $proc, $staged, $deadline, $status): void {
                 if (!is_resource($proc)) {
                     $loop->cancelTimer($timer);
 
                     return;
                 }
 
-                $gone = proc_get_status($proc)['running'] === false;
+                $gone = !$status->running();
                 if (!$gone && Clock::monotonicSeconds() < $deadline) {
                     return;
                 }
@@ -912,20 +909,21 @@ final class ChildRun
      * its group, and a group measured after the exit is no longer there to read.
      * An unwrapped child never leads a group, so this stays null for it.
      *
-     * @param resource $proc
+     * Both reads go through the recorder: a child that died just now is reaped by the
+     * read, and its exit (with the signal) must be kept, not thrown away here.
      */
-    private function groupFor($proc): ?int
+    private function groupFor(ChildStatus $status): ?int
     {
         if ($this->groupPid !== null) {
             return $this->groupPid;
         }
         if ($this->groupLeader) {
-            $pid = (int) (proc_get_status($proc)['pid'] ?? 0);
+            $pid = $status->pid();
 
             return $pid > 0 ? $pid : null;
         }
 
-        return Containment::groupId($proc);
+        return $status->groupId();
     }
 
     /**
@@ -936,11 +934,14 @@ final class ChildRun
      * reaped child answers neither, so the spawn-time value or the wrapper pid is the
      * one that reaches its job.
      *
+     * The live read goes through the recorder, so a read that reaps the child here
+     * keeps its exit for the run.
+     *
      * @param resource $proc
      */
-    private static function killGroup($proc, ?int $measured, ?int $reapedWrapper = null): ?int
+    private static function killGroup($proc, ?int $measured, ?int $reapedWrapper = null, ?ChildStatus $status = null): ?int
     {
-        return $measured ?? Containment::groupId($proc) ?? $reapedWrapper;
+        return $measured ?? ($status ?? new ChildStatus($proc))->groupId() ?? $reapedWrapper;
     }
 
     /**

@@ -212,6 +212,36 @@ final class ChildRunTest extends TestCase
         $this->assertNull($r->signal);
     }
 
+    /** @return iterable<string, array{0: bool}> */
+    public static function groupLeaderModes(): iterable
+    {
+        yield 'unwrapped' => [false];
+        yield 'group leader' => [true];
+    }
+
+    /**
+     * Regression: a child that kills itself at once dies during the spawn's own
+     * status reads (the group read, onSpawn's pid read). Whichever read reaped it
+     * used to throw the status away, and the run's later read saw signaled=false, so
+     * the signal read null. The first read that sees the exit now keeps it for the run.
+     */
+    #[DataProvider('groupLeaderModes')]
+    public function testASignalDeathDuringTheSpawnReadsKeepsItsSignalNumber(bool $groupLeader): void
+    {
+        $this->requirePosixPipes();
+        $r = ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])
+            ->withTimeout(5.0)
+            ->withGroupLeader($groupLeader)
+            ->withOnSpawn(static function (): void {
+                usleep(150_000);
+            })
+            ->run();
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
     public function testStdinPayloadIsDeliveredToTheChild(): void
     {
         $this->requirePosixPipes();

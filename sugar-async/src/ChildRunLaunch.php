@@ -116,6 +116,9 @@ final class ChildRunLaunch
 
     private readonly bool $windows;
 
+    /** Every status read of the child; it keeps the exit of whichever read saw it first. */
+    private readonly ChildStatus $status;
+
     /**
      * @param resource $proc
      * @param array<int, resource> $pipes  0 stdin (absent when the stdin is a staged file), 1 stdout, 2 stderr
@@ -130,6 +133,7 @@ final class ChildRunLaunch
      * @param bool $setsidWrapped  The child is a setsid wrapper that may not have led its group at the spawn read. Only then does the handle's pid stand in for the group once the child has exited; an unwrapped child leads no group of its own
      * @param float $terminateGrace  Seconds the kill ladder waits after SIGTERM before SIGKILL
      * @param float $killGrace  Seconds the kill ladder waits after SIGKILL before the run settles without the exit
+     * @param null|ChildStatus $status  The spawn's status recorder, which may already hold an exit a spawn-time read saw, or null for a fresh one
      */
     public function __construct(
         private readonly LoopInterface $loop,
@@ -150,7 +154,9 @@ final class ChildRunLaunch
         private readonly bool $setsidWrapped = false,
         private readonly float $terminateGrace = BoundedShutdown::TERMINATE_GRACE_SECONDS,
         private readonly float $killGrace = BoundedShutdown::KILL_GRACE_SECONDS,
+        ?ChildStatus $status = null,
     ) {
+        $this->status = $status ?? new ChildStatus($proc);
         $this->open = [1 => $pipes[1], 2 => $pipes[2]];
         $this->stdinPipe = $pipes[0] ?? null;
         $this->capture = new ChildCapture([1, 2], [], $maxBytes, $onChunk);
@@ -159,7 +165,8 @@ final class ChildRunLaunch
 
     public function start(): void
     {
-        $this->spawnPid = (int) $this->readStatus()['pid'];
+        $this->readStatus();
+        $this->spawnPid = $this->status->pid();
         $this->latchLiveGroup();
         $this->lastActivityAt = Clock::monotonicSeconds();
         $this->timers[] = $this->loop->addTimer($this->timeout, fn () => $this->expire());
@@ -419,15 +426,17 @@ final class ChildRunLaunch
     }
 
     /**
-     * Every status read in the launch goes through here, so whichever read first sees
-     * the exit records it. The read that reaps the child is the only one that carries
-     * the signal of a signal death: a later read reports the -1 sentinel alone.
+     * Every status read in the launch goes through here, and through the spawn's
+     * recorder, so whichever read first sees the exit records it, a spawn-time read
+     * included. The read that reaps the child is the only one that carries the signal
+     * of a signal death: a later proc_get_status() reports the -1 sentinel alone, so
+     * the recorder answers every later read from the status it kept.
      *
      * @return array<string, mixed>
      */
     private function readStatus(): array
     {
-        $status = proc_get_status($this->proc);
+        $status = $this->status->read();
         if ($status['running'] !== false || $this->exited) {
             return $status;
         }
@@ -436,10 +445,8 @@ final class ChildRunLaunch
         $this->exitedAt = Clock::monotonicSeconds();
         // Raw, as ChildRun::run() keeps it: a signal-killed child reports -1, and
         // a null here would read as "could not be reaped" and hide the failure.
-        $this->exitCode = (int) $status['exitcode'];
-        if (($status['signaled'] ?? false) === true && isset($status['termsig'])) {
-            $this->signal = (int) $status['termsig'];
-        }
+        $this->exitCode = $this->status->exitCode() ?? (int) $status['exitcode'];
+        $this->signal = $this->status->signal();
 
         return $status;
     }

@@ -1497,6 +1497,37 @@ final class ChildRunLaunchTest extends TestCase
         $this->assertNull($r->signal);
     }
 
+    /** @return iterable<string, array{0: bool}> */
+    public static function groupLeaderModes(): iterable
+    {
+        yield 'unwrapped' => [false];
+        yield 'group leader' => [true];
+    }
+
+    /**
+     * Regression: a child that kills itself at once dies during the spawn's own
+     * status reads, which launch() shares with run(). The read that reaped it threw
+     * the status away and the launch's later read saw signaled=false, so the signal
+     * read null. The first read that sees the exit now keeps it for the launch.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('groupLeaderModes')]
+    public function testLaunchKeepsTheSignalOfADeathDuringTheSpawnReads(bool $groupLeader): void
+    {
+        $this->requirePosixPipes();
+        $loop = new StreamSelectLoop();
+        $r = $this->settle($loop, ChildRun::new(['/bin/sh', '-c', 'kill -TERM $$'])
+            ->withTimeout(5.0)
+            ->withGroupLeader($groupLeader)
+            ->withOnSpawn(static function (): void {
+                usleep(150_000);
+            })
+            ->launch($loop));
+
+        $this->assertSame(ChildResult::EXITED, $r->status);
+        $this->assertSame(-1, $r->exitCode);
+        $this->assertSame(15, $r->signal);
+    }
+
     /** launch() runs its kill ladder on the graces withKillGrace() set, as run() does. */
     public function testBuildLaunchForwardsTheKillGracesToTheLaunch(): void
     {
