@@ -321,6 +321,10 @@ final class WorkspaceHostClient
         }
         if (\is_resource($this->process)) {
             if ($loop !== null) {
+                // A child that outlives signal 9 is reaped on sugar-core's
+                // REAP_POLL_SECONDS (0.25 s) cadence, not the 5 ms one the old
+                // ProcessReaper used: a rare stuck child is not worth a 200 Hz
+                // wakeup on the gateway loop.
                 BoundedShutdown::terminateBoundedAsync($loop, $this->process, groupPid: $this->groupPid);
             } else {
                 BoundedShutdown::terminateBounded($this->process, groupPid: $this->groupPid);

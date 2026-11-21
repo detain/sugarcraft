@@ -515,7 +515,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
             // resource destructor reaps an already-exited child but never waits
             // for a live one, so an abandoned stream left a `claude` process
             // running under pid 1, holding every descriptor above 2 this process
-            // had open when it spawned (E366). `terminateAndClose()` sends no
+            // had open when it spawned (E366). `BoundedShutdown::terminateBounded()` sends no
             // signal at all to a child that has already exited, so the normal
             // completion below pays nothing for this.
             foreach ($pipes as $pipe) {

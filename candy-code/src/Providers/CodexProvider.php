@@ -394,7 +394,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             // Generator-owned teardown, the E366 lesson in full: a consumer
             // that breaks out of the foreach destroys this generator mid-body,
             // and dropping a proc_open handle whose child still runs leaves an
-            // ORPHAN holding every inherited descriptor. terminateAndClose()
+            // ORPHAN holding every inherited descriptor. BoundedShutdown::terminateBounded()
             // signals nothing to a child that already exited.
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {

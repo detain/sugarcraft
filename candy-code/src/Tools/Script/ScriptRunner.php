@@ -330,7 +330,7 @@ final class ScriptRunner
                 }
             }
             // THE reap, on every path, called UNCONDITIONALLY at the
-            // finally's own level: terminateAndClose is idempotent by
+            // finally's own level: BoundedShutdown::terminateBounded() is idempotent by
             // contract (a false handle answers null), and the depth-keyed
             // ChildLifetimeScanner reads an if-wrapped closer as conditional.
             // The group id is measured HERE, at signal time, where the
