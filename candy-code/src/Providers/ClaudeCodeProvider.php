@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\ModelWindows;
@@ -16,7 +17,6 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
@@ -515,7 +515,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
             // resource destructor reaps an already-exited child but never waits
             // for a live one, so an abandoned stream left a `claude` process
             // running under pid 1, holding every descriptor above 2 this process
-            // had open when it spawned (E366). `terminateAndClose()` sends no
+            // had open when it spawned (E366). `BoundedShutdown::terminateBounded()` sends no
             // signal at all to a child that has already exited, so the normal
             // completion below pays nothing for this.
             foreach ($pipes as $pipe) {
@@ -524,7 +524,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
                 }
             }
 
-            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
+            $exitCode = BoundedShutdown::terminateBounded($process, groupPid: ProcessContainment::groupId($process));
 
             // After the reap, never before: the child reads the file at
             // startup, but nothing says when that is.

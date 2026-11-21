@@ -15,7 +15,7 @@ use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\Background\BackgroundSupervisor;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The accept and the stop run from the supervisor's loop (AUD §7 #2, CC-1 row f):
@@ -432,7 +432,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $this->assertFalse($supervisor->hasActiveSessions(), 'the supervisor must agree the poll may disarm');
         $this->assertSame([], $reaps->getValue($supervisor), 'the poll never collected the retired launcher');
         $this->assertGreaterThanOrEqual(
-            ProcessReaper::TERMINATE_GRACE_SECONDS,
+            BoundedShutdown::TERMINATE_GRACE_SECONDS,
             microtime(true) - $started,
             'SIGTERM is ignored, so only the SIGKILL stage after its grace can have ended the launcher',
         );
@@ -460,7 +460,7 @@ final class BackgroundSupervisorLoopDrivenTest extends TestCase
         $supervisor->teardown();
 
         $this->assertLessThan(
-            ProcessReaper::TERMINATE_GRACE_SECONDS + ProcessReaper::KILL_GRACE_SECONDS + 5.0,
+            BoundedShutdown::TERMINATE_GRACE_SECONDS + BoundedShutdown::KILL_GRACE_SECONDS + 5.0,
             microtime(true) - $started,
             'teardown must collect the launcher within the reap budget',
         );

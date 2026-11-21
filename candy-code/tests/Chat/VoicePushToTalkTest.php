@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
 use ReflectionMethod;
 use ReflectionProperty;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\App\VoiceFailedMsg;
+use SugarCraft\Code\App\VoiceTakeStoppedMsg;
 use SugarCraft\Code\App\VoiceTranscribedMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
@@ -40,6 +43,7 @@ final class VoicePushToTalkTest extends TestCase
     private string $home = '';
     /** @var list<string> */
     private array $takes = [];
+    private ?string $pathRestore = null;
 
     protected function setUp(): void
     {
@@ -56,6 +60,10 @@ final class VoicePushToTalkTest extends TestCase
     {
         VoiceSession::resetForTesting();
         TranscribeCmd::resetForTesting();
+        if ($this->pathRestore !== null) {
+            putenv('PATH=' . $this->pathRestore);
+            $this->pathRestore = null;
+        }
         $this->restoreHomeSandbox();
         $this->vp2tRemoveTree($this->home);
 
@@ -94,11 +102,19 @@ final class VoicePushToTalkTest extends TestCase
     {
         $take = $this->vp2tPlantTake(samples: true);
 
-        [$next, $cmd] = $this->chat()->update(self::altV());
+        [$next, $stop] = $this->chat()->update(self::altV());
 
         try {
             self::assertFalse(VoiceSession::active(), 'the take is closed');
-            self::assertNotNull($cmd, 'stop hands the take to the transcriber');
+            self::assertInstanceOf(\Closure::class, $stop, 'the press answers with the recorder stop Cmd');
+            self::assertFalse(TranscribeCmd::inFlight(), 'nothing is uploaded before the recorder has let go');
+
+            $stopped = self::vp2tSettle($stop);
+            self::assertInstanceOf(VoiceTakeStoppedMsg::class, $stopped);
+            self::assertSame($take, $stopped->recording);
+
+            [, $cmd] = $next->update($stopped);
+            self::assertNotNull($cmd, 'the stopped take goes to the transcriber');
             self::assertInstanceOf(\Closure::class, $cmd);
             self::assertTrue(TranscribeCmd::inFlight(), 'the engine latch took it');
             self::assertFileExists($take->path, 'the upload closure owns the file — it never ran here');
@@ -113,7 +129,9 @@ final class VoicePushToTalkTest extends TestCase
         $take = $this->vp2tPlantTake(samples: false);
         self::assertFileExists($take->path);
 
-        [, $cmd] = $this->chat()->update(self::altV());
+        [$chat, $stop] = $this->chat()->update(self::altV());
+        self::assertInstanceOf(\Closure::class, $stop);
+        [, $cmd] = $chat->update(self::vp2tSettle($stop));
 
         self::assertInstanceOf(\Closure::class, $cmd, 'the empty take still answers through a cmd');
         self::assertFalse(TranscribeCmd::inFlight(), 'the empty answer never took the latch');
@@ -121,6 +139,71 @@ final class VoicePushToTalkTest extends TestCase
         self::assertInstanceof(VoiceFailedMsg::class, $msg);
         self::assertStringContainsString(Lang::t('media.voice.no_audio'), $msg->line);
         self::assertFileDoesNotExist($take->path, 'and the engine deleted it — cmd() owns that path');
+    }
+
+    public function testAStopThatLandsWhileATranscriptionHoldsTheLatchDiscardsTheTakeLoudly(): void
+    {
+        $take = $this->vp2tPlantTake(samples: true);
+        [$chat, $stop] = $this->chat()->update(self::altV());
+        self::assertInstanceOf(\Closure::class, $stop);
+        $stopped = self::vp2tSettle($stop);
+
+        $latch = new ReflectionProperty(TranscribeCmd::class, 'inFlight');
+        $latch->setValue(null, true);
+        try {
+            [$next] = $chat->update($stopped);
+        } finally {
+            $latch->setValue(null, false);
+        }
+
+        self::assertStringContainsString(Lang::t('chat.voice.busy'), self::peekToast($next));
+        self::assertFileDoesNotExist($take->path, 'the stranded take is discarded through the recorder cancel');
+    }
+
+    public function testStoppingThroughTheUpdatePathEndsTheRecorder(): void
+    {
+        // The user tier stores flat dotted keys; this one turns voice on.
+        file_put_contents(
+            $this->home . '/.candy-code/config.json',
+            (string) json_encode(['voice.baseUrl' => 'http://127.0.0.1:9/v1']),
+        );
+        $bin = $this->home . '/bin';
+        mkdir($bin, 0o700);
+        file_put_contents($bin . '/arecord', "#!/bin/sh\nsleep 30\n");
+        chmod($bin . '/arecord', 0o755);
+        $path = getenv('PATH');
+        $this->pathRestore = is_string($path) ? $path : '';
+        putenv('PATH=' . $bin . ':' . $this->pathRestore);
+
+        [$recording, $start] = $this->chat()->update(self::altV());
+        self::assertNull($start, 'a started take needs no toast');
+        self::assertTrue(VoiceSession::active(), 'the shim recorder is rolling');
+
+        $live = (new ReflectionProperty(AudioRecorder::class, 'live'))->getValue();
+        self::assertCount(1, $live);
+        $process = array_values($live)[0]['process'];
+        self::assertIsResource($process);
+        $pid = (int) (proc_get_status($process)['pid'] ?? 0);
+        self::assertGreaterThan(0, $pid);
+
+        [$stopping, $stop] = $recording->update(self::altV());
+        self::assertInstanceOf(\Closure::class, $stop);
+        self::assertFalse(VoiceSession::active());
+
+        $stopped = self::vp2tSettle($stop);
+
+        self::assertInstanceOf(VoiceTakeStoppedMsg::class, $stopped, 'the stop Cmd settled on the loop');
+        self::assertFalse(is_resource($process), 'the recorder was reaped');
+        self::assertFalse(AudioRecorder::stopping());
+        self::assertDirectoryDoesNotExist('/proc/' . $pid, 'the recorder process is gone and reaped');
+
+        // The sleeping shim captured nothing: the fold answers the visible
+        // no-audio refusal without forking an upload.
+        [, $cmd] = $stopping->update($stopped);
+        self::assertInstanceOf(\Closure::class, $cmd);
+        $msg = $cmd();
+        self::assertInstanceOf(VoiceFailedMsg::class, $msg);
+        self::assertStringContainsString(Lang::t('media.voice.no_audio'), $msg->line);
     }
 
     public function testEscWhileRecordingCancelsDeletesTheWavAndTouchesNothingElse(): void
@@ -251,6 +334,28 @@ final class VoicePushToTalkTest extends TestCase
         $property->setValue(null, $recording);
 
         return $recording;
+    }
+
+    /** Run a stop Cmd on the loop until it answers, with a hard leash. */
+    private static function vp2tSettle(\Closure $cmd): ?object
+    {
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+
+        $loop = Loop::get();
+        $settled = null;
+        $async->promise->then(static function (object $value) use (&$settled, $loop): void {
+            $settled = $value;
+            $loop->stop();
+        });
+
+        if ($settled === null) {
+            $leash = $loop->addTimer(10.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($leash);
+        }
+
+        return $settled;
     }
 
     private static function altV(): KeyMsg

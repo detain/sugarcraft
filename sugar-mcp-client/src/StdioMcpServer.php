@@ -35,7 +35,8 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * the spawn planner's job.
  *
  * DELTA — teardown goes through sugar-core's BoundedShutdown instead of the
- * product's ProcessReaper+ProcessContainment::groupId pair.
+ * product's former ProcessReaper+ProcessContainment::groupId pair (the
+ * product has since moved onto BoundedShutdown too).
  *
  * WHY the argv-ARRAY form of proc_open and never a shell string: with a shell
  * the child is /bin/sh and the MCP server is its grandchild; stop() signals

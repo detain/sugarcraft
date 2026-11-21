@@ -9,7 +9,6 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
@@ -17,6 +16,7 @@ use SugarCraft\Code\Tui\StallDetector;
 use SugarCraft\Code\Tui\StallWarning;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Manages all background sessions as a supervisor process.
@@ -1075,7 +1075,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         $this->launcherReaps[] = [
             'proc' => $proc,
             'stage' => $signal ? 'term' : 'wait',
-            'deadline' => microtime(true) + ProcessReaper::TERMINATE_GRACE_SECONDS,
+            'deadline' => microtime(true) + BoundedShutdown::TERMINATE_GRACE_SECONDS,
             'ownerPid' => getmypid(),
         ];
     }
@@ -1084,7 +1084,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * Poll every retired launcher once. An exited one is closed; one that outlives its
      * grace is sent SIGKILL (terminated launchers only) and then dropped when its kill
      * grace runs out. A dropped handle is left to PHP's resource destructor, which
-     * abandons a live child without waiting (see {@see ProcessReaper::reapIfExited()}).
+     * abandons a live child without waiting (see {@see BoundedShutdown::reapIfExited()}).
      */
     private function advanceLauncherReaps(): void
     {
@@ -1104,7 +1104,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             if ($reap['stage'] === 'term') {
                 @proc_terminate($reap['proc'], 9);
                 $this->launcherReaps[$index]['stage'] = 'kill';
-                $this->launcherReaps[$index]['deadline'] = $now + ProcessReaper::KILL_GRACE_SECONDS;
+                $this->launcherReaps[$index]['deadline'] = $now + BoundedShutdown::KILL_GRACE_SECONDS;
                 continue;
             }
             unset($this->launcherReaps[$index]);

@@ -155,7 +155,7 @@ final class AgentCancelRequests
             }
         }
 
-        // 15 as a literal: SIGTERM is ext-pcntl's constant (see ProcessReaper).
+        // 15 as a literal: SIGTERM is ext-pcntl's constant (see BoundedShutdown).
         foreach (\array_keys($groups) as $group) {
             @\posix_kill(-$group, 15);
         }

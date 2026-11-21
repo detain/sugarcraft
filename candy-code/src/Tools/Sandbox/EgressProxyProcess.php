@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tools\Sandbox;
 use RuntimeException;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Launch-scoped runner for the egress proxy child process.
@@ -213,7 +213,7 @@ final class EgressProxyProcess
     public function stop(): void
     {
         if (is_resource($this->process)) {
-            ProcessReaper::terminateAndClose($this->process, $this->groupPid);
+            BoundedShutdown::terminateBounded($this->process, groupPid: $this->groupPid);
         }
         $this->process = null;
         $this->groupPid = null;

@@ -6,8 +6,8 @@ namespace SugarCraft\Code\LSP;
 
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\WindowsPipes;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\RequestIdSequence;
 
 /**
@@ -1185,7 +1185,7 @@ final class LspConnection implements LspConnectionInterface
      * why the destructor below exists.
      *
      * Now: SIGTERM, a bounded poll, signal 9, then `proc_close()` — the one
-     * ladder in {@see \SugarCraft\Code\Support\ProcessReaper}, shared with
+     * ladder in {@see \SugarCraft\Core\Util\Proc\BoundedShutdown}, shared with
      * {@see \SugarCraft\Code\ClaudeCodeMcpClient::disconnect()} rather than
      * spelled again here.
      *
@@ -1230,7 +1230,7 @@ final class LspConnection implements LspConnectionInterface
         $this->drainStderr();
 
         // THEN CLOSE THE PIPES, BEFORE THE REAP. `proc_close()` inside
-        // {@see ProcessReaper::terminateAndClose()} WAITS for the child, so the
+        // {@see BoundedShutdown::terminateBounded()} WAITS for the child, so the
         // documented ordering is to release its descriptors first — closing fd 0
         // is also the polite EOF that lets a server exit on its own rather than
         // on the escalation ladder. This class used to set `$this->pipes = null`
@@ -1254,9 +1254,9 @@ final class LspConnection implements LspConnectionInterface
         // after which the group would read as absent (ISS-014).
         $group = ProcessContainment::groupId($this->process);
         if ($exitGrace > 0.0 && is_resource($this->process)) {
-            ProcessReaper::waitForExit($this->process, $exitGrace);
+            BoundedShutdown::hasExited($this->process, $exitGrace);
         }
-        ProcessReaper::terminateAndClose($this->process, $group);
+        BoundedShutdown::terminateBounded($this->process, groupPid: $group);
         $this->lock?->destroy();
         $this->lock = null;
 

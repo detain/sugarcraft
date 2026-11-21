@@ -8,11 +8,10 @@ use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Async\StdinStagingException;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Core\Util\Proc\BoundedShutdown;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
 use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Support\WindowsTaskKill;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -607,7 +606,7 @@ trait CapturesProcessOutput
                     // of the reaper's own rung helper — the pty child leads
                     // its session, and killing only the shell would orphan
                     // the program behind it.
-                    $ladderConfirmed = ProcessReaper::escalate(
+                    $ladderConfirmed = BoundedShutdown::escalate(
                         static fn(int $signal): bool => ProcessContainment::terminatePid($child->pid(), $signal),
                         static fn(): bool => $child->exited(),
                     );

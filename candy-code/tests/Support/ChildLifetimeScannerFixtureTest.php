@@ -703,27 +703,28 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
      *
      * NOT A HYPOTHETICAL. Scanning a concurrent lane's `src/` with this class
      * found `Providers/ClaudeCodeProvider.php` reaping through
-     * `ProcessReaper::terminateAndClose($process)` where this tree still
-     * spells `proc_close($process)`; the site read as short-lived here and as
-     * "nothing returns, stores or proc_close()s it" there, on a change that
-     * ADDED a bounded SIGTERM->SIGKILL ladder. A guard that reds the stricter
-     * version of the code earns an exemption row written for correct code,
-     * and that row is where the next real offender hides.
+     * a bounded-ladder helper (today `BoundedShutdown::terminateBounded($process)`)
+     * where this tree still spells `proc_close($process)`; the site read as
+     * short-lived here and as "nothing returns, stores or proc_close()s it"
+     * there, on a change that ADDED a bounded SIGTERM->SIGKILL ladder. A guard
+     * that reds the stricter version of the code earns an exemption row
+     * written for correct code, and that row is where the next real offender
+     * hides.
      */
     public function testARosteredReapingHelperClosesTheChild(): void
     {
         $sites = $this->sitesIn(<<<'PHP'
             <?php
-            use SugarCraft\Code\Support\ProcessReaper;
+            use SugarCraft\Core\Util\Proc\BoundedShutdown;
             function m(array $pipes) {
                 $h = proc_open('x', [2 => ['pipe','w']], $pipes);
-                ProcessReaper::terminateAndClose($h);
+                BoundedShutdown::terminateBounded($h);
             }
             PHP);
 
         self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
         self::assertStringContainsString(
-            'ProcessReaper::terminateAndClose($h)',
+            'BoundedShutdown::terminateBounded($h)',
             $sites[0]['reason'],
             'the reason must name the call that actually reaps; a message that always says '
                 . 'proc_close describes a line the reader will not find at the site',
@@ -814,7 +815,7 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
      * EVERY ROSTERED ROW IS SPENT, one synthetic site per row.
      *
      * WHAT THIS EXISTS TO CATCH, measured rather than assumed. Before it,
-     * deleting `processreaper::reapifexited` from the roster SURVIVED the whole
+     * deleting the `reapifexited` row from the roster SURVIVED the whole
      * of this file plus {@see DescriptorInheritanceGuardTest} - 41 tests, 99
      * assertions, rc 0 - because the only rows any fixture spelled were
      * `terminateAndClose` and a deliberately-unrostered `Bookkeeping::`. A
@@ -840,8 +841,8 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         ?string $expectedClosedBy,
     ): void {
         // Rebuilt from the lowercased roster key, so the fixture cannot drift
-        // away from the row it is spending: `processreaper::terminateandclose`
-        // becomes `Processreaper::terminateandclose($h)`, which matches
+        // away from the row it is spending: `boundedshutdown::terminatebounded`
+        // becomes `Boundedshutdown::terminatebounded($h)`, which matches
         // case-insensitively exactly as the roster promises.
         [$class, $method] = \explode('::', $helper, 2);
         $call = \ucfirst($class) . '::' . $method;
@@ -952,7 +953,7 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         }
 
         self::assertFalse(
-            self::rosterKeyResolvesInSrc('processreaper::methodThatWasNeverTyped', $sourceFiles),
+            self::rosterKeyResolvesInSrc('boundedshutdown::methodThatWasNeverTyped', $sourceFiles),
             'the resolver matched a method that does not exist - it is answering yes to '
                 . 'everything and the rows above prove nothing',
         );
@@ -1024,7 +1025,8 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     /**
      * A BEST-EFFORT REAP IS NOT A CLOSE, and this is the row that was wrong.
      *
-     * `ProcessReaper::reapIfExited()` was rostered in
+     * The launcher reap `reapIfExited()` (today `BoundedShutdown::reapIfExited()`)
+     * was rostered in
      * {@see ChildLifetimeScanner::CLOSING_HELPERS} under a doc-block warning
      * that a row there "is a claim that the helper really closes". Read off
      * that method's own source rather than its name: it waits WITHOUT
@@ -1044,10 +1046,10 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     {
         $sites = $this->sitesIn(<<<'PHP'
             <?php
-            use SugarCraft\Code\Support\ProcessReaper;
+            use SugarCraft\Core\Util\Proc\BoundedShutdown;
             function m(array $pipes) {
                 $h = proc_open('x', [2 => ['pipe','w']], $pipes);
-                ProcessReaper::reapIfExited($h);
+                BoundedShutdown::reapIfExited($h);
             }
             PHP);
 
@@ -1096,12 +1098,12 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     {
         $sites = $this->sitesIn(<<<'PHP'
             <?php
-            use SugarCraft\Code\Support\ProcessReaper;
+            use SugarCraft\Core\Util\Proc\BoundedShutdown;
             function m(array $pipes, bool $extra) {
                 $h = proc_open('x', [2 => ['pipe','w']], $pipes);
                 proc_close($h);
                 if ($extra) {
-                    ProcessReaper::terminateAndClose($h);
+                    BoundedShutdown::terminateBounded($h);
                 }
             }
             PHP);
@@ -1109,7 +1111,7 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
         self::assertStringContainsString('proc_close($h) runs unconditionally', $sites[0]['reason']);
         self::assertStringNotContainsString(
-            'terminateAndClose($h) runs unconditionally',
+            'terminateBounded($h) runs unconditionally',
             $sites[0]['reason'],
             'the conditional call is inside an if; naming it as the unconditional one describes '
                 . 'a line the reader will not find where the message says it is',
@@ -1458,16 +1460,16 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     {
         $viaHelper = $this->sitesIn(<<<'PHP'
             <?php
-            use SugarCraft\Code\Support\ProcessReaper;
+            use SugarCraft\Core\Util\Proc\BoundedShutdown;
             function m(array $pipes) {
                 $h = proc_open('x', [2 => ['pipe','w']], $pipes);
-                ProcessReaper::terminateAndClose($h);
+                BoundedShutdown::terminateBounded($h);
             }
             PHP);
 
         self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaHelper[0]['lifetime']);
         self::assertSame(
-            'processreaper::terminateandclose',
+            'boundedshutdown::terminatebounded',
             $viaHelper[0]['closedBy'],
             'a short verdict bought by a CLOSING_HELPERS row must name the row that bought it. '
                 . 'Unstamped, the promotion is indistinguishable from a literal proc_close() and '
@@ -1557,10 +1559,10 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     {
         $sites = $this->sitesIn(<<<'PHP'
             <?php
-            use SugarCraft\Code\Support\ProcessReaper;
+            use SugarCraft\Core\Util\Proc\BoundedShutdown;
             function m(array $pipes) {
                 $h = proc_open('x', [2 => ['pipe','w']], $pipes);
-                ProcessReaper::tidyUpEventually($h);
+                BoundedShutdown::tidyUpEventually($h);
             }
             PHP);
 

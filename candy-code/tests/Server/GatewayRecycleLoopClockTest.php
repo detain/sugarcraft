@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * S-O16 — recycling a wedged workspace host must not freeze the gateway's
@@ -36,7 +36,7 @@ final class GatewayRecycleLoopClockTest extends TestCase
         $guard = $loop->addTimer(10.0, static fn () => $loop->stop());
 
         $started = \microtime(true);
-        ProcessReaper::terminateAndCloseAsync($loop, $process, null, static function (?int $s) use (&$status, $loop): void {
+        BoundedShutdown::terminateBoundedAsync($loop, $process, static function (?int $s) use (&$status, $loop): void {
             $status = $s;
             $loop->stop();
         });

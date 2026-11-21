@@ -491,7 +491,7 @@ final class LspConnectionShutdownTest extends TestCase
      *
      * `stopProcess()` used to set `$this->pipes = null` and leave the resources
      * to the destructor. That looks like ordering hygiene and it is not:
-     * `proc_close()` inside {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndClose()}
+     * `proc_close()` inside {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
      * WAITS for the child, and a server whose stdin is still open has been given
      * no reason to leave. Closing fd 0 delivers the EOF that a well-written
      * language server treats as "shut down now" — the same event
@@ -500,7 +500,7 @@ final class LspConnectionShutdownTest extends TestCase
      * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes,
      * identical every time, against a child that traps SIGTERM to a no-op and
      * exits on stdin EOF, run through the same TERM / 1.0s poll / signal-9
-     * ladder {@see \SugarCraft\Code\Support\ProcessReaper} uses:
+     * ladder {@see \SugarCraft\Core\Util\Proc\BoundedShutdown} uses:
      *
      *     pipes left open   -> 1.05s, escalated to signal 9, exit status 9
      *     pipes closed first -> 0.010s, exited on its own, exit status 0
@@ -535,7 +535,7 @@ final class LspConnectionShutdownTest extends TestCase
         $this->assertFileExists(
             $this->pidFile() . self::EOF_MARKER_SUFFIX,
             'the server never saw stdin EOF, so the pipes were not closed before the reap and it was '
-            . 'killed after the whole ' . \SugarCraft\Code\Support\ProcessReaper::TERMINATE_GRACE_SECONDS
+            . 'killed after the whole ' . \SugarCraft\Core\Util\Proc\BoundedShutdown::TERMINATE_GRACE_SECONDS
             . 's SIGTERM grace instead of exiting on its own',
         );
         $this->assertFalse($this->isAlive($pid), 'the server is still running after stopProcess()');
@@ -575,7 +575,7 @@ final class LspConnectionShutdownTest extends TestCase
 
         $started = microtime(true);
         proc_terminate($process);
-        $graceDeadline = microtime(true) + \SugarCraft\Code\Support\ProcessReaper::TERMINATE_GRACE_SECONDS;
+        $graceDeadline = microtime(true) + \SugarCraft\Core\Util\Proc\BoundedShutdown::TERMINATE_GRACE_SECONDS;
         $exitedPolitely = false;
         do {
             if (!proc_get_status($process)['running']) {
@@ -602,7 +602,7 @@ final class LspConnectionShutdownTest extends TestCase
             . 'trap the signal and the row above proves nothing about the EOF',
         );
         $this->assertGreaterThanOrEqual(
-            \SugarCraft\Code\Support\ProcessReaper::TERMINATE_GRACE_SECONDS,
+            \SugarCraft\Core\Util\Proc\BoundedShutdown::TERMINATE_GRACE_SECONDS,
             $elapsed,
             sprintf('the control paid only %.2fs of the grace', $elapsed),
         );
@@ -730,7 +730,7 @@ final class LspConnectionShutdownTest extends TestCase
      * Answering makes the control say what it is for: against a server that
      * behaves, `disconnect()` completes the handshake, the server exits on its
      * own, and
-     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndClose()}
+     * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
      * finds a process that is already gone — so no signal is sent and NO part of
      * the escalation budget is paid. That is the claim the bound below is
      * allowed to make.

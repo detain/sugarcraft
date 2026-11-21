@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli\Serve;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelRegistry;
@@ -54,7 +55,6 @@ use SugarCraft\Code\Support\Directories\DirectoryBrowser;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Support\HomeDirectory;
-use SugarCraft\Code\Support\ProcessReaper;
 
 /**
  * Part of the CWPD-14 split of Serve.php (lane G4-H, OD-30 guard-first).
@@ -798,7 +798,7 @@ trait ServeStartup
             return null;
         }
 
-        return ProcessReaper::escalate(
+        return BoundedShutdown::escalate(
             static fn (int $signal): bool => @\posix_kill($pid, $signal),
             static fn (): bool => !@\posix_kill($pid, 0),
         );

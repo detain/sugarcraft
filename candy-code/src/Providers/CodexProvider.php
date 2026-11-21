@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
@@ -12,7 +13,6 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Usage;
 
@@ -394,7 +394,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             // Generator-owned teardown, the E366 lesson in full: a consumer
             // that breaks out of the foreach destroys this generator mid-body,
             // and dropping a proc_open handle whose child still runs leaves an
-            // ORPHAN holding every inherited descriptor. terminateAndClose()
+            // ORPHAN holding every inherited descriptor. BoundedShutdown::terminateBounded()
             // signals nothing to a child that already exited.
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
@@ -402,7 +402,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
                 }
             }
 
-            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
+            $exitCode = BoundedShutdown::terminateBounded($process, groupPid: ProcessContainment::groupId($process));
 
             // After the reap: the child has certainly read (or never will
             // read) the schema file, so this is the last moment it may exist.

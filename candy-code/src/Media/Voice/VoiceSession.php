@@ -36,7 +36,9 @@ final class VoiceSession
     {
         self::registerShutdownCancel();
 
-        if (self::$recording !== null) {
+        // A take whose stop Cmd is still waiting on its recorder counts as in
+        // progress too: the old child may still hold the microphone.
+        if (self::$recording !== null || AudioRecorder::stopping()) {
             return Lang::t('media.voice.failed', ['reason' => 'a take is already in progress']);
         }
 
@@ -63,12 +65,17 @@ final class VoiceSession
     }
 
     /**
-     * End the take and hand it over for transcription. Null when nothing
-     * was recording; a returned recording with no samples inside is still
-     * returned — the transcribe path turns that into the visible
-     * `media.voice.no_audio` refusal rather than swallowing it.
+     * End the take, as the Cmd {@see AudioRecorder::stop()} returns. Null
+     * when nothing was recording. The session is closed at once; the Cmd
+     * resolves to a {@see \SugarCraft\Code\App\VoiceTakeStoppedMsg} once
+     * the recorder child is gone, and that message hands the take over for
+     * transcription. A take with no samples inside still arrives — the
+     * transcribe path turns it into the visible `media.voice.no_audio`
+     * refusal rather than swallowing it.
+     *
+     * @return (\Closure(): \SugarCraft\Core\AsyncCmd)|null
      */
-    public static function stop(): ?AudioRecording
+    public static function stop(): ?\Closure
     {
         $recording = self::$recording;
 
@@ -77,9 +84,8 @@ final class VoiceSession
         }
 
         self::$recording = null;
-        AudioRecorder::stop($recording);
 
-        return $recording;
+        return AudioRecorder::stop($recording);
     }
 
     /** Throw an in-progress take away (Esc): killed recorder, deleted WAV. */
@@ -117,7 +123,11 @@ final class VoiceSession
         };
     }
 
-    /** Once per process: an exit with a live take cancels it — recorder torn down, WAV deleted. */
+    /**
+     * Once per process: an exit with a live take cancels it — recorder torn
+     * down, WAV deleted — and a recorder whose stop Cmd has not settled is
+     * torn down too, since no loop timer runs after exit.
+     */
     private static function registerShutdownCancel(): void
     {
         if (self::$shutdownRegistered) {
@@ -127,6 +137,7 @@ final class VoiceSession
         self::$shutdownRegistered = true;
         \register_shutdown_function(static function (): void {
             self::cancel();
+            AudioRecorder::teardownAll();
         });
     }
 }

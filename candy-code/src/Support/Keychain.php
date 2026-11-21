@@ -10,6 +10,7 @@ use SugarCraft\Async\Clock;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\SecretStore;
 
 /**
@@ -76,9 +77,9 @@ final class Keychain
 
     /**
      * Poll slice for the exit-await loop, mirroring
-     * {@see ProcessReaper::POLL_INTERVAL_US}.
+     * {@see BoundedShutdown::POLL_INTERVAL_US}.
      */
-    private const POLL_INTERVAL_US = ProcessReaper::POLL_INTERVAL_US;
+    private const POLL_INTERVAL_US = BoundedShutdown::POLL_INTERVAL_US;
 
     /** @var array<string,string|null> memoised hits and misses by entry name */
     private static array $memo = [];
@@ -337,7 +338,7 @@ final class Keychain
      * Spawn the backend, drain it under a wall bound, reap it here.
      *
      * The handle never escapes this method: pipes close and
-     * {@see ProcessReaper::terminateAndClose()} runs on every exit path, so
+     * {@see BoundedShutdown::terminateBounded()} runs on every exit path, so
      * the scanner classifies the site short and no inheritance licence is
      * owed — the read and write paths share one site for the same reason.
      * argv carries only service and entry names ({@see argvFor()},
@@ -425,7 +426,7 @@ final class Keychain
         $groupPid = $timedOut ? ProcessContainment::groupId($process) : null;
         \fclose($pipes[1]);
         \fclose($pipes[2]);
-        $closedExit = ProcessReaper::terminateAndClose($process, $groupPid);
+        $closedExit = BoundedShutdown::terminateBounded($process, groupPid: $groupPid);
 
         if ($timedOut) {
             return ['status' => 'timeout', 'stdout' => '', 'exitCode' => 124];

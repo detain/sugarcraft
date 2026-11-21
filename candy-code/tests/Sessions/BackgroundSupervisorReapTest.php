@@ -7,8 +7,8 @@ namespace SugarCraft\Code\Tests\Sessions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Background\BackgroundSupervisor;
-use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The three invariants {@see BackgroundSupervisor::spawnSession()} now claims in
@@ -34,11 +34,11 @@ use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
  *      {@see testTheSpawnedDaemonIsDetachedIntoItsOwnSession()}.
  *   3. THE LAUNCHER IS REAPED WITHOUT EVER BEING SIGNALLED, because signalling
  *      it could land mid-fork and kill the process that is creating the
- *      session. That is {@see ProcessReaper::reapIfExited()}, and the tests
- *      below are the only thing separating it from `terminateAndClose()`.
+ *      session. That is {@see BoundedShutdown::reapIfExited()}, and the tests
+ *      below are the only thing separating it from `terminateBounded()`.
  *
  * ⚠️ HONEST SCOPE OF CLAIM 3, because a reader will otherwise over-read it.
- * Removing the `ProcessReaper::reapIfExited($proc)` call from `spawnSession()`
+ * Removing the `BoundedShutdown::reapIfExited($proc)` call from `spawnSession()`
  * does NOT leak a zombie, and this file does not pretend it does: `$proc` goes
  * out of scope at the end of the method and PHP's `proc_open()` resource
  * destructor reaps an already-exited child instantly — MEASURED on this host,
@@ -46,7 +46,7 @@ use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
  * buys legibility and a defined budget, not a fixed leak. So the mutation that
  * deletes it SURVIVES, and it is recorded as surviving. What these tests do pin
  * is that the reaper used there is the non-signalling one: swap it for
- * `terminateAndClose()` and
+ * `terminateBounded()` and
  * {@see testReapIfExitedNeverSignalsAChildThatIsStillRunning()} goes red.
  *
  * NOTE ON OWNERSHIP: round 53's file split gives `src/Background/BackgroundSupervisor.php`
@@ -57,12 +57,12 @@ final class BackgroundSupervisorReapTest extends TestCase
 {
     /**
      * The reap budget plus generous slack. `reapIfExited()` defaults to
-     * {@see ProcessReaper::TERMINATE_GRACE_SECONDS}, so a bound of one budget
+     * {@see BoundedShutdown::TERMINATE_GRACE_SECONDS}, so a bound of one budget
      * plus a second is loose enough not to flake on a loaded box and tight
      * enough that an unbounded `proc_close()` on a child sleeping for
      * {@see self::FIXTURE_LIFETIME_SECONDS} cannot satisfy it.
      */
-    private const REAP_BOUND_SECONDS = ProcessReaper::TERMINATE_GRACE_SECONDS + 1.0;
+    private const REAP_BOUND_SECONDS = BoundedShutdown::TERMINATE_GRACE_SECONDS + 1.0;
 
     /**
      * How long a fixture child stays alive. It must exceed
@@ -109,7 +109,7 @@ final class BackgroundSupervisorReapTest extends TestCase
     // =========================================================================
 
     /**
-     * THE ONE TEST THAT SEPARATES `reapIfExited()` FROM `terminateAndClose()`.
+     * THE ONE TEST THAT SEPARATES `reapIfExited()` FROM `terminateBounded()`.
      *
      * The fixture traps SIGTERM and records the fact in a file, and — copying
      * the readiness handshake that round 53's item-1 fixture had to learn the
@@ -121,7 +121,7 @@ final class BackgroundSupervisorReapTest extends TestCase
         $proc = $this->spawnFixture(self::SIGTERM_RECORDING_CHILD);
         $pid = $this->selfReportedPid();
 
-        $status = ProcessReaper::reapIfExited($proc, 0.2);
+        $status = BoundedShutdown::reapIfExited($proc, 0.2);
 
         $this->assertNull(
             $status,
@@ -138,7 +138,7 @@ final class BackgroundSupervisorReapTest extends TestCase
         usleep(300_000);
         $this->assertFileDoesNotExist(
             $this->tempDir . '/sigterm.seen',
-            'reapIfExited() signalled the child; that is terminateAndClose()\'s job, not this one\'s'
+            'reapIfExited() signalled the child; that is terminateBounded()\'s job, not this one\'s'
         );
 
         @posix_kill($pid, 9);
@@ -154,7 +154,7 @@ final class BackgroundSupervisorReapTest extends TestCase
         $proc = $this->spawnFixture(self::PROMPT_EXIT_CHILD);
         $pid = $this->selfReportedPid();
 
-        $status = ProcessReaper::reapIfExited($proc);
+        $status = BoundedShutdown::reapIfExited($proc);
 
         $this->assertSame(
             17,
@@ -178,7 +178,7 @@ final class BackgroundSupervisorReapTest extends TestCase
         $pid = $this->selfReportedPid();
 
         $start = microtime(true);
-        ProcessReaper::reapIfExited($proc);
+        BoundedShutdown::reapIfExited($proc);
         $elapsed = microtime(true) - $start;
 
         $this->assertLessThan(
@@ -197,22 +197,22 @@ final class BackgroundSupervisorReapTest extends TestCase
     }
 
     /**
-     * Idempotent by contract, for the same reason `terminateAndClose()` is: a
+     * Idempotent by contract, for the same reason `terminateBounded()` is: a
      * teardown path may run twice, and `proc_get_status()` on a consumed
      * resource is a TypeError rather than a false.
      */
     public function testReapIfExitedIsANoOpOnANonResource(): void
     {
-        $this->assertNull(ProcessReaper::reapIfExited(null));
-        $this->assertNull(ProcessReaper::reapIfExited(false));
-        $this->assertNull(ProcessReaper::reapIfExited('not a process'));
+        $this->assertNull(BoundedShutdown::reapIfExited(null));
+        $this->assertNull(BoundedShutdown::reapIfExited(false));
+        $this->assertNull(BoundedShutdown::reapIfExited('not a process'));
 
         $proc = $this->spawnFixture(self::PROMPT_EXIT_CHILD);
         $this->selfReportedPid();
-        ProcessReaper::reapIfExited($proc);
+        BoundedShutdown::reapIfExited($proc);
 
         $this->assertNull(
-            ProcessReaper::reapIfExited($proc),
+            BoundedShutdown::reapIfExited($proc),
             'a second reap of the same handle must be a no-op, not a fatal'
         );
     }
@@ -867,7 +867,7 @@ final class BackgroundSupervisorReapTest extends TestCase
      * was reported `array`. Both MEASURED by running this scanner directly.
      *
      * That is not a theoretical spelling in this package:
-     * {@see \SugarCraft\Code\Support\ProcessReaper} writes every builtin fully
+     * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown} writes every builtin fully
      * qualified (`\proc_close`, `\proc_terminate`, `\proc_get_status`), so a
      * future editor normalising a spawn site to the same house style is the
      * likely way this reappears.

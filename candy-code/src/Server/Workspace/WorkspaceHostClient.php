@@ -19,7 +19,7 @@ use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The gateway's handle on one workspace-host child (roadmap O-7): spawning
@@ -137,7 +137,7 @@ final class WorkspaceHostClient
         $listener = @\stream_socket_server('unix://' . $socketPath, $errno, $errstr);
         if ($listener === false) {
             @\fclose($stdin);
-            ProcessReaper::terminateAndClose($process, $groupPid);
+            BoundedShutdown::terminateBounded($process, groupPid: $groupPid);
 
             return \React\Promise\reject(new \RuntimeException('cannot listen for the workspace host: ' . $errstr));
         }
@@ -172,7 +172,7 @@ final class WorkspaceHostClient
             }
             $closeListener();
             @\fclose($stdin);
-            ProcessReaper::terminateAndClose($process, $groupPid);
+            BoundedShutdown::terminateBounded($process, groupPid: $groupPid);
             $deferred->reject(new \RuntimeException($reason . '; see ' . $logPath));
         };
 
@@ -321,9 +321,13 @@ final class WorkspaceHostClient
         }
         if (\is_resource($this->process)) {
             if ($loop !== null) {
-                ProcessReaper::terminateAndCloseAsync($loop, $this->process, $this->groupPid);
+                // A child that outlives signal 9 is reaped on sugar-core's
+                // REAP_POLL_SECONDS (0.25 s) cadence, not the 5 ms poll of the
+                // retired candy-code reaper: a rare stuck child is not worth a 200 Hz
+                // wakeup on the gateway loop.
+                BoundedShutdown::terminateBoundedAsync($loop, $this->process, groupPid: $this->groupPid);
             } else {
-                ProcessReaper::terminateAndClose($this->process, $this->groupPid);
+                BoundedShutdown::terminateBounded($this->process, groupPid: $this->groupPid);
             }
         }
         $this->process = null;

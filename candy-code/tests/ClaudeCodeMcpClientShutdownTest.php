@@ -385,7 +385,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * THE ORDER OF THOSE TWO LINES IS THE FIXTURE. It was the other way round
      * and the mutation table says what that cost: removing the signal-9
      * escalation from
-     * {@see \SugarCraft\Code\Support\ProcessReaper::terminateAndClose()}
+     * {@see \SugarCraft\Core\Util\Proc\BoundedShutdown::terminateBounded()}
      * SURVIVED, because `disconnect()` ran before the child had reached
      * `pcntl_signal()` and SIGTERM killed it at its DEFAULT disposition. The
      * bound was measuring a well-behaved child while claiming to measure a
