@@ -393,6 +393,28 @@ because signal dispositions are process-global and `ext-pcntl` is
 optional. Use it when you own the process's signal handling and want
 exit notifications without a poll timer.
 
+### `TerminationPolicy` — bounded teardown of a child
+
+An immutable description of how a child is ended: a first signal
+(SIGHUP by default, the signal a PTY session gets when its terminal goes
+away), a grace period, SIGKILL, a window to confirm it, and whether each
+signal reaches the child's whole process group (on by default, so the
+program under a shell dies with the shell). `apply()` blocks for at most
+the two budgets; `applyAsync()` runs the same ladder on loop timers and
+returns a `PromiseInterface<bool>`. Neither reimplements the ladder: they
+run sugar-core's `BoundedShutdown::escalate()` and `escalateAsync()`.
+
+```php
+use SugarCraft\Pty\TerminationPolicy;
+
+$policy = TerminationPolicy::new()
+    ->withGraceSeconds(0.5)       // SIGHUP, then 0.5 s before SIGKILL
+    ->withKillGraceSeconds(1.0);  // window to confirm the SIGKILL landed
+
+$gone = $policy->apply($child);   // $child is a PosixChild
+$policy->applyAsync($child, $loop)->then(fn (bool $gone) => null);
+```
+
 ## Recording sessions (Recorder tap)
 
 `PumpOptions` accepts an optional `SugarCraft\Core\Recorder`.

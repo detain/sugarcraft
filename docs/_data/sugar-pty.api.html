@@ -186,6 +186,21 @@
 <tr><td><code>static setSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int</code></td><td>Apply a winsize to <code>$fd</code>. Returns 0 on success, libc&#039;s rc on failure. Linux uses <code>ioctl(TIOCSWINSZ)</code>. Darwin tries the same but falls back to <code>stty -f /dev/fd/&lt;alias&gt;</code> (fd <code>dup()</code>ed first — see withDupAlias()) because the real libc <code>ioctl</code> is variadic and arm64 puts varargs on the stack while fixed args sit in <code>x0</code>–<code>x7</code> — our fixed-arg cdef pushes the winsize pointer to the wrong register and the kernel returns -1. POSIX 2024 <code>tcsetwinsize</code> would solve this cleanly but macOS 15 libSystem doesn&#039;t ship it yet (verified PR #475 CI: <code>Failed resolving C function &#039;tcsetwinsize&#039;</code>). The same frame mismatch was since MEASURED in the GET direction too — see getSizeViaLibc() before assuming any winsize-bearing ioctl can succeed straight through the cdef on arm64 Darwin.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-pty-terminationpolicy"><code>TerminationPolicy</code> <small>final class</small></h4>
+<p>How a PTY child is torn down: a first signal (SIGHUP by default), a grace period, SIGKILL, a confirmation window, and whether each signal reaches the child&#039;s whole process group.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $signal = self::SIGHUP, public readonly float $graceSeconds = BoundedShutdown::TERMINATE_GRACE_SECONDS, public readonly float $killGraceSeconds = BoundedShutdown::KILL_GRACE_SECONDS, public readonly bool $groupReach = true)</code></td><td></td></tr>
+<tr><td><code>static new(): self</code></td><td>The default policy: SIGHUP, the core grace budgets, group reach on.</td></tr>
+<tr><td><code>withSignal(int $signal): self</code></td><td>The first signal, sent before the grace period starts.</td></tr>
+<tr><td><code>withGraceSeconds(float $seconds): self</code></td><td>Seconds the child gets after the first signal before SIGKILL.</td></tr>
+<tr><td><code>withKillGraceSeconds(float $seconds): self</code></td><td>Seconds allowed to confirm the SIGKILL landed.</td></tr>
+<tr><td><code>withGroupReach(bool $groupReach): self</code></td><td>Whether each signal goes to the child&#039;s process group.</td></tr>
+<tr><td><code>apply(PosixChild $child): bool</code></td><td>Run the policy against $child, blocking for at most the two budgets.</td></tr>
+<tr><td><code>applyAsync(PosixChild $child, ?LoopInterface $loop = null): PromiseInterface</code></td><td>apply() on loop timers: the wait costs the loop nothing.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-pty-termiosfactory"><code>TermiosFactory</code> <small>final class</small></h4>
 <p>Factory that opens a Termios for the given fd.</p>
 <table class="api-table">
