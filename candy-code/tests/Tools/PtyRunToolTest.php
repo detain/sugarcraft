@@ -230,6 +230,41 @@ final class PtyRunToolTest extends TestCase
         self::assertLessThanOrEqual(4096 + 4096, strlen($result->content()), 'header and step chrome aside, the payload obeys the budget');
     }
 
+    /**
+     * A back-off cut ends the transcript for the whole session, not only the
+     * window that made it. A four-byte codepoint straddles the 64-byte budget
+     * three bytes short of the cap, so the cut keeps 61 bytes and leaves room
+     * for 3. A later step's bytes, and the tail the teardown drain reads, must
+     * then be counted as dropped and never appended after the gap. That holds
+     * only while runSession and teardownSession both thread the dropped total.
+     */
+    public function testABackOffCutRefusesLaterStepAndTeardownBytes(): void
+    {
+        $result = (new PtyRun())->execute([
+            'command' => "stty -echo; printf '%s\\360\\237\\230\\200' " . str_repeat('A', 61)
+                . "; read x; printf ZQZ; sleep 0.5; head -c 300 /dev/zero | tr '\\000' Y",
+            'description' => 'Straddle the byte cap, then keep painting',
+            'maxBytes' => 64,
+            'steps' => [
+                ['expect' => 'AAAA'],
+                ['send' => "go\n", 'wait' => 300],
+            ],
+            'timeout' => 15,
+        ]);
+
+        if (!$this->ptyWorks($result)) {
+            return;
+        }
+
+        $content = $result->content();
+        self::assertStringContainsString('61B captured', $content, 'the cut backs off to the codepoint start and nothing is kept past it');
+        self::assertStringNotContainsString("\xF0\x9F", $content, 'no torn codepoint rides the transcript');
+        self::assertStringNotContainsString('ZQZ', $content, "the later step's bytes are refused after the gap");
+        self::assertStringNotContainsString('YYY', $content, "the teardown tail is refused after the gap");
+        self::assertSame(1, preg_match('/(\d+)B dropped past maxBytes/', $content, $m), 'the drop marker is present');
+        self::assertGreaterThanOrEqual(4 + 3 + 300, (int) $m[1], 'the cut, the step and the teardown tail all count as dropped');
+    }
+
     public function testHarvestScreenReturnsOnlyTheFinalFrame(): void
     {
         $result = $this->driveFixture(60, 12, [

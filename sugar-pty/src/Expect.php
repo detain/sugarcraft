@@ -688,8 +688,10 @@ final class Expect
             }
         }
 
-        // A deadline already past on entry ends the window with no read and still counts
+        // A deadline already past on entry ends the main loop with no read and still counts
         // as a wall hit: the deadline is what ended the window, whether or not a read happened.
+        // The one exception is the exit grace above: a live child that exits inside it is
+        // drained, so its final frame can match and the window is not a wall hit.
         // EOF does not suppress it: with a live child the window keeps waiting past EOF,
         // so a deadline that passes there is a wall hit too.
         $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
