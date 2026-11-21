@@ -288,6 +288,14 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 (0.1 s no-progress window — every accepted byte restarts it) raises
 `RuntimeException` instead of spinning.
 
+`collectWindow(float $windowSeconds, float $deadline, int $maxBytes, int $retained = 0, int $dropped = 0, ?string $regex = null, ?Child $child = null, ?Closure $heartbeat = null, ?Closure $onChunk = null)`
+is the non-throwing alternative for scripted steps that must always yield a
+result row. It returns an `ExpectWindow` (`output`, `matched`, `childExited`,
+`wallHit`, and the session `retained`/`dropped` totals to thread into the next
+window). It ends on the first of a regex match, a child exit, the window length,
+or the absolute wall `$deadline` (each read is clamped to it). Bytes past
+`$maxBytes` are counted as dropped, and the cut never splits a UTF-8 codepoint.
+
 ### `PtyPool` — a concurrency ceiling, not a handle cache
 
 `new(?PtySystem = null, int $maxSize = self::DEFAULT_MAX_SIZE)` —

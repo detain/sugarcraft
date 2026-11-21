@@ -369,6 +369,15 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td><code>expectAny(array $needles, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Like expect() but races several needles in parallel. Returns the new Expect for whichever needle matched first (earliest byte offset in the buffer); ties broken by first in the array.</td></tr>
 <tr><td><code>expectPattern(string $regex, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Like expect() but the needle is a PCRE pattern. Returns a new Expect whose <code>$lastMatch</code> is the actual matched substring (not the regex source).</td></tr>
 <tr><td><code>expectEof(float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self</code></td><td>Wait for the master to signal EOF on the PTY. EOF is SUCCESS here: the returned Expect carries the pre-EOF output in <code>$before</code> and a null <code>$lastMatch</code>.</td></tr>
+<tr><td><code>collectWindow(float $windowSeconds, float $deadline, int $maxBytes, int $retained = 0, int $dropped = 0, ?string $regex = null, ?Child $child = null, ?\Closure $heartbeat = null, ?\Closure $onChunk = null): ExpectWindow</code></td><td>One bounded read window that never throws on a timeout, an EOF or a child exit: the outcome is the return value, so a scripted session keeps one result row per planned step whatever the child does.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-pty-expectwindow"><code>ExpectWindow</code> <small>final class</small></h4>
+<p>The outcome of one bounded read window from Expect::collectWindow().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $output, public readonly ?bool $matched, public readonly bool $childExited, public readonly bool $wallHit, public readonly int $retained, public readonly int $dropped)</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-lang"><code>Lang</code> <small>final class</small></h4>
