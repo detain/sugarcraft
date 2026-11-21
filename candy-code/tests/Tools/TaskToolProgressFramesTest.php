@@ -225,7 +225,7 @@ final class TaskToolProgressFramesTest extends TestCase
         $this->assertSame(200, $frames[count($frames) - 1]->contextTokens, 'the current context is the latest request, not the total');
         $this->assertSame('m', $frames[0]->model, 'the run names the model it really runs on — the engine\'s');
         $this->assertSame('m', $manager->subAgentsOf('coder')[0]->model());
-        $this->assertSame(2, $frames[count($frames) - 1]->lines, 'the trail line count rides the finished beat: one call in, one out');
+        $this->assertSame(3, $frames[count($frames) - 1]->lines, 'the trail line count rides the finished beat: one call in, one out, and the report\'s prose line');
     }
 
     /**

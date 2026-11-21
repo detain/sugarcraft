@@ -30,10 +30,12 @@ use SugarCraft\Code\Tools\ToolResult;
  * loop on the in-process row the session's {@see AgentManager} holds.
  *
  * What executeSubAgent() did that TaskTool already does under another name is
- * recorded in the CC1C-c1 commit message and is not re-pinned here. The one
- * entry that message filed as present but was not (per-chunk usage telemetry)
- * has since been merged: TaskTool's chunk usage observer raises the row on
- * every streamed chunk, pinned here and in TaskToolProgressFramesTest.
+ * recorded in the CC1C-c1 commit message and is not re-pinned here. The two
+ * entries that message filed as present but were not have since been merged:
+ * per-chunk usage telemetry (TaskTool's chunk usage observer raises the row on
+ * every streamed chunk, pinned here and in TaskToolProgressFramesTest) and
+ * per-chunk streamed output (a prose burst lands on the row's output as it
+ * streams, pinned here).
  */
 final class TaskToolExecuteMergeTest extends TestCase
 {
@@ -355,6 +357,46 @@ final class TaskToolExecuteMergeTest extends TestCase
         $row = $manager->runs()[0];
         $this->assertSame(350, $row->tokensUsed, 'chunk figures are replaced by the step\'s billed usage, not added to it');
         $this->assertEqualsWithDelta(0.035, $row->costUsd, 1e-9);
+    }
+
+    /**
+     * A run that only writes prose is live while it streams, as
+     * executeSubAgent() appended each chunk to the row's output: the row
+     * carries the burst's newest text on one `writing:` trail line, so
+     * liveRuns() lists it mid-stream instead of treating it as silent until
+     * it settles.
+     */
+    public function testAProseOnlyRunIsLiveWhileItStreams(): void
+    {
+        $manager = self::sessionManager([]);
+        $provider = new ScriptedProvider([
+            [
+                new CompleteResponse(content: 'the first part '),
+                new CompleteResponse(content: 'the second part'),
+            ],
+        ], streams: true);
+        $now = 0.0;
+        $seen = [];
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new($provider, 'm'))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use (&$manager, &$seen): void {
+                if ($activity->op === SubAgentActivity::OP_PROGRESS) {
+                    $seen[] = array_map(static fn (SubAgent $run): string => $run->output, $manager->liveRuns());
+                }
+            })
+            ->withActivityClock(static function () use (&$now): float {
+                return $now += 1.0;
+            });
+
+        $result = $task->execute(self::delegation());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame([
+            ['writing: the first part'],
+            ['writing: the first part the second part'],
+        ], $seen, 'each chunk reaches the row while the run still streams, on one trail line');
+        $this->assertSame([], $manager->liveRuns(), 'the settled run leaves the live set');
+        $this->assertSame('the first part the second part', $manager->runs()[0]->output, 'the report still wins at settle');
     }
 
     /**

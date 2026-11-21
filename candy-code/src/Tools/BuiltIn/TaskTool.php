@@ -1903,6 +1903,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // `thinking:` label goes on a thought's first line only, so one long
         // burst reads as one block instead of a label per folded line.
         $thinking = false;
+        // The run's open prose burst and the trail it started on. A prose-only
+        // run has no tool or thought line to show, so its newest text is the
+        // trail's last line, rewritten per chunk; without it the row's output
+        // stays empty and liveRuns() treats a streaming run as silent. Any
+        // other trail line closes the burst, which then stays where it was.
+        $prose = '';
+        $proseBase = null;
         // Trail lines produced, for the row's "N more lines" count — the
         // output itself is clipped to ACTIVITY_TAIL_BYTES.
         $lines = 0;
@@ -2016,8 +2023,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // out at the buffer's pace — the dashboard is a monitor, not a tape
         // deck.
         $record = static function (string $line, ?ActivityItem $item) use (
-            $subAgent, $buffer, $flushIfDue, &$lines,
+            $subAgent, $buffer, $flushIfDue, &$lines, &$prose, &$proseBase,
         ): void {
+            $prose = '';
+            $proseBase = null;
             $subAgent->output = self::appendActivity($subAgent->output, $line);
             $lines++;
             if ($item !== null) {
@@ -2367,15 +2376,30 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         },
                         // P-B2: the run's prose, as `text` items — the parent's
                         // live line shows the newest fragment when the run is
-                        // writing rather than calling tools. Items only: the v1
-                        // tail stays the run's trail of what it did.
-                        onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse, $markStreaming): void {
+                        // writing rather than calling tools. The row's output
+                        // gets it too, per chunk, as executeSubAgent() gave it:
+                        // one `writing:` trail line holding the burst's newest
+                        // text, so a prose-only run is live while it streams.
+                        onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse, $markStreaming, $subAgent, &$prose, &$proseBase, &$lines): void {
                             $onProgress();
                             $readControls(false);
                             $logProse .= $delta;
                             if ($delta !== '') {
                                 $markStreaming();
                                 $buffer->add(ActivityItem::text($delta));
+                                $prose .= $delta;
+                                // Bounded: only the newest THINK_LINE_BYTES show.
+                                if (strlen($prose) > 4 * self::THINK_LINE_BYTES) {
+                                    $prose = substr($prose, -2 * self::THINK_LINE_BYTES);
+                                }
+                                $shown = trim(self::tailClip((string) preg_replace('/\s+/', ' ', $prose), self::THINK_LINE_BYTES));
+                                if ($shown !== '') {
+                                    if ($proseBase === null) {
+                                        $proseBase = $subAgent->output;
+                                        $lines++;
+                                    }
+                                    $subAgent->output = self::appendActivity($proseBase, 'writing: ' . $shown);
+                                }
                             }
                             $flushIfDue();
                         },
