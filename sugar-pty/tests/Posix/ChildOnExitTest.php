@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixChild;
+use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\Tests\Support\RecordingLoop;
 
 /**
@@ -26,9 +27,6 @@ final class ChildOnExitTest extends TestCase
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     private const SAFETY_SECONDS = 5.0;
-
-    /** ChildPollTrait::SIGCHLD_WATCHDOG_SECONDS: the disposition check, not an exit poll. */
-    private const WATCHDOG_SECONDS = 1.0;
 
     /** @var list<PosixChild> */
     private array $spawned = [];
@@ -101,7 +99,7 @@ final class ChildOnExitTest extends TestCase
             $calls[] = $code;
         });
 
-        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers, 'the SIGCHLD path must arm no exit poll, only the disposition check');
+        $this->assertSame([], $loop->periodicTimers, 'the SIGCHLD path must arm no periodic timer');
         $this->assertSame([\SIGCHLD], $loop->signalsAdded, 'the listener must ride the loop\'s own SIGCHLD');
 
         $this->runBounded($loop, static function () use (&$calls): bool {
@@ -109,7 +107,7 @@ final class ChildOnExitTest extends TestCase
         });
 
         $this->assertSame([2], $calls);
-        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers);
+        $this->assertSame([], $loop->periodicTimers);
         $this->assertSame([\SIGCHLD], $loop->signalsRemoved, 'the listener must be removed once it fired');
         $this->assertSame(\SIG_DFL, \pcntl_signal_get_handler(\SIGCHLD), 'the loop must hand SIGCHLD back once its last listener goes');
     }
@@ -203,13 +201,14 @@ final class ChildOnExitTest extends TestCase
         $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
     }
 
-    public function testAHandlerInstalledAfterArmingHandsTheWaitToThePoll(): void
+    public function testAttachingSignalForwarderAfterArmingHandsTheWaitToThePoll(): void
     {
         $this->requireSigchld();
 
-        // The review repro: a SIGCHLD handler installed with pcntl_signal()
-        // after waitAsync() replaces the loop's listener, which then never
-        // hears the exit. The disposition check must notice and poll.
+        // The review repro: a SIGCHLD handler installed after waitAsync()
+        // replaces the loop's listener, which then never hears the exit.
+        // attachSigchld() must hand the wait to the poll, with no timer
+        // watching for it.
         $loop = new RecordingLoop();
         $child = $this->spawnShell('sleep 0.2; exit 8');
 
@@ -218,19 +217,58 @@ final class ChildOnExitTest extends TestCase
             $exit = $code;
         });
         $this->assertSame([\SIGCHLD], $loop->signalsAdded);
+        $this->assertSame([], $loop->periodicTimers);
+
+        try {
+            $this->assertTrue(SignalForwarder::attachSigchld(static function (): void {
+            }, false));
+            $forwarder = \pcntl_signal_get_handler(\SIGCHLD);
+            $this->assertSame([0.01], $loop->periodicTimers, 'the displaced listener must hand over to the fallback poll at once');
+
+            $this->runBounded($loop, static function () use (&$exit): bool {
+                return $exit !== null;
+            });
+
+            $this->assertSame(8, $exit, 'a wait whose listener was displaced must still resolve');
+            $this->assertSame([\SIGCHLD], $loop->signalsRemoved);
+            $this->assertSame($forwarder, \pcntl_signal_get_handler(\SIGCHLD), 'removing the listener must put the displacing handler back');
+        } finally {
+            SignalForwarder::reset(\SIGCHLD);
+        }
+    }
+
+    public function testALaterOnExitHandsAListenerDisplacedByPcntlSignalToThePoll(): void
+    {
+        $this->requireSigchld();
+
+        $loop = new RecordingLoop();
+        $first = $this->spawnShell('sleep 0.2; exit 8');
+        $second = $this->spawnShell('sleep 0.1; exit 9');
+
+        $firstCalls = [];
+        $first->onExit($loop, static function (int $code) use (&$firstCalls): void {
+            $firstCalls[] = $code;
+        }, 0.01);
 
         $foreign = static function (): void {
         };
         \pcntl_signal(\SIGCHLD, $foreign);
+        $this->assertSame([], $loop->periodicTimers, 'nothing may watch the disposition on a timer');
 
-        $this->runBounded($loop, static function () use (&$exit): bool {
-            return $exit !== null;
+        $secondCalls = [];
+        $second->onExit($loop, static function (int $code) use (&$secondCalls): void {
+            $secondCalls[] = $code;
+        }, 0.02);
+
+        $this->assertSame([0.01, 0.02], $loop->periodicTimers, 'the later call must hand the displaced listener to its poll, then poll itself');
+
+        $this->runBounded($loop, static function () use (&$firstCalls, &$secondCalls): bool {
+            return $firstCalls !== [] && $secondCalls !== [];
         });
 
-        $this->assertSame(8, $exit, 'a wait whose listener was displaced must still resolve');
-        $this->assertSame([self::WATCHDOG_SECONDS, 0.01], $loop->periodicTimers, 'the displaced listener must hand over to the fallback poll');
-        $this->assertSame([\SIGCHLD], $loop->signalsRemoved);
-        $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'removing the listener must put the displacing handler back');
+        $this->assertSame([8], $firstCalls);
+        $this->assertSame([9], $secondCalls);
+        $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
     }
 
     public function testASecondLoopTakesThePollSoBothLoopsHearTheirChildren(): void
@@ -328,7 +366,7 @@ final class ChildOnExitTest extends TestCase
             $exit = $code;
         });
 
-        $this->assertSame([self::WATCHDOG_SECONDS], $loop->periodicTimers, 'waitAsync must not arm the 15 ms poll where SIGCHLD is delivered');
+        $this->assertSame([], $loop->periodicTimers, 'waitAsync must arm no periodic timer where SIGCHLD is delivered');
         $this->runBounded($loop, static function () use (&$exit): bool {
             return $exit !== null;
         });

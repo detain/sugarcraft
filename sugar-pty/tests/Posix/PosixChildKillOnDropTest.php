@@ -191,6 +191,37 @@ final class PosixChildKillOnDropTest extends TestCase
         $this->assertLessThan(self::GRACE, (\hrtime(true) - $started) / 1e9, 'an exited child must not run the ladder');
     }
 
+    public function testAForkThatDropsAnInheritedHandleLeavesTheParentsChildRunning(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('ext-pcntl is required to fork.');
+        }
+
+        $child = $this->spawnTermTrapper()->withKillOnDrop($this->termPolicy());
+        $pid = $child->pid();
+
+        $fork = \pcntl_fork();
+        if ($fork === -1) {
+            $this->markTestSkipped('pcntl_fork() failed on this host.');
+        }
+        if ($fork === 0) {
+            // The fork runs every inherited destructor; drop the handle here,
+            // then exec away so PHPUnit's shutdown never runs a second time.
+            // The exit status reports whether the fork saw itself holding the duty.
+            $owned = $child->killOnDrop();
+            unset($child);
+            \pcntl_exec('/bin/sh', ['-c', $owned ? 'exit 3' : 'exit 0']);
+            exit(1);
+        }
+
+        \pcntl_waitpid($fork, $status);
+
+        $this->assertTrue(\pcntl_wifexited($status));
+        $this->assertSame(0, \pcntl_wexitstatus($status), 'the fork must not hold the drop duty its parent set');
+        $this->assertTrue($child->killOnDrop(), 'the parent keeps the duty');
+        $this->assertTrue(self::liveNonZombie($pid), 'a fork dropping an inherited handle must not end the parent\'s child');
+    }
+
     private function termPolicy(): TerminationPolicy
     {
         return TerminationPolicy::new()

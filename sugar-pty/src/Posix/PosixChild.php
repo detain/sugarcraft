@@ -53,6 +53,12 @@ final class PosixChild extends ChildProcess implements Child
     private ?object $dropOwner = null;
 
     /**
+     * The process that set the drop duty. A fork inherits the handle and runs
+     * its destructor on exit, so only this process may run the teardown.
+     */
+    private ?int $dropPid = null;
+
+    /**
      * A handle on the same child that tears it down when the handle is
      * destroyed while the child still runs.
      *
@@ -78,6 +84,9 @@ final class PosixChild extends ChildProcess implements Child
      * duty, so dropping this one still tears the child down, and the pending
      * callback or promise then settles with the exit status.
      *
+     * The duty stays with the process that called this: a forked child that
+     * inherits the handle drops it without signalling the parent's child.
+     *
      * Mirrors tokio's `Command::kill_on_drop(true)` (no charmbracelet
      * upstream: Go has no destructors).
      */
@@ -89,7 +98,9 @@ final class PosixChild extends ChildProcess implements Child
     /** Whether destroying this handle tears a still-running child down. */
     public function killOnDrop(): bool
     {
-        return $this->dropPolicy !== null && $this->dropOwner === $this->dropToken;
+        return $this->dropPolicy !== null
+            && $this->dropOwner === $this->dropToken
+            && $this->dropPid === (int) \getmypid();
     }
 
     public function __destruct()
@@ -134,6 +145,7 @@ final class PosixChild extends ChildProcess implements Child
         $view->dropPolicy = $changes['dropPolicy'];
         $view->dropToken = new \stdClass();
         $view->dropOwner = $view->dropToken;
+        $view->dropPid = (int) \getmypid();
 
         return $view;
     }

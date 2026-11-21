@@ -49,14 +49,6 @@ trait ChildPollTrait
     private const EXIT_FALLBACK_POLL_SECONDS = 0.015;
 
     /**
-     * Cadence of {@see onExit()}'s disposition check on the SIGCHLD path. It
-     * reads the SIGCHLD disposition only, never the child: a handler installed
-     * over the loop's after arming silences the listener, and this is how the
-     * listener learns it and hands over to the fallback poll.
-     */
-    private const SIGCHLD_WATCHDOG_SECONDS = 1.0;
-
-    /**
      * Try to reap an exited child via waitpid() FFI (non-blocking).
      *
      * Returns the exit code if the child has exited, null if still
@@ -229,11 +221,10 @@ trait ChildPollTrait
      * alone ({@see exited()}, a `waitpid(pid, WNOHANG)`), so a SIGCHLD from any
      * other child costs one probe and never reaps someone else's status.
      *
-     * NO EXIT POLL ON THE SIGNAL PATH. The child is not probed on a timer: the
+     * NO PERIODIC TIMER ON THE SIGNAL PATH. Nothing is armed on a timer: the
      * loop sleeps until a SIGCHLD arrives. One probe runs on the next tick after
      * the listener is armed, because a SIGCHLD delivered before that was not
-     * heard. The only timer is a once-a-second check of the SIGCHLD disposition
-     * itself (see below).
+     * heard.
      *
      * THE FALLBACK. A periodic {@see exited()} probe every $fallbackPollSec
      * takes over only where SIGCHLD cannot be delivered: no ext-pcntl (no
@@ -248,14 +239,18 @@ trait ChildPollTrait
      * arming the loop's listener would replace that handler, and the loop puts
      * SIG_DFL back, not the old handler, when its last listener goes.
      *
-     * A handler installed with `pcntl_signal()` AFTER this call replaces the
-     * loop's and silences the listener. The once-a-second disposition check
-     * sees the change and starts the fallback poll, so $fn still runs, up to
-     * about a second late. The listener is then left in place rather than
-     * removed early, and when it goes the replacing handler is put back, since
-     * the loop resets SIGCHLD to SIG_DFL on its last removal. Installing such a
-     * handler first avoids the delay: this call sees it and polls from the
-     * start.
+     * A handler installed AFTER this call replaces the loop's and silences the
+     * listener. That is checked without a timer, at the two points where a
+     * handler can be seen arriving: {@see \SugarCraft\Pty\SignalForwarder::attachSigchld()}
+     * and every later onExit() or waitAsync() call. Each compares the SIGCHLD
+     * disposition with the one this listener armed under and, on a change,
+     * starts the fallback poll for it, so $fn still runs. A handler installed
+     * with a bare `pcntl_signal()` and followed by neither is not seen, and
+     * the listener stays deaf: install such a handler before calling onExit(),
+     * so this call sees it and polls from the start. A displaced listener is
+     * left in place rather than removed early, and when it goes the replacing
+     * handler is put back, since the loop resets SIGCHLD to SIG_DFL on its last
+     * removal.
      *
      * EXACTLY ONCE. $fn never runs synchronously inside this call, even for a
      * child that has already exited: it runs on a loop tick or timer, with
@@ -298,15 +293,15 @@ trait ChildPollTrait
         $listener = null;
         /** @var TimerInterface|null $timer */
         $timer = null;
-        /** @var TimerInterface|null $watchdog */
-        $watchdog = null;
+        /** @var int|null $watchId this listener's SigchldOwner handover entry */
+        $watchId = null;
         /** The SIGCHLD disposition right after the listener was armed. */
         $armedDisposition = null;
 
-        $disarm = static function () use (&$signal, &$listener, &$timer, &$watchdog, &$armedDisposition, $loop): void {
-            if ($watchdog !== null) {
-                $loop->cancelTimer($watchdog);
-                $watchdog = null;
+        $disarm = static function () use (&$signal, &$listener, &$timer, &$watchId, &$armedDisposition, $loop): void {
+            if ($watchId !== null) {
+                SigchldOwner::unwatch($watchId);
+                $watchId = null;
             }
             if ($listener !== null) {
                 $current = self::sigchldDisposition();
@@ -357,15 +352,33 @@ trait ChildPollTrait
             $disarm();
         };
 
+        // A handler installed since earlier listeners were armed is seen here,
+        // so they hand over to the poll before this call reads the disposition.
+        SigchldOwner::checkDisplaced();
+
         if ($this->exited()) {
             $queueProbe();
 
             return $detach;
         }
 
+        // Runs only when SigchldOwner::checkDisplaced() is called: it reads
+        // the disposition, never the child, so no timer drives it.
+        $handover = static function () use (&$timer, &$watchId, &$armedDisposition, $loop, $probe, $fallbackPollSec): void {
+            if ($timer !== null || $watchId === null || self::sigchldDisposition() === $armedDisposition) {
+                return;
+            }
+            // Another handler took SIGCHLD: the listener is deaf now.
+            SigchldOwner::unwatch($watchId);
+            $watchId = null;
+            $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+        };
+
         $sigchld = self::deliverableSigchld($loop);
         if ($sigchld !== null) {
-            $handler = static function () use ($queueProbe): void {
+            // The listener also keeps $handover alive: SigchldOwner holds it
+            // weakly, so a loop dropped with this listener armed is not pinned.
+            $handler = static function () use ($queueProbe, $handover): void {
                 $queueProbe();
             };
             try {
@@ -381,18 +394,7 @@ trait ChildPollTrait
         if ($listener !== null) {
             $armedDisposition = self::sigchldDisposition();
             if ($armedDisposition !== null) {
-                $watchdog = $loop->addPeriodicTimer(
-                    self::SIGCHLD_WATCHDOG_SECONDS,
-                    static function () use (&$watchdog, &$timer, &$armedDisposition, $loop, $probe, $fallbackPollSec): void {
-                        if ($watchdog === null || self::sigchldDisposition() === $armedDisposition) {
-                            return;
-                        }
-                        // Another handler took SIGCHLD: the listener is deaf now.
-                        $loop->cancelTimer($watchdog);
-                        $watchdog = null;
-                        $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
-                    },
-                );
+                $watchId = SigchldOwner::watch($handover);
             }
             $queueProbe();
 
@@ -434,8 +436,7 @@ trait ChildPollTrait
      * event loop.
      *
      * Built on {@see onExit()}: SIGCHLD wakes the loop where the runtime
-     * delivers it, and the child is not probed on a timer (onExit()'s
-     * once-a-second disposition check aside). $pollIntervalSec is the
+     * delivers it, and no periodic timer is armed on that path. $pollIntervalSec is the
      * cadence of onExit()'s fallback poll only, used where SIGCHLD cannot be
      * delivered (see onExit() for when that is).
      *
