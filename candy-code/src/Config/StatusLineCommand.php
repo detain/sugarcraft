@@ -998,9 +998,12 @@ final class StatusLineCommand
      */
     private static function terminateAndEscalate($process): void
     {
-        // E676: one escalation sequence package-wide (ProcessReaper::escalate);
-        // the 0.5 s budgets are this segment's pinned worst-case arithmetic
-        // (see REFRESH_SECONDS' docblock) and stay at the call site.
+        // E676: the proc_open families share ProcessReaper::escalate. It is
+        // NOT package-wide: ProcessContainment::killTree()/killTreeAsync()
+        // run sugar-core's BoundedShutdown ladder, so a rung change made
+        // here does not reach frozen-tree kills. The 0.5 s budgets are this
+        // segment's pinned worst-case arithmetic (see REFRESH_SECONDS'
+        // docblock) and stay at the call site.
         ProcessReaper::escalate(
             static function (int $signal) use ($process): void {
                 ProcessContainment::terminate($process, $signal);

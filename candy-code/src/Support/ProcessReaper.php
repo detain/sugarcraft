@@ -152,6 +152,11 @@ final class ProcessReaper
      * escalation sequence instead of each keeping a private copy. Three
      * hand-rolled ladders is one too many: a copy is where a rung drifts.
      *
+     * NOT EVERY TEARDOWN: {@see ProcessContainment::killTree()} and
+     * {@see ProcessContainment::killTreeAsync()} escalate through sugar-core's
+     * `BoundedShutdown::escalate()`/`escalateAsync()` instead, so a change to
+     * the rung order here must be made there too.
+     *
      * THE BUDGETS STAY WITH THE CALLERS. ScriptHook and StatusLineCommand
      * expire on a 0.5 s grace and BackgroundSessionRunner on 2.0 s, each
      * pinned by its own family's tests; consolidating the BODY must not
