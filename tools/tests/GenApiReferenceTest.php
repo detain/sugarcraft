@@ -243,10 +243,14 @@ final class GenApiReferenceTest extends TestCase
      */
     private const FRAGMENT_BUDGET_BYTES = 1048576;
 
-    /** @var array<string, int> candy-code's fragment is 2,427,565 bytes at the rollout */
-    private const OVERSIZE_CEILINGS = [
-        'candy-code' => 2600000,
-    ];
+    /**
+     * Empty: every fragment fits FRAGMENT_BUDGET_BYTES. candy-code was 2,427,565 bytes at the rollout and
+     * now lists its top-level namespace row by row (ApiReference::ROWS_IN_NAMESPACE), so its ceiling
+     * entry was removed rather than raised.
+     *
+     * @var array<string, int>
+     */
+    private const OVERSIZE_CEILINGS = [];
 
     public function testFragmentsStayWithinTheirPageWeightBudget(): void
     {
@@ -806,6 +810,62 @@ final class GenApiReferenceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage("the published PHPDoc of Demo\\Fixture\\Walk carries a bare '@internal'");
         \ApiReference::generate($root, 'sugar-core');
+    }
+
+    /** A documented public class large enough to rank among a fixture's ten largest types. */
+    private static function heavyClass(string $namespace, string $short): string
+    {
+        return "<?php\n\ndeclare(strict_types=1);\n\nnamespace $namespace;\n\n/** $short. */\nfinal class $short\n{\n"
+            . "    /** Fills the buffer. */\n    public function fill(): string\n    {\n        return '" . \str_repeat('x', 300) . "';\n    }\n}\n";
+    }
+
+    public function testASlugListedByNamespaceShowsRowsForItsTopNamespaceAndACountPerSubNamespace(): void
+    {
+        // candy-code lists SugarCraft\Code row by row. Ten larger classes in that namespace push the
+        // small sub-namespace classes below the top-10 cut, so a sub-namespace gets one index line
+        // that states its full public class count and none of its classes has a heading.
+        $files = [
+            'candy-code/src/Top.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code;\n\n/** Top. */\nfinal class Top\n{\n}\n",
+            'candy-code/src/Cli/One.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Cli;\n\n/** One. */\nfinal class One\n{\n}\n",
+            'candy-code/src/Cli/Two.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Cli;\n\n/** Two. */\nfinal class Two\n{\n}\n",
+            'candy-code/src/Host/Lone.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Host;\n\n/** Lone. */\nfinal class Lone\n{\n}\n",
+        ];
+        for ($i = 1; $i <= 10; $i++) {
+            $files["candy-code/src/Heavy$i.php"] = self::heavyClass('SugarCraft\\Code', "Heavy$i");
+        }
+        $root = $this->fixtureRoot($files);
+        $html = \ApiReference::generate($root, 'candy-code');
+
+        self::assertStringContainsString('<h4 id="api-sugarcraft-code-top"><code>Top</code>', $html);
+        self::assertStringContainsString('<h4 id="api-sugarcraft-code-heavy1"><code>Heavy1</code>', $html);
+        self::assertStringNotContainsString('api-sugarcraft-code-cli-one', $html);
+        self::assertStringNotContainsString('api-sugarcraft-code-host-lone', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 2 public classes</li>', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Host</code>: 1 public class</li>', $html);
+    }
+
+    public function testASlugsTenLargestTypesKeepTheirRowsWhereverTheySit(): void
+    {
+        // The ten largest classes sit in a sub-namespace that is not the listed one. Their rows stay,
+        // because top-10 coverage reads them, while the small class beside them is left off the page.
+        $files = [
+            'candy-code/src/Cli/Small.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Cli;\n\n/** Small. */\nfinal class Small\n{\n}\n",
+        ];
+        for ($i = 1; $i <= 10; $i++) {
+            $files["candy-code/src/Big/Big$i.php"] = self::heavyClass('SugarCraft\\Code\\Big', "Big$i");
+        }
+        $root = $this->fixtureRoot($files);
+        $html = \ApiReference::generate($root, 'candy-code');
+
+        for ($i = 1; $i <= 10; $i++) {
+            self::assertStringContainsString('<h4 id="api-sugarcraft-code-big-big' . $i . '">', $html);
+        }
+        self::assertStringNotContainsString('api-sugarcraft-code-cli-small', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 1 public class</li>', $html);
+
+        $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'candy-code'), $html);
+        self::assertCount(10, $result['top']);
+        self::assertSame(100.0, $result['percent']);
     }
 
     public function testALineLeadingInternalTagExcludesTheTypeAndTheMethodFromThePage(): void

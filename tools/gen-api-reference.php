@@ -138,6 +138,22 @@ final class ApiReference
      */
     public const NO_PUBLIC_CLASSES = ['sugar-clipboard', 'sugar-codec', 'sugar-jwt', 'sugar-ws-rpc'];
 
+    /**
+     * Slugs whose page lists a row for each public type in one namespace only. Every type in a
+     * sub-namespace is left out, and the page carries one index line per sub-namespace that states
+     * its class count. candy-code's full listing was 2.4 MB, over the 1 MiB page-weight budget; its
+     * top-level namespace alone is about 0.1 MB. A slug here is an owner-visible reduction of the
+     * page, so the omission is stated on the page itself rather than left silent.
+     */
+    public const ROWS_IN_NAMESPACE = ['candy-code' => 'SugarCraft\\Code'];
+
+    /**
+     * Slugs whose page also keeps a row for each of their N largest public types, wherever they sit,
+     * so the top-10 coverage figure is read from rows and not from the namespace index. The size is
+     * the one coverage() ranks by, so a type kept here is a type the figure counts.
+     */
+    public const TOP_TYPES_LISTED = ['candy-code' => 10];
+
     /** The placeholder tools/gen-docs.php replaces with the fragment. Exactly one per body. */
     public const MARKER = '<!-- api-reference:generated -->';
 
@@ -1396,6 +1412,30 @@ final class ApiReference
     }
 
     /**
+     * The fqns of the $n largest types, as keys, in coverage()'s order: size descending, then name.
+     *
+     * @param list<array{fqn: string, size: int}> $types
+     * @return array<string, true>
+     */
+    private static function largestTypes(array $types, int $n): array
+    {
+        if ($n <= 0) {
+            return [];
+        }
+        usort($types, static function (array $a, array $b): int {
+            $cmp = $b['size'] <=> $a['size'];
+
+            return $cmp !== 0 ? $cmp : strcmp($a['fqn'], $b['fqn']);
+        });
+        $largest = [];
+        foreach (array_slice($types, 0, $n) as $type) {
+            $largest[$type['fqn']] = true;
+        }
+
+        return $largest;
+    }
+
+    /**
      * @param list<array{fqn: string, short: string, namespace: string, kind: string, size: int, summary: string, cases: list<string>, backed: bool, undeclaredTraits: list<string>, methods: list<array{name: string, signature: string, summary: string}>}> $types
      */
     private static function render(string $slug, array $types): string
@@ -1425,11 +1465,39 @@ final class ApiReference
         }
         ksort($byNamespace, SORT_STRING);
 
+        $listed = self::ROWS_IN_NAMESPACE[$slug] ?? null;
+        $pinned = self::largestTypes($types, self::TOP_TYPES_LISTED[$slug] ?? 0);
+        // namespace => [public classes in it, classes with a row on this page]
+        $omitted = [];
         foreach ($byNamespace as $namespace => $group) {
-            $out[] = '<h3>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</h3>';
+            $shown = [];
             foreach ($group as $type) {
-                $out[] = self::renderType($type);
+                if ($listed === null || $namespace === $listed || isset($pinned[$type['fqn']])) {
+                    $shown[] = $type;
+                }
             }
+            if ($shown !== []) {
+                $out[] = '<h3>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</h3>';
+                foreach ($shown as $type) {
+                    $out[] = self::renderType($type);
+                }
+            }
+            if (count($shown) < count($group)) {
+                $omitted[$namespace] = [count($group), count($shown)];
+            }
+        }
+
+        if ($omitted !== []) {
+            $out[] = '<h3>Sub-namespaces not listed row by row</h3>';
+            $out[] = '<p>A class named here has no row on this page. Each line states how many public classes its '
+                . 'namespace holds in all, so a count here is the full count.</p>';
+            $out[] = '<ul>';
+            foreach ($omitted as $namespace => [$total, $shown]) {
+                $out[] = '<li><code>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</code>: ' . $total
+                    . ' public ' . ($total === 1 ? 'class' : 'classes')
+                    . ($shown > 0 ? ", $shown of them with a row above" : '') . '</li>';
+            }
+            $out[] = '</ul>';
         }
 
         return implode("\n", $out) . "\n";
