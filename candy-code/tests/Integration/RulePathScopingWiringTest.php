@@ -677,11 +677,11 @@ final class RulePathScopingWiringTest extends TestCase
      * fails on an unreadable budget — a tool this cannot read is a tool the
      * ceiling guards would stop covering.
      *
-     * @param ReflectionClass<object> $class
+     * @param \ReflectionClass<object> $class
      *
      * @return array{0: string, 1: int}
      */
-    private static function capBehindLocal(string $source, string $local, ReflectionClass $class): array
+    private static function capBehindLocal(string $source, string $local, \ReflectionClass $class): array
     {
         self::assertSame(
             1,
