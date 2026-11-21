@@ -9,16 +9,23 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Providers\CompleteResponse;
-use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolCall as WireToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * Audit F-J3-rem(a): a sub-agent's path rules judge the file the tool opens.
@@ -28,8 +35,15 @@ use SugarCraft\Code\ToolCall;
  * and a symlink to it. {@see AgentManager} judged the same call with no root —
  * the session gate's `evaluate()` and the agent's own `tools` /
  * `disallowedTools` grant both — so every one of those spellings walked past
- * the rule on the sub-agent path. Each test below fails with the root dropped
- * from either the manager's three match sites or Bootstrap's construction.
+ * the rule on the sub-agent path.
+ *
+ * Every sub-agent run here is a Task delegation (CC1C-c2b): TaskTool's engine
+ * path, the one every production registration binds, where the session gate
+ * and the agent's declaration ({@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook})
+ * judge each call with the root the engine hands its hook context. A refused
+ * call is that call's error result and the run goes on, so each test reads
+ * the refusal off the tool turn the model received and checks that the tool
+ * never ran.
  *
  * Fixture tree (a fresh temp dir per test):
  *
@@ -46,9 +60,6 @@ final class AgentManagerProjectRootTest extends TestCase
 
     private string $tempDir;
     private string $root;
-
-    /** @var list<ToolCall> the calls the next provider response carries */
-    private array $pendingCalls = [];
 
     protected function setUp(): void
     {
@@ -93,36 +104,40 @@ final class AgentManagerProjectRootTest extends TestCase
     #[DataProvider('secretSpellings')]
     public function testTheSessionGateDeniesEverySpellingOfAnAbsolutePathRule(string $spelling): void
     {
-        $manager = $this->manager(
+        $refusal = $this->runCall(
             new PermissionGate(
                 PermissionMode::BypassPermissions,
                 [new PermissionRule('Read(' . $this->root . '/secret.txt)', PermissionAction::Deny)],
             ),
-            projectRoot: $this->root,
+            $this->root,
+            $this->agent(),
+            'Read',
+            ['file_path' => $spelling],
         );
 
-        $caught = $this->runCall($manager, $this->agent(), new ToolCall('Read', ['file_path' => $spelling]));
-
-        $this->assertNotNull($caught, "`{$spelling}` names the denied file and must be refused");
-        $this->assertStringContainsString('denied by permission gate', $caught->getMessage());
+        $this->assertNotNull($refusal, "`{$spelling}` names the denied file and must be refused");
+        $this->assertStringContainsString("Permission mode 'bypass-permissions' does not allow Read", $refusal);
     }
 
     /**
-     * The contrast that makes the fix visible: the same gate on a manager
-     * given no root still judges the spelling only. Kept because that is the
-     * documented behaviour of every root-less embedder, not because it is good.
+     * The contrast that makes the fix visible: the same gate on an engine
+     * given no root judges a relative spelling against the process directory,
+     * not the project, so `secret.txt` is not the denied file there. Kept
+     * because that is the documented behaviour of every root-less embedder,
+     * not because it is good.
      */
-    public function testWithoutARootTheSessionGateStillJudgesTheSpellingOnly(): void
+    public function testWithoutARootTheSessionGateDoesNotJudgeTheSpellingAtTheProject(): void
     {
-        $manager = $this->manager(
+        $this->assertNull($this->runCall(
             new PermissionGate(
                 PermissionMode::BypassPermissions,
                 [new PermissionRule('Read(' . $this->root . '/secret.txt)', PermissionAction::Deny)],
             ),
-            projectRoot: null,
-        );
-
-        $this->assertNull($this->runCall($manager, $this->agent(), new ToolCall('Read', ['file_path' => 'secret.txt'])));
+            null,
+            $this->agent(),
+            'Read',
+            ['file_path' => 'secret.txt'],
+        ));
     }
 
     /**
@@ -131,13 +146,12 @@ final class AgentManagerProjectRootTest extends TestCase
      */
     public function testTheAgentsDenylistStopsASymlinkToADeniedFile(): void
     {
-        $manager = $this->manager(new PermissionGate(PermissionMode::BypassPermissions), projectRoot: $this->root);
         $agent = $this->agent(disallowedTools: ['Read(' . $this->root . '/secret.txt)']);
 
-        $caught = $this->runCall($manager, $agent, new ToolCall('Read', ['file_path' => 'notes']));
+        $refusal = $this->runCall(new PermissionGate(PermissionMode::BypassPermissions), $this->root, $agent, 'Read', ['file_path' => 'notes']);
 
-        $this->assertNotNull($caught, 'a symlink to a file the agent itself refuses must be refused');
-        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+        $this->assertNotNull($refusal, 'a symlink to a file the agent itself refuses must be refused');
+        $this->assertStringContainsString('is refused by the denylist', $refusal);
     }
 
     /**
@@ -148,16 +162,14 @@ final class AgentManagerProjectRootTest extends TestCase
      */
     public function testTheAgentsGrantDoesNotFollowASymlinkOutOfTheGrantedTree(): void
     {
-        $manager = $this->manager(new PermissionGate(PermissionMode::BypassPermissions), projectRoot: $this->root);
         $agent = $this->agent(tools: ['Write(src/*)']);
 
-        $caught = $this->runCall($manager, $agent, new ToolCall('Write', ['file_path' => 'src/link', 'content' => 'x']));
-        $this->assertNotNull($caught, 'a write through a symlink out of src/ is not inside the Write(src/*) grant');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $refusal = $this->runCall(new PermissionGate(PermissionMode::BypassPermissions), $this->root, $agent, 'Write', ['file_path' => 'src/link', 'content' => 'x']);
+        $this->assertNotNull($refusal, 'a write through a symlink out of src/ is not inside the Write(src/*) grant');
+        $this->assertStringContainsString('is outside the tool grant', $refusal);
 
-        $manager = $this->manager(new PermissionGate(PermissionMode::BypassPermissions), projectRoot: $this->root);
         $this->assertNull(
-            $this->runCall($manager, $agent, new ToolCall('Write', ['file_path' => 'src/a.php', 'content' => 'x'])),
+            $this->runCall(new PermissionGate(PermissionMode::BypassPermissions), $this->root, $agent, 'Write', ['file_path' => 'src/a.php', 'content' => 'x']),
             'a real file under src/ is still granted',
         );
     }
@@ -171,15 +183,12 @@ final class AgentManagerProjectRootTest extends TestCase
      */
     public function testAcceptEditsAsksAboutASubAgentWriteThroughASymlinkOutOfTheRoot(): void
     {
-        $manager = $this->manager(new PermissionGate(PermissionMode::AcceptEdits), projectRoot: $this->root);
+        $refusal = $this->runCall(new PermissionGate(PermissionMode::AcceptEdits), $this->root, $this->agent(), 'Write', ['file_path' => 'src/link', 'content' => 'x']);
+        $this->assertNotNull($refusal, 'a write that lands outside the root is not an in-root edit');
+        $this->assertStringContainsString('no approver is attached to this run: Allow Write to run?', $refusal);
 
-        $caught = $this->runCall($manager, $this->agent(), new ToolCall('Write', ['file_path' => 'src/link', 'content' => 'x']));
-        $this->assertNotNull($caught, 'a write that lands outside the root is not an in-root edit');
-        $this->assertStringContainsString('requires approval', $caught->getMessage());
-
-        $manager = $this->manager(new PermissionGate(PermissionMode::AcceptEdits), projectRoot: $this->root);
         $this->assertNull(
-            $this->runCall($manager, $this->agent(), new ToolCall('Write', ['file_path' => 'src/a.php', 'content' => 'x'])),
+            $this->runCall(new PermissionGate(PermissionMode::AcceptEdits), $this->root, $this->agent(), 'Write', ['file_path' => 'src/a.php', 'content' => 'x']),
             'an in-root edit is still granted without asking',
         );
     }
@@ -235,46 +244,84 @@ final class AgentManagerProjectRootTest extends TestCase
         }
     }
 
-    private function manager(PermissionGate $gate, ?string $projectRoot): AgentManager
+    /**
+     * Delegate one run of $agent through {@see TaskTool} whose first step
+     * makes the single call $tool($args) and whose second reports, on an
+     * engine whose session gate is $gate and whose root is $projectRoot.
+     * Returns the refusal the model received for the call, or null when the
+     * call ran.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function runCall(PermissionGate $gate, ?string $projectRoot, Agent $agent, string $tool, array $args): ?string
     {
-        $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('supportsStreaming')->willReturn(false);
-        $provider->method('complete')->willReturnCallback(
-            fn() => new CompleteResponse(content: 'done', toolCalls: $this->pendingCalls),
-        );
-
-        return new AgentManager(
-            provider: $provider,
+        $manager = new AgentManager(
+            provider: new ScriptedProvider([]),
             skillRegistry: new SkillRegistry(),
             permissionGateFactory: static fn(): PermissionGate => $gate,
             projectRoot: $projectRoot,
         );
-    }
-
-    /**
-     * Run one sub-agent whose single response carries `$call`, and return what
-     * it threw (null when the call was let through and the run completed).
-     */
-    private function runCall(AgentManager $manager, Agent $agent, ToolCall $call): ?\RuntimeException
-    {
-        $this->pendingCalls = [$call];
         $manager->register($agent);
-        $subAgent = $manager->createSubAgent($agent->name, 'do the thing');
 
-        // Held outside the try: a failing assertion is-a RuntimeException
-        // (see SwallowingCatchCensusTest).
-        $caught = null;
-        try {
-            iterator_to_array($manager->executeSubAgent($subAgent->id));
-        } catch (\RuntimeException $e) {
-            $caught = $e;
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'calling', toolCalls: [new WireToolCall('call-1', $tool, $args)]),
+            new CompleteResponse(content: 'reported'),
+        ]);
+        $recorder = new class ($tool) implements Tool {
+            public int $runs = 0;
+
+            public function __construct(private readonly string $name)
+            {
+            }
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function description(): string
+            {
+                return "records {$this->name} runs";
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object'];
+            }
+
+            public function execute(array $args): ToolResult
+            {
+                $this->runs++;
+
+                return new ToolResult(toolCallId: (string) ($args['id'] ?? ''), content: $this->name . ' ran');
+            }
+        };
+        $engine = EngineBackend::new($provider, 'm')
+            ->withTools([$recorder])
+            ->withPermissionGate($gate)
+            ->withRoot($projectRoot);
+
+        $result = (new TaskTool($manager, suspended: new SuspendedDelegations($this->tempDir . '/suspended')))
+            ->withEngine($engine)
+            ->execute(['description' => 'Rooted check', 'prompt' => 'do the thing', 'agent' => $agent->name, 'id' => 'task-call']);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(2, $provider->requests, 'the run carried the call\'s result back to the model');
+        $runs = $manager->runs();
+        $this->assertCount(1, $runs);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $runs[0]->status, 'a refused call is not a failed run');
+
+        $turns = array_values(array_filter(
+            $provider->requests[1]->messages,
+            static fn (mixed $message): bool => $message instanceof Message && $message->role() === 'tool',
+        ));
+        $this->assertCount(1, $turns);
+        if ($recorder->runs === 1) {
+            return null;
         }
+        $this->assertSame(0, $recorder->runs, 'a refused call never ran');
 
-        if ($caught === null) {
-            $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
-        }
-
-        return $caught;
+        return $turns[0]->content();
     }
 
     /**
