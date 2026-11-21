@@ -901,20 +901,13 @@ final class Width
                 continue;
             }
 
-            // A run of printable non-space ASCII is a run of one-byte,
-            // one-cell clusters, the same shortcut cutAtWidth() takes: no
-            // ASCII byte extends or joins, so the segmenter would answer the
-            // same. The run's last byte is left to the segmenter when a
-            // non-ASCII byte follows, since that byte may be a combining mark
-            // on it. The run is then added to the word in slices, with the
-            // same hard break the per-cluster branch below makes when the
-            // word reaches $max. Without this a long ASCII transcript went
-            // through the grapheme walk byte by byte (a 400-message history
-            // rendered at four widths spent 97% of its 25 s there).
-            $run = strspn($s, self::asciiWordBytes(), $i);
-            if ($run > 0 && $i + $run < $len && ord($s[$i + $run]) >= 0x80) {
-                $run--;
-            }
+            // A run of printable non-space ASCII ({@see asciiRun()}) is added
+            // to the word in slices, with the same hard break the
+            // per-cluster branch below makes when the word reaches $max.
+            // Without this a long ASCII transcript went through the grapheme
+            // walk byte by byte (a 400-message history rendered at four
+            // widths spent 97% of its 25 s there).
+            $run = self::asciiRun($s, $i, $len, false);
             if ($run > 0) {
                 while ($run > 0) {
                     if ($wordWidth >= $max) {
@@ -970,12 +963,27 @@ final class Width
         return implode("\n", $lines);
     }
 
-    /** The strspn() mask for {@see wrapAnsi()}'s ASCII run: bytes 0x21-0x7E. */
-    private static function asciiWordBytes(): string
+    /**
+     * Length of the run of printable ASCII at byte `$i` (0x21-0x7E, plus the
+     * space when `$space`), less its last byte when a non-ASCII byte follows
+     * it, since that byte may be a combining mark on it.
+     *
+     * Every byte the run covers is a one-byte, one-cell cluster: no ASCII
+     * byte extends or joins (CR LF, the one ASCII pair UAX #29 joins, is
+     * outside the range), so the segmenter would answer the same. This is
+     * the shortcut cutAtWidth() takes per byte; the ANSI-aware walkers take
+     * it per run so plain text skips nextCluster() and graphemeWidth().
+     */
+    private static function asciiRun(string $s, int $i, int $len, bool $space): int
     {
-        static $bytes = null;
+        static $masks = [];
+        $mask = $masks[(int) $space] ??= implode('', array_map('chr', range($space ? 0x20 : 0x21, 0x7E)));
+        $run = strspn($s, $mask, $i);
+        if ($run > 0 && $i + $run < $len && ord($s[$i + $run]) >= 0x80) {
+            $run--;
+        }
 
-        return $bytes ??= implode('', array_map('chr', range(0x21, 0x7E)));
+        return $run;
     }
 
     private static function wrapParagraph(string $s, int $max): string
@@ -1179,6 +1187,21 @@ final class Width
                 continue;
             }
 
+            // A plain-ASCII run ({@see asciiRun()}) is cut in one slice: what
+            // fits is kept, and the first byte that does not fit ends the
+            // budget exactly as the per-cluster branch below would.
+            $run = self::asciiRun($s, $i, $len, true);
+            if ($run > 0) {
+                if (!$budgetReached) {
+                    $keep = min($run, $max - $w);
+                    $out .= substr($s, $i, $keep);
+                    $w += $keep;
+                    $budgetReached = $keep < $run;
+                }
+                $i += $run;
+                continue;
+            }
+
             // No more visible budget — keep scanning so trailing ANSI
             // sequences (e.g. SGR resets) get harvested by the loop above,
             // but skip visible characters silently.
@@ -1271,6 +1294,23 @@ final class Width
                     $prefix .= $seq;
                 }
                 $i = $j;
+                continue;
+            }
+
+            // A plain-ASCII run ({@see asciiRun()}): the bytes still inside
+            // the skipped cells are dropped, and the rest of the run starts
+            // the tail, as the per-cluster branches below would decide.
+            $run = self::asciiRun($s, $i, $len, true);
+            if ($run > 0) {
+                if (!$reachedTail) {
+                    $drop = min($run, $skip - $w);
+                    $w += $drop;
+                    $i += $drop;
+                    $run -= $drop;
+                    $reachedTail = $run > 0;
+                }
+                $tail .= substr($s, $i, $run);
+                $i += $run;
                 continue;
             }
 
@@ -1367,6 +1407,21 @@ final class Width
             // No more visible budget — keep scanning so trailing ANSI
             // sequences (e.g. SGR resets) get harvested by the loop above,
             // but skip visible characters silently.
+            // A plain-ASCII run ({@see asciiRun()}): the cells still owed are
+            // taken in one slice and the rest of the run is skipped, as the
+            // per-cluster branches below would decide.
+            $run = self::asciiRun($s, $i, $len, true);
+            if ($run > 0) {
+                if (!$budgetReached) {
+                    $n = min($run, $take - $w);
+                    $out .= substr($s, $i, $n);
+                    $w += $n;
+                    $budgetReached = $w >= $take;
+                }
+                $i += $run;
+                continue;
+            }
+
             if ($budgetReached) {
                 $cluster = self::nextCluster($s, $i);
                 $i += strlen($cluster);
