@@ -54,6 +54,48 @@ final class EgressProxyTest extends TestCase
         $this->releaseEgress($directory, $socket, $upstream['server']);
     }
 
+    /**
+     * The injected-loop seam runs the proxy inside a process that carries on
+     * afterwards (this test runner, here), so the SIGTERM/SIGHUP handlers and
+     * the non-blocking STDIN it sets for its own lifetime have to be put back.
+     * A handler left behind is inherited by every child the runner forks
+     * later: AgentWorkerPool's cancel tests got `completed` back from workers
+     * that survived SIGTERM after this file had run in the same worker.
+     *
+     * The handlers in place before are a closure and SIG_IGN, not the default,
+     * so a proxy that reset to SIG_DFL instead of restoring cannot pass.
+     */
+    public function testServingInsideACallerPutsBackItsSignalHandlersAndStdinMode(): void
+    {
+        if (!\function_exists('pcntl_signal_get_handler')) {
+            self::markTestSkipped('needs ext-pcntl to read signal handlers');
+        }
+        $sentinel = static function (): void {};
+        \pcntl_signal(\SIGTERM, $sentinel);
+        \pcntl_signal(\SIGHUP, \SIG_IGN);
+        $stdinBlocking = \defined('STDIN') && \is_resource(\STDIN) ? \stream_get_meta_data(\STDIN)['blocked'] : null;
+
+        try {
+            $loop = new StreamSelectLoop();
+            $directory = $this->privateDirectory();
+            $socket = $directory . '/s';
+            $received = '';
+            $this->pumpClient($loop, $socket, "CONNECT blocked.internal:443 HTTP/1.1\r\n\r\n", 'HTTP/1.1 403', null, $received);
+            EgressProxy::servePolicy($socket, $this->proxyPolicy(['github.com']), $loop);
+
+            self::assertStringContainsString('HTTP/1.1 403', $received, 'fixture: the proxy never answered, so nothing was served');
+            self::assertSame($sentinel, \pcntl_signal_get_handler(\SIGTERM), 'the proxy left its own SIGTERM handler installed');
+            self::assertSame(\SIG_IGN, \pcntl_signal_get_handler(\SIGHUP), 'the proxy left its own SIGHUP handler installed');
+            if ($stdinBlocking !== null) {
+                self::assertSame($stdinBlocking, \stream_get_meta_data(\STDIN)['blocked'], 'the proxy left STDIN in a different blocking mode');
+            }
+            $this->releaseEgress($directory, $socket);
+        } finally {
+            \pcntl_signal(\SIGTERM, \SIG_DFL);
+            \pcntl_signal(\SIGHUP, \SIG_DFL);
+        }
+    }
+
     public function testDeniedConnectAnswersFourOhThreeNamingHostAndSetting(): void
     {
         $loop = new StreamSelectLoop();
