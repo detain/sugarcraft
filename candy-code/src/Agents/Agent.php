@@ -720,8 +720,8 @@ final readonly class Agent
      *     which every per-stage render named above reaches this assembler, and
      *     {@see ProcessExecutor::spawnWorker()}, which those stages reach
      *     through `AgentWorkerPool::executeOne()`.
-     *   - DORMANT: `App::dispatchSkill()`, whose own in-code comment says
-     *     "Nothing calls dispatchSkill() in production yet".
+     *   - DORMANT: `App::dispatchSkill()`, whose own docblock says it "has
+     *     no production CALLER" (`grep -n 'has no production CALLER' src/App/App.php`).
      *
      * A TASK DELEGATION IS NOT ON THE ROSTER. {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}
      * speaks the agent's own prompt as the delegated transcript's system turn
@@ -823,7 +823,7 @@ final readonly class Agent
      * render nothing, and
      * `AgentWorkerPool::executeAll()` copies `$request->systemPrompt` onto each
      * per-agent request - so N parallel tasks cost N+1 renders, not 2N.
-     * `App::dispatchSkill()`'s own comment says the two consumers "must agree";
+     * {@see \SugarCraft\Code\Skills\SkillFork::agent()}'s docblock says the two consumers "must agree";
      * nothing makes them. Pinned by
      * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()}
      * and escalated rather than repaired: dropping either call site is the
