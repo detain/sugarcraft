@@ -344,6 +344,27 @@ final class LspInstallerTest extends TestCase
         $this->assertStringContainsString('typescript-language-server did not appear', $vanished['message']);
     }
 
+    public function testAnOverCeilingNpmStderrNamesItsDropsInsteadOfPassingTheHeadAsWhole(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the probe command is a POSIX shell pipeline');
+        }
+        $installer = (new \ReflectionClass(LspInstaller::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(LspInstaller::class, 'captureNpm');
+        $method->setAccessible(true);
+
+        // 8 MiB + 500 KB of stderr: the retained head is the first 8 MiB and
+        // the 500 KB tail is counted as dropped, never kept.
+        $over = $method->invoke($installer, 'head -c 8900000 /dev/zero >&2; echo final-summary >&2; exit 1', $this->root);
+        $this->assertSame(1, $over['exitCode']);
+        $this->assertFalse($over['timedOut']);
+        $this->assertMatchesRegularExpression('/\[npm stderr truncated: \d+ bytes omitted after the first \d+;/', $over['stderr']);
+
+        $under = $method->invoke($installer, 'echo small >&2; exit 2', $this->root);
+        $this->assertSame(2, $under['exitCode']);
+        $this->assertSame('small', $under['stderr'], 'an uncut stream must come back untouched, with no marker');
+    }
+
     public function testAnUnprivateInstallRootRefusesBeforeAnyChildOrFetch(): void
     {
         $hostile = $this->root . '/public-tree';

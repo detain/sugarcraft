@@ -1,7 +1,8 @@
-<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul Williams VT500 state machine.</p>
+<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid, cursor and mode state out, without ever spawning a real terminal. sugar-vterm is the in-memory virtual terminal of the SugarCraft ecosystem. It is built on a Paul Williams VT500 state machine shared with <a href="sugar-ansi-parser.html">sugar-ansi-parser</a>, and it mirrors the design of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-vterm</code></pre>
+    <p>Requires PHP <code>^8.3</code>. The library has no runtime dependency on a real terminal, a PTY or an event loop for the synchronous API.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal\Terminal;
@@ -18,25 +19,173 @@ $term-&gt;feed("\x1b]2;Demo\x07");
 $term-&gt;windowTitle();                 // 'Demo'
 
 $term-&gt;feed("\x1b[?1049h");
-$term-&gt;mode()-&gt;altScreen;             // true</code></pre>
+$term-&gt;isAltScreen();                 // true</code></pre>
+    <p>The stream is parsed incrementally, so a sequence split across two <code>feed()</code> calls is handled correctly. The runnable version of a feed-and-inspect flow is <code>examples/feed-and-screenshot.php</code>.</p>
+
+    <h3 style="margin-top: 32px;">Concepts</h3>
+    <p>A terminal program writes bytes. The emulator reads them the way a real terminal would and keeps the result as state: a grid of cells, a cursor, a set of modes (alternate screen, mouse reporting, bracketed paste, synchronized output, auto-wrap), a window title and a scrollback ring of rows that scrolled off the top. Querying that state is cheap and synchronous, and nothing is rendered until you ask for it.</p>
+    <p>Two classes share the name. <code>SugarCraft\Vterm\Terminal\Terminal</code> is the full emulator, with alternate screen, scrollback, OSC dispatch and the complete mode set. The root <code>SugarCraft\Vterm\Terminal</code> is a lightweight emulator that produces <code>Snapshot</code> value objects for <a href="candy-vcr.html">candy-vcr</a>'s renderer. The examples in this page use the full emulator unless they say otherwise.</p>
+
+    <h3 style="margin-top: 32px;">Common tasks</h3>
+    <p><strong>Assert on the rendered grid instead of raw bytes.</strong> Drive a TUI's <code>view()</code> through the emulator and check the cells it actually painted:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal\Terminal;
+
+$term = Terminal::new(cols: 20, rows: 3);
+$term-&gt;feed($app-&gt;view());
+
+$cell = $term-&gt;screen()-&gt;cell(0, 0);
+assert($cell-&gt;grapheme === 'S');
+assert($term-&gt;cursor()-&gt;row === 0);</code></pre>
+
+    <p><strong>Read a row as plain text.</strong> <code>lines()</code> yields each row's text, and <code>linesWithHistory()</code> includes the scrollback above it:</p>
+    <pre class="code"><code class="language-php">$term = Terminal::new(cols: 40, rows: 8);
+$term-&gt;feed("\x1b[1;1Hstatus: ok");
+
+foreach ($term-&gt;screen()-&gt;lines() as $row =&gt; $line) {
+    echo "$row: $line\n";
+}</code></pre>
+
+    <p><strong>Keep a scrollback history.</strong> Scrolled-off rows are kept in a ring buffer, and <code>withScrollbackSize()</code> returns a terminal with a different capacity:</p>
+    <pre class="code"><code class="language-php">$term = Terminal::new(cols: 80, rows: 24)-&gt;withScrollbackSize(5000);
+$term-&gt;feed(str_repeat("line\r\n", 300));
+$history = $term-&gt;screen()-&gt;scrollback();</code></pre>
+
+    <p><strong>Feed captured output safely.</strong> Text captured from a pipe or a file has bare LF line endings, which the emulator treats as a cursor move without a carriage return. <code>feedCaptured()</code> normalizes them first:</p>
+    <pre class="code"><code class="language-php">$term = Terminal::new(cols: 80, rows: 24);
+$term-&gt;feedCaptured(file_get_contents('session.log'));</code></pre>
+
+    <p><strong>Read the state a program set.</strong> Title, cursor, modes and palette are all bare accessors on the terminal:</p>
+    <pre class="code"><code class="language-php">$term-&gt;feed("\x1b]2;build #42\x07\x1b[?25l\x1b[?2004h");
+
+$title = $term-&gt;windowTitleSanitized();   // 'build #42', control bytes stripped
+$cursorShown = $term-&gt;mode()-&gt;cursorVisible;   // false
+$pasteWrapped = $term-&gt;mode()-&gt;bracketedPaste; // true</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul Williams state machine, implemented upstream in <strong>sugar-ansi-parser</strong> and imported here — this lib's <code>src/Parser/</code> holds the handler bridges only. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
-      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg. The emulator pen tracks bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles and SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed); the renderer paints the five cell-attribute bits — bold, italic, underline (every style collapsed onto one bit), reverse, strikethrough — while blink, dim and hidden are tracked but not painted. BCE is always on — erase fills inherit the current background; there is no <code>?12</code> gate.</span></div>
-      <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
-      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue + flush on disable), 7 auto-wrap (DECAWM).</span></div>
-      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events. Every payload is attacker-supplied text kept VERBATIM — consumers sanitize before display or onward propagation.</span></div>
-      <div class="feature"><strong>Width-aware + combining</strong><span>CJK + most emoji take 2 cells with a continuation marker. Zero-width runes — anything sugar-core <code>Width::string</code> scores 0 (combining diacritics, variation selectors, joiners) — attach to the preceding cell via <code>Cell::$combining</code> so composed graphemes render correctly in a single column.</span></div>
-      <div class="feature"><strong>Scrollback buffer</strong><span>Ring buffer (default 1000 rows) captures scrolled-off content. Access via <code>Screen::scrollback()</code>. Configure size with <code>Terminal::withScrollbackSize()</code>. Erased by <code>CSI 3 J</code>.</span></div>
-      <div class="feature"><strong>Trust boundary</strong><span>Engineered for hostile byte streams: stored strings cap at 64 KiB, event logs at 1024 entries (drop-oldest rings), the DEC 2026 queue replays past 16384 pending cells. Nothing leaves the grid's <em>text</em> unsanitised — stored side-channels (window titles, OSC 8 hyperlinks, OSC 52 payloads) are kept VERBATIM; consumers sanitize before display (<code>Sanitize::untrusted()</code>). <a href="https://github.com/sugarcraft/sugar-vterm#trust-boundary-and-hostile-input">Full trust contract</a>.</span></div>
+      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul Williams state machine, implemented upstream in <strong>sugar-ansi-parser</strong> and imported here. This library's <code>src/Parser/</code> holds the handler bridges only. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
+      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg. The emulator pen tracks bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles and SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed). The renderer paints the five cell-attribute bits (bold, italic, underline, reverse, strikethrough). Blink, dim and hidden are tracked but not painted. BCE is always on: erase fills inherit the current background, and there is no <code>?12</code> gate.</span></div>
+      <div class="feature"><strong>Cursor, erase and scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
+      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen with cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue, flushed on disable), 7 auto-wrap (DECAWM).</span></div>
+      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write and read events. Every payload is attacker-supplied text kept verbatim, and consumers sanitize it before display or onward propagation.</span></div>
+      <div class="feature"><strong>Width-aware and combining</strong><span>CJK and most emoji take 2 cells with a continuation marker. Zero-width runes (combining diacritics, variation selectors, joiners) attach to the preceding cell through <code>Cell::$combining</code>, so composed graphemes render in a single column.</span></div>
+      <div class="feature"><strong>Scrollback buffer</strong><span>A ring buffer (default 1000 rows) captures scrolled-off content. Read it with <code>Screen::scrollback()</code>, resize it with <code>Terminal::withScrollbackSize()</code>, and erase it with <code>CSI 3 J</code>.</span></div>
+      <div class="feature"><strong>Trust boundary</strong><span>Engineered for hostile byte streams. Stored strings cap at 64 KiB, event logs at 1024 entries (drop-oldest rings), and the DEC 2026 queue replays past 16384 pending cells. Stored side-channels (window titles, OSC 8 hyperlinks, OSC 52 payloads) are kept verbatim, so consumers sanitize before display.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Snapshot tests</strong> — drive any TUI's <code>view()</code> through SugarVterm and assert on cell-grid state instead of raw byte strings.</li>
-      <li><strong>Recording &amp; replay</strong> — capture <code>feed()</code> input and replay deterministically.</li>
-      <li><strong>Headless SSH sessions</strong> — <code>sugar-ssh-server</code> is pairable: it can route session bytes into <code>feed()</code> to run TUIs without a real PTY, but no integration ships in either package — the wiring is yours to write.</li>
+      <li><strong>Snapshot tests.</strong> Drive any TUI's <code>view()</code> through SugarVterm and assert on cell-grid state instead of raw byte strings.</li>
+      <li><strong>Recording and replay.</strong> Capture <code>feed()</code> input and replay it deterministically.</li>
+      <li><strong>Headless SSH sessions.</strong> <code>sugar-ssh-server</code> is pairable: it can route session bytes into <code>feed()</code> to run TUIs without a real PTY, but no integration ships in either package. The wiring is yours to write.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">API reference</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Terminal</td><td><code>new(cols, rows, scrollbackSize, buffer, cursor, mode, onFocusEvent)</code></td><td>Create a virtual terminal. The <code>Terminal::create()</code> factory is deprecated: it accepts no <code>scrollbackSize</code></td></tr>
+<tr><td>Terminal</td><td><code>feed(bytes)</code>, <code>feedCaptured(bytes)</code></td><td>Feed ANSI bytes to the terminal. <code>feedCaptured()</code> normalizes bare LF to CRLF first</td></tr>
+<tr><td>Terminal</td><td><code>flush()</code></td><td>Drains the parser's pending state</td></tr>
+<tr><td>Terminal</td><td><code>screen()</code>, <code>cellAt(row, col)</code>, <code>rowCells(row)</code></td><td>The current cell grid, and cell or row access by position</td></tr>
+<tr><td>Terminal</td><td><code>cursor()</code>, <code>isWrapPending()</code></td><td>Cursor position and the pending-wrap flag</td></tr>
+<tr><td>Terminal</td><td><code>mode()</code></td><td>Terminal mode state (cursor visibility, mouse, bracketed paste, auto-wrap and more)</td></tr>
+<tr><td>Terminal</td><td><code>windowTitle()</code>, <code>windowTitleSanitized()</code></td><td>The OSC title, verbatim, or with control bytes stripped</td></tr>
+<tr><td>Terminal</td><td><code>palette()</code>, <code>clipboardEvents()</code>, <code>focusEvents()</code>, <code>bells()</code></td><td>Palette entries set by OSC 4, OSC 52 events, focus events and the bell count</td></tr>
+<tr><td>Terminal</td><td><code>replies()</code>, <code>replyOverflowCount()</code></td><td>Responses the emulator produced for queries, and how many were dropped at the cap</td></tr>
+<tr><td>Terminal</td><td><code>resize(cols, rows)</code>, <code>cols()</code>, <code>rows()</code></td><td>Change the grid size and read it back</td></tr>
+<tr><td>Terminal</td><td><code>withScrollbackSize(int)</code>, <code>withCellPixels(int $widthPx, int $heightPx)</code></td><td>New terminal with a different scrollback capacity (at least 1), or with a cell pixel size</td></tr>
+<tr><td>Terminal</td><td><code>enableAltScreen()</code>, <code>disableAltScreen()</code>, <code>isAltScreen()</code></td><td>Alternate-screen control. The lightweight root <code>Terminal</code> throws <code>\LogicException</code> for the first two</td></tr>
+<tr><td>Screen</td><td><code>cell(row, col)</code></td><td>The cell at a position. Out-of-bounds coordinates return the empty cell</td></tr>
+<tr><td>Screen</td><td><code>lines()</code>, <code>linesWithHistory()</code></td><td>Each row's text, optionally with the scrollback above it</td></tr>
+<tr><td>Screen</td><td><code>scrollback()</code>, <code>diff(Screen $other)</code></td><td>The scrollback ring, and a cell-level diff against another screen</td></tr>
+<tr><td>Scrollback</td><td><code>push()</code>, <code>all()</code>, <code>at()</code>, <code>count()</code>, <code>clear()</code>, <code>maxSize()</code></td><td>The ring of scrolled-off rows</td></tr>
+<tr><td>Cell</td><td><code>grapheme</code>, <code>sgr()</code>, <code>combining</code>, <code>foreground()</code>, <code>background()</code></td><td>Cell content, style and combining marks. <code>sgr()</code> always returns an <code>Sgr</code>, while the raw <code>$sgr</code> property is <code>?Sgr</code></td></tr>
+<tr><td>Cursor</td><td><code>row</code>, <code>col</code>, <code>withRow()</code>, <code>withCol()</code>, <code>at()</code>, <code>withVisible()</code>, <code>hidden()</code></td><td>Cursor position and visibility, with immutable updates</td></tr>
+<tr><td>Mode</td><td><code>cursorVisible</code>, <code>bracketedPaste</code>, <code>mouseSgr</code>, <code>isMouseReporting()</code>, <code>withAutoWrap()</code>, <code>withAltScreen()</code>, <code>withSyncUpdate()</code></td><td>Public mode flags, with immutable <code>with*()</code> updates and mouse-encoding helpers</td></tr>
+<tr><td>Sgr</td><td><code>underlineStyle</code>, <code>withUnderlineStyle(UnderlineStyle)</code></td><td>SGR underline style (None, Single, Double, Curly, Dotted, Dashed), mapped from CSI 4:0 to 4:5</td></tr>
+<tr><td>Snapshot</td><td><code>Snapshot::of(Terminal $t, float $time = 0.0)</code>, <code>equals()</code>, <code>equalsWithTime()</code></td><td>A frozen frame from the lightweight root <code>Terminal</code>, used by candy-vcr</td></tr>
+<tr><td>Theme</td><td><code>defaultPalette()</code>, <code>tokyoNight()</code>, <code>dracula()</code>, <code>solarizedDark()</code>, <code>tokyoNightLight()</code>, <code>tokyoNightStorm()</code></td><td>256-color palette with default foreground and background, and named factories</td></tr>
+<tr><td>Themes</td><td><code>all()</code>, <code>v1()</code></td><td>The bundled theme catalog, and the first-release subset</td></tr>
+<tr><td>Hyperlink</td><td><code>Hyperlink</code> value object</td><td>OSC 8 target and id, recorded per cell</td></tr>
+</table>
+
+        <!-- api-reference:generated -->
+
+    <h3 style="margin-top: 40px;">Configuration and limits</h3>
+    <p>The library reads no environment variables and no configuration file. Its tunables are constructor and <code>with*()</code> arguments, plus hard limits that protect the emulator from hostile streams:</p>
+    <table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>cols</code>, <code>rows</code></td><td>int</td><td>80, 24</td><td>Grid size, changed later with <code>resize()</code></td></tr>
+<tr><td><code>scrollbackSize</code></td><td>int</td><td>1000 rows</td><td>Ring capacity for scrolled-off rows, set with <code>withScrollbackSize()</code></td></tr>
+<tr><td><code>SugarCraft\Vterm\Terminal::MAX_STRING_BUFFER</code></td><td>bytes</td><td>64 KiB</td><td>Cap on one OSC, DCS or APC payload. Excess bytes are dropped</td></tr>
+<tr><td>Event logs</td><td>entries</td><td>1024</td><td>Drop-oldest rings for clipboard, focus and similar events</td></tr>
+<tr><td>DEC 2026 queue</td><td>pending cells</td><td>16384</td><td>Past this budget a partial flush lands</td></tr>
+<tr><td><code>withCellPixels()</code></td><td>pixels</td><td>none</td><td>Cell pixel size, set on a new terminal</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Theming</h3>
+    <p><code>Theme</code> is a 256-color palette with a default foreground and background. Use one of the named factories, or build your own from a palette, and pass it to the root <code>Terminal::new()</code> with its <code>?Theme</code> argument:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
+
+$vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());</code></pre>
+    <p>The bundled catalog is available through <code>Themes::all()</code>, and <code>Themes::v1()</code> returns the first-release subset. The theme supplies the 256-color palette and the default foreground and background.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/examples/feed-and-screenshot.php"><code>examples/feed-and-screenshot.php</code></a>: feeds a scripted ANSI stream and prints the resulting cell grid, the window title, the cursor position and the hyperlink span. It sanitizes the echoed title, rows and hyperlink with <code>Sanitize::untrusted()</code> first.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/feed-and-screenshot.php</code></pre>
+    <p>The demo GIF further down this page is rendered in CI from the tape at <code>.vhs/snapshot-demo.tape</code>.</p>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <p>Run the suite from the library root with PHPUnit 10:</p>
+    <pre class="code"><code class="language-shell">cd sugar-vterm &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p><code>SnapshotTest.php</code> pins rendered output, <code>ReadmeSnippetsTest.php</code> runs the code samples in the README so they cannot drift, and <code>AllocationTest.php</code> covers allocation behavior. Parser behavior that the emulator inherits is covered in <code>sugar-ansi-parser</code>.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting</h3>
+    <table class="api-table">
+<tr><th>Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Captured text stacks diagonally, each line starting further right</td><td>Bare LF moves the cursor down without returning to column 0. Use <code>feedCaptured()</code>, or normalize <code>\n</code> to <code>\r\n</code> before <code>feed()</code>. A real terminal does this translation for you (ONLCR), which a capture does not get.</td></tr>
+<tr><td>The window title contains escape bytes or looks like another program's output</td><td><code>windowTitle()</code> returns the attacker-supplied text verbatim. Use <code>windowTitleSanitized()</code> for control bytes, and <code>Sanitize::untrusted()</code> before printing anything to a real terminal.</td></tr>
+<tr><td><code>lines()</code> output renders control sequences on a real terminal</td><td>The grid holds whatever the stream wrote. Treat the output as hostile and sanitize it before echoing, as the example does.</td></tr>
+<tr><td><code>enableAltScreen()</code> throws <code>LogicException</code></td><td>The root <code>Terminal</code> does not model the alternate screen. Use <code>SugarCraft\Vterm\Terminal\Terminal</code>, which does.</td></tr>
+<tr><td>The scrollback is empty after a long stream</td><td><code>CSI 3 J</code> erases it, and the ring holds only the last <code>scrollbackSize</code> rows. Raise the capacity with <code>withScrollbackSize()</code> if you need more history.</td></tr>
+<tr><td>A snapshot looks stale after you edit the grid directly</td><td>This applies to the lightweight root <code>SugarCraft\Vterm\Terminal</code>, which has <code>revision()</code>, <code>grid()</code> and <code>snapshot()</code>; the default emulator on this page does not. On the root class, <code>revision()</code> counts only <code>feed()</code> and <code>flush()</code> calls, so a direct <code>grid()</code> mutation is invisible to it. Go through <code>feed()</code>, or compare snapshots by value.</td></tr>
+<tr><td>Long OSC payloads are cut short</td><td>Payloads cap at 64 KiB. Anything past the cap is dropped, and the tail of an overlong title or clipboard write is lost.</td></tr>
+<tr><td>Static analysis flags a call to <code>Terminal::create()</code></td><td>The factory is marked deprecated and takes no <code>scrollbackSize</code>. Use <code>Terminal::new()</code>.</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Trust boundary and hostile input</h3>
+    <p>The byte stream is untrusted input. The emulator bounds every buffer it fills: string payloads, event logs, the synchronized-output queue and the reply queue all have fixed caps, and the parser refuses to grow past them. Everything the stream sets as text (titles, hyperlink targets, clipboard payloads) is stored verbatim, because a faithful emulator has to report what the program sent. Sanitizing is the consumer's job, and <code>Sanitize::untrusted()</code> is the function to use before display or before forwarding.</p>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <table class="api-table">
+<tr><th>Layer</th><th>Class</th><th>Role</th></tr>
+<tr><td>Facade</td><td><code>Terminal\Terminal</code></td><td>Owns a parser and a screen handler. <code>feed()</code> drives bytes in</td></tr>
+<tr><td>Parser</td><td><code>SugarCraft\AnsiParser\Parser\Parser</code></td><td>VT500 state machine, owned by sugar-ansi-parser and consumed here</td></tr>
+<tr><td>Handlers</td><td><code>Handler\ScreenHandler</code>, <code>CursorHandler</code>, <code>EraseHandler</code>, <code>ScrollHandler</code>, <code>SgrHandler</code>, <code>ModeHandler</code>, <code>TabHandler</code>, <code>OscHandler</code></td><td>Each family of sequences updates one part of the state</td></tr>
+<tr><td>Parser bridge</td><td><code>Parser\CsiHandlerImpl</code>, <code>Parser\OscHandlerImpl</code></td><td>Implement the sugar-ansi-parser <code>CsiHandler</code> and <code>OscHandler</code> interfaces for this emulator</td></tr>
+<tr><td>State</td><td><code>Buffer</code>, <code>Cursor</code>, <code>Mode</code>, <code>Scrollback</code></td><td>The grid, the cursor, the mode flags and the scrolled-off rows</td></tr>
+<tr><td>Snapshot</td><td><code>Terminal</code> (root), <code>Snapshot</code></td><td>The lightweight emulator and its frozen frames, used by candy-vcr</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Charmbracelet source</th><th>SugarCraft port</th><th>Notes</th></tr>
+<tr><td><code>charmbracelet/x/vt</code></td><td><code>Terminal\Terminal</code>, <code>Screen</code>, <code>Mode</code></td><td>The emulator design, with its state split into cursor, mode, grid and scrollback</td></tr>
+<tr><td><code>charmbracelet/x/ansi</code></td><td><code>sugar-ansi-parser</code></td><td>The parser side of the design. The state machine and the handler interfaces live in that package</td></tr>
+<tr><td>Paul Williams, DEC parser state diagram</td><td><code>sugar-ansi-parser</code> <code>Parser</code></td><td>The VT500 state machine that both libraries follow</td></tr>
+</table>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library has no separate changelog file yet. Its history is the commit log of <code>sugar-vterm/</code> in <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>, and that log is the record of what changed and why.</p>
+
+    <h3 style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li><a href="sugar-ansi-parser.html"><strong>sugar-ansi-parser</strong></a>: the VT500 parser this emulator is built on.</li>
+      <li><a href="sugar-cellbuffer.html"><strong>sugar-cellbuffer</strong></a>: the immutable cell-grid and diff model. It is separate from this package's mutable grid by design.</li>
+      <li><a href="candy-vcr.html"><strong>candy-vcr</strong></a>: the tape renderer that uses the lightweight root <code>Terminal</code> to produce its frames.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -44,29 +193,9 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
       <li><a href="https://github.com/sugarcraft/sugar-vterm">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Terminal</td><td>new(cols, rows, scrollbackSize)</td><td>Create a virtual terminal (the <code>Terminal::create()</code> factory is deprecated: it accepts no <code>scrollbackSize</code>)</td></tr>
-<tr><td>Terminal</td><td>feed(bytes)</td><td>Feed ANSI bytes to terminal</td></tr>
-<tr><td>Terminal</td><td>screen()</td><td>Get current cell grid</td></tr>
-<tr><td>Terminal</td><td>cursor()</td><td>Get cursor position</td></tr>
-<tr><td>Terminal</td><td>mode()</td><td>Get terminal mode state (includes autoWrap)</td></tr>
-<tr><td>Terminal</td><td>windowTitle()</td><td>Get window title from OSC — verbatim attacker text, sanitize before display</td></tr>
-<tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
-<tr><td>Screen</td><td>cell(row, col)</td><td>Get cell at position (out-of-bounds in either coordinate returns the empty cell)</td></tr>
-<tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
-<tr><td>Cell</td><td>grapheme, sgr(), combining, foreground(), background()</td><td>Cell content, style, and combining marks (sgr() always returns an Sgr; the raw $sgr property is ?Sgr)</td></tr>
-<tr><td>Cell</td><td>withCombining(string)</td><td>New cell with additional combining marks appended</td></tr>
-<tr><td>Mode</td><td>autoWrap, syncUpdate, withAutoWrap(bool)</td><td>DECAWM auto-wrap and synchronized-output (DEC 2026) state</td></tr>
-<tr><td>Sgr</td><td>underlineStyle, withUnderlineStyle(UnderlineStyle)</td><td>SGR underline style (None/Single/Double/Curly/Dotted/Dashed)</td></tr>
-<tr><td>UnderlineStyle</td><td>None / Single / Double / Curly / Dotted / Dashed</td><td>Enum — CSI 4:N map (4:0–4:5)</td></tr>
-</table>
   </div>
 </section>
 
@@ -79,7 +208,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-vterm/.vhs/snapshot-demo.gif" alt="A scripted ANSI byte stream fed to a virtual terminal; the cell grid prints back showing colors, cursor position, and a hyperlink span">
                 <h3>Feed and screenshot</h3>
                 <span class="demo-caption">An ANSI byte stream feeds into a Terminal; the cell grid prints back as a screenshot, with window title, cursor position, and hyperlink span.</span>
-                <span class="demo-caption">The GIF autoplays and cannot be paused by reduced-motion CSS — for a still, run <code>php examples/feed-and-screenshot.php</code>.</span>
+                <span class="demo-caption">The GIF autoplays and cannot be paused by reduced-motion CSS. For a still, run <code>php examples/feed-and-screenshot.php</code>.</span>
             </div>
         </div>
     </div>

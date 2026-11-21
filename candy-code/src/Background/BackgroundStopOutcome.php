@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 /**
- * What {@see BackgroundSupervisor::stopSession()} actually achieved (audit BG-1).
+ * What {@see BackgroundSupervisor::stopSession()} actually achieved.
  *
  * An enum rather than a bool because the caller — `/bg stop <id>` — owes the
  * user a different sentence for each case: "no such session" and "it had

@@ -10,18 +10,11 @@ use SugarCraft\Code\Support\LineAppends;
  * Append-only JSON-lines mailbox for inter-teammate message delivery.
  *
  * Each teammate's inbox is stored as a single append-only file at
- * $basePath/{teammateId}/inbox.jsonl. A companion wake marker
- * ($basePath/{teammateId}/.wake) is rewritten with a fresh generation
- * token on every send.
+ * $basePath/{teammateId}/inbox.jsonl.
  *
  * Messages are stored one JSON object per line. Reading validates every
  * line independently — a malformed line is skipped rather than aborting
  * the read, so one bad message cannot prevent delivery of subsequent ones.
- *
- * There is no OS-level wakeup across this plain-file transport (no inotify,
- * no signal), so waitForMessage() is a bounded poll-with-backoff loop
- * against the wake marker — it does NOT resume the instant a message
- * arrives, it notices within one poll interval of it.
  */
 final class Mailbox
 {
@@ -40,9 +33,7 @@ final class Mailbox
     /**
      * Send a message from one teammate to another.
      *
-     * Appends the message as a JSON line to the recipient's inbox and
-     * rewrites the wake marker so a concurrent waitForMessage() notices
-     * within its next poll interval.
+     * Appends the message as a JSON line to the recipient's inbox.
      */
     public function send(string $fromTeammateId, string $toTeammateId, TeamMessage $message): void
     {
@@ -60,12 +51,6 @@ final class Mailbox
         ], JSON_THROW_ON_ERROR) . "\n";
 
         LineAppends::append($inboxPath, $line);
-        $previous = umask(0o077);
-        try {
-            $this->touchWakeMarker($toTeammateId);
-        } finally {
-            umask($previous);
-        }
     }
 
     /**
@@ -220,103 +205,11 @@ final class Mailbox
         return $count;
     }
 
-    /**
-     * Block until the next unread message arrives in a teammate's inbox, or
-     * a bounded timeout elapses.
-     *
-     * Mirrors the pattern other Agents classes use when pcntl-based true
-     * parallelism isn't assumed (see AgentWorkerPool::waitForCompletion):
-     * there is no cross-process wakeup primitive available for a plain-file
-     * transport, so this polls the wake marker with exponential backoff
-     * (5ms → 100ms cap) instead of busy-spinning. The marker is rewritten
-     * with a fresh generation token on every send() (see touchWakeMarker()),
-     * so a change in its content — not merely its mtime, which on many
-     * filesystems only has one-second resolution — reliably signals that a
-     * send() happened since the last check, at which point the inbox is
-     * re-scanned for the oldest unread message.
-     *
-     * Returns immediately (no wait) if an unread message is already
-     * sitting in the inbox when called. Does NOT mark the returned message
-     * read — call markRead() explicitly. Returns null if timeoutSeconds
-     * elapses with no unread message appearing.
-     *
-     * @param callable(int):void|null $sleeper
-     *        Sleep seam (same family as {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow}'s
-     *        clock): the poll loop calls it with the microseconds owed instead
-     *        of `usleep()`. Production passes nothing and behaves exactly as
-     *        before; a test can count naps to assert the already-unread fast
-     *        path never entered this loop, instead of bounding the call by
-     *        wall time a loaded scheduler can violate.
-     */
-    public function waitForMessage(string $teammateId, float $timeoutSeconds = 5.0, ?callable $sleeper = null): ?TeamMessage
-    {
-        // Capture the wake token BEFORE the initial inbox check (mirroring the
-        // loop body's read-token-then-check-inbox order below). If the token
-        // were captured after firstUnread(), a send() landing in that window
-        // would bump the marker first, so the "baseline" we record would
-        // already reflect it — the poll loop's token comparison would then
-        // see no further change and skip re-scanning the inbox, silently
-        // missing a message that is genuinely sitting there unread.
-        $lastWakeToken = $this->wakeMarkerToken($teammateId);
-        $message = $this->firstUnread($teammateId);
-        if ($message !== null) {
-            return $message;
-        }
-
-        // Resolved AFTER the fast-path return, so a zero-nap count means
-        // "the loop was never reached" and not "the loop ran on a no-op
-        // sleeper".
-        $nap = $sleeper !== null
-            ? \Closure::fromCallable($sleeper)
-            : static function (int $microseconds): void {
-                usleep($microseconds);
-            };
-
-        $deadline = microtime(true) + $timeoutSeconds;
-        $pollIntervalSeconds = 0.005;
-        $maxPollIntervalSeconds = 0.1;
-
-        while (true) {
-            $remaining = $deadline - microtime(true);
-            if ($remaining <= 0) {
-                return null;
-            }
-
-            $nap((int) round(min($pollIntervalSeconds, $remaining) * 1_000_000));
-            $pollIntervalSeconds = min($pollIntervalSeconds * 2, $maxPollIntervalSeconds);
-
-            $currentWakeToken = $this->wakeMarkerToken($teammateId);
-            if ($currentWakeToken === $lastWakeToken) {
-                continue;
-            }
-            $lastWakeToken = $currentWakeToken;
-
-            $message = $this->firstUnread($teammateId);
-            if ($message !== null) {
-                return $message;
-            }
-        }
-    }
-
-    /**
-     * Return the oldest unread message in a teammate's inbox, or null.
-     */
-    private function firstUnread(string $teammateId): ?TeamMessage
-    {
-        foreach ($this->receive($teammateId) as $message) {
-            if (!$message->read) {
-                return $message;
-            }
-        }
-
-        return null;
-    }
-
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    /** Gate every path built from an id: send/receive/markRead/inboxSize/wake all route through the three path helpers. */
+    /** Gate every path built from an id: send/receive/markRead/inboxSize all route through the three path helpers. */
     private static function assertId(string $teammateId): void
     {
         if (preg_match(self::ID_PATTERN, $teammateId) !== 1 || $teammateId === '.' || $teammateId === '..') {
@@ -382,38 +275,5 @@ final class Mailbox
         fclose($handle);
 
         return $markers;
-    }
-
-    private function wakeMarkerPath(string $teammateId): string
-    {
-        self::assertId($teammateId);
-
-        return $this->basePath . '/' . $teammateId . '/.wake';
-    }
-
-    private function touchWakeMarker(string $teammateId): void
-    {
-        // Written content — not just mtime — doubles as a generation
-        // token so waitForMessage() can detect "did a send() happen since
-        // I last looked" at sub-second resolution; filemtime() only
-        // reports whole seconds on most filesystems, which is too coarse
-        // for a poll interval measured in milliseconds.
-        file_put_contents($this->wakeMarkerPath($teammateId), (string) hrtime(true), LOCK_EX);
-    }
-
-    /**
-     * Read the current wake-marker generation token, or null if no send()
-     * has ever happened for this teammate.
-     */
-    private function wakeMarkerToken(string $teammateId): ?string
-    {
-        $path = $this->wakeMarkerPath($teammateId);
-        if (!file_exists($path)) {
-            return null;
-        }
-
-        $contents = file_get_contents($path);
-
-        return $contents === false ? null : $contents;
     }
 }

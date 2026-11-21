@@ -72,7 +72,7 @@ final class PacedAsyncRenderer implements AsyncRenderer
      * re-arm on futureTick, so the promise needs the loop only when the
      * encode spans more than one slice.
      */
-    public function renderAsync(ImageSource $image, int $width, int $height): PromiseInterface
+    public function renderAsync(ImageSource $image, int $width, ?int $height = null): PromiseInterface
     {
         $deferred = new Deferred();
         $session = $this->session($image, $width, $height);

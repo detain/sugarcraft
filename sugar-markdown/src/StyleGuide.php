@@ -19,18 +19,10 @@ use SugarCraft\Style\Style;
  * `chroma` block mapping chroma token names (`Keyword`, `LiteralString`,
  * `Comment`, `LiteralNumber`, …) to their own primitives.
  *
- * DIVERGENCE, stated honestly: candy-mdview ships the same vocabulary as the
- * adapter {@see \SugarCraft\MdView\GlamourTheme} (it converts parsed
- * primitives into a sugar-markdown Theme on the consumer side). This class is NOT a
- * re-export of it and cannot be — candy-mdview REQUIRES sugar-markdown, so a
- * sugar-markdown→glow dependency would mint a sibling require-cycle: the
- * producer never depends on its consumer. The
- * decode vocabulary is therefore duplicated locally; the two families share
- * the schema contract, not the code. Glow's adapter can in time delegate
- * here (consumer→producer is the lawful direction).
- *
- * Being the producer's own decoder, {@see theme()} lands values directly
- * in their native {@see Theme} slots; nothing needs an adapter hop.
+ * candy-mdview's --theme-config door is this loader. It was once a separate
+ * adapter (`GlamourTheme`) that duplicated the decode vocabulary; since the
+ * P1-12c-mdview move the decode lives here once, and {@see theme()} lands values
+ * directly in their native {@see Theme} slots.
  *
  * WHAT DECODES: colours and attribute flags, the document's
  * `block_prefix` / `block_suffix` / `indent` / `margin`, `paragraph` block
@@ -60,10 +52,24 @@ use SugarCraft\Style\Style;
  * (0-255; out-of-range numbers are ignored rather than guessed), and
  * `"auto"` / named colours (no target representation) resolve to no colour.
  *
+ * DIVERGENCE, deliberate: this loader does NOT refuse a document or paragraph
+ * affix that is not inert whitespace. Its affixes are visible glyphs by design
+ * (`«` / `»`, `P> `, pinned by StyleGuideTest), and the SEC-02 sweep below is
+ * what keeps a payload from reaching the render raw. candy-mdview's
+ * GlamourDecorationGate applies the whitespace-only refusal
+ * (`glamour.decoration_unsafe`) in front of this loader. The over-ceiling
+ * refusal of indent and margin IS here (`glamour.value_too_large`).
+ *
  * Mirrors charmbracelet/glamour's styles.JSON style-file reader.
  */
 final class StyleGuide
 {
+    /**
+     * Hard ceiling on style-file bytes {@see fromFile()} will read. candy-mdview's
+     * --theme-config door reads against the same constant.
+     */
+    public const MAX_CONFIG_BYTES = 1_000_000;
+
     /**
      * @param string $blockPrefix    document `block_prefix` literal.
      * @param string $blockSuffix    document `block_suffix` literal.
@@ -112,15 +118,29 @@ final class StyleGuide
      * `block_suffix` / `indent_token`) are swept through
      * `Sanitize::untrusted()` so a hostile file cannot inject raw
      * escape sequences — stock glamour "\n"/space affixes survive the
-     * sweep byte-identical.
+     * sweep byte-identical. An indent or margin above
+     * {@see Theme::MAX_DOCUMENT_DECORATION} refuses by name.
      *
-     * @throws \RuntimeException        when the file cannot be read
-     * @throws \InvalidArgumentException when its contents are not a JSON object
+     * A file over {@see MAX_CONFIG_BYTES} refuses by name after a stat and before
+     * any read, so a hostile or mistaken multi-gigabyte path cannot exhaust
+     * memory. The ceiling is the one candy-mdview's --theme-config door enforces.
+     *
+     * @throws \RuntimeException        when the file cannot be read or exceeds
+     *                                   {@see MAX_CONFIG_BYTES}
+     * @throws \InvalidArgumentException when its contents are not a JSON object,
+     *                                   or carry an over-ceiling indent or margin
      */
     public static function fromFile(string $path): self
     {
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
+        $size = filesize($path);
+        if ($size !== false && $size > self::MAX_CONFIG_BYTES) {
+            throw new \RuntimeException(Lang::t('theme.file_too_large', [
+                'path'  => $path,
+                'bytes' => self::MAX_CONFIG_BYTES,
+            ]));
         }
         $warning = null;
         set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
@@ -192,12 +212,13 @@ final class StyleGuide
         // — glamour ships prefixes like "\n" (kept: TAB/LF/CR survive the
         // sweep byte-identical) but a hostile file must never be able to
         // inject a raw OSC/CSI sequence into the render through a prefix,
-        // a suffix or an indent token.
+        // a suffix or an indent token. An over-ceiling indent or margin
+        // refuses by name rather than saturating (see boundedDecoration()).
         return new self(
             blockPrefix:    Sanitize::untrusted((string) ($document['block_prefix'] ?? '')),
             blockSuffix:    Sanitize::untrusted((string) ($document['block_suffix'] ?? '')),
-            documentIndent: self::nonNegativeInt($document['indent'] ?? 0),
-            documentMargin: self::nonNegativeInt($document['margin'] ?? 0),
+            documentIndent: self::boundedDecoration($document['indent'] ?? 0, 'document.indent'),
+            documentMargin: self::boundedDecoration($document['margin'] ?? 0, 'document.margin'),
             elements:       $elements,
             chroma:         $chroma,
         );
@@ -407,6 +428,26 @@ final class StyleGuide
         }
 
         return null;
+    }
+
+    /**
+     * A decoration integer under the shared ceiling. An over-cap value refuses
+     * by name instead of saturating: a style file asking for a 1.5-billion-cell
+     * indent is broken, and the loader is the door that speaks to the user.
+     * Mirrors the refusal candy-mdview's former GlamourTheme made before the
+     * loader move; this loader is the ceiling's refusal point now.
+     */
+    private static function boundedDecoration(mixed $value, string $key): int
+    {
+        $number = self::nonNegativeInt($value);
+        if ($number > Theme::MAX_DOCUMENT_DECORATION) {
+            throw new \InvalidArgumentException(Lang::t('glamour.value_too_large', [
+                'key'   => $key,
+                'limit' => Theme::MAX_DOCUMENT_DECORATION,
+            ]));
+        }
+
+        return $number;
     }
 
     /** int | digit-string → non-negative int; anything else coerces to 0. */

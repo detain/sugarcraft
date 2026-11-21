@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
-use SugarCraft\Code\Lang;
+use CandyCode\Bundles\MsTeams\Lang;
 
 /**
  * The command vocabulary in Teams spelling.

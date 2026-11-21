@@ -11,7 +11,6 @@ use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Tools\BuiltIn\SkillTool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Util\TokenEstimate;
@@ -406,7 +405,7 @@ final readonly class ReinjectionPlan
         $base = $root ?? (getcwd() ?: '.');
         $realRoot = realpath($base);
         $plansDir = $realRoot === false ? false : realpath($realRoot . '/' . \SugarCraft\Code\Permissions\PermissionGate::PLANS_DIR);
-        if ($realRoot === false || $plansDir === false || !ContainedPath::below($plansDir, $realRoot)) {
+        if ($realRoot === false || $plansDir === false || !\SugarCraft\Core\Util\PathJail::below($plansDir, $realRoot)) {
             return [null, $this->files];
         }
 
@@ -446,7 +445,7 @@ final readonly class ReinjectionPlan
             }
             $real = realpath(str_starts_with($path, '/') ? $path : $base . '/' . $path);
             // Gone, not a file, or outside the project: not re-read.
-            if ($real === false || !is_file($real) || !is_readable($real) || !ContainedPath::below($real, $realRoot)) {
+            if ($real === false || !is_file($real) || !is_readable($real) || !\SugarCraft\Core\Util\PathJail::below($real, $realRoot)) {
                 continue;
             }
 

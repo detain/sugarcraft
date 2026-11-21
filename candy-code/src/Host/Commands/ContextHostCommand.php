@@ -13,10 +13,10 @@ use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * `/context` (and `/tokens`): where the next request's context window goes —
@@ -128,9 +128,9 @@ final class ContextHostCommand implements HostCommand
             $base = $this->resolveBase($context, $args[0] ?? null, $literalTokens);
             $jsonTarget = $base . '.json';
             $txtTarget = $base . '.txt';
-            AtomicFileWriter::write($jsonTarget, $json, 0600);
+            AtomicTextFile::at($jsonTarget)->withPermissions(0600)->write($json);
             $jsonWritten = true;
-            AtomicFileWriter::write($txtTarget, $dump['prompt'], 0600);
+            AtomicTextFile::at($txtTarget)->withPermissions(0600)->write($dump['prompt']);
         } catch (RuntimeException $e) {
             $message = $e->getMessage();
             if ($jsonWritten && !\is_file($txtTarget)) {

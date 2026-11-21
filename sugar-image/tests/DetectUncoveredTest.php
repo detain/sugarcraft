@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Detect;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * @covers \SugarCraft\Image\Detect
@@ -72,6 +73,7 @@ final class DetectUncoveredTest extends TestCase
         putenv('TMUX=1');
         putenv('KITTY_WINDOW_ID=12345');
         Detect::reset();
+        KittyTerminal::answer();
 
         $cap = Detect::probe();
 

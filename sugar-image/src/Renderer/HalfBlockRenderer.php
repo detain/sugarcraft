@@ -38,6 +38,8 @@ use SugarCraft\Image\Support\OutputOptimizer;
  */
 final class HalfBlockRenderer implements Renderer, IncrementalRenderer, AcceptsOptimization
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 

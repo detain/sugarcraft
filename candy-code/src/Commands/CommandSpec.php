@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Commands;
 
 use Symfony\Component\Yaml\Exception\ParseException;
+use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Code\Skills\SkillSource;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
@@ -39,8 +40,6 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  */
 final class CommandSpec
 {
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * A command name is typed after "/" and used as an array key, so it is
      * restricted to path-safe characters. "/" itself is allowed as the
@@ -377,13 +376,14 @@ final class CommandSpec
             throw new \RuntimeException(Lang::t('cmd.file.unreadable', ['path' => $path]));
         }
 
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) === 1) {
+        $split = MarkdownFrontmatter::split($content);
+        if ($split !== null) {
             try {
-                $meta = Frontmatter::parse($matches[1]);
+                $meta = Frontmatter::parse($split->meta);
             } catch (ParseException $e) {
                 throw new \InvalidArgumentException(Lang::t('cmd.file.malformed', ['path' => $path, 'error' => $e->getMessage()]), 0, $e);
             }
-            $body = substr($content, strlen($matches[0]));
+            $body = $split->body;
         } else {
             $meta = [];
             $body = $content;
@@ -505,7 +505,7 @@ final class CommandSpec
 
     /**
      * Whether this body holds a `` !`…` `` form, i.e. whether expanding it may
-     * have to run a shell (audit 15b-20).
+     * have to run a shell.
      *
      * Asked BEFORE expanding, so {@see \SugarCraft\Code\Chat} can move exactly
      * the expansions that can block off its update path and leave every other
@@ -536,12 +536,6 @@ final class CommandSpec
 
         return false;
     }
-
-    /**
-     * Seconds a timed-out `` !`…` `` tree gets between SIGTERM and SIGKILL —
-     * the 50 ms the pre-15b-20 ladder slept between its two `proc_terminate()`s.
-     */
-    private const TIMEOUT_TERM_GRACE_SECONDS = 0.05;
 
     /**
      * The prompt this file-based command sends, with its argument placeholders
@@ -771,179 +765,41 @@ final class CommandSpec
      */
     public function runShellSubstitution(string $command, ?string $cwd, float $timeoutSeconds): string
     {
-        // KEPT even though {@see expandTemplate()} now checks the budget before
-        // it calls its resolver: this is a public mechanism, and a bound a caller
-        // has to remember to apply is not a bound.
         if ($timeoutSeconds <= 0.0) {
             return self::shellBudgetSpentNotice($command);
         }
 
-        $pipes = [];
-        // E672/E674: a command substitution runs model-authored shell text;
-        // the choke point gives it the no-controlling-terminal spawn and the
-        // fail-fast env like every other site.
-        // rv-sec-4: SCRUBBED env, not the bare inherited one. The substitution's
-        // stdout is text the MODEL reads — it lands verbatim in the expanded
-        // prompt — which is exactly the audit F-E1 class that takes
-        // {@see ProcessContainment::scrubbedEnv()} (Bash, Grep, script hooks),
-        // not the operator-backend exemption that keeps {@see
-        // ProcessContainment::env()} unscrubbed: a `` !`printenv OPENAI_API_KEY` ``
-        // would otherwise mint a credential into the context window. No
-        // per-command allowlist is threaded here because scrubbedEnv() already
-        // consults the process-global `secretEnvAllowlist` Bootstrap installs —
-        // an operator who needs a template to see a credential grants it there,
-        // the same lever every other scrubbed site honours.
-        $process = @proc_open(
-            ProcessContainment::spawnSpec(['bash', '-c', $command]),
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            $cwd,
-            ProcessContainment::scrubbedEnv(),
-        );
-
-        if (!\is_resource($process)) {
+        // The shell runs as an argv (`bash -c`), never through a parent shell,
+        // so the command text reaches bash untouched. ChildRun owns the pipes,
+        // the deadline and the kill ladder; the group kill reaches the tree the
+        // containment wrapper leads. No exit grace: a backgrounded job that
+        // holds stdout after the shell exits is part of this command's budget,
+        // so the call runs to the deadline and the group kill reports it.
+        /** @var list<string> $argv */
+        $argv = array_values((array) ProcessContainment::spawnSpec(['bash', '-c', $command]));
+        try {
+            $result = ChildRun::new($argv)
+                ->withCwd($cwd)
+                ->withEnv(ProcessContainment::scrubbedEnv())
+                ->withTimeout($timeoutSeconds)
+                ->withMaxBytes(self::MAX_SUBSTITUTION_BYTES)
+                ->withExitGrace(null)
+                ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : ProcessContainment::awaitGroupLeader(...))
+                ->run();
+        } catch (\RuntimeException) {
             return sprintf('[!`%s` was not run: the shell could not be started]', self::abbreviateForm($command));
         }
 
-        // READ WHILE THE CHILD IS ALIVE, for the timeout's tree kill below
-        // (audit 15b-20): once it has exited, `proc_get_status()` reaps it and
-        // neither its pid nor its process group can be read any more — and the
-        // case that needs them most is exactly that one, a `` !`npm run dev &` ``
-        // whose shell is gone while the job it started holds stdout open.
-        $pid = (int) (proc_get_status($process)['pid'] ?? 0);
-        $groupPid = ProcessContainment::groupId($process);
+        $timedOut = $result->timedOut();
+        // A child that could not be reaped has no status; -1 is what proc_close()
+        // reported for that case before the ChildRun move, so it stays non-zero.
+        $exitCode = $result->exitCode ?? -1;
 
-        $streams = [1 => $pipes[1], 2 => $pipes[2]];
-        foreach ($streams as $stream) {
-            stream_set_blocking($stream, false);
-        }
-
-        $captured = [1 => '', 2 => ''];
-        // PER FD, not one running total, and that distinction is the whole
-        // correctness of the "bytes dropped" notice below. Stderr's overflow is
-        // a drop from THE SUBSTITUTION only when stderr is part of the
-        // substitution, and it usually is not: on a zero exit the entire stderr
-        // buffer is discarded, overflow and all, for a completely different
-        // reason. One shared counter reported the discarded buffer's overflow as
-        // the delivered text's drop count — MEASURED:
-        // `head -c 40000 /dev/zero | tr "\0" y 1>&2; echo ok` returned
-        // `ok` + "[23616 bytes dropped: one substitution may contribute 16384]"
-        // for a three-byte substitution from which nothing was dropped.
-        $overflow = [1 => 0, 2 => 0];
-        $deadline = microtime(true) + $timeoutSeconds;
-        $timedOut = false;
-
-        while ($streams !== []) {
-            $remaining = $deadline - microtime(true);
-            if ($remaining <= 0.0) {
-                $timedOut = true;
-                break;
-            }
-
-            // Capped at 200ms per wait so the deadline is re-checked often
-            // enough that a command producing no output at all still expires on
-            // time rather than on its first byte.
-            $slice = min($remaining, 0.2);
-            $read = array_values($streams);
-            $write = [];
-            $except = [];
-            if (@stream_select($read, $write, $except, (int) $slice, (int) round(($slice - (int) $slice) * 1000000)) === false) {
-                break;
-            }
-
-            foreach ($streams as $fd => $stream) {
-                if (!\in_array($stream, $read, true)) {
-                    continue;
-                }
-                $chunk = fread($stream, 8192);
-                if ($chunk === false || $chunk === '') {
-                    if (feof($stream)) {
-                        unset($streams[$fd]);
-                    }
-
-                    continue;
-                }
-                $room = self::MAX_SUBSTITUTION_BYTES - \strlen($captured[$fd]);
-                if ($room > 0) {
-                    $captured[$fd] .= substr($chunk, 0, $room);
-                }
-                $overflow[$fd] += max(0, \strlen($chunk) - max(0, $room));
-            }
-        }
-
-        // THE READ LOOP CAN END WITH THE CHILD STILL RUNNING, and the budget has
-        // to cover that too. A command that redirects its own output —
-        // `make -j8 > build.log 2>&1`, which a command file that only wants the
-        // exit code writes without thinking about it — closes both pipes at
-        // once, so `$streams` empties on the first iteration and the loop above
-        // has nothing left to wait on. `proc_close()` then WAITS for the
-        // process. MEASURED on this host before this wait existed:
-        // `printf %s early; exec 1>&- 2>&-; sleep 6` given a 0.3-second budget
-        // returned in 6.00 seconds. `SHELL_BUDGET_SECONDS` is documented as a
-        // bound on how long the single-threaded TUI is frozen, so a bound that
-        // covered only the OUTPUT and not the EXIT was a bound on the wrong
-        // thing.
-        //
-        // Polled rather than waited on, because there is no portable way to wait
-        // for a child with a deadline in PHP; 10ms is short enough that the
-        // usual case (already exited) adds one sleep and long enough that a
-        // ten-second budget costs at most a thousand `waitpid` calls. The exit
-        // code survives the polling: PHP caches it on the first
-        // `proc_get_status()` that reaps the child, so `proc_close()` below
-        // still returns the real status rather than -1 (measured on PHP 8.3).
-        while (!$timedOut && (proc_get_status($process)['running'] ?? false) === true) {
-            if (microtime(true) >= $deadline) {
-                $timedOut = true;
-
-                break;
-            }
-            usleep(10000);
-        }
-
-        if ($timedOut) {
-            // THE WHOLE TREE, not the direct child (audit 15b-20). proc_terminate()
-            // signalled only the `setsid` wrapper, so a template's
-            // `` !`bash -c 'sleep 38'; echo done` `` — or any `npm run dev &` that
-            // holds stdout — kept running after the "killed after N seconds"
-            // notice, MEASURED by `r14_cmd_shell.php`. killTree() freezes and
-            // collects the descendants while the root still holds them, then
-            // signals every process group they are in (spawnSpec() made the
-            // command a session leader, so a backgrounded job whose shell already
-            // exited is still in that group) and every member.
-            //
-            // SIGTERM with a short grace, then SIGKILL: a `bash -c` blocked in a
-            // syscall may ignore the first, and proc_close() WAITS, so closing
-            // without having actually killed the child is how a bounded call
-            // becomes unbounded. The grace is the 50 ms the old ladder slept.
-            //
-            // THEN THE GROUP, as the floor killTree() cannot reach on its own: a
-            // root that already exited (the `&` case above) has no descendants
-            // left to walk, but its group still holds the job. A group with
-            // live members keeps its id, so the signal cannot land elsewhere.
-            if ($pid > 0 && \function_exists('posix_kill')) {
-                ProcessContainment::killTree($pid, self::TIMEOUT_TERM_GRACE_SECONDS);
-                if ($groupPid !== null) {
-                    @posix_kill(-$groupPid, 9);
-                }
-            } else {
-                proc_terminate($process, 9);
-            }
-        }
-
-        foreach ([$pipes[1], $pipes[2]] as $stream) {
-            if (\is_resource($stream)) {
-                fclose($stream);
-            }
-        }
-        $exitCode = proc_close($process);
-
-        // The one place that decides whether stderr is part of the answer, so
-        // the drop accounting below can ask instead of assuming.
         $stderrIsIncluded = !$timedOut && $exitCode !== 0;
 
-        $text = rtrim($captured[1], "\n");
+        $text = rtrim($result->stdout, "\n");
         if ($stderrIsIncluded) {
-            $stderr = trim($captured[2]);
+            $stderr = trim($result->stderr);
             $text = rtrim($text . "\n" . $stderr, "\n")
                 . sprintf("\n[!`%s` exited %d]", self::abbreviateForm($command), $exitCode);
         }
@@ -963,7 +819,11 @@ final class CommandSpec
         // FAILING command could otherwise contribute MAX_SUBSTITUTION_BYTES of
         // stdout plus as much again of stderr — twice the number this class
         // documents as one substitution's share.
-        $dropped = $overflow[1] + ($stderrIsIncluded ? $overflow[2] : 0);
+        // Stderr's overflow counts only when stderr is part of the answer: on a zero
+        // exit the whole stderr buffer is discarded, overflow and all, so reporting
+        // it would invent a drop (MEASURED: `head -c 40000 /dev/zero | tr "\0" y 1>&2; echo ok`).
+        $dropped = $result->droppedBytes - $result->droppedStderrBytes
+            + ($stderrIsIncluded ? $result->droppedStderrBytes : 0);
         if (\strlen($text) > self::MAX_SUBSTITUTION_BYTES) {
             $dropped += \strlen($text) - self::MAX_SUBSTITUTION_BYTES;
             $text = substr($text, 0, self::MAX_SUBSTITUTION_BYTES);
@@ -983,7 +843,7 @@ final class CommandSpec
      * Read one `@path` and hand back its bytes, bounded to
      * {@see MAX_SUBSTITUTION_BYTES}.
      *
-     * CONTAINED IN $root, through the one {@see ContainedPath} predicate the
+     * CONTAINED IN $root, through the one {@see \SugarCraft\Core\Util\PathJail} predicate the
      * rest of this feature uses rather than a fourth prefix compare — which is
      * what stops `@../../.ssh/id_rsa.pub`, and a symlink under $root pointing at
      * the same, from becoming prompt text. The reference itself is
@@ -1027,7 +887,7 @@ final class CommandSpec
             );
         }
 
-        if (!ContainedPath::within($resolved, $root)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($resolved, $root)) {
             return sprintf(
                 '[@%s was not included: it resolves outside %s, and an included file becomes prompt text]',
                 $reference,

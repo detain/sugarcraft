@@ -777,7 +777,7 @@ in the same namespace are its value parts.
 | `ImagePlacer` | Optional interface for image placements |
 | `ImagePlacement` | Image placement data |
 | `TickEpoch` | Focus-regain epoch counter |
-| `BoundedCommand` | One bounded child-process run: argv array (no shell interpolation), wall-clock deadline (default 5s), 1 MiB output ceiling, and a guaranteed TERM→KILL reap before `proc_close` | `run(array $argv, float $timeoutSeconds, int $maxOutputBytes): array` |
+| `BoundedCommand` | One bounded child-process run: argv array (no shell interpolation), wall-clock deadline (default 5s), 1 MiB output ceiling, and a guaranteed TERM→KILL reap. The pump and the ladder are sugar-async's `ChildRun`. A Model update or tick must use `runAsync()`, which runs the child on the loop and settles on a promise; `run()` blocks the caller until the deadline and is for code outside the loop. `SETTLE_CEILING_SECONDS` is how long a started run can take to settle, and bounds how long a module may treat a command as in flight | `runAsync(LoopInterface $loop, array $argv, float $timeoutSeconds, int $maxOutputBytes): PromiseInterface` · `run(array $argv, float $timeoutSeconds, int $maxOutputBytes): array` |
 | `ProcAvailability` | Probe-once availability of Linux `/proc` pseudo-files — probe once, degrade quietly, show a visible 'n/a' sentinel on hosts without `/proc` instead of failing | `has(string $path): bool` |
 
 ## Registry Namespace (Module Registry)
@@ -817,9 +817,11 @@ in the same namespace are its value parts.
 > sentinels and clips over-length labels. The same bounded-teardown story
 > covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
 > output cap via `BoundedCommand`, with the same direct-children-only reap), and
-> the weather fetch (synchronous inside the
-> dispatched command, bounded by the HTTP client's 5 s timeout —
-> `WttrInClient`'s stream context).
+> the weather fetch, which runs off the update door: on a host with `pcntl`
+> it forks a `ForkedTask` child under a 15 s parent deadline, and the
+> child's HTTP client is capped by `WttrInClient`'s 5 s stream timeout. A
+> host without `pcntl` falls back to an in-process fetch that blocks the
+> frame for up to that 5 s timeout.
 >
 > **What a plugin can react to.** A legacy plugin panel is non-interactive by
 > construction: `LegacyModuleAdapter::update()` forwards exactly two message
@@ -866,17 +868,21 @@ in the same namespace are its value parts.
 > `TERM=dumb` → plain text, then `NO_COLOR` present-and-non-empty → color
 > off with decoration kept, then `CLICOLOR=0` → the same, and everything
 > else lands on the TrueColor floor. It diverges from what
-> `ColorProfile::detect()` would answer in exactly three documented places,
-> each pinned by `tests/Foundation/ColorModeDetectDivergenceTest.php`:
-> `NO_COLOR=0` disables color here while detect's truthiness test ignores
-> it; a force variable outranks `NO_COLOR` here while detect lets
-> `NO_COLOR` win; and the chain funnels without negotiating sub-tiers, so
+> `ColorProfile::detect()` would answer in the documented places, each
+> pinned by `tests/Foundation/ColorModeDetectDivergenceTest.php`. Since
+> P1-10a `detect()` answers through sugar-colorprofile's chain when that
+> package is installed, so `NO_COLOR=0` and the force-over-`NO_COLOR` order
+> now agree with this funnel. What still differs: a forced level is
+> TrueColor here, while detect answers the chain's level (`FORCE_COLOR=1` is
+> its Ansi floor); the chain funnels without negotiating sub-tiers, so
 > `TERM=xterm-256color` answers TrueColor here versus detect's `Ansi256`
 > (detect additionally consults `COLORTERM`, `TERM_PROGRAM` and CI hosts,
 > and refuses color on a non-tty stdout — a pipe keeps byte-identical
 > output here, and embedding hosts that know the real destination collapse
 > that last gap deliberately with
-> `ColorMode::use(ColorProfile::detect(null, $stdout))`). An explicit
+> `ColorMode::use(ColorProfile::detect(null, $stdout))`); and `TERM=dumb`
+> answers `NoTty` here, where `detect()` answers `Ascii` and only
+> `ColorProfile::detectTerminal()` answers `NoTty`. An explicit
 > profile argument — or a seeded override — always wins over the process
 > mode.
 >

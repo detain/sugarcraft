@@ -138,7 +138,11 @@ generators, never by hand:
 ## Locales and translations
 
 `lang/en.php` is the source of truth: every key a person reads lives there,
-and only there may a key be added. The community locales (`fr`, `de`, `es`,
+and only there may a key be added. The one exception is the channel bundles
+(`candy-discord`, `candy-msteams`): their strings live in each bundle's own
+`<bundle>/lang/` catalog, never as `channels.discord.*` or `channels.msteams.*`
+keys in the host catalog, where `LangParityTest` turns red. A plugin's strings
+go in its own `lang/` the same way. The community locales (`fr`, `de`, `es`,
 `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`) mirror it key for
 key — `LangParityTest` is **strict**: a new English key turns the guard red
 in every locale until it is translated, in the same change that adds the

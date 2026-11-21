@@ -7,7 +7,7 @@ namespace SugarCraft\Files\Support;
 use SugarCraft\Core\I18n\T;
 
 /**
- * Chrome glyph tiers (CF-35, closes audit 048).
+ * Chrome glyph tiers (CF-35).
  *
  * WHY: ▸ ✓ ─ ↑ ↓ · … are East Asian Width = Ambiguous. sugar-core's
  * Width law deliberately counts A as 1 cell (fleet parity, mirrors

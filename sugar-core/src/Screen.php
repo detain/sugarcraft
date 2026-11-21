@@ -33,8 +33,7 @@ final class Screen
      *
      * Used by {@see Program} to persist a screen's next model after its
      * update() — the immutability leg that lets pushed screens fold
-     * state instead of having their results thrown away (audit
-     * lib-reviews-1102 C6).
+     * state instead of having their results thrown away.
      */
     public function withModel(Model $model): self
     {

@@ -108,7 +108,9 @@ final class ChildLifetimesToolTest extends TestCase
         // ChafaRenderer::available probe site — was invisible fleet-wide. autoloadRoots
         // now walks files-section entries instead of refusing the lib; the surface
         // finding landed with its own honest reap-bounded row in the same commit.
-        $this->assertStringContainsString('15 findings', $out);
+        // 15 -> 16 on P1-5: sugar-async ChildRun::spawn is a new fd-open site
+        // (the descriptor judgement, same as PosixProcess::spawn) with its row.
+        $this->assertStringContainsString('16 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -140,6 +142,8 @@ final class ChildLifetimesToolTest extends TestCase
         // number the two observations above already measured.
         // 30 -> 32 on 2026-11-13: two more accounted spawn sites landed in
         // sibling lanes (tool reports 0 problems, every exposed site has a roster row).
+        // 32 -> 33 on P1-5: sugar-async ChildRun::spawn, the one new proc_open site.
+        // 33 -> 32 on P1-5c-dashboard: BoundedCommand's own proc_open retired; it now runs through ChildRun.
         $this->assertStringContainsString('32 proc_open sites', $out);
     }
 
@@ -366,8 +370,9 @@ final class ChildLifetimesToolTest extends TestCase
         // 6 -> 7 reap-bounded on 2026-11-13: the CP-46 census un-abort let
         // sugar-image's committed ChafaRenderer::available probe site derive
         // at all — it joined with its own honest reap-bounded row.
+        // 8 -> 9 fd-open on P1-5: sugar-async ChildRun::spawn (see the row).
         // Re-derive with the tool if a row changes dimension.
-        $this->assertSame(['reap-bounded' => 7, 'fd-open' => 8], $counts);
+        $this->assertSame(['reap-bounded' => 7, 'fd-open' => 9], $counts);
     }
 
     /**

@@ -229,6 +229,102 @@ final class ProbeInfocmpTest extends TestCase
         );
     }
 
+    public function testBoundedExecSignalKilledChildAnswersNoDump(): void
+    {
+        // A child a signal kills after printing part of its dump must not hand
+        // that prefix to the caller. proc_close() returns the signal number for
+        // a signal death, indistinguishable from an exit code, so the kill is
+        // read from proc_get_status() instead. The async report replays the
+        // same "no dump" for this shape.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nprintf '\\tTc,\\n'\nkill -KILL \$\$\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $dump = InfocmpBinary::runBounded('xterm');
+        } finally {
+            @\unlink($printer);
+            Probe::resetForTesting();
+        }
+
+        $this->assertNull($dump, 'a signal-killed child answers no dump, so its partial Tc prefix never reaches the verdict');
+    }
+
+    public function testBoundedExecEofThenWedgedChildFailsOpenInsideItsDeadline(): void
+    {
+        // The child closes both pipes at once (EOF before the deadline) and
+        // then sleeps on. The drain loop breaks on EOF, so the deadline ladder
+        // must still run after it: without it proc_close() blocks for the
+        // child's whole 20 s lifetime, and the empty stdout reads as a
+        // completed verdict. Expect a null answer well inside the sleep.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nexec >&- 2>&-\nexec sleep 20\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $started = \microtime(true);
+            $answer = InfocmpBinary::runBounded('xterm', 1.0);
+            $elapsed = \microtime(true) - $started;
+        } finally {
+            @\unlink($printer);
+            Probe::resetForTesting();
+        }
+
+        $this->assertNull($answer, 'an overrun child answers no completed verdict, even with its pipes already closed');
+        $this->assertLessThan(
+            6.0,
+            $elapsed,
+            'the ladder must reap a child that outlives EOF within its deadline plus grace ' . \sprintf('(took %.2f s)', $elapsed),
+        );
+    }
+
+    public function testChildThatClosedItsPipesAtTheDeadlineIsReapedNotEscalated(): void
+    {
+        // Regression: the drain loop checks EOF before the deadline, so EOF can
+        // end it in the pass the deadline expired. The settle step then saw
+        // the child still running against an expired deadline, sent SIGTERM to
+        // a child that had finished on its own, and memoized a permanent miss.
+        // Driven directly through the settle helper: the race window is too
+        // narrow to hit deterministically through the loop. The child closes
+        // no pipes here, but it exits 0.3 s from now — inside the grace window
+        // a post-EOF settle must grant.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the planted /bin/sh stub needs a POSIX shell.');
+        }
+
+        $handle = \proc_open(
+            ['/bin/sh', '-c', 'sleep 0.3'],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($handle);
+
+        try {
+            $settle = new \ReflectionMethod(InfocmpBinary::class, 'reapAfterEof');
+            $status = $settle->invoke(null, $handle, \microtime(true) - 1.0, true);
+        } finally {
+            \proc_close($handle);
+        }
+
+        $this->assertFalse(
+            $status['running'],
+            'a child that reached EOF gets a fresh grace window to be reaped, never a single poll against the expired deadline',
+        );
+        $this->assertFalse($status['signaled'], 'a child that exited on its own is not a signal kill');
+    }
+
     public function testDumpMemoAnswersRepeatedProbesWithoutAChild(): void
     {
         // 013: every gated re-probe used to re-exec. The shared per-TERM

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\LruMap;
 use SugarCraft\GitServer\HttpSmartProtocol\PasswordVerifyCache;
 
 /**
@@ -89,12 +90,71 @@ final class PasswordVerifyCacheTest extends TestCase
     {
         // Structural: keys are (username, sha256(password)) — read the
         // entry map via reflection and prove no raw secret is recoverable.
+        $password = 'top-secret-pw';
         $cache = $this->cache();
-        $cache->verify('top-secret-pw', \password_hash('x', \PASSWORD_BCRYPT, ['cost' => 4]), 'dave');
+        $cache->verify($password, \password_hash('x', \PASSWORD_BCRYPT, ['cost' => 4]), 'dave');
         $prop = new \ReflectionProperty(PasswordVerifyCache::class, 'entries');
         $prop->setAccessible(true);
-        foreach ((array) $prop->getValue($cache) as $key => $_) {
-            self::assertStringNotContainsString('top-secret-pw', (string) $key);
+        /** @var LruMap<bool> $map */
+        $map = $prop->getValue($cache);
+        $keys = $map->keys();
+
+        // Guard against a vacuous pass: the loop must actually see the one key.
+        self::assertCount(1, $keys);
+        foreach ($keys as $key) {
+            self::assertStringNotContainsString($password, $key);
+            // Pin the exact shape (username + sha256 digest): a key carrying the
+            // password in any other form fails here, not only the literal text.
+            self::assertSame('dave' . "\n" . \hash('sha256', $password), $key);
         }
+    }
+
+    public function testDefaultConstructionMemoizesWithoutAnInjectedClock(): void
+    {
+        // Production builds the cache with no clock (Server::verifyCache()), so
+        // the default path must memoize too, not only the injected-clock one.
+        $hash = \password_hash('sword', \PASSWORD_BCRYPT, ['cost' => 4]);
+        $cache = new PasswordVerifyCache();
+
+        self::assertTrue($cache->verify('sword', $hash, 'alice'));
+        // A hit on the default clock must skip the poisoned digest entirely.
+        self::assertTrue($cache->verify('sword', 'not-a-digest', 'alice'));
+        self::assertSame(1, $cache->size());
+    }
+
+    public function testDefaultConstructionWiresTtlAndMonotonicClock(): void
+    {
+        // Expiry cannot be waited out on the real clock (120 s), so pin the
+        // wiring instead: the TTL is TTL_SECONDS and no test clock is injected,
+        // which leaves LruMap on its monotonic hrtime default.
+        $cache = new PasswordVerifyCache();
+        $prop = new \ReflectionProperty(PasswordVerifyCache::class, 'entries');
+        $prop->setAccessible(true);
+        /** @var LruMap<bool> $map */
+        $map = $prop->getValue($cache);
+
+        $ttl = new \ReflectionProperty(LruMap::class, 'ttl');
+        $ttl->setAccessible(true);
+
+        self::assertSame(PasswordVerifyCache::TTL_SECONDS, $ttl->getValue($map));
+    }
+
+    public function testExpiredEntriesAreReapedBeforeLiveOnesAreEvicted(): void
+    {
+        $cache = $this->cache();
+        $hash = \password_hash('f', \PASSWORD_BCRYPT, ['cost' => 4]);
+
+        // One entry goes stale while the rest of the cache fills with live entries.
+        self::assertTrue($cache->verify('f', $hash, 'stale'));
+        $this->now += PasswordVerifyCache::TTL_SECONDS + 1;
+        for ($i = 1; $i < PasswordVerifyCache::MAX_ENTRIES; $i++) {
+            self::assertTrue($cache->verify('f', $hash, 'u' . $i));
+        }
+
+        // Inserting past capacity must drop the expired entry, not a live one.
+        self::assertFalse($cache->verify('pw-new', $hash, 'overflow'));
+        self::assertTrue($cache->verify('f', 'not-a-digest', 'u1'));
+        // The expired entry was dropped, so the poisoned digest decides again.
+        self::assertFalse($cache->verify('f', 'not-a-digest', 'stale'));
     }
 }

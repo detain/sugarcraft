@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Util\Ansi;
 
@@ -358,5 +359,108 @@ final class ProgramKittyTeardownTest extends TestCase
         fclose($writer2);
         fclose($in2);
         fclose($out2);
+    }
+
+    /** A model that renders and does nothing else: the RawMsg producers drive every write. */
+    private static function idleModel(): Model
+    {
+        return new class implements Model {
+            use SubscriptionCapable;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+
+            public function view(): string
+            {
+                return 'x';
+            }
+        };
+    }
+
+    /**
+     * Saturates the writer against a child that never reads its stdin, with
+     * $before queued ahead of the flood and $after queued behind it. Returns
+     * whether the writer really saturated and the kitty mirror as the loop
+     * sees it. The saturation check is the guard against a vacuous pass: a
+     * mirror that never moved would look identical to a dropped write.
+     *
+     * @param list<string> $before
+     * @param list<string> $after
+     * @return array{0: bool, 1: bool} [saturated, mirror]
+     */
+    private function kittyMirrorAfterStalledWrites(array $before, array $after): array
+    {
+        $proc = proc_open(['sleep', '30'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $procPipes);
+        $this->assertIsResource($proc);
+        [$out] = $procPipes;
+        [$in, , $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program(self::idleModel(), $this->options($in, $out, $loop));
+
+        foreach ($before as $bytes) {
+            $program->send(new RawMsg($bytes));
+        }
+        $chunk = str_repeat('x', 65536);
+        for ($i = 0; $i < 200; $i++) {
+            $program->send(new RawMsg($chunk));
+        }
+        foreach ($after as $bytes) {
+            $program->send(new RawMsg($bytes));
+        }
+
+        $mirror = new \ReflectionProperty(Program::class, 'kittyKeyboardPushed');
+        $backlog = new \ReflectionProperty(Program::class, 'writer');
+        $seen = null;
+        $saturated = null;
+        $loop->addTimer(1.0, static function () use ($program, $mirror, $backlog, &$seen, &$saturated): void {
+            $saturated = $backlog->getValue($program)->isSaturated();
+            $seen = $mirror->getValue($program);
+            $program->quit();
+        });
+        $loop->addTimer(2.5, static fn () => $loop->stop());
+        $program->run();
+
+        proc_terminate($proc);
+        foreach ($procPipes as $pipe) {
+            @fclose($pipe);
+        }
+        proc_close($proc);
+        fclose($writer);
+        fclose($in);
+
+        $this->assertIsBool($saturated);
+        $this->assertIsBool($seen);
+        return [$saturated, $seen];
+    }
+
+    /**
+     * The terminal still holds the layer the push armed. A pop the saturated
+     * writer drops never reaches it, so the mirror must keep the layer
+     * recorded: clearing it here would let the teardown skip the pairing pop.
+     */
+    public function testDroppedKittyPopKeepsTheMirrorArmed(): void
+    {
+        [$saturated, $mirror] = $this->kittyMirrorAfterStalledWrites([self::push()], [self::pop()]);
+        $this->assertTrue($saturated, 'precondition: the flood saturated the writer before the pop');
+        $this->assertTrue($mirror, 'a dropped pop leaves the terminal armed, so the mirror stays armed');
+    }
+
+    /**
+     * A push the saturated writer drops never reaches the terminal, so the
+     * mirror must not arm: the unwind would otherwise pop a layer the shell
+     * never received a push for.
+     */
+    public function testDroppedKittyPushLeavesTheMirrorDisarmed(): void
+    {
+        [$saturated, $mirror] = $this->kittyMirrorAfterStalledWrites([], [self::push()]);
+        $this->assertTrue($saturated, 'precondition: the flood saturated the writer before the push');
+        $this->assertFalse($mirror, 'a dropped push never reached the terminal, so the mirror must not arm');
     }
 }

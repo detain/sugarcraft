@@ -149,6 +149,73 @@ final class BundleRecommendationNoticeTest extends TestCase
         $this->assertArrayNotHasKey('launchRecommendations', $document, 'a silent drain stamps nothing');
     }
 
+    public function testAProjectTierInstallIsExcludedFromTheLaunchRowToo(): void
+    {
+        // PLG-2a: `bundles install --project` lands under <root>/.candy-code/bundles;
+        // the launch row must not offer it back in that project.
+        mkdir($this->projectRoot . '/.candy-code/bundles/php-tools', 0700, true);
+        $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
+        $this->withPhpSignal();
+        $registry = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
+
+        Bootstrap::reportBundleRecommendations($this->projectRoot, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame([], Bootstrap::launchNotices(), 'a project-tier install is not a recommendation');
+    }
+
+    public function testASubdirectoryLaunchExcludesTheRepositoryProjectTier(): void
+    {
+        // A launch from packages/api resolves its project root to the repository
+        // (ProjectRoot), so the install `bundles install --project` placed at the
+        // root is excluded here too. The subdirectory carries its own PHP signal,
+        // so reading the raw launch directory would offer php-tools again.
+        exec('git -C ' . escapeshellarg($this->projectRoot) . ' init -q 2>&1', $out, $code);
+        $this->assertSame(0, $code, implode("\n", $out));
+        $api = $this->projectRoot . '/packages/api';
+        mkdir($api, 0700, true);
+        file_put_contents($api . '/composer.json', '{"require":{}}');
+        $this->withPhpSignal();
+        $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
+        $registry = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
+        $installed = $this->projectRoot . '/.candy-code/bundles/php-tools';
+        mkdir($installed, 0700, true);
+
+        Bootstrap::reportBundleRecommendations($api, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame([], Bootstrap::launchNotices(), 'a subdirectory launch sees the repository project tier');
+
+        // Control: the same launch offers the bundle once the repository tier
+        // no longer holds it, so the silence above came from the tier, not the signal.
+        rmdir($installed);
+        Bootstrap::reportBundleRecommendations($api, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame(
+            [Lang::t('bundles.recommend.launch', ['names' => 'php-tools@acme'])],
+            Bootstrap::launchNotices(),
+            'with nothing installed at the repository root the subdirectory launch offers php-tools',
+        );
+    }
+
+    public function testASymlinkedProjectTierIsNotReadByTheLaunchRow(): void
+    {
+        // Discovery refuses a symlinked project floor, so the launch row does not
+        // read one either: an install behind the link is not counted as installed.
+        $elsewhere = $this->tempDir . '/elsewhere/.candy-code';
+        mkdir($elsewhere . '/bundles/php-tools', 0700, true);
+        symlink($elsewhere, $this->projectRoot . '/.candy-code');
+        $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);
+        $this->withPhpSignal();
+        $registry = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
+
+        Bootstrap::reportBundleRecommendations($this->projectRoot, $registry, $this->stampFile, $this->installedRoot);
+
+        $this->assertSame(
+            [Lang::t('bundles.recommend.launch', ['names' => 'php-tools@acme'])],
+            Bootstrap::launchNotices(),
+            'the symlinked tier is not read, so php-tools is still offered',
+        );
+    }
+
     public function testTheRowShowsOncePerProjectPerPinAndARepinedMarketplaceShowsAgain(): void
     {
         $this->addMarketplace('acme', self::SHA_A, [$this->entry('php-tools', ['php', 'composer'])]);

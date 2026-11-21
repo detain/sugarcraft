@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Http\Browser;
 use React\Socket\Connector;
+use SugarCraft\Async\Backoff;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 
 /**
@@ -35,7 +36,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * {@see CONNECT_TIMEOUT_SECONDS} arms the `TimeoutConnector` inside
  * {@see fromConfig()}. Neither bound is a blanket total-turn timeout on a
  * model request, which is what the ban forbids; the retry ladder
- * ({@see BACKOFF_SECONDS}: 2 s, 8 s, 30 s, then give up) bounds how LONG a
+ * ({@see retryPolicy()}: 2 s, 8 s, 30 s, then give up) bounds how LONG a
  * delivery may still be trying, and it is checked between attempts, never
  * instead of one.
  *
@@ -72,14 +73,6 @@ final class WebhookDispatcher
     /** TCP connect bound, armed through react/socket's TimeoutConnector. */
     public const CONNECT_TIMEOUT_SECONDS = 2.0;
 
-    /**
-     * Wait before retry attempt N+1 (index = retries already spent). Three
-     * retries per the design: 2 s, 8 s, 30 s, then the delivery is given up.
-     *
-     * @var list<float>
-     */
-    public const BACKOFF_SECONDS = [2.0, 8.0, 30.0];
-
     /** In-flight (including backoff-waiting) deliveries before a dispatch drops. */
     public const DEFAULT_QUEUE_LIMIT = 128;
 
@@ -88,8 +81,8 @@ final class WebhookDispatcher
     /** @var array<string,array{url:string,secret:string,events:list<string>}> */
     private readonly array $endpoints;
 
-    /** @var list<float> */
-    private readonly array $backoff;
+    /** The retry schedule and its attempt budget, as the same Backoff type the other retry ladders use. */
+    private readonly Backoff $backoff;
 
     private readonly LoopInterface $loop;
 
@@ -106,19 +99,19 @@ final class WebhookDispatcher
 
     /**
      * @param array<string,array{url:string,secret:string,events:list<string>}> $endpoints parsed output of {@see OutboundWebhookConfig::parse()}
-     * @param null|list<float> $backoffSeconds injectable ladder; {@see BACKOFF_SECONDS} by default (tests dial milliseconds)
+     * @param null|Backoff $backoff injectable policy; {@see retryPolicy()} by default (tests dial milliseconds)
      */
     public function __construct(
         Browser $browser,
         array $endpoints,
-        ?array $backoffSeconds = null,
+        ?Backoff $backoff = null,
         private readonly int $queueLimit = self::DEFAULT_QUEUE_LIMIT,
         ?LoopInterface $loop = null,
     ) {
         $this->endpoints = $endpoints;
-        $this->backoff = \array_values($backoffSeconds ?? self::BACKOFF_SECONDS);
-        if ($this->backoff === []) {
-            throw new \InvalidArgumentException('a webhook dispatcher with no backoff ladder is not a retry policy');
+        $this->backoff = $backoff ?? self::retryPolicy();
+        if ($this->backoff->attempts === null) {
+            throw new \InvalidArgumentException('a webhook dispatcher needs a finite retry budget: an unbounded policy never gives up');
         }
         if ($this->queueLimit < 1) {
             throw new \InvalidArgumentException('the outbound webhook queue limit must be at least 1');
@@ -133,6 +126,18 @@ final class WebhookDispatcher
             ->withFollowRedirects(false)
             ->withRejectErrorResponse(false)
             ->withTimeout(self::POST_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * The delivery retry policy: 2 s, 8 s, 30 s, then the delivery is given up.
+     * Four total attempts, which is three retries after the first send. The
+     * budget is a {@see Backoff} so the cap and the attempt budget follow the
+     * same rules as every other retry ladder: `withAttempts()` counts TOTAL
+     * tries, so the declared 4 is what the ladder actually makes.
+     */
+    public static function retryPolicy(): Backoff
+    {
+        return Backoff::new(2000.0, 4.0, 30_000)->withAttempts(4);
     }
 
     /**
@@ -226,8 +231,10 @@ final class WebhookDispatcher
 
     private function afterAttempt(string $name, array $endpoint, WebhookEvent $event, int $retriesSpent, bool $retryable, bool $accepted = false): void
     {
-        if ($retryable && $retriesSpent < \count($this->backoff)) {
-            $delay = $this->backoff[$retriesSpent];
+        // Backoff counts failures, 1-based: the first failed send is failure 1.
+        $failures = $retriesSpent + 1;
+        if ($retryable && $this->backoff->allows($failures)) {
+            $delay = $this->backoff->secondsForAttempt($failures);
             // The slot stays occupied across the wait: a delivery retrying
             // is the same delivery, and queue bounds count deliveries.
             $this->loop->addTimer($delay, function () use ($name, $endpoint, $event, $retriesSpent): void {

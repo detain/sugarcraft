@@ -1,90 +1,273 @@
-<p class="lede" style="margin-top: 28px;">Terminal Git client on the SugarCraft stack — a TUI for staging, branching, log, diff, stash, worktrees and rebase. Status, branches and log panes cycle with <code>tab</code>; <code>P</code> opens the diff viewer with per-hunk staging, and <code>u</code> / <code>Ctrl+r</code> undo and redo the last mutations through a 100-entry history. Every verb shells out to the user's own <code>git</code> — no reimplementation — so your existing hooks, GPG signing and credentials ride along; the plumbing verbs never consult git <em>aliases</em>, though, so they run git's built-ins exactly as typed.</p>
+<p class="lede" style="margin-top: 28px;">CandyGit is a terminal Git client on the SugarCraft stack: a three-pane TUI for staging, branching, log, diff, stash, worktrees, cherry-pick, merge and rebase. It mirrors the workflow of <a href="https://github.com/jesseduffield/lazygit">lazygit</a> in native PHP rather than as a line-by-line port. Every verb shells out to your own <code>git</code>, so your hooks, GPG signing and credentials apply exactly as they do at the command line. Its <code>u</code> and <code>Ctrl+r</code> keys undo and redo the last mutations through a 100-entry history.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git</code></pre>
+<h2 style="margin-top: 40px;">Install</h2>
+<pre class="code"><code class="language-shell">composer require sugarcraft/candy-git:@dev</code></pre>
+<p>Requires PHP 8.3 or newer and <code>git</code> 2.23 or newer. The <code>:@dev</code> suffix is needed while the project's <code>minimum-stability</code> is <code>stable</code>: Packagist carries only the rolling <code>dev-master</code> branch until a stable tag is cut, so the bare requirement stops with <code>does not match your minimum-stability</code>.</p>
+<p>CandyGit runs as a full-screen program. It needs an interactive terminal, and a piped stdout is refused rather than filled with escape sequences. It needs a checked-out work tree, since a bare repository has no status pane to show. At launch it checks <code>git --version</code> and refuses an older binary, or a missing one, with one sentence and exit status 1.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># Run from any git working tree:
+<h2 style="margin-top: 40px;">Quickstart</h2>
+<p>Run it from any git working tree:</p>
+<pre class="code"><code class="language-shell">cd path/to/your/repo
 vendor/bin/candy-git</code></pre>
-    <pre class="code"><code class="language-php">// Or wire your own driver in PHP:
-use SugarCraft\Core\Program;
+<p>To embed the app in your own program, build the driver and the program yourself:</p>
+<pre class="code"><code class="language-php">use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Git\App;
 use SugarCraft\Git\Git;
 
 $git = new Git(getcwd());
 (new Program(App::start($git), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+<p>The screen has three panes. Status is on the left, with the work-tree rows and the branch summary. Branches and log are stacked on the right. <code>Tab</code> cycles focus between the three, and each pane has its own verbs. The bottom line lists the keys for the focused pane.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Status pane</strong><span>Parses <code>git status --porcelain=v1 -b</code> with per-row index / work flags and a branch-summary header.</span></div>
-      <div class="feature"><strong>Branches pane</strong><span><code>git for-each-ref</code> driven; current branch is highlighted + bold.</span></div>
-      <div class="feature"><strong>Log pane</strong><span>Recent commits — short SHA + subject painted; author and relative time arrive on the wire but are not rendered yet.</span></div>
-      <div class="feature"><strong>Stage / unstage / discard</strong><span><code>s</code> toggles staging via <code>git add</code> / <code>git restore --staged</code>, <code>a</code> stages all, <code>d</code> discards working-tree changes.</span></div>
-      <div class="feature"><strong>Diff viewer</strong><span><code>P</code> renders per-file diffs with syntax-highlighted hunks and per-hunk stage / unstage.</span></div>
-      <div class="feature"><strong>Commit / amend</strong><span><code>c</code> and <code>A</code> commit through your <code>git</code>, so hooks and signing config apply as they always do.</span></div>
-      <div class="feature"><strong>Stash</strong><span><code>S</code> creates, applies, pops and drops stash entries via <code>git stash</code>.</span></div>
-      <div class="feature"><strong>Branch create / delete</strong><span><code>n</code> creates a branch, <code>D</code> deletes one; <code>space</code> checks out.</span></div>
-      <div class="feature"><strong>Worktrees</strong><span><code>w</code> lists worktrees and adds new ones via <code>git worktree</code>.</span></div>
-      <div class="feature"><strong>Merge / rebase / cherry-pick</strong><span><code>M</code> merges, <code>r</code> opens the sequencer menu (continue / abort; skip on a rebase) when stopped, <code>V</code> cherry-picks a typed ref, and <code>i</code> previews the interactive-rebase todo — the mutating rebase keys are parked and refuse with a notice.</span></div>
-      <div class="feature"><strong>Undo / redo</strong><span><code>u</code> / <code>Ctrl+r</code> step back and forward through <code>HistoryManager</code> (capped at <code>MAX_HISTORY = 100</code> entries).</span></div>
-      <div class="feature"><strong>Pluggable driver</strong><span><code>GitDriver</code> interface lets tests inject a fixture-backed driver without staging real repos.</span></div>
-      <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk; cursors are clamped if the row count shrinks.</span></div>
-      <div class="feature"><strong>Internationalization</strong><span>All user-facing strings use <code>Lang::t()</code> — key hints, error labels, empty-state messages, git error text.</span></div>
-    </div>
+<h3 style="margin-top: 32px;">What's in the box</h3>
+<div class="feature-grid">
+  <div class="feature"><strong>Status pane</strong><span>Parses <code>git status --porcelain=v1 -b</code> with per-row index and work flags and a branch-summary header.</span></div>
+  <div class="feature"><strong>Branches pane</strong><span>Lists local and remote-tracking branches from <code>git for-each-ref</code>, with ahead and behind badges for tracked upstreams. The current branch is highlighted.</span></div>
+  <div class="feature"><strong>Log pane</strong><span>Recent commits, fetched in 20-commit pages as the cursor walks off the bottom. Each row shows the short SHA and the subject. <code>Enter</code> opens a read-only details view.</span></div>
+  <div class="feature"><strong>Stage, unstage, discard</strong><span><code>s</code> toggles staging through <code>git add</code> and <code>git restore --staged</code>. <code>a</code> stages all. <code>d</code> discards working-tree changes after a second press.</span></div>
+  <div class="feature"><strong>Diff viewer</strong><span><code>Enter</code> on a status row renders the file's diff with highlighted hunks. Stage or unstage one hunk at a time.</span></div>
+  <div class="feature"><strong>Commit and amend</strong><span><code>c</code> commits what you staged. <code>A</code> amends the last commit, with the collector pre-filled with its message. Both run through your <code>git</code>.</span></div>
+  <div class="feature"><strong>Stash</strong><span><code>S</code> creates, applies, pops and drops stash entries through <code>git stash</code>.</span></div>
+  <div class="feature"><strong>Branches</strong><span><code>n</code> creates a branch, <code>Space</code> checks one out, and <code>D</code> deletes one after a second press. The current branch is never deleted.</span></div>
+  <div class="feature"><strong>Worktrees</strong><span><code>w</code> lists worktrees, adds one with a created branch, and removes one, all through <code>git worktree</code>.</span></div>
+  <div class="feature"><strong>Merge, rebase, cherry-pick</strong><span><code>M</code> merges a typed ref. <code>V</code> cherry-picks a ref. <code>r</code> opens the sequencer menu (continue, abort, and skip on a rebase) while one is stopped. <code>i</code> previews the interactive-rebase todo; its mutating keys are parked and refuse with a notice.</span></div>
+  <div class="feature"><strong>Undo and redo</strong><span><code>u</code> steps back and <code>Ctrl+r</code> steps forward through <code>HistoryManager</code>, capped at <code>MAX_HISTORY = 100</code> entries.</span></div>
+  <div class="feature"><strong>Pluggable driver</strong><span>The <code>GitDriver</code> interface lets tests inject a fixture-backed driver, so the transition logic runs without staging a real repository.</span></div>
+  <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk. Cursors are clamped when the row count shrinks.</span></div>
+  <div class="feature"><strong>Localized strings</strong><span>Every user-facing string goes through <code>Lang::t()</code>: key hints, error labels, empty-state messages and git error text.</span></div>
+</div>
 
-    <h3 style="margin-top: 32px;">Trust boundary</h3>
-    <p>Opening a repository executes its configuration unless told otherwise, and git has several config keys that name <em>executables</em>. CandyGit runs every git call through a fixed argument prelude — <code>-c core.quotepath=off -c core.fsmonitor=false</code> plus <code>--no-ext-diff</code> on diffs — that disarms the repo-controlled execution channels it can neutralize without breaking legitimate tooling; merge drivers are enumerated on the merged config scope and each overridden with <code>false</code> (resolved to the inert coreutils binary) before any merge-capable command, and a driver shape that cannot be re-expressed refuses the merge outright. Filter drivers (<code>clean</code> / <code>smudge</code> / <code>process</code>) are detected and announced on stderr rather than silently disarmed — git-lfs-class tooling depends on them working — with <code>CANDY_GIT_STRICT_FILTERS=1</code> turning the posture into a refusal. Children spawn through a single <code>proc_open</code> site with a pinned environment. A hostile clone can still reach a trusted global git-lfs driver through its <code>.gitattributes</code>: operate only repositories you trust. The full disclosure lives in the README's <em>Trust boundary</em> section.</p>
+<h2 style="margin-top: 40px;">Concepts</h2>
+<p>The application is one immutable model. Every key returns a fresh <code>App</code> that owns the three lists, their cursors, the focused pane and the open overlays. The renderer is a pure function of that model, so a frame can be reproduced from a fixture. Only the <code>Git</code> driver and the <code>Process</code> runner touch the outside world.</p>
+<p>Git calls are synchronous. Each one is a bounded subprocess with a 30-second default timeout, and it runs on the UI thread. That is deliberate for version 1: a slow remote can pause the screen while a fetch, pull or push runs. Moving git work to the event loop is the planned version 2 direction.</p>
+<p>Every verb has one of three behaviors. It runs straight away, runs after a second press (<code>d</code>, <code>f</code>, <code>p</code>, <code>P</code>, <code>D</code>), or opens a prompt. History records each verb with its inverse. Where no safe inverse exists, undo refuses with a notice rather than pretending to undo.</p>
 
-    <h3 style="margin-top: 32px;">Internationalization</h3>
-    <p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The keys live in <code>lang/en.php</code> with the <code>git</code> prefix inside the file — pass the file key verbatim: <code>Lang::t('git.timeout')</code>. The facade bakes the library namespace into every lookup, so the core registry sees <code>git.git.timeout</code>: namespace <code>git</code>, file key <code>git.timeout</code>. <code>Lang::t('timeout')</code> does NOT resolve — it asks for a file key the prefixed file never registers, and echoes the raw string back. Always call through <code>SugarCraft\Git\Lang</code>, never the raw registry.</p>
-    <table class="api-table">
-<tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
-<tr><td>git.spawn_failed</td><td>git: failed to spawn: {reason}</td><td>{reason}</td></tr>
-<tr><td>git.error</td><td>git: {stderr}</td><td>{stderr}</td></tr>
-<tr><td>git.timeout</td><td>git: command timed out after {seconds}s</td><td>{seconds}</td></tr>
-<tr><td>cli.not_a_repo</td><td>candy-git: not a git repository: {cwd}</td><td>{cwd}</td></tr>
-<tr><td>ui.error_prefix</td><td>error: </td><td>—</td></tr>
-<tr><td>status.clean</td><td>clean working tree</td><td>—</td></tr>
-<tr><td>branches.empty</td><td>(no branches)</td><td>—</td></tr>
-<tr><td>log.empty</td><td>(empty log)</td><td>—</td></tr>
-<tr><td>help.keyhints</td><td>S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  enter  diff  ·  f  fetch  ·  p  pull  ·  P  push  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit</td><td>—</td></tr>
-</table>
-    <p>The table above is an excerpt; <code>lang/en.php</code> is the full roster of 201 keys. To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
-    <p>The <code>cli.not_a_repo</code> refusal fires when <code>git rev-parse --absolute-git-dir</code> fails for the working directory — linked worktrees, where <code>.git</code> is a file rather than a directory, are accepted.</p>
+<h3 style="margin-top: 32px;">Trust boundary</h3>
+<p>Opening a repository executes its configuration unless told otherwise, and git has several config keys that name <em>executables</em>. CandyGit runs every git call through a fixed argument prelude, <code>-c core.quotepath=off -c core.fsmonitor=false</code>, plus <code>--no-ext-diff</code> on diffs. That disarms the repository-controlled execution channels it can neutralize without breaking legitimate tooling. Merge drivers are enumerated on the merged config scope and each one is overridden with <code>false</code> before any merge-capable command. A driver shape that cannot be re-expressed makes the merge refuse outright.</p>
+<p>Filter drivers (<code>clean</code>, <code>smudge</code>, <code>process</code>) are detected and announced on stderr rather than silently disarmed, because git-lfs-class tooling depends on them. Set <code>CANDY_GIT_STRICT_FILTERS=1</code> to turn that announcement into a refusal. Git and other child processes start through <code>Process::run()</code>, which pins the environment, including <code>GIT_TERMINAL_PROMPT=0</code>. The one other <code>proc_open</code> caller is the Windows process-tree teardown in <code>Platform</code>, which spawns <code>taskkill</code> and the MSYS group-kill script under a bounded drain without that pinned environment.</p>
+<p>A hostile clone can still reach a trusted global git-lfs driver through its <code>.gitattributes</code>. Operate only on repositories you trust. The full disclosure is in the README's Trust boundary section.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/candy-git">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git/blob/master/examples">Runnable examples</a></li>
-      <li>Design antecedent: <a href="https://github.com/jesseduffield/lazygit">lazygit</a> (Go); SugarCraft is developed as a native PHP project.</li>
-    </ul>
+<h2 style="margin-top: 40px;">Tasks</h2>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+<h3 style="margin-top: 32px;">Stage part of a file and commit</h3>
+<ol>
+  <li>Focus the status pane and press <code>Enter</code> on the file. The diff viewer shows its hunks, and the title carries a <code>worktree</code> or <code>staged</code> chip for the side you are viewing.</li>
+  <li>Press <code>[</code> and <code>]</code> to move between hunks, and <code>Space</code> to stage the current one. The viewer stays open and lands on the next hunk. On the staged side, <code>Space</code> unstages instead, and it asks you to press twice. Each hunk goes into the index through <code>git apply --cached</code>.</li>
+  <li>Press <code>c</code>, type the message, and press <code>Enter</code>. <code>Tab</code> inserts a newline; <code>Esc</code> cancels.</li>
+</ol>
+<p><code>c</code> commits only what is staged. Unstaged edits stay in the work tree.</p>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+<h3 style="margin-top: 32px;">Amend the last commit</h3>
+<p>Press <code>A</code>. The collector opens with the last message. Edit it and press <code>Enter</code> to rewrite HEAD, or submit it unchanged to keep the message. Undo refuses an amend, because the old commit cannot be restored from the history lane.</p>
+
+<h3 style="margin-top: 32px;">Undo the last operation</h3>
+<p><code>u</code> reverses the most recent history entry. Undoing a commit moves the branch boundary back and re-arms the collector with your typed message, so no text is lost. Undoing a stage-all restores the exact prior selection, unless a file was partially staged, in which case undo refuses. <code>Ctrl+r</code> redoes, and a new operation clears the redo side.</p>
+
+<h3 style="margin-top: 32px;">Stash work in progress</h3>
+<p>Press <code>S</code> to open the stash overlay. Press <code>u</code> inside it to include untracked files. Apply keeps the entry and leaves the overlay open. Pop and drop ask once more before they run. A drop is undoable from the main view.</p>
+
+<h3 style="margin-top: 32px;">Work across worktrees</h3>
+<p>Press <code>w</code> on the branches pane to open the worktree manager. It lists worktrees, adds one, and removes one. A new worktree always gets a created branch: type a name with <code>-b</code>, or let git name the branch from the path's basename. CandyGit never creates a detached worktree.</p>
+
+<h3 style="margin-top: 32px;">Cherry-pick or merge a ref</h3>
+<p>Press <code>V</code> to cherry-pick. In a log view the cursor's commit fills in as the default ref. Press <code>M</code> to merge a typed branch or ref into the current branch. If a rebase, cherry-pick or conflicted merge stops, press <code>r</code> to continue, abort, or, on a rebase, skip.</p>
+
+<h3 style="margin-top: 32px;">Create a branch at a commit</h3>
+<p>Move the cursor to the commit in the log pane and press <code>n</code>. The collector reads <code>new branch from &lt;sha&gt;:</code>, and the branch starts at that commit.</p>
+
+<h2 style="margin-top: 40px;">API reference</h2>
+<p>The public surface is small: a driver, the immutable model, and the pure state objects the model carries. Tests replace the driver with a fixture, so the same model drives both the real program and the test suite.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Git</td><td>new(cwd)</td><td>Create the shell-out git driver</td></tr>
-<tr><td>Git</td><td>status()</td><td>Get working tree status</td></tr>
-<tr><td>Git</td><td>branches()</td><td>List branches</td></tr>
-<tr><td>Git</td><td>log()</td><td>Get commit log</td></tr>
-<tr><td>Git</td><td>stage(path)</td><td>Stage file</td></tr>
-<tr><td>Git</td><td>unstage(path)</td><td>Unstage file</td></tr>
-<tr><td>GitDriver</td><td>interface</td><td>Driver contract the App consumes; tests inject a fixture-backed implementation</td></tr>
-<tr><td>DiffViewer</td><td>currentHunkPatch() / hunkCount()</td><td>Per-file diff surface with per-hunk stage / unstage</td></tr>
-<tr><td>StashManager</td><td>fuzzyFilter(query)</td><td>Smith-Waterman-ranked stash list via sugar-fuzzy</td></tr>
-<tr><td>HistoryManager</td><td>push(entry)</td><td>Undo / redo lane, capped at <code>MAX_HISTORY = 100</code></td></tr>
-<tr><td>App</td><td>start(git)</td><td>Create app model</td></tr>
+<tr><td>Git</td><td>__construct(cwd, timeout = 30.0)</td><td>The shell-out driver. It runs every git call from <code>cwd</code> with the fixed prelude.</td></tr>
+<tr><td>Git</td><td>status(), branches(), log(limit = 25)</td><td>Read the status rows, the branch list, and a page of commits.</td></tr>
+<tr><td>Git</td><td>stage(path), unstage(path), stageAll(), unstageAll()</td><td>Stage and unstage whole files.</td></tr>
+<tr><td>Git</td><td>stagePatch(path, hunk), unstagePatch(path, hunk)</td><td>Stage or unstage one hunk through <code>git apply --cached</code>.</td></tr>
+<tr><td>Git</td><td>push()</td><td>Push the current branch. It refuses on a detached HEAD.</td></tr>
+<tr><td>GitDriver</td><td>interface</td><td>The contract that <code>App</code> consumes. Tests inject a fixture-backed implementation.</td></tr>
+<tr><td>App</td><td>start(GitDriver): self</td><td>Builds the app model for a driver.</td></tr>
+<tr><td>DiffViewer</td><td>currentHunkPatch(): string, hunkCount(): int</td><td>The selected hunk as a patch, and the number of hunks. The patch is empty when the diff has no hunks.</td></tr>
+<tr><td>StashManager</td><td>fuzzyFilter(query): self</td><td>Ranks stash entries by message and branch through <a href="sugar-fuzzy.html">sugar-fuzzy</a>. The stash overlay's <code>/</code> search calls it when Enter commits the query.</td></tr>
+<tr><td>HistoryManager</td><td>push(HistoryEntry): self</td><td>Adds an undoable entry and clears the redo lane. The cap is <code>MAX_HISTORY = 100</code>.</td></tr>
+<tr><td>Pane</td><td>Status, Branches, Log; next()</td><td>The pane enum, with <code>next()</code> for <code>Tab</code> cycling.</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Translation lookup in the <code>git</code> namespace. See Internationalization.</td></tr>
 </table>
+
+    <!-- api-reference:generated -->
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+<p>CandyGit has no configuration file. Its behavior comes from the command line, the environment, and the repository's own git configuration.</p>
+<h3 style="margin-top: 32px;">Command-line flags</h3>
+<table class="api-table">
+<tr><th>Flag</th><th>Effect</th></tr>
+<tr><td><code>--version</code></td><td>Prints the version line and the phar build stamp, then exits 0. Works outside a repository.</td></tr>
+<tr><td><code>--help</code>, <code>-h</code></td><td>Prints usage, then exits 0. Works outside a repository.</td></tr>
+<tr><td>any other argument</td><td>Refused. The program exits 2 and names the argument, pointing at <code>--help</code>.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Environment</h3>
+<table class="api-table">
+<tr><th>Variable</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>CANDY_GIT_STRICT_FILTERS</code></td><td>unset</td><td>Set to <code>1</code>, <code>true</code> or <code>yes</code> to refuse repositories whose filter drivers would run. Unset, filter drivers are announced on stderr and allowed to run.</td></tr>
+<tr><td><code>NO_COLOR</code>, <code>TERM</code>, <code>COLORTERM</code></td><td>detected</td><td>Read at launch through the color-profile detection. <code>NO_COLOR</code> strips color. <code>TERM=dumb</code> turns color off, but the full-screen alternate screen and cursor addressing are still used, so the terminal has to accept those sequences.</td></tr>
+<tr><td><code>PATH</code></td><td>system</td><td>Locates the <code>git</code> binary. A launch failure that is not a missing git prints the OS reason.</td></tr>
+</table>
+
+<h3 style="margin-top: 32px;">Fixed limits</h3>
+<table class="api-table">
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Git call timeout</td><td>30 seconds per read call; 120 seconds per mutating call (<code>fetch</code>, <code>pull</code>, <code>push</code>, <code>commit</code>, <code>merge</code>, <code>rebase</code> and the other verbs in <code>Git::MUTATING_VERBS</code>)</td></tr>
+<tr><td>Log page size</td><td>20 commits per fetch</td></tr>
+<tr><td>Undo and redo history</td><td>100 entries (<code>HistoryManager::MAX_HISTORY</code>)</td></tr>
+<tr><td>Minimum git version</td><td>2.23 (<code>GitRequirement::MINIMUM</code>)</td></tr>
+</table>
+
+<h2 style="margin-top: 40px;">Keys</h2>
+<p>Keys work in the pane where they are listed. The <code>?</code> overlay shows the verbs for the focused pane.</p>
+<table class="api-table">
+<tr><th>Key</th><th>Action</th></tr>
+<tr><td><code>Tab</code></td><td>Cycle focus between the status, branches and log panes</td></tr>
+<tr><td><code>↑</code>/<code>↓</code> or <code>k</code>/<code>j</code></td><td>Move the cursor in the focused pane</td></tr>
+<tr><td><code>PageUp</code> / <code>PageDown</code></td><td>Move the cursor one page</td></tr>
+<tr><td><code>Home</code> / <code>End</code></td><td>Move to the first or last entry</td></tr>
+<tr><td><code>s</code> (status)</td><td>Stage or unstage the highlighted file</td></tr>
+<tr><td><code>a</code> (status)</td><td>Stage all files</td></tr>
+<tr><td><code>d</code> (status)</td><td>Discard changes to the highlighted file (press twice). On an untracked file it deletes the file from disk, which cannot be undone</td></tr>
+<tr><td><code>Enter</code> (status)</td><td>Open the diff viewer for the highlighted file. In the viewer, <code>Space</code> stages or unstages the current hunk, <code>[</code> and <code>]</code> move between hunks, and <code>Esc</code> or <code>d</code> closes it</td></tr>
+<tr><td><code>Enter</code> (log)</td><td>Open the commit's read-only details view</td></tr>
+<tr><td><code>f</code>, <code>p</code>, <code>P</code></td><td>Fetch, pull, or push (each press twice); <code>P</code> refuses on a detached HEAD</td></tr>
+<tr><td><code>Space</code> (branches)</td><td>Check out the branch. On a remote-tracking branch it creates a local branch of that name, or checks out the existing one</td></tr>
+<tr><td><code>c</code></td><td>Commit what you staged through the message collector</td></tr>
+<tr><td><code>A</code></td><td>Amend the last commit, with the collector pre-filled</td></tr>
+<tr><td><code>n</code></td><td>Create and switch to a new branch</td></tr>
+<tr><td><code>D</code> (branches)</td><td>Delete the selected local branch (press twice). Never the current one</td></tr>
+<tr><td><code>M</code></td><td>Merge a typed branch or ref into the current branch</td></tr>
+<tr><td><code>r</code></td><td>Sequencer menu. It appears only while a rebase, cherry-pick or conflicted merge is stopped</td></tr>
+<tr><td><code>S</code></td><td>Stash manager: create, apply, pop, drop</td></tr>
+<tr><td><code>V</code></td><td>Cherry-pick a commit ref</td></tr>
+<tr><td><code>w</code> (branches)</td><td>Worktree manager: list, add, remove</td></tr>
+<tr><td><code>i</code></td><td>Interactive-rebase todo list, as a preview only</td></tr>
+<tr><td><code>u</code>, <code>Ctrl+r</code></td><td>Undo the last operation; redo it</td></tr>
+<tr><td><code>R</code></td><td>Refresh from disk</td></tr>
+<tr><td><code>?</code></td><td>Context-sensitive help</td></tr>
+<tr><td><code>q</code></td><td>Quit. It closes the innermost overlay first</td></tr>
+<tr><td><code>Esc</code></td><td>Cancel the innermost overlay or collection. Quits when nothing is open</td></tr>
+<tr><td><code>Ctrl+C</code></td><td>Acts like <code>q</code> while idle, and like <code>Esc</code> while typing, where it drops the half-typed draft</td></tr>
+</table>
+<p>Inside a text buffer every printable key is typed, so <code>q</code> is just a letter. <code>Ctrl+W</code> and <code>Ctrl+U</code> delete a word or the line, and a bracketed paste inserts the whole sanitized blob with its line structure. Remote-tracking branches appear with divergence badges such as <code>[↑2 ↓1]</code>, or <code>[!]</code> when the upstream has vanished. Those are read-only for <code>D</code>.</p>
+
+<h2 style="margin-top: 40px;">Theme, styling and accessibility</h2>
+<p>Every state the interface needs you to know is carried by text, not by color alone. Status rows show git's porcelain <code>XY</code> codes, and diff lines keep their leading <code>+</code> and <code>-</code>. The rebase todo spells its actions as words: <code>pick</code>, <code>reword</code>, <code>edit</code>, <code>squash</code>, <code>drop</code>. The ahead-and-behind summary is git's own header. The panes stay readable under <code>NO_COLOR</code>, under <code>TERM=dumb</code>, or with an ASCII-only palette.</p>
+<p>The focused pane shows two signals: the accent border and a <code>▸</code> text marker before its title. The selected row uses reverse video on styling terminals. The frame also carries a plain-text <code>cursor:</code> line that names the selected file, branch, commit or overlay entry. It has no styling, so it stays visible under every palette, including <code>TERM=dumb</code>.</p>
+<p>The palette is not tuned for WCAG conformance, and it does not promise a measured contrast ratio for the hint strip or the unfocused border. Actual contrast depends on your terminal palette, so check the colors against your own background.</p>
+
+<h2 style="margin-top: 40px;">Internationalization</h2>
+<p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. The catalog is <code>lang/en.php</code>, and the other locales are under <code>lang/</code>, 16 files in all. Only the twelve <code>git.*</code> keys carry a <code>git.</code> prefix inside the file, and you pass those as written: <code>Lang::t('git.timeout')</code>. Every other key has no prefix and is passed as written too: <code>Lang::t('status.clean')</code> and <code>Lang::t('cli.not_a_repo')</code>. The facade adds the library namespace on lookup, so the shared registry sees <code>git.git.timeout</code> and <code>git.status.clean</code>. <code>Lang::t('timeout')</code> does not resolve. It returns the prefixed key <code>git.timeout</code> rather than a message, so always call through <code>SugarCraft\Git\Lang</code>.</p>
+<table class="api-table">
+<tr><th>Key</th><th>Default text</th><th>Parameters</th></tr>
+<tr><td>git.spawn_failed</td><td>git: failed to spawn: {reason}</td><td>reason</td></tr>
+<tr><td>git.error</td><td>git: {stderr}</td><td>stderr</td></tr>
+<tr><td>git.timeout</td><td>git: command timed out after {seconds}s</td><td>seconds</td></tr>
+<tr><td>cli.not_a_repo</td><td>candy-git: not a git repository: {cwd}</td><td>cwd</td></tr>
+<tr><td>ui.error_prefix</td><td>error: </td><td>none</td></tr>
+<tr><td>status.clean</td><td>clean working tree</td><td>none</td></tr>
+<tr><td>branches.empty</td><td>(no branches)</td><td>none</td></tr>
+<tr><td>log.empty</td><td>(empty log)</td><td>none</td></tr>
+</table>
+<p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values. The <code>cli.not_a_repo</code> refusal fires when <code>git rev-parse --absolute-git-dir</code> fails in the working directory. Linked worktrees, where <code>.git</code> is a file, are accepted.</p>
+
+<h2 style="margin-top: 40px;">Examples</h2>
+<p>Both examples are hermetic. They render a fixture-backed driver, so they need no repository. Each one is interactive. In a terminal it runs until you quit it. When stdin reaches end of file, it renders one frame and exits 0.</p>
+<ul>
+  <li><code>examples/play.php</code> is the pane tour, with status, branches and log. Run it in a terminal with <code>php examples/play.php</code>, and press <code>q</code> to quit. Non-interactively, <code>printf 'q' | php examples/play.php</code> renders one frame and exits 0. With stdin at <code>/dev/null</code> it also renders one frame and exits 0, so it never blocks a script or CI job. It keeps running only while stdin is an open pipe or terminal, so write a key to an open stream to drive it.</li>
+  <li><code>examples/stage.php</code> is the staging demo, where <code>s</code> stages and unstages rows that visibly change. Run it with <code>php examples/stage.php</code>. Piping <code>sq</code> into it exits 0, and so does stdin at <code>/dev/null</code>.</li>
+</ul>
+<p>The VHS tapes drive these examples, not the live binary, so the recorded output does not depend on the state of a repository. <code>tests/ExamplesSmokeTest.php</code> compiles each example against the live driver interface and boots the app, so a driver change that breaks an example fails the suite.</p>
+
+<h2 style="margin-top: 40px;">Testing</h2>
+<p>Run the suite from the package root after <code>composer install</code>:</p>
+<pre class="code"><code class="language-shell">vendor/bin/phpunit</code></pre>
+<p>Most tests drive the model with a fixture-backed <code>GitDriver</code>, so they need no repository. The <code>*IntegrationTest</code> files create real repositories in a temporary directory and run the real <code>git</code>. Those need git 2.23 or newer on <code>PATH</code>. The <code>ExamplesSmokeTest</code> keeps both examples booting.</p>
+
+<h2 style="margin-top: 40px;">Troubleshooting</h2>
+
+<h3 style="margin-top: 32px;">candy-git: cannot find composer autoload.php</h3>
+<p>You are running from a clone that has no <code>vendor/</code> directory. Run <code>composer install</code> inside <code>candy-git/</code>. The directory is gitignored, so a fresh clone never has it.</p>
+
+<h3 style="margin-top: 32px;">It refuses to start: git is too old or missing</h3>
+<p>CandyGit needs git 2.23 or newer, because it uses <code>git restore</code> for unstage and discard. The refusal is one sentence with exit status 1. Upgrade git, or make sure the <code>git</code> on <code>PATH</code> is the one you expect.</p>
+
+<h3 style="margin-top: 32px;">It refuses: not a git repository</h3>
+<p>Run it inside a checked-out work tree. Bare repositories are refused because they have no status to show. Linked worktrees work.</p>
+
+<h3 style="margin-top: 32px;">It refuses to run with output piped</h3>
+<p>The interface is a full-screen program, so stdout must be a terminal. Run it directly in a terminal, not through a pipe or a capturing wrapper.</p>
+
+<h3 style="margin-top: 32px;">Undo refuses an operation</h3>
+<p>That is by design. Undo refuses where the inverse would lie: discard, untracked-file delete, amend, merge, revert, reset --hard, a checkout with no origin to return to, and a branch delete whose prior SHA was never recorded. Undo also refuses a stage-all when a file was partly staged. The status line says why.</p>
+
+<h3 style="margin-top: 32px;">A deleted untracked file is gone</h3>
+<p><code>d</code> on an untracked file deletes it from disk, and undo does not restore it. The press-twice guard is the only confirmation. Stage or move files you want to keep before you press <code>d</code>.</p>
+
+<h3 style="margin-top: 32px;">Push refuses on a detached HEAD</h3>
+<p>There is no branch to push. Check out a branch with <code>Space</code> on the branches pane, or create one with <code>n</code>, then push with <code>P</code>.</p>
+
+<h3 style="margin-top: 32px;">A filter driver prints a notice on stderr</h3>
+<p>The repository configures a <code>clean</code>, <code>smudge</code> or <code>process</code> filter, such as git-lfs. CandyGit announces it rather than disabling it, because those tools need their filters to work. Set <code>CANDY_GIT_STRICT_FILTERS=1</code> to refuse such repositories instead.</p>
+
+<h3 style="margin-top: 32px;">git: command timed out after 30s</h3>
+<p>A read git call ran past its 30-second budget, usually a slow remote or a fetch waiting on credentials. Git calls run on the UI thread, so the screen pauses until the call returns or times out. Check the network or the remote, then retry. The timed-out child is stopped with <code>TERM</code>, then <code>KILL</code>.</p>
+
+<h3 style="margin-top: 32px;">git: mutator timed out after 120s</h3>
+<p>A mutating call such as <code>fetch</code>, <code>pull</code>, <code>push</code>, <code>commit</code> or <code>merge</code> ran past its 120-second budget. The repository may be mid-operation, most often a stale <code>.git/index.lock</code> or a half-applied checkout. Run <code>git status</code> outside CandyGit, clear a lock you know is dead, then retry.</p>
+
+<h2 style="margin-top: 40px;">Upstream mapping</h2>
+<p>lazygit is the design antecedent. CandyGit mirrors its three-pane workflow and its single-key verbs, and it is native PHP rather than a port, so there is no class-for-class table. Each verb maps to a <code>git</code> subcommand, which is why the git documentation is the reference for behavior. The table in the API reference lists the classes that carry it.</p>
+
+<h2 style="margin-top: 40px;">Architecture</h2>
+<p>The model is pure. Every key returns a fresh <code>App</code>, and the git work happens in the driver. The main classes are below.</p>
+<table class="api-table">
+<tr><th>Class</th><th>Role</th></tr>
+<tr><td><code>App</code></td><td>The TEA model. Owns the lists, cursors, focus and overlays. Each key returns a fresh instance.</td></tr>
+<tr><td><code>Git</code>, <code>GitDriver</code></td><td>The concrete shell-out driver, and the interface every operation goes through. Tests inject a fixture-backed driver.</td></tr>
+<tr><td><code>Process</code></td><td>The main <code>proc_open</code> site. It runs a bounded drain loop, pins the child environment, isolates stdin from the terminal, and tears down with TERM, a grace period, then KILL. The private <code>runBounded</code> helper in <code>Platform</code> is the other caller (Windows teardown only) and does not pin the environment.</td></tr>
+<tr><td><code>Platform</code></td><td>The OS seam: the null device, PATH lookup, and process-tree kill on Windows. Both branches are unit-tested on any host.</td></tr>
+<tr><td><code>HistoryEntry</code>, <code>HistoryManager</code></td><td>One undoable operation with its inverse or a refusal marker, and the bounded undo and redo stacks.</td></tr>
+<tr><td><code>DiffViewer</code>, <code>DiffHighlighter</code></td><td>The immutable diff overlay state with hunk navigation, and the per-line highlight spans.</td></tr>
+<tr><td><code>StashManager</code>, <code>StashEntry</code></td><td>The immutable stash list and its entries.</td></tr>
+<tr><td><code>CherryPick</code>, <code>Worktrees</code>, <code>WorktreeEntry</code></td><td>The cherry-pick collector, and the worktree list with its add and remove modes.</td></tr>
+<tr><td><code>InteractiveRebase</code>, <code>RebaseCommit</code>, <code>RebaseAction</code></td><td>The rebase todo preview, its entries, and the action enum: Pick, Reword, Edit, Squash, Drop.</td></tr>
+<tr><td><code>Renderer</code></td><td>A pure view function. It draws the three bordered panes and the focus marker.</td></tr>
+<tr><td><code>Lang</code></td><td>The <code>git</code>-namespaced translation facade over the shared registry.</td></tr>
+<tr><td><code>Support\Version</code>, <code>Support\GitRequirement</code></td><td>The version and build-stamp reader, and the git version floor.</td></tr>
+</table>
+
+<h2 style="margin-top: 40px;">Changelog and versioning</h2>
+<p>CandyGit was published as <code>sugarcraft/sugar-stash</code> until a rename in 2026-10, when the namespace changed from <code>SugarCraft\Stash\</code> to <code>SugarCraft\Git\</code>. The Composer channel tracks <code>dev-master</code>. The GitHub release channel has two tags. <code>candy-git/latest</code> is the rolling prerelease phar, and <code>candy-git/v*</code> tags are stable cuts. Until a stable tag is cut, the prerelease phar is the only release artifact. Each release ships <code>candy-git.phar.sha256</code> and <code>candy-git.phar.commit</code>, which names the tested commit the bytes were built at.</p>
+
+<h2 style="margin-top: 40px;">Related</h2>
+<ul>
+  <li><a href="sugar-core.html">sugar-core</a> provides the program loop, the key messages and the cell-width math.</li>
+  <li><a href="sugar-fuzzy.html">sugar-fuzzy</a> provides the scored matcher behind <code>StashManager::fuzzyFilter()</code>.</li>
+  <li><a href="candy-files.html">candy-files</a> is the dual-pane file manager on the same stack.</li>
+</ul>
+
+<h2 style="margin-top: 40px;">Source &amp; demos</h2>
+<ul>
+  <li><a href="https://github.com/sugarcraft/candy-git">Source on GitHub</a></li>
+  <li><a href="https://github.com/sugarcraft/candy-git/blob/master/README.md">Full README</a></li>
+  <li><a href="https://github.com/sugarcraft/candy-git/tree/master/examples">Runnable examples</a></li>
+  <li>Design antecedent: <a href="https://github.com/jesseduffield/lazygit">lazygit</a> (Go). SugarCraft is developed as a native PHP project.</li>
+</ul>
+
+<p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
   </div>
 </section>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIF demos. <code>play.tape</code> drives <code>examples/play.php</code> — a hermetic, fixture-backed build of the TUI that renders identically on every machine — while <code>stage.tape</code> drives the real <code>./bin/candy-git</code> against the CI checkout, so its rows are environment-dependent.</p>
+        <p class="lede">VHS-recorded GIF demos. <code>play.tape</code> drives <code>examples/play.php</code> — a hermetic, fixture-backed build of the TUI that renders identically on every machine — while <code>stage.tape</code> drives <code>examples/stage.php</code> through the same fixture.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-git/.vhs/play.gif" alt="Play">

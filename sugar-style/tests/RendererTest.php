@@ -121,6 +121,34 @@ final class RendererTest extends TestCase
         }
     }
 
+    /**
+     * Regression. fromEnvironment() used ColorProfile::detect(), which answers
+     * TERM=dumb as Ascii on a terminal, so bold and the other attributes reached
+     * a dumb terminal as raw SGR. It must take the dumb-terminal veto and answer
+     * NoTty, as the pre-P1-10a ladder did, so the renderer emits no escape bytes.
+     */
+    public function testFromEnvironmentVetoesADumbTerminal(): void
+    {
+        $keys = ['TERM', 'FORCE_COLOR', 'CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR'];
+        $saved = [];
+        foreach ($keys as $k) {
+            $saved[$k] = getenv($k);
+            putenv($k);
+        }
+        putenv('TERM=dumb');
+        Renderer::resetEnvironmentMemoForTesting();
+
+        try {
+            $r = Renderer::fromEnvironment();
+            $this->assertSame(ColorProfile::NoTty, $r->colorProfile);
+        } finally {
+            foreach ($saved as $k => $v) {
+                putenv($v === false ? $k : "{$k}={$v}");
+            }
+            Renderer::resetEnvironmentMemoForTesting();
+        }
+    }
+
     public function testImmutability(): void
     {
         $a = Renderer::new();

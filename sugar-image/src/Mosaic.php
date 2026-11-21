@@ -105,6 +105,29 @@ final class Mosaic implements IncrementalRenderer
     }
 
     /**
+     * Memoised {@see auto()} answer for this process; null until the first call.
+     */
+    private static ?self $autoMemo = null;
+
+    /**
+     * Pick the best renderer from environment variables alone.
+     *
+     * The env stage of {@see auto()} without the tty: no query bytes, no
+     * timeouts, no palette probe, and no tmux `allow-passthrough` toggle (that
+     * toggle is a tmux process, which this pure entry point must not spawn).
+     * Inside tmux the passthrough envelope is still applied, so the bytes
+     * match what the probed path would emit for the same terminal. A Kitty
+     * env claim is not enough here: {@see Detect::fromEnv()} reports it
+     * unconfirmed, so this never picks the Kitty renderer from TERM alone.
+     *
+     * @param array<string,string>|null $env  null reads the process environment
+     */
+    public static function fromEnv(?array $env = null): self
+    {
+        return self::fromCapability(Detect::fromEnv($env), ensureTmux: false);
+    }
+
+    /**
      * Auto-detect the best renderer.
      *
      * NEVER throws: every failure route lands on a renderer, because the
@@ -134,10 +157,34 @@ final class Mosaic implements IncrementalRenderer
      * symbols → halfblock. Symbols, not HalfBlock, is the practical floor:
      * a probed text-capable terminal always lands one rung above it.
      *
+     * Memoised per process: the first call probes and later calls return the
+     * same instance. {@see self::resetAutoMemo()} forces the next call to probe
+     * again ({@see Detect::reset()} clears it too). {@see self::probe()} is not
+     * memoised.
+     *
      * @see Mosaic::diagnose() for structured probe report
      * @see Detect::probe() for the primary TTY-probing implementation
      */
     public static function auto(): self
+    {
+        return self::$autoMemo ??= self::autoProbe();
+    }
+
+    /**
+     * Forget the memoised {@see auto()} result, so the next call probes the
+     * terminal again. For tests and for an application that changed terminal
+     * (a reattached multiplexer, say); the probe itself is the expensive part.
+     */
+    public static function resetAutoMemo(): void
+    {
+        self::$autoMemo = null;
+    }
+
+    /**
+     * The uncached {@see auto()} body: one Detect::probe(), then the palette
+     * fallback only when that found no graphics protocol.
+     */
+    private static function autoProbe(): self
     {
         try {
             $cap = Detect::probe();
@@ -172,9 +219,12 @@ final class Mosaic implements IncrementalRenderer
      * Explicit fallback detection via sugar-colorprofile's TerminalProbe.
      *
      * Only consulted when {@see Detect::probe()} identified no graphics
-     * protocol. The palette report can still see Kitty/iTerm2 environment
-     * advertisements Detect's env table misses; anything else keeps the
-     * Detect snapshot (whose bestBackend lands on the Symbols rung).
+     * protocol. The palette report can still see iTerm2 environment
+     * advertisements Detect's env table misses. It is never a Kitty source:
+     * its Kitty keyboard flag comes from TERM alone, and a Kitty graphics
+     * claim needs the APC `a=q` reply that Detect already asked for (P1-13b).
+     * Anything else keeps the Detect snapshot (whose bestBackend lands on the
+     * Symbols rung).
      * Consumer wire: the rebuilt capabilities inherit the snapshot's
      * probed OSC 10/11 default colours — dropping them used to hand the
      * terminal a colour-blind text fallback two rungs down the ladder.
@@ -186,15 +236,6 @@ final class Mosaic implements IncrementalRenderer
         } catch (\Throwable) {
             // TerminalProbe itself threw — keep the Detect snapshot.
             return self::fromCapability($fallbackCap);
-        }
-
-        // Kitty keyboard support implies the Kitty graphics protocol.
-        if ($report->has(PaletteCapability::KittyKeyboard)) {
-            return self::fromCapability(
-                Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux)
-                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg)
-                    ->withTerminalFacts($fallbackCap->quirks, $fallbackCap->passthroughMode),
-            );
         }
 
         // iTerm2 inline image support.
@@ -574,7 +615,7 @@ final class Mosaic implements IncrementalRenderer
      *    (half/quarter block, ASCII — the renderers implementing
      *    {@see AcceptsOptimization}) coalesce identical-glyph runs under an
      *    unchanged pen into `ESC[count b`, gated by
-     *    {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()} AND
+     *    {@see \SugarCraft\CellBuffer\Support\RepeatGate::worth()} AND
      *    {@see Detect::supportsRepeat()}. Pixel-protocol backends (sixel/
      *    kitty/iterm2/chafa) carry no cell stream to coalesce: the mask
      *    still rides their poster cache key but emits nothing.
@@ -1034,7 +1075,7 @@ final class Mosaic implements IncrementalRenderer
      * chain answers screen. Shared by {@see probe()}, {@see auto()} and the
      * palette fallback so every detection path ends in one place.
      */
-    private static function fromCapability(Capability $cap): self
+    private static function fromCapability(Capability $cap, bool $ensureTmux = true): self
     {
         $renderer = self::bestBackend($cap);
 
@@ -1055,7 +1096,7 @@ final class Mosaic implements IncrementalRenderer
         // is on — flip it transactionally for the process lifetime when a
         // pixel protocol is in play (chicle-options.c:2412-2418 gates the
         // same way; text fallback emits nothing that needs the toggle).
-        if ($cap->inTmux && self::hasGraphicsProtocol($cap)) {
+        if ($ensureTmux && $cap->inTmux && self::hasGraphicsProtocol($cap)) {
             TmuxPassthrough::ensure();
         }
 
@@ -1114,10 +1155,10 @@ final class Mosaic implements IncrementalRenderer
      * Returns null on an unknown mode so callers can phrase the error in
      * their own words rather than unwinding an exception.
      */
-    public static function fromModeString(string $mode): ?self
+    public static function fromModeString(string $mode, bool $probe = true): ?self
     {
         return match (strtolower(trim($mode))) {
-            'auto'         => self::auto(),
+            'auto'         => $probe ? self::auto() : self::fromEnv(),
             'sixel'        => self::sixel(),
             'kitty'        => self::kitty(),
             'iterm2'       => self::iterm2(),
@@ -1195,10 +1236,11 @@ final class Mosaic implements IncrementalRenderer
      * fulfillment chain, so a rejected fetch stores nothing. Error semantics
      * are inherited from the source call: an unsupported URL scheme throws
      * synchronously, SSRF/host rejections come back as a rejected promise.
-     * The render itself is synchronous on the event loop (decode + resample
-     * + encode) — for large posters route the source through
-     * {@see Mosaic::adaptive()} + {@see AdaptiveImage::withAsync()} or
-     * offload the whole call so the loop keeps serving other sockets.
+     *
+     * The encode runs through a {@see PacedAsyncRenderer} over this mosaic's
+     * row-lazy seam (AUD §3.9): each slice is budgeted and the loop is
+     * yielded between slices, so a large poster no longer occupies the loop for
+     * one whole encode. The bytes are the ones {@see poster()} returns.
      *
      * @return PromiseInterface<string>
      */
@@ -1217,14 +1259,16 @@ final class Mosaic implements IncrementalRenderer
             }
         }
 
-        $poster = $this->scaledForPoster();
+        $paced = new PacedAsyncRenderer($this->scaledForPoster());
 
         return ImageSource::fromUrlAsync($url, allowedHosts: $allowedHosts)
-            ->then(static function (ImageSource $source) use ($poster, $cellW, $cellH, $cache, $key): string {
-                $rendered = $poster->render($source, $cellW, $cellH);
-                $cache?->put($key, $rendered);
+            ->then(static function (ImageSource $source) use ($paced, $cellW, $cellH, $cache, $key): PromiseInterface {
+                return $paced->renderAsync($source, $cellW, $cellH)
+                    ->then(static function (string $rendered) use ($cache, $key): string {
+                        $cache?->put($key, $rendered);
 
-                return $rendered;
+                        return $rendered;
+                    });
             });
     }
 

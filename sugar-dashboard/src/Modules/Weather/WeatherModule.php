@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Modules\Weather;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use SugarCraft\Async\ForkChannel;
+use SugarCraft\Async\ForkedTask;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\AtomicJsonFile;
@@ -31,6 +37,9 @@ class WeatherModule extends BaseModule
     private const TICK_INTERVAL = 1800.0;
     private const TTL_SECONDS = 1800;
 
+    /** Parent-side budget for one fetch child: the client's own timeouts, plus slack for a slow reply. */
+    private const FETCH_DEADLINE_SECONDS = 15.0;
+
     private ?WeatherSnapshot $current;
     private \DateTimeImmutable $lastFetch;
 
@@ -55,6 +64,9 @@ class WeatherModule extends BaseModule
     /**
      * @param float $tickSeconds refresh cadence; @param int $ttlSeconds
      *     cache-freshness window. Both were frozen class constants before.
+     * @param ?LoopInterface $loop  The loop the host runs (see SystemModule): the
+     *     fetch's child and its deadline are registered on it, so a host with its
+     *     own loop must pass it here or the fetch never settles.
      */
     public function __construct(
         private readonly HttpClient $httpClient,
@@ -62,6 +74,7 @@ class WeatherModule extends BaseModule
         private readonly float $tickSeconds = self::TICK_INTERVAL,
         private readonly int $ttlSeconds = self::TTL_SECONDS,
         private readonly ?string $name = null,
+        private readonly ?LoopInterface $loop = null,
     ) {
         $this->current = null;
         $this->lastFetch = new \DateTimeImmutable('@0');
@@ -99,18 +112,14 @@ class WeatherModule extends BaseModule
                 }
             }
 
-            // Cache miss or stale — run the HTTP fetch. The fetch itself
-            // is synchronous inside the command the program dispatches,
-            // bounded by the HTTP client's own timeout; the promise only
-            // adapts the settled result to message dispatch. It does NOT
-            // run off the event loop.
-            // Stale-cache fallback happens inside the fetch (see
-            // fetchWeatherHttp); final failures resolve a WeatherFailureMsg.
+            // Cache miss or stale — run the HTTP fetch in a forked child so the
+            // loop keeps painting while the network answers (see fetchWeather).
+            // Stale-cache fallback and the WeatherFailureMsg happen in the parent.
             return [
                 $this,
                 Cmd::batch(
-                    Cmd::promise(function (): \React\Promise\PromiseInterface {
-                        return $this->fetchWeatherHttp();
+                    Cmd::promise(function (): PromiseInterface {
+                        return $this->fetchWeather();
                     }),
                     $this->makeTickCmd(),
                 ),
@@ -228,6 +237,98 @@ class WeatherModule extends BaseModule
         $clone->lastFailure = null;
         $clone->lastAttempt = $snapshot->fetchedAt;
         return $clone;
+    }
+
+    /**
+     * Fetch weather without holding the event loop (P1-5).
+     *
+     * The injected client runs in a forked child, which sends one frame back:
+     * the snapshot, or the failure text. The parent caches a success and
+     * applies the same stale-cache fallback as {@see fetchWeatherHttp()}. The
+     * child's deadline bounds a black-holed or trickling endpoint, so a dead
+     * network reports a failure instead of freezing the panel. A host without
+     * pcntl keeps the in-process fetch.
+     *
+     * @return PromiseInterface<Msg>
+     */
+    private function fetchWeather(): PromiseInterface
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            return $this->fetchWeatherHttp();
+        }
+
+        $deferred = new Deferred();
+        $frame = null;
+        $settle = function (?string $failure) use (&$frame, $deferred): void {
+            $deferred->resolve($this->settleFetch($frame, $failure));
+        };
+
+        try {
+            ForkedTask::run(
+                function (ForkChannel $channel): void {
+                    $channel->send($this->fetchFrame());
+                },
+                static function (string $reply) use (&$frame): void {
+                    $frame = $reply;
+                },
+                $this->loop ?? Loop::get(),
+                null,
+                self::FETCH_DEADLINE_SECONDS,
+            )->then(
+                static fn (): null => $settle(null),
+                static fn (\Throwable $e): null => $settle($e->getMessage()),
+            );
+        } catch (\Throwable $e) {
+            $settle($e->getMessage());
+        }
+
+        return $deferred->promise();
+    }
+
+    /** Child side of {@see fetchWeather()}: the one JSON frame it reports. */
+    private function fetchFrame(): string
+    {
+        try {
+            $snapshot = $this->httpClient->fetch($this->location);
+
+            return json_encode(
+                ['ok' => true, 'snapshot' => $snapshot->toArray()],
+                JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE,
+            );
+        } catch (\Throwable $e) {
+            return json_encode(['ok' => false, 'reason' => $e->getMessage()], JSON_INVALID_UTF8_SUBSTITUTE)
+                ?: '{"ok":false,"reason":"the weather reply could not be encoded"}';
+        }
+    }
+
+    /**
+     * Parent side of {@see fetchWeather()}: a success is cached and shown; anything
+     * else falls back to the stale cache, or to a WeatherFailureMsg naming why.
+     *
+     * @param ?string $frame The child's frame, when one arrived
+     * @param ?string $failure Why the child produced no usable frame, when known
+     */
+    private function settleFetch(?string $frame, ?string $failure): Msg
+    {
+        $reply = $frame === null ? null : json_decode($frame, true);
+        if (is_array($reply) && ($reply['ok'] ?? null) === true) {
+            try {
+                $snapshot = WeatherSnapshot::fromArray((array) ($reply['snapshot'] ?? []));
+                $this->saveCache($snapshot);
+
+                return new WeatherResultMsg($snapshot);
+            } catch (\Throwable $e) {
+                $failure = 'wttr.in reply could not be read: ' . $e->getMessage();
+            }
+        } elseif (is_array($reply) && is_string($reply['reason'] ?? null)) {
+            $failure = $reply['reason'];
+        }
+
+        $cached = $this->loadCache();
+
+        return $cached !== null
+            ? new WeatherResultMsg($cached)
+            : new WeatherFailureMsg(new \DateTimeImmutable(), $failure ?? 'the weather fetch ended without a reply');
     }
 
     /**

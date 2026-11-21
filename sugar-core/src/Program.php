@@ -24,6 +24,8 @@ use SugarCraft\Core\Util\Tty;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use WeakReference;
 
 /**
@@ -70,8 +72,15 @@ final class Program
     private $output;
     private readonly InputReader $reader;
     private readonly Renderer $renderer;
+    private readonly Writer $writer;
     private readonly Tty $tty;
     private bool $dirty = true;
+    /** Pending one-shot render timer ({@see markDirty()}); null when no frame is due. */
+    private ?TimerInterface $renderTimer = null;
+    /** hrtime() of the last frame; caps frames at the framerate. */
+    private int $lastRenderAt = 0;
+    /** True only while run() owns the loop, so a stopped program arms no timers. */
+    private bool $renderLive = false;
     private bool $escapeFlushPending = false;
     /**
      * The armed stale-paste timer, re-armed on every read that leaves the
@@ -91,6 +100,16 @@ final class Program
     private array $lastImageRows = [];
     /** The resolved body rendered last frame; `null` until the first render. */
     private ?string $lastRenderedBody = null;
+    /**
+     * The view() result memoized for a {@see RevisionCapable} model: the
+     * revision it was produced under, the model class that produced it, and
+     * the value view() returned. `null` when nothing is memoized.
+     *
+     * @var array{revision: int|string, model: class-string, rendered: string|View}|null
+     */
+    private ?array $viewMemo = null;
+    /** Per-frame diff hook installed by withFrameDiffHook(); `null` when unset. */
+    private ?\Closure $frameDiffHook = null;
     private ?Util\Color $lastForegroundColor = null;
     private ?Util\Color $lastBackgroundColor = null;
     private ?MouseMode $activeMouseMode = null;
@@ -105,6 +124,8 @@ final class Program
      * rides exit.
      */
     private bool $kittyKeyboardPushed = false;
+    /** True while a saturated backlog has already surfaced its overflow ExceptionMsg. */
+    private bool $outputOverflowReported = false;
     /**
      * True between a {@see setupTerminal()} that acquired the terminal and
      * the {@see teardownTerminal()} that releases it. Makes teardown
@@ -134,6 +155,7 @@ final class Program
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
+
     /**
      * Signal-subscription chains, keyed by signal number (sugar-core-017).
      * Each signo owns ONE dispatcher we install; `prev` is the handler the
@@ -168,6 +190,14 @@ final class Program
     private ?bool $prevAsyncSignals = null;
     /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
     private bool $asyncSignals = false;
+    /**
+     * Fallback signal-dispatch pump, armed only while run() owns the loop and
+     * a signal arm exists that async delivery does not cover (see
+     * {@see armSignalPump()}). Null = not armed.
+     */
+    private mixed $signalPump = null;
+    /** True while run() owns the loop; gates {@see armSignalPump()}. */
+    private bool $signalPumpLive = false;
     /**
      * Sole-Resume latch (sugar-core-014): true from just before the real
      * SIGTSTP stop until the post-wake re-setup has completed, so a SIGCONT
@@ -250,11 +280,16 @@ final class Program
             }
         }
         $this->reader = new InputReader($options->sanitizePaste);
+        // One writer for every byte this program emits, so renderer frames
+        // and program writes keep their order. Synchronous until run() attaches
+        // the loop.
+        $this->writer = new Writer($this->output);
         $this->renderer = new Renderer(
             $this->output,
             inline:   $options->inlineMode,
             cellDiff: $options->cellDiffRenderer,
             synchronized: $options->synchronizedOutput,
+            writer: $this->writer,
         );
         $this->tty = new Tty($this->input, $options->termios);
     }
@@ -362,6 +397,31 @@ final class Program
     }
 
     /**
+     * Install a per-frame diff hook. After every frame the renderer paints,
+     * the hook receives the body the previous frame painted (`null` before
+     * the first paint, and after a reset such as forceRepaint()) and the body
+     * this frame painted. Both are the bodies after image markers are
+     * resolved, so the hook sees what the text renderer diffed. Equal bodies
+     * mean the text grid did not change; the cursor and the image layer are
+     * not part of the body, so they can change the screen while the bodies
+     * stay equal. The hook is not called in headless mode
+     * (`ProgramOptions::withoutRenderer`). A throw from the hook goes to the
+     * exception handler, like any other user-code seat.
+     *
+     * Apps use it to learn which lines changed without rebuilding the grid
+     * themselves; it is a read-only observer and must not write to the
+     * terminal.
+     *
+     * @param \Closure(?string $previous, string $current): void $hook
+     */
+    public function withFrameDiffHook(\Closure $hook): self
+    {
+        $next = clone $this;
+        $next->frameDiffHook = $hook;
+        return $next;
+    }
+
+    /**
      * Return the duration in seconds of the last rendered frame.
      */
     public function lastFrameDuration(): float
@@ -391,7 +451,7 @@ final class Program
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
     }
 
     /**
@@ -554,6 +614,13 @@ final class Program
         // run #2 diff against the CLOSED screen — a stale tail instead of a
         // fresh paint. Reset at the same door as stopSignal.
         $this->lastRenderedBody = null;
+        // Bind the drain hook to the instance that is running. The writer is
+        // shared with every clone (withExceptionHandler()/withLogger()), so a
+        // hook captured in the constructor would drain into the original and
+        // leave this instance's held frame and overflow flag stranded.
+        $this->writer->onDrain(function (): void {
+            $this->onOutputDrained();
+        });
         $this->setupTerminal();
         $this->installSignalHandlers();
 
@@ -567,7 +634,6 @@ final class Program
         // straight-line tail; teardownTerminal() is idempotent ($terminalAttached)
         // and releaseRuntime() clears the state it walks, so the normal return,
         // the early-quit return and the throw path share this single exit.
-        $tickTimer = null;
         $inputWatched = false;
         // M-14: the two `return $this->model;` sites below flip this before
         // the finally runs; a still-false flag means a Throwable is unwinding
@@ -576,6 +642,8 @@ final class Program
         // so teardown owes the kitty pairing pop.
         $normalReturn = false;
         try {
+            // Inside the try so the finally detaches the writer even if a step below throws.
+            $this->writer->attach($this->loop);
             // Initial size + env + colour-profile + init Cmd. Each
             // honours the matching ProgramOptions override when set —
             // unset falls back to the live tty / getenv() / detect().
@@ -613,21 +681,15 @@ final class Program
             });
             $inputWatched = true;
 
-            // Render tick.
-            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
-            $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-                // Fallback signal pump for environments where async delivery is
-                // unavailable (or was declined). When async signals are enabled,
-                // handlers already fired and nothing is pending, so skip this to
-                // avoid a redundant dispatch.
-                if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
-                    pcntl_signal_dispatch();
-                }
-                if ($this->dirty) {
-                    $this->renderFrame();
-                    $this->dirty = false;
-                }
-            });
+            // Render scheduling. There is no 60 Hz poll: markDirty() arms a
+            // one-shot timer, capped at one frame interval after the last frame,
+            // so an idle program wakes for input and timers only (rank 16).
+            // The periodic signal pump is the fallback for environments where
+            // async signal delivery is unavailable, and only while a signal arm
+            // actually needs it (see armSignalPump()).
+            $this->signalPumpLive = true;
+            $this->armSignalPump();
+            $this->renderLive = true;
 
             // Paint the initial frame synchronously, before the loop starts, so the
             // first view is on screen immediately rather than one render-tick later.
@@ -662,15 +724,131 @@ final class Program
             $normalReturn = true;
             return $this->model;
         } finally {
-            if ($tickTimer !== null) {
-                $this->loop->cancelTimer($tickTimer);
-            }
+            $this->signalPumpLive = false;
+            $this->cancelSignalPump();
+            $this->cancelRenderTimer();
             if ($inputWatched) {
                 $this->loop->removeReadStream($this->input);
             }
             $this->releaseRuntime();
             $this->teardownTerminal(popKittyKeyboard: !$normalReturn);
+            // The teardown bytes are the last thing this run puts on the wire, so
+            // they must reach the terminal before the writer goes back to blocking
+            // mode. The flush is bounded by the write deadline.
+            $this->writer->detach(Writer::WRITE_WAIT_DEADLINE);
             $this->recorder?->close();
+        }
+    }
+
+    /**
+     * Mark the view dirty and make sure a frame is due. Called from every site
+     * that changes what the screen should show. Arms a single one-shot timer,
+     * never a poll, so a burst of changes inside one frame interval costs one
+     * wakeup.
+     */
+    private function markDirty(): void
+    {
+        $this->dirty = true;
+        if ($this->renderLive && $this->renderTimer === null) {
+            $this->armRender();
+        }
+    }
+
+    private function armRender(): void
+    {
+        $interval = 1.0 / max(1.0, $this->options->framerate);
+        $elapsed = (hrtime(true) - $this->lastRenderAt) / 1e9;
+        $this->renderTimer = $this->loop->addTimer(max(0.0, $interval - $elapsed), function (): void {
+            $this->renderTimer = null;
+            $this->onRenderDue();
+        });
+    }
+
+    /**
+     * Frame timer fired. A saturated writer holds the frame: the dirty flag
+     * stays set, and {@see onOutputDrained()} re-arms once the backlog clears.
+     */
+    private function onRenderDue(): void
+    {
+        if (!$this->dirty || $this->writer->isSaturated()) {
+            return;
+        }
+        $this->renderFrame();
+        $this->dirty = false;
+    }
+
+    private function onOutputDrained(): void
+    {
+        $this->outputOverflowReported = false;
+        if ($this->dirty && $this->renderLive && $this->renderTimer === null) {
+            $this->armRender();
+        }
+    }
+
+    /**
+     * Arm the fallback signal pump when pcntl signals need polling: no async
+     * delivery, pcntl_signal_dispatch() available, and at least one program
+     * handler or signal subscription installed. An idle program with signal
+     * handling off (withoutSignalHandler / catchInterrupts false) therefore
+     * never wakes at the framerate. Idempotent; a signal arm installed while
+     * run() is live calls this again.
+     */
+    private function armSignalPump(): void
+    {
+        if (!$this->signalPumpLive
+            || $this->signalPump !== null
+            || $this->asyncSignals
+            || !function_exists('pcntl_signal_dispatch')
+            || ($this->prevProgramSignalHandlers === [] && $this->signalSubscriptions === [])
+        ) {
+            return;
+        }
+        $interval = 1.0 / max(1.0, $this->options->framerate);
+        $this->signalPump = $this->loop->addPeriodicTimer($interval, function (): void {
+            pcntl_signal_dispatch();
+        });
+    }
+
+    private function cancelSignalPump(): void
+    {
+        if ($this->signalPump !== null) {
+            $this->loop->cancelTimer($this->signalPump);
+            $this->signalPump = null;
+        }
+    }
+
+    private function cancelRenderTimer(): void
+    {
+        $this->renderLive = false;
+        if ($this->renderTimer !== null) {
+            $this->loop->cancelTimer($this->renderTimer);
+            $this->renderTimer = null;
+        }
+    }
+
+    /**
+     * Hand the output back to blocking mode before the terminal changes hands:
+     * a child process, a suspend or an external release. O_NONBLOCK lives on
+     * the shared open file description, so a child or the shell would inherit
+     * it. Queued bytes go out first.
+     *
+     * This is the one deliberate exception to the Writer's "never blocks the
+     * loop" contract: the flush waits synchronously for up to
+     * Writer::WRITE_WAIT_DEADLINE when the terminal has stopped reading. The
+     * child, the suspend or the release cannot take the terminal while those
+     * bytes are still queued, so deferring the handover to onDrain would only
+     * move the same wait past a point where the terminal is already in use.
+     */
+    private function detachOutput(): void
+    {
+        $this->writer->detach(Writer::WRITE_WAIT_DEADLINE);
+    }
+
+    /** Return the output to queued mode once the terminal is ours again. */
+    private function attachOutput(): void
+    {
+        if ($this->renderLive) {
+            $this->writer->attach($this->loop);
         }
     }
 
@@ -762,6 +940,7 @@ final class Program
     public function releaseTerminal(): void
     {
         $this->teardownTerminal();
+        $this->detachOutput();
     }
 
     /**
@@ -772,12 +951,13 @@ final class Program
      */
     public function restoreTerminal(): void
     {
+        $this->attachOutput();
         $this->setupTerminal();
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
     }
 
     /**
@@ -975,6 +1155,39 @@ final class Program
     }
 
     /**
+     * View seat with the revision memo (P1-16). When the model is a
+     * {@see RevisionCapable} whose revision equals the one the memoized
+     * frame was rendered under (same model class), view() is skipped and the
+     * memoized value is returned, so the frame pipeline repaints the same
+     * bytes a fresh view() would. A null revision always calls view().
+     *
+     * @return string|View|null
+     */
+    private function renderedFrame(Model $model): string|View|null
+    {
+        $revision = null;
+        if ($model instanceof RevisionCapable) {
+            try {
+                $revision = $model->revision();
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                return null;
+            }
+        }
+        $class = $model::class;
+        if ($revision !== null && $this->viewMemo !== null
+            && $this->viewMemo['revision'] === $revision
+            && $this->viewMemo['model'] === $class) {
+            return $this->viewMemo['rendered'];
+        }
+        $rendered = $this->userView($model);
+        $this->viewMemo = ($revision !== null && $rendered !== null)
+            ? ['revision' => $revision, 'model' => $class, 'rendered' => $rendered]
+            : null;
+        return $rendered;
+    }
+
+    /**
      * User-code seat: a subscription/TickRequest produce closure
      * (sugar-core-003). Returns null when the handler absorbed a throw —
      * that tick/signal is skipped, the subscription stays armed.
@@ -1007,7 +1220,12 @@ final class Program
             return;
         }
         if ($msg instanceof TickRequest) {
-            $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
+            // A tick cancelled before it reached the loop never arms, so its
+            // produce closure cannot run (see TickHandle).
+            if ($msg->handle?->isCancelled()) {
+                return;
+            }
+            $timer = $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
                 try {
                     $produced = ($msg->produce)();
                 } catch (\Throwable $t) {
@@ -1018,6 +1236,12 @@ final class Program
                     $this->dispatch($produced);
                 }
             });
+            $msg->handle?->attach(fn () => $this->cancelOneShotTimer($timer));
+            return;
+        }
+        if ($msg instanceof WindowSizeRequest) {
+            $size = $this->options->windowSize ?? $this->tty->size();
+            $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
             return;
         }
         if ($msg instanceof EveryRequest) {
@@ -1032,23 +1256,25 @@ final class Program
             // M-14: a whole-string kitty push/pop is the one side-channel
             // shape with terminal state the teardown must account for — it
             // arms and disarms the pop mirror, so an escaping Throwable still
-            // gets the pairing pop (see teardownTerminal()).
-            if (preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
+            // gets the pairing pop (see teardownTerminal()). The mirror follows
+            // only bytes that were queued: a dropped push or pop leaves the
+            // terminal in its old state, and the mirror must still match it.
+            $queued = $this->writeNonFrameOutput($msg->bytes);
+            if ($queued && preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
                 $this->kittyKeyboardPushed = $m[1] === '>';
             }
-            $this->writeOutput($msg->bytes);
             return;
         }
         if ($msg instanceof PrintMsg) {
             // Print above the program region. The renderer's diff state
             // is now stale, so reset it so the next render() repaints
             // every visible row.
-            $this->writeOutput($msg->text . "\n");
+            $this->writeNonFrameOutput($msg->text . "\n");
             $this->renderer->reset();
             $this->lastRenderedBody = null;
             $this->lastImageSignature = '';
             $this->lastImageRows = [];
-            $this->dirty = true;
+            $this->markDirty();
             return;
         }
         if ($msg instanceof ExecRequest) {
@@ -1096,7 +1322,7 @@ final class Program
                 $this->lastRenderedBody = null;
                 $this->lastImageSignature = '';
                 $this->lastImageRows = [];
-                $this->dirty = true;
+                $this->markDirty();
             }
         }
         if ($msg instanceof AsyncCmd) {
@@ -1108,17 +1334,29 @@ final class Program
             // generation at arm-time and refusing to act on a mismatch makes
             // post-teardown settlement a silent no-op.
             $generation = $this->runtimeGeneration;
-            $msg->promise->then(function (?Msg $resolvedMsg) use ($generation): void {
+            $promise = $msg->timeoutSeconds === null
+                ? $msg->promise
+                : $this->boundPromise($msg->promise, $msg->timeoutSeconds);
+            $promise->then(function (?Msg $resolvedMsg) use ($generation): void {
                 if ($generation !== $this->runtimeGeneration) {
                     return;
                 }
                 if ($resolvedMsg !== null) {
                     $this->dispatch($resolvedMsg);
                 }
-            })->otherwise(function (\Throwable $e) use ($generation): void {
+            })->otherwise(function (\Throwable $e) use ($generation, $msg): void {
                 if ($generation !== $this->runtimeGeneration) {
                     // Same law on the reject path: no log line, no ExceptionMsg,
                     // and crucially no user exception handler after teardown.
+                    return;
+                }
+                if ($msg->onFailure !== null) {
+                    // A producer that scopes its own failures (TabScope) owns the
+                    // rejection, timeouts included: its Msg replaces the raw
+                    // ExceptionMsg, and the user handler is skipped as it is for
+                    // every other scoped result.
+                    $this->log('error', 'async command failed: ' . $e->getMessage());
+                    $this->dispatch(($msg->onFailure)($e));
                     return;
                 }
                 // Surface the async failure as an ExceptionMsg (models can react /
@@ -1170,10 +1408,19 @@ final class Program
                 }
                 [$nextModel, $cmd] = $updated;
                 $this->model = $nextModel;
-                $this->dirty = true;
+                // A push or pop swaps the active screen, which can be the same
+                // class at the same revision. The memo keys on neither the
+                // instance nor the stack position, so it must not survive the
+                // transition or the new screen would paint the old screen's view.
+                $this->viewMemo = null;
+                $this->markDirty();
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
+                // A push or pop moves the active model, so the subscriptions
+                // of the new top (pushed screen, or the base on pop) must be
+                // reconciled now, not on the next unrelated Msg.
+                $this->reconcileWantedSubscriptions();
                 return;
             }
             // sugar-core-034 (RUN-9): a stack message reaching a root that does
@@ -1208,7 +1455,7 @@ final class Program
             // was dropped on the floor: routed, updated, thrown away.
             $this->persistScreenModel($this->model, $nextModel);
         }
-        $this->dirty = true;
+        $this->markDirty();
         if ($cmd !== null) {
             $this->scheduleCmd($cmd);
         }
@@ -1499,6 +1746,8 @@ final class Program
     private function runExec(ExecRequest $req): void
     {
         $this->teardownTerminal();
+        // The child takes the terminal next: nothing queued may land after it starts.
+        $this->detachOutput();
         $err = null;
         $exit = -1;
         $stdout = '';
@@ -1576,11 +1825,12 @@ final class Program
             $err = $t;
         }
         $this->setupTerminal();
+        $this->attachOutput();
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
 
         $produced = $req->onComplete !== null
             ? ($req->onComplete)($exit, $stdout, $stderr, $err)
@@ -1693,6 +1943,7 @@ final class Program
         // CONTs the shell or a stray kill -CONT delivers.
         $this->suspendStopPending = true;
         $this->suspendResumeIssued = false;
+        $this->detachOutput();
         if (function_exists('posix_getpid')) {
             posix_kill(posix_getpid(), SIGTSTP);
         }
@@ -1702,11 +1953,12 @@ final class Program
             $this->send(new SuspendMsg());
         });
         $this->setupTerminal();
+        $this->attachOutput();
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
-        $this->dirty = true;
+        $this->markDirty();
         if (!$this->suspendResumeIssued) {
             $this->suspendResumeIssued = true;
             $this->dispatch(new ResumeMsg());
@@ -1727,7 +1979,7 @@ final class Program
         }
         $this->escapeFlushPending = true;
         $generation = $this->runtimeGeneration;
-        $this->addOneShotTimer(0.05, function () use ($generation): void {
+        $this->addOneShotTimer($this->options->escapeDelay, function () use ($generation): void {
             $this->escapeFlushPending = false;
             // Teardown law (crush_libs.md sugar-core #3, pinned by
             // ProgramRuntimeTeardownTest): a flush must never promote into a
@@ -1955,6 +2207,43 @@ final class Program
                 $this->dispatch($msg);
             }
         });
+    }
+
+    /**
+     * Settle $promise with its own outcome, or reject with a timeout error
+     * once $seconds pass, whichever comes first. The timer lives on the
+     * Program's loop, so teardown cancels it like any other one-shot.
+     */
+    private function boundPromise(PromiseInterface $promise, float $seconds): PromiseInterface
+    {
+        $deferred = new Deferred();
+        $settled = false;
+        $timer = $this->addOneShotTimer($seconds, function () use ($deferred, &$settled, $seconds): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $deferred->reject(new \RuntimeException(Lang::t('program.async_timeout', ['seconds' => (string) $seconds])));
+        });
+        $promise->then(
+            function (mixed $value) use ($deferred, &$settled, $timer): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $this->cancelOneShotTimer($timer);
+                $deferred->resolve($value);
+            },
+            function (\Throwable $error) use ($deferred, &$settled, $timer): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $this->cancelOneShotTimer($timer);
+                $deferred->reject($error);
+            },
+        );
+        return $deferred->promise();
     }
 
     private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
@@ -2282,6 +2571,7 @@ final class Program
         $this->writeOutput(Ansi::popKittyKeyboard());
         $this->kittyKeyboardPushed = false; // the backstop's unconditional pop settles the mirror too
         $this->teardownTerminal();
+        $this->detachOutput();
     }
 
     /**
@@ -2292,16 +2582,18 @@ final class Program
     private function renderFrame(): void
     {
         $frameStart = microtime(true);
+        $this->lastRenderAt = hrtime(true);
 
         if ($this->options->withoutRenderer) {
-            // Headless mode: still call view() so the model's
+            // Headless mode: still run the view seat so the model's
             // computation runs (and any errors surface) but skip
-            // emitting any output.
-            $this->userView($this->activeModel());
+            // emitting any output. The revision memo applies here too:
+            // no paint is needed, so an unchanged revision skips view().
+            $this->renderedFrame($this->activeModel());
             $this->lastFrameDuration = microtime(true) - $frameStart;
             return;
         }
-        $rendered = $this->userView($this->activeModel());
+        $rendered = $this->renderedFrame($this->activeModel());
         if ($rendered === null) {
             // handler absorbed the view() throw: skip this frame. The
             // caller clears dirty for this pass, so the screen keeps the
@@ -2338,6 +2630,7 @@ final class Program
         $bodyChanged = $body !== $this->lastRenderedBody;
 
         // Paint the text frame first (a normal diff — repaints only changed lines).
+        $previousBody = $this->lastRenderedBody;
         $this->renderer->render($body);
 
         // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
@@ -2362,6 +2655,14 @@ final class Program
         $this->lastRenderedBody = $body;
         $this->lastImageSignature = $signature;
         $this->lastImageRows = ImageOverlay::coveredRows($paints);
+
+        if ($this->frameDiffHook !== null) {
+            try {
+                ($this->frameDiffHook)($previousBody, $body);
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+            }
+        }
 
         $this->lastFrameDuration = microtime(true) - $frameStart;
     }
@@ -2479,65 +2780,48 @@ final class Program
     }
 
     /**
-     * Write a chunk to the program's output stream and tee it to the
-     * recorder if one is attached. Every byte that leaves the runtime —
-     * renderer frames, RawMsg / PrintMsg, terminal-mode bytes, cursor /
-     * title / progress emitters — flows through here so cassettes
-     * reflect what the user actually saw.
+     * Write a chunk to the program's output through the shared {@see Writer}.
+     * Every byte that leaves the runtime — renderer frames, RawMsg / PrintMsg,
+     * terminal-mode bytes, cursor / title / progress emitters — flows through
+     * here, so the writer's recorder tee sees exactly what reached the stream
+     * and cassettes reflect what the user actually saw.
      *
-     * @param float $deadline writability ceiling (tests pass short bounds;
-     *                        production callers always take the default)
+     * While run() owns the loop the write is queued and never blocks the loop;
+     * outside run() it is synchronous, bounded by $deadline.
+     *
+     * @param float $deadline writability ceiling for a synchronous write (tests
+     *                        pass short bounds; production callers take the default)
      */
     private function writeOutput(string $bytes, float $deadline = Renderer::WRITE_WAIT_DEADLINE): void
     {
-        // Loop over short writes: a single fwrite() to a PTY/pipe (e.g. an
-        // SSH session) with a partially full kernel buffer consumes only what
-        // fits and returns a short count. Dropping the tail left mode-setting
-        // sequences and large RawMsg/PrintMsg payloads partially emitted.
-        //
-        // sugar-core-018 (mirrors Renderer::writeAll()): a stream_select()
-        // false return is a transient interrupt, not "writable never" —
-        // retry MAX_SELECT_FALSE_RETRY consecutive ticks inside a
-        // WRITE_WAIT_DEADLINE wall bound before giving up on the tail.
-        $len = strlen($bytes);
-        $written = 0;
-        $selectFalse = 0;
-        $start = hrtime(true);
-        // A closed resource makes fwrite()/stream_select() throw TypeError (the
-        // @ silencer does not cover that), and a torn pipe returns false with
-        // a Notice. Teardown is best-effort: swallow and let later restore
-        // writes still be attempted.
-        try {
-            while ($written < $len && is_resource($this->output)) {
-                $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
-                if ($n === false) {
-                    break;
-                }
-                if ($n === 0) {
-                    if ((hrtime(true) - $start) / 1e9 >= $deadline) {
-                        break;
-                    }
-                    $w = [$this->output];
-                    $r = $e = null;
-                    if (@stream_select($r, $w, $e, 1) === false) {
-                        if (++$selectFalse > Renderer::MAX_SELECT_FALSE_RETRY) {
-                            break;
-                        }
-                        continue;
-                    }
-                    $selectFalse = 0;
-                    continue;
-                }
-                $written += $n;
-            }
-        } catch (\Throwable) {
+        $this->writer->write($bytes, $deadline);
+    }
+
+    /**
+     * Write RawMsg / PrintMsg bytes. Frames are held by the saturation gate in
+     * {@see onRenderDue()}, but these producers are not, so they get a hard cap
+     * instead: once the backlog reaches the writer's threshold the bytes are
+     * dropped and one ExceptionMsg is surfaced per saturation episode. Without
+     * the cap a stalled reader grows the backlog with output volume until
+     * PHP's memory_limit fatals the process. Bytes already queued still drain,
+     * and {@see onOutputDrained()} re-arms the report once the backlog clears.
+     *
+     * Returns true only when the bytes were queued; callers whose bookkeeping
+     * mirrors terminal state must not record a dropped write.
+     */
+    private function writeNonFrameOutput(string $bytes): bool
+    {
+        if (!$this->writer->isSaturated()) {
+            $this->writeOutput($bytes);
+            return true;
         }
-        // sugar-core-018: the recorder tee sees FLUSHED bytes only — a
-        // cassette that claims bytes the stream refused never matches what
-        // the user saw on glass.
-        if ($this->recorder !== null && $written > 0) {
-            $this->recorder->recordOutput($written === $len ? $bytes : substr($bytes, 0, $written));
+        if ($this->outputOverflowReported) {
+            return false;
         }
+        $this->outputOverflowReported = true;
+        $this->log('error', Lang::t('program.output_backlog_full'));
+        $this->send(new ExceptionMsg(new \RuntimeException(Lang::t('program.output_backlog_full'))));
+        return false;
     }
 
     /**
@@ -2681,6 +2965,7 @@ final class Program
                 : null;
         }
         pcntl_signal($signo, $handler);
+        $this->armSignalPump();
     }
 
     /**
@@ -2720,6 +3005,15 @@ final class Program
      * so a model that declares a tick must get it started without every
      * consumer having to hand-wire the closure. Models that don't subscribe
      * use the {@see SubscriptionCapable} trait and return null → empty set.
+     */
+    /**
+     * Not cached per model identity: the set is re-walked on every update
+     * cycle. A cache keyed on identity served stale subscriptions when a
+     * model's children changed without a new identity (commit 8093ee2d9, after
+     * a Codex P2 review), so the re-read is the correctness choice and the
+     * planned cache is dropped. The walk is O(nodes) per message; a deep tree at a high
+     * message rate is the cost to revisit with a per-update invalidation
+     * signal, not an identity key.
      */
     private function wantedSubscriptions(): ?Subscriptions
     {
@@ -2762,6 +3056,14 @@ final class Program
                 foreach ($node->panes() as $pane) {
                     $collect($pane->model);
                 }
+            } elseif ($node instanceof RootModelWithScreenStack
+                && $node->screens()->isEmpty()
+                && $node->currentModel !== null
+            ) {
+                // With no screen pushed the root is the active model, and its
+                // base layer is the live one: walk it, or its subscriptions
+                // never start (the root itself declares none).
+                $collect($node->currentModel);
             }
         };
         $collect($model);
@@ -2972,6 +3274,7 @@ final class Program
             });
         }
         $this->signalSubscriptions[$signo]['subs'][] = $sub;
+        $this->armSignalPump();
         return null;
     }
 

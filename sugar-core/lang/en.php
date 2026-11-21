@@ -42,11 +42,13 @@ return [
     'semaphore.shutdown'          => 'semaphore closed before a permit could be granted',
     'semaphore.closed'            => 'semaphore is closed and cannot grant another permit',
     'semaphore.derive_closed'     => 'cannot derive a new pool from a closed semaphore',
+    'semaphore.map_cancelled' => 'batch cancelled before every item finished',
 
     // Util/LruMap.php
     'lru_map.capacity_invalid'    => 'LRU capacity must be at least 1, got {capacity}',
     'lru_map.capacity_too_large'  => 'LRU capacity {capacity} exceeds growth guard {max}',
     'lru_map.evict_from_empty'    => 'cannot evict from an empty LRU map',
+    'lru_map.ttl_invalid'         => 'LRU TTL must be a positive, finite number of seconds, got {seconds}',
 
     // Util/Validation.php
     'errors.negative_not_allowed'  => 'negative not allowed for {name}',
@@ -59,6 +61,7 @@ return [
     'program.exec_select_unsupported' => 'exec capture cannot stream-select these pipes on this platform; stdout and stderr were read sequentially with blocking reads',
     'program.subscription_duplicate_id' => 'subscription id {id} was declared twice in one batch; ids must be unique across the model tree',
     'program.subscription_interval_invalid' => 'subscription {id} has an invalid {param}: it must be a positive number of seconds',
+    'program.output_backlog_full' => 'output backlog is full: raw and printed output is dropped until the terminal reads again',
     'program.signal_signo_missing' => 'signal subscription {id} declares no signo: a signal subscription needs a positive signal number, or it can never fire',
     'editor.extension_invalid' => 'editor temp-file extension {extension} is not a label (letters, digits, dot, dash, underscore; max 32 after the dot)',
     'program.screen_stack_unsupported' => 'root model {root} does not own a screen stack, so {msg} was refused',
@@ -76,6 +79,9 @@ return [
 
     // sc-20 (sugar-core-022): the localized throw corpus — en.php rows are the authentic byte-for-byte form of each swept message; the 15 fallback locales carry English verbatim per the in-step precedent.
     'builder.framerate_positive' => 'Framerate must be positive',
+    'builder.escape_delay_non_negative' => 'escapeDelay must be a finite number of seconds, zero or more',
+    'program.async_timeout' => 'async command timed out after {seconds} seconds',
+    'cmd.promise_timeout_positive' => 'Cmd::promise() timeout must be a finite number of seconds greater than zero, got {seconds}',
     'builder.window_size_keys' => 'windowSize must have cols and rows keys',
     'builder.window_size_positive' => 'windowSize cols and rows must be positive',
     'worker.cap_invalid' => 'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got {cap}',

@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarPlugins",
+    "description": "SugarPlugins: the generic plugin core for SugarCraft hosts — plugin and channel contracts, the launch context, the prompt-fence escape, and the trust-gated loader, quarantine ledger, registry and manifest reader. Original work; first-party.",
+    "ogTitle": "SugarCraft — SugarPlugins",
+    "ogDescription": "The plugin layer a SugarCraft host builds on: contracts, a launch context, a loader that only runs trusted code, and a manifest reader, in one package with no dependency on any host.",
+    "emoji": "",
+    "displayName": "SugarPlugins",
+    "tagline": "generic plugin core — contracts, trust-gated loader, quarantine ledger, manifest reader",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">plugins</span>\n          <span class=\"tag-chip\">channels</span>\n          <span class=\"tag-chip\">prompt-fence</span>"
+}

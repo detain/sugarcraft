@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Tests\Support;
 
+use CandyCode\Bundles\MsTeams\Tests\Support\FileCredentialWriter;
 use CandyCode\Bundles\MsTeams\Support\CredentialStore;
 use CandyCode\Bundles\MsTeams\Support\PairingCodes;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
@@ -30,7 +31,7 @@ final class PairingCodesTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/p3-pair-' . getmypid() . '-' . uniqid('', true);
         mkdir($this->dir, 0o700, true);
         $this->path = $this->dir . '/channels.json';
-        $this->store = new CredentialStore($this->path);
+        $this->store = new CredentialStore($this->path, new FileCredentialWriter($this->path));
         $this->safety = new TextSafety();
         $this->codes = new PairingCodes($this->store, $this->safety);
     }
@@ -147,7 +148,7 @@ final class PairingCodesTest extends TestCase
     public function testTheRosterSurvivesAProcessRestartByReadingTheStoreAgain(): void
     {
         $code = (string) $this->codes->request('default', 'peer-1')['code'];
-        $rebuilt = new PairingCodes(new CredentialStore($this->path), new TextSafety());
+        $rebuilt = new PairingCodes(new CredentialStore($this->path, new FileCredentialWriter($this->path)), new TextSafety());
         self::assertSame('silent', $rebuilt->request('default', 'peer-1')['kind']);
         self::assertSame('peer-1', $rebuilt->approve('default', $code));
     }

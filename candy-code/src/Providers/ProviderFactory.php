@@ -11,7 +11,6 @@ use SugarCraft\Code\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Code\Providers\ThinkingCapability;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Keychain;
 
 /**
@@ -356,10 +355,10 @@ final readonly class ProviderFactory
      * carries:
      *
      *  - `<root>/.candy-code` must resolve STRICTLY inside `<root>`
-     *    ({@see ContainedPath::below()}), so a `.candy-code -> /elsewhere` inside
+     *    ({@see \SugarCraft\Core\Util\PathJail::below()}), so a `.candy-code -> /elsewhere` inside
      *    the shipped package relocates the check instead of tripping it;
      *  - `config.dev.json` must resolve inside that directory
-     *    ({@see ContainedPath::within()}), so `config.dev.json -> /elsewhere/evil.json`
+     *    ({@see \SugarCraft\Core\Util\PathJail::within()}), so `config.dev.json -> /elsewhere/evil.json`
      *    is refused on its own.
      *
      * WHOSE CHOICE IS THIS PATH, stated because the answer decides whether the gate
@@ -372,7 +371,7 @@ final readonly class ProviderFactory
      * process did not choose.
      *
      * ABSENCE IS NOT REFUSAL. A missing file returns null here as well, because
-     * {@see ContainedPath} refuses what it cannot resolve — so callers must keep
+     * {@see \SugarCraft\Core\Util\PathJail} refuses what it cannot resolve — so callers must keep
      * reporting "not found" from the CONFIGURED path
      * ({@see defaultConfigPath()}) rather than from this. The distinction the two
      * methods draw is "where" versus "may I", and neither is "does it exist".
@@ -392,7 +391,7 @@ final readonly class ProviderFactory
         $path = $root . '/' . self::CONFIG_PATH;
         $dir = \dirname($path);
 
-        if (!ContainedPath::below($dir, $root) || !ContainedPath::within($path, $dir)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($dir, $root) || !\SugarCraft\Core\Util\PathJail::within($path, $dir)) {
             return null;
         }
 

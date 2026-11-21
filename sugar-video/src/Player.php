@@ -27,6 +27,7 @@ use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Render\Color;
 use SugarCraft\Video\Render\FrameRenderer;
+use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
@@ -942,6 +943,10 @@ final class Player implements Model
 
         [$decoder, $frame, $landed] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
 
+        // Read before the swap: the outgoing renderer's last Kitty frame is what the
+        // terminal still shows, and the Cmd retires it once the runtime runs it.
+        $retire = $this->retirementCmd();
+
         // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx),
         // and clear the pending slot in the same mutate() so the apply is atomic: no
         // Player instance ever shows the new grid while still owning the old decoder.
@@ -963,7 +968,7 @@ final class Player implements Model
             ? null
             : Cmd::tick(1.0 / $this->fps, static fn (): Msg => TickMsg::instance());
 
-        return [$nextPlayer, $cmd];
+        return [$nextPlayer, self::joinCmds($retire, $cmd)];
     }
 
     /**
@@ -1043,8 +1048,12 @@ final class Player implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
+            // The last Kitty frame is still on screen, and quitting is the last
+            // chance to retire it: stop() cannot hand the runtime bytes, so the
+            // delete rides the quit Cmd ahead of the QuitMsg.
+            $retire = $this->retirementCmd();
             $this->stop();
-            return [$this, Cmd::quit()];
+            return [$this, self::joinCmds($retire, Cmd::quit())];
         }
 
         // Space: toggle pause/resume.
@@ -1150,12 +1159,15 @@ final class Player implements Model
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
             // forward to the current playhead would be pure churn.
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
+                $retire = $this->retirementCmd();
+
                 return [$this->mutate([
                     'mode' => $nextMode,
                     'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
-                ]), null];
+                ]), $retire];
             }
 
+            $retire = $this->retirementCmd();
             [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
             $nextPlayer = $this->mutate([
@@ -1167,7 +1179,7 @@ final class Player implements Model
                 'videoTime' => $landed / $this->fps,
                 'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
             ]);
-            return [$nextPlayer, null];
+            return [$nextPlayer, $retire];
         }
 
         return [$this, null];
@@ -1244,6 +1256,11 @@ final class Player implements Model
      * @return string
      */
     public function view(): string
+    {
+        return $this->paint();
+    }
+
+    private function paint(): string
     {
         // SV-PGEO/068: a below-floor terminal cannot hold even one pane row —
         // every line this model can emit soft-wraps and corrupts the whole
@@ -2409,6 +2426,9 @@ final class Player implements Model
      * teardown is measured on Linux only; the Windows disposition (refused at
      * spawn by SV-M44, unmeasured-by-design otherwise) is documented at
      * {@see \SugarCraft\Video\Decode\FfmpegDecoder::isTeardownExit()}.
+     *
+     * stop() writes nothing to the terminal. A host that tore down a Kitty player
+     * runs {@see teardownCmd()} first, or the last frame stays in the image store.
      */
     public function stop(): void
     {
@@ -2663,5 +2683,50 @@ final class Player implements Model
         // Cmd::tick chain; a wall-clock subscription here would double-tick
         // the pump. Input and resize arrive through sugar-core's own wiring.
         return null;
+    }
+
+    /**
+     * The Cmd a host runs before {@see stop()} when it tears the player down outside
+     * update(). stop() is void, so this is the only way to hand the runtime the delete
+     * for the last Kitty frame; without it the frame outlives the player. Null when
+     * nothing was drawn or the current mode cannot delete by id.
+     */
+    public function teardownCmd(): ?\Closure
+    {
+        return $this->retirementCmd();
+    }
+
+    /**
+     * The Cmd that retires the Kitty frame the outgoing renderer drew last, or null
+     * when it drew none. A rebuild replaces the renderer, and a fresh Kitty session
+     * starts its own id pair, so nothing else would ever delete that frame from the
+     * terminal's image store.
+     *
+     * It is a Cmd rather than bytes folded into view() on purpose (CLAUDE.md: side
+     * effects go in a Cmd, never in view()). The runtime writes it exactly once,
+     * however many views are discarded or messages coalesced before the next frame.
+     */
+    private function retirementCmd(): ?\Closure
+    {
+        if (!$this->renderer instanceof GraphicsRenderer) {
+            return null;
+        }
+
+        $bytes = $this->renderer->retirement();
+
+        return $bytes === '' ? null : Cmd::raw($bytes);
+    }
+
+    /**
+     * Joins two optional Cmds, keeping null when neither is set so callers that
+     * expect "no Cmd" still get one.
+     */
+    private static function joinCmds(?\Closure $first, ?\Closure $second): ?\Closure
+    {
+        if ($first === null) {
+            return $second;
+        }
+
+        return $second === null ? $first : Cmd::batch($first, $second);
     }
 }

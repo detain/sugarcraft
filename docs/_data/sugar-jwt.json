@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarJwt",
+    "description": "SugarJwt: JWT and JWK verification for SugarCraft — a skeleton for now; the verification classes arrive in a later step. Original work; first-party.",
+    "ogTitle": "SugarCraft — SugarJwt",
+    "ogDescription": "JWT and JWK verification shared by SugarCraft channel bundles: token signature and claim checks, plus key-set handling.",
+    "emoji": "",
+    "displayName": "SugarJwt",
+    "tagline": "JWT and JWK verification — skeleton, no API yet",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">jwt</span>\n          <span class=\"tag-chip\">jwk</span>\n          <span class=\"tag-chip\">skeleton</span>"
+}

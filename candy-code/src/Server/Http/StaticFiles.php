@@ -8,7 +8,6 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use React\Http\Message\Response;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * Serves the web UI's built files from one directory (Appendix O §7.3):
@@ -16,7 +15,7 @@ use SugarCraft\Code\Support\ContainedPath;
  * `sugarcraft/candy-code-web` package's `dist/`.
  *
  * THE URL IS THE ATTACKER'S, so the file it names is resolved and then held to
- * the root with {@see ContainedPath::within()} — after symlinks, so a link in
+ * the root with {@see \SugarCraft\Core\Util\PathJail::within()} — after symlinks, so a link in
  * the build pointing out of it is refused like a `..` would be. Dot-segments
  * and dotfiles are refused before that, NUL bytes outright. GET and HEAD only.
  *
@@ -122,7 +121,7 @@ final class StaticFiles
             $file = $this->root . '/index.html';
         }
 
-        if (!\is_file($file) || !ContainedPath::within($file, $this->root)) {
+        if (!\is_file($file) || !\SugarCraft\Core\Util\PathJail::within($file, $this->root)) {
             return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 

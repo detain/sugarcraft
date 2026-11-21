@@ -40,6 +40,8 @@ use SugarCraft\ColorProfile\Color;
  */
 final class AsciiRenderer implements Renderer, AcceptsOptimization
 {
+    use \SugarCraft\Image\Concerns\ImageSourceRgbFallback;
+
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 

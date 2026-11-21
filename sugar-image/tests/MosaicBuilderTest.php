@@ -15,6 +15,7 @@ use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthroughDecorator;
+use SugarCraft\Image\Tests\Support\KittyTerminal;
 
 /**
  * @covers \SugarCraft\Image\MosaicBuilder
@@ -31,6 +32,7 @@ final class MosaicBuilderTest extends TestCase
      */
     protected function setUp(): void
     {
+        \SugarCraft\Image\Mosaic::resetAutoMemo();
         parent::setUp();
         $keys = [
             'CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM',
@@ -80,8 +82,13 @@ final class MosaicBuilderTest extends TestCase
     {
         $_ENV['TERM'] = 'xterm-kitty';
         putenv('TERM=xterm-kitty');
-
-        $mosaic = Mosaic::builder()->build();
+        Detect::reset();
+        KittyTerminal::answer();
+        try {
+            $mosaic = Mosaic::builder()->build();
+        } finally {
+            KittyTerminal::clear();
+        }
 
         $this->assertSame('kitty', $mosaic->protocol());
     }

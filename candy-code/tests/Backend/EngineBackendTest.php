@@ -775,6 +775,53 @@ final class EngineBackendTest extends TestCase
     }
 
     /**
+     * Many frames arriving in one read are all handed back in order, and the
+     * trailing partial frame is what stays buffered. This pins the integer
+     * cursor walk: the offsets must line up across every frame in the batch.
+     */
+    public function testDrainFramesReturnsEveryFrameFromOneReadInOrder(): void
+    {
+        $drain = new \ReflectionMethod(EngineBackend::class, 'drainFrames');
+        $wire = '';
+        for ($i = 0; $i < 500; $i++) {
+            $body = serialize(['kind' => 'tick', 'n' => $i, 'pad' => str_repeat('x', $i % 17)]);
+            $wire .= pack('N', strlen($body)) . $body;
+        }
+        $partial = pack('N', 40) . 'short';
+        $buffer = $wire . $partial;
+        $corrupt = false;
+
+        $frames = $drain->invokeArgs(null, [&$buffer, &$corrupt]);
+
+        $this->assertFalse($corrupt);
+        $this->assertCount(500, $frames);
+        foreach ($frames as $i => $frame) {
+            $this->assertSame($i, $frame['n']);
+        }
+        $this->assertSame($partial, $buffer, 'only the trailing partial frame may remain buffered');
+    }
+
+    /**
+     * Frames decoded before a bad one are still returned; the stream is then
+     * marked corrupt and the buffer is dropped, exactly as the one-frame path.
+     */
+    public function testDrainFramesKeepsWholeFramesBeforeACorruptOne(): void
+    {
+        $drain = new \ReflectionMethod(EngineBackend::class, 'drainFrames');
+        $good = serialize(['kind' => 'started', 'id' => 'c1']);
+        $bad = 'not-a-serialized-frame';
+        $buffer = pack('N', strlen($good)) . $good . pack('N', strlen($bad)) . $bad . pack('N', 3) . 'abc';
+        $corrupt = false;
+
+        $frames = $drain->invokeArgs(null, [&$buffer, &$corrupt]);
+
+        $this->assertTrue($corrupt);
+        $this->assertCount(1, $frames);
+        $this->assertSame('c1', $frames[0]['id']);
+        $this->assertSame('', $buffer);
+    }
+
+    /**
      * The second half of the §1 E1 defect: COMPLETE_TIMEOUT_SECONDS used to be
      * armed exactly once for the whole forked turn, so real multi-step tool
      * work got SIGKILLed mid-flight. It is now an IDLE ceiling, re-armed on

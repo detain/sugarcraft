@@ -123,15 +123,16 @@ final class Width
 
     /**
      * Last key measured by {@see string()}, its exact width, and whether
-     * that key carries an ESC byte — the extension door's slot (F15c). A
+     * that key leaves an escape sequence open (see leavesSequenceOpen()) —
+     * the extension door's slot (F15c). A
      * streaming caller that re-asks for the same logical line with bytes
      * appended (the preview-ladder shape sugar-markdown's open section
      * produces every frame, and every TEA app previewing a growing line)
      * is answered `lastWidth + compute(tail)`, which is exact whenever the
      * seam provably splits nothing: both seam bytes are printable ASCII
      * (0x20-0x7E — no cluster and no \r\n pair can span them) and the
-     * previous key is ESC-free (so no ANSI sequence is open across the
-     * seam either). One slot, one string of overhead; no new cache to
+     * previous key is inert under Ansi::strip() (so no ANSI sequence, ESC-led
+     * or 8-bit C1, is open across the seam either). One slot, one string of overhead; no new cache to
      * bound. WHY THE DOOR EXISTS AT ALL: sc-36's 1 MiB byte budget is
      * load-bearing (the burst-eviction pin defends it), but a growing-key
      * working set that crosses the budget re-purges the keys the warm run
@@ -157,24 +158,63 @@ final class Width
         if (isset(self::$memo[$s])) {
             return self::$memo[$s];
         }
-        $width = self::extend($s) ?? self::compute($s);
+        $prevKey = self::$extendKey;
+        $width = self::extend($s);
+        if ($width === null) {
+            $width = self::compute($s);
+            self::$extendKeyHasEsc = self::leavesSequenceOpen($s);
+        } else {
+            // The door only fires when the previous key was inert, so the
+            // whole key is inert exactly when its appended tail is. Scanning
+            // the tail keeps a growing line O(delta) rather than O(length).
+            self::$extendKeyHasEsc = self::leavesSequenceOpen(\substr($s, \strlen($prevKey)));
+        }
         self::$extendKey = $s;
         self::$extendWidth = $width;
-        self::$extendKeyHasEsc = \strpos($s, "\x1b") !== false;
         while (self::$memo !== []
             && (\count(self::$memo) >= self::MEMO_MAX
                 || self::$memoBytes + \strlen($s) > self::MEMO_MAX_BYTES)
         ) {
             // Drop the oldest half of what is actually there (the entry-cap
             // path at a full 2048 memo behaves exactly as the old fixed
-            // 1024-offset slice did) and re-account the survivors. The loop
-            // lets a byte-triggered overflow with only a few huge keys keep
-            // shedding instead of over-shooting the budget.
-            self::$memo = \array_slice(self::$memo, intdiv(\count(self::$memo), 2) ?: 1, null, true);
-            self::$memoBytes = \array_sum(\array_map('strlen', \array_keys(self::$memo)));
+            // 1024-offset slice did) and re-account the bytes it removed. The
+            // loop lets a byte-triggered overflow with only a few huge keys
+            // keep shedding instead of over-shooting the budget.
+            // Subtract the evicted keys' bytes from the running total instead
+            // of re-summing the survivors. The old pass built an array_keys()
+            // copy and an array_map() of every survivor's strlen() per eviction;
+            // this one walks only the dropped half. array_slice() still copies
+            // the kept half once, as the old code did, so an eviction costs one
+            // O(count) rebuild, not two.
+            $drop = \intdiv(\count(self::$memo), 2) ?: 1;
+            $dropped = 0;
+            foreach (self::$memo as $key => $_width) {
+                if ($dropped++ >= $drop) {
+                    break;
+                }
+                // Integer-like keys come back as int; strlen needs the string form.
+                self::$memoBytes -= \strlen((string) $key);
+            }
+            self::$memo = \array_slice(self::$memo, $drop, null, true);
         }
         self::$memoBytes += \strlen($s);
         return self::$memo[$s] = $width;
+    }
+
+    /**
+     * Whether a key could leave an escape sequence open across the door's seam.
+     *
+     * An ESC byte is one way to open a sequence. The 8-bit C1 introducers
+     * (0x80-0x9F outside a well-formed UTF-8 sequence) are another, and
+     * {@see Ansi::strip()} consumes them too: a raw `\x9b` followed by `3` is an
+     * unterminated CSI, and the whole run vanishes. A key is inert only when
+     * strip() leaves it unchanged, which also covers ESC, because every ESC
+     * introduces a removal. Valid multi-byte UTF-8 that contains continuation
+     * bytes in 0x80-0x9F is not a removal and stays on the door.
+     */
+    private static function leavesSequenceOpen(string $s): bool
+    {
+        return Ansi::strip($s) !== $s;
     }
 
     /**
@@ -333,6 +373,36 @@ final class Width
             $i += strlen($cluster);
         }
         return $out;
+    }
+
+    /**
+     * Shorten `$s` to at most `$n` display cells, ending a clipped text with
+     * `$ellipsis`, which counts against the budget.
+     *
+     * Text that already fits comes back untouched, ANSI included. A clip goes
+     * through {@see truncate()}: ANSI is dropped and the cut is grapheme-safe.
+     * When the ellipsis alone does not fit in `$n` cells there is no room for
+     * it, so the result is a plain head cut that still fits.
+     *
+     * Shaped after the ellipsis-truncate copies that migrate to it (candy-files
+     * `Entry`, candy-top `Units`, phlix `Truncate`). `clipCells()` is the
+     * marker-first sibling whose no-room fallback cuts the marker, not the text.
+     */
+    public static function truncateEllipsis(string $s, int $n, string $ellipsis = '...'): string
+    {
+        if ($n <= 0) {
+            return '';
+        }
+        if (self::string($s) <= $n) {
+            return $s;
+        }
+        $ellipsisWidth = self::string($ellipsis);
+        // An ellipsis that exactly fills the budget fits: only a wider one forces the head cut.
+        if ($ellipsisWidth > $n) {
+            return self::truncate($s, $n);
+        }
+
+        return self::truncate($s, $n - $ellipsisWidth) . $ellipsis;
     }
 
     /**
@@ -544,6 +614,168 @@ final class Width
     }
 
     /**
+     * Greedy word wrap of plain text into lines, for callers that place each
+     * line themselves (a notice box, a toast, a fixed-height panel row).
+     *
+     * Parity with the two copies it replaces, candy-flappy `foldNoticeLine()`
+     * (`$breakWords: false`) and candy-minesweeper `wrapPlain()`
+     * (`$breakWords: true`), is pinned by WidthWrapWordsTest for the fixtures
+     * both copies receive. It is not total: three inputs differ, and the
+     * owner ruling of 2026-11-17 adopts this helper's answer for the first three.
+     * The consumers migrate in P4-3b and P4-3c, and each declares its change in
+     * its PR body. The regression pins are in WidthWrapWordsTest.
+     *  - A newline is a hard break here. `foldNoticeLine()` splits on `\s+`,
+     *    which includes `\n`, so it joins the two sides with a space.
+     *  - A tab separates words here. `wrapPlain()` splits words on spaces
+     *    only, so a tab is part of a word there.
+     *  - A ZWJ cluster is kept whole here. `wrapPlain()` breaks it per codepoint.
+     *  - A fourth divergence is not in that ruling and is disclosed here rather
+     *    than adopted: every Unicode whitespace code point separates words,
+     *    including U+00A0 (no-break space) and U+3000 (ideographic space), and
+     *    the separator is rewritten to a plain space. `wrapPlain()` splits on
+     *    spaces only, so it keeps those characters inside one word. P4-3c must
+     *    decide this before migrating NBSP-separated or CJK-spaced text.
+     *
+     * The rules, in order:
+     *  - `\n` is a hard break. Every paragraph yields at least one line, so an
+     *    empty paragraph is an empty line.
+     *  - Words are separated by runs of whitespace. Each output line joins its
+     *    words with a single space, so runs collapse and edge whitespace goes.
+     *  - A word that fits joins the current line when it can, and otherwise
+     *    opens the next line.
+     *  - A word wider than `$width`, with `$breakWords`, is cut at grapheme
+     *    boundaries and each whole chunk becomes a line of its own; the
+     *    remainder then wraps like any other word. Without `$breakWords` it
+     *    stands alone on its line, over-wide, as the flappy fold did.
+     *
+     * A single grapheme wider than `$width` is never split, so it can exceed
+     * the budget on its own line. ANSI sequences are stripped first, as in
+     * {@see wrap()}.
+     *
+     * @return list<string>
+     * @throws \InvalidArgumentException when `$width` is below 1
+     */
+    public static function wrapWords(string $s, int $width, bool $breakWords = true): array
+    {
+        if ($width < 1) {
+            throw new \InvalidArgumentException("wrapWords() needs a width of at least 1 cell, got $width.");
+        }
+
+        $lines = [];
+        foreach (\explode("\n", Ansi::strip($s)) as $paragraph) {
+            $line = '';
+            $lineWidth = 0;
+            $paragraphStart = \count($lines);
+            foreach (self::splitWords($paragraph) as $word) {
+                $wordWidth = self::string($word);
+                if ($breakWords && $wordWidth > $width) {
+                    if ($line !== '') {
+                        $lines[] = $line;
+                        $line = '';
+                        $lineWidth = 0;
+                    }
+                    // Walk the word once with a byte offset. Re-measuring the
+                    // remainder after every cut made a long unbroken token
+                    // quadratic: each cut copied and re-scanned the whole tail.
+                    $offset = 0;
+                    $len = \strlen($word);
+                    while ($wordWidth > $width && $offset < $len) {
+                        [$chunk, $offset, $chunkWidth] = self::cutAtWidth($word, $offset, $width);
+                        $lines[] = $chunk;
+                        $wordWidth -= $chunkWidth;
+                    }
+                    $word = \substr($word, $offset);
+                    $wordWidth = self::string($word);
+                }
+                if ($line === '') {
+                    $line = $word;
+                    $lineWidth = $wordWidth;
+                } elseif ($lineWidth + 1 + $wordWidth > $width) {
+                    $lines[] = $line;
+                    $line = $word;
+                    $lineWidth = $wordWidth;
+                } else {
+                    $line .= ' ' . $word;
+                    $lineWidth += 1 + $wordWidth;
+                }
+            }
+            // An empty $line is only meaningful when nothing else came out of
+            // this paragraph: a cut that consumed the whole word leaves an
+            // empty remainder, and pushing it would add a spurious blank line.
+            if ($line !== '' || \count($lines) === $paragraphStart) {
+                $lines[] = $line;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Words of one paragraph: runs of whitespace separate them, and empty
+     * runs vanish. `/u` refuses malformed UTF-8, so that case falls back to
+     * the ASCII whitespace set at byte level, as {@see wrapParagraph()} does.
+     *
+     * @return list<string>
+     */
+    private static function splitWords(string $paragraph): array
+    {
+        $words = \preg_split('/\s+/u', $paragraph, -1, PREG_SPLIT_NO_EMPTY);
+        if ($words === false) {
+            $words = \preg_split('/[ \t\r\x0B\x0C]+/', $paragraph, -1, PREG_SPLIT_NO_EMPTY);
+            if ($words === false) {
+                throw new \RuntimeException(
+                    Lang::t('width.wrap_split_failed', ['reason' => preg_last_error_msg()]),
+                );
+            }
+        }
+
+        return $words;
+    }
+
+    /**
+     * Cut `$word` from byte `$offset` after as many grapheme clusters as fit
+     * in `$width` cells. The first cluster is always taken, even when it is
+     * wider than the budget, so every cut makes progress.
+     *
+     * @return array{0: string, 1: int, 2: int} the chunk, the byte offset where
+     *         it ends (the next cut starts there), and the chunk's width
+     */
+    private static function cutAtWidth(string $word, int $offset, int $width): array
+    {
+        $start = $offset;
+        $used = 0;
+        $taken = 0;
+        $i = $offset;
+        $len = \strlen($word);
+        while ($i < $len) {
+            // Printable ASCII followed by another ASCII byte (or the end) is a
+            // one-byte, one-cell cluster: no ASCII byte extends or joins, so the
+            // segmenter would answer the same. Skipping it keeps a long token
+            // off the grapheme walk for the common case.
+            $b = \ord($word[$i]);
+            if ($b >= 0x20 && $b <= 0x7E && ($i + 1 === $len || \ord($word[$i + 1]) < 0x80)) {
+                if ($taken > 0 && $used + 1 > $width) {
+                    break;
+                }
+                $used++;
+                $taken++;
+                $i++;
+                continue;
+            }
+            $cluster = self::nextCluster($word, $i);
+            $clusterWidth = self::graphemeWidth($cluster);
+            if ($taken > 0 && $used + $clusterWidth > $width) {
+                break;
+            }
+            $used += $clusterWidth;
+            $taken++;
+            $i += \strlen($cluster);
+        }
+
+        return [\substr($word, $start, $i - $start), $i, $used];
+    }
+
+    /**
      * ANSI-aware companion to {@see wrap()}. Preserves inline CSI / OSC
      * sequences across line breaks: a colour set on line N stays active
      * on line N+1 (no SGR reset is auto-emitted; callers wanting that
@@ -691,7 +923,9 @@ final class Width
             $i += strlen($cluster);
         }
         $commitWord($word, $wordWidth);
-        if ($line !== '') {
+        // A trailing hard break leaves an empty final row, which is kept so
+        // the output has the same row count as the input (wrap()'s contract).
+        if ($line !== '' || str_ends_with($s, "\n")) {
             $lines[] = rtrim($line);
         }
         return implode("\n", $lines);

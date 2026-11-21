@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Memory;
 
 use SugarCraft\Code\Agents\MemoryScope;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
 
@@ -147,7 +146,7 @@ final class AgentMemory
         // Checked after the create, not before: an existing symlink planted at
         // the store's path resolves through it right here, exactly as the
         // post-mkdir gate catches the write that mkdir laid down THROUGH one.
-        if (!ContainedPath::below($directory, $base)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($directory, $base)) {
             return null;
         }
 

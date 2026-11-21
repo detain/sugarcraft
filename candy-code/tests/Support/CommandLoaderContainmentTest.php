@@ -9,7 +9,7 @@ use SugarCraft\Code\Commands\CommandLoader;
 
 /**
  * The two containment boundaries {@see CommandLoader} takes from
- * {@see \SugarCraft\Code\Support\ContainedPath}.
+ * {@see \SugarCraft\Core\Util\PathJail}.
  *
  * Filed beside the predicate rather than with the loader's behavioural suite
  * (`tests/Commands/CommandLoaderTest.php`) because the subject is the boundary,

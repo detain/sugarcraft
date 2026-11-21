@@ -185,7 +185,17 @@ final class ProgramOptions
          * print the raw `?2026h`/`?2026l` sequences as garbage.
          */
         public readonly bool $synchronizedOutput = true,
+        /**
+         * Seconds to wait after a lone ESC byte before reporting it as a
+         * standalone Escape key. A longer wait tolerates slow SSH or
+         * multiplexer links that split an escape sequence; a shorter one
+         * makes Esc feel snappier. Zero disables the settling window.
+         */
+        public readonly float $escapeDelay = 0.05,
     ) {
+        if ($escapeDelay < 0.0 || !is_finite($escapeDelay)) {
+            throw new \InvalidArgumentException(Lang::t('builder.escape_delay_non_negative'));
+        }
     }
 
     /**

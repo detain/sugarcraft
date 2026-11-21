@@ -596,6 +596,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // W4.2: tearDown() lists the clipboard-paste PNGs the test itself landed
         // under its sandboxed awHomeDir to assert the paste persisted them.
         'App/MediaFormWiringTest.php' => ["glob(\$this->awHomeDir.'/home/.candy-code/media/clipboard/'.\\chr(42).'.png')"],
+        // PLG-2a: listed() names the entries under a directory the test made itself
+        // (the symlink target a refused install must not reach, and the project bundle
+        // root), so each refusal can be asserted to have left nothing behind.
+        'Bundles/BundleInstallScopeTest.php' => ['scandir($dir)'],
         // INT-M1: entriesUnderRoot() lists the sandbox bundle dir under the
         // test's fake HOME; every install lands inside it.
         'Bundles/BundleInstallTest.php' => ['scandir($this->root)'],

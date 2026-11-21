@@ -7,8 +7,8 @@ namespace SugarCraft\Flexbox\Flex;
 /**
  * Item alignment within a {@see FlexBox}.
  *
- * ONE value drives BOTH axes (measured truth) — there is no
- * separate CSS `justify-content` counterpart here, and rows are always
+ * ONE value drives BOTH axes (measured truth) — main-axis placement of
+ * leftover cells is {@see Justify}, a separate value, and rows are always
  * placed top-down. In row mode the case selects the box height (Stretch
  * fills the declared totalHeight, every other case takes the tallest item)
  * AND how each item's text sits inside its allocated cell (Start=left,

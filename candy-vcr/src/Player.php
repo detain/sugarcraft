@@ -258,6 +258,7 @@ final class Player
             // point at the offending tape lines (finding 035) — the loop
             // never dies on a bad envelope.
             $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0, 'undecoded' => 0];
+            /** @var list<string> $undecodedAt */
             $undecodedAt = [];
             $expectedOutput = '';
             $programQuitCleanly = false;
@@ -446,6 +447,7 @@ final class Player
      * through a timer arm, sharing dispatchEvent's tally/expected wiring.
      *
      * @param array{input:int,resize:int,output:int,quit:int,undecoded:int} $tally
+     * @param list<string> $undecodedAt
      */
     private function dispatchInline(
         Event $event,

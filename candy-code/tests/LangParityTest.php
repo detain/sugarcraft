@@ -123,6 +123,24 @@ final class LangParityTest extends TestCase
         }
     }
 
+    /**
+     * The channel bundles own their catalogs (plugin-owned under O4,
+     * plan_plugin.md 4.11), so no `channels.discord.*` or `channels.msteams.*`
+     * key belongs in the host keyspace. The census above reads src/; this pins
+     * the catalogs themselves, in every locale.
+     */
+    public function testChannelBundleKeysLiveInTheBundleCatalogsNotTheHostCatalog(): void
+    {
+        foreach (glob(self::LANG_DIR . '/*.php') ?: [] as $file) {
+            $table = require $file;
+            $leaked = array_values(array_filter(
+                array_keys($table),
+                static fn (string $key): bool => str_starts_with($key, 'channels.discord.') || str_starts_with($key, 'channels.msteams.'),
+            ));
+            $this->assertSame([], $leaked, basename($file) . ' still carries channel bundle keys');
+        }
+    }
+
     public function testAnUnknownKeyFallsBackToTheNamespacedRawKey(): void
     {
         $this->assertSame('code.no.such.key', Lang::t('no.such.key'));

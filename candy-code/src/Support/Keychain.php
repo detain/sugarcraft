@@ -394,13 +394,12 @@ final class Keychain
         // kept. The wall bound stays this method's: it also bounds the exit wait.
         $budget = self::$timeoutOverride ?? self::TIMEOUT_SECONDS;
         $deadline = \microtime(true) + $budget;
-        $drain = ChildPump::drain(
-            [1 => $pipes[1], 2 => $pipes[2]],
-            Clock::monotonicSeconds() + $budget,
-            self::MAX_STDOUT_BYTES,
-            discard: [2],
-            running: WindowsPipes::runningProbe($process),
-        );
+        $drain = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
+            ->withDeadline(Clock::monotonicSeconds() + $budget)
+            ->withCap(self::MAX_STDOUT_BYTES)
+            ->withDiscard([2])
+            ->withRunning(WindowsPipes::runningProbe($process))
+            ->pump();
         $stdout = $drain->buffer(1);
         $overflowed = $drain->droppedBytes(1) > 0;
         $timedOut = !$drain->closed();

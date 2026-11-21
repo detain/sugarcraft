@@ -24,16 +24,16 @@ Rules that make a fleet reproducible:
   under `$HOME/.candy-code`. One `HOME` per isolation domain; `--config` moves
   only the config file, not the state directories under `HOME`.
 - **`--root` sandbox.** The workspace the agent may touch is set with
-  `--root` (src/Cli/ArgvParser.php:362); give every fleet lane its own.
+  `--root` (src/Cli/ArgvParser.php:451); give every fleet lane its own.
 - **Permissions.** Unattended lanes that must not stop at an approval prompt
-  pass `--permission-mode` (src/Cli/ArgvParser.php:498). The mode decision is
+  pass `--permission-mode` (src/Cli/ArgvParser.php:647). The mode decision is
   the permission system's, and it honors the flag — a stalled fleet is a
   permission-mode mistake, not a hang.
 
 ## The stdout envelope (`--output-format json`)
 
 A json run writes exactly one JSON document to stdout, on every exit path.
-Success shape (assembled at src/Cli/NonInteractive.php:2371):
+Success shape (assembled at src/Cli/NonInteractive.php:2746):
 
 | Key | Presence | Meaning |
 | --- | --- | --- |
@@ -41,23 +41,22 @@ Success shape (assembled at src/Cli/NonInteractive.php:2371):
 | `result` | always (success) | The final assistant text. |
 | `refusals` | always (success doc) | Denials recorded during the run; `[]` when there were none. |
 | `session_id` | when present | 16-hex id of the session that served the turn. |
-| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-233 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
+| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:138-235 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
 | `steps_truncated` / `length_stopped` / `loop_guard_stopped_by` | only when true | The stop-reason trio: a step budget cut, an output-length stop, or a loop-guard intervention. |
 | `json_schema_applied` | only when `false` | Appears only when a schema was requested and the answer rode a tool result instead — the schema was not enforced on that turn. |
 
-Error shape (src/Cli/NonInteractive.php:1587): `{"schema":1,"result":null,
+Error shape (src/Cli/NonInteractive.php:1823): `{"schema":1,"result":null,
 "error":{"type":...,"message":...}}` with an optional `provider` key; here
 `refusals` stays conditional — present only when denials were recorded
-(src/Cli/NonInteractive.php:1608). A machine error document is only emitted
+(src/Cli/NonInteractive.php:1825). A machine error document is only emitted
 under json/stream-json output — plain-text mode dies with prose on stderr
-instead (guard at src/Cli/NonInteractive.php:1598).
+instead (guard at src/Cli/NonInteractive.php:1814).
 Provider failures surface as `error.type` `backend` with a raw English message
 (connection refused, HTTP status) — not locale-tied, safe to pattern-match.
 
 Drivers must treat **stdout as the only truth channel**. stderr carries launch
 notices and advisories — e.g. the autoReview cost warning behind the
-`autoReview` setting (src/Config/Settings/Definitions/PermissionSettings.php:71,
-read at src/Cli/Bootstrap.php:7637) — and is *advisory*: never gate on it,
+`autoReview` setting (defined at src/Config/Settings/Definitions/PermissionSettings.php:79, announced through src/Host/TitleService.php:468 from src/Cli/Bootstrap.php:7511) — and is *advisory*: never gate on it,
 never parse it for the result. One probe run paid ~20.7k cold input tokens and
 then cache reads on follow-ups; expect the first turn of a fresh model pairing
 to be the expensive one.
@@ -67,7 +66,7 @@ to be the expensive one.
 `--output-format stream-json` emits NDJSON progress events
 `{sessionId, type, ts, durable, data}` (thin writer at
 src/Cli/StreamJsonEmitter.php:164) and then **the last line is the plain json
-success document above** (src/Cli/NonInteractive.php:776). Event vocabulary
+success document above** (src/Cli/NonInteractive.php:931). Event vocabulary
 observed: `assistant.delta`, `reasoning.delta`, `tool.started`, `tool.progress`
 (tail-bounded, 4096-byte budget), `tool.finished`. Gate on the final line only;
 the preceding lines are a live tail, not the verdict.
@@ -86,8 +85,8 @@ the preceding lines are a live tail, not the verdict.
 | `--json-schema` pointing at a bad path | 2 | config refusal |
 
 `EXIT_OK` / `EXIT_FAILURE` / `EXIT_CONFIG` are the three constants a driver
-needs (src/Cli/NonInteractive.php:107, src/Cli/NonInteractive.php:146,
-src/Cli/NonInteractive.php:186). `2` means your command line was wrong — fail
+needs (src/Cli/NonInteractive.php:108, src/Cli/NonInteractive.php:147,
+src/Cli/NonInteractive.php:187). `2` means your command line was wrong — fail
 loud and fix the launcher; `1` means the run itself failed, and the envelope
 tells you why.
 
@@ -96,10 +95,9 @@ error document accompanies the 1 and 2 exits alongside the stderr prose —
 `error.type` `usage` for the exit-2 cases above (including unrecognized
 options), `not-found` for an unknown `session show` target.
 
-## Driver flags queued for merge (weld-queued)
+## Driver flags: `--session-id` and `--input-format`
 
-Collected from the driver-lane report; these describe the `wf/driver` branch.
-Until that weld lands, both options exit 2 as unrecognized on shipped builds.
+Both options ship on every build. Their contract for drivers:
 
 - `--session-id <16hex>` — pre-allocates the NEW one-shot session id so drivers
   can key artifacts before the run completes; refuses (exit 2) if the id is
@@ -115,25 +113,26 @@ Until that weld lands, both options exit 2 as unrecognized on shipped builds.
 ## Follow-up turns and lineage
 
 - `--resume=<session_id>` continues the same conversation and keeps the same
-  session id (flag plumbing at src/Cli/ArgvParser.php:153 and :921-925). A measured
+  session id (flag plumbing at src/Cli/ArgvParser.php:938-954). A measured
   follow-up turn finished in ~1.7 s against the same `session_id`.
 - Post-hoc lineage: `session show <id> --output-format json` returns the full
   record — including `parent_id` and `parent_call_id`, so delegated sub-agent
-  sessions are reconstructible after the fact. Verb roster at
-  src/Cli/Subcommands.php:934; `list` flags at src/Cli/Subcommands.php:1011
+  sessions are reconstructible after the fact. Verb roster at src/Cli/ParsedArgs.php:80; `list` flags at src/Cli/Subcommands.php:3333
   (`--all`, `--archived`, `--children`, `--limit`).
 - Cost rollups across a fleet: `session import` exists for migrating stores
-  (src/Cli/Subcommands.php:1018), and the usage surface answers
+  (src/Cli/Subcommands.php:1115), and the usage surface answers
   `--output-format json` with a machine rollup shaped `scopeAll` / `windowDays`
-  / `days` — the shape is built at src/Cli/Subcommands.php:1568 and served
-  through the host-command facts helper at src/Cli/Subcommands.php:1587.
+  / `days` — the shape is built at src/Cli/Subcommands.php:3902.
+  The facts come from `UsageHostCommand::rollupFacts()`, declared at
+  src/Host/Commands/UsageHostCommand.php:153, and the verb serves them through
+  `renderUsage()` at src/Cli/Subcommands.php:3922.
 
 ## Structured answers: `--json-schema`
 
-Pass `--json-schema /abs/path/schema.json` (src/Cli/ArgvParser.php:653) and a
+Pass `--json-schema /abs/path/schema.json` (src/Cli/ArgvParser.php:805) and a
 schema-capable provider enforces it at request level. The local sglang provider
 sends `response_format.json_schema` (capability probe at
-src/Providers/SglangProvider.php:1087); the measured result came back as
+src/Providers/SglangProvider.php:1088; the request body carries it at :1910); the measured result came back as
 `result` containing the schema-shaped JSON **stringified inside the string** —
 drivers decode twice. When the answer follows a tool result the provider may
 skip enforcement; that is exactly the case the `json_schema_applied: false`
@@ -149,8 +148,8 @@ there is no `json_schema_applied` to check on that path (see
 
 Running `-p` with stdin closed or empty is the normal shape. Piping bytes to
 stdin prepends them to the prompt as context — bounded by a 10 MB cap
-(src/Cli/NonInteractive.php:193) and a two-second first-byte grace
-(src/Cli/NonInteractive.php:215). It is **not** an envelope channel: never feed
+(src/Cli/NonInteractive.php:194) and a two-second first-byte grace
+(src/Cli/NonInteractive.php:222). It is **not** an envelope channel: never feed
 JSON *into* the process expecting a request protocol, and never leave stdin
 open in a wrapper that has nothing to send — the grace window stalls the turn
 instead.
@@ -167,10 +166,8 @@ you actually want isolation; identical `HOME` for identical cache warmth.
 ## What does *not* exist (don't improvise flags)
 
 Measured absent: `--allowedTools` / `--disallowedTools` (tool narrowing is the
-`permissionRules` config surface), `--session-id` on shipped builds (ids are
-minted, or supplied to `--resume`; a pre-allocation variant is weld-queued
-under "Driver flags queued for merge" above), `--values` flag (params ride the native verb: `candy-code workflow run
---param k=v` or `--param 'k:=<json>'`; the top-level `workflow` subcommand itself exists since W-1 —
+`permissionRules` config surface), `--values` flag (params ride the native verb: `candy-code workflow run
+--param k=v` or `--param 'k:=<json>'`; the top-level `workflow` subcommand itself exists —
 run, status, resume; pause and list stay `/workflow` slash commands), and any `--auto-review` flag (`autoReview` is a
 config key only — src/Config/LayeredSettings.php:589). The saved-workflow DSL
 lives at `~/.candy-code/workflows/<name>.php`; pause records live under
@@ -185,11 +182,9 @@ measured probe it read the engine source and rebuilt a plan of its own
 choosing. The verification machinery that makes workflows trustworthy —
 `withVerification` verdict scanning, the `ESCALATE:` stop-for-human rule,
 `outputSchema` enforcement, `reject()` retry routing — may therefore **never
-run**. The escalated probe run exited 0 with "completed successfully". Until a
-native headless workflow verb lands, do **not** gate a fleet on the exit codes
-or prose of headless workflow runs: drive the stages yourself as N parallel
+run**. The escalated probe run exited 0 with "completed successfully". On that route, do **not** gate a fleet on the exit codes or prose: drive the stages yourself as N parallel
 `-p` lanes (Task-style invocations) with file-protocol handshakes, and keep
-`/workflow` for interactive use. W-1 has since landed the machine pathway:
+`/workflow` for interactive use. The `workflow run` verb is the machine pathway:
 `candy-code workflow run <name>` executes the saved workflow through the
 engine directly — verification machinery, `ESCALATE:` scanning and
 `outputSchema` enforcement included — with gateable exit codes (0/1/2/3,

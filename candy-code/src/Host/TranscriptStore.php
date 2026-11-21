@@ -314,7 +314,7 @@ final class TranscriptStore
     }
 
     /**
-     * Take the single-writer lock on $sessionId (audit SES-3(b)), or null when
+     * Take the single-writer lock on $sessionId, or null when
      * another process holds it — or when there is no store to lock under.
      */
     public function lock(string $sessionId): ?SessionLock

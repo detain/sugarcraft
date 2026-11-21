@@ -777,7 +777,7 @@ whose frontmatter already says disabled stays off whichever way you toggle, beca
 the session set only subtracts from the file's intent and never overrules it.
 
 **Persisting a toggle is a deferred step, not an omission.** The ruling in
-`prompt_plan.md` (P6.S4) kept the byte-identical contract standing and named the
+`prompt_plan.md` kept the byte-identical contract standing and named the
 cost of breaking it: a third key through `Chat`'s config-change door would
 collide with the two-key invariant above and with the census that guards that
 invariant, so the toggle waits for a guarded door of its own. That door now
@@ -927,6 +927,9 @@ small, innocuous-looking value deletes almost everything.
 model does next is not less work, it is the *same* work through `Bash`, which
 reaches the permission gate as opaque shell text instead of as a reviewable
 path. Strictly fewer tools, strictly coarser review.
+`Task` is the one built-in the whitelist cannot reach: it is appended after the
+filter (`LaunchContext::tools()`), so a chat launched with an agent manager keeps
+sub-agent spawning under `allowedTools: ["Bash"]` too.
 
 **A previous version of this page claimed `disabledTools` can only express that
 attack "by naming every tool it removes — a value you can see when you read the
@@ -1054,7 +1057,7 @@ files, the unreadable memory notes, the instruction files and enabled
 skill bodies the system prompt leaves out for budget (audit R1), a nonsense
 `maxToolSteps` or `maxOutputTokens` (audit R12) and the empty tool set — the
 reports that can raise several rows share one call site:
-**thirty-seven** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+**thirty-eight** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
 identifier does **not** — it reports roughly double, because most occurrences in
@@ -1145,8 +1148,7 @@ what your `allowedTools` excluded.
 
 ## Compaction thresholds
 
-The `compaction.*` keys move the tiers every context-usage check is judged by
-(roadmap N-P4b). `Bootstrap::chat()` builds the session's `CompactorConfig`
+The `compaction.*` keys move the tiers every context-usage check is judged by. `Bootstrap::chat()` builds the session's `CompactorConfig`
 from them (`CompactorConfig::fromSettings()`) and hands that one instance to
 every turn, and a save from the settings view rebuilds it
 (`Chat::applySettings()`), so in the TUI a change is **live**: the next prompt
@@ -1979,8 +1981,8 @@ outranks the session but never the environment or a flag
   `disabledMcpServers`, `mcp.lazySchemaTokens`, `providerRetryAttempts` and
   `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
-  (`statusLine` was missing from this list when it joined the stack — P6.S4
-  counted the keys rather than copying the sentence, which is what found it.
+  (`statusLine` was missing from this list when it joined the stack; counting
+  the keys rather than copying the sentence is what found it.
   The sentence is now generated from `SettingsSchema`, so a key can no longer
   join the stack without landing in it.)
 - [`CONTEXT.md`](CONTEXT.md) — what the `compaction.*` and `contextPruning.*`

@@ -27,7 +27,7 @@ namespace CandyCode\Bundles\MsTeams\Support;
  *
  * MUTABLE ON PURPOSE: one open SQLite connection of the daemon.
  */
-final class SessionMap
+final class SessionMap implements \SugarCraft\Plugins\Bridge\SessionStore
 {
     /** msteams-22: the schema this code writes (see the user_version door). */
     public const SCHEMA_VERSION = 2;

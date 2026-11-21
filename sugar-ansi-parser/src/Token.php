@@ -1,0 +1,77 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\AnsiParser;
+
+/**
+ * One classified slice of a byte stream, as emitted by {@see AnsiTokenizer::parse()}.
+ *
+ * Field semantics by `$type`:
+ *
+ * - `TEXT`    — `$data` is one or more bytes that are not C0 controls or ESC. The one
+ *               exception is a held partial sequence returned as text: from
+ *               {@see AnsiTokenizer::flush()}, or when the held bytes pass the
+ *               cap. Such a partial always begins with ESC, and it is returned
+ *               whole rather than dropped.
+ * - `CONTROL` — `$data` is a single C0 control byte (or DEL, 0x7F).
+ * - `ESC`     — `ESC <final>`; `$data` is the final byte. An ESC intermediate
+ *               sequence (`ESC ( 0`, `ESC # 8`, `ESC SP F`) carries its
+ *               0x20-0x2F bytes in `$intermediate`, so a two-byte ESC token
+ *               has an empty `$intermediate`.
+ * - `CSI`     — `ESC [ … final`. `$intermediate` carries the leading private
+ *               marker (`?`, `>`, `=`, `<`) plus any trailing intermediate
+ *               bytes; `$params` is the raw parameter substring; `$final` is
+ *               the single final byte.
+ * - `OSC`, `DCS`, `APC`, `SOS`, `PM` — `$data` is the body between the opener
+ *               and its terminator. `$terminator` is the exact byte run that
+ *               closed it (`"\x1b\\"` for ST, `"\x07"` for BEL), which a
+ *               byte-offset consumer needs to measure the span consumed. It is
+ *               `''` when another ESC aborted the string: the body is then
+ *               dispatched as it stands and that ESC opens the next token.
+ *
+ * The shape and type constants match the tokens sugar-core's `Util\Token`
+ * emits, so a consumer moving onto this class sees the same fields.
+ *
+ * Tokens are immutable.
+ */
+final class Token
+{
+    public const TEXT    = 'text';
+    public const CONTROL = 'control';
+    public const ESC     = 'esc';
+    public const CSI     = 'csi';
+    public const OSC     = 'osc';
+    public const DCS     = 'dcs';
+    public const APC     = 'apc';
+    public const SOS     = 'sos';
+    public const PM      = 'pm';
+
+    public function __construct(
+        public readonly string $type,
+        public readonly string $data = '',
+        public readonly string $intermediate = '',
+        public readonly string $params = '',
+        public readonly string $final = '',
+        public readonly string $terminator = '',
+    ) {
+    }
+
+    /**
+     * Parse `$params` as a semicolon-separated list of integers (CSI
+     * convention). An empty slot reads as 0.
+     *
+     * @return list<int>
+     */
+    public function paramInts(): array
+    {
+        if ($this->params === '') {
+            return [];
+        }
+        $out = [];
+        foreach (explode(';', $this->params) as $p) {
+            $out[] = $p === '' ? 0 : (int) $p;
+        }
+        return $out;
+    }
+}

@@ -441,12 +441,74 @@ final class TerminalReplyDrainTest extends TestCase
         $this->assertSame('11;?', $events[0]->body);
     }
 
-    public function testDcsTmuxEchoIsDrained(): void
+    public function testDcsXtversionReplyIsDrained(): void
     {
-        $events = $this->decoder->decode("\x1bPtmux;echo\x1b\\");
+        // Only the `ESC P >` introducer opens a DCS string (XTVERSION reply).
+        $events = $this->decoder->decode("\x1bP>|xterm(371)\x1b\\");
         $this->assertCount(1, $events);
-        $this->assertSame('tmux;echo', $events[0]->body);
+        $this->assertSame('>|xterm(371)', $events[0]->body);
         $this->assertStreamAlive();
+    }
+
+    public function testBareEscPIsAltPNotAStringStart(): void
+    {
+        // Alt+Shift+P sends ESC P. It must decode as Alt+P, and the keys typed
+        // after it must not be swallowed into a DCS payload until BEL/ST/reset().
+        $events = $this->decoder->decode("\x1bPa");
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(KeyEvent::class, $events[0]);
+        $this->assertSame('p', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('a', $events[1]->key);
+
+        $events = $this->decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testKeypadOperatorSs3FinalsDecode(): void
+    {
+        // DECKPAM operator finals: multiply, add, decimal and divide (same as core).
+        $events = $this->decoder->decode("\x1bOj\x1bOk\x1bOn\x1bOo");
+        $this->assertSame(
+            ['KPMultiply', 'KPAdd', 'KPDecimal', 'KPDivide'],
+            array_map(static fn(Event $e): string => $e instanceof KeyEvent ? $e->key : '?', $events),
+        );
+    }
+
+    public function testAltPBetweenKeysInOneReadDoesNotDropTheRest(): void
+    {
+        // The failure scenario in one feed: Alt+P, a, Up, b, Enter all decode.
+        $events = $this->decoder->decode("\x1bPa\x1b[Ab\r");
+        $this->assertCount(5, $events);
+        $this->assertSame('p', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('a', $events[1]->key);
+        $this->assertSame('ArrowUp', $events[2]->key);
+        $this->assertSame('b', $events[3]->key);
+        $this->assertSame('Enter', $events[4]->key);
+    }
+
+    public function testHeldEscPResolvesAsAltPOrJoinsAnXtversionReply(): void
+    {
+        // With deferTrailingEscape, a chunk ending on ESC P is held. A `>` in the
+        // next read means the XTVERSION reply, otherwise flush resolves it as Alt+P.
+        $decoder = new EscapeDecoder(options: new EscapeDecoderOptions(deferTrailingEscape: true));
+        $this->assertSame([], $decoder->decode("\x1bP"));
+        $this->assertSame("\x1bP", $decoder->remainder());
+        $events = $decoder->decode(">|xterm\x1b\\");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(TerminalReplyEvent::class, $events[0]);
+        $this->assertSame('', $decoder->remainder());
+
+        $this->assertSame([], $decoder->decode("\x1bP"));
+        $events = $decoder->flushDeferredEscape();
+        $this->assertCount(1, $events);
+        $this->assertSame('p', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('', $decoder->remainder());
+        $this->assertSame([], $decoder->flushDeferredEscape());
     }
 
     public function testStringReplySplitAcrossReads(): void
@@ -467,7 +529,7 @@ final class TerminalReplyDrainTest extends TestCase
 
     public function testUnterminatedStringIsCappedNotUnbounded(): void
     {
-        $flood = "\x1bP" . str_repeat('q', 4000);
+        $flood = "\x1bP>" . str_repeat('q', 4000);
         $events = $this->decoder->decode($flood);
         $this->assertCount(1, $events);
         $this->assertTrue($events[0]->truncated, 'oversized unterminated string drains as truncated');
@@ -495,7 +557,7 @@ final class TerminalReplyDrainTest extends TestCase
         // keystrokes: the view left 15 of this flood's payload still past the
         // abandon window, and they decode as 'q' keys in this same call.
         $before = $this->decoder->droppedUnknownCount();
-        $events = $this->decoder->decode("\x1bP" . str_repeat('q', 1024 + 65536 + 16));
+        $events = $this->decoder->decode("\x1bP>" . str_repeat('q', 1024 + 65536 + 15));
         $this->assertCount(16, $events, 'one truncated drain plus the bytes past the view budget, as keys');
         $this->assertTrue($events[0]->truncated);
         $this->assertSame('q', $events[1]->key);
@@ -515,7 +577,7 @@ final class TerminalReplyDrainTest extends TestCase
     {
         // A flood past the 1 KiB drain cap but within the 64 KiB abandon budget is
         // swallowed whole even in 7-byte chunks: one truncated reply, zero key spam.
-        $flood = "\x1bP" . str_repeat('q', 2048);
+        $flood = "\x1bP>" . str_repeat('q', 2048);
         $total = 0;
         for ($off = 0; $off < strlen($flood); $off += 7) {
             $total += count($this->decoder->decode(substr($flood, $off, 7)));
@@ -540,7 +602,7 @@ final class TerminalReplyDrainTest extends TestCase
         // the boundary is deliberately chunk-dependent). The invariants that
         // must NOT shift with chunk size are the control behaviour: one drain,
         // one counted abandon, identical post-resync stream, empty remainder.
-        $flood = "\x1bP" . str_repeat('zx', 40000);
+        $flood = "\x1bP>" . str_repeat('zx', 40000);
         $oneShot = new EscapeDecoder();
         $chunked = new EscapeDecoder();
         $chunkEvents = [];
@@ -594,7 +656,7 @@ final class TerminalReplyDrainTest extends TestCase
         // between its ESC and the backslash: the overflow drain must still see
         // the terminator — losing it silently swallows every later keystroke.
         $body = str_repeat('q', 1500);
-        $events = $this->decoder->decode("\x1bP" . $body . "\x1b");
+        $events = $this->decoder->decode("\x1bP>" . $body . "\x1b");
         $this->assertCount(1, $events, 'truncated reply emitted at the cap');
         $this->assertTrue($events[0]->truncated);
         // Second read starts with the ST's second byte.

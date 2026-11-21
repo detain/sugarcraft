@@ -30,13 +30,37 @@ use SugarCraft\Image\Lang;
  * Mirrors the kitty graphics protocol's f=32 raw RGBA transmission — the
  * wire format is upstream's (kitty docs), this writer is original. chafa
  * chunks encoded frames rather than raw quads.
+ *
+ * An instance is a decoded image: its geometry and the validated RGBA8 buffer
+ * ({@see new()}). {@see \SugarCraft\Image\PngPixels::decode()} returns one, so
+ * a decoded still feeds the raw-RGBA transmission path with no second copy.
+ * The static helpers are the encoder and are unchanged by that.
  */
 final class RawRgba
 {
     /** Pixels per `pack('V*')` call — bounded so huge frames never spread past the arg limit. */
     private const PACK_BATCH_PIXELS = 8192;
 
-    private function __construct() {}
+    private function __construct(
+        /** Pixel columns. */
+        public readonly int $width,
+        /** Pixel rows. */
+        public readonly int $height,
+        /** Straight-alpha RGBA8, `width × height × 4` bytes, rows top to bottom. */
+        public readonly string $rgba,
+    ) {}
+
+    /**
+     * Wrap a w×h RGBA8 buffer, validated by {@see validate()}.
+     *
+     * @throws \InvalidArgumentException  when the buffer is not exactly width×height quads
+     */
+    public static function new(int $width, int $height, string $rgba): self
+    {
+        self::validate($rgba, $width, $height);
+
+        return new self($width, $height, $rgba);
+    }
 
     /**
      * Serialise a pixel list (each `R | G<<8 | B<<16 | A<<24`) to wire bytes.

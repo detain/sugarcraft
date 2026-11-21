@@ -33,13 +33,21 @@ final class BufferBuilder
     private array $grid;
 
     /**
-     * @throws \InvalidArgumentException on non-positive dimensions (the
-     *         same floor fromGrid() enforces at the wrap — failing here
-     *         means a giant build never discovers its canvas was void).
+     * A seed grid is validated BEFORE the canvas is allocated, so a
+     * mismatched or hostile seed fails with InvalidArgumentException instead
+     * of first building a blank grid of the requested size next to it.
+     *
+     * @param ?list<Cell> $seed flat grid of exactly width*height cells, index = $row*$width + $col; null paints a blank canvas
+     *
+     * @throws \InvalidArgumentException on non-positive dimensions, a seed of
+     *         the wrong size, a keyed array, or a seed entry that is not a Cell
+     *         (the floor fromGrid() enforces at the wrap, so a giant build
+     *         never discovers its canvas was void)
      */
     public function __construct(
         private readonly int $width,
         private readonly int $height,
+        ?array $seed = null,
     ) {
         if ($width <= 0 || $height <= 0) {
             throw new \InvalidArgumentException(
@@ -47,7 +55,45 @@ final class BufferBuilder
             );
         }
 
-        $this->grid = array_fill(0, $width * $height, Cell::blank());
+        if ($seed === null) {
+            $this->grid = array_fill(0, $width * $height, Cell::blank());
+
+            return;
+        }
+
+        $expected = $width * $height;
+        if (count($seed) !== $expected) {
+            throw new \InvalidArgumentException(
+                "BufferBuilder grid must contain exactly {$expected} cells ({$width}x{$height}), got " . count($seed)
+            );
+        }
+        if (!array_is_list($seed)) {
+            throw new \InvalidArgumentException(
+                'BufferBuilder grid must be a list (row-major keys 0..width*height-1)'
+            );
+        }
+        foreach ($seed as $idx => $cell) {
+            if (!$cell instanceof Cell) {
+                throw new \InvalidArgumentException(
+                    'BufferBuilder grid entry ' . $idx . ' must be a Cell, got ' . get_debug_type($cell)
+                );
+            }
+        }
+        $this->grid = $seed;
+    }
+
+    /**
+     * Seed a builder with an existing flat grid, so a frame that already
+     * exists can be repainted in place. {@see Buffer::toBuilder()} is the
+     * in-tree caller; validation lives in the constructor.
+     *
+     * @param list<Cell> $grid flat grid of exactly width*height cells, index = $row*$width + $col
+     *
+     * @throws \InvalidArgumentException see the constructor
+     */
+    public static function fromGrid(int $width, int $height, array $grid): self
+    {
+        return new self($width, $height, $grid);
     }
 
     /**
@@ -86,6 +132,18 @@ final class BufferBuilder
         }
 
         return $this;
+    }
+
+    /** Width in cells. */
+    public function width(): int
+    {
+        return $this->width;
+    }
+
+    /** Height in cells. */
+    public function height(): int
+    {
+        return $this->height;
     }
 
     /** Bounding region of the entire canvas. */

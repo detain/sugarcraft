@@ -200,7 +200,9 @@ trait TruncatesOutput
      * newline drops bytes without leaving damage.
      *
      * A non-positive $maxBytes disables the cap, which keeps the trait usable
-     * from a tool whose caller has deliberately opted out.
+     * from a tool whose caller has deliberately opted out. That skips the clip
+     * only: a positive $alreadyDropped still gets its marker, because bytes the
+     * capture already lost must not read as a complete answer.
      *
      * $saveSpill false is a PROBE: the same text, byte for byte in length, but
      * nothing is written — see {@see truncateMerged()}.
@@ -253,8 +255,17 @@ trait TruncatesOutput
         $separator = ($head !== '' && $tail !== '') ? "\n" : '';
         $joined = $head . $separator . $tail;
 
+        // A non-positive bound has nothing to clip to, so the joined text
+        // stands. A capture that still dropped bytes (the 8 MiB retention
+        // ceiling) must say so, or the partial stream reads as the whole answer.
         if ($maxBytes <= 0) {
-            return $joined;
+            if ($merged['dropped'] === 0) {
+                return $joined;
+            }
+
+            $marker = $this->truncationMarker($merged['dropped'], strlen($joined) + $merged['dropped']);
+
+            return $joined === '' ? $marker : $joined . "\n" . $marker;
         }
 
         // Nothing was lost anywhere and it all fits: hand it back untouched.
@@ -429,7 +440,10 @@ trait TruncatesOutput
      * `toolSpillCaptureBytes` setting, else {@see ToolOutputSpill::CAPTURE_BYTES})
      * when one can, so
      * the saved file holds the overflow rather than only the bytes the cap
-     * would have kept anyway. Null means unbounded, matching a disabled cap.
+     * would have kept anyway. Null is NOT unbounded: a non-positive cap returns
+     * null, and runCaptured() then retains the default
+     * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput::DEFAULT_RETAINED_BYTES}
+     * per stream. A caller that needs a number coalesces the null itself.
      */
     private function captureBound(int $maxOutputBytes): ?int
     {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Style\Layout;
 
 use SugarCraft\Constraints\Constraint as ConstraintsConstraint;
-use SugarCraft\Constraints\Direction as ConstraintsDirection;
+use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\LayoutSolver;
 use SugarCraft\Constraints\Region;
 
@@ -36,11 +36,7 @@ final class Solver
         $solver = SolverFactory::fromEnvironment();
         $region = new Region($area->x, $area->y, $area->width, $area->height);
         $layoutConstraints = self::toConstraintsConstraints($constraints);
-        $layoutDir = $dir === Direction::Horizontal
-            ? ConstraintsDirection::Horizontal
-            : ConstraintsDirection::Vertical;
-
-        $layoutRegions = $solver->solve($region, $layoutDir, $layoutConstraints);
+        $layoutRegions = $solver->solve($region, $dir, $layoutConstraints);
 
         return self::fromConstraintsRegions($layoutRegions);
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Session;
 
 /**
- * The single-writer lock on one stored session (audit SES-3(b)): an exclusive
+ * The single-writer lock on one stored session: an exclusive
  * `flock()` on `<configDir>/sessions/<id>.lock`, held for as long as a TUI has
  * that session open.
  *

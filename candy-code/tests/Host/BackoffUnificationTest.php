@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use React\Promise\PromiseInterface;
 use React\Stream\ThroughStream;
 use SugarCraft\Async\Backoff;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Providers\TransientFailure;
+use SugarCraft\Code\Tests\Host\Support\RecordedTimerLoop;
+use function React\Promise\reject;
 
 /**
  * S-P06 (G-11): one backoff law, sugar-async Backoff, for the provider ladder
@@ -30,23 +34,55 @@ final class BackoffUnificationTest extends TestCase
         self::assertSame(0, TransientFailure::backoffMicroseconds(5, $config), 'the last attempt owes nothing');
     }
 
-    public function testRedialDelaysDoubleFromQuarterSecondAndCapAtFour(): void
+    public function testTheProductionLadderSchedulesTheCurveItShipped(): void
     {
-        $delays = [];
-        $host = RemoteSessionHost::overStream(
-            new ThroughStream(),
-            reopen: static fn() => null,
-            after: static function (float $seconds, \Closure $run) use (&$delays): void {
-                $delays[] = $seconds;
-            },
-        );
-        $method = new \ReflectionMethod($host, 'scheduleAttempt');
-        $attempt = new \ReflectionProperty($host, 'attempt');
-        foreach (range(0, 6) as $n) {
-            $attempt->setValue($host, $n);
-            $method->invoke($host);
+        // No seam: the production default backoff runs, and every timer the
+        // host asks the loop for is the delay the ladder actually schedules.
+        $inner = Loop::get();
+        $recorder = new RecordedTimerLoop($inner);
+        Loop::set($recorder);
+        try {
+            $dials = 0;
+            $closes = [];
+            $host = RemoteSessionHost::overStream(
+                new ThroughStream(),
+                reopen: static function () use (&$dials): PromiseInterface {
+                    $dials++;
+
+                    return reject(new \RuntimeException('refused'));
+                },
+            );
+            $host->onClose(static function (string $reason) use (&$closes, $inner): void {
+                $closes[] = $reason;
+                $inner->stop();
+            });
+
+            // A drop leaves the host reconnecting; the first wait and the ladder run from here.
+            (new \ReflectionProperty($host, 'reconnecting'))->setValue($host, true);
+            (new \ReflectionMethod($host, 'scheduleLadder'))->invoke($host);
+            $guard = $inner->addTimer(5.0, static fn () => $inner->stop());
+            $inner->run();
+            $inner->cancelTimer($guard);
+        } finally {
+            Loop::set($inner);
         }
 
-        self::assertSame([0.25, 0.5, 1.0, 2.0, 4.0, 4.0, 4.0], $delays);
+        // The curve the app shipped: a 0.25 s first wait, then one rung per
+        // failed attempt, 0.5, 1, 2 and 4, with 4 held to the end of the budget.
+        $expected = [RemoteSessionHost::RECONNECT_BASE_DELAY_SECONDS, 0.5, 1.0, 2.0];
+        while (\count($expected) < RemoteSessionHost::RECONNECT_MAX_ATTEMPTS) {
+            $expected[] = RemoteSessionHost::RECONNECT_MAX_DELAY_SECONDS;
+        }
+        self::assertSame($expected, $recorder->requested, 'the timers the ladder scheduled, in order');
+        self::assertSame(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS, $dials, 'the default ladder dialed its whole budget');
+        self::assertCount(1, $closes, 'one verdict once the budget is spent');
+        self::assertStringContainsString('gave up', $closes[0]);
+    }
+
+    public function testTheRedialLadderSpendsTheReconnectAttemptBudget(): void
+    {
+        $ladder = (new \ReflectionMethod(RemoteSessionHost::class, 'redialLadder'))->invoke(null);
+        self::assertTrue($ladder->allows(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS - 1), 'a retry may follow the last allowed failure');
+        self::assertFalse($ladder->allows(RemoteSessionHost::RECONNECT_MAX_ATTEMPTS), 'the budget-th failure is final');
     }
 }

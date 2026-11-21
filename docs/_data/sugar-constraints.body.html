@@ -1,16 +1,24 @@
-<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
+<p class="lede" style="margin-top: 28px;">A <a href="https://github.com/ratatui/ratatui">ratatui</a>-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-constraints</code></pre>
+    <p>Requires PHP 8.3 or newer. The package has no runtime dependencies.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
+    <p>A classic two-pane sidebar: a fixed-width rail and a content pane that takes whatever width is left. The runnable walk ships as <code>examples/sidebar.php</code>, which runs this split at widths 100 and 10, then a four-pane mix.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\{Direction, GreedySolver, Region};
 
 $solver = GreedySolver::new();
-$region = Region::fromSize(100, 24);
 
-// The widths in the comments are what this 100-cell split returns.
+$rects = $solver-&gt;solve(Region::fromSize(100, 20), Direction::Horizontal, [
+    Constraint::length(24),   // 24: sidebar, 24 cells
+    Constraint::fill(1),      // 76: content, the cells left
+]);</code></pre>
+    <h3 style="margin-top: 24px;">Constraint tour</h3>
+    <p>One 100-cell row with every constraint type. This block is a tour, not a script: no file under <code>examples/</code> runs it, and the widths in its comments are what the solver returns for it.</p>
+    <pre class="code"><code class="language-php">$region = Region::fromSize(100, 20);
+
 $rects = $solver-&gt;solve($region, Direction::Horizontal, [
     Constraint::length(20),       // 20: exactly 20 cells
     Constraint::min(10),          // 10: a floor; the Fills below take the slack
@@ -26,30 +34,164 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
     Constraint::max(15),          // 15: clamped at its ceiling
     Constraint::fill(1),          // 65: everything Max did not take
 ]);</code></pre>
+    <p><code>solve()</code> returns one positioned <code>Region</code> per constraint, in list order. The <code>x</code> and <code>y</code> offsets are absolute cell coordinates: the input region's origin is already included, so a region at x=5 returns its first box at x=5. Paint each box at its returned <code>x</code> and <code>y</code> without adding the origin again.</p>
+
+    <h3 style="margin-top: 32px;">How it works</h3>
+    <p>Each solve is a pure function of the region, the direction and the constraint list. The solver keeps no state between calls, so re-solving on every <code>WindowSizeMsg</code> is the intended pattern. The package places boxes in whole terminal cells and never measures text; sizing a string with CJK, emoji or combining marks is the caller's job, and <code>sugar-core</code>'s <code>Width::of()</code> answers it.</p>
+    <p>The walk runs in this order. Percentage and Ratio resolve to absolute sizes, and Length plus those sizes form a fixed reservation. Min floors and Max ceilings are entered. Whatever slack remains goes to the Fill weights and to Max, which is weighted by its cap and then clamped to it. A Min takes slack directly only when the set has neither Fill nor Max; on its own it absorbs the whole span. A Max clamp hands its excess back, and a Min takes that first, ahead of Fill. Demand above supply shrinks regions proportionally. A well-constrained set then tiles the span exactly, so its widths sum to the region's size.</p>
+    <p>Rounding is lossless for well-constrained sets. Slack residue rides the first Fill, or the first Max when no Fill is present. Min-only slack rides the first Min. With neither Fill nor Max in the set, a Percentage or Ratio shortfall of at most N−1 cells is reclaimed earliest-first; with a Fill or Max, that shortfall rides the first Fill or Max along with the rest of the slack. Over-subscription truncates silently by design, because a terminal resized below its fixed panes is a normal state, not an error.</p>
+    <pre class="code"><code class="language-php">// Length(10) and Max(5) in a 100-cell span: the Max clamp hands back the rest.
+$rects = GreedySolver::new()-&gt;solve(Region::fromSize(100, 20), Direction::Horizontal, [
+    Constraint::length(10),
+    Constraint::max(5),
+]);
+// widths: 95, 5</code></pre>
+    <p>Five carve-outs keep the sum law from holding. Under-constrained fixed-only sets keep their gap, so <code>[percentage(30)]</code> at 100 yields one 30-cell region. Compat mode and <code>withoutOverflowTruncation()</code> run off-grid on overflow. A zero-weight Fill set keeps its slack. A Max-only set keeps the shortfall of its caps, so <code>[max(40), max(40)]</code> at 100 yields 40 and 40; adding any Length, Percentage, Ratio, Fill or Min absorbs it. Extreme-magnitude inputs past int64 ride float arithmetic. The README names all five, and the tests pin the first two.</p>
+
+    <h3 style="margin-top: 32px;">Choosing a layout strategy</h3>
+    <ul>
+      <li>One content flow that sizes itself, such as paragraphs or form fields: reach for <code>sugar-flexbox</code>.</li>
+      <li>Several panes split and re-resolved on every resize: this solver.</li>
+      <li>An IDE-style center with vertical side stacks: the <code>Dock\*</code> surface, described below.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Tasks</h3>
+    <h3 style="margin-top: 24px;">Check whether a set fits before you paint</h3>
+    <pre class="code"><code class="language-php">$demand = GreedySolver::new()-&gt;demandOf(Region::fromSize(100, 20), Direction::Horizontal, [
+    Constraint::length(60),
+    Constraint::length(60),
+]);
+// 120: above the 100-cell span, so the set cannot be satisfied whole</code></pre>
+    <p><code>demandOf()</code> sums fixed sizes exactly, resolves Percentage and Ratio under the instance's rounding policy, sums Min floors, ceilings Max caps, and counts Fill as 0. Use it when collapse must be visible. Clipping on the host side with <code>withoutOverflowTruncation()</code> is the other option.</p>
+
+    <h3 style="margin-top: 24px;">Keep the default policy, or opt into compat parity</h3>
+    <p>New code should use <code>GreedySolver::new()</code>. <code>GreedySolver::compat()</code> reproduces the sugar-panels <code>distribute()</code> splits: round-split, remainder to the last region, and non-truncating overflow. Use it only to match an existing sugar-panels golden frame.</p>
+
+    <h3 style="margin-top: 24px;">Solve a Dock frame</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Constraints\Dock\{DockLayout, Side};
+use SugarCraft\Constraints\Region;
+
+$dock = DockLayout::new('chat')
+    -&gt;withSlotAdded(Side::Left, 'files')
+    -&gt;withSlotAdded(Side::Left, 'git')
+    -&gt;withSlotAdded(Side::Right, 'term')
+    -&gt;withStackWeight(Side::Left, 0, 2, 1);      // files takes twice the rows of git
+
+$geometry = $dock-&gt;resolve(Region::fromSize(100, 30));
+$chat = $geometry-&gt;regionFor('chat');           // null when the pane is undocked or dropped
+foreach ($geometry-&gt;dividerColumns() as $divider) {
+    // the host paints each divider column
+}</code></pre>
 
     <h3 style="margin-top: 32px;">Solvers</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>GreedySolver</strong><span>Deterministic greedy solver. Extracted from sugar-style, which routes its own splits back through this solver. No deps; no strength or priority vocabulary. Small and stateless. Lossless rounding: floored fractions are handed back so for a well-constrained set the regions tile the span (Fill/Max remainder to the first Fill (or the first Max when no Fill is present), Min slack residue to the first Min, a Percentage/Ratio shortfall of at most N−1 cells reclaimed earliest-first). When fixed demand exceeds the span, regions shrink proportionally and still sum to it — <code>withoutOverflowTruncation()</code> keeps full base sizes instead. Tiling assumes a positive-weight recipient: under-constrained fixed-only sets keep their gap, and a zero-weight-only Fill set leaves slack too — the README names all four carve-outs. Over-subscription truncates silently by design; <code>demandOf()</code> answers the pre-paint comparison under the instance's rounding policy.</span></div>
-      <div class="feature"><strong>CassowarySolver (deprecated)</strong><span>The original Big-M simplex prototype never converged, so <code>solve()</code> raises <code>E_USER_DEPRECATED</code> and delegates wholly to <code>GreedySolver</code> — results are identical. Kept only so existing call-sites keep working.</span></div>
-      <div class="feature"><strong>DockLayout</strong><span>Center pane plus left/right weighted slot stacks. Stack heights are split in exact integer arithmetic (no float decides a boundary row); a weight set whose scaled sum would overflow is refused with <code>InvalidArgumentException</code> where it is introduced, and <code>resolve()</code> itself never throws, degrading by dropping a side on small frames. <code>withFixedColumns()</code> claims exact columns for a side before the share pass (the center's floor still outranks exactness); fixed widths ride the version-2 manifest while share-only docks keep emitting the byte-identical version-1 shape.</span></div>
+      <div class="feature"><strong>GreedySolver</strong><span>Deterministic greedy solver, extracted from sugar-style. No dependencies, and no strength or priority vocabulary. Stateless, so one instance can be shared. Every constraint type is implemented here, and sugar-style routes its own splits back through it.</span></div>
+      <div class="feature"><strong>CassowarySolver (deprecated)</strong><span>The original Big-M simplex prototype never converged, so <code>solve()</code> raises <code>E_USER_DEPRECATED</code> on every call and delegates wholly to <code>GreedySolver</code>. Results are identical. It is kept only so existing call-sites keep working.</span></div>
+      <div class="feature"><strong>DockLayout</strong><span>A center pane plus left and right weighted slot stacks. Stack heights are split in exact integer arithmetic, so no float decides a boundary row. <code>resolve()</code> never throws; below the floors it drops a side instead.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Constraint types</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Length</strong><span>Fixed cell count — n cells, except the documented carve-outs (the reclaim ladder inflates it in sets with no Min and no Fill, overflow truncation shrinks it, compat mode runs off-grid); the README walks them.</span></div>
-      <div class="feature"><strong>Min</strong><span>Soft floor — at least n cells while slack survives every Fill and Max; clamps proportionally when demand exceeds the span; the README documents the semantics.</span></div>
-      <div class="feature"><strong>Max</strong><span>Ceiling — greedy, clamped to n cells.</span></div>
-      <div class="feature"><strong>Fill</strong><span>Proportional remainder — weight controls distribution across multiple Fill constraints.</span></div>
-      <div class="feature"><strong>Percentage</strong><span>Fraction of total — n% of the available dimension.</span></div>
-      <div class="feature"><strong>Ratio</strong><span>Fractional proportion — num/denom of the total span, reserved like a fixed size.</span></div>
+      <div class="feature"><strong>Length</strong><span>Fixed cell count. One exception: when a Max clamps in a set with neither Min nor Fill, the reclaim ladder can inflate a Length, and a Percentage or Ratio alike.</span></div>
+      <div class="feature"><strong>Min</strong><span>Soft floor of n cells. It grows when the set has neither Fill nor Max, or when a Max clamp hands it cells back ahead of Fill. It clamps proportionally when demand exceeds the span.</span></div>
+      <div class="feature"><strong>Max</strong><span>Greedy ceiling. It takes slack up to n cells, and its clamp pass can hand cells back to the rest of the set.</span></div>
+      <div class="feature"><strong>Fill</strong><span>Proportional remainder. Its weight sets the share among Fill constraints. <code>fill(0)</code> is accepted and weightless.</span></div>
+      <div class="feature"><strong>Percentage</strong><span>An integer from 0 to 100 inclusive, as a share of the solved-axis span. Values outside that range throw. Same reclaim exception as Length: a Max clamp in a set with neither Min nor Fill can inflate it.</span></div>
+      <div class="feature"><strong>Ratio</strong><span>numerator/denominator of the span, reserved like a fixed size. It is not an aspect ratio: <code>solve()</code> works on one axis. Same reclaim exception as Length: a Max clamp in a set with neither Min nor Fill can inflate it.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <p><code>GreedySolver</code> takes six named constructor arguments. The zero-argument <code>new()</code> keeps these defaults.</p>
+<table class="api-table">
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td><code>roundSplit</code></td><td>bool</td><td><code>false</code></td><td>Use <code>round()</code> instead of <code>floor()</code> for Percentage and Ratio sizes. <code>withRoundSplit()</code> sets it.</td></tr>
+<tr><td><code>remainderToLast</code></td><td>bool</td><td><code>false</code></td><td>Rounding remainder goes to the last region instead of the first. <code>withRemainderToLast()</code> sets it.</td></tr>
+<tr><td><code>truncateOverflow</code></td><td>bool</td><td><code>true</code></td><td>When fixed demand exceeds the span, shrink regions proportionally. <code>false</code> keeps full base sizes, off-grid. <code>withoutOverflowTruncation()</code> and <code>withOverflowTruncation()</code> set it.</td></tr>
+<tr><td><code>minShare</code></td><td>int</td><td><code>0</code></td><td>Cells reserved per unplaced region before the Fill split. <code>0</code> leaves the floor off. Negative values throw.</td></tr>
+<tr><td><code>reserveGap</code></td><td>int</td><td><code>0</code></td><td>Cells added per placed region while the min-share floor is engaged, for inter-region spacing. Negative values throw.</td></tr>
+<tr><td><code>reserveLead</code></td><td>int</td><td><code>0</code></td><td>Cells reserved before the first region while the min-share floor is engaged, as a leading margin. Negative values throw.</td></tr>
+</table>
+    <p>The dock defaults come from <code>DockLayout::new()</code>. The center pane id is <code>'center'</code> unless you pass another. Each side starts at a 1/3 column share, with a 24-column center floor and a 20-column side floor, and the divider is one column. <code>withMinimums()</code> changes the floors, and <code>withColumnShare()</code> changes the shares.</p>
+
+    <h3 style="margin-top: 32px;">API reference</h3>
+<table class="api-table">
+<!-- n1: bare <tr><th> header kept - the site-wide .api-table cure (docs-review-1023 G4 seam) owns the thead/scope upgrade; do not hand-patch here. -->
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>LayoutSolver</td><td>solve(Region $region, Direction $dir, array $constraints): array</td><td>Solve constraints against a region in the given direction. Returns one positioned sub-region per constraint, and an empty list solves to <code>[]</code>. Keyed or sparse arrays and non-Constraint members throw <code>InvalidArgumentException</code>.</td></tr>
+<tr><td>GreedySolver</td><td>new(): self / greedy(): self / compat(): self</td><td><code>new()</code> is the default factory. <code>greedy()</code> is a byte-identical alias of <code>new()</code>. <code>compat()</code> is the sugar-panels parity bundle.</td></tr>
+<tr><td>GreedySolver</td><td>__construct(bool $roundSplit = false, bool $remainderToLast = false, bool $truncateOverflow = true, int $minShare = 0, int $reserveGap = 0, int $reserveLead = 0)</td><td>Public constructor, called as <code>new GreedySolver(...)</code>. Negative floor or reserve values throw <code>InvalidArgumentException</code>. The six fields are public readonly, so the resolved policy reads back off the instance.</td></tr>
+<tr><td>GreedySolver</td><td>static solveStatic(Region $area, Direction $dir, array $constraints): array</td><td>Legacy no-instance entry for the default policy. Its argument order matches <code>solve()</code>. Prefer an instance when you need the compat toggles.</td></tr>
+<tr><td>GreedySolver</td><td>static minShareFloor(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0): self</td><td>Builds an instance with the min-share floor engaged and the sugar-panels mode settings (floor split, remainder to the last region, truncation on).</td></tr>
+<tr><td>GreedySolver</td><td>demandOf(Region $area, Direction $dir, array $constraints): int</td><td>Demand of the set under the instance's rounding policy. A result above the solved axis means the set cannot be satisfied whole. Shares the list guard with <code>solve()</code>.</td></tr>
+<tr><td>GreedySolver</td><td>withRoundSplit(bool $on = true) / withRemainderToLast(bool $on = true) / withoutOverflowTruncation() / withOverflowTruncation(bool $on = true)</td><td>Immutable rounding and overflow toggles. Each returns a new instance.</td></tr>
+<tr><td>GreedySolver</td><td>withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0)</td><td>Engages the sequential min-share floor. It sets <code>roundSplit</code> to false and <code>remainderToLast</code> to true. While engaged, <code>solve()</code> throws <code>InvalidArgumentException</code> for any set that holds a non-Fill constraint, on either axis.</td></tr>
+<tr><td>CassowarySolver</td><td>new(): self / cassowary(): self</td><td>Deprecated shim. <code>solve()</code> raises <code>E_USER_DEPRECATED</code> and delegates to <code>GreedySolver</code>. Use <code>GreedySolver</code> in new code.</td></tr>
+<tr><td>Constraint</td><td>length(int $n) / min(int $n) / max(int $n) / fill(int $weight = 1) / percentage(int $n) / ratio(int $numerator, int $denominator)</td><td>Factories on the abstract <code>Constraint</code> class. <code>length()</code>, <code>min()</code> and <code>max()</code> throw on a negative <code>n</code>. <code>percentage()</code> outside 0 to 100 throws, and <code>ratio()</code> with a negative numerator or a zero or negative denominator throws.</td></tr>
+<tr><td>Direction</td><td>Horizontal, Vertical / other(): self</td><td>Split axis. <code>other()</code> returns the counterpart axis.</td></tr>
+<tr><td>Region</td><td>__construct(int $x, int $y, int $width, int $height) / fromSize(int $width, int $height) / withOrigin(int $x, int $y)</td><td>Input and output box. Negative components throw. <code>withOrigin()</code> moves the region without resizing it.</td></tr>
+<tr><td>Dock\DockLayout</td><td>new(string $centerPaneId = 'center') / withSlotAdded(Side $side, string $paneId, ?int $index = null) / withSlotRemoved(string $paneId) / withSlotMovedTo(string $paneId, Side $side, ?int $index = null) / slots(Side $side)</td><td>Immutable dock manifest. Removing an undocked pane is a no-op, while moving one throws. Each slot mutator scans every stack, so batch changes through <code>fromArray()</code>.</td></tr>
+<tr><td>Dock\DockLayout</td><td>withColumnShare(Side $side, int $num, int $denom) / withColumnShareExact(Side $side, int $num, int $denom) / columnShare(Side $side): array</td><td>Rational column shares. <code>withColumnShare()</code> clamps to the pair rule and stores the effective share. <code>withColumnShareExact()</code> throws instead of clamping.</td></tr>
+<tr><td>Dock\DockLayout</td><td>withStackWeight(Side $side, int $index, int $num, int $denom) / withStackWeightFor(Side $side, string $paneId, int $num, int $denom)</td><td>Slot weights by position, or by pane id. The id form cannot write to the wrong slot after a removal shifts the stack.</td></tr>
+<tr><td>Dock\DockLayout</td><td>withMinimums(int $centerMinCols, int $sideMinCols) / withFixedColumns(Side $side, int $cols)</td><td>Sets the floors the degradation ladder reads. <code>withFixedColumns()</code> claims exactly <code>$cols</code> columns for a side before the share pass. Passing <code>0</code> returns the side to share-driven planning.</td></tr>
+<tr><td>Dock\DockLayout</td><td>resolve(Region $frame): DockGeometry</td><td>Never throws. Below the floors it drops a side, and the divider stays at one column.</td></tr>
+<tr><td>Dock\DockLayout</td><td>toArray(): array / static fromArray(array $data): self</td><td>Versioned persistence. A share-only dock emits the version-1 shape. A dock with fixed columns emits version 2 with a <code>fixed</code> map, and <code>fromArray()</code> accepts both. Malformed input throws <code>InvalidArgumentException</code> naming the failed key.</td></tr>
+<tr><td>Dock\DockGeometry</td><td>new(array $regions = [], array $dividerColumns = []): self / regionFor(string $paneId): ?Region / dividerColumns(): array / isEmpty(): bool</td><td>Final readonly resolved geometry, with public readonly <code>$regions</code> and <code>$dividerColumns</code>. <code>new()</code> validates untrusted payloads. <code>regionFor()</code> returns null for a pane that is never docked or was dropped, and a 0-width region is not null.</td></tr>
+<tr><td>Dock\DockSlot</td><td>new(string $paneId, int $weightNum = 1, int $weightDenom = 1) / withWeight(int $num, int $denom)</td><td>One vertical stack slot with a rational weight.</td></tr>
+<tr><td>Dock\Side</td><td>Left, Right / other(): self</td><td>Enum of the two stacks. <code>other()</code> returns the opposite side.</td></tr>
+<tr><td>Expression</td><td>(internal)</td><td>Linear-expression value object kept from the retired simplex prototype. It is marked <code>@internal</code>, no solver consumes it, and it is not part of the supported surface. Use <code>LayoutSolver</code>.</td></tr>
+</table>
+
+    <!-- api-reference:generated -->
+
+    <h3 style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><code>examples/sidebar.php</code>: the horizontal two-pane walk, with a fixed rail, an elastic content pane, a crushed frame at width 10, and a four-pane mix.</li>
+      <li><code>examples/vertical.php</code>: the same walk on <code>Direction::Vertical</code>, where a cell is one text row.</li>
+      <li><code>examples/dock.php</code>: the <code>Dock\*</code> surface, with a center pane, weighted side stacks, and the small-frame ladder that drops sides instead of throwing.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/sidebar.php
+php examples/vertical.php
+php examples/dock.php</code></pre>
+
+    <h3 style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-constraints
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>Every fenced <code>php</code> block in the README runs under <code>tests/ReadmeSnippetsTest.php</code>, so the README snippets cannot drift. <code>tests/SolverEdgeCaseTest.php</code> pins the tiling shapes, and <code>tests/WidthSumInvariantSweepTest.php</code> checks the sum law across a sweep. <code>tests/GreedySolverCompatTest.php</code> holds the sugar-panels parity cases, and <code>tests/ExtremeMagnitudeCarveoutTest.php</code> covers the int64 carve-out.</p>
+
+    <h3 style="margin-top: 32px;">Troubleshooting</h3>
+    <ul>
+      <li><strong><code>solve()</code> throws "Constraints must be a list".</strong> The array is keyed or sparse. Pass a sequential list, for example by calling <code>array_values()</code> on it.</li>
+      <li><strong>A static call through the interface name is a fatal error.</strong> <code>LayoutSolver</code> declares only the instance method <code>solve()</code>, so a static factory such as <code>greedy()</code> called on the interface name fails with <code>Error: Call to undefined method</code>, followed by the interface and method name. Call a concrete class such as <code>GreedySolver::greedy()</code> or <code>GreedySolver::new()</code>.</li>
+      <li><strong>Sizes sum to less than the span.</strong> One of the carve-outs applies. For example, <code>[percentage(30)]</code> at 100 yields 30, and <code>[max(40), max(40)]</code> at 100 yields 40 and 40. Add a <code>fill(1)</code> to absorb the rest, or check the set with <code>demandOf()</code>.</li>
+      <li><strong>Sizes sum to more than the span.</strong> The set was solved with compat mode or <code>withoutOverflowTruncation()</code>. <code>[length(60), length(60)]</code> at 100 yields 60 and 60 under those settings, and 50 and 50 under the default policy.</li>
+      <li><strong><code>E_USER_DEPRECATED</code> on every solve.</strong> The call uses <code>CassowarySolver</code>, which delegates to <code>GreedySolver</code>. Switch to <code>GreedySolver::new()</code>.</li>
+      <li><strong>A dock side disappears on a small frame.</strong> The frame is below the floors, so <code>resolve()</code> drops that side. Resize the frame, or lower the floors with <code>withMinimums()</code>.</li>
+      <li><strong><code>percentage(150)</code> throws.</strong> Percentage takes an integer from 0 to 100. Use <code>ratio()</code> for other fractions.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Upstream mapping</h3>
+    <p>The layout model follows ratatui's constraint system. Badros, Borning and Stuckey's Cassowary paper is the historical source of the deprecated shim, but this port implements neither the simplex nor the strength and priority vocabulary. The port mapping is in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>, where the SugarConstraints row carries its port status.</p>
+<table class="api-table">
+<tr><th>ratatui</th><th>SugarConstraints</th></tr>
+<tr><td><code>Constraint::Length</code></td><td><code>Constraint::length()</code>, class <code>Length</code></td></tr>
+<tr><td><code>Constraint::Min</code></td><td><code>Constraint::min()</code>, class <code>Min</code></td></tr>
+<tr><td><code>Constraint::Max</code></td><td><code>Constraint::max()</code>, class <code>Max</code></td></tr>
+<tr><td><code>Constraint::Fill</code></td><td><code>Constraint::fill()</code>, class <code>Fill</code></td></tr>
+<tr><td><code>Constraint::Percentage</code></td><td><code>Constraint::percentage()</code>, class <code>Percentage</code></td></tr>
+<tr><td><code>Constraint::Ratio</code></td><td><code>Constraint::ratio()</code>, class <code>Ratio</code></td></tr>
+<tr><td>layout split</td><td><code>LayoutSolver::solve()</code>, implemented by <code>GreedySolver</code></td></tr>
+</table>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Extracted from sugar-style</strong> — sugar-style's <code>Layout\Solver</code> bridge now delegates back through this package.</li>
-      <li><strong>Live pane splits</strong> — <code>sugar-panels</code> (compat mode), <code>candy-code</code>'s <code>Dock\*</code> surface, and the <code>candy-sql</code> dashboard; <code>sugar-forms</code> requires it but its constraint knob is dormant, and <code>sugar-widgets</code> does not consume it.</li>
-      <li><strong>Swap solver without breaking call-sites</strong> — <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
+      <li><strong>Extracted from sugar-style</strong>: sugar-style's <code>Layout\Solver</code> bridge now delegates back through this package.</li>
+      <li><strong>Live pane splits</strong>: <code>sugar-panels</code> (compat mode), <code>candy-code</code>'s <code>Dock\*</code> surface, and the <code>candy-sql</code> dashboard. <code>sugar-forms</code> requires it, but its constraint knob is dormant, and <code>sugar-widgets</code> does not consume it.</li>
+      <li><strong>Swap solver without breaking call-sites</strong>: <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
     </ul>
+
+    <h3 style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package has no separate changelog file. History is in git and on the <a href="https://packagist.org/packages/sugarcraft/sugar-constraints">Packagist release list</a>. The README header records the 2026-10 rename: the package was published as <code>sugarcraft/candy-layout</code>, and the namespace moved from <code>SugarCraft\Layout\</code> to <code>SugarCraft\Constraints\</code>.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -57,40 +199,9 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
       <li><a href="https://github.com/sugarcraft/sugar-constraints/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-constraints/tree/master/examples">Runnable examples</a></li>
       <li>Inspired by <a href="https://github.com/ratatui/ratatui">ratatui/ratatui</a> layout constraint system</li>
-      <li>Originally inspired by <a href="https://doi.org/10.1145/504704.504707">Badros, Van den Broucke &amp; Borning, "The Cassowary Linear Arithmetic Constraint Solving Algorithm", ACM TOPLAS 23(6), 2001</a> — this package implements neither the simplex nor the strength/priority vocabulary</li>
+      <li>Originally inspired by <a href="https://doi.org/10.1145/504704.504705">Badros, Borning &amp; Stuckey, "The Cassowary Linear Arithmetic Constraint Solving Algorithm", ACM TOCHI 8(4), 2001</a>. This package implements neither the simplex nor the strength/priority vocabulary.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<!-- n1: bare <tr><th> header kept - the site-wide .api-table cure (docs-review-1023 G4 seam) owns the thead/scope upgrade; do not hand-patch here. -->
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>LayoutSolver</td><td>solve(Region $region, Direction $dir, array $constraints): array</td><td>Solve constraints against a region in the given direction; returns one positioned sub-region per constraint - an empty list solves to <code>[]</code>, keyed/sparse arrays and non-Constraint members throw <code>InvalidArgumentException</code>, and one constraint per region is the law: "30% but never under 20" is inexpressible</td></tr>
-<tr><td>GreedySolver</td><td>new(): self / compat(): self</td><td>Default factory / sugar-panels parity mode (round-split, remainder-to-last, non-truncating overflow)</td></tr>
-<tr><td>GreedySolver</td><td>static solveStatic(Region $area, Direction $dir, array $constraints): array</td><td>Legacy no-instance entry for the pre-immutable default policy; argument order matches <code>solve()</code> (reordered 2026-11 — a repo grep found no external positional callers of the old transposed order); prefer an instance for the compat() toggles</td></tr>
-<tr><td>GreedySolver</td><td>new(roundSplit: false, remainderToLast: false, truncateOverflow: true, minShare: 0, reserveGap: 0, reserveLead: 0)</td><td>Public six-named-arg constructor — a supported entry point (the zero-arg call keeps the legacy defaults byte-for-byte); negative floor/reserve values throw <code>InvalidArgumentException</code>, and all six fields are public readonly so the resolved policy reads back off the instance</td></tr>
-<tr><td>GreedySolver</td><td>static minShareFloor(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0)</td><td>Dedicated construction door for the sequential min-share floor — the compat knobs arrive at the mode's truth (floor split, remainder to the LAST region, truncation on) rather than being inherited, for instances built engaged rather than retuned</td></tr>
-<tr><td>GreedySolver</td><td>demandOf(Region $area, Direction $dir, array $constraints): int</td><td>Demand of the set: fixed sizes exact, Percentage/Ratio resolved under the instance's rounding policy, Min floors summed, Max caps ceilinged, Fill contributes 0; demand above the solved axis says the set cannot be satisfied whole. Shares <code>solve()</code>'s list/sparse guard</td></tr>
-<tr><td>GreedySolver</td><td>withRoundSplit() / withRemainderToLast() / withoutOverflowTruncation() / withOverflowTruncation(bool) / withMinShare(cells, reserveGap, reserveLead)</td><td>Immutable rounding and overflow options; <code>withMinShare()</code> runs its own proportional path, resets <code>roundSplit</code>/<code>remainderToLast</code> to the mode's truth on engagement, and refuses any set containing a non-Fill constraint on both axes</td></tr>
-<tr><td>GreedySolver / CassowarySolver</td><td>static greedy() / static cassowary()</td><td>Concrete-class factories - construction lives on the classes, not the interface; <code>CassowarySolver::greedy()</code> is a warning-free escape hatch returning a supported <code>GreedySolver</code></td></tr>
-<tr><td>CassowarySolver</td><td>new(): self</td><td>Deprecated shim; solve() raises E_USER_DEPRECATED and delegates to GreedySolver</td></tr>
-<tr><td>Direction</td><td>Horizontal, Vertical / other()</td><td>Enum: split direction; <code>other()</code> answers the counterpart axis — the Dock vocabulary's <code>Side::other()</code> shape, so callers never hard-code the flip</td></tr>
-<tr><td>Region</td><td>fromSize(int, int) / withOrigin(int $x, int $y)</td><td>Factory: width, height; <code>withOrigin()</code> translates without resizing — a negative destination is refused loudly by the same boundary guard the constructor carries</td></tr>
-<tr><td>Constraint</td><td>length(int $n)</td><td>Fixed cell count; <code>length(-1)</code> throws <code>InvalidArgumentException</code></td></tr>
-<tr><td>Constraint</td><td>min(int $n)</td><td>Soft floor - at least n cells; negative <code>n</code> throws <code>InvalidArgumentException</code></td></tr>
-<tr><td>Constraint</td><td>max(int $n)</td><td>Ceiling - at most n cells; negative <code>n</code> throws <code>InvalidArgumentException</code></td></tr>
-<tr><td>Constraint</td><td>fill(int $weight = 1)</td><td>Proportional remainder with weight; <code>fill(0)</code> is accepted and silently weightless</td></tr>
-<tr><td>Constraint</td><td>percentage(int $n)</td><td>Percentage of total for <code>0</code>-<code>100</code>; out of range (e.g. <code>150</code> or <code>-5</code>) throws <code>InvalidArgumentException</code></td></tr>
-<tr><td>Constraint</td><td>ratio(int $numerator, int $denominator)</td><td>Fraction of the total span; a negative numerator or a zero/negative denominator throws <code>InvalidArgumentException</code></td></tr>
-<tr><td>Dock\DockLayout</td><td>new(centerPaneId = 'center') / withSlotAdded(side, paneId, index?) / withSlotRemoved(paneId) / withSlotMovedTo(paneId, side, index?) / slots(side)</td><td>Immutable center-plus-stacks dock manifest; an undocked <code>withSlotRemoved()</code> is an idempotent no-op while <code>withSlotMovedTo()</code> throws; every slot mutator scans all stacks, so batch with <code>fromArray()</code> (a single linear pass)</td></tr>
-<tr><td>Dock\DockLayout</td><td>withColumnShare(side, num, denom) / withColumnShareExact(side, num, denom) / columnShare(side)</td><td>Rational column shares: malformed rationals throw, requested magnitudes clamp down under the pair rule and the mutator stores the <code>effective</code> share (read <code>columnShare()</code> to observe a clamp); <code>withColumnShareExact()</code> refuses a would-be clamp with <code>InvalidArgumentException</code> naming the ceiling</td></tr>
-<tr><td>Dock\DockLayout</td><td>withStackWeight(side, index, num, denom) / withStackWeightFor(side, paneId, num, denom)</td><td>Slot weights by positional index or retargeted by pane id — the id door names the miss, so a removal that shifted the stack can never make an index weight the wrong slot; a weight set whose scaled sum would overflow <code>PHP_INT_MAX</code> is refused where it is introduced</td></tr>
-<tr><td>Dock\DockLayout</td><td>withMinimums(centerMinCols, sideMinCols) / withFixedColumns(side, cols)</td><td>24/20 shipped floors the degradation ladder reads per frame; <code>withFixedColumns()</code> claims EXACTLY that many columns for a side before the share pass (the <code>sideMinCols</code> raise never touches a fixed side, and the center's floor still outranks exactness); <code>0</code> returns the side to share-driven planning</td></tr>
-<tr><td>Dock\DockLayout</td><td>toArray() / static fromArray(array)</td><td>Versioned lossless persistence: share-only docks emit the byte-identical version-1 shape, a dock with fixed columns emits version 2 plus a <code>'fixed'</code> map, and <code>fromArray()</code> accepts both (an absent <code>fixed</code> key means <code>[0, 0]</code>, so every v1 blob round-trips byte-identically); malformed manifests throw <code>InvalidArgumentException</code> naming the failed key</td></tr>
-<tr><td>Dock\DockLayout</td><td>resolve(Region $frame): DockGeometry</td><td>Never throws; below the floors it degrades by dropping sides, and the divider is fixed at one column</td></tr>
-<tr><td>Dock\DockGeometry</td><td>static new(regions, dividerColumns) / regionFor(paneId) / dividerColumns() / isEmpty() · public readonly $regions / $dividerColumns</td><td><code>final readonly</code> resolved absolute regions in insertion order (left stack, center, right stack); <code>new()</code> is the validating public door for untrusted payloads while <code>resolve()</code> builds through an <code>@internal</code> zero-validation seam (the <code>solved()</code> twin — nothing reachable from a geometry can mutate). <code>regionFor()</code> null covers never-docked, ladder-dropped, and degenerate alike; a 0-width region is NOT null</td></tr>
-<tr><td>Dock\DockSlot / Dock\Side</td><td>DockSlot::new(paneId, num, denom) / withWeight(num, denom); Side::other()</td><td>One vertical stack slot with a rational weight; opposite-side lookup</td></tr>
-</table>
   </div>
 </section>

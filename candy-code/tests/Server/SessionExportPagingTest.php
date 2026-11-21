@@ -8,13 +8,13 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
-use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Schema\MethodSchemas;
 use SugarCraft\Code\Protocol\Schema\ProtocolSchema;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Util\Exporter;
+use SugarCraft\McpClient\Protocol\JsonRpc;
 
 /**
  * C-WEB-7.c (source WEB-1-P2): `session.export` answers the frame cap by

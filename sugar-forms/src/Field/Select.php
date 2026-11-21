@@ -167,9 +167,9 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
      * {@see WorkerPool} parameter is accepted for signature parity with the
      * planned offload path and is DISCARDED here (Select does not even store
      * it; Input stores the same dead parameter). Wiring real offloading is
-     * deferred to the follow-up async lane (findings/plan_sugar-forms.md
-     * Phase 6.3) — until then passing a pool has NO effect, and fetchers
-     * that block will block the loop.
+     * deferred to a follow-up async lane with no tracked plan file yet —
+     * until then passing a pool has NO effect, and fetchers that block will
+     * block the loop.
      *
      * @param callable(string):PromiseInterface<list<string>> $fetcher Receives filter text, returns promise of suggestions
      * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)

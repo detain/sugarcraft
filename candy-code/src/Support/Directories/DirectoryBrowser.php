@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support\Directories;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 
 /**
@@ -26,7 +25,7 @@ use SugarCraft\Code\Support\HomeDirectory;
  * resolved and must stay inside it: `..` is collapsed first, a path outside
  * the root is refused with one answer whether or not it exists, and the real
  * path (links followed) is checked again with
- * {@see ContainedPath::within()}. Without one (the local TUI — the user's own
+ * {@see \SugarCraft\Core\Util\PathJail::within()}. Without one (the local TUI — the user's own
  * machine) any directory this process can reach may be listed.
  */
 final class DirectoryBrowser
@@ -90,7 +89,7 @@ final class DirectoryBrowser
             // (a home reached through a symlink). Either way a refusal reads
             // the same, so it says nothing about what exists out there.
             $real = \realpath($lexical);
-            if ($real === false || !\is_dir($real) || !ContainedPath::within($real, $this->root)) {
+            if ($real === false || !\is_dir($real) || !\SugarCraft\Core\Util\PathJail::within($real, $this->root)) {
                 throw $this->outside($lexical);
             }
 
@@ -98,7 +97,7 @@ final class DirectoryBrowser
         }
 
         $real = self::realDirectory($lexical);
-        if ($this->root !== null && !ContainedPath::within($real, $this->root)) {
+        if ($this->root !== null && !\SugarCraft\Core\Util\PathJail::within($real, $this->root)) {
             throw $this->outside($lexical);
         }
 
@@ -149,7 +148,7 @@ final class DirectoryBrowser
             }
             $full = ($real === '/' ? '' : $real) . '/' . $name;
             $target = \realpath($full);
-            if ($target === false || ($this->root !== null && !ContainedPath::within($target, $this->root))) {
+            if ($target === false || ($this->root !== null && !\SugarCraft\Core\Util\PathJail::within($target, $this->root))) {
                 // A dangling link, or one that leads out of the browse root.
                 continue;
             }

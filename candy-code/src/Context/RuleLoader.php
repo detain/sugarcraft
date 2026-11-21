@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Context;
 
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
@@ -64,7 +63,7 @@ use SugarCraft\Code\Support\ProjectRoot;
  *
  * CONTAINMENT IS THE POINT (the threat, in CommandLoader's own words, is that a
  * rules file "cannot smuggle in ~/.ssh/config as a prompt"). Every read of every
- * tier is gated by {@see ContainedPath}. A refusal is never silently skipped: it
+ * tier is gated by {@see \SugarCraft\Core\Util\PathJail}. A refusal is never silently skipped: it
  * is recorded in {@see refusedPaths()} with a reason, because a silently skipped
  * read is indistinguishable from an empty file and a loader that cannot say WHY
  * it loaded nothing is unauditable.
@@ -787,7 +786,7 @@ final class RuleLoader
         }
 
         $real = realpath($path);
-        if ($real === false || !ContainedPath::within($path, $root)) {
+        if ($real === false || !\SugarCraft\Core\Util\PathJail::within($path, $root)) {
             $reason = sprintf(
                 'Skipping root rules file %s: it does not resolve inside the checkout it was reached from (%s).',
                 $path,
@@ -880,7 +879,7 @@ final class RuleLoader
             return [];
         }
 
-        if ($anchoredIn !== null && !ContainedPath::below($dir, $anchoredIn)) {
+        if ($anchoredIn !== null && !\SugarCraft\Core\Util\PathJail::below($dir, $anchoredIn)) {
             $reason = sprintf(
                 'Skipping %s rules directory %s: resolves to %s, outside the boundary it is anchored to (%s).',
                 $tier,
@@ -932,7 +931,7 @@ final class RuleLoader
             // vanished with no ledger entry at all - which for the one case that
             // matters, a DANGLING SYMLINK (`x.md -> nowhere`), is a path the walk
             // reached whose contents this loader cannot show it did not read.
-            // `ContainedPath::within()` cannot answer for it either, because
+            // `\SugarCraft\Core\Util\PathJail::within()` cannot answer for it either, because
             // `realpath()` fails on the target, so the entry would be refused at
             // the gate below only if the gate could see it - and it never got
             // there. The scanner therefore fails CLOSED on the unknown spelling:
@@ -965,11 +964,11 @@ final class RuleLoader
 
             // A symlink inside a rules directory can point anywhere; require the
             // target to still live under the resolved directory so a rules file
-            // cannot smuggle ~/.ssh/config in as a prompt. {@see ContainedPath}
+            // cannot smuggle ~/.ssh/config in as a prompt. {@see \SugarCraft\Core\Util\PathJail}
             // rather than a local prefix compare, so this class is not another
             // spelling of the predicate. This is the security gate, so the
             // refusal it makes is a containment one.
-            if (!ContainedPath::within($spelled, $realDir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($spelled, $realDir)) {
                 $reason = sprintf('Skipping rules file outside %s: %s', $realDir, $spelled);
                 $this->report($reason);
                 $this->refusedPaths[$spelled] = $reason;

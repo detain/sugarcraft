@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Support;
 
+use CandyCode\Bundles\Discord\Lang;
 use RuntimeException;
-use SugarCraft\Code\Lang;
 
 /**
  * Resolves the Discord API root and gateway websocket URL (docs/SPEC.md §7.1).

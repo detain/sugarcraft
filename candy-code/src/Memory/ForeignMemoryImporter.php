@@ -6,12 +6,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Memory;
 
 use SugarCraft\Code\Context\Utf8Scrub;
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Skills\SkillSource;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * Imports memory/scratchpad files written by OTHER coding CLIs into
@@ -61,9 +61,6 @@ use SugarCraft\Code\Skills\SkillSource;
  */
 final class ForeignMemoryImporter
 {
-    /** Leading YAML frontmatter block, as written by Claude Code's memory files. */
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * Claude Code regenerates this file from the other entries in the
      * directory, so importing it would duplicate every real entry as one
@@ -279,12 +276,14 @@ final class ForeignMemoryImporter
             // prompt; and the YAML parse below refuses invalid UTF-8, which
             // dropped the whole file (audit 15d-08).
             $raw = Utf8Scrub::clean($raw);
-            if (preg_match(self::FRONTMATTER_PATTERN, $raw, $m) !== 1) {
+            // Leading YAML frontmatter block, as written by Claude Code's memory files.
+            $split = MarkdownFrontmatter::split($raw);
+            if ($split === null) {
                 continue;
             }
 
             try {
-                $meta = Frontmatter::parse($m[1]);
+                $meta = Frontmatter::parse($split->meta);
             } catch (\Throwable $e) {
                 // One unparseable foreign file must not abort the import of
                 // every other entry in the directory.
@@ -296,7 +295,7 @@ final class ForeignMemoryImporter
             // empty block, a scalar for a bare value. Only a map can carry the
             // fields read below.
             $meta = is_array($meta) ? $meta : [];
-            $body = trim(substr($raw, strlen($m[0])));
+            $body = trim($split->body);
 
             $this->note(
                 $scope,
@@ -346,7 +345,7 @@ final class ForeignMemoryImporter
         // a directory that simply is not there is the overwhelmingly common
         // case and says nothing worth reporting, so only a directory that
         // EXISTS and resolves out is named.
-        if (is_dir($dir) && !ContainedPath::below($dir, $projectRoot)) {
+        if (is_dir($dir) && !\SugarCraft\Core\Util\PathJail::below($dir, $projectRoot)) {
             $this->refusedDirectories[$dir] = sprintf(
                 'resolves to %s, %s the checkout it was reached from (%s), so its files are not this '
                 . "project's memory",
@@ -414,7 +413,7 @@ final class ForeignMemoryImporter
         $files = [];
         foreach ($names as $name) {
             $file = $dir . '/' . $name;
-            if (!ContainedPath::within($file, $dir)) {
+            if (!\SugarCraft\Core\Util\PathJail::within($file, $dir)) {
                 $this->refusedDirectories[$file] = sprintf(
                     'resolves outside %s, the directory it was listed from, so it is not a memory entry that '
                     . 'directory holds',

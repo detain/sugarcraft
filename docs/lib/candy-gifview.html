@@ -77,6 +77,11 @@
                     <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                    <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -118,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -151,65 +157,296 @@
 
     <nav class="doc-toc" aria-label="On this page">
         <ul class="doc-toc-list">
-            <li class="toc-h3"><a href="#install">Install</a></li>
-            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
-            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#install">Install</a></li>
+            <li class="toc-h2"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h2"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#sizing-the-viewport">Sizing the viewport</a></li>
+            <li class="toc-h3"><a href="#frames-are-decoded-once-at-the-launch-size">Frames are decoded once, at the launch size</a></li>
+            <li class="toc-h2"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#play-at-a-fixed-rate-or-a-multiple-of-the-gif-s-rate">Play at a fixed rate or a multiple of the GIF&#039;s rate</a></li>
+            <li class="toc-h3"><a href="#stop-by-itself-for-scripts-and-ci">Stop by itself, for scripts and CI</a></li>
+            <li class="toc-h3"><a href="#reload-the-file-when-it-changes">Reload the file when it changes</a></li>
+            <li class="toc-h3"><a href="#start-paused-and-step-through-frames">Start paused and step through frames</a></li>
+            <li class="toc-h3"><a href="#answer-in-another-language">Answer in another language</a></li>
+            <li class="toc-h2"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#cli">Cli</a></li>
+            <li class="toc-h3"><a href="#version-and-lang">Version and Lang</a></li>
+            <li class="toc-h3"><a href="#classes-from-sugar-animation">Classes from sugar-animation</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-gifview">SugarCraft\GifView</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-gifview-support">SugarCraft\GifView\Support</a></li>
+            <li class="toc-h2"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#options">Options</a></li>
+            <li class="toc-h3"><a href="#environment">Environment</a></li>
+            <li class="toc-h3"><a href="#the-loop-count-in-the-file">The loop count in the file</a></li>
+            <li class="toc-h2"><a href="#keys-and-keybindings">Keys and keybindings</a></li>
+            <li class="toc-h2"><a href="#theming">Theming</a></li>
+            <li class="toc-h2"><a href="#examples">Examples</a></li>
+            <li class="toc-h2"><a href="#testing">Testing</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#the-process-never-exits">The process never exits</a></li>
+            <li class="toc-h3"><a href="#exit-1-when-ext-gd-is-missing-or-a-file-fails-to-decode">Exit 1 when ext-gd is missing, or a file fails to decode</a></li>
+            <li class="toc-h3"><a href="#output-is-raw-escape-sequences">Output is raw escape sequences</a></li>
+            <li class="toc-h3"><a href="#the-viewer-is-the-wrong-size">The viewer is the wrong size</a></li>
+            <li class="toc-h3"><a href="#a-large-file-is-refused-or-the-first-frames-are-missing">A large file is refused, or the first frames are missing</a></li>
+            <li class="toc-h3"><a href="#a-watch-reload-leaves-the-old-frames-on-screen">A --watch reload leaves the old frames on screen</a></li>
+            <li class="toc-h2"><a href="#limits">Limits</a></li>
+            <li class="toc-h2"><a href="#exit-codes">Exit codes</a></li>
+            <li class="toc-h2"><a href="#accessibility">Accessibility</a></li>
+            <li class="toc-h2"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#intake-then-playback">Intake, then playback</a></li>
+            <li class="toc-h3"><a href="#language-is-fixed-before-output">Language is fixed before output</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h2"><a href="#related">Related</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#view">View</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command split out of the animation package into its own app.</p>
+<p class="lede" style="margin-top: 28px;">candy-gifview is a terminal GIF viewer. Point it at a <code>.gif</code> and it decodes the file with <code>ext-gd</code>, sizes the frame grid to your terminal, and plays the animation in the alternate screen as 24-bit background blocks or as an ASCII luminance ramp. The decode, render and playback layer lives in <a href="sugar-animation.html">sugar-animation</a>. This package is the command-line front end over it, and GIF is the only input format it reads.</p>
 
-    <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview</code></pre>
+    <h2 id="install" style="margin-top: 40px;">Install</h2>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview   # binary lands in vendor/bin/candy-gifview</code></pre>
+    <p>Requires PHP 8.3 or newer and <code>ext-gd</code>, which is declared in <code>composer.json</code>, so the platform refuses an install without it. The CLI also checks for <code>ext-gd</code> before it touches the file, and exits non-zero with a clear message if it is missing.</p>
+    <p>A rolling phar is published on GitHub Releases as <code>candy-gifview.phar</code>. The channel is frozen at the 2026-11-04 build, commit <code>f1c90bb34</code>, because rolling rebuilds are blocked fleet-wide. Until the release page shows an artifact newer than that date, prefer the Composer install. To check a download, compare the <code>.sha256</code> sidecar and the <code>.phar.commit</code> sidecar. No minisign key is anchored for this app yet, so these two files show what you hold rather than who built it.</p>
+    <pre class="code"><code class="language-shell">sha256sum -c candy-gifview.phar.sha256   # integrity
+grep -m1 . candy-gifview.phar.commit     # which build you actually hold</code></pre>
 
-    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># with a project-local install, invoke the binary as ./vendor/bin/candy-gifview
-./vendor/bin/candy-gifview my-animation.gif         # solid 24-bit blocks (default)
-./vendor/bin/candy-gifview my-animation.gif density # luminance-density ramp
+    <h2 id="quickstart" style="margin-top: 40px;">Quickstart</h2>
+    <pre class="code"><code class="language-shell">candy-gifview my-animation.gif            # solid 24-bit blocks (the default preset)
+candy-gifview my-animation.gif density    # ASCII luminance ramp
+candy-gifview --fps=12 --paused clip.gif # a uniform 12 fps, starting on the first frame</code></pre>
+    <p>With a project-local install, run <code>./vendor/bin/candy-gifview</code> instead. The synopsis is <code>candy-gifview [options] &lt;gif&gt; [solid|density]</code>. Flags may appear before or after the positional arguments.</p>
 
-# flags
-#   --fps=N   --speed=N|Nfps|max   --duration=SECONDS   --watch   --paused
+    <h2 id="concepts" style="margin-top: 40px;">Concepts</h2>
+    <p>The viewer has three stages. Intake reads the file and decodes it into frames, sized to a grid of terminal cells. Playback schedules those frames on the clock the GIF's own delays define, or on a rate you choose. The renderer paints each frame with SGR escapes into the alternate screen, and quitting restores the terminal's prior contents.</p>
+    <p>Both presets emit 24-bit truecolor SGR. <code>solid</code> paints the cell background (<code>48;2</code>) with a space glyph. <code>density</code> paints the foreground (<code>38;2</code>) on a luminance ramp of characters. The viewer paints with escape sequences rather than a terminal graphics protocol such as kitty, sixel or iTerm2, so it works anywhere 24-bit color does. Inline graphics are a different route, offered by <a href="sugar-image.html">sugar-image</a>.</p>
 
-# keys while playing
-#   Space   pause / resume
-#   Left/Right  step frames
-#   d       toggle solid <-> density
-#   q / Esc / Ctrl-C  quit</code></pre>
+    <h3 id="sizing-the-viewport" style="margin-top: 24px;">Sizing the viewport</h3>
+    <p>The viewer sizes the frame grid through sugar-core's terminal façade. Each axis is read on its own. A positive-integer <code>COLUMNS</code> or <code>LINES</code> wins for its axis, and an axis left unset is probed from stdout. Off a terminal, such as piped output or CI, an unset axis falls back to a deterministic 60 by 24 cells. A probe failure therefore cannot crash the run, and the worst answer is the fallback grid.</p>
 
-    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
-      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate and reserves two rows (status line + trailing newline), so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
-      <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a sugar-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
-      <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>&#183; .:-=+*#%@</code> density ramp (<code>&#183;</code> marks the ramp's leading space) without losing your frame position.</span></div>
-      <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
-      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a thin shim (autoload probe with phar-identity resolution, locale wiring, then the <code>Cli::main()</code> hand-off), and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
-      <div class="feature"><strong>Localized</strong><span>CLI usage and refusal messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
-    </div>
+    <h3 id="frames-are-decoded-once-at-the-launch-size" style="margin-top: 24px;">Frames are decoded once, at the launch size</h3>
+    <p>Growing the window reveals no extra detail, because frames were decoded at the launch size. Shrinking the window re-clamps the grid and crops the frame. Only a restart re-queries the terminal, and a <code>--watch</code> reload also re-decodes at the frozen launch budget.</p>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <h2 id="tasks" style="margin-top: 40px;">Tasks</h2>
+
+    <h3 id="play-at-a-fixed-rate-or-a-multiple-of-the-gif-s-rate" style="margin-top: 24px;">Play at a fixed rate or a multiple of the GIF's rate</h3>
+    <pre class="code"><code class="language-shell">candy-gifview --fps=10 clip.gif          # a uniform 10 frames per second
+candy-gifview --speed=2 clip.gif        # twice the GIF's average rate
+candy-gifview --speed=24fps clip.gif    # an absolute 24 frames per second
+candy-gifview --fps=10 --speed=2 clip.gif   # plays at 20 fps: the multiplier composes onto the rate</code></pre>
+    <p>The rate arithmetic runs on three slots. A rate slot is written by <code>--fps=N</code> and by <code>--speed=Nfps</code>, so the last of those wins. A multiplier from <code>--speed=N</code> composes onto whatever the rate slot holds, so the flag order does not matter. <code>--speed=max</code> is a latch: once seen, it overrides every other rate flag and a later flag cannot clear it.</p>
+
+    <h3 id="stop-by-itself-for-scripts-and-ci" style="margin-top: 24px;">Stop by itself, for scripts and CI</h3>
+    <pre class="code"><code class="language-shell">COLUMNS=80 LINES=24 script -qfec 'candy-gifview --duration=5 clip.gif' /dev/null   # five seconds of playback under a pseudo-terminal
+timeout 5 candy-gifview loop.gif                 # stdin held open by a terminal or a pipe: exit 124 when the timer fires
+candy-gifview clip.gif &lt; /dev/null               # stdin at end of file: exits at once with status 0</code></pre>
+    <p>An animation with no finite loop count repeats forever, so something outside the animation has to end the run. Stdin at end of file is one such thing, and it ends playback at once. A run with stdin from <code>/dev/null</code> therefore never plays for its <code>--duration</code>. <code>--duration=N</code> times the run only when stdin is a terminal, which is why the first command runs under <code>script</code>. The <code>COLUMNS</code> and <code>LINES</code> pair sizes the grid there, because a pseudo-terminal opened by <code>script</code> may report no size. Over an open pipe that is not a terminal, <code>--duration</code> does not stop the run, so use <code>timeout(1)</code> instead. <code>--duration</code> counts playback time, not wall time, so paused time does not count. It needs at least two frames, and a single-frame file with <code>--duration</code> is refused.</p>
+
+    <h3 id="reload-the-file-when-it-changes" style="margin-top: 24px;">Reload the file when it changes</h3>
+    <pre class="code"><code class="language-shell">candy-gifview --watch frames.gif</code></pre>
+    <p><code>--watch</code> polls the file every 10 ms on the event loop and reloads it when it changes. A reload runs its decode synchronously inside the poll tick, so a large replacement file can stall one tick. A reload that trips a cap keeps the stale frames rather than blanking the screen.</p>
+
+    <h3 id="start-paused-and-step-through-frames" style="margin-top: 24px;">Start paused and step through frames</h3>
+    <pre class="code"><code class="language-shell">candy-gifview --paused clip.gif   # opens on the first frame; Space resumes, arrows step</code></pre>
+    <p>Playback can start paused, and it is fully steppable by key. <code>←</code> and <code>→</code> step one frame and wrap at the ends. This is also the way to meet the reduced-motion preference, since the viewer does not read the environment for it.</p>
+
+    <h3 id="answer-in-another-language" style="margin-top: 24px;">Answer in another language</h3>
+    <pre class="code"><code class="language-shell">candy-gifview --lang=de clip.gif   # German messages, whatever LC_* says</code></pre>
+    <p>The <code>--lang</code> flag is resolved before the first message prints, so it works on hosts where no <code>LC_*</code> variable exists, such as native Windows cmd. An unknown code is refused in plain English, and the refusal names the locales that are available.</p>
+
+    <h2 id="api-reference" style="margin-top: 40px;">API reference</h2>
+    <p>The public classes live in <code>SugarCraft\GifView\</code>, except <code>Version</code>, which lives in <code>SugarCraft\GifView\Support\</code>. Most of the work happens in the sugar-animation classes that this app wires together, so the list below covers the app's own surface.</p>
+
+    <h3 id="cli" style="margin-top: 24px;">Cli</h3>
+    <table class="api-table">
+    <tr><th>Member</th><th>Description</th></tr>
+    <tr><td><code>Cli::main(array $argv, $stdout, $stderr, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): int</code></td><td>The viewer front end. <code>$argv</code> includes the script name at index 0. The return value is the exit code. The optional closures are test seams: <code>$play</code> receives the wired <code>Player</code> instead of the blocking program loop, <code>$watchStat</code> answers <code>stat()</code> for the watcher, and <code>$decode</code> answers the frames and loop count for a path.</td></tr>
+    <tr><td><code>Cli::runningVersion(): string</code></td><td>The version this run reports. Inside a phar it is the build stamp. Otherwise it is <code>Version::CURRENT</code>.</td></tr>
+    <tr><td><code>Cli::viewportCells(): array</code></td><td>The grid size the viewer uses, from the environment or the terminal, or the 60 by 24 fallback.</td></tr>
+    <tr><td><code>Cli::FALLBACK_CELLS_W</code>, <code>Cli::FALLBACK_CELLS_H</code></td><td>The fallback grid, 60 by 24 cells.</td></tr>
+    <tr><td><code>Cli::MAX_FRAMES</code></td><td>The outer frame ceiling, 4096. The engine's own limit of 256 frames applies first.</td></tr>
+    <tr><td><code>Cli::MAX_INPUT_BYTES</code></td><td>The file size cap, 64 MiB. A file over the cap is refused.</td></tr>
+    <tr><td><code>Cli::MAX_RESIDENT_CELLS</code></td><td>The resident-cell budget for the frames, 6,000,000 cells for the current viewport.</td></tr>
+    </table>
+
+    <h3 id="version-and-lang" style="margin-top: 24px;">Version and Lang</h3>
+    <table class="api-table">
+    <tr><th>Class</th><th>Member</th><th>Description</th></tr>
+    <tr><td>Version</td><td><code>CURRENT</code> = <code>'0.1.0'</code>, <code>TAG_PREFIX</code> = <code>'candy-gifview/'</code></td><td>The compiled-in version and the tag prefix that release stamps carry.</td></tr>
+    <tr><td>Version</td><td><code>resolve(string $archive, string $fallback = self::CURRENT)</code></td><td>The stamp inside a running phar, or the fallback when the stamp is absent or unparseable.</td></tr>
+    <tr><td>Version</td><td><code>fromPharMetadata(string $archivePath)</code></td><td>Read and normalize the stamp from a phar's metadata, or return <code>null</code>. A corrupt archive returns <code>null</code> rather than throwing.</td></tr>
+    <tr><td>Version</td><td><code>normalizeStamp(string $stamped)</code>, <code>isStampable(string $stamped)</code></td><td>Turn a stamp into a printable version, or <code>null</code>. A stamp is printable when it is a bare release such as <code>1.4.2</code>, or a development identity such as <code>dev-1a2b3c4</code> or <code>dev-build</code>.</td></tr>
+    <tr><td>Lang</td><td><code>Lang::t($key, $params)</code></td><td>Translate a message key for the active locale. It extends the shared i18n base and loads the catalogs under <code>lang/</code>.</td></tr>
+    </table>
+
+    <h3 id="classes-from-sugar-animation" style="margin-top: 24px;">Classes from sugar-animation</h3>
+    <p>The viewer's playback and decoding are provided by sugar-animation. <code>Decoder</code> holds the limits <code>MAX_FRAMES</code> (256 frames), <code>MAX_CELLS</code> (100,000 output cells) and <code>MAX_TOTAL_PIXELS</code> (2,000,000 source pixels). <code>Player</code> holds <code>MAX_FPS</code>, and it is the player that <code>Cli::main()</code> wires and passes to the <code>$play</code> seam. See the <a href="sugar-animation.html">sugar-animation page</a> for those classes.</p>
+
+        <!-- GENERATED by tools/gen-api-reference.php from candy-gifview/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php candy-gifview -->
+<p>Only methods declared in <code>candy-gifview/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-gifview">SugarCraft\GifView</h3>
+<h4 id="api-sugarcraft-gifview-cli"><code>Cli</code> <small>final class</small></h4>
+<p>Command-line entry point: parse argv, size the decode grid to the viewport, hand the frames to sugar-animation&#039;s Player, and run the SugarCraft Program.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static runningVersion(): string</code></td><td>The version this run reports: the phar archive&#039;s build stamp when executing inside one (InstalledVersions lies under the frozen phar vendor/, so the stamp is the only truth), else the compiled-in Support\Version::CURRENT. The archive is identified by \Phar::running(false), which is exactly the real path the \Phar constructor wants here (this class only ever runs required from inside the archive, never as the stub).</td></tr>
+<tr><td><code>static main(array $argv, $stdout, $stderr, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): int</code></td><td>Run the viewer front end.</td></tr>
+<tr><td><code>static viewportCells(): array</code></td><td>Size the decode grid to the terminal viewport: rows-2, one row for the Player&#039;s status line and one for the trailing newline its view() emits — an over-tall final line scrolls the alt screen by one. The COLUMNS/LINES environment pair wins first (bare positive integers — the universal CLI escape hatch for hosts the probe cannot answer); otherwise the never-throwing sugar-core Tty facade probes STDOUT. Off a terminal (piped output, CI) the grid is the deterministic 60x24 fallback. On resize the engine re-clamps to rows-1 itself (sugar-animation Player; engine seam), so the reserve is exact for the initial paint.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-gifview-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for candy-gifview.</p>
+<h3 id="sugarcraft-gifview-support">SugarCraft\GifView\Support</h3>
+<h4 id="api-sugarcraft-gifview-support-version"><code>Version</code> <small>final class</small></h4>
+<p>Single source of truth for the printed version.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static resolve(string $archive, string $fallback = self::CURRENT): string</code></td><td>Resolve the version for the current run.</td></tr>
+<tr><td><code>static fromPharMetadata(string $archivePath): ?string</code></td><td>Read and normalize the version stamp inside an archive, or null when the path is empty, is not a file, is not a readable phar, or its stamp does not parse as a comparable release. Every failure mode falls back to null rather than throwing — a corrupt archive must not crash --version.</td></tr>
+<tr><td><code>static normalizeStamp(string $stamped): ?string</code></td><td>Normalize a build stamp to a printable version, or null when it names neither a comparable release nor a recognised development identity: TAG_PREFIX stripped, a leading <code>v</code> stripped, then the COMPARABLE release shape, then the DEV grammar. One grammar, one home — the producer (tools/build-phar.php) validates against exactly this rule through isStampable(), so a stamp that would be dropped at runtime is refused at build time instead of silently printing CURRENT.</td></tr>
+<tr><td><code>static isStampable(string $stamped): bool</code></td><td>Whether a producer may stamp this string at all (the consumer decides).</td></tr>
+</tbody>
+</table>
+
+    <h2 id="configuration" style="margin-top: 40px;">Configuration</h2>
+    <h3 id="options" style="margin-top: 24px;">Options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Meaning</th></tr>
+    <tr><td><code>--fps=N</code></td><td>Play at a uniform N frames per second, instead of the GIF's delays. N is a positive number, and fractions such as <code>12.5</code> work. Values above <code>Player::MAX_FPS</code> clamp silently. There is no lower clamp.</td></tr>
+    <tr><td><code>--speed=N</code></td><td>Play at the GIF's average rate multiplied by N. N is positive and may be fractional.</td></tr>
+    <tr><td><code>--speed=Nfps</code></td><td>An absolute rate of N frames per second. This shares the rate slot with <code>--fps</code>.</td></tr>
+    <tr><td><code>--speed=max</code></td><td>Burn frames as fast as the scheduler's floors allow.</td></tr>
+    <tr><td><code>--duration=N</code></td><td>Stop after N seconds of playback time. Needs at least two frames.</td></tr>
+    <tr><td><code>--watch</code></td><td>Reload when the source file changes. A bare flag.</td></tr>
+    <tr><td><code>--paused</code></td><td>Start paused on the first frame. A bare flag.</td></tr>
+    <tr><td><code>--lang=CODE</code></td><td>Answer in one of the 16 bundled locales, regardless of the environment.</td></tr>
+    <tr><td><code>-h</code>, <code>--help</code></td><td>Print the localized usage line and exit 0.</td></tr>
+    <tr><td><code>-v</code>, <code>--version</code></td><td>Print the version stamp and exit 0.</td></tr>
+    </table>
+    <p>A standalone <code>--</code> ends option parsing. Every token after it is a path, so a GIF named <code>-foo.gif</code> can be played as <code>-- -foo.gif</code>. A bare <code>-</code> is not read as stdin. It is an ordinary path, and it is refused as <code>could not play '-'</code>.</p>
+
+    <h3 id="environment" style="margin-top: 24px;">Environment</h3>
+    <table class="api-table">
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>COLUMNS</code>, <code>LINES</code></td><td>A positive-integer pair that sets the viewport size. It wins over the terminal probe. The viewer reserves two rows of chrome, so whenever both axes resolve, the grid is <code>LINES</code> minus 2 rows, whether the values come from the environment or the probe. <code>COLUMNS</code> is used as given. Each axis is taken from the environment first and from the probe second.</td></tr>
+    <tr><td><code>LC_ALL</code>, <code>LC_MESSAGES</code>, <code>LANG</code></td><td>Message locale, read in that order, with the first usable value winning. <code>--lang</code> overrides all three.</td></tr>
+    </table>
+
+    <h3 id="the-loop-count-in-the-file" style="margin-top: 24px;">The loop count in the file</h3>
+    <p>A loop count of N in the GIF means N extra repeats after the first play, so N+1 passes in total. A count of 0, or a file with no loop extension, plays forever. That forever default deliberately differs from the single-play answer of libnsgif.</p>
+
+    <h2 id="keys-and-keybindings" style="margin-top: 40px;">Keys and keybindings</h2>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>Space</kbd></td><td>Pause or resume</td></tr>
+    <tr><td><kbd>←</kbd> / <kbd>Left</kbd></td><td>Step back one frame, wrapping</td></tr>
+    <tr><td><kbd>→</kbd> / <kbd>Right</kbd></td><td>Step forward one frame, wrapping</td></tr>
+    <tr><td><kbd>d</kbd></td><td>Toggle between the solid and density presets</td></tr>
+    <tr><td><kbd>q</kbd>, <kbd>Esc</kbd>, <kbd>Ctrl+C</kbd></td><td>Quit</td></tr>
+    </table>
+    <p>The key table is fixed in the player model. Keys cannot be rebound.</p>
+
+    <h2 id="theming" style="margin-top: 40px;">Theming</h2>
+    <p>The two presets are the only styling. <code>solid</code> is the default and suits pictures, and <code>density</code> suits legibility, since its character ramp survives color-blind viewing and poor-color terminals. Switch with the preset argument at launch, or press <kbd>d</kbd> during playback.</p>
+    <pre class="code"><code class="language-shell">candy-gifview clip.gif solid
+candy-gifview clip.gif density</code></pre>
+    <p>There is no 256-color fallback and no <code>NO_COLOR</code> or monochrome mode. On a terminal without truecolor the blocks degrade to default or nearby colors. On <code>TERM=dumb</code> or other capability-poor terminals, expect raw escape sequences rather than a usable frame. Transparent GIF pixels are composited against the terminal's own background.</p>
+
+    <h2 id="examples" style="margin-top: 40px;">Examples</h2>
+    <p>The <code>examples/</code> directory holds three PHP programs. They load the Composer autoloader, so run them from a checkout after <code>composer install</code>.</p>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-gifview">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-gifview/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-gifview/tree/master/examples">Runnable examples</a></li>
-      <li>Decode + playback engine: <a href="sugar-animation.html">sugarcraft/sugar-animation</a>.</li>
-      <li>Originally inspired by <a href="https://github.com/namzug16/gifterm">gifterm</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><code>examples/view.php</code> builds a small synthetic animated GIF in a temporary file and plays it through <code>Cli::main()</code>, the same entry point the binary uses. The file is removed on exit. Any extra arguments are passed to the CLI, so a timed run needs a pseudo-terminal, as the command below shows. This is the program behind the demo GIF below.</li>
+      <li><code>examples/refusals.php</code> runs <code>Cli::main()</code> on four argument vectors, <code>--help</code>, <code>--version</code>, a bad preset and a missing file, with memory streams and a stub player. It prints each exit code and the first line of output, so you can see the exit-code contract without a terminal.</li>
+      <li><code>examples/version-stamp.php</code> shows how <code>Version::normalizeStamp()</code> and <code>isStampable()</code> treat a release tag, a bare release, a development build and an unrecognized string.</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/refusals.php &lt; /dev/null
+php examples/version-stamp.php &lt; /dev/null
+COLUMNS=80 LINES=24 script -qfec 'php examples/view.php --duration=1' /dev/null</code></pre>
+
+    <h2 id="testing" style="margin-top: 40px;">Testing</h2>
+    <p>The suite runs under PHPUnit 10. Run it once from the package root, with stdin redirected:</p>
+    <pre class="code"><code class="language-shell">cd candy-gifview &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit &lt; /dev/null</code></pre>
+    <p>The tests cover the entry point, the watch loop and the binary. <code>CliTest</code> and <code>CliLoopWatchTest</code> drive <code>Cli::main()</code> through its seams. <code>BinBootTest</code> and <code>BinSizeQueryPolarityTest</code> cover the <code>bin/candy-gifview</code> shim. <code>WatchRealHostTest</code> exercises the watcher against the real filesystem. <code>VersionTest</code> covers the stamp grammar, and <code>LocaleParityTest</code> checks that every <code>lang/</code> catalog carries the same keys. <code>PharBuildScriptTest</code> covers the phar build.</p>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="the-process-never-exits" style="margin-top: 24px;">The process never exits</h3>
+    <p>The GIF has no loop count, so it repeats forever. The run keeps going while stdin stays open, such as at a terminal or a pipe that nothing closes. Quit it with a key, stop it with a signal, or let <code>timeout(1)</code> end it, and <code>timeout</code> then exits 124. With stdin at end of file the run exits at once instead, so a job that expects a long playback and gets a quick exit should check its stdin. <code>--duration=N</code> times the run only under a pseudo-terminal.</p>
+
+    <h3 id="exit-1-when-ext-gd-is-missing-or-a-file-fails-to-decode" style="margin-top: 24px;">Exit 1 when <code>ext-gd</code> is missing, or a file fails to decode</h3>
+    <p>The CLI needs <code>ext-gd</code> to decode GIFs. Install it, for example with <code>apt install php-gd</code> on Debian-based systems, and check it with <code>php -m</code>. A file that fails to decode also exits 1. Either way the message is written to stderr.</p>
+
+    <h3 id="output-is-raw-escape-sequences" style="margin-top: 24px;">Output is raw escape sequences</h3>
+    <p>The terminal lacks truecolor, or <code>TERM</code> is <code>dumb</code>. The blocks degrade on a limited palette, and <code>density</code> stays legible there. On <code>TERM=dumb</code> there is no usable frame, and the viewer cannot help with that.</p>
+
+    <h3 id="the-viewer-is-the-wrong-size" style="margin-top: 24px;">The viewer is the wrong size</h3>
+    <p>The grid is sized once at launch. A window that is grown after launch keeps the old frame detail, so restart the viewer. Off a terminal, the grid is the 60 by 24 fallback. Set <code>COLUMNS</code> and <code>LINES</code> to size it explicitly.</p>
+
+    <h3 id="a-large-file-is-refused-or-the-first-frames-are-missing" style="margin-top: 24px;">A large file is refused, or the first frames are missing</h3>
+    <p>A file over 64 MiB is refused. The engine decodes at most 256 frames, and a longer file is cut to its first 256 frames. A notice on stderr says so. A file with exactly 256 frames gets the same notice, because a full window and a truncated stream look the same to the engine.</p>
+
+    <h3 id="a-watch-reload-leaves-the-old-frames-on-screen" style="margin-top: 24px;">A <code>--watch</code> reload leaves the old frames on screen</h3>
+    <p>A reload is refused when it trips a cap, and then the stale frames stay on screen. A large replacement file can also delay one tick, because its decode runs synchronously. Check the file's size against the caps listed under Limits.</p>
+
+    <h2 id="limits" style="margin-top: 40px;">Limits</h2>
+    <table class="api-table">
+    <tr><th>Limit</th><th>Value</th><th>Where</th></tr>
+    <tr><td>Frames decoded per animation</td><td>256</td><td><code>Decoder::MAX_FRAMES</code>, the engine's intake window</td></tr>
+    <tr><td>Frames the CLI accepts</td><td>4,096</td><td><code>Cli::MAX_FRAMES</code>, the outer ceiling</td></tr>
+    <tr><td>File size</td><td>64 MiB</td><td><code>Cli::MAX_INPUT_BYTES</code>, enforced by a bounded read</td></tr>
+    <tr><td>Resident frame cells</td><td>6,000,000</td><td><code>Cli::MAX_RESIDENT_CELLS</code></td></tr>
+    <tr><td>Output grid cells</td><td>100,000</td><td><code>Decoder::MAX_CELLS</code></td></tr>
+    <tr><td>Source canvas pixels</td><td>2,000,000</td><td><code>Decoder::MAX_TOTAL_PIXELS</code></td></tr>
+    </table>
+    <p>Intake is bounded by the read itself. At most the cap plus one byte is pulled, and the length actually seen decides, so a file that grows during the read cannot slip past the cap. FIFOs and devices are refused by an <code>is_file()</code> check before the open.</p>
+
+    <h2 id="exit-codes" style="margin-top: 40px;">Exit codes</h2>
+    <table class="api-table">
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td><code>--help</code> or <code>--version</code> printed, or playback ended normally</td></tr>
+    <tr><td>1</td><td>A flag or argument refusal, the <code>ext-gd</code> refusal, or a decode failure. The message is on stderr.</td></tr>
+    <tr><td>128+N</td><td>The loop was stopped by signal N. For example, 143 is SIGTERM.</td></tr>
+    </table>
+
+    <h2 id="accessibility" style="margin-top: 40px;">Accessibility</h2>
+    <ul>
+      <li>The density preset encodes brightness as character density, not only as color, so it reads on colorblind viewing and poor-color terminals.</li>
+      <li>Playback can start paused with <code>--paused</code>, and it can be stepped one frame at a time with the arrow keys. Motion is never required to see the content.</li>
+      <li>The frame rate is capped at the player's own scheduler floors. <code>--speed=max</code> is opt-in and is never the default.</li>
+      <li>Reduced motion is not detected automatically. The viewer does not read <code>REDUCE_MOTION</code> or <code>PREFERS_REDUCED_MOTION</code>, so motion-averse users should pass <code>--paused</code>. This is a known gap against the fleet convention.</li>
+      <li>CLI messages are localized into 16 locales, and the playback status line follows the same locale, so <code>--lang</code> changes both.</li>
+    </ul>
+
+    <h2 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h2>
+    <table class="api-table">
+    <tr><th>Upstream</th><th>Where it shows up here</th></tr>
+    <tr><td><a href="https://github.com/haraldschmidt/chicle">chicle</a>, a CLI viewer over chafa</td><td>The flag-parser model. <code>--speed</code> with its multiplier and absolute forms, <code>--watch</code> and the rebind behavior follow chicle, and the source cites its option parser line by line.</td></tr>
+    <tr><td><a href="https://github.com/namzug16/gifterm">namzug16/gifterm</a></td><td>The design antecedent. The decode, render and playback layer it mirrors is developed as sugar-animation.</td></tr>
+    <tr><td>libnsgif</td><td>The reference for GIF loop semantics, from which the forever-by-default loop count deliberately differs.</td></tr>
+    </table>
+    <p>SugarCraft is a native PHP project. This app is not a port of any single upstream. The docblocks in <code>src/Cli.php</code> cite the chicle source lines that the flag parser follows.</p>
+
+    <h2 id="architecture" style="margin-top: 40px;">Architecture</h2>
+    <h3 id="intake-then-playback" style="margin-top: 24px;">Intake, then playback</h3>
+    <p><code>Cli::main()</code> parses flags, checks <code>ext-gd</code>, reads the file under its caps and decodes it into frames sized to the grid. It then wires a <code>Player</code> from sugar-animation and runs the program loop on it. The <code>$play</code> seam replaces that last step for tests and examples.</p>
+    <h3 id="language-is-fixed-before-output" style="margin-top: 24px;">Language is fixed before output</h3>
+    <p><code>--lang</code> is scanned before anything prints, so the locale is set before the first message. The unknown-code refusal is an English literal, because a localized refusal would need a locale the user has not yet chosen.</p>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The version is <code>Version::CURRENT</code>, <code>0.1.0</code>, in a checkout. Inside a phar, the build stamp replaces it. A release stamp is a bare version such as <code>1.4.2</code>, and a development stamp is <code>dev-</code> followed by a commit hash or <code>dev-build</code>. A development stamp prints verbatim, so a development phar never looks like a stable release.</p>
+
+    <h2 id="related" style="margin-top: 40px;">Related</h2>
+    <ul>
+      <li><a href="sugar-animation.html">sugar-animation</a>: the decode, render and playback layer this app runs on.</li>
+      <li><a href="sugar-image.html">sugar-image</a>: inline graphics, for when a terminal graphics protocol is wanted.</li>
+      <li><a href="sugar-core.html">sugar-core</a>: the terminal façade that sizes the viewport.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Cli</td><td>main(argv, stdout, stderr, play, watchStat, decode)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
-<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-2) behind a stream_isatty gate, 60×24 fallback</td></tr>
-<tr><td>Lang</td><td>t(key, params)</td><td>Localized CLI messages (namespace <code>gifview</code>)</td></tr>
-</table>
     </div>
   </div>
 </section>
@@ -217,7 +454,7 @@
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2 id="demos">Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded demo of examples/view.php, which plays a synthetic GIF through the CLI. Regenerated automatically on every push that touches the tape or the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="VHS recording: candy-gifview playing a synthetic GIF — solid 24-bit blocks, then the ASCII density ramp" onerror="this.parentElement.style.display='none'">

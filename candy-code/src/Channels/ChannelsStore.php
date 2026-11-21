@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Channels;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Plugins\Channel\CredentialWriter;
 
 /**
  * The on-disk record for plugin channels — the file ruling 4b named.
@@ -51,7 +52,7 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * version guards themselves live plugin-side; this reader is loud on parse
  * and IO failure.
  */
-final class ChannelsStore
+final class ChannelsStore implements CredentialWriter
 {
     public const FILE_NAME = 'channels.json';
 
@@ -139,6 +140,27 @@ final class ChannelsStore
         $this->readFailure = null;
 
         $this->write();
+    }
+
+    /**
+     * The single credential writer (O9): the closure receives the record as it
+     * is on disk now, and its result is what gets persisted, so a plugin's
+     * credential write never races the ledger's merge-on-write.
+     *
+     * @param \Closure(array<string, mixed>): array<string, mixed> $change
+     * @return array<string, mixed>
+     *
+     * @throws \RuntimeException when the record cannot be read, so nothing is written over it
+     */
+    public function mutate(\Closure $change): array
+    {
+        $record = $this->read();
+        $next = $change($record);
+        $this->data = $next;
+        $this->readFailure = null;
+        $this->write();
+
+        return $next;
     }
 
     /** Why the most recent read failed, or null while reads succeed. */

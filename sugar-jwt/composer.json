@@ -1,0 +1,46 @@
+{
+    "name": "sugarcraft/sugar-jwt",
+    "description": "JWT and JWK verification for SugarCraft: signature and claim checks for JSON Web Tokens and key sets, shared by the channel bundles instead of per-bundle copies.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "jwt",
+        "jwk",
+        "jose",
+        "authentication",
+        "signature",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-jwt",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-jwt/issues",
+        "source": "https://github.com/sugarcraft/sugar-jwt",
+        "docs": "https://sugarcraft.github.io/lib/sugar-jwt.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Jwt\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Jwt\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

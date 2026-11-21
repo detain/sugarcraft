@@ -77,6 +77,11 @@
                     <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                    <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -118,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -131,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 42 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-testing.png" alt="" aria-hidden="true">
@@ -152,26 +158,45 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#tasks">Tasks</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
             <li class="toc-h3"><a href="#programsimulator">ProgramSimulator</a></li>
             <li class="toc-h3"><a href="#scriptedinput">ScriptedInput</a></li>
-            <li class="toc-h3"><a href="#assertions">Assertions</a></li>
+            <li class="toc-h3"><a href="#assertions-and-goldenfile">Assertions and GoldenFile</a></li>
             <li class="toc-h3"><a href="#graphics-stream-assertions">Graphics stream assertions</a></li>
             <li class="toc-h3"><a href="#taperecorder">TapeRecorder</a></li>
-            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#full-signature-table">Full signature table</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing">SugarCraft\Testing</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing-concerns">SugarCraft\Testing\Concerns</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing-graphics">SugarCraft\Testing\Graphics</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing-input">SugarCraft\Testing\Input</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing-snapshot">SugarCraft\Testing\Snapshot</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-testing-tape">SugarCraft\Testing\Tape</a></li>
+            <li class="toc-h3"><a href="#configuration-and-options">Configuration and options</a></li>
+            <li class="toc-h3"><a href="#keys-and-input">Keys and input</a></li>
+            <li class="toc-h3"><a href="#theme-and-color-profile">Theme and color profile</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting-and-faq">Troubleshooting and FAQ</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for composing VHS demo scripts.</p>
+<p class="lede" style="margin-top: 28px;">The test harness for SugarCraft programs. <code>ProgramSimulator</code> drives a TEA <code>Model</code> with scripted messages and records what it rendered, <code>Assertions</code> and <code>GoldenFile</code> pin the output as byte-exact snapshots, <code>Graphics</code> decodes inline-image streams back to pixels, and <code>TapeRecorder</code> writes VHS <code>.tape</code> scripts for demos. It is an original SugarCraft design, inspired by the Go teatest and golden-file prior art cited under Upstream mapping.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require --dev sugarcraft/sugar-testing:@dev</code></pre>
-    <p>This is a PHPUnit test harness: it belongs in <code>require-dev</code> and must not enter runtime dependencies.</p>
+    <p>This is a PHPUnit test harness. It belongs in <code>require-dev</code> and must not enter runtime dependencies. It needs PHP 8.3 or newer, <code>sugarcraft/sugar-core</code>, <code>sugarcraft/sugar-cellbuffer</code> and <code>react/event-loop</code>. <code>ext-gd</code> is optional and only needed to materialize pixels in the graphics assertions.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <p>This block runs exactly as copy-pasted — the lib's own test suite executes it as a test.</p>
+    <p>This block is self-contained. The inline counter stands in for a real app's Model, which a real suite would hand to the simulator instead.</p>
+
     <pre class="code"><code class="language-php">use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Testing\Input\ScriptedInput;
@@ -212,7 +237,7 @@ $counter = new class implements \SugarCraft\Core\Model {
 };
 
 $result = ProgramSimulator::for($counter)
-    -&gt;send(...ScriptedInput::new()-&gt;key('a')-&gt;key('q')-&gt;build())
+    -&gt;addMsgs(...ScriptedInput::new()-&gt;key('a')-&gt;key('q')-&gt;build())
     -&gt;run();
 
 // Real suites COMMIT the golden file; a missing golden then fails loudly (see
@@ -224,70 +249,70 @@ if (GoldenFile::load($golden) === null) {
 
 Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
-    <h3 id="programsimulator" style="margin-top: 32px;">ProgramSimulator</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
-      <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
-      <div class="feature"><strong>withFakeCmdRunner()</strong><span>Decide the message injected for each Cmd; the real closure still runs unless you also call withRealCmdRunner(false).</span></div>
-      <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output. Subscription output is delivered right after the message that triggered it; messages still queued when a QuitMsg/InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. run() can be called again.</span></div>
-      <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>/<code>EnvMsg</code>/<code>ColorProfileMsg</code> exactly as a real Program dispatches them — before <code>init()</code>. Each returns a clone.</span></div>
-    </div>
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A SugarCraft program is a <code>Model</code> with <code>init()</code>, <code>update(Msg): [Model, ?Cmd]</code> and <code>view()</code>. <code>ProgramSimulator</code> runs that loop without a terminal: it queues the messages you send, feeds each one through <code>update()</code>, renders <code>view()</code> after every step, and returns a <code>TestResult</code>. Commands are either executed (the default) or captured with <code>withRealCmdRunner(false)</code> so a test can assert that a command was produced without running it.</p>
+    <p>Input is modeled as messages, not bytes. <code>ScriptedInput</code> builds the same <code>KeyMsg</code>, <code>MouseMsg</code>, <code>WindowSizeMsg</code> (from <code>resize()</code>) and paste messages a live session produces. When a test needs the real byte path, <code>ScriptedInput::bytes()</code> runs raw terminal input through sugar-core's <code>InputReader</code>.</p>
+    <p>Snapshots are create-only. A golden file is written once, from a deliberate seeding run, and a later mismatch fails loudly without rewriting the file. To re-baseline, delete the golden and rerun with the update variable set. The same rule applies to the TapeRecorder output: it is generated, never hand-edited.</p>
 
-    <h3 id="scriptedinput" style="margin-top: 32px;">ScriptedInput</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces; <code>build()</code> returns the list.</span></div>
-      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
-      <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg, PasteMsg sequence as at runtime (longer pastes arrive in several PasteMsg chunks).</span></div>
-      <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime; pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
-    </div>
-
-    <h3 id="assertions" style="margin-top: 32px;">Assertions</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test — set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> (legacy alias: <code>UPDATE_GOLDENS=1</code>) to create a missing golden; creation is one-way and a mismatch never rewrites, so to re-baseline, delete the file and rerun with it set.</span></div>
-      <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
-      <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with readable ESC diff.</span></div>
-      <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check — a second <code>view()</code> must return identical bytes; catches models that mutate state while rendering. The model-unchanged leg uses a shallow clone: nested mutation by reference is out of its reach — output idempotence is the guarantee, not deep-state purity.</span></div>
-    </div>
-
-    <h3 id="graphics-stream-assertions" style="margin-top: 32px;">Graphics stream assertions</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid, <code>assertInlineImageDimensions()</code> checks placement and size, <code>assertProtocolRoundTrip()</code> re-encodes what it decoded, <code>renderGrid()</code> exposes the grid directly.</span></div>
-      <div class="feature"><strong>Mode::detect()</strong><span>Sniff whether a stream speaks Sixel, Kitty, or iTerm2 inline images.</span></div>
-      <div class="feature"><strong>KittyStream / SixelStream / Iterm2Stream</strong><span>Per-protocol decoders returning value objects — <code>KittyImage</code> (PNG payload, placements, z-index), sixel raster (width, height, palette, grid), iTerm2 file keys.</span></div>
-      <div class="feature"><strong>PixelGrid</strong><span>The RGBA grid behind every comparison: <code>fromRgbGrid()</code>/<code>transparent()</code> constructors, <code>uniformColor()</code> and <code>toGdImage()</code> escape hatches (ext-gd).</span></div>
-      <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams — raster cells, number digits, decompressed bytes, image pixels — enforced with <code>MalformedGraphicsException</code>.</span></div>
-    </div>
-
-    <h3 id="taperecorder" style="margin-top: 32px;">TapeRecorder</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to the given path.</span></div>
-      <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
-      <div class="feature"><strong>type() / enter() / sleep()</strong><span>Append the demo's choreography — Type/Enter/Sleep directive lines; nothing is captured from a running program and there is no playback API.</span></div>
-      <div class="feature"><strong>save()</strong><span>Write the completed .tape file.</span></div>
-      <div class="feature"><strong>keyMsgToVhs(KeyMsg)</strong><span>Static: map a decoded key message back to VHS <code>Type</code> syntax (null when unsupported), so scripted sessions turn into directives.</span></div>
-    </div>
-
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
+    <h3 id="tasks" style="margin-top: 32px;">Tasks</h3>
     <ul>
-      <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
-      <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
-      <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
-      <li><strong>Inline-image protocol tests</strong> — the <code>Graphics</code> namespace decodes real kitty/sixel/iTerm2 streams to pixel grids with no terminal attached.</li>
-      <li><strong>Demo script building</strong> — TapeRecorder emits VHS-compatible .tape files; CI renders them into GIFs.</li>
-      <li><strong>Test-infra hub for 22 sibling packages</strong> — incl. sugar-forms and sugar-widgets, which build their test support on it (census: sibling composer.json require/require-dev at commit time).</li>
+      <li><strong>Pin a rendered screen.</strong> Drive the model with <code>ScriptedInput</code>, then call <code>Assertions::assertGoldenAnsi($golden, $result-&gt;view)</code> against a committed golden under <code>fixtures/</code>.</li>
+      <li><strong>Check that a key produced a command.</strong> Build the simulator with <code>withRealCmdRunner(false)</code>, queue the key with <code>addMsgs()</code>, call <code>run()</code>, then call <code>$result-&gt;assertCmdCount(1)</code> or <code>assertCmdContains()</code> on the captured list.</li>
+      <li><strong>Catch render-time mutation.</strong> Call <code>Assertions::assertViewIdempotent($model)</code>. A second <code>view()</code> must return identical bytes.</li>
+      <li><strong>Test a paste exactly as the runtime sees it.</strong> Use <code>ScriptedInput::new()-&gt;paste($text)</code>. Pasted payloads are sanitized by default, and <code>withSanitizePaste(false)</code> delivers them verbatim.</li>
+      <li><strong>Assert an inline image.</strong> Feed a captured Kitty, Sixel or iTerm2 stream to <code>GraphicsAssertions::assertRendersTo()</code> with the expected <code>PixelGrid</code>, or to <code>assertProtocolRoundTrip()</code> to check that decode and re-encode agree.</li>
+      <li><strong>Script a demo.</strong> Open a <code>TapeRecorder::to($path)</code>, add <code>header()</code>, <code>type()</code>, <code>enter()</code> and <code>sleep()</code> directives, then call <code>save()</code>. CI renders the resulting tape.</li>
     </ul>
 
-    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
-    <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-testing">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-testing/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-testing/tree/master/tests">Test suite</a></li>
-      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
-    </ul>
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
+    <p>The classes below are the public surface. Each block lists the methods a test typically calls. The full signature table follows the blocks.</p>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
+    <h3 id="programsimulator" style="margin-top: 24px;">ProgramSimulator</h3>
+    <p>Configure first, then queue. Every <code>with*()</code> setter (<code>withRealCmdRunner()</code>, <code>withFakeCmdRunner()</code>, <code>withWindowSize()</code>, <code>withEnvironment()</code>, <code>withColorProfile()</code>) must be called before the first <code>addMsgs()</code>. A later <code>with*()</code> call throws <code>RuntimeException</code> instead of silently discarding the queued messages.</p>
+    <div class="feature-grid">
+      <div class="feature"><strong>ProgramSimulator::for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
+      <div class="feature"><strong>ProgramSimulator::addMsgs(Msg ...$msgs)</strong><span>Fluent message enqueue. Chain as many <code>addMsgs()</code> calls as the scenario needs.</span></div>
+      <div class="feature"><strong>ProgramSimulator::withRealCmdRunner(bool) / ProgramSimulator::withFakeCmdRunner(Closure)</strong><span>Pass <code>false</code> to capture Cmds without executing them. The fake runner decides the message injected for each Cmd, and execution is otherwise unchanged.</span></div>
+      <div class="feature"><strong>ProgramSimulator::run()</strong><span>Drain the queue and return a <code>TestResult</code> with the model, last view, captured cmds, output and frames. Subscription output is delivered right after the message that triggered it. Messages still queued when a QuitMsg or InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. <code>run()</code> can be called again.</span></div>
+      <div class="feature"><strong>ProgramSimulator::withWindowSize() / ProgramSimulator::withEnvironment() / ProgramSimulator::withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>, <code>EnvMsg</code> and <code>ColorProfileMsg</code> exactly as a real Program dispatches them, before <code>init()</code>. Each returns a clone.</span></div>
+    </div>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="scriptedinput" style="margin-top: 24px;">ScriptedInput</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>ScriptedInput::key() / ScriptedInput::namedKey() / ScriptedInput::enter() / ScriptedInput::arrow() / ScriptedInput::mouse() / ScriptedInput::resize() / ScriptedInput::ticks()</strong><span>Fluent builders for the messages a session produces. <code>build()</code> returns the list, ready to splat into <code>addMsgs()</code>.</span></div>
+      <div class="feature"><strong>ScriptedInput::bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read. Reads are split into 4096-byte chunks like the runtime. Afterwards the runtime's idle recovery applies: a lone ESC becomes an Escape key, and an unterminated paste is closed.</span></div>
+      <div class="feature"><strong>ScriptedInput::paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg and PasteMsg sequence as at runtime. Longer pastes arrive in several PasteMsg chunks.</span></div>
+      <div class="feature"><strong>ScriptedInput::withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime. Pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
+    </div>
+
+    <h3 id="assertions-and-goldenfile" style="margin-top: 24px;">Assertions and GoldenFile</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Assertions::assertGoldenAnsi</strong><span>Byte-exact snapshot test against a committed golden file. Set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> to create a missing golden. Creation is one-way, and a mismatch never rewrites the file.</span></div>
+      <div class="feature"><strong>Assertions::assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers, using the cell-grid schema that the parser validates at the boundary.</span></div>
+      <div class="feature"><strong>Assertions::assertAnsiEquals</strong><span>Byte-exact ANSI comparison with a readable ESC diff.</span></div>
+      <div class="feature"><strong>Assertions::assertViewIdempotent</strong><span>Render-purity check. A second <code>view()</code> must return identical bytes. The model-unchanged leg uses a shallow clone, so nested mutation by reference is out of its reach. Output idempotence is the guarantee.</span></div>
+      <div class="feature"><strong>GoldenFile</strong><span><code>load()</code> returns null only for a missing file, and unreadable or symlinked goldens throw. <code>create()</code> refuses an existing golden, <code>update()</code> is the deliberate re-baseline, and <code>resolve()</code> keeps fixture paths inside <code>fixtures/</code>.</span></div>
+    </div>
+
+    <h3 id="graphics-stream-assertions" style="margin-top: 24px;">Graphics stream assertions</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid. <code>assertInlineImageDimensions()</code> checks placement and size. <code>assertProtocolRoundTrip()</code> re-encodes what it decoded. <code>renderGrid()</code> exposes the grid directly.</span></div>
+      <div class="feature"><strong>Mode::detect()</strong><span>Sniffs whether a stream speaks Sixel, Kitty or iTerm2 inline images.</span></div>
+      <div class="feature"><strong>KittyStream / SixelStream / Iterm2Stream</strong><span>Per-protocol decoders that return value objects: <code>KittyImage</code> (PNG payload, placements, z-index), a sixel raster (width, height, palette, grid), and iTerm2 file keys.</span></div>
+      <div class="feature"><strong>PixelGrid</strong><span>The RGBA grid behind every comparison. Constructors are <code>fromRgbGrid()</code> and <code>transparent()</code>. <code>uniformColor()</code> and <code>toGdImage()</code> are the escape hatches, and the latter needs ext-gd.</span></div>
+      <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams: raster cells, number digits, decompressed bytes and image pixels. Breaches raise <code>MalformedGraphicsException</code>.</span></div>
+    </div>
+
+    <h3 id="taperecorder" style="margin-top: 24px;">TapeRecorder</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>TapeRecorder::to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to that path.</span></div>
+      <div class="feature"><strong>TapeRecorder::header() / TapeRecorder::type() / TapeRecorder::enter() / TapeRecorder::sleep()</strong><span>Emit the VHS <code>Set</code> directives and the choreography lines. Typed text is escaped, so it can never forge a standalone directive line.</span></div>
+      <div class="feature"><strong>TapeRecorder::resize() / TapeRecorder::comment() / TapeRecorder::line()</strong><span>Resize and <code>#</code> comment directives. <code>line()</code> appends one raw directive verbatim.</span></div>
+      <div class="feature"><strong>TapeRecorder::save()</strong><span>Write the completed <code>.tape</code> file. Nothing is captured from a running program, and there is no playback API.</span></div>
+      <div class="feature"><strong>TapeRecorder::keyMsgToVhs(KeyMsg)</strong><span>Static: maps a decoded key message back to VHS <code>Type</code> syntax, or returns null when unsupported, so scripted sessions turn into directives.</span></div>
+    </div>
+
+    <h3 id="full-signature-table" style="margin-top: 24px;">Full signature table</h3>
 <table class="api-table">
 <caption>sugar-testing public API — every class, method, and constant named above, verified against the shipped source.</caption>
 <thead>
@@ -295,7 +320,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 </thead>
 <tbody>
 <tr><td>ProgramSimulator</td><td>for(Model|Program): self</td><td>Factory: wrap a Program or a bare Model</td></tr>
-<tr><td>ProgramSimulator</td><td>send(Msg ...$msgs): self</td><td>Fluent message enqueue</td></tr>
+<tr><td>ProgramSimulator</td><td>addMsgs(Msg ...$msgs): self</td><td>Fluent message enqueue; configure with*() before the first call</td></tr>
 <tr><td>ProgramSimulator</td><td>withRealCmdRunner(bool): self</td><td>Pass false to capture Cmds without executing them (the default executes)</td></tr>
 <tr><td>ProgramSimulator</td><td>withFakeCmdRunner(\Closure $runner): self</td><td>Per-Cmd injected-message hook (execution unchanged)</td></tr>
 <tr><td>ProgramSimulator</td><td>run(): TestResult</td><td>Drain queue, return result</td></tr>
@@ -340,9 +365,338 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 <tr><td>Graphics\MalformedGraphicsException</td><td>extends RuntimeException</td><td>Thrown by all three decoders and the limit guards on malformed or over-cap streams</td></tr>
 <tr><td>LoopPin</td><td>pinStableClock(): LoopInterface</td><td>Static: stop and replace the shared loop so arm-time deadlines compute correctly; process-wide (see README caveats)</td></tr>
 <tr><td>LoopPin</td><td>hasStaleClockRisk(LoopInterface): bool</td><td>Static: fail-closed check — StreamSelectLoop is safe; extension-backed and unknown loops are reported at risk</td></tr>
-<tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / getTempDirSuffix()</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
+<tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / tempDirPrefix()</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
 </tbody>
 </table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-testing/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-testing -->
+<p>Only methods declared in <code>sugar-testing/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-testing">SugarCraft\Testing</h3>
+<h4 id="api-sugarcraft-testing-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-testing.</p>
+<h4 id="api-sugarcraft-testing-looppin"><code>LoopPin</code> <small>final class</small></h4>
+<p>Pins the shared ReactPHP event loop to an implementation whose timer deadlines stay honest inside a test process.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static pinStableClock(): LoopInterface</code></td><td>Pin the shared loop to a clock-fresh implementation and return it.</td></tr>
+<tr><td><code>static hasStaleClockRisk(LoopInterface $loop): bool</code></td><td>Whether a loop computes timer deadlines against a clock that can go stale between the moment it was last refreshed and the moment a timer is armed.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-programsimulator"><code>ProgramSimulator</code> <small>final class</small></h4>
+<p>Drives a Program (or bare Model) with scripted input, deterministically.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Model|Program $program): self</code></td><td>Factory — wrap a Program or a bare Model for testing.</td></tr>
+<tr><td><code>static for(Model|Program $program): self</code></td><td></td></tr>
+<tr><td><code>addMsgs(Msg ...$msgs): self</code></td><td>Enqueue messages for the run() cycle, mutating this handle.</td></tr>
+<tr><td><code>withFakeCmdRunner(\Closure $runner): self</code></td><td>Install a fake runner that decides the message injected for each Cmd.</td></tr>
+<tr><td><code>withRealCmdRunner(bool $execute): self</code></td><td>Opt-out of cmd execution for deterministic capture-only mode.</td></tr>
+<tr><td><code>captureCmds(): self</code></td><td>Capture-only arm in one call: every cmd emitted during the run lands in the result&#039;s cmds list but nothing executes — the direct spelling of withRealCmdRunner(false), side-effect-free by construction.</td></tr>
+<tr><td><code>withCmdCapture(\Closure $onCmd): self</code></td><td>Capture without executing AND substitute each cmd&#039;s result, in one clone: the pair withFakeCmdRunner($onCmd) + withRealCmdRunner(false). The closure receives the cmd — and only the cmd; it must not invoke it, since nothing here executes — and returns the message to inject in place of whatever the real cmd would have produced.</td></tr>
+<tr><td><code>withFrameCapture(bool $capture = true): self</code></td><td>Control per-frame retention in TestResult::$frames.</td></tr>
+<tr><td><code>withWindowSize(int $cols, int $rows): self</code></td><td>Arm the startup WindowSizeMsg (dispatched before init(), like Program).</td></tr>
+<tr><td><code>withEnvironment(array $vars): self</code></td><td>Arm the startup EnvMsg (dispatched before init(), like Program).</td></tr>
+<tr><td><code>withColorProfile(ColorProfile $profile): self</code></td><td>Arm the startup ColorProfileMsg (dispatched before init(), like Program) — the message candy-top&#039;s color veto keys off.</td></tr>
+<tr><td><code>run(): TestResult</code></td><td>Drain the message queue, running init/update/view in sequence.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-testresult"><code>TestResult</code> <small>final readonly class</small></h4>
+<p>The result of a ProgramSimulator::run() call.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public Model $model, public string $view, public array $cmds, public string $output, public array $frames = [], public int $droppedAfterStop = 0)</code></td><td></td></tr>
+<tr><td><code>assertCmdCount(int $expected): void</code></td><td>Assert the exact number of commands was emitted.</td></tr>
+<tr><td><code>assertCmdContains(callable $filter, ?string $message = null): void</code></td><td>Assert that at least one command matches the given filter.</td></tr>
+<tr><td><code>assertNoCmds(): void</code></td><td>Assert that no commands were emitted.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-testing-concerns">SugarCraft\Testing\Concerns</h3>
+<h4 id="api-sugarcraft-testing-concerns-filesystemerrorcapture"><code>FilesystemErrorCapture</code> <small>trait</small></h4>
+<p>Runs a filesystem call and captures the diagnostic that call itself raised, instead of reading the process-global error_get_last().</p>
+<h4 id="api-sugarcraft-testing-concerns-temporarydirectorytrait"><code>TemporaryDirectoryTrait</code> <small>trait</small></h4>
+<p>Provides temporary directory setup and cleanup for tests.</p>
+<h3 id="sugarcraft-testing-graphics">SugarCraft\Testing\Graphics</h3>
+<h4 id="api-sugarcraft-testing-graphics-decodelimits"><code>DecodeLimits</code> <small>final class</small></h4>
+<p>Decode budgets shared by the graphics stream decoders.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static assertMaterializablePng(string $png, string $notImageKey): void</code></td><td>Header-only budget check to run BEFORE GD materializes an image.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-graphicsassertions"><code>GraphicsAssertions</code> <small>final class</small></h4>
+<p>Assertions that decode a terminal graphics stream and compare it to intent.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static assertRendersTo(string $stream, Mode $mode, PixelGrid|array $expected, int $tolerance = 0, string $message = &#039;&#039;): void</code></td><td>Assert that a stream renders to the expected RGB raster.</td></tr>
+<tr><td><code>static assertInlineImageDimensions(string $stream, Mode $mode, ?int $width, ?int $height, string $message = &#039;&#039;): void</code></td><td>Assert the pixel dimensions the stream renders at (either axis may be null to skip).</td></tr>
+<tr><td><code>static assertProtocolRoundTrip(string $stream, Mode $mode, string $message = &#039;&#039;): void</code></td><td>Assert the stream decodes cleanly and stays internally consistent.</td></tr>
+<tr><td><code>static renderGrid(string $stream, Mode $mode): PixelGrid</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-iterm2stream"><code>Iterm2Stream</code> <small>final class</small></h4>
+<p>Byte-level decoder for the iTerm2 inline-image protocol.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static decode(string $stream): self</code></td><td>Decode the first iTerm2 sequence found in a byte stream.</td></tr>
+<tr><td><code>command(): string</code></td><td>The OSC command verb, e.g. <code>File</code> or <code>Pop</code>.</td></tr>
+<tr><td><code>params(): array</code></td><td></td></tr>
+<tr><td><code>payload(): string</code></td><td>The decoded payload bytes (empty for control-only sequences).</td></tr>
+<tr><td><code>hasPayload(): bool</code></td><td></td></tr>
+<tr><td><code>png(): string</code></td><td>The decoded PNG bytes.</td></tr>
+<tr><td><code>cellsWidth(): ?int</code></td><td>Declared width in character cells (<code>width=</code>).</td></tr>
+<tr><td><code>cellsHeight(): ?int</code></td><td>Declared height in character cells (<code>height=</code>).</td></tr>
+<tr><td><code>pixelDimensions(): array</code></td><td>The real pixel size carried by the PNG payload.</td></tr>
+<tr><td><code>toGdImage(): \GdImage</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-kittyimage"><code>KittyImage</code> <small>final class</small></h4>
+<p>One decoded Kitty graphics transmission (a single image or placement).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromTransmit(array $params, string $payload): self</code></td><td></td></tr>
+<tr><td><code>action(): string</code></td><td></td></tr>
+<tr><td><code>id(): ?int</code></td><td></td></tr>
+<tr><td><code>number(): ?int</code></td><td></td></tr>
+<tr><td><code>cols(): ?int</code></td><td>Declared width in character cells (<code>c</code>).</td></tr>
+<tr><td><code>rows(): ?int</code></td><td>Declared height in character cells (<code>r</code>).</td></tr>
+<tr><td><code>pixelWidth(): ?int</code></td><td>Declared pixel width (<code>s</code>).</td></tr>
+<tr><td><code>pixelHeight(): ?int</code></td><td>Declared pixel height (<code>v</code>).</td></tr>
+<tr><td><code>offsetX(): ?int</code></td><td></td></tr>
+<tr><td><code>offsetY(): ?int</code></td><td></td></tr>
+<tr><td><code>zIndex(): ?int</code></td><td>The <code>z</code> stacking index — deliberately NOT a compression flag.</td></tr>
+<tr><td><code>format(): ?string</code></td><td>The raw <code>f</code> transmission-format value, or null when the sender omitted it.</td></tr>
+<tr><td><code>compressed(): bool</code></td><td>Whether the payload was transmitted zlib-compressed (<code>o=z</code>) and already inflated here.</td></tr>
+<tr><td><code>pngPassthrough(): bool</code></td><td>Whether the <code>f</code> code declares the payload a complete PNG — <code>f=100</code> (the upstream code) or <code>f=12</code> (the synonym accepted alongside it), both listed in PNG_PASSTHROUGH_FORMATS. Orthogonal to compressed(): an <code>f=100,o=z</code> transmit is a PNG that arrived zlib-wrapped and was inflated here.</td></tr>
+<tr><td><code>rawPayload(): string</code></td><td>The reassembled, decoded payload bytes for this transmit — already zlib-inflated for an <code>o=z</code> image and empty for a data-less placement. Unlike png() this never throws on an empty payload.</td></tr>
+<tr><td><code>hasPayload(): bool</code></td><td>Whether this transmit carries image data at all (placements do not).</td></tr>
+<tr><td><code>png(): string</code></td><td>The image payload bytes for this transmit: a PNG for a PNG-format (<code>f=100</code>/<code>f=12</code>) transmit — arrived plain or <code>o=z</code>-inflated — raw pixel data for an <code>f=24</code>/<code>f=32</code> transmit.</td></tr>
+<tr><td><code>params(): array</code></td><td></td></tr>
+<tr><td><code>pixelDimensions(): array</code></td><td>Decode the PNG payload into a GD image and report its real pixel size.</td></tr>
+<tr><td><code>toGdImage(): \GdImage</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-kittystream"><code>KittyStream</code> <small>final class</small></h4>
+<p>Byte-level decoder for the Kitty graphics protocol.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static decode(string $stream): self</code></td><td>Decode every Kitty transmit found in a byte stream.</td></tr>
+<tr><td><code>images(): array</code></td><td></td></tr>
+<tr><td><code>image(): KittyImage</code></td><td>The first decoded image.</td></tr>
+<tr><td><code>count(): int</code></td><td></td></tr>
+<tr><td><code>id(): ?int</code></td><td></td></tr>
+<tr><td><code>action(): string</code></td><td></td></tr>
+<tr><td><code>cols(): ?int</code></td><td></td></tr>
+<tr><td><code>rows(): ?int</code></td><td></td></tr>
+<tr><td><code>png(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-malformedgraphicsexception"><code>MalformedGraphicsException</code> <small>final class</small></h4>
+<p>Thrown when a byte stream cannot be parsed as the graphics protocol it claims.</p>
+<h4 id="api-sugarcraft-testing-graphics-mode"><code>Mode</code> <small>enum</small></h4>
+<p>The terminal graphics protocols a stream can speak.</p>
+<p>Cases: <code>Sixel</code> · <code>Kitty</code> · <code>Iterm2</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static detect(string $stream): self</code></td><td>Sniff the protocol a byte stream speaks from its control introducer.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-pixelgrid"><code>PixelGrid</code> <small>final class</small></h4>
+<p>An immutable RGB raster produced by a graphics decoder.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static fromRgbGrid(array $pixels): self</code></td><td>Build a grid from a fully-formed row-major array of RGB triples.</td></tr>
+<tr><td><code>static transparent(int $width, int $height): self</code></td><td>Build an empty (fully transparent) grid of the given dimensions.</td></tr>
+<tr><td><code>width(): int</code></td><td></td></tr>
+<tr><td><code>height(): int</code></td><td></td></tr>
+<tr><td><code>pixel(int $x, int $y): ?array</code></td><td>The RGB triple at (x, y), or null when that cell was never painted.</td></tr>
+<tr><td><code>paintedPixels(): array</code></td><td>Every cell that was painted, as a flat list — handy for sampling palettes.</td></tr>
+<tr><td><code>uniformColor(): ?array</code></td><td>True when the whole raster carries a single color, returned as that triple.</td></tr>
+<tr><td><code>toGdImage(): \GdImage</code></td><td>Materialize the grid as a GD truecolor image (alpha for unpainted cells).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-graphics-sixelstream"><code>SixelStream</code> <small>final class</small></h4>
+<p>Byte-level decoder for the Sixel graphics protocol.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static decode(string $stream): self</code></td><td>Decode a Sixel byte stream (which may be embedded in surrounding text).</td></tr>
+<tr><td><code>width(): int</code></td><td></td></tr>
+<tr><td><code>height(): int</code></td><td></td></tr>
+<tr><td><code>palette(): array</code></td><td></td></tr>
+<tr><td><code>grid(): PixelGrid</code></td><td></td></tr>
+<tr><td><code>pixel(int $x, int $y): ?array</code></td><td></td></tr>
+<tr><td><code>toGdImage(): \GdImage</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-testing-input">SugarCraft\Testing\Input</h3>
+<h4 id="api-sugarcraft-testing-input-scriptedinput"><code>ScriptedInput</code> <small>final readonly class</small></h4>
+<p>Builder for sequences of input messages to feed a \SugarCraft\Testing\ProgramSimulator.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>Default factory.</td></tr>
+<tr><td><code>withSanitizePaste(bool $sanitize): self</code></td><td>Mirror \SugarCraft\Core\ProgramOptions::$sanitizePaste for the pastes this script builds. On (the default, as in the runtime) a pasted payload is neutralized by \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames(); off, it reaches the model verbatim.</td></tr>
+<tr><td><code>key(string $char, bool $shift = false, bool $ctrl = false, bool $alt = false): self</code></td><td>Append a character key message.</td></tr>
+<tr><td><code>namedKey(\SugarCraft\Core\KeyType $type, string $rune = &#039;&#039;, bool $shift = false, bool $ctrl = false, bool $alt = false): self</code></td><td>Append a named key message.</td></tr>
+<tr><td><code>enter(): self</code></td><td>Append pressing Enter.</td></tr>
+<tr><td><code>escape(): self</code></td><td>Append pressing Escape.</td></tr>
+<tr><td><code>backspace(): self</code></td><td>Append pressing Backspace.</td></tr>
+<tr><td><code>tab(): self</code></td><td>Append pressing Tab.</td></tr>
+<tr><td><code>arrow(string $dir, bool $shift = false, bool $ctrl = false, bool $alt = false): self</code></td><td>Append arrow keys.</td></tr>
+<tr><td><code>ticks(int $count, float $seconds = 1.0, ?callable $factory = null): self</code></td><td>Append $count tick messages, one per interval of $seconds.</td></tr>
+<tr><td><code>resize(int $cols, int $rows): self</code></td><td>Append a window resize message.</td></tr>
+<tr><td><code>quit(): self</code></td><td>Append a quit message.</td></tr>
+<tr><td><code>mouse(\SugarCraft\Core\MouseButton $button, \SugarCraft\Core\MouseAction $action, int $x, int $y): self</code></td><td>Append a mouse event.</td></tr>
+<tr><td><code>push(Msg $msg): self</code></td><td>Append an arbitrary message.</td></tr>
+<tr><td><code>build(): array</code></td><td>Return the built message sequence.</td></tr>
+<tr><td><code>count(): int</code></td><td>Return the count of messages.</td></tr>
+<tr><td><code>wheel(\SugarCraft\Core\MouseButton $button, int $x, int $y): self</code></td><td>Append a mouse wheel scroll event.</td></tr>
+<tr><td><code>paste(string $content): self</code></td><td>Append the messages a terminal paste of <code>$content</code> produces.</td></tr>
+<tr><td><code>bytes(string ...$reads): self</code></td><td>Append the messages raw terminal input decodes to.</td></tr>
+<tr><td><code>clipboard(string $content, string $selection = &#039;c&#039;): self</code></td><td>Append a clipboard message with the given content.</td></tr>
+<tr><td><code>keyboardEnhancements(int $flags): self</code></td><td>Append a keyboard enhancements reply message.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-input-tickmsg"><code>TickMsg</code> <small>final readonly class</small></h4>
+<p>The harness&#039;s own tick message.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public float $seconds)</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-testing-snapshot">SugarCraft\Testing\Snapshot</h3>
+<h4 id="api-sugarcraft-testing-snapshot-assertions"><code>Assertions</code> <small>final class</small></h4>
+<p>Static assertion helpers for terminal snapshot testing.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static assertViewIdempotent(Model $model): void</code></td><td>Assert that a model&#039;s view() is idempotent and side-effect free.</td></tr>
+<tr><td><code>static assertGoldenAnsi(string $goldenPath, string $actual): void</code></td><td>Assert that $actual matches the golden file at $goldenPath.</td></tr>
+<tr><td><code>static golden(string $testFileDir, string $name, string $actual): void</code></td><td>Convenience wrapper over assertGoldenAnsi() for the standard layout: the golden lives in a <code>fixtures</code> directory next to the test file that asserts it.</td></tr>
+<tr><td><code>static assertCellGrid(array $expected, Buffer $actual): void</code></td><td>Assert that $expected matches the Buffer&#039;s cell grid — EVERY cell.</td></tr>
+<tr><td><code>static assertAnsiEquals(string $expected, string $actual): void</code></td><td>Assert that $expected and $actual ANSI byte sequences are identical.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-snapshot-goldenfile"><code>GoldenFile</code> <small>final class</small></h4>
+<p>Load/save helper for golden ANSI snapshot files.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static load(string $path): ?string</code></td><td>Load a golden file&#039;s contents.</td></tr>
+<tr><td><code>static save(string $path, string $content): void</code></td><td>Write content to a golden file (atomic; replaces an existing file).</td></tr>
+<tr><td><code>static create(string $path, string $content): void</code></td><td>Create a golden file only if it does not already exist (atomic).</td></tr>
+<tr><td><code>static update(string $path, string $content): void</code></td><td>Deliberately replace a golden file (the re-baseline path).</td></tr>
+<tr><td><code>static resolve(string $baseDir, string $relative): string</code></td><td>Resolve a fixture-relative path to an absolute path.</td></tr>
+<tr><td><code>static writeFailureReason(int|false $written, ?string $diagnostic, int $expected): string</code></td><td>Classify a failed write for the error message: an int return is a short write (the count says how short — the old is_string() test made that branch dead code), false is a hard failure whose reason comes from the scoped capture. Public so the shape roster is directly testable without failing devices.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-testing-snapshot-goldenfileexistsexception"><code>GoldenFileExistsException</code> <small>final class</small></h4>
+<p>Thrown by GoldenFile::create() when the golden already exists.</p>
+<h3 id="sugarcraft-testing-tape">SugarCraft\Testing\Tape</h3>
+<h4 id="api-sugarcraft-testing-tape-taperecorder"><code>TapeRecorder</code> <small>final class</small></h4>
+<p>Builds VHS-compatible <code>.tape</code> files for demo-GIF rendering.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $outputPath): self</code></td><td>Factory — create a new tape recorder writing to $outputPath.</td></tr>
+<tr><td><code>static to(string $outputPath): self</code></td><td></td></tr>
+<tr><td><code>header(string $theme = &#039;TokyoNight&#039;, int $width = 800, int $height = 480, int $fontSize = 14, ?float $typingSpeed = null): self</code></td><td>Write the VHS header with theme and dimensions.</td></tr>
+<tr><td><code>type(string $keys): self</code></td><td>Record literal typed text as a quoted Type directive.</td></tr>
+<tr><td><code>enter(): self</code></td><td>Record pressing Enter.</td></tr>
+<tr><td><code>sleep(float $seconds): self</code></td><td>Record a sleep delay.</td></tr>
+<tr><td><code>resize(int $cols, int $rows): self</code></td><td>Emit a resize annotation.</td></tr>
+<tr><td><code>comment(string $comment): self</code></td><td>Record a comment.</td></tr>
+<tr><td><code>line(string $line): self</code></td><td>Append an arbitrary line verbatim.</td></tr>
+<tr><td><code>save(): void</code></td><td>Finalize and publish the tape file to disk (atomic).</td></tr>
+<tr><td><code>static keyMsgToVhs(KeyMsg $msg): ?string</code></td><td>Convert a KeyMsg to VHS Type syntax.</td></tr>
+</tbody>
+</table>
+
+    <h3 id="configuration-and-options" style="margin-top: 32px;">Configuration and options</h3>
+    <table class="api-table">
+    <tr><th>Option</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>SUGAR_TESTING_UPDATE_GOLDENS</code></td><td>env, <code>1</code> to arm</td><td>unset</td><td>Creates a missing golden on the next <code>assertGoldenAnsi()</code> run. It never rewrites an existing golden.</td></tr>
+    <tr><td><code>UPDATE_GOLDENS</code></td><td>env, <code>1</code> to arm</td><td>unset</td><td>Deprecated legacy alias of the variable above. It is read until the alias is dropped.</td></tr>
+    <tr><td><code>ProgramSimulator::withWindowSize()</code></td><td><code>int</code>, <code>int</code></td><td>none</td><td>Arms the startup <code>WindowSizeMsg</code>, dispatched before <code>init()</code>.</td></tr>
+    <tr><td><code>ProgramSimulator::withEnvironment()</code></td><td><code>array</code></td><td>none</td><td>Arms the startup <code>EnvMsg</code> with the given variables.</td></tr>
+    <tr><td><code>ProgramSimulator::withColorProfile()</code></td><td><code>ColorProfile</code></td><td>none</td><td>Arms the startup <code>ColorProfileMsg</code>, the message that color vetoes read.</td></tr>
+    <tr><td><code>ProgramSimulator::withRealCmdRunner()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Pass <code>false</code> to capture Cmds without executing them.</td></tr>
+    <tr><td><code>ScriptedInput::withSanitizePaste()</code></td><td><code>bool</code></td><td><code>true</code></td><td>Sanitizes paste payloads as at runtime. Set before <code>bytes()</code>.</td></tr>
+    <tr><td><code>TestResult::droppedAfterStop</code></td><td><code>int</code></td><td>computed</td><td>Count of messages skipped after a QuitMsg or InterruptMsg ended the drain.</td></tr>
+    </table>
+
+    <h3 id="keys-and-input" style="margin-top: 32px;">Keys and input</h3>
+    <p>The harness has no keymap of its own. A key is a <code>KeyMsg</code> built by <code>ScriptedInput</code>, so the keys a test sends are exactly the keys the model's <code>update()</code> matches. Use <code>key('a', ctrl: true)</code> for modifiers, <code>namedKey()</code> or <code>arrow()</code> for special keys, <code>escape()</code>, <code>backspace()</code>, <code>tab()</code> and <code>quit()</code> as shortcuts, and <code>mouse()</code> and <code>wheel()</code> for pointer input. <code>TestResult::assertCmdCount()</code> and <code>assertNoCmds()</code> check what a key produced.</p>
+
+    <h3 id="theme-and-color-profile" style="margin-top: 32px;">Theme and color profile</h3>
+    <p>The harness does not style output or define a theme. Themes belong to the model under test. What the harness controls is the color profile the model sees. <code>withColorProfile()</code> arms the startup <code>ColorProfileMsg</code>, so a golden captured under one profile can be reproduced exactly. Pin the profile in every snapshot test that renders color, because the same model emits different SGR bytes under a different profile.</p>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>Both examples run without a terminal and need only <code>composer install</code> in the lib root.</p>
+    <ul>
+      <li><code>examples/program-simulator.php</code>: drives an inline counter with <code>ScriptedInput</code>, prints the final view, the frame count and the captured command count. Run it with <code>php examples/program-simulator.php</code>.</li>
+      <li><code>examples/tape-recorder.php</code>: builds a VHS tape, prints it, and removes the temporary file it wrote. Run it with <code>php examples/tape-recorder.php</code>. The output includes an escaped <code>Type</code> line, which shows how typed control bytes are handled.</li>
+    </ul>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <p>Run the lib's own suite from its root:</p>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite tests the harness through the same Model contract it simulates. Its fixtures, such as <code>CounterModel</code> and <code>ControlRecorderModel</code>, are small TEA models. <code>tests/bootstrap.php</code> calls <code>LoopPin::pinStableClock()</code> before anything else. Under ext-uv, deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle would already be overdue.</p>
+    <p>In your own suite, call <code>LoopPin::pinStableClock()</code> from your bootstrap when your tests bound waits with timers on <code>\React\EventLoop\Loop::get()</code>. Use <code>ProgramSimulator</code> for the model and <code>Assertions::assertGoldenAnsi()</code> for the output, and commit the goldens under <code>fixtures/</code>.</p>
+
+    <h3 id="troubleshooting-and-faq" style="margin-top: 32px;">Troubleshooting and FAQ</h3>
+    <ul>
+      <li><strong>The golden is missing and the test fails with "No golden file found".</strong> Seed it once with <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> and commit the new file. Creation is one-way, so a golden that already exists is never rewritten by this variable.</li>
+      <li><strong>The output changed, the test fails with "Golden file mismatch", and you want the new output.</strong> Delete the golden, rerun with the variable set, and review the diff in version control. Do not edit the golden by hand.</li>
+      <li><strong>A timer-based wait times out or fires early on a developer machine.</strong> The loop clock is stale. Call <code>LoopPin::pinStableClock()</code> first in the bootstrap. <code>LoopPin::hasStaleClockRisk()</code> reports whether the current loop is at risk.</li>
+      <li><strong><code>toGdImage()</code> throws in a graphics test.</strong> Pixel materialization needs ext-gd. Install the extension, or stay on the stream-level checks such as <code>assertProtocolRoundTrip()</code>, which work without it.</li>
+      <li><strong><code>assertViewIdempotent()</code> passes but a nested object still changed.</strong> The model-unchanged leg uses a shallow clone. The check guarantees identical output on a second render, not deep state purity. Keep render methods free of nested mutation by convention.</li>
+      <li><strong>A message queued after <code>QuitMsg</code> never reached <code>update()</code>.</strong> That is intended. The drain stops at the quit, and the skipped count is in <code>TestResult::droppedAfterStop</code>.</li>
+    </ul>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>There is no one-to-one port. The table maps the Go prior art named in the lib's README credits to the SugarCraft classes that take their place.</p>
+    <table class="api-table">
+    <tr><th>Upstream (Go)</th><th>SugarCraft class</th><th>Notes</th></tr>
+    <tr><td><code>charmbracelet/teatest</code></td><td><code>ProgramSimulator</code>, <code>ScriptedInput</code>, <code>TestResult</code></td><td>Drives a model with scripted messages and captures the final output. The dispatch table mirrors the private dispatch method of <code>Program</code>, and divergences are named in the README.</td></tr>
+    <tr><td><code>charmbracelet/x/exp/golden</code></td><td><code>Assertions::assertGoldenAnsi()</code>, <code>GoldenFile</code></td><td>Golden-file snapshots. SugarCraft makes the lifecycle explicit with create-only seeding and a separate re-baseline path.</td></tr>
+    <tr><td>VHS demo scripts</td><td><code>TapeRecorder</code></td><td>Builds <code>.tape</code> files. CI renders them into GIFs, and the render step lives in candy-vcr rather than upstream VHS.</td></tr>
+    </table>
+
+    <h3 id="architecture" style="margin-top: 32px;">Architecture</h3>
+    <p>Five parts sit side by side. <code>ProgramSimulator</code> and <code>ScriptedInput</code> form the TEA runner. <code>Assertions</code> and <code>GoldenFile</code> form the snapshot layer, which rejects malformed expectation shapes before comparing. The <code>Graphics</code> namespace decodes Kitty, Sixel and iTerm2 streams into a <code>PixelGrid</code>, with <code>DecodeLimits</code> capping hostile input at every allocation. <code>TapeRecorder</code> is a standalone builder for demo scripts. <code>LoopPin</code> replaces the shared ReactPHP loop with <code>StreamSelectLoop</code> so that timer deadlines are computed at arm time. The simulator's dispatch table is an explicit mirror of the private dispatch method of <code>Program</code>, and the README's "Simulation subset" section is the contract for that mirror.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 32px;">Changelog and versioning</h3>
+    <p>The package ships no CHANGELOG file. The commit history of <code>sugar-testing/</code> in the monorepo is the record of changes. The install line above pins the development branch with <code>@dev</code>, so pin a tagged release in your own manifest once one is published.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
+    <ul>
+      <li>sugar-core: the <code>Model</code>, <code>Msg</code> and <code>Program</code> contract the simulator drives.</li>
+      <li>sugar-cellbuffer: the <code>Buffer</code> that cell-grid assertions compare.</li>
+      <li>sugar-image: consumes the <code>Graphics</code> assertions in its renderer tests.</li>
+      <li>The <code>sugarcraft/sugar-testing</code> package is required in <code>require-dev</code> by 25 sibling packages, so changes here reach most suites.</li>
+    </ul>
+
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-testing">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-testing/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-testing/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
     </div>
   </div>
 </section>

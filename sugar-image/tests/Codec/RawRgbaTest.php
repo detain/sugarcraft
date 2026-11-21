@@ -95,4 +95,23 @@ final class RawRgbaTest extends TestCase
 
         RawRgba::validate('', 0, 1);
     }
+
+    public function testNewCarriesGeometryAndBufferUnchanged(): void
+    {
+        $rgba = str_repeat("\x01\x02\x03\x04", 6);
+
+        $image = RawRgba::new(3, 2, $rgba);
+
+        self::assertSame(3, $image->width);
+        self::assertSame(2, $image->height);
+        self::assertSame($rgba, $image->rgba);
+    }
+
+    public function testNewRefusesABufferThatIsNotExactlyWidthTimesHeightQuads(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Raw RGBA payload is 3 bytes; expected 24');
+
+        RawRgba::new(3, 2, "\x01\x02\x03");
+    }
 }

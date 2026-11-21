@@ -198,7 +198,11 @@ final class Form implements Model
     }
 
     /**
-     * Show / hide the help footer rendered below the focused field.
+     * Show / hide the `Step X of Y` indicator drawn at the foot of a
+     * multi-group form's view. It paints only when the form has more than one
+     * group and the group's own help flag is on, so a single-group form
+     * renders the same either way. The form never draws key-help rows; those
+     * come from {@see keyBinds()} for the host to draw.
      * Default on. Mirrors charmbracelet/huh.`WithShowHelp`.
      */
     public function withShowHelp(bool $on = true): self

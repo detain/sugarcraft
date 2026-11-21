@@ -10,6 +10,7 @@ use SugarCraft\Code\Context\Triggers\KeywordTrigger;
 use SugarCraft\Code\Context\Triggers\PathTrigger;
 use SugarCraft\Code\Context\Triggers\Trigger;
 use SugarCraft\Code\Support\Frontmatter;
+use SugarCraft\Markdown\Frontmatter as MarkdownFrontmatter;
 
 /**
  * One loaded rules file, parsed into a name, a prompt body, and its triggers.
@@ -99,14 +100,6 @@ use SugarCraft\Code\Support\Frontmatter;
  */
 final class Rule
 {
-    /**
-     * Same single-fence read {@see \SugarCraft\Code\Commands\CommandSpec::FRONTMATTER_PATTERN}
-     * uses: a leading `---` line, a YAML block, a closing `---` line, and the
-     * rest as body. Group 1 is handed to {@see Frontmatter::parse()}; the whole
-     * match is trimmed off the content to leave the prompt body.
-     */
-    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---\s*\n/s';
-
     /**
      * The three tiers, in load order (user -> project -> root). Kept as a
      * private const list so {@see new()} can parse-don't-validate the tier
@@ -244,13 +237,14 @@ final class Rule
         $meta = [];
         $body = $content;
 
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) === 1) {
-            $parsed = Frontmatter::parse($matches[1]);
+        $split = MarkdownFrontmatter::split($content);
+        if ($split !== null) {
+            $parsed = Frontmatter::parse($split->meta);
             if ($parsed !== null && !is_array($parsed)) {
                 throw new InvalidArgumentException(sprintf('Rule frontmatter must be a mapping of keys, %s given (%s).', get_debug_type($parsed), $path));
             }
             $meta = is_array($parsed) ? $parsed : [];
-            $body = substr($content, strlen($matches[0]));
+            $body = $split->body;
         }
 
         $name = self::stringField($meta, 'name', $path) ?? $fallbackName;

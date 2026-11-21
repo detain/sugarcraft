@@ -16,7 +16,9 @@ use SugarCraft\Code\Cli\ParsedArgs;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
+use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Host\Commands\BackgroundCommand;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Lang;
@@ -338,7 +340,7 @@ trait ServeStartup
         // answered as the handler's generic 503.
         $hooks = $config->webhooks === [] ? null : HookWebhooks::new(
             $config->webhooks,
-            static function (string $name, array $hook, string $prompt) use ($protocol, $config): array {
+            static function (string $name, array $hook, string $prompt) use ($protocol, $config): PromiseInterface {
                 $server = $protocol->context();
                 if ($server->isDraining()) {
                     throw new \RuntimeException('the server is shutting down');
@@ -357,8 +359,10 @@ trait ServeStartup
                 $mode = $hook['permissionMode'];
                 $modeValue = $mode?->value ?? $config->hookPermissionModeFallback();
                 $root = $server->hub()->workspace()->root;
+                // The launch answers when its daemon authenticates; the loop, not this
+                // request, waits on the daemon.
                 try {
-                    $session = $events->supervisor()->spawnSession(
+                    $launch = $events->supervisor()->spawnSessionAsync(
                         name: BackgroundCommand::sessionName('hook ' . $name),
                         agent: $agent,
                         task: $prompt,
@@ -371,9 +375,19 @@ trait ServeStartup
 
                     throw $e;
                 }
-                $events->track($session);
 
-                return $events->summary($session);
+                return $launch->then(
+                    static function (BackgroundSession $session) use ($events): array {
+                        $events->track($session);
+
+                        return $events->summary($session);
+                    },
+                    static function (\Throwable $e) use ($server, $name): never {
+                        $server->logError($e, 'webhook ' . $name . ' failed');
+
+                        throw $e;
+                    },
+                );
             },
         );
         // code-chat P1 step 4: plugin channels boot before the port is bound.
@@ -399,6 +413,24 @@ trait ServeStartup
                     $loop,
                     $log,
                     ChannelInboundLog::new(),
+                    // Each channel's settings section, frozen at launch, and the
+                    // config directory it may use as its state directory (plan 4.14).
+                    static fn (string $bundle): array => match ($bundle) {
+                        'candy-discord' => Bootstrap::channelsDiscordSettings(),
+                        'candy-msteams' => Bootstrap::channelsMsteamsSettings(),
+                        default => [],
+                    },
+                    // The candy-code configuration directory, or null when none resolves: a
+                    // channel then starts without a state directory and refuses what it cannot place.
+                    (static function (): ?string {
+                        try {
+                            return Bootstrap::trustedConfigDirPath();
+                        } catch (\Throwable) {
+                            return null;
+                        }
+                    })(),
+                    // PL-5d: each channel calls this serve in process, one client per bundle, with no loopback dial.
+                    self::channelHostFactoryRouted($protocol, $loop, $gateway),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.
@@ -531,9 +563,15 @@ trait ServeStartup
 
         // Never SIGCHLD: the turn children are reaped by EngineBackend's own
         // sweep, and a SIGCHLD handler would race it (Appendix O §4.6).
+        // The stop runs on the loop's next tick, never inside the handler: a
+        // signal that lands between the readiness line and Loop::run() would
+        // otherwise call Loop::stop() before run() sets its running flag, the
+        // request is lost, and the server serves on with no way to be stopped.
+        // Ticks run inside run(), after that flag is set; the signal itself
+        // interrupts the loop's blocking wait so the tick runs at once.
         foreach ([\SIGINT => 'SIGINT', \SIGTERM => 'SIGTERM'] as $signal => $name) {
-            $handlers[$signal] = static function () use ($stop, $name): void {
-                $stop($name);
+            $handlers[$signal] = static function () use ($stop, $name, $loop): void {
+                $loop->futureTick(static fn () => $stop($name));
             };
             Loop::addSignal($signal, $handlers[$signal]);
         }
@@ -551,6 +589,50 @@ trait ServeStartup
         Loop::run();
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * PL-5d: the host factory the serve hands ChannelRegistry::boot(), one in-process client per
+     * bundle over this serve's dispatcher. The result is the factory itself, not a host: boot()
+     * calls it once per bundle, so a wrapper here that returned the factory would fail every
+     * channel's start with a TypeError.
+     *
+     * @return \Closure(string): \SugarCraft\Plugins\Host\HostServices
+     */
+    public static function channelHostFactory(Dispatcher $protocol, LoopInterface $loop): \Closure
+    {
+        return \SugarCraft\Code\Host\InProcessHostServices::bundleFactory($protocol, $loop);
+    }
+
+    /**
+     * PL-5c-A: the host factory the serve hands ChannelRegistry::boot() when the gateway is up. Each
+     * bundle's in-process client routes calls and events of sessions on other roots through $gateway,
+     * the same rule the wire uses (the gateway is built before the channels boot, in serve()).
+     *
+     * @return \Closure(string): \SugarCraft\Plugins\Host\HostServices
+     */
+    public static function channelHostFactoryRouted(Dispatcher $protocol, LoopInterface $loop, Gateway $gateway): \Closure
+    {
+        return \SugarCraft\Code\Host\InProcessHostServices::bundleFactory($protocol, $loop, $gateway);
+    }
+
+    /**
+     * The refusals the `bundles.channels.refused` notice names. A `project-tier`
+     * row is left out: Bootstrap::bundles() already announces project-tier
+     * copies of trusted names through `bundles.project_tier_trust_refused`, and
+     * naming them here too would print a second notice whose reason list has no
+     * project-tier entry.
+     *
+     * @param list<array<array-key, mixed>> $refusals
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    public static function channelRefusalsForNotice(array $refusals): array
+    {
+        return \array_values(\array_filter(
+            $refusals,
+            static fn (array $row): bool => ($row['reason'] ?? '') !== 'project-tier',
+        ));
     }
 
     /**
@@ -577,8 +659,8 @@ trait ServeStartup
                 'count' => \count($buckets['quarantined']),
             ]));
         }
-        $refusals = $buckets['refusals'];
-        foreach ($refusals as $refusal) {
+        $refusals = self::channelRefusalsForNotice($buckets['refusals']);
+        foreach ($buckets['refusals'] as $refusal) {
             if (($refusal['reason'] ?? '') === 'collision') {
                 self::stderr(Lang::t('bundles.channels.collision', [
                     'name' => (string) ($refusal['name'] ?? $refusal['class'] ?? '?'),

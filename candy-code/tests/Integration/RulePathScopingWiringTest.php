@@ -627,7 +627,11 @@ final class RulePathScopingWiringTest extends TestCase
                 $short . ' holds a RulePathNudge but never calls it — the tracker is wired to a tool that cannot use it',
             );
 
-            if (preg_match('/intdiv\(\$this->(\w+), RulePathNudge::CALLER_BUDGET_DIVISOR\)/', $source, $captured) !== 1) {
+            // The cap is a property, or a local that names one: Glob budgets
+            // through `$budgetCap`, its cap or, for a non-positive one, the
+            // 8 MiB capture ceiling (owner ruling A, 2026-11-20). The local is
+            // read back to its assignment by capBehindLocal(), never taken on sight.
+            if (preg_match('/intdiv\(\$(?:this->(?<property>\w+)|(?<local>\w+)), RulePathNudge::CALLER_BUDGET_DIVISOR\)/', $source, $captured) !== 1) {
                 self::assertSame(
                     0,
                     substr_count($source, 'RulePathNudge::CALLER_BUDGET_DIVISOR'),
@@ -638,16 +642,24 @@ final class RulePathScopingWiringTest extends TestCase
                 continue;
             }
 
-            $capProperty = new ReflectionProperty($tool, $captured[1]);
+            $fallback = null;
+            $property = $captured['property'];
+            if ($property === '') {
+                [$property, $fallback] = self::capBehindLocal($source, $captured['local'], $class);
+            }
+
+            $capProperty = new ReflectionProperty($tool, $property);
             $capProperty->setAccessible(true);
             $cap = $capProperty->getValue($tool);
-            self::assertIsInt($cap, $short . '::$' . $captured[1] . ' is not an int cap');
+            self::assertIsInt($cap, $short . '::$' . $property . ' is not an int cap');
 
             $divisor = RulePathNudge::CALLER_BUDGET_DIVISOR;
             $spend[$short] = [
                 'cap' => $cap,
                 'divisor' => $divisor,
-                'budget' => $cap > 0 ? intdiv($cap, $divisor) : PHP_INT_MAX,
+                'budget' => $cap > 0
+                    ? intdiv($cap, $divisor)
+                    : ($fallback !== null ? intdiv($fallback, $divisor) : PHP_INT_MAX),
             ];
         }
 
@@ -655,6 +667,51 @@ final class RulePathScopingWiringTest extends TestCase
         sort($unbudgeted);
 
         return ['spend' => $spend, 'unbudgeted' => $unbudgeted];
+    }
+
+    /**
+     * The property a budget local stands for, and the cap it takes when that
+     * property is not positive: read from the local's one assignment, which
+     * must have the shape `$local = $this->cap > 0 ? $this->cap : Class::CONST;`.
+     * Any other shape fails here naming the local, for the reason the roster
+     * fails on an unreadable budget — a tool this cannot read is a tool the
+     * ceiling guards would stop covering.
+     *
+     * @param ReflectionClass<object> $class
+     *
+     * @return array{0: string, 1: int}
+     */
+    private static function capBehindLocal(string $source, string $local, ReflectionClass $class): array
+    {
+        self::assertSame(
+            1,
+            preg_match_all(
+                '/\$' . preg_quote($local, '/') . '\s*=\s*\$this->(\w+)\s*>\s*0\s*\?\s*\$this->\1\s*:\s*([A-Za-z_\\\\][\w\\\\]*)::([A-Z][A-Z0-9_]*)\s*;/',
+                $source,
+                $assigned,
+                PREG_SET_ORDER,
+            ),
+            sprintf(
+                '%s budgets its nudge through $%s, which is not assigned exactly once as '
+                . '`$%s = $this->cap > 0 ? $this->cap : Class::CONST;` — teach capBehindLocal() the new shape',
+                $class->getShortName(),
+                $local,
+                $local,
+            ),
+        );
+        [, $property, $owner, $constant] = $assigned[0];
+
+        $fqcn = ltrim($owner, '\\');
+        if (!str_contains($owner, '\\')) {
+            $fqcn = preg_match('/^use\s+([\w\\\\]+\\\\' . preg_quote($owner, '/') . ')\s*;/m', $source, $imported) === 1
+                ? $imported[1]
+                : $class->getNamespaceName() . '\\' . $owner;
+        }
+        $fallback = (new \ReflectionClassConstant($fqcn, $constant))->getValue();
+        self::assertIsInt($fallback, $fqcn . '::' . $constant . ' is not an int cap');
+        self::assertGreaterThan(0, $fallback, $fqcn . '::' . $constant . ' is not a positive cap');
+
+        return [$property, $fallback];
     }
 
     /**

@@ -1,7 +1,8 @@
-<p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo: a CancellationSource owns the mutable flag and its cancel() trigger while consumers hold a read-only CancellationToken, Subscription handles make disposal uniform (compose() gathers many into one), and the AsyncOps helpers cover timeout and deadline ceilings, retry with jittered backoff and a total budget, single-flight coalescing, debounce and throttle timers, all/race fan-in, and a pending-notice combinator — plus loop-free blocking engines behind AsyncOps forwarders (Retry, Backoff, ChildPump) and a bounded TTL AsyncCache that coalesces in-flight loads.</p>
+<p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. A <code>CancellationSource</code> owns the cancellation flag and hands out read-only <code>CancellationToken</code>s; <code>Subscription</code> handles make disposal uniform; <code>AsyncOps</code> covers timeouts, deadlines, retry with jittered backoff, single-flight coalescing, debounce, throttle and fan-in. Beside the promise helpers sit loop-free blocking engines, process helpers that run and pump child processes with deadlines and byte caps, and a bounded TTL <code>AsyncCache</code> that coalesces in-flight loads.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-async</code></pre>
+    <p>Requires PHP 8.3 or newer, <code>react/event-loop ^1.6</code>, <code>react/promise ^3.3</code> and <code>sugarcraft/sugar-core</code>, which this package pins to <code>dev-master</code>. A project on <code>minimum-stability: stable</code> may fail to resolve that require, so add <code>"minimum-stability": "dev"</code> with <code>"prefer-stable": true</code> to the consuming root manifest.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Async\{AsyncOps, CancellationSource};
@@ -9,20 +10,20 @@
 $source = CancellationSource::new();
 
 // Attach a cancellation callback
-$source->token()->onCancel(function (): void { echo "Cancelled!\n"; });
+$source-&gt;token()-&gt;onCancel(function (): void { echo "Cancelled!\n"; });
 
-$source->cancel(); // prints "Cancelled!"
+$source-&gt;cancel(); // prints "Cancelled!"
 
 // Timeout wrapper
 $loop = \React\EventLoop\Loop::get();
 $somePromise = \React\Promise\resolve('eventually');
-$promise = AsyncOps::withTimeout($loop, $somePromise, 5.0);
+$promise = AsyncOps::withTimeout($somePromise, 5.0, $loop);
 
 // Retry with backoff
 $attempts = 0;
 $promise = AsyncOps::retry(
-    function () use (&$attempts) {
-        if (++$attempts < 3) {
+    function () use (&amp;$attempts) {
+        if (++$attempts &lt; 3) {
             return \React\Promise\reject(new \RuntimeException('transient failure'));
         }
 
@@ -34,41 +35,146 @@ $promise = AsyncOps::retry(
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers observe isCancelled() and register onCancel() callbacks; the trigger methods are @internal-tagged but public, so restriction is by convention, not visibility — do not hand tokens to untrusted code.</span></div>
-      <div class="feature"><strong>CancellationSource</strong><span>Owns the mutable cancellation flag. Create via CancellationSource::new(). Call cancel() to flip the flag and fire all registered callbacks.</span></div>
+      <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers observe isCancelled() and register onCancel() callbacks; the trigger methods are @internal-tagged but public, so restriction is by convention, not visibility. Do not hand tokens to untrusted code.</span></div>
+      <div class="feature"><strong>CancellationSource</strong><span>Owns the mutable cancellation flag. Create via CancellationSource::new(). Call cancel() to flip the flag and fire all registered callbacks; repeated calls are no-ops.</span></div>
       <div class="feature"><strong>Cancellable interface</strong><span>Contract for components that can be canceled. Implemented by CancellationSource. Callbacks fire exactly once, even on repeated cancel() calls.</span></div>
-      <div class="feature"><strong>Subscription interface</strong><span>Disposal handle returned by onCancel(), debounce(), and throttle(). unsubscribe() disposes the subscription; isActive() reports whether it is still live.</span></div>
-      <div class="feature"><strong>Subscriptions::compose()</strong><span>Combine multiple subscriptions into a single atomic handle. Calling unsubscribe() on the composite disposes all underlying subscriptions.</span></div>
+      <div class="feature"><strong>Subscription interface</strong><span>Disposal handle returned by onCancel(), debounce() and throttle(). unsubscribe() disposes the subscription; isActive() reports whether it is still live.</span></div>
+      <div class="feature"><strong>Subscriptions::compose()</strong><span>Combine multiple subscriptions into a single handle. Calling unsubscribe() on the composite disposes all underlying subscriptions.</span></div>
       <div class="feature"><strong>AsyncOps::withTimeout()</strong><span>Wrap a promise with a timeout. Rejects with TimeoutException if the timeout fires before the promise settles.</span></div>
-      <div class="feature"><strong>AsyncOps::retry()</strong><span>Runs an operation up to N times in total with exponential backoff — attempts: 3 means three runs, not three retries. Respects CancellationToken — cancelling aborts remaining attempts.</span></div>
+      <div class="feature"><strong>AsyncOps::retry()</strong><span>Runs an operation up to N times in total with exponential backoff. attempts: 3 means three runs, not three retries. Respects CancellationToken: cancelling aborts remaining attempts.</span></div>
       <div class="feature"><strong>AsyncOps::debounce()</strong><span>Wrap a callable so only the last call within the window fires, after silence.</span></div>
-      <div class="feature"><strong>AsyncOps::throttle()</strong><span>Wrap a callable so it fires at most once per interval; suppressed calls resolve null — visible in the promise chain, never silently dropped. With trailing: true the last suppressed call fires at window end.</span></div>
+      <div class="feature"><strong>AsyncOps::throttle()</strong><span>Wrap a callable so it fires at most once per interval. Suppressed calls resolve null, visible in the promise chain. With trailing: true the last suppressed call fires at window end.</span></div>
       <div class="feature"><strong>AsyncOps::withDeadline()</strong><span>Budget-aware ceiling: rejects with TimeoutException on expiry and cancels the inner operation so no late result is ever adopted; the optional onTimeout hook gets one shot at aborting server-side work.</span></div>
-      <div class="feature"><strong>AsyncOps::cancellable()</strong><span>Guards a promise with a token: cancellation rejects the guard with OperationCancelledException and runs the onCancel cleanup hook; the registration un-registers itself when the inner promise settles.</span></div>
-      <div class="feature"><strong>AsyncOps::singleFlight()</strong><span>Coalesces concurrent same-key calls into one in-flight worker — one round-trip per key, every caller receives the outcome. Stateful: never share a singleFlight closure across a pcntl_fork boundary.</span></div>
+      <div class="feature"><strong>AsyncOps::cancellable()</strong><span>Guards a promise with a token: cancellation rejects the guard with OperationCancelledException and runs the onCancel cleanup hook.</span></div>
+      <div class="feature"><strong>AsyncOps::singleFlight()</strong><span>Coalesces concurrent same-key calls into one in-flight worker. One round-trip per key, and every caller receives the outcome. Stateful: never share a singleFlight closure across a pcntl_fork boundary.</span></div>
       <div class="feature"><strong>AsyncOps::all() / race()</strong><span>Fan-in helpers: all() waits for every promise (empty input resolves to []); race() adopts the first settled outcome (empty input throws InvalidArgumentException at the call site).</span></div>
-      <div class="feature"><strong>AsyncOps::pendingNotice() / AsyncOps::boundWait()</strong><span>pendingNotice fires a required progress hook when a promise is still unsettled after N seconds — a spinner signal for slow calls; boundWait ends only the waiting, rejecting with a TimeoutException naming the abandonment while the inner operation runs on. (The deprecated onPending() delegates to the pair.)</span></div>
-      <div class="feature"><strong>AsyncOps::setLogSink()</strong><span>Redirects the swallowed-failure notices — cancellation callbacks, the retry <code>onRetry:</code> and <code>pendingNotice</code> hooks, and the disposal pass behind <code>Subscriptions::unsubscribe()</code> — into the host's own diagnostics; <code>setLogSink(null)</code> restores the <code>error_log()</code> default (stderr under stock PHP, where one interleaved line can corrupt an in-progress render).</span></div>
-      <div class="feature"><strong>Blocking engines</strong><span><code>Retry::bounded()</code> runs a result-driven retry loop with every wait clamped to the remaining budget (no event loop involved); <code>Retry::nap()</code> is a sleep re-armed after EINTR; <code>Retry::reconnect()</code> redials until success or cancellation; <code>ChildPump::drain()</code> runs one select loop over all pipes and answers a <code>DrainResult</code>. <code>AsyncOps::retryBounded()</code> / <code>nap()</code> / <code>reconnect()</code> / <code>drain()</code> forward to them; <code>Backoff</code> carries the schedule (ceiling, full jitter, server hint, attempts).</span></div>
-      <div class="feature"><strong>AsyncCache</strong><span>TTL'd async memo — loop-free, it arms no timers: fetch(key, loader) coalesces in-flight loads, serves fresh entries instantly, optionally serves stale on loader failure, with an entry cap that evicts the least-recently-stored value.</span></div>
-      <div class="feature"><strong>Suspended</strong><span>A paused command as data: a resume closure paired with its state. resume() hands the Cmd closure to the resumer exactly once — a second call yields null, never a double-fire.</span></div>
-      <div class="feature"><strong>CallbackSubscription</strong><span>The disposable handle onCancel() and Subscriptions::of() hand out: unsubscribe() drops a registration that has not fired; handles for work already done are born spent.</span></div>
-      <div class="feature"><strong>Timeout / cancellation exceptions</strong><span>OperationCancelledException and TimeoutException — plain RuntimeException subclasses; TimeoutException carries seconds() and label() context.</span></div>
+      <div class="feature"><strong>AsyncOps::pendingNotice() / AsyncOps::boundWait()</strong><span>pendingNotice fires a progress hook when a promise is still unsettled after N seconds, a spinner signal for slow calls. boundWait ends only the waiting, rejecting with a TimeoutException while the inner operation runs on.</span></div>
+      <div class="feature"><strong>AsyncOps::setLogSink()</strong><span>Redirects the swallowed-failure notices (cancellation callbacks, retry <code>onRetry:</code> and <code>pendingNotice</code> hooks, and the disposal pass behind <code>Subscriptions::unsubscribe()</code>) into the host's own diagnostics. <code>setLogSink(null)</code> restores the <code>error_log()</code> default, which writes to stderr under stock PHP and can corrupt a render in progress.</span></div>
+      <div class="feature"><strong>Blocking engines</strong><span><code>Retry::bounded()</code> runs a result-driven retry loop with every wait clamped to the remaining budget, with no event loop involved. <code>Retry::nap()</code> is a sleep re-armed after EINTR. <code>Retry::reconnect()</code> redials until success or cancellation. <code>ChildPump::drain()</code> runs one select loop over all pipes and answers a <code>DrainResult</code>. The <code>AsyncOps</code> forwarders delegate to them, and <code>Backoff</code> carries the schedule.</span></div>
+      <div class="feature"><strong>Child processes</strong><span><code>ChildRun</code> runs one child with a deadline and a per-stream byte cap, blocking through <code>run()</code> or on the loop through <code>launch()</code>. <code>ChildPump</code> reads its pipes to EOF without one wedged pipe blocking another. A timed-out child is terminated through a TERM, grace, KILL ladder.</span></div>
+      <div class="feature"><strong>ForkedTask</strong><span>Forks a child, streams its frames back to the loop over a <code>ForkChannel</code>, and settles with the child's exit status. Requires ext-pcntl and ext-posix; without them it refuses up front.</span></div>
+      <div class="feature"><strong>AsyncCache</strong><span>TTL'd async memo. It is loop-free and arms no timers: fetch(key, loader) coalesces in-flight loads, serves fresh entries instantly and can serve stale values on loader failure. An optional entry cap evicts the least-recently-stored value.</span></div>
+      <div class="feature"><strong>Suspended</strong><span>A paused command as data: a resume closure paired with its state. resume() hands the Cmd closure to the resumer exactly once; a second call yields null, never a double-fire.</span></div>
+      <div class="feature"><strong>CallbackSubscription</strong><span>The disposable handle onCancel() and Subscriptions::of() hand out. unsubscribe() drops a registration that has not fired; handles for work already done are born spent.</span></div>
+      <div class="feature"><strong>Timeout / cancellation exceptions</strong><span>OperationCancelledException and TimeoutException are plain RuntimeException subclasses. TimeoutException carries seconds() and label() context.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 style="margin-top: 40px;">Concepts</h3>
+    <p>The library has three ways to wait, and the choice decides which helper you call. Promise helpers (<code>AsyncOps::withTimeout()</code>, <code>retry()</code>, <code>debounce()</code>) return promises and arm their timers on a <code>React\EventLoop\LoopInterface</code>, which defaults to the shared loop. Blocking engines (<code>Retry::bounded()</code>, <code>Retry::nap()</code>, <code>ChildPump::drain()</code>) run a select or sleep loop of their own and never touch the event loop, so they suit a CLI that has no loop running. <code>Await::until()</code> is the one place a CLI entry point may block on the loop.</p>
+    <p>Cancellation is split in two. A <code>CancellationSource</code> is the writer and a <code>CancellationToken</code> is the reader. You pass the token down to every operation and keep the source where you decide to stop. Every registration returns a <code>Subscription</code>, so a component can unhook its callback when it is torn down.</p>
+    <p>Process helpers are built on the same vocabulary. <code>ChildRun</code> never hands argv to a shell, except through <code>commandLine()</code>, which is the one explicit exception. The default deadline and per-stream cap are ten seconds and 8 MiB.</p>
+
+    <h3 style="margin-top: 40px;">Tasks and recipes</h3>
+    <p><strong>Cancel a retry from the UI.</strong> Pass the token to <code>retry()</code>, and cancelling the source aborts the attempts that have not started yet.</p>
+    <pre class="code"><code class="language-php">$source = CancellationSource::new();
+$promise = AsyncOps::retry(
+    static fn () =&gt; fetchRemote(),
+    attempts: 5,
+    baseBackoffSeconds: 0.2,
+    token: $source-&gt;token(),
+    maxTotalSeconds: 10.0,
+);
+
+// Later, from a key handler:
+$source-&gt;cancel();</code></pre>
+
+    <p><strong>Run a command with a deadline.</strong> <code>ChildRun</code> returns a <code>ChildResult</code> that reports how the child ended.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Async\ChildRun;
+
+$r = ChildRun::new(['git', 'status', '--porcelain'])
+    -&gt;withTimeout(5.0)
+    -&gt;withMaxBytes(1_048_576)
+    -&gt;run();
+
+if ($r-&gt;timedOut()) {
+    // the child was terminated after the deadline
+} elseif ($r-&gt;succeeded()) {
+    // $r-&gt;stdout holds the captured output
+}</code></pre>
+
+    <p><strong>Cache a slow lookup with a TTL.</strong> <code>AsyncCache::fetch()</code> coalesces concurrent loads for one key and, when enabled, keeps serving the last good value if a reload fails.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Async\AsyncCache;
+
+$cache = AsyncCache::new(ttlSeconds: 30.0, serveStaleOnError: true, maxEntries: 200);
+
+$cache-&gt;fetch('weather:Berlin', static fn () =&gt; loadWeather('Berlin'))
+    -&gt;then(static fn (array $w) =&gt; render($w));</code></pre>
+
+    <p><strong>Debounce a search box.</strong> <code>AsyncOps::debounce()</code> returns a <code>Debounced</code> handle, so each keystroke invokes it and only the last call inside the window runs.</p>
+    <pre class="code"><code class="language-php">$search = AsyncOps::debounce(static fn (string $q) =&gt; runSearch($q), 0.3);
+
+$search('ma');
+$search('mai');
+$search('main'); // only this call runs, after 0.3 s of silence</code></pre>
+
+    <p><strong>Fan in several requests.</strong> <code>all()</code> resolves once every promise has settled, and <code>race()</code> adopts the first outcome.</p>
+    <pre class="code"><code class="language-php">AsyncOps::all([$a, $b, $c])-&gt;then(static fn (array $results) =&gt; print_r($results));
+AsyncOps::race([$primary, $mirror])-&gt;then(static fn ($first) =&gt; use_result($first));</code></pre>
+
+    <h3 style="margin-top: 40px;">Configuration and options</h3>
+    <p>There is no global configuration. Each helper takes its options as named arguments, and the constructor-style factories take the same knobs. The defaults below are the ones the source uses.</p>
+    <table class="api-table">
+    <tr><th>Option</th><th>Where</th><th>Default</th><th>Effect</th></tr>
+    <tr><td><code>attempts</code></td><td><code>AsyncOps::retry()</code></td><td>3</td><td>Total runs, including the first. Not a retry count.</td></tr>
+    <tr><td><code>baseBackoffSeconds</code> and <code>jitter</code></td><td><code>AsyncOps::retry()</code></td><td>0.1 and 0.0</td><td>Base delay for the exponential schedule, and the jitter fraction applied to it.</td></tr>
+    <tr><td><code>maxTotalSeconds</code></td><td><code>AsyncOps::retry()</code></td><td>null (no budget)</td><td>Overall budget. Exceeding it rejects with a TimeoutException.</td></tr>
+    <tr><td><code>trailing</code></td><td><code>AsyncOps::throttle()</code></td><td>false</td><td>When true, the last suppressed call fires at the end of the window.</td></tr>
+    <tr><td><code>ttlSeconds</code></td><td><code>AsyncCache::new()</code></td><td>60.0</td><td>How long a loaded value counts as fresh.</td></tr>
+    <tr><td><code>serveStaleOnError</code></td><td><code>AsyncCache::new()</code></td><td>false</td><td>Serve the last value when a reload fails, instead of rejecting.</td></tr>
+    <tr><td><code>maxEntries</code></td><td><code>AsyncCache::new()</code></td><td>null (no cap)</td><td>Caps stored keys. An adopt past the cap evicts the least-recently-stored entry.</td></tr>
+    <tr><td>Deadline and byte cap</td><td><code>ChildRun</code>, <code>ChildPump</code></td><td>10 seconds and 8 MiB per stream</td><td>Set with <code>withTimeout()</code> and <code>withMaxBytes()</code> on <code>ChildRun</code>. On the pump, <code>withDeadline()</code> takes an absolute monotonic time, and <code>withCap()</code> sets the byte cap.</td></tr>
+    <tr><td><code>MAX_FRAME_BYTES</code></td><td><code>ForkChannel</code></td><td>16 MiB</td><td>Largest frame a channel will send or accept. A larger length prefix is treated as a broken peer.</td></tr>
+    <tr><td><code>setLogSink()</code></td><td><code>AsyncOps</code></td><td>error_log()</td><td>Destination for swallowed-failure notices.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 40px;">Architecture</h3>
+    <p><code>AsyncOps</code> is a facade. Its methods forward to focused classes: <code>Timeouts</code> holds the timer machinery for <code>withTimeout()</code> and <code>withDeadline()</code>, <code>Retry</code> holds the waiting engines and <code>Backoff</code> holds the schedule, <code>Debounced</code> and <code>Throttled</code> hold the timer state behind the two rate limiters, and <code>Pending</code> carries the progress hook.</p>
+    <p>Child processes take two paths. <code>ChildRun::run()</code> drives <code>ChildPump</code>, a <code>stream_select()</code> loop over every open pipe, so a child that fills its stderr buffer cannot wedge a read of stdout. <code>ChildRun::launch()</code> builds a <code>ChildRunLaunch</code> that does the same work as loop callbacks. A periodic check, rather than a readable stream, observes the exit, and a child that is still running when its kill budget is spent is reaped on a later tick, so the loop never blocks on <code>proc_close()</code>.</p>
+    <p><code>ForkedTask</code> connects parent and child with a <code>ForkChannel</code>, a socket pair that carries 4-byte big-endian length-prefixed frames. The parent reads frames on the loop, and it kills and reaps the child when the token fires, the deadline passes or the collector throws.</p>
+
+    <h3 style="margin-top: 40px;">Examples</h3>
     <ul>
-      <li><strong>Unified cancellation</strong> — replace ad-hoc cancellation scattered across async consumers with one shared pattern; the dependents census as of 2026-11 is sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server and candy-codetime.</li>
-      <li><strong>Subscription lifecycle ownership</strong> — Subscriptions::compose() gathers many disposal handles so teardown can dispose them all atomically (the sugar-core runtime keeps its own internal variant; this is the public standalone one).</li>
-      <li><strong>Async operation helpers</strong> — withTimeout, retry, debounce, throttle built on top of react/promise and react/event-loop; loop-free blocking engines (<code>Retry::bounded()</code>, <code>nap()</code>, <code>reconnect()</code>, <code>ChildPump::drain()</code>) sit behind the <code>AsyncOps</code> forwarders.</li>
+      <li><code>examples/async-operations.php</code> covers the timer-backed helpers on a private loop: <code>debounce()</code> and <code>throttle()</code> return invokable handles, and <code>all()</code>, <code>race()</code> and <code>boundWait()</code> are demonstrated alongside them.</li>
+      <li><code>examples/cache.php</code> shows <code>AsyncCache</code> as cache-aside with coalescing, a monotonic clock seam that needs no sleeps, serve-stale-on-error and the bounded entry cap.</li>
+      <li><code>examples/cancellation.php</code> walks the cancellation vocabulary: sources, tokens and disposable registrations, plus the rule that cancellation is not an error. Every promise there settles synchronously, so the example runs without an event loop.</li>
     </ul>
+    <p>Run them from the library directory with <code>php examples/cache.php</code> and the same pattern for the others, after <code>composer install</code>.</p>
+
+    <h3 style="margin-top: 40px;">Testing</h3>
+    <pre class="code"><code class="language-shell">composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The suite runs from <code>tests/bootstrap.php</code>, which calls <code>SugarCraft\Testing\LoopPin::pinStableClock()</code>. That call matters because ext-uv computes timer deadlines against a clock refreshed once per loop iteration, so a timer armed after a long synchronous idle is already overdue. <code>ExamplesTest</code> lints and runs every example, and <code>ReadmeSnippetsTest</code> does the same for every PHP fence in the README. Tests that arm timers should assert scheduled state, using <code>isPending()</code> on the timer handles, and not wall-clock time.</p>
+    <p><code>ProgramSimulator</code> from sugar-testing does not drive timers, because it pumps stdin only. Promises waiting on the shared <code>\React\EventLoop\Loop::get()</code> loop never settle under it, so drive async TUI flows with a real loop and a guard timer.</p>
+
+    <h3 style="margin-top: 40px;">Troubleshooting</h3>
+    <p><strong>A rejected promise exits 0 with no message.</strong> ReactPHP does not print unhandled rejections. Attach a rejection handler in examples and tests, with <code>then(null, ...)</code> or <code>otherwise()</code>.</p>
+    <p><strong>A timeout never fires.</strong> The loop must run. Call <code>$loop-&gt;run()</code> on the loop you passed in, or let your host program's loop drive the timers this library arms.</p>
+    <p><strong>A <code>singleFlight</code> or <code>AsyncCache</code> behaves oddly after a fork.</strong> Its state lives in one process. Create these objects after <code>pcntl_fork()</code>, in the process that will use them.</p>
+    <p><strong>A <code>ForkedTask</code> call throws at once.</strong> It needs ext-pcntl and ext-posix, and it refuses up front with a RuntimeException rather than returning a promise that can never settle.</p>
+    <p><strong>Failure notices interleave with the terminal output.</strong> The default sink writes to stderr. Install a sink with <code>AsyncOps::setLogSink()</code> to route notices into your own diagnostics.</p>
+    <p><strong>Composer resolves an old <code>candy-async</code>.</strong> The package was renamed to <code>sugarcraft/sugar-async</code> in the 2026-10 rename, and no compatibility aliases were shipped. Update the use statements.</p>
+
+    <h3 style="margin-top: 40px;">Upstream mapping</h3>
+    <p>sugar-async is an original SugarCraft design, with no one-to-one Go counterpart. Some of its shapes are borrowed from other ecosystems, and the source cites them where they apply.</p>
+    <table class="api-table">
+    <tr><th>SugarCraft type</th><th>Borrowed shape</th></tr>
+    <tr><td><code>Cancellable</code>, <code>CancellationSource</code>, <code>CancellationToken</code></td><td>Go's <code>context.Context</code> Done channel, and the source and token split of .NET's CancellationTokenSource</td></tr>
+    <tr><td><code>Subscription</code>, <code>CallbackSubscription</code></td><td>RxJS's Subscription, and Node's <code>EventEmitter.removeListener</code></td></tr>
+    <tr><td><code>Subscriptions</code></td><td>RxJS's Subscription group</td></tr>
+    <tr><td><code>ForkChannel</code></td><td>The socketpair frame channels used by candy-code's child-process relays and candy-git-server's WorkerFork. This is an in-family shape, not an upstream one.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 40px;">Caveats</h3>
+    <p>Every stateful surface is per-process. That covers a <code>singleFlight</code> closure's in-flight map, an <code>AsyncCache</code> store and its coalesced flights, a <code>Debounced</code> handle's pending burst, a <code>Throttled</code> handle's cooldown and queued trailing call, and a <code>CancellationSource</code>'s registered callbacks. Sharing one across a fork boundary is unsafe. Promises settled in one process never reach the other, and a callback registered before the fork fires in whichever process cancels.</p>
+
+    <h3 style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>There is no tagged release yet, so the package follows the <code>dev-master</code> track of the monorepo. The 2026-10 rename to <code>sugar-async</code> is the one name change on record. Watch the repository history for changes until a first release is cut.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-async">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-async/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-async/tree/master/sugar-async/examples">Runnable examples</a></li>
-      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-async/tree/master/examples">Runnable examples</a></li>
+      <li>Original SugarCraft design. No one-to-one Go counterpart.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -102,8 +208,8 @@ $promise = AsyncOps::retry(
 <tr><td>Subscriptions</td><td>count(): int · isEmpty(): bool</td><td>Size of the composite</td></tr>
 <tr><td>Subscriptions</td><td>disposeAll(): void</td><td>@internal teardown worker behind unsubscribe(): snapshot-and-clear first, then dispose every handle; a throwing unsubscribe() is logged and never propagated — <code>error_log()</code> by default, redirectable via <code>AsyncOps::setLogSink()</code> (the same hook-failure contract as CancellationToken::fireCallbacks())</td></tr>
 <tr><td>AsyncOps</td><td>setLogSink(?callable $sink): void</td><td>The diagnostics door for the four swallowed-failure sites (cancellation callbacks, retry <code>onRetry:</code>, <code>pendingNotice</code> hooks, the <code>Subscriptions::unsubscribe()</code> disposal pass): route the notices into host logging; <code>null</code> restores the <code>error_log()</code> default</td></tr>
-<tr><td>AsyncOps</td><td>withTimeout(?LoopInterface, PromiseInterface, float, ?string label): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException (seconds and optional label readable on it); null loop uses the shared one</td></tr>
-<tr><td>AsyncOps</td><td>withDeadline(?LoopInterface, PromiseInterface, float, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
+<tr><td>AsyncOps</td><td>withTimeout(PromiseInterface, float, ?LoopInterface, ?string label): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException (seconds and optional label readable on it); null loop uses the shared one</td></tr>
+<tr><td>AsyncOps</td><td>withDeadline(PromiseInterface, float, ?LoopInterface, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
 <tr><td>AsyncOps</td><td>cancellable(PromiseInterface, ?CancellationToken, ?callable onCancel): PromiseInterface</td><td>Token guard: cancellation rejects with OperationCancelledException and runs the onCancel hook; the registration auto-un-registers when the inner promise settles — no loop parameter</td></tr>
 <tr><td>AsyncOps</td><td>singleFlight(callable keyFn, callable worker): callable</td><td>Coalesces concurrent same-key calls into one in-flight worker — every joined caller receives the outcome; the slot frees on settle so the next call may start a fresh flight; the join is not abandonable by design (wrap it in <code>cancellable()</code> when the wait itself must be abandonable); stateful — never share across pcntl_fork</td></tr>
 <tr><td>AsyncOps</td><td>retry(operation, attempts: 3, baseBackoffSeconds: 0.1, token:, maxTotalSeconds:, jitter: 0.0, loop:, now:, onRetry:): PromiseInterface</td><td>Retries a thunk with exponential backoff; a canceled token stops the remaining attempts (reject OperationCancelledException); maxTotalSeconds rejects with TimeoutException on budget exhaustion; onRetry fires when each backoff is scheduled and its errors are never propagated (they route through the log sink)</td></tr>
@@ -113,8 +219,8 @@ $promise = AsyncOps::retry(
 <tr><td>AsyncOps</td><td>drain(pipes, deadline, maxBytes)</td><td>Forwarder to <code>ChildPump::drain()</code> — one select loop over all pipes, returning a <code>DrainResult</code></td></tr>
 <tr><td>AsyncOps</td><td>all(iterable): PromiseInterface</td><td>Fan-in on every promise; empty input resolves to []</td></tr>
 <tr><td>AsyncOps</td><td>race(iterable): PromiseInterface</td><td>Adopts the first settled outcome; empty input throws InvalidArgumentException at the call site</td></tr>
-<tr><td>AsyncOps</td><td>pendingNotice(PromiseInterface, float, callable onPending, ?LoopInterface): PromiseInterface</td><td>Fires the required advisory hook once if the promise is still unsettled after N seconds; the wait continues and the inner is never canceled (a hook passed to the deprecated onPending() delegates here)</td></tr>
-<tr><td>AsyncOps</td><td>boundWait(PromiseInterface, float, ?LoopInterface, ?string label): PromiseInterface</td><td>Bounded wait: still unsettled after N seconds rejects the wait with a TimeoutException naming (still pending) while the inner runs on (the null-hook mode of the deprecated onPending() delegates here)</td></tr>
+<tr><td>AsyncOps</td><td>pendingNotice(PromiseInterface, float, callable onPending, ?LoopInterface): PromiseInterface</td><td>Fires the required advisory hook once if the promise is still unsettled after N seconds; the wait continues and the inner is never canceled</td></tr>
+<tr><td>AsyncOps</td><td>boundWait(PromiseInterface, float, ?LoopInterface, ?string label): PromiseInterface</td><td>Bounded wait: still unsettled after N seconds rejects the wait with a TimeoutException naming (still pending) while the inner runs on</td></tr>
 <tr><td>AsyncOps</td><td>debounce(callable, float, ?LoopInterface, ?CancellationSource): Debounced</td><td>Debounce wrapper returning a Debounced handle; only the last call fires after the window; optional source cancels it</td></tr>
 <tr><td>AsyncOps</td><td>throttle(callable, float, ?LoopInterface, bool trailing): Throttled</td><td>Throttle wrapper returning a Throttled handle; fires at most once per interval, trailing edge opt-in</td></tr>
 <tr><td>Debounced</td><td>__invoke(...) · flush() · isPending() · unsubscribe() · isActive()</td><td>Handle AsyncOps::debounce() returns: each invoke returns a promise — the scheduled call resolves with the result (rejects if the work throws), superseded calls resolve <code>null</code>; <code>flush()</code> runs the pending burst immediately and returns that PromiseInterface (give it a rejection handler, or a rejecting burst dies silently); <code>unsubscribe()</code> drops the burst (its promise resolves <code>null</code>) and spends the handle — later calls answer <code>null</code> without arming timers</td></tr>
@@ -130,5 +236,8 @@ $promise = AsyncOps::retry(
 <tr><td>TimeoutException</td><td>seconds(): ?float · label(): ?string</td><td>Rejection from withTimeout(), withDeadline(), boundWait() expiry, and retry()'s maxTotalSeconds budget; carries the budget and optional label for message building</td></tr>
 </tbody>
 </table>
+    <!-- api-reference:generated -->
   </div>
 </section>
+
+    

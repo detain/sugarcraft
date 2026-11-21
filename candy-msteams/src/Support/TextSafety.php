@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\Support;
 
-use SugarCraft\Code\Context\PromptFence;
+use SugarCraft\Plugins\Support\PromptFence;
 
 /**
  * The trust floor for inbound platform text (docs/SPEC.md §6.4 trust law, docs/SPEC.md §9.5):
@@ -22,7 +22,7 @@ use SugarCraft\Code\Context\PromptFence;
  * token, app passwords, client secrets — anything the operator named)
  * never echo back into a transcript or channel, in either direction.
  */
-final class TextSafety
+final class TextSafety implements \SugarCraft\Plugins\Bridge\TextGuard
 {
     /** @param list<string> $secrets */
     public function __construct(

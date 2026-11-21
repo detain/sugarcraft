@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
-use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
+use CandyCode\Bundles\MsTeams\Candy\ServeError;
 use CandyCode\Bundles\MsTeams\MsTeams\Commands;
 use CandyCode\Bundles\MsTeams\MsTeams\Jwt;
 use CandyCode\Bundles\MsTeams\MsTeams\Jwk;
@@ -26,13 +26,13 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
-use SugarCraft\Code\Channels\AcceptsHttpRequests;
-use SugarCraft\Code\Channels\ChannelContext;
-use SugarCraft\Code\Channels\ChannelInterface;
-use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Server\Auth\TokenStore;
-use SugarCraft\Code\Server\DiscoveryFile;
-use SugarCraft\Code\Server\StateDir;
+use SugarCraft\Plugins\Channel\AcceptsHttpRequests;
+use SugarCraft\Plugins\PluginContext;
+use SugarCraft\Plugins\Channel\ChannelInterface;
+use SugarCraft\Plugins\Channel\CredentialWriter;
+use SugarCraft\Plugins\Channel\WritesCredentials;
+use SugarCraft\Plugins\Bridge\HostServicesServeClient;
+use SugarCraft\Plugins\Host\HostServices;
 
 // Entrypoint self-bootstrap: the P1 loader require_once's THIS file and
 // nothing else, so the bundle's sibling classes need their autoloader
@@ -46,16 +46,14 @@ require_once __DIR__ . '/autoload.php';
  * The `sugarcraft/candy-msteams` channel root (docs/SPEC.md §8): Microsoft Teams dialogs, over
  * the INVERSE transport.
  *
- * Discord keeps a websocket to its platform and dials the local serve;
- * Teams keeps a websocket to the local serve and lets Microsoft POST at
+ * Discord keeps a websocket to its platform; Teams lets Microsoft POST at
  * US: the daemon's `/channels/msteams/…` mount (docs/SPEC.md §8.1) lands in
  * {@see handleRequest()}, where Bot Framework JWT validation TERMINATES —
  * the candy-code router never speaks Bot Framework, so every byte of that
  * trust door lives here, over an injected signing-key roster. Outbound
- * rides the activity's serviceUrl conversation reference (docs/SPEC.md §8.6); the
- * serve leg is the same self-dial state machine the discord bundle runs,
- * because durable cursors do not care which side originally opened a
- * socket.
+ * rides the activity's serviceUrl conversation reference (docs/SPEC.md §8.6). The
+ * serve leg calls the host the channel is given (PL-5d): no socket is dialled, and
+ * the inbound leg is the only one that crosses a network boundary.
  *
  * Dark until `channels.msteams.enabled === true`; policy read from the
  * USER tier only; credentials only from the 0600 channels store (with the
@@ -65,7 +63,7 @@ require_once __DIR__ . '/autoload.php';
  * platform-hosted attachment bytes only and REFUSES Graph-hosted content
  * with a disclosed note — never a silent drop.
  */
-final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
+final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests, WritesCredentials
 {
     /** Activities are small JSON; inline attachment bytes are NOT v1 (docs/SPEC.md §8.7). */
     private const MAX_BODY_BYTES = 1_048_576;
@@ -78,7 +76,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
     private ?SessionMap $map = null;
 
-    private ?ServeBridge $serve = null;
+    private ?HostServicesServeClient $serve = null;
+
+    /** The in-process host the serve calls go to (PL-5d). */
+    private ?HostServices $host = null;
 
     private ?ConversationRouter $router = null;
 
@@ -86,8 +87,6 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
     /** @var list<MsTeamsAccount> */
     private array $faces = [];
-
-    private ?ConversationRouter $placeholderRouter = null;
 
     /** @var array<string, array{account: string, jwt: Jwt}> appId => validator */
     private array $validators = [];
@@ -103,21 +102,30 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
     private string $mountPath = '/channels/msteams/api/messages';
 
-    private ?TimerInterface $pollTimer = null;
-
     private ?TimerInterface $pruneTimer = null;
 
-    private int $nextDialAt = 0;
-
-    private string $dialIdentity = '';
-
     private bool $disposed = false;
+
+    /** The settings section the host froze at launch (plan 4.14). */
+    private array $cfg = [];
 
     /** Per-source budget for the webhook door: 30 requests a minute, checked before any JWKS dial. */
     private RateLimiter $webhookLimit;
 
     /** Shutdown window for in-flight Teams posts (dispose law). */
     private const DRAIN_SECONDS = 5.0;
+
+    /**
+     * The boot hello's retry ladder. The pre-5d ServeBridge kept it (0.25 s doubling, 30 s cap,
+     * 60 attempts); a hello refused at boot must not leave the channel dead until a serve restart.
+     */
+    private const DIAL_BACKOFF_BASE_SECONDS = 0.25;
+    private const DIAL_BACKOFF_MAX_SECONDS = 30.0;
+    private const DIAL_MAX_ATTEMPTS = 60;
+
+    private int $dialAttempts = 0;
+
+    private ?TimerInterface $dialTimer = null;
 
     public function __construct()
     {
@@ -129,16 +137,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         return 'msteams';
     }
 
-    public function start(ChannelContext $context): void
+    public function start(PluginContext $context, ?CredentialWriter $writer = null): void
     {
-        // Version-skew guard: a bundle newer than its host candy-code must
-        // no-op loudly, not fatal the launch.
-        if (!method_exists(Bootstrap::class, 'channelsMsteamsSettings')) {
-            ($context->log)('channels.msteams: candy-code too old for this bundle — refusing to start');
-
-            return;
-        }
-        $cfg = Bootstrap::channelsMsteamsSettings();
+        $cfg = $context->config;
+        $this->cfg = $cfg;
         if (($cfg['enabled'] ?? false) !== true) {
             ($context->log)('channels.msteams: disabled posture, nothing started');
 
@@ -150,7 +152,18 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             ($context->log)($line);
         });
 
-        $store = new CredentialStore(CredentialStore::defaultPath());
+        if ($context->stateDir === null || $context->stateDir === '') {
+            ($context->log)('channels.msteams: no state directory, nothing started');
+
+            return;
+        }
+        if ($context->host === null) {
+            ($context->log)('channels.msteams: no serve host wired in, nothing started');
+
+            return;
+        }
+        $this->host = $context->host;
+        $store = new CredentialStore(CredentialStore::pathIn($context->stateDir), $writer);
         $accounts = $this->accountNames($cfg, $store);
 
         $transport = (array) ($cfg['transport'] ?? []);
@@ -225,7 +238,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             }
         }
 
-        $dir = Bootstrap::trustedConfigDirPath() . '/msteams';
+        $dir = $context->stateDir . '/msteams';
         if (!is_dir($dir)) {
             // msteams-20 leg 030: a read-only config tree must cost ONE clean
             // refusal line and a stopped boot — never a raw PHP warning inside
@@ -248,6 +261,43 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $this->mountPath = '/channels/msteams/api/messages';
         }
 
+        // The serve client and the router exist before any face: a face takes its router at
+        // construction, so there is no placeholder to swap in when the serve answers.
+        $this->serve = new HostServicesServeClient(
+            $this->host,
+            static fn (string $method, \Throwable $e): \Throwable => ServeError::fromHost($method, $e),
+        );
+        $router = new ConversationRouter(
+            $this->serve,
+            $this->map,
+            $this->log,
+            $this->safety,
+            $this->loop,
+            [
+                'queue' => (array) ($cfg['queue'] ?? []),
+                'approvals' => (array) ($cfg['approvals'] ?? []),
+            ],
+        );
+        $this->router = $router;
+        $this->queueGate = new QueueGate(
+            $this->loop,
+            (int) (((array) ($cfg['queue'] ?? []))['debounceMs'] ?? QueueGate::DEFAULT_DEBOUNCE_MS),
+            (int) (((array) ($cfg['queue'] ?? []))['maxPending'] ?? QueueGate::DEFAULT_MAX_PENDING),
+        );
+        $router->setQueueGate($this->queueGate);
+        $router->setPairHandler(function (string $key, array $ref, array $args): void {
+            $account = Keys::parse($key)['account'];
+            $isDm = \str_starts_with((string) Keys::parse($key)['rest'], 'dm:');
+            $actor = (string) (((array) ($ref['__actor'] ?? []))['userId'] ?? '');
+            foreach ($this->faces as $face) {
+                if ($face->accountName() === $account) {
+                    $face->pairCommand($ref, $args, $actor, $isDm);
+
+                    return;
+                }
+            }
+        });
+
         $roster = self::rosterProvider($jwksUrl, $insecure);
         foreach ($credentials as $account => $triple) {
             if (isset($this->validators[$triple['appId']])) {
@@ -269,8 +319,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
                 $account,
                 $triple['appId'],
                 $rest,
-                // The router arrives with the serve; faces read it lazily.
-                $this->pendingRouter(),
+                $router,
                 $this->faceConfig($cfg, $account),
                 $this->log,
                 $pairing,
@@ -280,23 +329,15 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             );
         }
 
-        // Faces exist before any dial: register them on the placeholder so
-        // pre-serve inbound reaches the failWith door (loudly) instead of
-        // dropping silently. rebuildRouter() swaps in the live router and
-        // re-adds them there when serve appears.
-        $placeholder = $this->pendingRouter();
         foreach ($this->faces as $face) {
-            $placeholder->addChannel($face, $face->accountName());
+            $router->addChannel($face, $face->accountName());
         }
 
-        // Timer-law guard (docs/SPEC.md §9.5's shape): an escaping throw inside a periodic
-        // closure kills the shared loop for EVERYONE, so both housekeeping
-        // ticks swallow at the door and log — a broken db or a half-written
-        // discovery must cost one tick, never the process.
-        $this->pollTimer = $this->loop->addPeriodicTimer(5.0, function (): void {
-            $this->pollServeGuarded();
-        });
-        $this->pollServe();
+        // The host is in process, so connecting is the hello and nothing more. A refused hello
+        // leaves the faces up with no serve, and the router answers what it cannot route, until
+        // the retry ladder gets a hello through.
+        $this->dialServe();
+
         // The dedupe ledger stays bounded without a platform-side sweep
         // (docs/SPEC.md §9.5); 6 h is amply frequent for a 7-day keep.
         $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
@@ -304,14 +345,37 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         });
     }
 
-    /** msteams-18: the poll tick, fenced — a throw costs one tick, not the loop. */
-    private function pollServeGuarded(): void
+    /**
+     * One boot hello, and on refusal the next one after the ladder's delay, up to DIAL_MAX_ATTEMPTS.
+     * The router adopts its bindings on the first hello that lands.
+     */
+    private function dialServe(): void
     {
-        try {
-            $this->pollServe();
-        } catch (\Throwable $e) {
-            $this->log?->warn('channels.msteams.poll_tick_failed', ['error' => $e->getMessage()]);
+        if ($this->disposed || $this->host === null) {
+            return;
         }
+        $this->dialAttempts++;
+        $this->host->connect()->then(function (): void {
+            $this->dialTimer = null;
+            $this->router?->adoptBindings();
+            $this->log?->info('channels.msteams.serve_connected');
+        }, function (\Throwable $e): void {
+            $this->dialTimer = null;
+            $this->log?->warn('channels.msteams.serve_dial_failed', ['error' => $e->getMessage(), 'attempt' => $this->dialAttempts]);
+            if ($this->disposed) {
+                return;
+            }
+            if ($this->dialAttempts >= self::DIAL_MAX_ATTEMPTS) {
+                $this->log?->warn('channels.msteams.serve_giveup', ['attempts' => $this->dialAttempts]);
+
+                return;
+            }
+            $delay = \min(
+                self::DIAL_BACKOFF_MAX_SECONDS,
+                self::DIAL_BACKOFF_BASE_SECONDS * (2 ** \min(8, $this->dialAttempts - 1)),
+            );
+            $this->dialTimer = $this->loop?->addTimer($delay, fn () => $this->dialServe());
+        });
     }
 
     /** msteams-18: the prune tick, fenced (a corrupt session db must not kill the loop). */
@@ -427,13 +491,13 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         }
         $this->disposed = true;
 
-        foreach ([$this->pollTimer, $this->pruneTimer] as $timer) {
+        foreach ([$this->pruneTimer, $this->dialTimer] as $timer) {
             if ($timer !== null && $this->loop !== null) {
                 $this->loop->cancelTimer($timer);
             }
         }
-        $this->pollTimer = null;
         $this->pruneTimer = null;
+        $this->dialTimer = null;
 
         // Drain before the router and serve go: a reply already on the wire
         // should land, and anything still open after the window is cancelled.
@@ -445,13 +509,14 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $face->cancelAllTimers();
             $face->stop();
         }
-        $this->serve?->stop();
+        $this->host?->disconnect();
+        $this->host = null;
         $this->serve = null;
         $this->router = null;
-        // Faces hold a reference to the (possibly placeholder) router; the
-        // placeholder refuses everything once disposed.
+        // Faces are stopped above. Host disconnect drains the events still owed to the
+        // in-process client through the live router first, so a late reply is delivered
+        // via its face's deliver path before the router and serve are released.
         $this->faces = [];
-        $this->placeholderRouter = null;
         $this->validators = [];
     }
 
@@ -484,121 +549,6 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     public function faceNames(): array
     {
         return array_map(static fn (MsTeamsAccount $face): string => $face->accountName(), $this->faces);
-    }
-
-    // ── serve leg (the shared P2 state machine) ──
-
-    private function pollServe(): void
-    {
-        if ($this->loop === null || $this->map === null || $this->safety === null) {
-            return;
-        }
-        if (time() < $this->nextDialAt) {
-            return;
-        }
-        $stateDirPath = (string) (getenv('CANDY_CODE_SERVER_DIR')
-            ?: (rtrim((string) (getenv('HOME') ?: ''), '/') . '/.candy-code/server'));
-        try {
-            $dir = StateDir::existing($stateDirPath);
-        } catch (\Throwable $e) {
-            $this->log?->warn('channels.msteams.state_dir_refused', ['error' => $e->getMessage()]);
-            $this->nextDialAt = time() + 30;
-
-            return;
-        }
-        if ($dir === null) {
-            return; // no serve yet — the 5s poll keeps trying (this is the boot order, not an error)
-        }
-        $record = DiscoveryFile::read($dir);
-        if ($record === null || !$record->isLive()) {
-            return;
-        }
-        $wsUrl = ServeBridge::wsUrlFrom((string) ($record->toArray()['url'] ?? ''));
-        if ($wsUrl === null) {
-            $this->log?->warn('channels.msteams.discovery_url_untranslatable');
-
-            return;
-        }
-        $tokenFile = $dir->path . '/' . TokenStore::FILE;
-        $stat = @lstat($tokenFile);
-        $serveToken = $stat !== false && (($stat['mode'] & 0170000) === 0100000)
-            ? trim((string) @file_get_contents($tokenFile))
-            : '';
-        if ($serveToken === '') {
-            return; // never-mints posture: only read a token an authorized serve wrote
-        }
-
-        $identity = $wsUrl . '|' . sha1($serveToken);
-        if ($identity === $this->dialIdentity) {
-            return;
-        }
-        $this->rebuildRouter($wsUrl, $serveToken, $identity);
-    }
-
-    private function rebuildRouter(string $wsUrl, string $serveToken, string $identity): void
-    {
-        $cfg = method_exists(Bootstrap::class, 'channelsMsteamsSettings') ? Bootstrap::channelsMsteamsSettings() : [];
-        $this->serve?->stop();
-        $this->queueGate?->cancelAll();
-
-        $this->serve = new ServeBridge($wsUrl, $serveToken, 'subprotocol', $this->log, $this->loop);
-        $this->safety?->addSecret($serveToken);
-        $this->router = new ConversationRouter(
-            $this->serve,
-            $this->map,
-            $this->log,
-            $this->safety,
-            $this->loop,
-            [
-                'queue' => (array) ($cfg['queue'] ?? []),
-                'approvals' => (array) ($cfg['approvals'] ?? []),
-            ],
-        );
-        $this->queueGate = new QueueGate(
-            $this->loop,
-            (int) (((array) ($cfg['queue'] ?? []))['debounceMs'] ?? QueueGate::DEFAULT_DEBOUNCE_MS),
-            (int) (((array) ($cfg['queue'] ?? []))['maxPending'] ?? QueueGate::DEFAULT_MAX_PENDING),
-        );
-        $this->router->setQueueGate($this->queueGate);
-        $this->router->setPairHandler(function (string $key, array $ref, array $args): void {
-            $account = Keys::parse($key)['account'];
-            $isDm = \str_starts_with((string) Keys::parse($key)['rest'], 'dm:');
-            $actor = (string) (((array) ($ref['__actor'] ?? []))['userId'] ?? '');
-            foreach ($this->faces as $face) {
-                if ($face->accountName() === $account) {
-                    $face->pairCommand($ref, $args, $actor, $isDm);
-
-                    return;
-                }
-            }
-        });
-        foreach ($this->faces as $face) {
-            $face->rebindRouter($this->router);
-            $this->router->addChannel($face, $face->accountName());
-        }
-
-        $this->dialIdentity = ''; // any failure below re-dials fresh
-        $this->serve->start(
-            function (string $why): void {
-                $this->log?->warn('channels.msteams.serve_down', ['why' => $why]);
-            },
-            function () use ($identity): void {
-                // The ladder gave up (gone serve / dead host): back off the
-                // discovery poll itself, keep the channel alive.
-                $this->nextDialAt = time() + 30;
-                $this->dialIdentity = '';
-                $this->log?->warn('channels.msteams.serve_giveup', ['retry' => 'in 30s']);
-            },
-        )->then(function () use ($identity): void {
-            // Record the dial that succeeded: the next tick with the same
-            // discovery + token must NOT rebuild (without this the router
-            // churned every 5 s and the re-dial law was untested).
-            $this->dialIdentity = $identity;
-            $this->router?->adoptBindings();
-            $this->log?->info('channels.msteams.serve_connected');
-        }, function (\Throwable $e): void {
-            $this->log?->warn('channels.msteams.serve_dial_failed', ['error' => $e->getMessage()]);
-        });
     }
 
     // ── config shaping ──
@@ -736,25 +686,5 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     private static function nonEmptyString(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
-    }
-
-    /**
-     * Faces take a router at construction; the real one arrives with the
-     * first serve dial. The placeholder's bridge never starts, so every
-     * call on it refuses 'not connected' — and the refusal still reaches
-     * the channel, because start() registers the faces on this very router
-     * (pre-dial inbound is LOUD, never a silent drop).
-     */
-    private function pendingRouter(): ConversationRouter
-    {
-        if ($this->placeholderRouter !== null) {
-            return $this->placeholderRouter;
-        }
-        $serve = new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', $this->log, $this->loop);
-        // Never started, never dials: start() is only called on the
-        // rebuilt instance; this one exists to satisfy the constructor.
-        $this->placeholderRouter = new ConversationRouter($serve, $this->map, $this->log, $this->safety, $this->loop, []);
-
-        return $this->placeholderRouter;
     }
 }

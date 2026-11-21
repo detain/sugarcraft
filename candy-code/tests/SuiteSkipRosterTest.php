@@ -111,6 +111,10 @@ final class SuiteSkipRosterTest extends TestCase
     private const SETSID_ENTRY =
         'SugarCraft\\Code\\Tests\\Support\\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
 
+    /** The HelpTest poison quarantine key: unconditional, rostered as an accepted local red. */
+    private const HELP_POISON_ENTRY =
+        'SugarCraft\\Code\\Tests\\Cli\\HelpTest::testAPoisonedCataloguePageIsSanitizedWithoutLosingItsRows';
+
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
      * shell state exactly, so the layout pins stay deterministic no matter
@@ -315,7 +319,9 @@ final class SuiteSkipRosterTest extends TestCase
                     ? []
                     : [
                         self::SETSID_ENTRY => SuiteSkipRoster::EXPECTED[self::SETSID_ENTRY],
-                    ]),
+                    ]) + [
+                        self::HELP_POISON_ENTRY => SuiteSkipRoster::EXPECTED[self::HELP_POISON_ENTRY],
+                    ],
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '

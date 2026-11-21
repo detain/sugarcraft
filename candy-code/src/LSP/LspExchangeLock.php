@@ -6,7 +6,7 @@ namespace SugarCraft\Code\LSP;
 
 /**
  * Cross-process mutual exclusion for one {@see LspConnection}, plus the state
- * that must outlive whichever process held it last (audit B7).
+ * that must outlive whichever process held it last.
  *
  * WHY: candy-code runs every turn in a pcntl_fork()ed child and sub-agents in
  * further forks, and every fork inherits the language server's stdio pipes.

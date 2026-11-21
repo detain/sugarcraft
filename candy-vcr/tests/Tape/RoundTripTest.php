@@ -177,7 +177,7 @@ TAPE;
         $typed = '';
         foreach ($recompiled->events as $event2) {
             if ($event2->kind === \SugarCraft\Vcr\EventKind::Input) {
-                $typed .= (string) $event2->payload['b'];
+                $typed .= (\is_string($event2->payload['b']) ? $event2->payload['b'] : '');
             }
         }
         $this->assertSame($bytes, $typed);

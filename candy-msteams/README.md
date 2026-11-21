@@ -11,6 +11,10 @@ This guide is written from the code. Anything the code cannot confirm (Azure
 portal labels, tenant policy, Teams client behaviour) is marked
 **verify in your tenant**.
 
+Original work: this bundle has no upstream port, so it carries no `Mirrors charmbracelet/...`
+citation. It is a channel plugin for `candy-code serve` and sits outside the 42 + 22 package matrix
+in `docs/MATCHUPS.md`.
+
 ## Contents
 
 1. [Requirements](#requirements)
@@ -328,15 +332,21 @@ address. The webhook limiter is per remote address (see troubleshooting).
 
 ## Language
 
-Delivered chat copy rides the host's catalogs: the bundle has no `lang/`
-directory of its own — it is a trusted bundle living inside the candy-code
-process, so the host's catalogs are its catalogs. Every string a human sees
-in a conversation routes through `Lang::t()` over the `channels.msteams.*`
-key family in `candy-code/lang/`, mirrored across all host locales. Boot and
-log lines are deliberately content-free English: event names and account
-labels, never message bodies or secrets. Unlike `candy-discord`, this bundle
-does not yet ship a `UserFacingLiteralGuardTest` — new delivered strings are
-caught by review, and a guard is open as a fan-out cost arm.
+The bundle owns its catalog. Delivered chat copy routes through `Lang::t()`
+over the `channels.msteams.*` key family in `lang/`, a plugin-owned catalog
+loaded through `SugarCraft\Plugins\Lang`, mirrored across all twelve locales and
+checked by `tests/I18n/LangParityTest`.
+
+The group reveal notice, the approver pairing replies, the approval card and
+expiry text, the `[skipped: ...]` media notes and the refused-prompt notice are
+catalog keys too. `tests/I18n/UserFacingLiteralGuardTest` keeps them there: it
+token-scans `MsTeamsAccount.php` and `ConversationRouter.php` and fails on a
+prose literal that is not inside a `->log->` call, the `NoSessionIdException`
+constructor, or the `RuntimeException` rejection of `deliver` and
+`notifyConversation` in `MsTeamsAccount.php` (host-facing, never shown in chat).
+
+Boot and log lines are deliberately content-free English: event names and
+account labels, never message bodies or secrets.
 
 ## Settings reference
 
@@ -422,8 +432,11 @@ with `why` set to `no bearer` or `token refused`). For a refused token, check:
 - `channels.msteams ... tenantId is not a directory GUID ... refusing to start`
   means the stored or env `tenantId` is `common`, `organizations`, a domain, or
   malformed. Replace it with the Directory (tenant) ID GUID.
-- `channels.msteams.serve_down` / `serve_dial_failed`: the bundle cannot reach
-  the local serve. A session is not created until it can.
+- `channels.msteams.serve_dial_failed`: the in-process hello to the serve was
+  refused. The bundle redials on a ladder (0.25 s doubling, capped at 30 s).
+- `channels.msteams.serve_giveup`: 60 hellos in a row were refused, so the bundle
+  stopped redialling. Fix the serve side, then restart `candy-code serve`. A
+  session is not created until the hello lands.
 - The service URL. Replies go to the activity's `serviceUrl`, which must be
   HTTPS on a Bot Framework host (`botframework.com`, `smba.trafficmanager.net`,
   `msg.teams.microsoft.com`). Other hosts are refused before any token is sent

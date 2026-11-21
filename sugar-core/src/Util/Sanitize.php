@@ -37,6 +37,21 @@ namespace SugarCraft\Core\Util;
  *     For a gate — a permission prompt, a confirmation — where the user must
  *     see exactly what they are approving, and a strip would hide part of it.
  *
+ * **Which entry point to call.** Choose by where the text lands, not by how
+ * dangerous it looks. The first seven rows are policies; the last row lists the
+ * building blocks they are made from, which a caller may also use directly.
+ *
+ * | The text is headed for…                                        | Call                                  | Removes or renders                                                        |
+ * |----------------------------------------------------------------|---------------------------------------|---------------------------------------------------------------------------|
+ * | A plain-text sink: a log line, a notification, a module field  | {@see untrusted()}                    | Every escape, C0 and C1 except tab, LF and CR. Bidi and zero-width kept.  |
+ * | A row of a line-oriented frame, from outside the process       | {@see untrustedForDisplay()}          | As `untrusted()`, plus CR and CRLF become LF; bidi and zero-width shown as `<U+XXXX>`. |
+ * | A frame carrying sugar-mouse zone markup, from outside         | {@see untrustedForMarkedFrames()}     | As `untrusted()`, plus the zone sentinels U+E000 and U+E001.              |
+ * | A data-grid cell from an already-stringified value             | {@see cellValue()}                    | Invalid UTF-8 repaired; remaining control bytes shown as a dot; newlines collapsed unless asked to keep them. |
+ * | A single-line field that must not hold any C0 control byte     | {@see controlChars()}                 | C0 removed, `\n` `\r` `\t` become spaces. SGR parameter text is left behind. DEL and C1 survive: use {@see untrusted()} for those. |
+ * | A gate (permission, confirmation) where every byte must be seen | {@see visibleControls()}             | Nothing removed. Controls rendered as caret notation or `<U+XXXX>`.       |
+ * | Text that must be free of invisible formatting                 | {@see stripInvisibleFormatting()}     | Bidi and zero-width format characters removed. {@see markInvisibleFormatting()} marks them instead. |
+ * | Building blocks                                                 | {@see stripZoneSentinels()}, {@see stripPrivateUse()} | The first removes only the sentinel pair; the second removes the whole BMP Private Use Area. |
+ *
  * **The Private-Use reservation.** A TUI frame is not only text: sugar-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
  * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates the
@@ -274,7 +289,7 @@ final class Sanitize
      * `\n`, and every remaining lone `\r` becomes `\n` too. The policy for
      * untrusted text painted into a frame that is laid out one logical line
      * per terminal row. Invisible bidi overrides and zero-width characters are
-     * rendered as `<U+XXXX>` markers on top (audit 15b-28) — see
+     * rendered as `<U+XXXX>` markers on top — see
      * {@see markInvisibleFormatting()} for which, and when.
      *
      * Why CR cannot simply survive there, as {@see untrusted()} lets it: CR is
@@ -320,7 +335,7 @@ final class Sanitize
 
     /**
      * Render the invisible bidi and zero-width format characters as visible
-     * `<U+XXXX>` markers — the display half of audit 15b-28, applied by
+     * `<U+XXXX>` markers — the display half of the invisible-formatting policy, applied by
      * {@see untrustedForDisplay()} (and, unconditionally, by
      * {@see visibleControls()}).
      *
@@ -377,9 +392,8 @@ final class Sanitize
 
     /**
      * Remove the invisible bidi and zero-width format characters that
-     * {@see markInvisibleFormatting()} marks — the strip twin of audit
-     * 15b-28, for text that must simply be free of them (a submitted
-     * prompt, a stored name) rather than shown with markers.
+     * {@see markInvisibleFormatting()} marks, for text that must simply be free of
+     * them (a submitted prompt, a stored name) rather than shown with markers.
      *
      * The two policies agree character for character, and not by restating
      * the rule: both tier sets come from {@see invisibleFormattingMaps()},

@@ -180,52 +180,15 @@ final class AsyncOpsFanInTest extends TestCase
     }
 
     /**
-     * SA-06 BC contract: the deprecated onPending() shim must delegate
-     * one-to-one — a hook lands on the pendingNotice() (advisory) arm, a
-     * null hook on the boundWait() (rejection) arm — and each call raises
-     * exactly one E_USER_DEPRECATED naming both settled helpers.
+     * The deprecated onPending() shim is removed: the split names
+     * pendingNotice() (advisory hook) and boundWait() (bounded rejection) are
+     * the only way to say which contract a call wants.
      */
-    public function test_on_pending_shim_delegates_one_to_one_to_the_split_names(): void
+    public function test_on_pending_shim_is_removed_in_favor_of_the_split_names(): void
     {
-        $notices = [];
-        \set_error_handler(static function (int $severity, string $message) use (&$notices): bool {
-            $notices[] = [$severity, $message];
-
-            return true;
-        });
-        try {
-            $loop = $this->clockwork();
-            $inner = new Deferred();
-            $fired = 0;
-            $advisory = AsyncOps::onPending($inner->promise(), 0.5, static function () use (&$fired): void {
-                $fired++;
-            }, $loop);
-            $this->fireAll();
-            $this->assertSame(1, $fired, 'hook arm behaves as pendingNotice()');
-            $inner->resolve('v');
-            $this->assertSame('v', $this->outcome($advisory), 'advisory arm never rejects on expiry');
-
-            $loop2 = $this->clockwork();
-            $hung = new Deferred();
-            $bounded = AsyncOps::onPending($hung->promise(), 0.5, null, $loop2);
-            $this->fireAll();
-            $error = null;
-            $bounded->then(null, static function (\Throwable $e) use (&$error): void {
-                $error = $e;
-            });
-            $this->assertInstanceOf(TimeoutException::class, $error, 'null hook arm behaves as boundWait()');
-            $this->assertStringContainsString('(still pending)', $error->getMessage());
-        } finally {
-            \restore_error_handler();
-        }
-
-        $this->assertCount(2, $notices, 'one deprecation per shim call');
-        foreach ($notices as [$severity, $message]) {
-            $this->assertSame(\E_USER_DEPRECATED, $severity);
-            $this->assertStringContainsString('pendingNotice()', $message);
-            $this->assertStringContainsString('boundWait()', $message);
-            $this->assertStringContainsString('2.0.0', $message);
-        }
+        self::assertFalse(\method_exists(AsyncOps::class, 'onPending'));
+        self::assertTrue(\method_exists(AsyncOps::class, 'pendingNotice'));
+        self::assertTrue(\method_exists(AsyncOps::class, 'boundWait'));
     }
 
     private function clockwork(): LoopInterface

@@ -8,7 +8,7 @@ final class DeadlineExceededException extends \RuntimeException
 {
     /**
      * The optional reason rides the fixed text as
-     * `context deadline exceeded: <reason>` (audit sugar-ssh-server-078).
+     * `context deadline exceeded: <reason>`.
      * With no reason the message is the plain fixed string, so anything
      * matching on it today keeps matching.
      */

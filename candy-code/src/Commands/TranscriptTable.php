@@ -225,7 +225,7 @@ final class TranscriptTable
     /**
      * `$text` with every line indented by the transcript's two-space margin
      * and terminated by a newline — the shape these commands echo their prose
-     * in. A translated paragraph (audit 15b-14) is one catalogue entry with
+     * in. A translated paragraph is one catalogue entry with
      * its own line breaks, so the margin is applied here rather than spelled
      * into each line of every locale. An empty line stays empty: a margin of
      * trailing spaces is not a blank line.
@@ -243,7 +243,7 @@ final class TranscriptTable
     /**
      * `$columns` re-keyed through `$labels`: a command declares its budget map
      * (and its floors) under STABLE ENGLISH column ids, and the header a
-     * reader sees is the translated label (audit 15b-14), so the map is
+     * reader sees is the translated label, so the map is
      * re-keyed once, before {@see fit()}, and cells are looked up by
      * `$labels[$id]`. A column `$labels` does not name keeps its id.
      *

@@ -95,7 +95,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
     }
 
     /**
-     * Audit 15a A9: the provider hands over the request's tool schemas so
+     * The provider hands over the request's tool schemas so
      * {@see coerceValue()} can type each value by what the tool DECLARED
      * instead of by what the text happens to look like. Forwarded to the
      * delegate when it is schema-aware too, so a stacked chain stays typed.
@@ -121,7 +121,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
     }
 
     /**
-     * This parser's envelope opener, then the delegate chain's (audit 15a A8).
+     * This parser's envelope opener, then the delegate chain's.
      *
      * @return list<string>
      */
@@ -135,7 +135,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
     /**
      * {@see parse()}'s decision tree, carrying the spans of the envelopes the
-     * calls came from (audit 15a A8), so the provider can cut them out of the
+     * calls came from, so the provider can cut them out of the
      * assistant's text.
      *
      * @param array<string, mixed> $message

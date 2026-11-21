@@ -126,7 +126,7 @@ final class CommandResult
 
     /**
      * A copy that leaves a running turn running: `/workflow pause|status`
-     * typed while the run they control holds the session (audit WF-4). Every
+     * typed while the run they control holds the session. Every
      * other command runs idle, where releasing the turn changes nothing.
      */
     public function holdingTurn(): self

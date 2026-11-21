@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Server;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\ServeProtocol\Discovery\StateDirReader;
 
 /**
  * `candy-code serve`'s state directory (Appendix O §4.6; roadmap O-4a):
@@ -83,17 +84,9 @@ final class StateDir
      */
     public static function existing(string $path): ?self
     {
-        $path = \rtrim($path, '/');
-        clearstatcache(true, $path);
-        if (@\lstat($path) === false) {
-            return null;
-        }
-        $reason = PrivateDir::refusal($path, self::LABEL);
-        if ($reason !== null) {
-            throw new \RuntimeException($reason);
-        }
+        $existing = StateDirReader::existing($path);
 
-        return new self($path);
+        return $existing === null ? null : new self($existing);
     }
 
     public function discoveryPath(): string

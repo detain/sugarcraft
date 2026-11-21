@@ -73,7 +73,7 @@ return [
     'smtp.invalid_host' => 'Hostitel SMTP {host} není platný název hostitele ani adresa (pouze písmena, číslice, tečky a pomlčky)',
     'smtp.invalid_port' => 'Port SMTP {port} je mimo rozsah (musí být mezi 1 a 65535)',
     'smtp.invalid_timeout' => 'Timeout SMTP {timeout} není počet sekund mezi 1 a 3600',
-    'resend.cid_unsupported' => 'Payload API Resend nemá pole Content-ID: příloha {filename} je inline; vložené obrázky přepravuje pouze SMTP.',
+    'resend.cid_unsupported' => 'Payload API Resend nemá pole Content-ID, takže Resend odmítá vloženou přílohu {filename}: vložené obrázky musí jít přes SMTP nebo Mailgun.',
     'smtp.incomplete_credentials' => 'Údaje SMTP nejsou kompletní: zadejte uživatelské jméno i heslo společně, nebo obojí prázdné pro anonymní odeslání',
     'email.non_ascii_address' => 'E-mailová adresa {addr} obsahuje ne-ASCII znaky: SMTPUTF8 není podporován — použijte ASCII obálkovou adresu',
     'smtp.openssl_missing' => 'ext-openssl je vyžadován k zabezpečení SMTP spojení (STARTTLS/SMTPS) - nainstalujte rozšíření; nic se neodesílá, dokud nelze kanál šifrovat',

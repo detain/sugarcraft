@@ -49,8 +49,8 @@ $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
 ```
 
 `solve()` returns one positioned `Region` per constraint, in list order —
-output `x`/`y` are offsets **inside the input region**, so each returned box
-can be painted directly. The input may itself be a sub-area: pass
+output `x`/`y` are absolute cell coordinates. The input region's origin is
+already included, so paint each returned box at its `x`/`y` as it is. The input may itself be a sub-area: pass
 `new Region($x, $y, $w, $h)` (say, a span inset by borders) and the walk
 places panes within it. The constraint array must be a **list**: `solve()`
 refuses keyed or sparse arrays at the boundary with `InvalidArgumentException`
@@ -97,6 +97,8 @@ Cross-references only — nothing here depends on sugar-flexbox.
 ## Types
 
 ```
+Direction (enum)                 canonical split axis for the whole stack: Horizontal | Vertical,
+                                 other(). sugar-style's Layout consumes this enum (its own copy was removed).
 LayoutSolver (interface)         one method: solve(Region, Direction, list<Constraint>)
   └─ GreedySolver (final)        the supported solver
   └─ CassowarySolver (final)     deprecated shim — warns and delegates to GreedySolver
@@ -116,9 +118,11 @@ a concrete class.
   set has neither `Min` nor `Fill`, `Max`-clamp reclaims are shared with
   Length/Percentage/Ratio and inflate them (the **reclaim ladder** — step 6
   below).
-- `Constraint::min(int $n)` — soft floor of `$n` cells. It grows only when **slack**
-  (what the fixed reservation leaves over) survives Fill and Max
-  (proportional clamp under demand); on its own it absorbs the whole span.
+- `Constraint::min(int $n)` — soft floor of `$n` cells. It takes **slack**
+  (what the fixed reservation leaves over) directly only when the set has
+  neither Fill nor Max, where on its own it absorbs the whole span. Otherwise
+  it grows only from cells a Max clamp hands back, which it takes before Fill
+  (proportional clamp under demand).
 - `Constraint::max(int $n)` — ceiling, greedy: takes slack up to the cap, and its clamp pass can hand cells back to the rest of the set (ladder step 6).
 - `Constraint::fill(int $weight = 1)` — proportional claim on the slack left
   after the **fixed reservation** (Length plus resolved Percentage/Ratio —
@@ -151,9 +155,11 @@ code-side mirror of this walk. The seven steps, condensed:
    loss back one cell per shrunk region; a **well-constrained set** — one the
    walk finishes without gap or overflow — then tiles the span exactly.
 
-In action: Fill and Max share the slack first (Max greedily, up to its cap);
-a `Min` grows only when there is neither. The clamp pass then hands back what
-Maxes gave up, which is how a "fixed" `length(10)` becomes 95 in
+In action: Fill and Max share the slack first (Max weighted by its cap, then
+clamped to it); a `Min` takes slack directly only when there is neither. The
+clamp pass then hands back what Maxes gave up: to the `Min` first when there
+is one, then to `Fill`, and otherwise to the fixed sizes. That last rung is
+how a "fixed" `length(10)` becomes 95 in
 `[length(10), max(5)]@100 → [95, 5]`. Every one of these shapes is pinned in
 `tests/SolverEdgeCaseTest.php` and swept for the sum law by
 `tests/WidthSumInvariantSweepTest.php`.
@@ -161,9 +167,11 @@ Maxes gave up, which is how a "fixed" `length(10)` becomes 95 in
 **Rounding and overflow.** Sizes are whole cells, so `floor()` loses
 fractions; the solver hands those cells back so the regions still tile the
 span: slack residue rides the first Fill (or the first Max when no Fill is
-present), Min-only slack rides the first Min, and a Percentage/Ratio
-shortfall of at most N−1 cells (N = their count — the most N floored shares
-can lose) is reclaimed earliest-first. A larger gap is slack the constraints
+present), Min-only slack rides the first Min, and with neither Fill nor Max
+in the set a Percentage/Ratio shortfall of at most N−1 cells (N = their
+count — the most N floored shares can lose) is reclaimed earliest-first.
+With a Fill or Max, that shortfall rides the first Fill or Max along with the
+rest of the slack. A larger gap is slack the constraints
 never asked for and stays open. When fixed demand exceeds the span, regions
 shrink proportionally and the floor loss is returned one cell per shrunk
 region — silently, because a terminal resized below its fixed panes is a
@@ -203,10 +211,10 @@ its Ratio path returned 0). The simplex was deleted rather than rewritten:
 the shim keeps the class name alive for straggling callers and warns them on
 every `solve()`.
 
-## Tiling guarantee — and its four carve-outs
+## Tiling guarantee — and its five carve-outs
 
 `solve()` tiles the region exactly for every well-constrained set: the widths
-(or heights) sum to the region's total. Four deliberate exceptions:
+(or heights) sum to the region's total. Five deliberate exceptions:
 
 1. **Under-constrained fixed-only sets keep their gap.** `[percentage(30)]@100`
    yields one 30-wide region and 70 untiled columns — the constraints never
@@ -225,9 +233,13 @@ every `solve()`.
    `PHP_INT_MAX`-wide frame reported `width=-9223372036854775808`). Terminal
    frames never approach that scale; the behaviour is documented, not
    guarded.
+5. **A Max-only set keeps the shortfall of its caps.** Max is a ceiling, and
+   when every member is a Max, nothing grows past its cap to take the slack:
+   `[max(40), max(40)]@100` yields 40 and 40, leaving 20 columns untiled. Adding
+   any Length, Percentage, Ratio, Fill or Min member absorbs the slack.
 
-The first two are pinned in `tests/`; the latter two are probe-measured, and
-all four are called out on the
+The first two are pinned in `tests/`; the last three are probe-measured, and
+all five are called out on the
 `LayoutSolver` interface docblock — check them before painting a pane
 edge-to-edge off the sum law.
 
@@ -249,7 +261,7 @@ output unflagged in both modes.
 ## Integration and performance
 
 The solver is stateless — nothing to cache, and re-solving on every
-`ResizeMsg` is the intended pattern (and what sugar-panels and candy-code's
+`WindowSizeMsg` is the intended pattern (and what sugar-panels and candy-code's
 Dock do). Measured envelope (2026-11, PHP 8.3.6 dev box, CLI): ~0.01 ms for
 the six-constraint quickstart, ~0.15 ms for a dashboard-sized frame of ~210
 constraints, and linear growth to 100k constraints (~95 ms for one solve) —

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Context;
 
-use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -176,7 +175,7 @@ use SugarCraft\Core\Util\Width;
  *
  *   - a `scandir()` entry under the root, and each `repositories: {type:
  *     path}` url the root manifest names — the candidate sub-package
- *     directories, each refused unless {@see ContainedPath::below()} puts it
+ *     directories, each refused unless {@see \SugarCraft\Core\Util\PathJail::below()} puts it
  *     strictly inside the root. `below()` and not `within()` because a
  *     sub-package cannot BE the root: `peek -> .` would otherwise list the
  *     root as a member of itself.
@@ -800,7 +799,7 @@ final readonly class RepoMapBlock implements PromptSection
             // See ON PATHS THAT COME FROM CONTENT: the entry NAME cannot hold
             // a separator, the directory it names can be a symlink out of the
             // tree, and a `git clone` materialises one.
-            if (!ContainedPath::below($dir, $root)) {
+            if (!\SugarCraft\Core\Util\PathJail::below($dir, $root)) {
                 continue;
             }
 
@@ -894,7 +893,7 @@ final readonly class RepoMapBlock implements PromptSection
                     // why the relative name is taken by offset and NOT by a
                     // prefix compare. A pattern of `../*` therefore yields a
                     // relative name of `../sibling`, and the one thing standing
-                    // between that and the prompt is the ContainedPath::below()
+                    // between that and the prompt is the \SugarCraft\Core\Util\PathJail::below()
                     // gate in the caller. Writing a prefix compare here would
                     // read like a second gate while gating nothing.
                     $candidates[substr($match, strlen($root) + 1)] = true;
@@ -951,7 +950,7 @@ final readonly class RepoMapBlock implements PromptSection
                 // `below()` because a prefix mapped to `""` legitimately means
                 // the package root itself, which is the boundary rather than
                 // something strictly inside it.
-                if (!ContainedPath::within($absolute, $root)) {
+                if (!\SugarCraft\Core\Util\PathJail::within($absolute, $root)) {
                     continue;
                 }
 
@@ -1105,7 +1104,7 @@ final readonly class RepoMapBlock implements PromptSection
      */
     private static function readManifest(string $path, string $root): ?array
     {
-        if (!ContainedPath::within($path, $root)) {
+        if (!\SugarCraft\Core\Util\PathJail::within($path, $root)) {
             return null;
         }
 

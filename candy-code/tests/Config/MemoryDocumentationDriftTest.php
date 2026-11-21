@@ -139,7 +139,7 @@ final class MemoryDocumentationDriftTest extends TestCase
     /** @return list<string> */
     private static function controlTokenPipes(): array
     {
-        $pipes = (new \ReflectionClass(PromptFence::class))->getReflectionConstant('CONTROL_TOKEN_PIPES')?->getValue();
+        $pipes = (new \ReflectionClass(\SugarCraft\Plugins\Support\PromptFence::class))->getReflectionConstant('CONTROL_TOKEN_PIPES')?->getValue();
         self::assertIsArray($pipes);
         self::assertNotSame([], $pipes);
 

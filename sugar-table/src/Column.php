@@ -151,8 +151,7 @@ final class Column
     }
 
     /**
-     * The single spelling for (re)declaring a column's width mechanism
-     * (audit ST-27, findings 027+069): mode plus, for Percent only, the
+     * The single spelling for (re)declaring a column's width mechanism: mode plus, for Percent only, the
      * percentage. A non-Percent mode discards any stale percent — the
      * ghost value that used to survive some withers and die in others;
      * the resolver gates percent reads on the mode, so what is stored for

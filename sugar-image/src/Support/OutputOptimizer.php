@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Support;
 
-use SugarCraft\CellBuffer\Diff\RepeatGate;
+use SugarCraft\CellBuffer\Support\RepeatGate;
 use SugarCraft\Core\Util\Ansi;
 
 /**
@@ -44,7 +44,7 @@ use SugarCraft\Core\Util\Ansi;
  * cell grid. The two MUST NOT be unified — toAnsi walks a finished grid, this
  * optimizer streams a render loop. What IS shared since the REP level landed is the
  * REP-vs-literal decision itself: both paths consult
- * {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()}, so a run can never
+ * {@see \SugarCraft\CellBuffer\Support\RepeatGate::worth()}, so a run can never
  * be compressed on one path and left literal on the other. With the
  * RepeatCells level off (the default), the run buffer flushes literal
  * repeats in place — byte-identical to the pre-run-buffer inline appends, which is

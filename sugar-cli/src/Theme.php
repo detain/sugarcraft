@@ -68,10 +68,11 @@ final class Theme
      * output stream — the fallback every presenter uses when no theme is
      * passed.
      *
-     * The capability comes from sugar-core's {@see ColorProfile::detect()},
+     * The capability comes from sugar-core's {@see ColorProfile::detectTerminal()},
      * which owns the whole convention order (non-tty output, TERM=dumb,
-     * NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...), and is
-     * applied via
+     * NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...) and adds
+     * the dumb-terminal veto: an unforced TERM=dumb answers NoTty, so no SGR
+     * is written to it. Applied via
      * {@see withColorProfile()}. The default (no-argument) answer is memoized
      * against a fingerprint of exactly what detection consults — the
      * environment values {@see ColorProfile::detect()} reads plus the state
@@ -115,7 +116,7 @@ final class Theme
                     'Theme::detect() expects a stream resource or null; got ' . get_debug_type($stream) . '.'
                 );
             }
-            return self::ansi()->withColorProfile(ColorProfile::detect($env, $stream));
+            return self::ansi()->withColorProfile(ColorProfile::detectTerminal($env, $stream));
         }
         if ($env !== null) {
             return self::ansi()->withColorProfile(self::detectDefaultStream($env));
@@ -139,7 +140,7 @@ final class Theme
     private const DETECT_ENV_KEYS = [
         'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
         'TERM', 'COLORTERM', 'TERM_PROGRAM',
-        'WT_SESSION',
+        'WT_SESSION', 'TMUX', 'STY', 'GOOGLE_CLOUD_SHELL',
         'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
     ];
 
@@ -148,7 +149,7 @@ final class Theme
 
     /**
      * Fingerprint of everything the default-stream detect path reads: the
-     * twelve roster values and the state of STDOUT as sugar-core will see it
+     * roster values and the state of STDOUT as sugar-core will see it
      * (defined / open / tty-ness — the three facts detectDefaultStream()
      * branches on). Two calls share a key exactly when both inputs are
      * byte-identical, which is precisely the never-stale condition.
@@ -191,10 +192,10 @@ final class Theme
     private static function detectDefaultStream(?array $env): ColorProfile
     {
         if (!\defined('STDOUT')) {
-            return ColorProfile::detect($env, null);
+            return ColorProfile::detectTerminal($env, null);
         }
         if (\is_resource(\STDOUT)) {
-            return ColorProfile::detect($env, \STDOUT);
+            return ColorProfile::detectTerminal($env, \STDOUT);
         }
 
         $notATty = fopen('php://memory', 'r');
@@ -203,7 +204,7 @@ final class Theme
             return ColorProfile::NoTty;
         }
         try {
-            return ColorProfile::detect($env, $notATty);
+            return ColorProfile::detectTerminal($env, $notATty);
         } finally {
             fclose($notATty);
         }
@@ -431,6 +432,6 @@ final class Theme
                 'Theme::detectFor(): $stream must be an open stream resource; got ' . get_debug_type($stream) . '.'
             );
         }
-        return self::ansi()->withColorProfile(ColorProfile::detect(null, $stream));
+        return self::ansi()->withColorProfile(ColorProfile::detectTerminal(null, $stream));
     }
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
-use SugarCraft\Code\Support\ContainedPath;
 
 /**
  * A parsed `.claude-plugin/marketplace.json` — the catalog file a marketplace
@@ -28,7 +27,7 @@ use SugarCraft\Code\Support\ContainedPath;
  * whose name or source cannot be honoured is a row an installer must not see.
  *
  * THE CONTAINMENT, stated exactly: relative sources are resolved through
- * {@see ContainedPath::below()} against the checkout root the manifest was
+ * {@see \SugarCraft\Core\Util\PathJail::below()} against the checkout root the manifest was
  * read from, and both the manifest file itself and every relative source
  * must resolve STRICTLY inside that checkout. An absolute path is refused
  * without even asking the filesystem; a `../` walk, an absolute symlink, and
@@ -68,7 +67,7 @@ final class Marketplace
     {
         $manifest = $checkoutRoot . '/' . self::MARKETPLACE_RELATIVE_PATH;
 
-        if (!ContainedPath::below($manifest, $checkoutRoot)) {
+        if (!\SugarCraft\Core\Util\PathJail::below($manifest, $checkoutRoot)) {
             return null;
         }
 
@@ -269,7 +268,7 @@ final class Marketplace
             return null;
         }
 
-        return ContainedPath::below($candidate, $checkoutRoot) ? $candidate : null;
+        return \SugarCraft\Core\Util\PathJail::below($candidate, $checkoutRoot) ? $candidate : null;
     }
 
     /** `owner/name`, both halves carrying a legal bundle name. */

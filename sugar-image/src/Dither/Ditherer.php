@@ -401,23 +401,38 @@ final class Ditherer
      */
     private function loadBaseRow(\GdImage $img, int $y, int $w, int $offset, ?OrderedTexture $texture, int $yOrigin): array
     {
+        // Batch row copy (rank 32): the row is read off the image in one tight
+        // pass into a flat int row, then every decision that is the same for
+        // every pixel of the row (is this the hole census, is there a
+        // background to flatten onto, is a texture armed) is made once here
+        // instead of once per pixel. GD exposes no bulk row read, so
+        // imagecolorat() still runs once per pixel; what is removed is the
+        // per-pixel branching and the three texture calls on untextured runs.
+        $raw = [];
+        for ($x = 0; $x < $w; $x++) {
+            $raw[$x] = imagecolorat($img, $x, $y);
+        }
+
+        $census  = $offset === 1;
+        $flatten = $this->flattenBackground;
+        $textureY = $y + $yOrigin;
+
         $row = [];
         $rowHoles = [];
-        $textureY = $y + $yOrigin;
         for ($x = 0; $x < $w; $x++) {
-            $rgb = imagecolorat($img, $x, $y);
+            $rgb   = $raw[$x];
             $alpha = ($rgb >> 24) & 0xFF;
-            $isHole = $offset === 1 && $alpha >= $this->alphaThreshold;
-            if ($offset === 1) {
+            $isHole = $census && $alpha >= $this->alphaThreshold;
+            if ($census) {
                 $rowHoles[$x] = $isHole;
             }
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
             $b = $rgb & 0xFF;
-            if ($this->flattenBackground !== null && !$isHole && $alpha > 0) {
+            if ($flatten !== null && !$isHole && $alpha > 0) {
                 // Semi-transparent (0 < alpha < threshold) -> src-over
                 // onto the background BEFORE quantisation/diffusion.
-                [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
+                [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $flatten);
             }
             $rf = (float) $r;
             $gf = (float) $g;

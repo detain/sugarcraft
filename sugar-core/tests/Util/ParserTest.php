@@ -196,4 +196,61 @@ final class ParserTest extends TestCase
         $this->assertSame(Token::TEXT, $flushed[0]->type);
         $this->assertSame("\x1b[31", $flushed[0]->data);
     }
+
+    public function testShimReturnsLegacyTokensCarryingEveryField(): void
+    {
+        $p = new Parser();
+        $tokens = $p->parse("\x1b[?25l\x1b]0;t\x1b\\");
+        $this->assertCount(2, $tokens);
+        foreach ($tokens as $token) {
+            $this->assertInstanceOf(Token::class, $token);
+        }
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('?', $tokens[0]->intermediate);
+        $this->assertSame('25', $tokens[0]->params);
+        $this->assertSame('l', $tokens[0]->final);
+        $this->assertSame(Token::OSC, $tokens[1]->type);
+        $this->assertSame('0;t', $tokens[1]->data);
+        $this->assertSame("\x1b\\", $tokens[1]->terminator);
+    }
+
+    public function testOversizedChunkReturnsShortHeldTailAsTextLikeTheLegacyParser(): void
+    {
+        // The legacy cap is judged on the whole buffer: a 70,000-byte chunk
+        // whose tail is a short open CSI returns that tail as TEXT on this
+        // call, instead of holding it for the next feed.
+        $p = new Parser();
+        $tokens = $p->parse(str_repeat('a', 70000) . "\x1b[38;5;");
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame(str_repeat('a', 70000), $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame("\x1b[38;5;", $tokens[1]->data);
+        $this->assertSame([], $p->flush());
+
+        $tokens = $p->parse('196m');
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame('196m', $tokens[0]->data);
+    }
+
+    public function testOversizedBacklogCountsBytesHeldFromEarlierFeeds(): void
+    {
+        // The chunk alone is under the cap; only the 30,004 held bytes push
+        // the whole buffer over it. The held bytes are the start of an OSC,
+        // which the second feed terminates with BEL before the short open
+        // CSI at the end.
+        $p = new Parser();
+        $this->assertSame([], $p->parse("\x1b]0;" . str_repeat('x', 30000)));
+
+        $tokens = $p->parse("\x07" . str_repeat('y', 35600) . "\x1b[38;5;");
+        $this->assertCount(3, $tokens);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('0;' . str_repeat('x', 30000), $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[1]->type);
+        $this->assertSame(str_repeat('y', 35600), $tokens[1]->data);
+        $this->assertSame(Token::TEXT, $tokens[2]->type);
+        $this->assertSame("\x1b[38;5;", $tokens[2]->data);
+        $this->assertSame([], $p->flush());
+    }
 }

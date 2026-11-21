@@ -77,6 +77,11 @@
                     <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                    <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -118,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -131,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 42 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-cellbuffer.png" alt="" aria-hidden="true">
@@ -152,22 +158,38 @@
         <ul class="doc-toc-list">
             <li class="toc-h3"><a href="#install">Install</a></li>
             <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#common-tasks">Common tasks</a></li>
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
-            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
-            <li class="toc-h3"><a href="#security-trust-boundaries">Security &amp; trust boundaries</a></li>
-            <li class="toc-h3"><a href="#source">Source</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-cellbuffer">SugarCraft\CellBuffer</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-cellbuffer-diff">SugarCraft\CellBuffer\Diff</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-cellbuffer-support">SugarCraft\CellBuffer\Support</a></li>
+            <li class="toc-h3"><a href="#configuration-and-limits">Configuration and limits</a></li>
+            <li class="toc-h3"><a href="#theming-and-styling">Theming and styling</a></li>
+            <li class="toc-h3"><a href="#wide-characters">Wide characters</a></li>
+            <li class="toc-h3"><a href="#diffing-and-delta-ansi">Diffing and delta ANSI</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#security-and-trust-boundaries">Security and trust boundaries</a></li>
+            <li class="toc-h3"><a href="#architecture">Architecture</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h3"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
+            <li class="toc-h3"><a href="#related">Related</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
         </ul>
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Immutable Buffer (2-D cell grid) and Cell (rune, style, link, width) value objects forming the shared data model for terminal rendering across the SugarCraft ecosystem. Wide-char (CJK/emoji) cells declare width=2; the writing API enforces the width-0 continuation pair for you.</p>
+<p class="lede" style="margin-top: 28px;">Immutable <code>Buffer</code> (2-D cell grid) and <code>Cell</code> (rune, style, hyperlink, width) value objects: the shared data model that SugarCraft renderers paint into. Each mutation returns a new buffer, <code>Buffer::diff()</code> reduces two frames to the minimal operation list, and <code>DiffEncoder</code> turns that list into a self-contained ANSI byte stream. It mirrors the terminal cell buffer of <a href="https://github.com/charmbracelet/x/tree/main/cellbuf">charmbracelet/x/cellbuf</a>, with the mutable grid replaced by value semantics.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cellbuffer</code></pre>
+    <p>Requires PHP <code>^8.3</code>. The package ships only a <code>dev-master</code> line on Packagist, so consumers without <code>minimum-stability: dev</code> pin it explicitly with <code>composer require sugarcraft/sugar-cellbuffer:@dev</code>. Inside the monorepo, a path repository on the <code>sugar-cellbuffer/</code> directory is the alternative.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php"><?php
+    <pre class="code"><code class="language-php">&lt;?php
 
 require 'vendor/autoload.php';
 
@@ -180,81 +202,523 @@ use SugarCraft\CellBuffer\Region;
 $buf = Buffer::new(20, 3);
 
 // Set a cell at (col=5, row=1).
-$buf = $buf->withCellAt(5, 1, Cell::new('H'));
+$buf = $buf-&gt;withCellAt(5, 1, Cell::new('H'));
 
 // Blit a seeded 2x2 sub-buffer at origin — seeding matters: blitting an
 // all-blank sub-buffer over blank cells is a visible no-op.
 $sub = Buffer::new(2, 2);
-$sub = $sub->withCellAt(0, 0, Cell::new('A'))->withCellAt(1, 0, Cell::new('B'));
-$sub = $sub->withCellAt(0, 1, Cell::new('C'))->withCellAt(1, 1, Cell::new('D'));
-$buf = $buf->withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
+$sub = $sub-&gt;withCellAt(0, 0, Cell::new('A'))-&gt;withCellAt(1, 0, Cell::new('B'));
+$sub = $sub-&gt;withCellAt(0, 1, Cell::new('C'))-&gt;withCellAt(1, 1, Cell::new('D'));
+$buf = $buf-&gt;withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
 
 // Read a cell back.
-$cell = $buf->cellAt(5, 1);
-echo $cell->rune(); // 'H'
+$cell = $buf-&gt;cellAt(5, 1);
+echo $cell-&gt;rune(); // 'H'
 
 // Access dimensions.
-echo $buf->width();  // 20
-echo $buf->height(); // 3</code></pre>
+echo $buf-&gt;width();  // 20
+echo $buf-&gt;height(); // 3</code></pre>
+
+    <p>Coordinates are zero-based (<code>col</code>, <code>row</code>). The CUP sequences the encoders emit are one-based, and <code>toAnsi()</code> ends each row with a bare LF, so write <code>"\r\n"</code> yourself when the output goes to a raw-mode terminal. The runnable version of this flow is <code>examples/basic.php</code>.</p>
+
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p>A <code>Buffer</code> is a fixed <code>width × height</code> grid of <code>Cell</code> values stored row-major. Nothing is edited in place: <code>withCellAt()</code>, <code>withRegion()</code>, <code>fill()</code> and <code>applyDiff()</code> each return a new <code>Buffer</code>, so a previous frame stays valid while the next one is built. That is what makes frame-to-frame diffing cheap to reason about: you keep the last frame and diff the new one against it.</p>
+    <p>A <code>Cell</code> holds one grapheme as its rune, an optional <code>Style</code> (the pen), an optional <code>Hyperlink</code> (OSC 8), and a width. Width <code>1</code> is a normal cell, width <code>2</code> is a wide lead (CJK, many emoji) that owns the next column through a width-<code>0</code> continuation cell, and larger widths are single run-length spans. The writing API keeps those pairs intact, so a half-pair never survives a public mutation.</p>
+
+    <h3 id="common-tasks" style="margin-top: 32px;">Common tasks</h3>
+    <p><strong>Paint a frame and emit only what changed.</strong> Keep the previous frame and encode the difference in one call:</p>
+    <pre class="code"><code class="language-php">$bytes = $curr-&gt;diffToAnsi($prev);   // CUP + SGR + literal runs, no full repaint
+// or, when the op list is needed for inspection:
+$ops   = $curr-&gt;diff($prev);
+$bytes = (new \SugarCraft\CellBuffer\Diff\DiffEncoder())-&gt;encode($ops);</code></pre>
+
+    <p><strong>Build a frame in one pass.</strong> <code>BufferBuilder</code> is the mutable scratch for bulk work, and <code>toBuffer()</code> freezes it back into an immutable <code>Buffer</code>:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Region;
+use SugarCraft\CellBuffer\Buffer;
+
+$builder = Buffer::builder(10, 2)
+    -&gt;fillRect(Region::new(Position::new(0, 0), 10, 1), Cell::new('-'))
+    -&gt;setCellAt(0, 1, Cell::new('>'));
+$frame = $builder-&gt;toBuffer();</code></pre>
+
+    <p><strong>Place a wide glyph.</strong> Declare the width explicitly. Width is never measured for you, and <code>withCellAt()</code> writes the continuation partner to the right:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+
+$buf = Buffer::new(4, 1)-&gt;withCellAt(1, 0, Cell::new('中', null, null, 2));
+// (1,0) carries the lead; (2,0) is now a continuation with width 0.
+$buf-&gt;cellAt(2, 0)-&gt;width(); // 0</code></pre>
+
+    <p><strong>Read a style back from SGR.</strong> <code>Style::fromSgr()</code> parses an SGR parameter string into a pen, and <code>toAnsi()</code> writes the pen back out:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Style;
+
+$pen = Style::fromSgr('1;38;5;196');   // bold, 256-color foreground
+$pen?-&gt;hasBold();                     // true
+echo $pen?-&gt;toAnsi();                 // a full SGR sequence, reset first</code></pre>
+
+    <p><strong>Attach a clickable link.</strong> Hyperlinks are validated when they are constructed, so hostile control bytes never reach the wire through this type:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Hyperlink;
+
+$link = Hyperlink::new('https://example.com/docs', 'docs-group');
+$cell = Cell::new('d', null, $link);</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent with*() family plus fill(), copy() and applyDiff() (not named with*, equally immutable — every mutation returns a new instance). Bounds-checked cellAt() throws OutOfRangeException.</span></div>
-      <div class="feature"><strong>Cell</strong><span>Readonly value object: rune (string), style (?Style), link (?Hyperlink), width (int). Cell::continuation() for wide-char neighbour cells. No with*() — rebuild via new.</span></div>
-      <div class="feature"><strong>Position</strong><span>2-D coordinate (col, row) with bare accessors. Negative coordinates may be used for relative offsets.</span></div>
-      <div class="feature"><strong>Region</strong><span>Rectangular sub-region defined by Position origin + width/height. contains() helper for hit-testing; zero-area regions no-op in fill()/withRegion().</span></div>
-      <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground/background as RGB 0xRRGGBB <em>or</em> palette-slot identity (0-255), underline color, and an attribute bitmask. The with*() builders keep slot and RGB mutually exclusive per channel; the public fromSgr() parses SGR parameter strings back into styles. The rich styling API (border, padding, transforms) lives in sugar-style.</span></div>
-      <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field, validated at construction and again on unserialization (C0/DEL, lone raw 8-bit C1 bytes and their UTF-8 <code>C2 xx</code> spellings, plus semicolons-in-id refused; valid multibyte IRI payloads pass).</span></div>
-      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair law automatically; Buffer::fromGrid() is the escape hatch that skips it — it validates the dimensions and requires a flat list of exactly width×height cells, but takes the cells as given, so pair maintenance is the caller's duty.</span></div>
+      <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent <code>with*()</code> family plus <code>fill()</code>, <code>copy()</code> and <code>applyDiff()</code>. Every mutation returns a new instance. Bounds-checked <code>cellAt()</code> throws <code>OutOfRangeException</code>.</span></div>
+      <div class="feature"><strong>Cell</strong><span>Readonly value object: rune, style, link and width, read through bare accessors. <code>Cell::continuation()</code> marks the neighbor of a wide lead. Derive changes with <code>withRune()</code>, <code>withStyle()</code>, <code>withLink()</code> and <code>withWidth()</code>, each of which returns a new cell.</span></div>
+      <div class="feature"><strong>Position and Region</strong><span><code>Position</code> is a 2-D coordinate that admits negative values for relative offsets. <code>Region</code> is an origin plus width and height, with <code>contains()</code> for hit-testing. Zero-area regions are no-ops in <code>fill()</code> and <code>withRegion()</code>.</span></div>
+      <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground and background as RGB <code>0xRRGGBB</code> or as palette-slot identity (0-255), an underline color, and an attribute bitmask. <code>fromSgr()</code> parses SGR parameter strings back into styles, and <code>toAnsi()</code> writes them out.</span></div>
+      <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor with a URL and an optional id grouping field. Both are validated at construction and again on unserialization, so C0 and DEL controls, C1 introducers and semicolons in the id are refused.</span></div>
+      <div class="feature"><strong>Diff pipeline</strong><span><code>Buffer::diff()</code> returns <code>DiffOp</code> objects (cursor moves, style changes, cell runs, REP and ECH runs, hyperlink changes). <code>DiffOptimiser</code> shapes that list, and <code>DiffEncoder</code> writes it as ANSI.</span></div>
     </div>
 
-    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
+    <h3 id="api-reference" style="margin-top: 40px;">API reference</h3>
+    <table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Buffer</td><td><code>new(int $width, int $height)</code></td><td>Factory for a grid of blank cells</td></tr>
+<tr><td>Buffer</td><td><code>fromString(?string $ansi, int $width, int $height)</code></td><td>Test-support parser: walks an ANSI string onto a grid. Lossy by contract, so do not use it as a terminal emulator</td></tr>
+<tr><td>Buffer</td><td><code>fromStyledText(string $text, int $width, int $height)</code></td><td>Builds a grid from styled text</td></tr>
+<tr><td>Buffer</td><td><code>fromGrid(int $width, int $height, array $grid)</code></td><td>Bulk wrap of exactly <code>width × height</code> cells. Skips pair enforcement, so the pair law is the caller's duty</td></tr>
+<tr><td>Buffer</td><td><code>builder(int $width, int $height)</code>, <code>toBuilder()</code></td><td>Returns a <code>BufferBuilder</code> for bulk edits, or converts an existing buffer to one</td></tr>
+<tr><td>Buffer</td><td><code>cellAt(int $col, int $row)</code>, <code>withCellAt(...)</code></td><td>Bounds-checked read, and the immutable single-cell write that enforces the wide-pair law</td></tr>
+<tr><td>Buffer</td><td><code>withRegion(Region $region, Buffer $source)</code></td><td>Blits <code>$source</code> into <code>$region</code>, clipped to the intersection</td></tr>
+<tr><td>Buffer</td><td><code>fill(Region $region, Cell $cell)</code></td><td>Paints a region with one cell</td></tr>
+<tr><td>Buffer</td><td><code>copy(Region $region)</code></td><td>Extracts a region-sized buffer, padding out-of-grid area with blanks. Capped by <code>Buffer::MAX_COPY_CELLS</code></td></tr>
+<tr><td>Buffer</td><td><code>text(?Region $region = null)</code></td><td>Plain text of the grid or of a region. Runes are returned whatever their style</td></tr>
+<tr><td>Buffer</td><td><code>diff(Buffer $previous)</code>, <code>applyDiff(array $ops)</code>, <code>diffToAnsi(Buffer $previous)</code></td><td>Minimal operation list between two frames, its inverse, and the one-call diff-and-encode</td></tr>
+<tr><td>Buffer</td><td><code>toAnsi()</code></td><td>Full repaint of every cell, for terminals where delta output is not safe</td></tr>
+<tr><td>Buffer</td><td><code>setRowPrefilterEnabled(bool $on)</code>, <code>rowPrefilterEnabled()</code></td><td>Process-wide switch for the row prefilter used by the diff path. On by default</td></tr>
+<tr><td>BufferBuilder</td><td><code>setCellAt(...)</code>, <code>fillRect(...)</code>, <code>toBuffer()</code></td><td>Mutable scratch for bulk construction. It shares the wide-pair placement rules with <code>Buffer</code> through the <code>WidePairPlacement</code> trait, so the two cannot diverge</td></tr>
+<tr><td>Cell</td><td><code>new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1)</code></td><td>Constructs a cell. Negative widths are refused, and a span wider than 2 must measure exactly that many columns</td></tr>
+<tr><td>Cell</td><td><code>continuation()</code>, <code>blank()</code></td><td>The width-0 partner of a wide lead, and the default padding cell</td></tr>
+<tr><td>Cell</td><td><code>rune()</code>, <code>style()</code>, <code>link()</code>, <code>width()</code>, <code>equals(Cell $other)</code></td><td>Bare accessors and value equality</td></tr>
+<tr><td>Cell</td><td><code>withRune()</code>, <code>withStyle()</code>, <code>withLink()</code>, <code>withWidth()</code></td><td>Derivations that return a new cell and re-fire the constructor checks</td></tr>
+<tr><td>Style</td><td><code>new(?int $fg = null, ?int $bg = null, int $attrs = 0)</code>, <code>bold()</code>, <code>reverse()</code></td><td>Convenience factories for RGB colors and the attribute bitmask</td></tr>
+<tr><td>Style</td><td><code>fromSgr(string $params, ?Style $carry = null)</code></td><td>SGR parameter parser. Returns <code>null</code> only when nothing was set</td></tr>
+<tr><td>Style</td><td><code>toAnsi()</code>, <code>equals()</code>, <code>valuesEqual()</code></td><td>One-shot SGR emission (via <code>SgrEmitter</code>) and value equality</td></tr>
+<tr><td>Style</td><td><code>withAttrs(int)</code>, <code>withBold()</code> to <code>withInvisible()</code>, <code>has*()</code> predicates</td><td>Bitmask replacement, nine single-bit toggles, and their predicates</td></tr>
+<tr><td>Hyperlink</td><td><code>new(string $url, string $id = '')</code>, <code>Hyperlink::CLOSE</code></td><td>Validated OSC 8 anchor and the close frame constant</td></tr>
+<tr><td>Region</td><td><code>new(Position $origin, int $width, int $height)</code>, <code>contains(int $col, int $row)</code></td><td>Rectangle with inclusive-edge <code>right()</code> and <code>bottom()</code> accessors</td></tr>
+<tr><td>Position</td><td><code>new(int $col, int $row)</code></td><td>Coordinate pair with <code>col()</code> and <code>row()</code></td></tr>
+<tr><td>DiffEncoder</td><td><code>encode(array $ops)</code></td><td>Writes an operation list as ANSI. Every frame opens with an unconditional home CUP, so one instance can be reused across frames</td></tr>
+<tr><td>DiffOptimiser</td><td><code>optimise(array $ops)</code></td><td>Runs at the end of <code>Buffer::diff()</code>. Last style wins, and adjacent same-state cells are coalesced</td></tr>
+<tr><td>SgrEmitter</td><td><code>SgrEmitter::emit(?Style $style)</code></td><td>Turns a style into SGR bytes, preferring palette-slot identity over the RGB twin</td></tr>
+</table>
+
+        <!-- GENERATED by tools/gen-api-reference.php from sugar-cellbuffer/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-cellbuffer -->
+<p>Only methods declared in <code>sugar-cellbuffer/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-cellbuffer">SugarCraft\CellBuffer</h3>
+<h4 id="api-sugarcraft-cellbuffer-buffer"><code>Buffer</code> <small>final class</small></h4>
+<p>A 2-D grid of terminal cells with immutable mutation semantics.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static setRowPrefilterEnabled(bool $on): void</code></td><td></td></tr>
+<tr><td><code>static rowPrefilterEnabled(): bool</code></td><td></td></tr>
+<tr><td><code>static new(int $width, int $height): self</code></td><td>Default factory — creates a width×height grid of blank cells.</td></tr>
+<tr><td><code>static fromString(?string $ansi, int $width, int $height): self</code></td><td>Build a Buffer from an ANSI-encoded string produced by toAnsi().</td></tr>
+<tr><td><code>static fromStyledText(string $text, int $width, int $height): self</code></td><td>Parse a styled ANSI text stream into a full width×height Buffer — the supported production counterpart of the byte-wise test-support self::fromString().</td></tr>
+<tr><td><code>static fromGrid(int $width, int $height, array $grid): self</code></td><td>Build a Buffer directly from a pre-computed flat cell grid (O(1) wrap).</td></tr>
+<tr><td><code>static builder(int $width, int $height): BufferBuilder</code></td><td>Fresh mutable scratch for bulk painting (CB-34): setCellAt()/fillRect() write in place under the identical pair law as the fluent with*() paths, and toBuffer() freezes the result through fromGrid(). One allocation per cell, not one Buffer clone per write.</td></tr>
+<tr><td><code>toBuilder(): BufferBuilder</code></td><td>Mutable scratch seeded with this buffer&#039;s cells, for repainting an existing frame in bulk. Writes follow the same pair law as withCellAt(), and BufferBuilder::toBuffer() on the result equals the immutable chain over the same writes; this buffer is not changed.</td></tr>
+<tr><td><code>width(): int</code></td><td>Width in cells.</td></tr>
+<tr><td><code>height(): int</code></td><td>Height in cells.</td></tr>
+<tr><td><code>region(): Region</code></td><td>Bounding region of the entire buffer.</td></tr>
+<tr><td><code>text(?Region $region = null): string</code></td><td>Extract plain text, row by row, joined with &quot;\n&quot;.</td></tr>
+<tr><td><code>cellAt(int $col, int $row): Cell</code></td><td>Bounds-checked cell accessor.</td></tr>
+<tr><td><code>withCellAt(int $col, int $row, Cell $cell): self</code></td><td>Return a new Buffer with $cell placed at ($col, $row).</td></tr>
+<tr><td><code>withRegion(Region $region, Buffer $source): self</code></td><td>Blit (composite) $source into this buffer&#039;s $region.</td></tr>
+<tr><td><code>fill(Region $region, Cell $cell): self</code></td><td>Efficiently fill a rectangular $region with a single $cell.</td></tr>
+<tr><td><code>copy(Region $region): self</code></td><td>Extract a sub-region of this buffer into a new buffer.</td></tr>
+<tr><td><code>diff(Buffer $previous): array</code></td><td>Compare this buffer against $previous and return the list of operations needed to transform $previous into this buffer.</td></tr>
+<tr><td><code>applyDiff(array $ops): self</code></td><td>Apply a list of DiffOps to this buffer and return the resulting buffer (round-trip inverse of diff): $previous-&gt;applyDiff($current-&gt;diff($previous)) renders as $current.</td></tr>
+<tr><td><code>diffToAnsi(self $previous): string</code></td><td>Diff against $previous and encode the delta in one step — the canonical two-liner (<code>$curr-&gt;diff($prev)</code> fed to a fresh <code>DiffEncoder</code>) collapsed for the frame-loop call sites that hand-wired it (sugar-flexbox, sugar-panels, sugar-overlay, sugar-dashboard, examples/diff_frames.php all repeat the pattern).</td></tr>
+<tr><td><code>toAnsi(): string</code></td><td>Render the buffer to an ANSI escape string.</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-bufferbuilder"><code>BufferBuilder</code> <small>final class</small></h4>
+<p>Mutable scratch pad for BULK cell painting (CB-34).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly int $width, private readonly int $height, ?array $seed = null)</code></td><td>A seed grid is validated BEFORE the canvas is allocated, so a mismatched or hostile seed fails with InvalidArgumentException instead of first building a blank grid of the requested size next to it.</td></tr>
+<tr><td><code>static fromGrid(int $width, int $height, array $grid): self</code></td><td>Seed a builder with an existing flat grid, so a frame that already exists can be repainted in place. Buffer::toBuilder() is the in-tree caller; validation lives in the constructor.</td></tr>
+<tr><td><code>setCellAt(int $col, int $row, Cell $cell): self</code></td><td>Paint one cell with the full pair law applied in place. Bounds are fatal (Out Of Range) exactly as withCellAt(), not silently clipped — a bulk loop hitting the edge is a caller bug the builder refuses to hide.</td></tr>
+<tr><td><code>fillRect(Region $region, Cell $cell): self</code></td><td>Sweep a region with one cell, clipped to the builder extent (the same intersect-then-sweep shape as Buffer::fill(), which likewise never throws for out-of-frame regions).</td></tr>
+<tr><td><code>width(): int</code></td><td>Width in cells.</td></tr>
+<tr><td><code>height(): int</code></td><td>Height in cells.</td></tr>
+<tr><td><code>region(): Region</code></td><td>Bounding region of the entire canvas.</td></tr>
+<tr><td><code>toBuffer(): Buffer</code></td><td>Freeze the CURRENT grid into an immutable Buffer via the validated fromGrid wrap. Repeat calls after further painting each snapshot the grid as it stands.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-cell"><code>Cell</code> <small>final class</small></h4>
+<p>A single terminal cell — the atom of buffer rendering.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $rune, public readonly ?Style $style, public readonly ?Hyperlink $link, public readonly int $width)</code></td><td></td></tr>
+<tr><td><code>static new(string $rune = &#039; &#039;, ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self</code></td><td>Default factory — blank cell (shared instance, see property docblock).</td></tr>
+<tr><td><code>static continuation(): self</code></td><td>Factory: a blank continuation cell for wide-char neighbours. Continuation cells have empty rune and zero width. Shared instance.</td></tr>
+<tr><td><code>static blank(): self</code></td><td>Factory: the padding identity — one space, default style, no link, width 1. Named preset so erase paths read as intent (Cell::blank()) rather than as an argumentless default. Same shared instance as the default self::new().</td></tr>
+<tr><td><code>withRune(string $rune): self</code></td><td>Copy carrying a different rune; style, link and width are kept.</td></tr>
+<tr><td><code>withStyle(?Style $style): self</code></td><td>Copy carrying a different style (null clears it); the rest is kept.</td></tr>
+<tr><td><code>withLink(?Hyperlink $link): self</code></td><td>Copy carrying a different hyperlink anchor (null clears it).</td></tr>
+<tr><td><code>withWidth(int $width): self</code></td><td>Copy declaring a different display width.</td></tr>
+<tr><td><code>rune(): string</code></td><td>Displayed grapheme(s), returned verbatim.</td></tr>
+<tr><td><code>style(): ?Style</code></td><td>Per-cell style (or null for default rendering).</td></tr>
+<tr><td><code>link(): ?Hyperlink</code></td><td>OSC 8 hyperlink anchor, or null.</td></tr>
+<tr><td><code>width(): int</code></td><td>Display width in terminal cells.</td></tr>
+<tr><td><code>equals(Cell $other): bool</code></td><td>Structural equality: two cells are equal iff their rendered representation (rune, style, link, width) is identical.</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-hyperlink"><code>Hyperlink</code> <small>final class</small></h4>
+<p>OSC 8 hyperlink anchor — a clickable terminal link.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $url, public readonly string $id = &#039;&#039;)</code></td><td></td></tr>
+<tr><td><code>static new(string $url, string $id = &#039;&#039;): self</code></td><td>Factory matching upstream: Hyperlink(url, id).</td></tr>
+<tr><td><code>url(): string</code></td><td></td></tr>
+<tr><td><code>id(): string</code></td><td></td></tr>
+<tr><td><code>toAnsi(): string</code></td><td>The OSC 8 open frame for this anchor, spelled per spec grammar <code>OSC 8 ; params ; URI ST</code>: <code>ESC ] 8 ; &lt;params&gt; ; &lt;url&gt; ESC \</code>.</td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td>Value equality: two hyperlinks are equal iff their url and id match.</td></tr>
+<tr><td><code>static valuesEqual(?self $a, ?self $b): bool</code></td><td>Null-safe value equality: two optional hyperlinks are the same link state iff both are null, or both are non-null and url+id match.</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-cellbuffer.</p>
+<h4 id="api-sugarcraft-cellbuffer-position"><code>Position</code> <small>final class</small></h4>
+<p>A 2-D coordinate in the buffer grid.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $col, public readonly int $row)</code></td><td></td></tr>
+<tr><td><code>static new(int $col, int $row): self</code></td><td></td></tr>
+<tr><td><code>col(): int</code></td><td>Column (0-based, horizontal axis).</td></tr>
+<tr><td><code>row(): int</code></td><td>Row (0-based, vertical axis).</td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td>Value equality — the same coordinate spelled by a different call site is the same place (consumer idiom: &quot;did the selection move?&quot;).</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-region"><code>Region</code> <small>final class</small></h4>
+<p>A rectangular sub-region of a Buffer, identified by its top-left Position and dimensions.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Position $origin, public readonly int $width, public readonly int $height)</code></td><td></td></tr>
+<tr><td><code>static new(Position $origin, int $width, int $height): self</code></td><td></td></tr>
+<tr><td><code>origin(): Position</code></td><td>Top-left corner.</td></tr>
+<tr><td><code>width(): int</code></td><td>Width in cells.</td></tr>
+<tr><td><code>height(): int</code></td><td>Height in cells.</td></tr>
+<tr><td><code>right(): int</code></td><td>Rightmost column (inclusive).</td></tr>
+<tr><td><code>bottom(): int</code></td><td>Bottommost row (inclusive).</td></tr>
+<tr><td><code>contains(int $col, int $row): bool</code></td><td>Whether a cell at ($col, $row) falls within this region. A zero-area region contains nothing (see class docblock).</td></tr>
+<tr><td><code>intersect(self $other): ?self</code></td><td>The rectangle common to this region and $other — the clip math Buffer::withRegion()/Buffer::fill() use against the grid, exposed for overlay compositors.</td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td>Value equality of the rectangle: origin corner plus extents (the inclusive right/bottom edges follow from those, so equal here means equal corners and edges). Consumer idiom: &quot;did the selection move?&quot;</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-style"><code>Style</code> <small>final class</small></h4>
+<p>Minimal per-cell style record — foreground colour, background colour, palette-slot identity, underline colour, and a raw attribute bitmask.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(?int $fg = null, ?int $bg = null, int $attrs = 0, ?int $fgSlot = null, ?int $bgSlot = null, ?int $ul = null, ?int $ulSlot = null)</code></td><td></td></tr>
+<tr><td><code>static new(?int $fg = null, ?int $bg = null, int $attrs = 0): self</code></td><td>Default factory.</td></tr>
+<tr><td><code>static bold(): self</code></td><td>Factory: bold.</td></tr>
+<tr><td><code>static reverse(): self</code></td><td>Factory: reverse.</td></tr>
+<tr><td><code>fg(): ?int</code></td><td></td></tr>
+<tr><td><code>bg(): ?int</code></td><td></td></tr>
+<tr><td><code>attrs(): int</code></td><td></td></tr>
+<tr><td><code>fgSlot(): ?int</code></td><td></td></tr>
+<tr><td><code>bgSlot(): ?int</code></td><td></td></tr>
+<tr><td><code>ul(): ?int</code></td><td></td></tr>
+<tr><td><code>ulSlot(): ?int</code></td><td></td></tr>
+<tr><td><code>hasBold(): bool</code></td><td></td></tr>
+<tr><td><code>hasItalic(): bool</code></td><td></td></tr>
+<tr><td><code>hasUnderline(): bool</code></td><td></td></tr>
+<tr><td><code>hasStrike(): bool</code></td><td></td></tr>
+<tr><td><code>hasFaint(): bool</code></td><td></td></tr>
+<tr><td><code>hasBlink(): bool</code></td><td></td></tr>
+<tr><td><code>hasReverse(): bool</code></td><td></td></tr>
+<tr><td><code>hasOverline(): bool</code></td><td></td></tr>
+<tr><td><code>hasInvisible(): bool</code></td><td></td></tr>
+<tr><td><code>withFg(?int $fg): self</code></td><td>Sets the RGB foreground and discards palette-slot identity (the two representations are mutually exclusive by this class&#039;s with*() law).</td></tr>
+<tr><td><code>withBg(?int $bg): self</code></td><td>Sets the RGB background and discards its palette-slot identity.</td></tr>
+<tr><td><code>withFgSlot(?int $fgSlot): self</code></td><td>Sets the foreground palette slot (0-255, or null to clear it) and discards the RGB foreground so a stale hex can never shadow the slot.</td></tr>
+<tr><td><code>withBgSlot(?int $bgSlot): self</code></td><td>Sets the background palette slot (0-255 or null) and discards its RGB twin.</td></tr>
+<tr><td><code>withUl(?int $ul): self</code></td><td>Sets the underline RGB and discards its palette-slot identity.</td></tr>
+<tr><td><code>withUlSlot(?int $ulSlot): self</code></td><td>Sets the underline palette slot (0-255 or null) and discards its RGB twin.</td></tr>
+<tr><td><code>withAttrs(int $attrs): self</code></td><td>Return a new Style with the given attribute bitmask (replaces).</td></tr>
+<tr><td><code>withBold(bool $on = true): self</code></td><td>Return a new Style with bold toggled on or off.</td></tr>
+<tr><td><code>withReverse(bool $on = true): self</code></td><td>Return a new Style with reverse toggled on or off.</td></tr>
+<tr><td><code>withItalic(bool $on = true): self</code></td><td>Return a new Style with italic toggled on or off.</td></tr>
+<tr><td><code>withUnderline(bool $on = true): self</code></td><td>Return a new Style with underline toggled on or off.</td></tr>
+<tr><td><code>withStrike(bool $on = true): self</code></td><td>Return a new Style with strike toggled on or off.</td></tr>
+<tr><td><code>withFaint(bool $on = true): self</code></td><td>Return a new Style with faint toggled on or off.</td></tr>
+<tr><td><code>withBlink(bool $on = true): self</code></td><td>Return a new Style with blink toggled on or off.</td></tr>
+<tr><td><code>withOverline(bool $on = true): self</code></td><td>Return a new Style with overline toggled on or off.</td></tr>
+<tr><td><code>withInvisible(bool $on = true): self</code></td><td>Return a new Style with invisible (conceal) toggled on or off.</td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td>Value equality: two styles are equal iff their fg, bg, attrs, palette slots, and underline colour values are all identical.</td></tr>
+<tr><td><code>static valuesEqual(?self $a, ?self $b): bool</code></td><td>Null-safe value equality: two optional styles are the same render state iff both are null, or both are non-null and value-equal.</td></tr>
+<tr><td><code>toAnsi(): string</code></td><td>One-shot full SGR emission for this style (CB-31): the exact bytes the diff encoder writes whenever its pen transitions onto it — the canonical emitter (Support\SgrEmitter, relocated in CB-30) is the single home, so this is the parse→emit identity surface for callers outside a Buffer stream. Note the leading reset term: emission is assertive (\x1b[0;…m), self-contained on any terminal state.</td></tr>
+<tr><td><code>static fromSgr(string $params, ?self $carry = null): ?self</code></td><td>Parse one SGR parameter run (the digits between &quot;\x1b[&quot; and &#039;m&#039;) into a Style, carried on top of $carry.</td></tr>
+<tr><td><code>__serialize(): array</code></td><td>Serialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>__unserialize(array $data): void</code></td><td>Unserialization hook for caching/IPC use cases.</td></tr>
+<tr><td><code>jsonSerialize(): array</code></td><td>JSON serialization support.</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-cellbuffer-diff">SugarCraft\CellBuffer\Diff</h3>
+<h4 id="api-sugarcraft-cellbuffer-diff-diffencoder"><code>DiffEncoder</code> <small>final class</small></h4>
+<p>Encodes a list of DiffOp objects into a minimal ANSI byte stream.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>encode(array $ops): string</code></td><td>Encode a list of DiffOps to a raw ANSI byte string.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-diffop"><code>DiffOp</code> <small>abstract class</small></h4>
+<p>Abstract base for all buffer-diff operations.</p>
+<h4 id="api-sugarcraft-cellbuffer-diff-diffoptimiser"><code>DiffOptimiser</code> <small>final class</small></h4>
+<p>Peephole optimiser over a list of DiffOps.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>optimise(array $ops): array</code></td><td>Optimize a list of DiffOps.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-eraserunop"><code>EraseRunOp</code> <small>final class</small></h4>
+<p>Erase N characters starting at the current cursor position using ECH (Erase Character) sequence \x1b[N X.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $count)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-movecursorop"><code>MoveCursorOp</code> <small>final class</small></h4>
+<p>Move cursor to ($col, $row) using CUP (Cursor Position) sequence.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $col, public readonly int $row)</code></td><td></td></tr>
+<tr><td><code>col(): int</code></td><td>Destination column (0-based; CUP emits it 1-based).</td></tr>
+<tr><td><code>row(): int</code></td><td>Destination row (0-based; CUP emits it 1-based).</td></tr>
+<tr><td><code>info(): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-repeatrunop"><code>RepeatRunOp</code> <small>final class</small></h4>
+<p>Repeat the preceding character N times using REP sequence \x1b[N b.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $rune, public readonly int $count, public readonly int $width = 1)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-setcellop"><code>SetCellOp</code> <small>final class</small></h4>
+<p>Write one or more cells at the current cursor position using direct character output (SGR transitions are separate SetStyleOp).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly array $cells)</code></td><td></td></tr>
+<tr><td><code>count(): int</code></td><td>Number of cells in this op.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-sethyperlinkop"><code>SetHyperlinkOp</code> <small>final class</small></h4>
+<p>Open or close an OSC 8 hyperlink at the current cursor position.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly ?Hyperlink $hyperlink)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-diff-setstyleop"><code>SetStyleOp</code> <small>final class</small></h4>
+<p>Transition the active SGR (Select Graphic Rendition) style before the next cell write.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly ?Style $style)</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-cellbuffer-support">SugarCraft\CellBuffer\Support</h3>
+<h4 id="api-sugarcraft-cellbuffer-support-repeatgate"><code>RepeatGate</code> <small>final class</small></h4>
+<p>Byte-cost gate deciding whether a REP sequence actually pays for itself.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static worth(int $count, int $runeBytes = 1): bool</code></td><td>Whether encoding $count repeats of a $runeBytes-wide rune as one <code>ESC[count b</code> sequence is strictly smaller than repeating it literally.</td></tr>
+<tr><td><code>static repByteCost(int $count): int</code></td><td>Wire size of the REP encoding for $count repeats (3 frame bytes plus the decimal digits of the count). Public so the break-even ladder in tests/RepeatGateTest derives its expectations instead of re-spelling the arithmetic.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-support-sgremitter"><code>SgrEmitter</code> <small>final class</small></h4>
+<p>Shared SGR (Select Graphic Rendition) sequence emitter.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static emit(?Style $style): string</code></td><td>Emit the SGR sequence for a style (or reset if null).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cellbuffer-support-widepairplacement"><code>WidePairPlacement</code> <small>trait</small></h4>
+<p>The wide-pair placement law, shared verbatim by Buffer&#039;s copy-on-write paths and the mutable BufferBuilder scratch (CB-34) so the degradation rules exist in exactly one place — a builder that diverged from withCellAt() would mint grids the immutable API can never produce.</p>
+
+    <h3 id="configuration-and-limits" style="margin-top: 40px;">Configuration and limits</h3>
+    <p>The package has no configuration file or environment variables. Its tunable surface is a handful of constructor-time values and class-level limits:</p>
+    <table class="api-table">
+<tr><th>Setting</th><th>Type</th><th>Default</th><th>Effect</th></tr>
+<tr><td>Buffer width and height</td><td>int, int</td><td>none (required)</td><td>Grid dimensions. Dimensions are trusted at construction, so size the grid to the pane rather than to the content</td></tr>
+<tr><td><code>Buffer::MAX_COPY_CELLS</code></td><td>int constant</td><td><code>1_000_000</code></td><td>Upper bound on the cells a single <code>copy()</code> may produce</td></tr>
+<tr><td><code>Buffer::setRowPrefilterEnabled()</code></td><td>bool, process-wide</td><td><code>true</code></td><td>Enables the row prefilter that skips unchanged rows in <code>diff()</code>.</td></tr>
+<tr><td>Cell width</td><td>int</td><td><code>1</code></td><td><code>0</code> is a continuation, <code>2</code> a wide lead, and <code>N &gt; 2</code> a span whose rune must be exactly <code>N</code> columns wide</td></tr>
+<tr><td>Style palette slots</td><td>int, 0-255</td><td>unset</td><td>Palette identity for a channel. Validated at construction. Slot and RGB are mutually exclusive per channel</td></tr>
+<tr><td>Hyperlink url and id</td><td>string</td><td>id <code>''</code></td><td>C0 and DEL controls, C1 introducers and semicolons in the id are refused</td></tr>
+</table>
+
+    <h3 id="theming-and-styling" style="margin-top: 40px;">Theming and styling</h3>
+    <p>A <code>Style</code> is a pen, not a theme. It carries the colors and attributes a cell paints with, and it does not look up colors from a palette of its own. Two color channels are available for each of foreground, background and underline:</p>
     <ul>
-      <li><strong>Shared cell-grid foundation</strong> — consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared <em>data model</em> and its byte encoders.</li>
-      <li><strong>Per-cell dirty tracking</strong> — <code>Buffer::diff()</code> emits move / style / set-cell / repeat-run / erase-run / hyperlink ops for only the changed cells, and <code>applyDiff()</code> is its round-trip inverse.</li>
-      <li><strong>Terminal rendering</strong> — the data model behind styled-grid output: <code>toAnsi()</code> full repaints and diff-encoded delta frames, hyperlinks surviving intact.</li>
+      <li><strong>RGB</strong>: <code>Style::new(0xFF0000)</code> paints a fixed color and discards any slot identity on that channel.</li>
+      <li><strong>Palette slot</strong>: <code>withFgSlot(n)</code>, <code>withBgSlot(n)</code> and <code>withUlSlot(n)</code> keep the color symbolic, so it follows the terminal theme and survives a delta round-trip without being baked into a hex value.</li>
+    </ul>
+    <p>The attribute bitmask uses this package's own bit layout, which does not match <code>sugar-vterm</code>'s bits:</p>
+    <table class="api-table">
+<tr><th>Constant</th><th>Bit</th><th>Note</th></tr>
+<tr><td><code>Style::ATTR_BOLD</code></td><td>1</td><td></td></tr>
+<tr><td><code>Style::ATTR_ITALIC</code></td><td>2</td><td></td></tr>
+<tr><td><code>Style::ATTR_UNDERLINE</code></td><td>4</td><td>The underline color is stored apart from this bit and emitted whenever the pen is set</td></tr>
+<tr><td><code>Style::ATTR_STRIKE</code></td><td>8</td><td></td></tr>
+<tr><td><code>Style::ATTR_FAINT</code></td><td>16</td><td>Cleared together with bold by SGR 22</td></tr>
+<tr><td><code>Style::ATTR_BLINK</code></td><td>32</td><td>The bit is carried verbatim. The terminal decides what it means, so TUIs honoring reduced motion should substitute static emphasis</td></tr>
+<tr><td><code>Style::ATTR_REVERSE</code></td><td>64</td><td></td></tr>
+<tr><td><code>Style::ATTR_OVERLINE</code></td><td>128</td><td></td></tr>
+<tr><td><code>Style::ATTR_INVISIBLE</code></td><td>256</td><td>A display attribute, not a redaction boundary. Runes in invisible cells are still returned by <code>text()</code></td></tr>
+</table>
+
+    <h3 id="wide-characters" style="margin-top: 40px;">Wide characters</h3>
+    <p>Wide cells (CJK, many emoji) declare <code>width: 2</code>. Width is declared, never measured, so pass it explicitly. The writing API (<code>withCellAt()</code>, <code>fill()</code> and <code>withRegion()</code>) writes the width-0 continuation to the right of every lead and degrades a lead that would straddle the last column to a blank. When a lead is replaced, its old continuation is blanked, and a new lead that lands on an existing pair displaces the partner. Larger widths are run-length spans with no continuation cells, and their rune must measure exactly the declared width. <code>Buffer::fromGrid()</code> is the one entry point that skips these rules.</p>
+
+    <h3 id="diffing-and-delta-ansi" style="margin-top: 40px;">Diffing and delta ANSI</h3>
+    <p><code>Buffer::diff(Buffer $previous)</code> compares two frames and returns a minimal list of <code>DiffOp</code> objects. <code>DiffEncoder::encode()</code> turns that list into bytes. The encoder resets its cursor, style and hyperlink state on every call and opens each frame with a home CUP, so an encoder can be reused safely across frames. Each frame is self-contained and does not depend on what the previous frame left on screen.</p>
+    <table class="api-table">
+<tr><th>Operation</th><th>ANSI</th><th>Used when</th></tr>
+<tr><td><code>MoveCursorOp</code></td><td>CUP <code>ESC [row;colH</code></td><td>Repositions before a run of changes, and is skipped when the cursor is already there</td></tr>
+<tr><td><code>SetStyleOp</code></td><td>SGR <code>ESC [...m</code></td><td>The pen changes by value. This is a full reset and restatement, not a minimal delta</td></tr>
+<tr><td><code>SetCellOp</code></td><td>Raw rune bytes</td><td>One or more consecutive changed cells</td></tr>
+<tr><td><code>RepeatRunOp</code></td><td>REP <code>ESC [N b</code></td><td>The tail of a long identical run where the <code>RepeatGate</code> byte arithmetic favors REP. The gate answers <code>false</code> on ties, so plain glyphs stay literal</td></tr>
+<tr><td><code>EraseRunOp</code></td><td>ECH <code>ESC [N X</code></td><td>Runs of three or more blank default cells</td></tr>
+<tr><td><code>SetHyperlinkOp</code></td><td>OSC 8</td><td>Opens or closes a hyperlink anchor</td></tr>
+</table>
+    <p>Worked example: two 5×2 buffers, one blank and one with a red <code>A</code> and a bold blue <code>BBB</code>. The diff yields seven operations: a cursor move, a style change and the red cell, then a cursor move, a style change, the blue cell, and a repeat run for the remaining <code>B</code>s.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
+
+$prev = Buffer::new(5, 2);
+$blueBold = Style::new(0x0000FF)-&gt;withAttrs(Style::ATTR_BOLD);
+$curr = $prev
+    -&gt;withCellAt(0, 0, Cell::new('A', Style::new(0xFF0000)))
+    -&gt;withCellAt(1, 0, Cell::new('B', $blueBold))
+    -&gt;withCellAt(2, 0, Cell::new('B', $blueBold))
+    -&gt;withCellAt(3, 0, Cell::new('B', $blueBold));
+
+$ops   = $curr-&gt;diff($prev);
+$bytes = (new DiffEncoder())-&gt;encode($ops);</code></pre>
+    <pre class="code"><code class="language-text">ESC[1;1H            home anchor, the unconditional prologue of every frame
+ESC[0;38;2;255;0;0m  SGR: red foreground
+A                   the changed cell
+ESC[0;38;2;0;0;255;1m  SGR: blue foreground and bold
+BBB                 the repeat run is written literally, because REP would cost more here
+ESC[0m              closing reset, so a stale color never bleeds into the next frame</code></pre>
+    <p>The diff round-trips: <code>$prev-&gt;applyDiff($curr-&gt;diff($prev))</code> renders byte-identically to <code>$curr</code> through <code>toAnsi()</code>, and hyperlinks, ids included, survive the trip.</p>
+
+    <h3 id="examples" style="margin-top: 40px;">Examples</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/examples/basic.php"><code>examples/basic.php</code></a>: the Quickstart, runnable. It prints the rune read back from the cell, then the grid. Because <code>toAnsi()</code> ends rows with a bare LF, the <code>H</code> runs into the first row, so the output begins <code>HAB</code>.</li>
+      <li><a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/examples/diff_frames.php"><code>examples/diff_frames.php</code></a>: the worked diff example. It prints the seven delta operations for two 5×2 frames, the encoded delta size (50 bytes), and the size of a full <code>toAnsi()</code> repaint of the same frame (51 bytes).</li>
+    </ul>
+    <pre class="code"><code class="language-shell">php examples/basic.php
+php examples/diff_frames.php</code></pre>
+
+    <h3 id="testing" style="margin-top: 40px;">Testing</h3>
+    <p>Run the suite from the library root. It uses PHPUnit 10 and the <code>phpunit.xml</code> in the package:</p>
+    <pre class="code"><code class="language-shell">cd sugar-cellbuffer &amp;&amp; composer install &amp;&amp; vendor/bin/phpunit</code></pre>
+    <p>The tests are the executable specification for the package. <code>BufferTest.php</code> covers the immutable mutators, <code>WideCellPairingTest.php</code> the pair law, <code>DiffEncoderTest.php</code>, <code>DiffOptimiserTest.php</code> and <code>DiffRowPrefilterTest.php</code> the delta path, <code>RepeatGateTest.php</code> the REP arithmetic, <code>SgrEmitterTest.php</code> and <code>StyleTest.php</code> the SGR vocabulary, and <code>HyperlinkTest.php</code> the OSC 8 validation.</p>
+
+    <h3 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h3>
+    <table class="api-table">
+<tr><th>Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Output rows stack diagonally in a raw terminal</td><td><code>toAnsi()</code> joins rows with a bare LF, which a raw-mode terminal does not turn into a carriage return. Write <code>"\r\n"</code> between rows, or position each row yourself with CUP.</td></tr>
+<tr><td>A wide character leaves a gap or overwrites its neighbor</td><td>The width was not declared. Pass <code>width: 2</code> to <code>Cell::new()</code>, and write the lead with <code>withCellAt()</code>, which writes the continuation for you. <code>fromGrid()</code> skips that step, so pair the cells yourself there.</td></tr>
+<tr><td><code>OutOfRangeException</code> from <code>cellAt()</code></td><td>Coordinates are zero-based and bounded by <code>width()</code> and <code>height()</code>. Clamp the coordinate, or check <code>region()-&gt;contains()</code> first.</td></tr>
+<tr><td><code>InvalidArgumentException</code> from <code>Hyperlink::new()</code></td><td>The URL or id contains a C0 or DEL control, a C1 introducer, or (in the id) a semicolon. Sanitize untrusted text first. Well-formed multibyte IRIs are accepted.</td></tr>
+<tr><td><code>Cell::new()</code> refuses a wide span</td><td>A width above 2 is a run-length span, and its rune must measure exactly that many display columns. Use a width-2 lead for a single wide glyph, or pad the rune to the span width.</td></tr>
+<tr><td>A diff replay leaves cells out of the grid unchanged</td><td><code>applyDiff()</code> skips any write that lands past the last row or column, by design, so a diff never grows the grid. Check that the ops were produced from a buffer of the same dimensions.</td></tr>
+</table>
+
+    <h3 id="security-and-trust-boundaries" style="margin-top: 40px;">Security and trust boundaries</h3>
+    <ul>
+      <li><strong>Runes are written verbatim.</strong> <code>toAnsi()</code> and the diff encoder emit whatever rune a cell holds. Strip control bytes from untrusted text first with <code>SugarCraft\Core\Util\Sanitize::untrusted()</code>. Raw escapes in a rune desynchronize the cursor and inject live SGR.</li>
+      <li><strong>Hyperlinks are validated</strong> at construction and again on unserialization, so their fields cannot carry forged OSC 8 frames.</li>
+      <li><strong><code>fromString()</code> is test support.</strong> It is not an emulator. It drops every CSI that is not SGR-shaped and skips OSC frames, so do not feed it untrusted input expecting a faithful parse.</li>
+      <li><strong>Serialized payloads are re-validated.</strong> <code>__unserialize()</code> re-runs every constructor invariant, so a forged payload fails closed.</li>
     </ul>
 
-    <h3 id="security-trust-boundaries" style="margin-top: 40px;">Security &amp; trust boundaries</h3>
+    <h3 id="architecture" style="margin-top: 40px;">Architecture</h3>
+    <pre class="code"><code class="language-text">Buffer / BufferBuilder     immutable grid  (BufferBuilder is the mutable scratch)
+        |  diff($previous)
+        v
+DiffOp list               MoveCursorOp, SetStyleOp, SetCellOp, RepeatRunOp,
+        |                  EraseRunOp, SetHyperlinkOp
+        |  DiffOptimiser (last style wins, runs coalesced)
+        v
+DiffEncoder               ANSI bytes, home-anchored and self-contained
+        ^
+Support\SgrEmitter        Style -&gt; SGR parameters (palette slot first)
+Support\RepeatGate        REP-versus-literal byte arithmetic
+Support\WidePairPlacement wide-pair law, shared by Buffer and BufferBuilder</code></pre>
+    <p>The memory model is copy-on-write: every mutation clones the cell list, so an old and a new grid briefly coexist. That is the price of value semantics, and it is why grid dimensions should follow the pane rather than the content.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 40px;">Upstream mapping</h3>
+    <table class="api-table">
+<tr><th>Charmbracelet source</th><th>SugarCraft port</th><th>Notes</th></tr>
+<tr><td><code>charmbracelet/x/cellbuf</code> <code>buffer.go</code></td><td><code>Buffer</code>, <code>Cell</code></td><td>The grid model, with copy-on-write mutation in place of in-place edits. There is no <code>Resize</code>, <code>Scroll</code> or <code>SetSize</code></td></tr>
+<tr><td><code>charmbracelet/x/cellbuf</code> <code>hardscroll.go</code>, <code>hashmap.go</code></td><td>not ported</td><td>The scroll optimization and line-hash map. Scrolling belongs to <code>sugar-vterm</code>'s mutable grid</td></tr>
+<tr><td><code>charmbracelet/lipgloss</code></td><td><code>Style</code>, <code>SgrEmitter</code></td><td>The pen and SGR vocabulary</td></tr>
+<tr><td><code>ratatui</code> <code>Buffer::diff</code></td><td><code>Buffer::diff()</code>, <code>DiffEncoder</code></td><td>The framing of the delta, cited in the <code>DiffOp</code> notes</td></tr>
+</table>
+    <p>The deliberate departures from the Go package are listed in the <a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/README.md#divergences-from-charmbraceletxcellbuf">Divergences</a> section of the library README.</p>
+
+    <h3 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h3>
+    <p>The library has no separate changelog file yet, so its history is the commit log of <code>sugar-cellbuffer/</code> in <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>. Packagist publishes the <code>dev-master</code> line only. The package was renamed from <code>sugarcraft/candy-buffer</code> in 2026-10, with its namespace changed from <code>SugarCraft\Buffer\</code> to <code>SugarCraft\CellBuffer\</code>. Depend on the new name only.</p>
+
+    <h3 id="related" style="margin-top: 40px;">Related</h3>
     <ul>
-      <li><strong>Cell runes ride the wire verbatim.</strong> <code>toAnsi()</code> and the diff encoder never strip control characters from cell contents — callers rendering untrusted text must sanitize first (sugar-core <code>Sanitize::untrusted()</code>). <code>text()</code> does not respect styles either: invisible-styled runes still come out, so invisibility is not a redaction boundary.</li>
-      <li><strong>Hyperlink fields are hard-gated.</strong> url and id refuse C0 controls, DEL and the C1 escape introducers — lone raw 0x80-0x9F bytes that do not continue a well-formed UTF-8 sequence, and their UTF-8 <code>C2 xx</code> spellings — and ids refuse semicolons, at construction and again on unserialization, so no escape introducer can be forged into the OSC 8 frame. Well-formed multibyte payloads (arrows, emoji, Cyrillic: an IRI) pass even though their continuation bytes sit in the C1 window.</li>
-      <li><strong><code>Buffer::fromString()</code> is test-support, not an emulator.</strong> Only SGR sequences are interpreted; every other CSI frame deposits its parameter text into cells as literal runes. Do not feed it untrusted input expecting a parse.</li>
+      <li><a href="sugar-vterm.html"><strong>sugar-vterm</strong></a>: the mutable terminal emulator that parses ANSI into a cell grid. Its own grid is independent of this package by design.</li>
+      <li><a href="sugar-ansi-parser.html"><strong>sugar-ansi-parser</strong></a>: the VT500 byte-stream parser that drives <code>sugar-vterm</code>.</li>
+      <li><a href="sugar-style.html"><strong>sugar-style</strong></a>: the rich styling API (borders, padding, transforms). It converts to and from this package's regions.</li>
     </ul>
 
-    <h3 id="source" style="margin-top: 40px;">Source</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-cellbuffer">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/README.md">Full README</a></li>
-      <li>Originally inspired by the Go <a href="https://github.com/charmbracelet">Charm</a> ecosystem; SugarCraft is developed as a native PHP project. The Buffer/Cell data model follows the cell/style design of <a href="https://github.com/charmbracelet/lipgloss">charmbracelet/lipgloss</a> and the terminal cell representation in <a href="https://github.com/charmbracelet/x">charmbracelet/x</a> (<code>x/vt</code>).</li>
+      <li><a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/examples">Runnable examples</a></li>
     </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
-
-    <h3 id="api" style="margin-top: 32px;">API</h3>
-<table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Buffer</td><td>new(int, int)</td><td>Factory: creates width×height grid of blank cells</td></tr>
-<tr><td>Buffer</td><td>cellAt(int, int)</td><td>Bounds-checked cell accessor; throws OutOfRangeException</td></tr>
-<tr><td>Buffer</td><td>withCellAt(int, int, Cell)</td><td>Immutable cell setter; enforces the wide-pair law</td></tr>
-<tr><td>Buffer</td><td>withRegion(Region, Buffer)</td><td>Blit source Buffer into this Buffer's region, clipped to the intersection; returns new Buffer</td></tr>
-<tr><td>Buffer</td><td>width(), height(), region()</td><td>Dimension accessors</td></tr>
-<tr><td>Buffer</td><td>fromGrid(int, int, array)</td><td>Wrap a flat cell list (index = row*width + col; count validated, pair law not)</td></tr>
-<tr><td>Buffer</td><td>diff(Buffer $previous): list&lt;DiffOp&gt; / applyDiff(array $ops)</td><td>Delta ops that turn $previous into this buffer (dimensions must match) / replay them (negative cursor ops refused)</td></tr>
-<tr><td>Buffer</td><td>fill(Region, Cell) / copy(Region)</td><td>Paint a region (clipped to the intersection) / extract an always region-sized Buffer (in-grid cells verbatim, out-of-grid area padded with blanks; capped by MAX_COPY_CELLS, 1,000,000)</td></tr>
-<tr><td>Buffer</td><td>text(?Region)</td><td>Plain-text extraction; continuation cells skipped, invisible-styled runes included (rows joined with a bare LF, same contract as <code>toAnsi()</code>)</td></tr>
-<tr><td>Buffer</td><td>toAnsi() / fromString(?string $ansi, int, int)</td><td>Render to SGR + OSC 8 bytes (rows joined with a bare LF — raw-mode callers post-process) / lossy test-support parse back. SGR channels above 255 saturate, a negative component is refused as malformed (params must be plain digit-runs), 38;5/48;5 indices map through the xterm-256 palette, and a truncated extended color ends the parse keeping the pen built so far</td></tr>
-<tr><td>Cell</td><td>new(string, ?Style, ?Hyperlink, int)</td><td>Factory with rune, style, link, width (0 = continuation, 1 normal, 2 wide lead, larger = run-length span)</td></tr>
-<tr><td>Cell</td><td>rune(), style(), link(), width(), equals(Cell)</td><td>Property accessors / value equality</td></tr>
-<tr><td>Cell</td><td>continuation()</td><td>Factory: empty rune, null style/link, width=0</td></tr>
-<tr><td>Position</td><td>new(int, int)</td><td>Factory: col, row</td></tr>
-<tr><td>Region</td><td>new(Position, int, int)</td><td>Factory: origin, width, height</td></tr>
-<tr><td>Region</td><td>contains(int, int) / right() / bottom()</td><td>Hit-test a cell coordinate / inclusive edge coordinates</td></tr>
-<tr><td>Style</td><td>new(?fg, ?bg, int attrs)</td><td>Convenience factory: RGB 0xRRGGBB colors and attrs bitmask. The full slot-aware form is the constructor — <code>new Style(fg, bg, attrs, fgSlot, bgSlot, ul, ulSlot)</code> — where slots are palette identities 0-255, validated at construction</td></tr>
-<tr><td>Style</td><td>fromSgr(string $params, ?Style $carry)</td><td>Public SGR-parameter parser: reset, base/bright/256/RGB colors (slots recorded with an RGB fallback), underline color, on-codes 1-5, 7-9 and 53, off-codes 22, 23-25, 27-29 (22 clears bold and faint; 6, 26 and 55 have no arm); non-digit-run params throw, a truncated extended-color arm ends the parse keeping the pen built so far (null only when nothing was set)</td></tr>
-<tr><td>Style</td><td>withAttrs(int) / withBold()…withInvisible() / bold() / reverse() / hasX() / equals() / valuesEqual()</td><td>Bitmask replace and nine single-bit toggles (<code>bool $on = true</code>); factories and predicates for all nine attributes; <code>equals()</code>/<code>valuesEqual()</code> compare by value (the null-safe form the encoders use)</td></tr>
-<tr><td>Hyperlink</td><td>new(string, string)</td><td>Factory: url, id (C0 controls, DEL, lone raw 8-bit C1 bytes and their UTF-8 <code>C2 xx</code> spellings, and semicolons-in-id refused at construction and again on unserialization; valid multibyte IRI payloads pass)</td></tr>
-</table>
     </div>
   </div>
 </section>

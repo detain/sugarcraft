@@ -20,8 +20,10 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\PrintMsg;
 use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\SequenceMsg;
+use SugarCraft\Core\TickHandle;
 use SugarCraft\Core\TickRequest;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\WindowSizeRequest;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\TestResult;
 
@@ -169,17 +171,58 @@ final class ControlParitySimulatorTest extends TestCase
         $sim->run();
     }
 
+    public function testACancelledTickNeverRunsItsProducer(): void
+    {
+        // Program::dispatch() drops a tick cancelled before it reaches the
+        // loop; the simulator must not fire the producer for it either.
+        $handle = new TickHandle(1.0, static fn (): Msg => new KeyMsg(KeyType::Char, rune: 'T'));
+        $handle->cancel();
+
+        $result = ProgramSimulator::new(new ControlRecorderModel())
+            ->addMsgs(new TickRequest(1.0, static fn (): Msg => new KeyMsg(KeyType::Char, rune: 'T'), $handle))
+            ->run();
+
+        self::assertSame('I', $result->model->trace);
+    }
+
+    public function testWindowSizeRequestResolvesToTheArmedSize(): void
+    {
+        // Cmd::windowSize() is answered by Program with a WindowSizeMsg; the
+        // simulator must hand update() that message, never the sentinel.
+        $result = ProgramSimulator::new(new ControlRecorderModel())
+            ->withWindowSize(100, 30)
+            ->addMsgs(new WindowSizeRequest())
+            ->run();
+
+        self::assertSame(2, substr_count($result->model->trace, '100x30'), 'startup size plus the resolved request');
+        self::assertStringNotContainsString('WindowSizeRequest', $result->model->trace);
+    }
+
+    public function testWindowSizeRequestWithoutAnArmedSizeIsRefusedByName(): void
+    {
+        $sim = ProgramSimulator::new(new ControlRecorderModel())
+            ->addMsgs(new WindowSizeRequest());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('windowSize');
+
+        $sim->run();
+    }
+
     public function testStartupTrioIsDeliveredBeforeInitWhenArmed(): void
     {
         $result = ProgramSimulator::new(new ControlRecorderModel())
             ->withWindowSize(80, 24)
             ->withEnvironment(['K' => 'V'])
-            ->withColorProfile(ColorProfile::detect(['FORCE_COLOR' => '1']))
+            // Forced colour, passed explicitly: the detection chain is not a
+            // dependency of sugar-testing, so a FORCE_COLOR env read would
+            // answer Ascii here. The trace records the profile name.
+            ->withColorProfile(ColorProfile::TrueColor)
             ->run();
 
         // Program::run() dispatches the trio before init(); the trace shows
         // exactly that order, with init()'s produced key landing last.
-        self::assertSame('80x24K=VCPI', $result->model->trace);
+        self::assertSame('80x24K=VCPTrueColorI', $result->model->trace);
     }
 
     public function testStartupTrioIsAbsentByDefault(): void

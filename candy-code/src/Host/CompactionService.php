@@ -418,7 +418,7 @@ final class CompactionService
 
     /**
      * The wire a {@see ContextCompactor} is handed: $history's AGENT-VISIBLE
-     * rows only (audit 15b-03-rem(a)).
+     * rows only.
      *
      * Compaction exists to shrink what the model is sent, and a UI-only row -
      * a command echo and its output, a queued or refused notice, a launch,
@@ -2007,8 +2007,8 @@ final class CompactionService
     /**
      * $history with the parked submission's own rows removed — the prompt
      * {@see Chat::scheduleParkedCompaction()} echoed and the UserPromptSubmit notes it
-     * wrote immediately ahead of it — for the pre-turn checkpoint (audit SES-1;
-     * see {@see Chat::dispatchTurn()} for what "pre-turn" keeps and why).
+     * wrote immediately ahead of it — for the pre-turn checkpoint
+     * (see {@see Chat::dispatchTurn()} for what "pre-turn" keeps and why).
      *
      * FOUND BY CONTENT AND BRACKETED BY THE PARK NOTICE, because nothing else
      * survives the landing: compaction rebuilds the history, so neither indices

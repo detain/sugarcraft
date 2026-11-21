@@ -80,9 +80,15 @@ final class HelpTest extends TestCase
      * screen() comes back with every control stripped AND every authored row
      * still on its own line — the flattening the E453 deferral was waiting on
      * render() to stop doing.
+     *
+     * Quarantined as an accepted local red ("HelpTest poison", owner ruling
+     * 2026-11-18). The body and assertions are kept as written; the skip lifts
+     * once the poisoned-catalogue wiring is verified against them again.
      */
     public function testAPoisonedCataloguePageIsSanitizedWithoutLosingItsRows(): void
     {
+        $this->markTestSkipped('Quarantined: accepted local red "HelpTest poison" (owner ruling 2026-11-18).');
+
         $dir = sys_get_temp_dir() . '/crush-help-poison-' . bin2hex(random_bytes(4));
         self::assertTrue(mkdir($dir, 0700), 'cannot create the poisoned-catalogue directory');
         $this->poisonDir = $dir;

@@ -178,7 +178,7 @@ are listable but never reach the prompt. `add` creates the entry with
 the first (the `Memory` tool's `save` takes any of the five, and tags — and an
 `intent` additionally requires its `when:` trigger, below).
 
-`search` is a keyword search ranked by BM25 (roadmap 5.3-1). Every word of the
+`search` is a keyword search ranked by BM25. Every word of the
 query must appear in a note's content, type or tags, in any order; a word also
 matches as a prefix and through the porter stemmer, so `deploy` finds
 `deploying`. The best match is listed first, and a word in a note's tags counts
@@ -198,7 +198,7 @@ build whose SQLite lacks FTS5, or a cache that cannot be opened, falls back to
 the case-insensitive substring scan, in file order; a damaged cache file is
 deleted and rebuilt by the next search.
 
-**History (roadmap 5.4-2).** The home memory directory, `~/.candy-code/memory`,
+**History.** The home memory directory, `~/.candy-code/memory`,
 is a git repository of its own (`Memory\MemoryHistory`), started — with a
 first commit, `memory: start history`, that holds only its `.gitignore` — the
 first time a changing `/memory` sub-command runs or `/memory log` is asked. Every `add`,
@@ -252,7 +252,7 @@ is versioned by the user's own checkout, not by the memory history, as ever.
 ### The `Memory` tool
 
 The model reads and writes the same notes through the `Memory` tool
-(`src/Tools/BuiltIn/MemoryTool.php`, roadmap 5.1-2). One `action` per call:
+(`src/Tools/BuiltIn/MemoryTool.php`). One `action` per call:
 
 | Action | Arguments | Does |
 |---|---|---|
@@ -283,7 +283,7 @@ under their own `## standing intents` heading with the trigger spelled out, and
 `tests/Context/StandingIntentTest.php`.
 
 Status: this step lands the save-side vocabulary, the refusals, the index
-heading and the tool-time seam, and with the weld the store round-trip is
+heading and the tool-time seam, and the store round-trip is
 live: `MemoryStore` carries the `when:` column of the frontmatter, a saved
 intent's trigger survives the write and re-arms on reload, and the `save`
 reply says the standing-intent sentence. A hand-edited malformed trigger
@@ -325,7 +325,7 @@ folds a different store — its own — into the delegated run's prompt, covered
 either; a bare `Runtime` nobody handed the shared memo to memoises per
 instance, which is the granularity its wiring tests pin —
 from `MemoryStore::list(MemoryScope::Project)` and `MemoryStore::list(MemoryScope::User)`.
-**What reaches the prompt is the index, not the notes** (roadmap 5.1-1): one line
+**What reaches the prompt is the index, not the notes**: one line
 per note, `- [type] id: opening words (tags: …)` — the fields of the store's own
 `MEMORY.md` index, with the content cut to `MemoryStore::INDEX_PREVIEW_BYTES` (80)
 bytes and marked `...` when cut. The full text is read on demand. The fence is
@@ -400,7 +400,7 @@ Those values are the defaults. The `memory.promptMaxEntries`,
 `memory.promptMaxBytes` and `memory.entryMaxBytes` settings change them — with
 `memory.userMaxEntries` and `memory.userMaxBytes` for the user-scope sub-caps
 (4 notes, 1,024 bytes) — from `~/.candy-code/config.json` only, read by each
-turn's `Runtime` (`MemoryBlock::withSettings()`, roadmap N-P4d). The header
+turn's `Runtime` (`MemoryBlock::withSettings()`). The header
 sentence states whatever applies. A sub-cap that would not nest (a note's
 line within the user budget, the user budget within the total, the user notes
 within the note count) is lowered to fit, so the relations below hold whatever
@@ -449,7 +449,7 @@ recall below, which rides the turn rather than the prompt.
 ### Recall
 
 Every turn, the notes most relevant to the user's latest message are recalled
-into the `<turn-context>` row (roadmap 5.3-2) — at the tail of the request, never
+into the `<turn-context>` row — at the tail of the request, never
 in the system prompt, because a block that changes with every message would move
 message 0 and void the cached prefix behind it. The block is fenced
 `<memory-recall>` and holds at most `MemoryRecallBlock::MAX_ENTRIES` (3) notes,
@@ -576,7 +576,7 @@ tree; `/memory export` bundles CandyCode's own stores for the user, never a
 foreign tree.
 
 **`Host\Commands\MemoryCommand::import()` constructs it behind `/memory import claude|opencode`**
-(wired in P7.S6). The importer writes every entry at the scope it is handed,
+The importer writes every entry at the scope it is handed,
 defaulting to `MemoryScope::Local`, which `MemoryStore::normalizeScope()` lands
 in the `agent` directory — so an import on the default path reaches
 `/memory list agent` and `/memory search` and, per the project-scope-only policy
@@ -684,7 +684,7 @@ of its own — nothing reaches its prompt until a note exists.
 ## Auto-memory
 
 At the end of a turn, candy-code may save durable facts from the conversation
-as memory notes on its own (roadmap 5.2, after Kilo's typed consolidation).
+as memory notes on its own (after Kilo's typed consolidation).
 `Memory\AutoMemoryConsolidator` shows the conversation since its last run to the
 tool-less summary backend (`CANDY_CODE_SUMMARY_MODEL`, the one `/compact` uses),
 which answers with JSON operations: `add` a note, `update` or `delete` one, or
@@ -752,9 +752,9 @@ nothing says nothing.
 ## Memory flush before compaction
 
 Right before the engine compacts a turn — the step summary it writes when a
-request is still over its step budget after the prune (roadmap 2.4-1) — it
+request is still over its step budget after the prune — it
 gives the model one silent step to save what should outlive the session
-(roadmap 2.11, after OpenClaw's pre-compaction flush;
+(after OpenClaw's pre-compaction flush;
 `Context\Compaction\MemoryFlush`). A compaction summary keeps what the next
 step needs; a preference, a correction, a decision and why it was taken is
 exactly what it drops, and this is the last moment the model can still read
@@ -789,7 +789,7 @@ it.
 
 Every so often, candy-code reads the compaction journal (see
 [On-disk layout summary](#on-disk-layout-summary)) and folds what keeps coming
-back into the memory notes (roadmap 5.4-3, after nanobot's Dream).
+back into the memory notes (after nanobot's Dream).
 `Memory\DreamPass` shows the journal entries the previous passes have not read
 to the session's own engine, in a turn of its own: auto-memory looks at one
 conversation, the dream at the summaries of many.
@@ -1013,7 +1013,7 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by its own root through `ContainedPath` — nine call
+Every read is bounded by its own root through sugar-core's `PathJail` — nine call
 sites, one per read decision: `loadPersonal()`'s personal-directory gate
 (shared by the head file and its persona candidates) and its
 `~/.claude` fallback (each bounded by its own directory),

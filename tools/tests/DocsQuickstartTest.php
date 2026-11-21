@@ -283,6 +283,56 @@ final class DocsQuickstartTest extends TestCase
         self::assertSame($promised, $actual, 'the widths in the sugar-constraints quickstart comments are not what GreedySolver returns');
     }
 
+    /**
+     * A documented call that does not exist (Mode::$altScreen) is only a PHP warning at
+     * run time, and the static checker above never executes a sample. The sugar-vterm
+     * quickstart is run from source with warnings turned into exceptions, and the state
+     * it reports must be what its prose says: alternate screen on, title "Demo".
+     */
+    public function testTheVtermQuickstartRunsWithoutWarningsAndReportsWhatItSays(): void
+    {
+        $php = \array_values(\array_filter(
+            self::blocks((string) \file_get_contents(self::root() . '/docs/_data/sugar-vterm.body.html')),
+            static fn (array $b): bool => $b['lang'] === 'php',
+        ));
+        self::assertNotSame([], $php, 'sugar-vterm has no PHP quickstart');
+        $sample = \preg_replace('/^\s*<\?php\s*/', '', $php[0]['code']);
+
+        $runner = <<<'PHP'
+        <?php
+        declare(strict_types=1);
+        $root = __ROOT__;
+        $map = [
+            'SugarCraft\\Vterm\\' => $root . '/sugar-vterm/src/',
+            'SugarCraft\\AnsiParser\\' => $root . '/sugar-ansi-parser/src/',
+            'SugarCraft\\Core\\' => $root . '/sugar-core/src/',
+        ];
+        spl_autoload_register(static function (string $c) use ($map): void {
+            foreach ($map as $prefix => $dir) {
+                if (str_starts_with($c, $prefix)) {
+                    $file = $dir . str_replace('\\', '/', substr($c, strlen($prefix))) . '.php';
+                    if (is_file($file)) { require $file; }
+                    return;
+                }
+            }
+        });
+        set_error_handler(static function (int $no, string $message): bool {
+            throw new \ErrorException($message, 0, $no);
+        });
+        __SAMPLE__
+        echo json_encode(['alt' => $term->isAltScreen(), 'title' => $term->windowTitle()]);
+        PHP;
+        $script = \str_replace(['__ROOT__', '__SAMPLE__'], [\var_export(self::root(), true), $sample], $runner);
+
+        $path = $this->tmpDir . '/vterm_quickstart.php';
+        \file_put_contents($path, $script);
+        $out = \shell_exec(\escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($path) . ' 2>&1');
+        $actual = \json_decode((string) $out, true);
+        self::assertIsArray($actual, 'the sugar-vterm quickstart did not run cleanly: ' . $out);
+
+        self::assertSame(['alt' => true, 'title' => 'Demo'], $actual, 'the sugar-vterm quickstart comments promise alt=true and title "Demo"');
+    }
+
     // -----------------------------------------------------------------
     // The checker, pinned against a fixture tree
     // -----------------------------------------------------------------

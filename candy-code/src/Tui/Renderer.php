@@ -2898,7 +2898,7 @@ final class Renderer
     /**
      * The model id the TUI labels show — this status bar's model segment and
      * the Settings pane's `Model` row — preferring the model requests ACTUALLY
-     * go to over the configured id the App was built with (audit 15b-35).
+     * go to over the configured id the App was built with.
      *
      * An SGLang provider built on its default id adopts the server's served
      * model (audit A26), so {@see App::$model} — the static default — named a

@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Modules\Generic;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Msg\TickMsg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\BoundedCommand;
+use SugarCraft\Dashboard\Module\RunLaunch;
 use SugarCraft\Core\Util\Sanitize;
 
 /**
@@ -31,16 +35,44 @@ final class GenericModule extends BaseModule
     private string $output = '';
 
     /**
+     * True while the command is on the loop. Its output returns as a
+     * CommandOutputMsg. Each tick schedules the next one itself, so one tick
+     * chain runs at a time and a hung command never stacks children.
+     */
+    private bool $inFlight = false;
+
+    /**
+     * Monotonic second the in-flight latch was taken, by the tick that asked for
+     * the run. The latch counts from the child's launch once it has one; see
+     * {@see latched()}.
+     */
+    private ?float $inFlightSince = null;
+
+    /** When the in-flight run's child was actually launched; see {@see latched()}. */
+    private ?RunLaunch $inFlightLaunch = null;
+
+    /**
+     * Counts every run started. The newest value names the run the latch belongs
+     * to: a result from an older, still-hung run must neither clear the latch nor
+     * schedule a second tick chain beside the live one.
+     */
+    private int $runSeq = 0;
+
+    /**
      * @param string|array<string> $command  Trusted shell string OR argv list (no shell).
      *                                      When array, runs via proc_open with no shell
      *                                      interpolation — the safe form for untrusted args.
      *                                      When string, passed verbatim to the shell —
      *                                      callers MUST treat as trusted-only input.
+     * @param ?LoopInterface $loop  The loop the host runs. Pass the Program's loop
+     *                              when it is not the global one, or the child's
+     *                              pipes and timers sit on a loop nobody runs.
      */
     public function __construct(
         private readonly string|array $command,
         private readonly int $intervalSeconds = 5,
         private readonly ?string $name = null,
+        private readonly ?LoopInterface $loop = null,
     ) {
     }
 
@@ -56,11 +88,31 @@ final class GenericModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
-            $newOutput = $this->runCommand();
-            $nextModule = $this->withOutput($newOutput);
-            return [$nextModule, $this->selfTickCmd()];
+        if ($msg instanceof CommandOutputMsg && $msg->source === $this->name()) {
+            // Only the newest run settles the latch; an older run that was still hung
+            // past the ceiling is stale and changes nothing.
+            if (!$this->inFlight || $msg->run !== $this->runSeq) {
+                return [$this, null];
+            }
+
+            return [$this->withOutput($msg->output), null];
         }
+
+        if ($msg instanceof TickMsg && $msg->isFor($this->name())) {
+            // The tick re-arms itself on every path, as SystemModule does. A cmd-only
+            // host that drops the run's Cmd then still gets the next tick, and with it
+            // the stale-latch expiry; re-arming only on the output would freeze the module.
+            if ($this->latched()) {
+                return [$this, $this->selfTickCmd()];
+            }
+
+            $next = $this->withInFlight();
+            $tick = $next->selfTickCmd();
+            $run = $next->runCmd();
+
+            return [$next, $tick === null ? $run : Cmd::batch($tick, $run)];
+        }
+
         return [$this, null];
     }
 
@@ -83,28 +135,79 @@ final class GenericModule extends BaseModule
     {
         $clone = clone $this;
         $clone->output = $output;
+        $clone->inFlight = false;
+        $clone->inFlightSince = null;
+        $clone->inFlightLaunch = null;
+        return $clone;
+    }
+
+    private function withInFlight(): static
+    {
+        $clone = clone $this;
+        $clone->inFlight = true;
+        $clone->inFlightSince = hrtime(true) / 1_000_000_000;
+        $clone->inFlightLaunch = new RunLaunch();
+        $clone->runSeq = $this->runSeq + 1;
         return $clone;
     }
 
     /**
-     * Run the configured command and return trimmed stdout+stderr.
-     * When $command is an array: proc_open with no shell (safe for untrusted
-     * args). Both forms run through BoundedCommand, which owns the stderr
-     * pipe — the string form is wrapped in `sh -c` for shell syntax and is
-     * a trusted-only configuration path. The command string is passed
+     * A latch holds only while its child can still settle. The Cmd belongs to
+     * the host: a host that drops it never delivers CommandOutputMsg, so past
+     * the settle ceiling the latch is stale and the next tick runs the command
+     * again. The ceiling counts from the child's launch, not from the tick that
+     * queued it, so a Cmd the host ran late cannot be stacked over while its
+     * child is still alive; a Cmd never run still expires from the tick.
+     */
+    private function latched(): bool
+    {
+        if (!$this->inFlight) {
+            return false;
+        }
+
+        $since = $this->inFlightLaunch?->latchedSince((float) $this->inFlightSince)
+            ?? (float) $this->inFlightSince;
+        $elapsed = hrtime(true) / 1_000_000_000 - $since;
+
+        return $elapsed < BoundedCommand::SETTLE_CEILING_SECONDS;
+    }
+
+    /**
+     * The configured command as a Cmd: it runs on the loop through BoundedCommand
+     * and settles as a CommandOutputMsg carrying the trimmed stdout+stderr (or the
+     * named failure). When $command is an array: proc_open with no shell (safe for
+     * untrusted args). The string form is wrapped in `sh -c` for shell syntax and
+     * is a trusted-only configuration path. The command string is passed
      * VERBATIM (sugar-dashboard-200): appending `2>&1` was string surgery
      * on configuration — it silently hijacked a user's own `2>/dev/null`
      * (last redirect wins) and poured stderr into `> file` targets, while
      * BoundedCommand already merges the err pipe on its own.
      */
-    private function runCommand(): string
+    private function runCmd(): \Closure
     {
         $argv = is_array($this->command)
             ? $this->command
             : ['sh', '-c', $this->command];
+        $source = $this->name();
+        $run = $this->runSeq;
+        $loop = $this->loop ?? Loop::get();
+        $launch = $this->inFlightLaunch;
 
-        $result = BoundedCommand::run($argv);
+        return Cmd::promise(
+            static function () use ($loop, $argv, $launch, $source, $run): PromiseInterface {
+                // Stamped when the host actually runs this Cmd, so the latch counts from the launch.
+                $launch?->markLaunched();
 
-        return $result['failure'] ?? $result['output'];
+                return BoundedCommand::runAsync($loop, $argv)->then(
+                    static fn (array $result): Msg => new CommandOutputMsg(
+                        $source,
+                        $result['failure'] ?? $result['output'],
+                        $run,
+                    ),
+                    // Unexpected rejection: name it rather than leave the module in flight forever.
+                    static fn (\Throwable $e): Msg => new CommandOutputMsg($source, 'Command failed', $run),
+                );
+            },
+        );
     }
 }

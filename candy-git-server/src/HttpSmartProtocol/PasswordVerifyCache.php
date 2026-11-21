@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\HttpSmartProtocol;
 
+use SugarCraft\Core\Util\LruMap;
+
 /**
  * Small capped LRU of bcrypt results (finding 048).
  *
@@ -16,10 +18,13 @@ namespace SugarCraft\GitServer\HttpSmartProtocol;
  * exactly the repeat pattern being fixed, and persisting auth RESULTS to
  * disk would be a far worse trade than a per-connection re-verify.
  *
- * Freshness bound: the TTL. A password changed out from under a warm
- * entry is honored (or refused, for a revoked credential) at most
- * self::TTL_SECONDS late — the ceiling the old per-request shape paid
- * zero of, since only a process restart cleared it.
+ * Freshness bound: the TTL plus one verify. The expiry is stamped when the
+ * outcome is stored, which is after password_verify() returns, so an entry
+ * outlives self::TTL_SECONDS by the bcrypt run that produced it. A password
+ * changed out from under a warm entry is therefore honored (or, for a
+ * revoked credential, still accepted) at most self::TTL_SECONDS plus that
+ * one verify late. The old per-request shape paid zero of this, since only
+ * a process restart cleared it.
  *
  * Only REAL digests are cached. The unknown-user and key-only decoy
  * burns stay outside (their uniform refusal timing is the enumeration
@@ -38,17 +43,23 @@ final class PasswordVerifyCache
     /** How long one outcome stands (the 60-300 s band, mid point). */
     public const TTL_SECONDS = 120.0;
 
-    private readonly \Closure $clock;
+    /** @var LruMap<bool> outcome per (username, password-digest) key, TTL-bound */
+    private readonly LruMap $entries;
 
-    /** @var array<string, array{0: bool, 1: float}> key => [outcome, expiresAt] */
-    private array $entries = [];
-
-    /** @param (callable(): float)|null $clock test seam for TTL math */
+    /**
+     * Without an injected clock, TTL math runs on LruMap's monotonic hrtime
+     * clock. The pre-P1-11 cache read the wall clock (microtime), which a
+     * backwards NTP step could stretch past TTL_SECONDS; a monotonic clock
+     * keeps the freshness bound in the class docblock true.
+     *
+     * @param (callable(): float)|null $clock test seam for TTL math
+     */
     public function __construct(?callable $clock = null)
     {
-        $this->clock = $clock === null
-            ? static fn (): float => \microtime(true)
-            : \Closure::fromCallable($clock);
+        $this->entries = LruMap::new(self::MAX_ENTRIES)->withTtl(
+            self::TTL_SECONDS,
+            $clock === null ? null : \Closure::fromCallable($clock),
+        );
     }
 
     /**
@@ -59,29 +70,17 @@ final class PasswordVerifyCache
      */
     public function verify(string $password, string $hash, string $username): bool
     {
-        $now = ($this->clock)();
         $key = $username . "\n" . \hash('sha256', $password);
 
-        $hit = $this->entries[$key] ?? null;
+        // get() treats an expired entry as absent and promotes a live one, so
+        // a hit is the recency touch the hand-rolled LRU used to do by hand.
+        $hit = $this->entries->get($key);
         if ($hit !== null) {
-            if ($hit[1] > $now) {
-                // LRU touch: reinsert so iteration order tracks recency.
-                unset($this->entries[$key]);
-                $this->entries[$key] = $hit;
-
-                return $hit[0];
-            }
-            unset($this->entries[$key]); // expired: reclaim the slot now
+            return $hit;
         }
 
         $outcome = \password_verify($password, $hash);
-        $this->entries[$key] = [$outcome, $now + self::TTL_SECONDS];
-
-        if (\count($this->entries) > self::MAX_ENTRIES) {
-            \reset($this->entries);
-            $lru = (string) \key($this->entries);
-            unset($this->entries[$lru]);
-        }
+        $this->entries->put($key, $outcome);
 
         return $outcome;
     }
@@ -89,6 +88,6 @@ final class PasswordVerifyCache
     /** Live entries (tests + introspection). */
     public function size(): int
     {
-        return \count($this->entries);
+        return $this->entries->count();
     }
 }

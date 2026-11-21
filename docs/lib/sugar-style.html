@@ -77,6 +77,11 @@
                     <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
                     <a href="/lib/sugar-releases.html">sugar-releases</a>
                     <a href="/lib/sugar-ignore.html">sugar-ignore</a>
+                    <a href="/lib/sugar-serve-protocol.html">sugar-serve-protocol</a>
+                    <a href="/lib/sugar-ws-rpc.html">sugar-ws-rpc</a>
+                    <a href="/lib/sugar-jwt.html">sugar-jwt</a>
+                    <a href="/lib/sugar-codec.html">sugar-codec</a>
+                    <a href="/lib/sugar-clipboard.html">sugar-clipboard</a>
                     <a href="/lib/sugar-testing.html">sugar-testing</a>
                 </div>
             </li>
@@ -118,6 +123,7 @@
                     <a href="/GLOSSARY.html">Glossary</a>
                     <a href="/KEYMAPS.html">Keymaps</a>
                     <a href="/cookbook/index.html">Cookbook</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
                 </div>
             </li>
             <li class="nav-item"><a href="/#demos">Demos</a></li>
@@ -131,7 +137,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 42 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 48 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-style.png" alt="" aria-hidden="true">
@@ -157,7 +163,27 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#embedded-border-titles">Embedded border titles</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
-            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#concepts">Concepts</a></li>
+            <li class="toc-h3"><a href="#api-reference">API reference</a></li>
+            <li class="toc-h3"><a href="#configuration">Configuration</a></li>
+            <li class="toc-h3"><a href="#theming">Theming</a></li>
+            <li class="toc-h3"><a href="#examples">Examples</a></li>
+            <li class="toc-h3"><a href="#testing">Testing</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style">SugarCraft\Style</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-bar">SugarCraft\Style\Bar</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-border">SugarCraft\Style\Border</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-layout">SugarCraft\Style\Layout</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-listing">SugarCraft\Style\Listing</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-table">SugarCraft\Style\Table</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-style-tree">SugarCraft\Style\Tree</a></li>
+            <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
+            <li class="toc-h3"><a href="#colors-still-print-under-no-color-or-into-a-pipe">Colors still print under NO_COLOR, or into a pipe</a></li>
+            <li class="toc-h3"><a href="#theme-adaptive-picks-the-dark-palette-on-a-light-terminal">Theme::adaptive() picks the dark palette on a light terminal</a></li>
+            <li class="toc-h3"><a href="#a-wrapped-table-cell-stays-on-one-line-or-render-throws-a-typeerror">A wrapped table cell stays on one line, or render() throws a TypeError</a></li>
+            <li class="toc-h3"><a href="#an-overlay-hides-the-layer-beneath-it-instead-of-blending">An overlay hides the layer beneath it instead of blending</a></li>
+            <li class="toc-h3"><a href="#withembeddedtitle-adds-nothing-to-the-border">withEmbeddedTitle() adds nothing to the border</a></li>
+            <li class="toc-h3"><a href="#upstream-mapping">Upstream mapping</a></li>
+            <li class="toc-h2"><a href="#changelog-and-versioning">Changelog and versioning</a></li>
             <li class="toc-h2"><a href="#demos">Demos.</a></li>
             <li class="toc-h3"><a href="#style">Style</a></li>
             <li class="toc-h3"><a href="#border">Border</a></li>
@@ -238,7 +264,11 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 id="api" style="margin-top: 32px;">API</h3>
+    <h3 id="concepts" style="margin-top: 32px;">Concepts</h3>
+    <p><code>Style</code> is an immutable value object. Every setter returns a new <code>Style</code> and leaves the receiver unchanged, so one base style can be reused and specialized without side effects. <code>Border</code>, <code>Table</code>, <code>Tree</code> and <code>Canvas</code> follow the same pattern.</p>
+    <p><code>render()</code> does not write escape codes blindly. It downsamples each color to the style's color profile, so a TrueColor value becomes a 256-color, 16-color or plain-text sequence depending on the tier. The same approach as the Writer in charmbracelet/colorprofile.</p>
+
+    <h3 id="api-reference" style="margin-top: 32px;">API reference</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Theme</td><td>dark() / light() / dracula() / tokyoNight() / oneDark() / githubDark() / solarizedDark() / solarizedLight() / ansi() / adaptive()</td><td>Named theme factories</td></tr>
@@ -264,6 +294,987 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
 <tr><td>Bar</td><td>StatusBar::new()-&gt;left()/center()/right(Segment|string ...)-&gt;width()/style()-&gt;render(); HelpBar::fromMap()</td><td>One-line chrome: positioned segment groups + key→label help rows</td></tr>
 </table>
+
+    <h3 id="configuration" style="margin-top: 32px;">Configuration</h3>
+    <p>Color output is controlled per style, or once for the whole process. The defaults are the values the classes ship with.</p>
+    <ul>
+      <li><code>Style::setDefaultProfile(?ColorProfile)</code>: process-wide, default unset, so TrueColor. Sets the color tier that styles created by <code>Style::new()</code> render to. <code>null</code> restores TrueColor.</li>
+      <li><code>Style::colorProfile(ColorProfile)</code>: per style, default no profile set, so the process-wide default applies. Forces the tier this style's <code>render()</code> downsamples to, overriding the process-wide default.</li>
+      <li><code>Theme::adaptive(bool $fallbackDark)</code>: bool, default <code>true</code>. Palette used when <code>COLORFGBG</code> cannot decide light or dark.</li>
+      <li><code>Border::withEmbeddedTitle(text, ?TitleAnchor, ?open, ?close)</code>: anchor, junction runes. The anchor defaults to <code>TitleAnchor::TopLeft</code>; the junction runes default to the square form of the border's corners (<code>┐</code>/<code>┌</code> top, <code>┘</code>/<code>└</code> bottom), so a rounded border gets square junctions too. Cuts a title into the border edge.</li>
+      <li><code>Table::wrap(?Closure)</code>: closure or null, default no callback set. When set, every line it returns renders, so a wrapped row spans several physical lines. Each line is fitted to the column width and cut when it is wider.</li>
+    </ul>
+
+    <h3 id="theming" style="margin-top: 32px;">Theming</h3>
+    <p><code>Theme</code> is the palette shared by the SugarCraft libraries, with 13 color slots. It has ten named factories: <code>dark()</code>, <code>light()</code>, <code>dracula()</code>, <code>tokyoNight()</code>, <code>oneDark()</code>, <code>githubDark()</code>, <code>solarizedDark()</code>, <code>solarizedLight()</code>, <code>ansi()</code> and <code>adaptive()</code>. Each slot setter, such as <code>withPrimary()</code>, returns a new <code>Theme</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Color;
+use SugarCraft\Style\Theme;
+
+$theme = Theme::dracula()-&gt;withPrimary(Color::hex('#50fa7b'));</code></pre>
+
+    <h3 id="examples" style="margin-top: 32px;">Examples</h3>
+    <p>Each file in <code>examples/</code> runs from the library root as <code>php examples/&lt;name&gt;.php</code>.</p>
+    <ul>
+      <li><code>styled-text.php</code>: The lipgloss "hello world": one styled line of text.</li>
+      <li><code>style.php</code>: Foreground, background, bold, italic, underline and strikethrough, plus adaptive color.</li>
+      <li><code>adaptive-colour.php</code>: Storing the color once and collapsing it on both the light and dark axes.</li>
+      <li><code>border.php</code>: The same content under every built-in border style.</li>
+      <li><code>table.php</code>: A rounded-border table with custom alignment and a <code>styleFunc</code> that paints alternate rows.</li>
+      <li><code>list.php</code>: Lists with the default bullet, a custom enumerator and nested enumerators.</li>
+      <li><code>tree.php</code>: A project structure rendered under three enumerator styles.</li>
+      <li><code>dashboard.php</code>: A small dashboard built with <code>Layout::joinHorizontal()</code>, <code>joinVertical()</code> and <code>place()</code>.</li>
+      <li><code>constraint-dashboard.php</code>: A dashboard whose panes are sized by Length, Min and Percentage constraints.</li>
+      <li><code>canvas.php</code>: A styled popover layer composited over a base layer.</li>
+      <li><code>theme-roles.php</code>: The role-to-style registry and the injectable darkness seam.</li>
+    </ul>
+
+    <h3 id="testing" style="margin-top: 32px;">Testing</h3>
+    <pre class="code"><code class="language-shell">cd sugar-style
+composer install
+vendor/bin/phpunit</code></pre>
+    <p>The only dev dependency is PHPUnit 10. The suite asserts on the exact bytes <code>render()</code> produces, so a change to the escape sequences fails a test.</p>
+
+    <!-- GENERATED by tools/gen-api-reference.php from sugar-style/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-style -->
+<p>Only methods declared in <code>sugar-style/src</code>, or inherited from a parent declared there, are listed. A type that extends a class outside that tree, such as <code>\RuntimeException</code>, does not show the methods of that class.</p>
+<h3 id="sugarcraft-style">SugarCraft\Style</h3>
+<h4 id="api-sugarcraft-style-adaptivecolor"><code>AdaptiveColor</code> <small>final class</small></h4>
+<p>A pair of colours that resolve to one based on the active terminal background. Mirrors lipgloss v2&#039;s <code>AdaptiveColor</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Color $light, public readonly Color $dark)</code></td><td></td></tr>
+<tr><td><code>pick(bool $isDark): Color</code></td><td>Pick the colour appropriate for the current background. Pass the value of \SugarCraft\Core\Msg\BackgroundColorMsg::isDark() (or any other dark-background detector).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-align"><code>Align</code> <small>enum</small></h4>
+<p>Horizontal alignment of content within a fixed-width Style box.</p>
+<p>Cases: <code>Left</code> · <code>Center</code> · <code>Right</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h4 id="api-sugarcraft-style-border"><code>Border</code> <small>final class</small></h4>
+<p>The 13 corner / edge / interior runes that make up a rectangular box border. Outer runes drive Style boxes; the five middle-* runes drive Table separators (column splits, row separators, cross intersections).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $top, public readonly string $bottom, public readonly string $left, public readonly string $right, public readonly string $topLeft, public readonly string $topRight, public readonly string $bottomLeft, public readonly string $bottomRight, public readonly string $middleLeft = &#039; &#039;, public readonly string $middleRight = &#039; &#039;, public readonly string $middle = &#039; &#039;, public readonly string $middleTop = &#039; &#039;, public readonly string $middleBottom = &#039; &#039;, private readonly array $titles = [])</code></td><td></td></tr>
+<tr><td><code>static normal(): self</code></td><td></td></tr>
+<tr><td><code>static rounded(): self</code></td><td></td></tr>
+<tr><td><code>static thick(): self</code></td><td></td></tr>
+<tr><td><code>static double(): self</code></td><td></td></tr>
+<tr><td><code>static block(): self</code></td><td></td></tr>
+<tr><td><code>static ascii(): self</code></td><td></td></tr>
+<tr><td><code>static hidden(): self</code></td><td></td></tr>
+<tr><td><code>static markdownBorder(): self</code></td><td>GitHub-flavored Markdown table border. Mirrors lipgloss&#039;s <code>Border::markdownBorder()</code> — pipes for the verticals, dashes for the horizontals, plain <code>|</code> corners. Useful when an already-rendered <code>Table\Table</code> grid (this lib&#039;s own Markdown-capable table) needs to round-trip through a Markdown reader without losing its grid.</td></tr>
+<tr><td><code>static catalog(): array</code></td><td>Enumerate the names of all built-in border factories.</td></tr>
+<tr><td><code>withTitle(string $text, ?TitleAnchor $anchor = null): self</code></td><td>Attach a title to the border.</td></tr>
+<tr><td><code>withEmbeddedTitle(string $text, ?TitleAnchor $anchor = null, ?string $open = null, ?string $close = null): self</code></td><td>Attach a title EMBEDDED in the edge: bracketed by junction runes so it reads as cut into the line — <code>╭─┐cpu┌───╮</code> on the top edge, <code>╰─┘mem└───╯</code> on the bottom. Mirrors btop <code>Draw::createBox</code> (title / title2 args) and <code>Draw::update_clock</code> (btop_draw.cpp, Symbols <code>title_left ┐ / title_right ┌</code>, <code>title_left_down ┘ / title_right_down └</code>).</td></tr>
+<tr><td><code>embedJunctions(bool $bottom = false): array</code></td><td>The default <code>[open, close]</code> junction pair for an embedded title on the top (<code>$bottom = false</code>) or bottom edge. Taken from the border&#039;s own opposite corners so every family stays consistent — <code>┐┌</code>/<code>┘└</code> for normal and rounded, <code>┓┏</code>/<code>┛┗</code> thick, <code>╗╔</code>/<code>╝╚</code> double, <code>++</code> ascii — with the rounded arcs squared off, matching btop which always embeds with square junctions even on rounded boxes.</td></tr>
+<tr><td><code>seam(bool $left, bool $right, bool $up, bool $down): string</code></td><td>The rune for a point where lines leave in the given directions — the junction a seam (an internal divider) makes where it meets a frame or another seam. btop&#039;s divider law (Symbols <code>div_left ├</code>, <code>div_right ┤</code>, <code>div_up ┬</code>, <code>div_down ┴</code>): a vertical seam landing on the top edge is <code>seam(left: true, right: true, down: true)</code> → <code>┬</code>.</td></tr>
+<tr><td><code>withTitles(array $map): self</code></td><td>Attach multiple titles in bulk, replacing any previously set.</td></tr>
+<tr><td><code>titles(): array</code></td><td>Attached titles, keyed by TitleAnchor case name, each anchor&#039;s list in insertion order.</td></tr>
+<tr><td><code>getTitles(): array</code></td><td>Alias of titles(), kept so existing callers keep compiling.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-canvas"><code>Canvas</code> <small>final class</small></h4>
+<p>Multi-layer compositor — port of Bubble Tea v2&#039;s <code>lipgloss.Canvas</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>addLayer(Layer $l): self</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td>Compose all layers and return the rendered string.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-cell"><code>Cell</code> <small>final readonly class</small></h4>
+<p>A single character cell with associated style.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $rune, public Style $style)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-completeadaptivecolor"><code>CompleteAdaptiveColor</code> <small>final class</small></h4>
+<p>Combines AdaptiveColor (light vs dark background) with CompleteColor (per-tier override) — a designer-supplied matrix of (background × profile) → Color. Mirrors lipgloss v2&#039;s <code>CompleteAdaptiveColor</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly CompleteColor $light, public readonly CompleteColor $dark)</code></td><td></td></tr>
+<tr><td><code>pick(bool $isDark, ColorProfile $profile): Color</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-completecolor"><code>CompleteColor</code> <small>final class</small></h4>
+<p>Profile-aware colour triple. Lets the designer pick the *exact* colour to use at each capability tier, rather than relying on runtime quantization from a single TrueColor value. Mirrors lipgloss v2&#039;s <code>CompleteColor</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Color $trueColor, public readonly Color $ansi256, public readonly Color $ansi)</code></td><td></td></tr>
+<tr><td><code>pick(ColorProfile $profile): Color</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-hsl"><code>Hsl</code> <small>final class</small></h4>
+<p>Factory for creating Color instances via HSL values.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static color(float $h, float $s, float $l): \SugarCraft\Core\Util\Color</code></td><td>Create a Color from HSL values.</td></tr>
+<tr><td><code>static parse(string $hsl): ?\SugarCraft\Core\Util\Color</code></td><td>Create a Color from HSL string like &quot;hsl(200, 80%, 50%)&quot;.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-lang"><code>Lang</code> <small>final class</small></h4>
+<p>Per-library translation facade for sugar-style.</p>
+<h4 id="api-sugarcraft-style-layer"><code>Layer</code> <small>final class</small></h4>
+<p>A single positioned layer within a Canvas. Holds the pre-rendered content block plus its (x, y) origin and z-index.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $content, public readonly int $x = 0, public readonly int $y = 0, public readonly int $z = 0)</code></td><td></td></tr>
+<tr><td><code>static new(string $content): self</code></td><td></td></tr>
+<tr><td><code>withX(int $x): self</code></td><td></td></tr>
+<tr><td><code>withY(int $y): self</code></td><td></td></tr>
+<tr><td><code>withZ(int $z): self</code></td><td></td></tr>
+<tr><td><code>lines(): array</code></td><td></td></tr>
+<tr><td><code>width(): int</code></td><td></td></tr>
+<tr><td><code>height(): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout"><code>Layout</code> <small>final class</small></h4>
+<p>Compositional layout primitives.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static width(string $block): int</code></td><td>Cell width of <code>$block</code>. For multi-line blocks it&#039;s the widest line.</td></tr>
+<tr><td><code>static height(string $block): int</code></td><td>Number of lines in <code>$block</code>.</td></tr>
+<tr><td><code>static size(string $block): array</code></td><td>Width / height pair. Useful for checking that a child fits inside a fixed-size container before placing.</td></tr>
+<tr><td><code>static joinHorizontal(float $pos, string ...$blocks): string</code></td><td>Stitch blocks side by side. <code>$pos</code> is a vertical anchor (Top/ Center/Bottom or any 0.0-1.0 float): shorter blocks are padded vertically with blank lines anchored per <code>$pos</code>. Per-line widths are equalised with trailing spaces so the output is rectangular.</td></tr>
+<tr><td><code>static joinHorizontalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string</code></td><td>Stitch blocks side by side with explicit spacing.</td></tr>
+<tr><td><code>static joinVertical(float $pos, string ...$blocks): string</code></td><td>Stack blocks top-to-bottom. <code>$pos</code> is a horizontal anchor (Left/Center/Right or any 0.0-1.0 float): narrower blocks get padded horizontally with spaces anchored per <code>$pos</code>.</td></tr>
+<tr><td><code>static joinVerticalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string</code></td><td>Stack blocks top-to-bottom with explicit spacing.</td></tr>
+<tr><td><code>static joinHorizontalWithDivider(float $pos, string $divider, string ...$blocks): string</code></td><td>Stitch blocks side by side with a divider column between each adjacent pair. Empty blocks (<code>&#039;&#039;</code>, zero width) are dropped together with their divider, so a collapsed pane leaves no orphan rule. A single-line <code>$divider</code> is repeated on every row; a multi-line one is laid out row by row (missing rows blank). An empty <code>$divider</code> degrades to joinHorizontal().</td></tr>
+<tr><td><code>static joinVerticalWithDivider(float $pos, string $divider, string ...$blocks): string</code></td><td>Stack blocks top-to-bottom with a rule line between each adjacent pair, the rule tiled (repeated, then cut on a cell boundary) to the widest block. Empty blocks are dropped together with their rule. An empty <code>$divider</code> degrades to joinVertical().</td></tr>
+<tr><td><code>static tile(string $unit, int $width): string</code></td><td>Repeat <code>$unit</code> until it covers <code>$width</code> cells, then cut to exactly that.</td></tr>
+<tr><td><code>static clipHead(string $block, int $rows): string</code></td><td>Keep at most <code>$rows</code> lines from the top of <code>$block</code>.</td></tr>
+<tr><td><code>static clipTail(string $block, int $rows): string</code></td><td>Keep at most <code>$rows</code> lines from the bottom of <code>$block</code>.</td></tr>
+<tr><td><code>static clipWidth(string $block, int $cols, string $ellipsis = &#039;&#039;): string</code></td><td>Keep at most <code>$cols</code> visible cells of every line. The cut is ANSI-aware (escapes carry no width, a trailing reset survives) and lands on a grapheme boundary. With <code>$ellipsis</code> set an overlong line keeps <code>$cols - width(ellipsis)</code> cells and gains the ellipsis.</td></tr>
+<tr><td><code>static place(int $width, int $height, float $hPos, float $vPos, string $block, string $fill = &#039; &#039;): string</code></td><td>Position <code>$block</code> within a <code>$width × $height</code> rectangle. <code>$hPos</code> and <code>$vPos</code> are 0.0-1.0 anchors (use the Position constants). The fill character defaults to a space; passing a styled blank (e.g. <code>Style::new()-&gt;background(...)-&gt;render(&#039; &#039;)</code>) lets the surrounding area carry a colour.</td></tr>
+<tr><td><code>static placeHorizontal(int $width, float $pos, string $block, string $fill = &#039; &#039;): string</code></td><td>Position horizontally only — pads each line in <code>$block</code> to <code>$width</code> with <code>$fill</code>, anchored per <code>$pos</code>. No vertical change.</td></tr>
+<tr><td><code>static placeVertical(int $height, float $pos, string $block, string $fill = &#039; &#039;): string</code></td><td>Position vertically only — pads <code>$block</code> above/below to reach <code>$height</code> rows, anchored per <code>$pos</code>. Each blank row is <code>width($block)</code> cells wide.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-lightdark"><code>LightDark</code> <small>final class</small></h4>
+<p>Tiny convenience for picking one of two colours based on whether the terminal background is dark. Mirrors lipgloss v2&#039;s <code>LightDark</code> helper.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static pick(bool $isDark, Color $light, Color $dark): Color</code></td><td></td></tr>
+<tr><td><code>static picker(bool $isDark): \Closure</code></td><td>Returns a closure that picks <code>(light, dark)</code> pairs based on a single captured <code>isDark</code> flag.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-markup"><code>Markup</code> <small>final class</small></h4>
+<p>Parses Rich-style inline markup into Cell arrays.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(string $input, Style $defaultStyle): array</code></td><td>Parse markup string into a list of Cells.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-output"><code>Output</code> <small>final class</small></h4>
+<p>Top-level (un-styled) output helpers — the equivalents of the package-level <code>lipgloss.Print</code> / <code>Println</code> / <code>Sprint</code> / <code>Fprint</code> / <code>Printf</code> functions. Each method is the un-styled twin of the matching Style method (<code>Output::sprint()</code> vs <code>Style::sprint()</code>, and so on) so callers can reach the same shape without a Style instance.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static sprint(string ...$parts): string</code></td><td>Concatenate arguments with single spaces. No newline, no styling. Un-styled twin of Style::sprint() (same join rule and same Go divergence, both documented in the class docblock).</td></tr>
+<tr><td><code>static printf(string $format, mixed ...$args): string</code></td><td><code>sprintf()</code> substitution that RETURNS the formatted string (upstream <code>Printf</code> writes instead). Un-styled twin of Style::printfSprint().</td></tr>
+<tr><td><code>static print(string ...$parts): int</code></td><td>Write <code>Output::sprint($parts)</code> to STDOUT (no newline). Un-styled twin of Style::print(). Same fail-fast write accounting: returns the bytes written, throws <code>RuntimeException</code> on an invalid STDOUT or a false/short write.</td></tr>
+<tr><td><code>static println(string ...$parts): int</code></td><td>Write <code>Output::sprint($parts) . &quot;\n&quot;</code> to STDOUT. Un-styled twin of Style::println(). Same fail-fast write accounting as print().</td></tr>
+<tr><td><code>static fprint($stream, string ...$parts): int</code></td><td>Write <code>Output::sprint($parts)</code> to a caller-supplied stream resource (no trailing newline). Un-styled twin of Style::fprint().</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-palette"><code>Palette</code> <small>final class</small></h4>
+<p>Named ANSI colour constants and colour helpers — the lipgloss equivalents of <code>lipgloss.Black</code>, <code>lipgloss.Red</code>, …, <code>lipgloss.BrightWhite</code> plus the <code>lipgloss.HasDarkBackground()</code> top-level helper.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static black(): Color</code></td><td></td></tr>
+<tr><td><code>static red(): Color</code></td><td></td></tr>
+<tr><td><code>static green(): Color</code></td><td></td></tr>
+<tr><td><code>static yellow(): Color</code></td><td></td></tr>
+<tr><td><code>static blue(): Color</code></td><td></td></tr>
+<tr><td><code>static magenta(): Color</code></td><td></td></tr>
+<tr><td><code>static cyan(): Color</code></td><td></td></tr>
+<tr><td><code>static white(): Color</code></td><td></td></tr>
+<tr><td><code>static brightBlack(): Color</code></td><td></td></tr>
+<tr><td><code>static brightRed(): Color</code></td><td></td></tr>
+<tr><td><code>static brightGreen(): Color</code></td><td></td></tr>
+<tr><td><code>static brightYellow(): Color</code></td><td></td></tr>
+<tr><td><code>static brightBlue(): Color</code></td><td></td></tr>
+<tr><td><code>static brightMagenta(): Color</code></td><td></td></tr>
+<tr><td><code>static brightCyan(): Color</code></td><td></td></tr>
+<tr><td><code>static brightWhite(): Color</code></td><td></td></tr>
+<tr><td><code>static gray(): Color</code></td><td>Alias for <code>brightBlack()</code> — the canonical &quot;muted&quot; palette slot.</td></tr>
+<tr><td><code>static hasDarkBackground(?Color $background): ?bool</code></td><td>lipgloss-style top-level helper: given a known background Color (typically obtained via a SugarCraft terminal-query response), report whether it&#039;s dark enough to want light foregrounds.</td></tr>
+<tr><td><code>static all(): array</code></td><td>All 16 named ANSI colours in ANSI index order. Useful for theme preview tables and for iteration tests.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-position"><code>Position</code> <small>final class</small></h4>
+<p>Position constants for Layout::place(). Match lipgloss&#039;s <code>Top</code> / <code>Bottom</code> / <code>Left</code> / <code>Right</code> / <code>Center</code> floats: 0.0 anchors to the start, 1.0 anchors to the end, 0.5 centres.</p>
+<h4 id="api-sugarcraft-style-renderer"><code>Renderer</code> <small>final class</small></h4>
+<p>Per-writer rendering context. Mirrors lipgloss&#039;s <code>Renderer</code> — a small value object that bundles a ColorProfile and a &quot;dark background&quot; flag so callers can branch on those without threading them through every Style construction.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>Default renderer: TrueColor profile, dark background. Convenience for the common case (most modern terminals).</td></tr>
+<tr><td><code>static fromEnvironment(): self</code></td><td>Auto-detect the color profile from the environment via ColorProfile::detectTerminal(), memoised per process and per distinct environment fingerprint (self::$environmentMemo). The dumb-terminal veto matters here: <code>TERM=dumb</code> answers NoTty, so no SGR reaches a terminal that cannot honour it, as before P1-10a. The dark-background flag stays at its default (true) since that&#039;s not detectable without an OSC 11 round trip — toggle it explicitly via withHasDarkBackground() once the program has the answer.</td></tr>
+<tr><td><code>static resetEnvironmentMemoForTesting(): void</code></td><td>Drop every memoised environment detection. Same seam shape as \SugarCraft\Style\Layout\SolverFactory::resetEnvironmentResolutionForTesting(), separate statics — tests that flip colour variables call this to start from a cold memo.</td></tr>
+<tr><td><code>withColorProfile(ColorProfile $p): self</code></td><td>Override the color profile (downsamples colours when rendering).</td></tr>
+<tr><td><code>withHasDarkBackground(bool $isDark): self</code></td><td>Override the dark-background flag. Bubble Tea programs set this from a <code>BackgroundColorMsg::isDark()</code> reply on startup; for non-interactive output, leave at the default.</td></tr>
+<tr><td><code>newStyle(): Style</code></td><td>Create a fresh Style pre-configured with this renderer&#039;s color profile. Equivalent to <code>Style::new()-&gt;colorProfile($p)</code>.</td></tr>
+<tr><td><code>lightDark(): \Closure</code></td><td>Bind this renderer&#039;s <code>hasDarkBackground</code> to a LightDark picker. Equivalent to <code>LightDark::picker($r-&gt;hasDarkBackground)</code>.</td></tr>
+<tr><td><code>resolveAdaptive(AdaptiveColor $color): \SugarCraft\Core\Util\Color</code></td><td>Resolve an AdaptiveColor with this renderer&#039;s dark-bg flag. Mirrors lipgloss <code>Renderer.HasDarkBackground</code> + adaptive pick.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-style"><code>Style</code> <small>final class</small></h4>
+<p>Immutable styled-text builder. Each setter returns a new Style.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static setDefaultProfile(?ColorProfile $profile): void</code></td><td>Pin the ambient profile for styles created by new() from now on; <code>null</code> restores TrueColor.</td></tr>
+<tr><td><code>static defaultProfile(): ?ColorProfile</code></td><td>The ambient profile currently in force, or <code>null</code> when none was negotiated.</td></tr>
+<tr><td><code>static getDefaultProfile(): ?ColorProfile</code></td><td>Prefix-spelled alias of self::defaultProfile() from the lipgloss-era naming; the bare slot never collided (the static property and a method name are separate namespaces).</td></tr>
+<tr><td><code>static withDefaultProfile(?ColorProfile $profile, callable $callable): mixed</code></td><td>Scoped gate over the ambient default profile: pins <code>$profile</code> for the duration of <code>$callable</code>, then restores whatever was in force — <code>finally</code>-guarded, so an exception thrown inside still unwinds cleanly. Collapses the per-callsite save/restore ritual (finding 020) into one call; nesting is safe (each gate reinstalls its own predecessor) and <code>null</code> behaves as in setDefaultProfile() (TrueColor minting inside the block).</td></tr>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>setString(string $content): self</code></td><td>Bind a default content string to the style. Calling <code>render()</code> with no argument then renders this string. Mirrors lipgloss&#039;s <code>SetString()</code>.</td></tr>
+<tr><td><code>value(): ?string</code></td><td>Bound default content (set via setString() / of()), or null.</td></tr>
+<tr><td><code>underlineColor(Color|string|null $c): self</code></td><td>Coloured underline, separate from the foreground colour. Mirrors lipgloss&#039;s <code>UnderlineColor</code>. Emits SGR <code>58;...</code> (xterm-256 extension) when underlining is active. Accepts the same input shape as fg() — a <code>Color</code>, a 3- or 6-digit hex string, or <code>null</code> to clear; a bad string refuses with the shared <code>InvalidArgumentException</code> path, not a TypeError. Tier caveat: SGR 58 has no 4-bit form, so at the Ansi profile the colour falls back to the FOREGROUND slot and recolours the glyphs themselves (<code>Color::toUnderline()</code>), rather than tinting the line.</td></tr>
+<tr><td><code>getUnderlineColor(): ?Color</code></td><td>Underline color (SGR 58), or null when default.</td></tr>
+<tr><td><code>underlineStyle(UnderlineStyle $style): self</code></td><td>Underline-line shape (single / double / curly / dotted / dashed), emitted as the SGR <code>4:N</code> sub-parameter. A non-None shape also switches <code>underline()</code> on (an explicit later <code>underline(false)</code> still wins; None leaves the flag alone), so the shape never silently renders nothing. The wire form is unchanged (ruled): only <code>4:N</code>, no plain SGR 4 companion. Terminals that understand SGR <code>4:N</code> render the styled underline; terminals that don&#039;t typically ignore the extended form and render no underline at all, since no plain SGR 4 companion is emitted. Mirrors lipgloss <code>UnderlineStyle</code>.</td></tr>
+<tr><td><code>getUnderlineStyle(): UnderlineStyle</code></td><td>Underline shape (single / double / curly / dotted / dashed / none).</td></tr>
+<tr><td><code>paddingChar(string $char): self</code></td><td>Glyph used to fill padding cells. Default <code>&#039; &#039;</code>. Single-cell graphemes are recommended; wider clusters render but break lipgloss-style width math. Mirrors lipgloss <code>PaddingChar</code>.</td></tr>
+<tr><td><code>getPaddingChar(): string</code></td><td>Glyph used to fill padding cells (default <code>&#039; &#039;</code>).</td></tr>
+<tr><td><code>marginChar(string $char): self</code></td><td>Glyph used to fill margin cells. Default <code>&#039; &#039;</code>. Mirrors lipgloss <code>MarginChar</code>.</td></tr>
+<tr><td><code>getMarginChar(): string</code></td><td>Glyph used to fill margin cells (default <code>&#039; &#039;</code>).</td></tr>
+<tr><td><code>foreground(?Color $c): self</code></td><td>Set the foreground color. Pass null to clear (no SGR emitted).</td></tr>
+<tr><td><code>background(?Color $c): self</code></td><td>Set the background color. Pass null to clear.</td></tr>
+<tr><td><code>fg(Color|string|null $c): self</code></td><td>Short alias for foreground(). Accepts a Color, hex string (e.g. <code>&#039;#ff5&#039;</code>), or null to clear.</td></tr>
+<tr><td><code>bg(Color|string|null $c): self</code></td><td>Short alias for background(). Same input shape as fg().</td></tr>
+<tr><td><code>on(Color|string|null $c): self</code></td><td>Reads naturally in chains: <code>$s-&gt;fg(&#039;#ffffff&#039;)-&gt;on(&#039;#0000ff&#039;)</code>. Same as bg() (hex string, Color or null) but English-shaped.</td></tr>
+<tr><td><code>of(string $content): self</code></td><td>Short alias for setString() — bind a default content string. After <code>-&gt;of(&#039;hello&#039;)</code>, <code>render()</code> with no argument uses that string.</td></tr>
+<tr><td><code>foregroundAdaptive(Color|string $light, Color|string $dark): self</code></td><td>Store a foreground pair for resolveAdaptive() to collapse: $light for terminals with a light background, $dark for terminals with a dark one. render() never consults the pair — the light-vs-dark answer is ambient knowledge the style does not have — and rendering with the pair still uncollapsed throws a <code>LogicException</code>. Until the ritual runs, an explicit <code>foreground</code> slot wins.</td></tr>
+<tr><td><code>backgroundAdaptive(Color|string $light, Color|string $dark): self</code></td><td></td></tr>
+<tr><td><code>foregroundComplete(Color|string $trueColor, Color|string $ansi256, Color|string $ansi): self</code></td><td>Store a foreground that picks per-tier from the supplied triple based on the live ColorProfile. render() collapses the triple itself (the tier lives on the style, so nothing ambient is needed); resolveProfile() materialises the same pick into the concrete slot. Use this when you want to override the automatic downsampling with designer-chosen values for each terminal capability tier. Mirrors lipgloss v2&#039;s <code>CompleteColor</code>; assign a pre-built triple through withCompleteForeground() instead (named arguments there keep the tier semantics attached to each value, which is what makes positional misorder invisible).</td></tr>
+<tr><td><code>backgroundComplete(Color|string $trueColor, Color|string $ansi256, Color|string $ansi): self</code></td><td></td></tr>
+<tr><td><code>withAdaptiveForeground(AdaptiveColor $pair): self</code></td><td>Feed a pre-built AdaptiveColor pair into the adaptive foreground slot — the value-object twin of foregroundAdaptive(), byte-identical downstream (same slot, same set-flags). Upstream lipgloss assigns the pair (its <code>lightdark.Color</code> struct) directly to the style field; this restores that shape after the flattened positional port. The same fail-fast contract applies: render() refuses while the pair is uncollapsed.</td></tr>
+<tr><td><code>withAdaptiveBackground(AdaptiveColor $pair): self</code></td><td>Value-object twin of backgroundAdaptive().</td></tr>
+<tr><td><code>withCompleteForeground(CompleteColor $triple): self</code></td><td>Feed a pre-built CompleteColor triple into the complete foreground slot — the value-object twin of foregroundComplete(), byte-identical downstream. Construct with named arguments to keep each tier bound to its value.</td></tr>
+<tr><td><code>withCompleteBackground(CompleteColor $triple): self</code></td><td>Value-object twin of backgroundComplete().</td></tr>
+<tr><td><code>resolveAdaptive(bool $isDark): self</code></td><td>Collapse any adaptive fg/bg slots into concrete <code>foreground</code> / <code>background</code> based on the supplied dark-background flag (typically the value of \SugarCraft\Core\Msg\BackgroundColorMsg::isDark()).</td></tr>
+<tr><td><code>resolveProfile(): self</code></td><td>Collapse any complete-colour fg/bg slots into concrete <code>foreground</code> / <code>background</code> based on the style&#039;s current colour profile. Explicit concrete colours win, matching lipgloss precedence. render() collapses complete slots on its own, so this is only needed to materialise (or re-materialise after a <code>colorProfile()</code> change) the pick for inspection — the adaptive axis has no automatic path and must come through resolveAdaptive().</td></tr>
+<tr><td><code>bold(bool $on = true): self</code></td><td>Toggle bold (SGR 1).</td></tr>
+<tr><td><code>italic(bool $on = true): self</code></td><td>Toggle italic (SGR 3).</td></tr>
+<tr><td><code>underline(bool $on = true): self</code></td><td>Toggle underline (SGR 4). See underlineStyle() / underlineColor() for sub-options.</td></tr>
+<tr><td><code>strikethrough(bool $on = true): self</code></td><td>Toggle strikethrough (SGR 9).</td></tr>
+<tr><td><code>faint(bool $on = true): self</code></td><td>Toggle faint / dim (SGR 2).</td></tr>
+<tr><td><code>dim(bool $on = true): self</code></td><td>Alias for faint() (SGR 2). Mirrors lipgloss&#039;s <code>Dim</code>.</td></tr>
+<tr><td><code>blink(bool $on = true): self</code></td><td>Toggle blink (SGR 5) — terminal-dependent; many emulators ignore it.</td></tr>
+<tr><td><code>rapidBlink(bool $on = true): self</code></td><td>Toggle rapid blink (SGR 6) — distinct from plain blink (SGR 5).</td></tr>
+<tr><td><code>reverse(bool $on = true): self</code></td><td>Toggle reverse video — swap fg / bg (SGR 7).</td></tr>
+<tr><td><code>overline(bool $on = true): self</code></td><td>Toggle overline (SGR 53).</td></tr>
+<tr><td><code>invisible(bool $on = true): self</code></td><td>Toggle invisible / hidden text (SGR 8).</td></tr>
+<tr><td><code>padding(int ...$sides): self</code></td><td>padding($all) | padding($v, $h) | padding($t, $r, $b, $l)</td></tr>
+<tr><td><code>paddingTop(int $n): self</code></td><td></td></tr>
+<tr><td><code>paddingRight(int $n): self</code></td><td></td></tr>
+<tr><td><code>paddingBottom(int $n): self</code></td><td></td></tr>
+<tr><td><code>paddingLeft(int $n): self</code></td><td></td></tr>
+<tr><td><code>margin(int ...$sides): self</code></td><td>margin($all) | margin($v, $h) | margin($t, $r, $b, $l)</td></tr>
+<tr><td><code>marginTop(int $n): self</code></td><td></td></tr>
+<tr><td><code>marginRight(int $n): self</code></td><td></td></tr>
+<tr><td><code>marginBottom(int $n): self</code></td><td></td></tr>
+<tr><td><code>marginLeft(int $n): self</code></td><td></td></tr>
+<tr><td><code>pad(int ...$sides): self</code></td><td>Short alias for padding(). CSS-style: 1 / 2 / 4 args (all / vert+horiz / top/right/bottom/left).</td></tr>
+<tr><td><code>mg(int ...$sides): self</code></td><td>Short alias for margin(). CSS-style: 1 / 2 / 4 args.</td></tr>
+<tr><td><code>width(?int $w): self</code></td><td></td></tr>
+<tr><td><code>height(?int $h): self</code></td><td></td></tr>
+<tr><td><code>maxWidth(?int $w): self</code></td><td>Cap rendered width to <code>$w</code> cells (truncate longer lines). Unlike width(), doesn&#039;t pad shorter content. Mirrors lipgloss&#039;s <code>MaxWidth</code>. Pass <code>null</code> to remove the cap.</td></tr>
+<tr><td><code>maxHeight(?int $h): self</code></td><td>Cap rendered height to <code>$h</code> rows (truncate excess). Unlike height(), doesn&#039;t pad shorter content. Mirrors <code>MaxHeight</code>.</td></tr>
+<tr><td><code>inline(bool $on = true): self</code></td><td>Force the rendered output onto a single line. Newlines in content are replaced with spaces; padding-top/bottom and margin-top/bottom collapse to zero. Mirrors lipgloss&#039;s <code>Inline()</code>.</td></tr>
+<tr><td><code>wordWrap(bool $on = true): self</code></td><td>Word-wrap content to width() instead of truncating it. Opt-in: the default keeps width()&#039;s truncation, which existing consumers and the README rely on. Breaks fall on whitespace where the line allows, a word wider than the budget is broken across lines, and SGR styling carries across each break (Width::wrapAnsi()). Without a width() this is a no-op: there is no budget to wrap to. Under inline() it is also a no-op: inline() promises one line, so width() truncation applies instead.</td></tr>
+<tr><td><code>marginBackground(?Color $c): self</code></td><td>Set the colour painted into the margin area (outside the border). Defaults to no colour; useful for full-width status bars.</td></tr>
+<tr><td><code>colorWhitespace(bool $on = true): self</code></td><td>Toggle whether the style&#039;s SGR (background, reverse, underline, …) extends over whitespace the style itself adds — padding cells, the alignment fill of a width()/align() box, and height() filler rows. With <code>false</code> only the content is styled. Mirrors lipgloss&#039;s <code>ColorWhitespace</code>. Defaults to true.</td></tr>
+<tr><td><code>hyperlink(string $url, string $id = &#039;&#039;): self</code></td><td>Wrap rendered output in an OSC 8 hyperlink envelope so terminals that support it render the styled text as a clickable link. Mirrors lipgloss v2&#039;s <code>Hyperlink()</code> setter.</td></tr>
+<tr><td><code>getHyperlink(): ?string</code></td><td>Currently-set hyperlink target, or null if unset.</td></tr>
+<tr><td><code>tabWidth(int $w): self</code></td><td>Width of a <code>\t</code> character when expanded inside content. Defaults to Width::TAB_WIDTH. Pass 0 to keep tabs as literal <code>\t</code> (no expansion).</td></tr>
+<tr><td><code>static expandTabs(string $content, int $tabWidth = Width::TAB_WIDTH): string</code></td><td>Expand <code>\t</code> characters in $content the way render() does: each tab becomes $tabWidth spaces; 0 (or less) keeps them literal, matching the <code>tabWidth()</code> contract. Closes the split-brain noted there for width-budgeting callers (sugar-table fitting, core <code>fitCell</code>):</td></tr>
+<tr><td><code>transform(?\Closure $fn): self</code></td><td>Apply <code>$fn</code> at the top of the decoration pipeline, before any width measurement, padding, height fit or border, so the callback sees the caller&#039;s text (after tab-expansion and inline-fold) and its result is measured and framed like any other content — case folds and width-changing rewrites (e.g. capitalise, mask sensitive values) cannot corrupt the SGR bytes or desync the frame. Mirrors lipgloss&#039;s <code>Transform</code>, likewise applied at the top of its <code>Render()</code>.</td></tr>
+<tr><td><code>align(Align $h): self</code></td><td></td></tr>
+<tr><td><code>verticalAlign(VAlign $v): self</code></td><td></td></tr>
+<tr><td><code>border(?Border $b, bool ...$sides): self</code></td><td>Apply a border. Sides (variadic) follow CSS shorthand: border($b) → all four sides border($b, $v, $h) → top/bottom = $v, left/right = $h border($b, $t, $r, $b, $l) → per side</td></tr>
+<tr><td><code>borderTop(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderRight(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderBottom(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderLeft(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderForeground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderBackground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderForegroundBlend(Color|string $start, Color|string $end): self</code></td><td>Border-foreground gradient — pre-blends <code>$start</code> and <code>$end</code> and sets distinct per-side colours on top, right, bottom, left so the rendered border fades from one colour to the other when traversed clockwise from the top edge.</td></tr>
+<tr><td><code>borderTopForeground(?Color $c): self</code></td><td>Per-side border foreground colours. Each setter overrides the default <code>borderForeground()</code> for that one side; pass <code>null</code> to clear the override and fall back to the default.</td></tr>
+<tr><td><code>borderRightForeground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderBottomForeground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderLeftForeground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderTopBackground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderRightBackground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderBottomBackground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>borderLeftBackground(?Color $c): self</code></td><td></td></tr>
+<tr><td><code>colorProfile(ColorProfile $p): self</code></td><td>Set the terminal capability the render targets. Mirrors what charmbracelet/colorprofile&#039;s Writer does to lipgloss output: <code>TrueColor</code>/<code>Ansi256</code>/<code>Ansi</code> re-quantise colours to the tier; <code>Ascii</code> drops colour but keeps text attributes (bold, underline, …) and OSC 8 hyperlinks; <code>NoTty</code> emits no escape sequence at all — including any carried in by pre-styled content — keeping only the plain-text layout.</td></tr>
+<tr><td><code>getForeground(): ?Color</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name foreground() is the fluent setter foreground(?Color $c): self, so this getForeground() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getBackground(): ?Color</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name background() is the fluent setter background(?Color $c): self, so this getBackground() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>isBold(): bool</code></td><td></td></tr>
+<tr><td><code>isItalic(): bool</code></td><td></td></tr>
+<tr><td><code>isUnderline(): bool</code></td><td></td></tr>
+<tr><td><code>isStrikethrough(): bool</code></td><td></td></tr>
+<tr><td><code>isFaint(): bool</code></td><td></td></tr>
+<tr><td><code>isBlink(): bool</code></td><td></td></tr>
+<tr><td><code>isRapidBlink(): bool</code></td><td></td></tr>
+<tr><td><code>isReverse(): bool</code></td><td></td></tr>
+<tr><td><code>isOverline(): bool</code></td><td></td></tr>
+<tr><td><code>isInvisible(): bool</code></td><td></td></tr>
+<tr><td><code>getWidth(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent setter width(?int $w): self, so this getWidth() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getHeight(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name height() is the fluent setter height(?int $h): self, so this getHeight() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getMaxWidth(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name maxWidth() is the fluent setter maxWidth(?int $w): self, so this getMaxWidth() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getMaxHeight(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name maxHeight() is the fluent setter maxHeight(?int $h): self, so this getMaxHeight() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getAlign(): Align</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name align() is the fluent setter align(Align $h): self, so this getAlign() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getVerticalAlign(): VAlign</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name verticalAlign() is the fluent setter verticalAlign(VAlign $v): self, so this getVerticalAlign() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getBorder(): ?Border</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name border() is the fluent setter border(?Border $b, bool ...$sides): self, so this getBorder() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getBorderForeground(): ?Color</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name borderForeground() is the fluent setter borderForeground(?Color $c): self, so this getBorderForeground() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getBorderBackground(): ?Color</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name borderBackground() is the fluent setter borderBackground(?Color $c): self, so this getBorderBackground() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getColorProfile(): ColorProfile</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name colorProfile() is the fluent setter colorProfile(ColorProfile $p): self, so this getColorProfile() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>isInline(): bool</code></td><td></td></tr>
+<tr><td><code>getTabWidth(): int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name tabWidth() is the fluent setter tabWidth(int $w): self, so this getTabWidth() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getMarginBackground(): ?Color</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name marginBackground() is the fluent setter marginBackground(?Color $c): self, so this getMarginBackground() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getPadding(): array</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name padding() is the fluent setter padding(int ...$sides): self, so this getPadding() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getMargin(): array</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name margin() is the fluent setter margin(int ...$sides): self, so this getMargin() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>borderSides(): array</code></td><td></td></tr>
+<tr><td><code>getBorderSides(): array</code></td><td></td></tr>
+<tr><td><code>horizontalPadding(): int</code></td><td>Left plus right padding, in cells. Mirrors charmbracelet/lipgloss.GetHorizontalPadding.</td></tr>
+<tr><td><code>verticalPadding(): int</code></td><td>Top plus bottom padding, in rows; zero under inline(). Mirrors charmbracelet/lipgloss.GetVerticalPadding.</td></tr>
+<tr><td><code>horizontalMargin(): int</code></td><td>Left plus right margin, in cells. Mirrors charmbracelet/lipgloss.GetHorizontalMargins.</td></tr>
+<tr><td><code>verticalMargin(): int</code></td><td>Top plus bottom margin, in rows; zero under inline(). Mirrors charmbracelet/lipgloss.GetVerticalMargins.</td></tr>
+<tr><td><code>horizontalBorderSize(): int</code></td><td>Border columns: one per enabled left or right side; zero without a border(). Mirrors charmbracelet/lipgloss.GetHorizontalBorderSize.</td></tr>
+<tr><td><code>verticalBorderSize(): int</code></td><td>Border rows: one per enabled top or bottom side; zero without a border(). Mirrors charmbracelet/lipgloss.GetVerticalBorderSize.</td></tr>
+<tr><td><code>horizontalFrameSize(): int</code></td><td>Total non-content width: padding, border and margin, left and right. Mirrors charmbracelet/lipgloss.GetHorizontalFrameSize.</td></tr>
+<tr><td><code>verticalFrameSize(): int</code></td><td>Total non-content height: padding, border and margin, top and bottom. Mirrors charmbracelet/lipgloss.GetVerticalFrameSize.</td></tr>
+<tr><td><code>isSet(string $prop): bool</code></td><td></td></tr>
+<tr><td><code>unsetForeground(): self</code></td><td></td></tr>
+<tr><td><code>unsetBackground(): self</code></td><td></td></tr>
+<tr><td><code>unsetBold(): self</code></td><td></td></tr>
+<tr><td><code>unsetItalic(): self</code></td><td></td></tr>
+<tr><td><code>unsetUnderline(): self</code></td><td></td></tr>
+<tr><td><code>unsetStrikethrough(): self</code></td><td></td></tr>
+<tr><td><code>unsetFaint(): self</code></td><td></td></tr>
+<tr><td><code>unsetDim(): self</code></td><td>Alias for unsetFaint().</td></tr>
+<tr><td><code>unsetBlink(): self</code></td><td></td></tr>
+<tr><td><code>unsetReverse(): self</code></td><td></td></tr>
+<tr><td><code>unsetOverline(): self</code></td><td></td></tr>
+<tr><td><code>unsetInvisible(): self</code></td><td></td></tr>
+<tr><td><code>unsetWidth(): self</code></td><td></td></tr>
+<tr><td><code>unsetHeight(): self</code></td><td></td></tr>
+<tr><td><code>unsetMaxWidth(): self</code></td><td></td></tr>
+<tr><td><code>unsetMaxHeight(): self</code></td><td></td></tr>
+<tr><td><code>unsetBorder(): self</code></td><td>Drop the border AND its side toggles: the side flags revert to the all-sides default and leave propsSet, so a later inherit() re-inherits the parent&#039;s border sides along with its border.</td></tr>
+<tr><td><code>unsetTransform(): self</code></td><td></td></tr>
+<tr><td><code>unsetHyperlink(): self</code></td><td>Drop the currently-set hyperlink. Mirrors lipgloss&#039;s <code>UnsetHyperlink</code>.</td></tr>
+<tr><td><code>unsetPadding(): self</code></td><td>Drop padding entirely (all four sides → 0).</td></tr>
+<tr><td><code>unsetMargin(): self</code></td><td>Drop margin entirely (all four sides → 0).</td></tr>
+<tr><td><code>unsetTabWidth(): self</code></td><td>Reset tab width to the default, Width::TAB_WIDTH.</td></tr>
+<tr><td><code>unsetAlign(): self</code></td><td>Reset horizontal alignment to Align::Left.</td></tr>
+<tr><td><code>unsetVerticalAlign(): self</code></td><td>Reset vertical alignment to VAlign::Top.</td></tr>
+<tr><td><code>unsetInline(): self</code></td><td>Drop inline mode.</td></tr>
+<tr><td><code>unsetMarginBackground(): self</code></td><td>Drop the margin background colour.</td></tr>
+<tr><td><code>unsetColorWhitespace(): self</code></td><td>Reset colorWhitespace to the default (true).</td></tr>
+<tr><td><code>unsetBorderTop(): self</code></td><td>Per-side border-side disablers. Each one flips the matching <code>borderSides</code> slot back to false without touching the other three sides or the border characters themselves. Mirror lipgloss&#039;s <code>UnsetBorderTop</code> / <code>UnsetBorderRight</code> / <code>UnsetBorderBottom</code> / <code>UnsetBorderLeft</code>.</td></tr>
+<tr><td><code>unsetBorderRight(): self</code></td><td></td></tr>
+<tr><td><code>unsetBorderBottom(): self</code></td><td></td></tr>
+<tr><td><code>unsetBorderLeft(): self</code></td><td></td></tr>
+<tr><td><code>copy(): self</code></td><td>Duplicate this style. Returns an identical instance (the explicit propsSet is preserved). Mirrors lipgloss&#039;s deprecated <code>Copy()</code> — since Style is immutable, this is mostly a clarity helper.</td></tr>
+<tr><td><code>builder(): StyleBuilder</code></td><td>Start a chain that edits one draft and builds a single new style.</td></tr>
+<tr><td><code>inherit(self $parent): self</code></td><td>Merge $parent into this style. Any property the child explicitly set wins; everything else is taken from the parent.</td></tr>
+<tr><td><code>patch(self $other): self</code></td><td>Incrementally merge $other into this style.</td></tr>
+<tr><td><code>render(string $content = &#039;&#039;): string</code></td><td></td></tr>
+<tr><td><code>__invoke(string $content): string</code></td><td></td></tr>
+<tr><td><code>sprint(string ...$content): string</code></td><td>Render the arguments, joined with single spaces between them.</td></tr>
+<tr><td><code>printfSprint(string $format, mixed ...$args): string</code></td><td><code>printf</code>-substitution analogue: formats with <code>sprintf()</code>, renders the result styled, and RETURNS the string. Upstream lipgloss v2 <code>Printf</code> is a writer that returns <code>(n, err)</code> — this is the analogue, not a mirror (the writing twin is fprint()). The un-styled twin is Output::printf().</td></tr>
+<tr><td><code>println(string ...$content): int</code></td><td>Write the rendered sprint() output to STDOUT followed by a newline — for non-TUI scripts that just want styled console output. The space-join (and its Go divergence) is inherited from sprint(). The un-styled twin is Output::println().</td></tr>
+<tr><td><code>print(string ...$content): int</code></td><td>Write the rendered sprint() output to STDOUT (no trailing newline). Join semantics as in sprint(); the un-styled twin is Output::print(). Same fail-fast write accounting and byte-count return as println().</td></tr>
+<tr><td><code>fprint($stream, string ...$content): int</code></td><td>Write the rendered sprint() output to a caller-supplied stream resource (no trailing newline). The un-styled twin is Output::fprint().</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-stylebuilder"><code>StyleBuilder</code> <small>final class</small></h4>
+<p>Chain form of Style&#039;s plain-value setters: edit one draft, build one Style.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>setForeground(?Color $c): self</code></td><td>Set the foreground color. Pass null to clear. Mirrors Style::foreground().</td></tr>
+<tr><td><code>setBackground(?Color $c): self</code></td><td>Set the background color. Pass null to clear. Mirrors Style::background().</td></tr>
+<tr><td><code>setFg(Color|string|null $c): self</code></td><td>Hex-string form of setForeground(). Mirrors Style::fg().</td></tr>
+<tr><td><code>setBg(Color|string|null $c): self</code></td><td>Hex-string form of setBackground(). Mirrors Style::bg().</td></tr>
+<tr><td><code>setUnderlineColor(Color|string|null $c): self</code></td><td>Set the underline color (SGR 58), or clear it with null. Mirrors Style::underlineColor().</td></tr>
+<tr><td><code>setBold(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setItalic(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setUnderline(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setStrikethrough(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setFaint(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setBlink(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setRapidBlink(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setReverse(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setOverline(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setInvisible(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setInline(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setWordWrap(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setColorWhitespace(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>setUnderlineStyle(UnderlineStyle $style): self</code></td><td>Underline shape. A non-None shape also switches the underline flag on, as Style::underlineStyle() does; None leaves the flag alone.</td></tr>
+<tr><td><code>setWidth(?int $w): self</code></td><td></td></tr>
+<tr><td><code>setHeight(?int $h): self</code></td><td></td></tr>
+<tr><td><code>setMaxWidth(?int $w): self</code></td><td></td></tr>
+<tr><td><code>setMaxHeight(?int $h): self</code></td><td></td></tr>
+<tr><td><code>setTabWidth(int $w): self</code></td><td>Mirrors Style::tabWidth(): a negative width is refused.</td></tr>
+<tr><td><code>setAlign(Align $h): self</code></td><td></td></tr>
+<tr><td><code>setVerticalAlign(VAlign $v): self</code></td><td></td></tr>
+<tr><td><code>setColorProfile(ColorProfile $p): self</code></td><td></td></tr>
+<tr><td><code>setString(string $content): self</code></td><td>Bind the default content, as Style::setString() does.</td></tr>
+<tr><td><code>setPadding(int ...$sides): self</code></td><td></td></tr>
+<tr><td><code>setMargin(int ...$sides): self</code></td><td></td></tr>
+<tr><td><code>setPaddingChar(string $char): self</code></td><td>Glyph that fills padding cells. Mirrors Style::paddingChar().</td></tr>
+<tr><td><code>setMarginChar(string $char): self</code></td><td>Glyph that fills margin cells. Mirrors Style::marginChar().</td></tr>
+<tr><td><code>setMarginBackground(?Color $c): self</code></td><td>Color painted into the margin, or cleared with null. Mirrors Style::marginBackground().</td></tr>
+<tr><td><code>build(): Style</code></td><td>Build the Style. The builder stays usable: the draft is copied, not consumed.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-styleparser"><code>StyleParser</code> <small>final class</small></h4>
+<p>Parses termui-style inline style strings into Cell arrays.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static parse(string $input, Style $defaultStyle): array</code></td><td>Parse a styled string into a list of Cells.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-theme"><code>Theme</code> <small>final class</small></h4>
+<p>Canonical theme palette — the single source of truth for terminal colour schemes across SugarCraft consumer libs.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly Color $foreground, public readonly Color $background, public readonly Color $primary, public readonly Color $secondary, public readonly Color $accent, public readonly Color $muted, public readonly Color $error, public readonly Color $warning, public readonly Color $success, public readonly Color $info, public readonly Color $border, public readonly Color $separator, public readonly Color $cursor, public readonly array $styles = [])</code></td><td></td></tr>
+<tr><td><code>static dark(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.dark().</td></tr>
+<tr><td><code>static light(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.light().</td></tr>
+<tr><td><code>static dracula(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.dracula().</td></tr>
+<tr><td><code>static tokyoNight(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.tokyoNight().</td></tr>
+<tr><td><code>static oneDark(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.oneDark().</td></tr>
+<tr><td><code>static githubDark(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.githubDark().</td></tr>
+<tr><td><code>static solarizedDark(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.solarizedDark(). Based on the Solarized colour palette (Ethan Schoonover).</td></tr>
+<tr><td><code>static solarizedLight(): self</code></td><td>Mirrors charmbracelet/lipgloss.Theme.solarizedLight(). Based on the Solarized colour palette (Ethan Schoonover).</td></tr>
+<tr><td><code>static ansi(): self</code></td><td>Terminal-default 8-colour ANSI theme. Mirrors charmbracelet/lipgloss.Theme.ansi().</td></tr>
+<tr><td><code>static for(bool $isDark): self</code></td><td>Pick the matching member of the built-in dark/light pair from a known polarity. The injectable seam adaptive() cannot accept — callers that already know the background (an OSC-11 probe, a host setting, a stored user preference) resolve the theme without re-reading the environment.</td></tr>
+<tr><td><code>static adaptive(bool $fallbackDark = true): self</code></td><td>Auto-detect theme from the <code>COLORFGBG</code> environment variable. Falls back to dark when the variable is absent or unparseable.</td></tr>
+<tr><td><code>static catalog(): array</code></td><td>Enumerate the names of all built-in theme factories.</td></tr>
+<tr><td><code>style(string $role): ?Style</code></td><td>The Style bound to a semantic role, or null when the theme defines no binding for it. Mirrors charmbracelet/lipgloss&#039;s Theme.StyleFunc (whose (Style, bool) tuple collapses to the nullable read here).</td></tr>
+<tr><td><code>withStyle(string $role, ?Style $style): self</code></td><td>Returns a new Theme with one role binding replaced — or removed when $style is null. The registry rides the private copy door, so no wither can drop it: the lesson of finding 037 applied to the 14th field itself (finding 003).</td></tr>
+<tr><td><code>withForeground(Color $foreground): self</code></td><td>Returns a new Theme with the foreground colour replaced.</td></tr>
+<tr><td><code>withBackground(Color $background): self</code></td><td>Returns a new Theme with the background colour replaced.</td></tr>
+<tr><td><code>withPrimary(Color $primary): self</code></td><td>Returns a new Theme with the primary colour replaced.</td></tr>
+<tr><td><code>withSecondary(Color $secondary): self</code></td><td>Returns a new Theme with the secondary colour replaced.</td></tr>
+<tr><td><code>withAccent(Color $accent): self</code></td><td>Returns a new Theme with the accent colour replaced.</td></tr>
+<tr><td><code>withMuted(Color $muted): self</code></td><td>Returns a new Theme with the muted colour replaced.</td></tr>
+<tr><td><code>withError(Color $error): self</code></td><td>Returns a new Theme with the error colour replaced.</td></tr>
+<tr><td><code>withWarning(Color $warning): self</code></td><td>Returns a new Theme with the warning colour replaced.</td></tr>
+<tr><td><code>withSuccess(Color $success): self</code></td><td>Returns a new Theme with the success colour replaced.</td></tr>
+<tr><td><code>withInfo(Color $info): self</code></td><td>Returns a new Theme with the info colour replaced.</td></tr>
+<tr><td><code>withBorder(Color $border): self</code></td><td>Returns a new Theme with the border colour replaced.</td></tr>
+<tr><td><code>withSeparator(Color $separator): self</code></td><td>Returns a new Theme with the separator colour replaced.</td></tr>
+<tr><td><code>withCursor(Color $cursor): self</code></td><td>Returns a new Theme with the cursor colour replaced.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-titleplacement"><code>TitlePlacement</code> <small>enum</small></h4>
+<p>Horizontal alignment of a border title within its allocated space.</p>
+<p>Cases: <code>Left</code> · <code>Center</code> · <code>Right</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<h4 id="api-sugarcraft-style-underlinestyle"><code>UnderlineStyle</code> <small>enum</small></h4>
+<p>Underline-line style — drives the SGR 4:N sub-parameter that terminals such as kitty, WezTerm, iTerm2 and recent xterm interpret as a distinct line shape under the text.</p>
+<p>Cases: <code>None</code> · <code>Single</code> · <code>Double</code> · <code>Curly</code> · <code>Dotted</code> · <code>Dashed</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h4 id="api-sugarcraft-style-valign"><code>VAlign</code> <small>enum</small></h4>
+<p>Vertical alignment of content within a fixed-height Style box. Used by Style::verticalAlign() together with Style::height().</p>
+<p>Cases: <code>Top</code> · <code>Middle</code> · <code>Bottom</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h3 id="sugarcraft-style-bar">SugarCraft\Style\Bar</h3>
+<h4 id="api-sugarcraft-style-bar-helpbar"><code>HelpBar</code> <small>final class</small></h4>
+<p>A themed single-line keyboard-shortcut help bar.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly array $entries = [], private readonly string $keySeparator = &#039;: &#039;, private readonly string $separator = &#039; │ &#039;, private readonly ?Style $keyStyle = null, private readonly ?Style $labelStyle = null, private readonly ?int $width = null, private readonly bool $visible = true)</code></td><td></td></tr>
+<tr><td><code>static new(): self</code></td><td>Empty, visible help bar with default separators.</td></tr>
+<tr><td><code>static fromMap(array $bindings): self</code></td><td>Build a help bar from a key → label map. Insertion order is preserved; a repeated key overwrites the earlier label.</td></tr>
+<tr><td><code>add(string $key, string $label): self</code></td><td>Append a key → label entry. Duplicate keys are kept (ordered list).</td></tr>
+<tr><td><code>bindings(array $bindings): self</code></td><td>Replace all entries from a key → label map.</td></tr>
+<tr><td><code>without(string $key): self</code></td><td>Drop the first entry whose key matches.</td></tr>
+<tr><td><code>keySeparator(string $separator): self</code></td><td>Separator between a key and its label (default <code>&#039;: &#039;</code>).</td></tr>
+<tr><td><code>separator(string $separator): self</code></td><td>Separator between entries (default <code>&#039; │ &#039;</code>).</td></tr>
+<tr><td><code>keyStyle(?Style $style): self</code></td><td>Style applied to each key. Null renders keys raw.</td></tr>
+<tr><td><code>labelStyle(?Style $style): self</code></td><td>Style applied to each label. Null renders labels raw.</td></tr>
+<tr><td><code>width(?int $width): self</code></td><td>Cap the rendered line to this width (ANSI-aware truncation). Null = uncapped.</td></tr>
+<tr><td><code>visible(bool $on = true): self</code></td><td>Toggle visibility — a hidden bar renders to the empty string.</td></tr>
+<tr><td><code>hidden(): self</code></td><td>Alias for <code>visible(false)</code>.</td></tr>
+<tr><td><code>entries(): array</code></td><td></td></tr>
+<tr><td><code>getKeySeparator(): string</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name keySeparator() is the fluent setter keySeparator(string $separator): self, so this getKeySeparator() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getSeparator(): string</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name separator() is the fluent setter separator(string $separator): self, so this getSeparator() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getKeyStyle(): ?Style</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name keyStyle() is the fluent setter keyStyle(?Style $style): self, so this getKeyStyle() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getLabelStyle(): ?Style</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name labelStyle() is the fluent setter labelStyle(?Style $style): self, so this getLabelStyle() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getWidth(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent setter width(?int $width): self, so this getWidth() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>isVisible(): bool</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td>Assemble the help bar into a single line. Returns the empty string when hidden or when there are no entries.</td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-segment"><code>Segment</code> <small>final class</small></h4>
+<p>A single themed piece of text inside a StatusBar.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $text = &#039;&#039;, public readonly ?Style $style = null)</code></td><td></td></tr>
+<tr><td><code>static new(): self</code></td><td>Empty segment (no text, no style).</td></tr>
+<tr><td><code>static of(string $text, ?Style $style = null): self</code></td><td>Build a segment from a text run and an optional Style.</td></tr>
+<tr><td><code>withText(string $text): self</code></td><td>Replace the text run.</td></tr>
+<tr><td><code>withStyle(?Style $style): self</code></td><td>Replace (or clear, with null) the segment style.</td></tr>
+<tr><td><code>text(): string</code></td><td>Bound text run.</td></tr>
+<tr><td><code>style(): ?Style</code></td><td>Bound style, or null when the text renders raw.</td></tr>
+<tr><td><code>width(): int</code></td><td>Visible cell width of the text (the raw text carries no SGR).</td></tr>
+<tr><td><code>isEmpty(): bool</code></td><td>True when the text run is empty (renders to nothing).</td></tr>
+<tr><td><code>render(): string</code></td><td>Render the text through its style. Returns the raw text unchanged when no style is bound.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-statusbar"><code>StatusBar</code> <small>final class</small></h4>
+<p>A themed single-line status bar with left / center / right segment groups.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly array $left = [], private readonly array $center = [], private readonly array $right = [], private readonly string $separator = &#039; &#039;, private readonly ?int $width = null, private readonly ?Style $style = null, private readonly string $leftCap = &#039;&#039;, private readonly string $rightCap = &#039;&#039;, private readonly string $fillChar = &#039; &#039;, private readonly bool $visible = true)</code></td><td></td></tr>
+<tr><td><code>static new(): self</code></td><td>Empty, visible, auto-width status bar.</td></tr>
+<tr><td><code>left(Segment|string ...$segments): self</code></td><td>Replace the left group. Accepts Segments and/or plain strings (wrapped into un-styled segments).</td></tr>
+<tr><td><code>center(Segment|string ...$segments): self</code></td><td>Replace the center group. Same input shape as left().</td></tr>
+<tr><td><code>right(Segment|string ...$segments): self</code></td><td>Replace the right group. Same input shape as left().</td></tr>
+<tr><td><code>addLeft(Segment|string ...$segments): self</code></td><td>Append to the left group.</td></tr>
+<tr><td><code>addCenter(Segment|string ...$segments): self</code></td><td>Append to the center group.</td></tr>
+<tr><td><code>addRight(Segment|string ...$segments): self</code></td><td>Append to the right group.</td></tr>
+<tr><td><code>separator(string $separator): self</code></td><td>Separator inserted between segments within a single group.</td></tr>
+<tr><td><code>width(?int $width): self</code></td><td>Fixed target width in cells. The bar fills (pads) up to the width and caps (truncates) longer content. Pass null for natural (auto) width.</td></tr>
+<tr><td><code>style(?Style $style): self</code></td><td>Bar-wide base style — colours the fill and any un-styled text. Null clears it.</td></tr>
+<tr><td><code>caps(string $left, string $right): self</code></td><td>Edge caps (borders) placed outside the segment groups.</td></tr>
+<tr><td><code>fillChar(string $char): self</code></td><td>Glyph used to fill the gaps between groups (default <code>&#039; &#039;</code>).</td></tr>
+<tr><td><code>visible(bool $on = true): self</code></td><td>Toggle visibility — a hidden bar renders to the empty string.</td></tr>
+<tr><td><code>hidden(): self</code></td><td>Alias for <code>visible(false)</code>.</td></tr>
+<tr><td><code>leftSegments(): array</code></td><td></td></tr>
+<tr><td><code>centerSegments(): array</code></td><td></td></tr>
+<tr><td><code>rightSegments(): array</code></td><td></td></tr>
+<tr><td><code>getSeparator(): string</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name separator() is the fluent setter separator(string $separator): self, so this getSeparator() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getWidth(): ?int</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent setter width(?int $width): self, so this getWidth() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getStyle(): ?Style</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name style() is the fluent setter style(?Style $style): self, so this getStyle() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getCaps(): array</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name caps() is the fluent setter caps(string $left, string $right): self, so this getCaps() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>getFillChar(): string</code></td><td>Legal exception (owner ruling 2026-10-24): the bare name fillChar() is the fluent setter fillChar(string $char): self, so this getFillChar() read keeps its get* prefix permanently.</td></tr>
+<tr><td><code>isVisible(): bool</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td>Assemble the bar into a single line. Returns the empty string when the bar is hidden.</td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-zoneentry"><code>ZoneEntry</code> <small>final class</small></h4>
+<p>The unit a ZoneRow places or drops whole: an ordered run of ZonePieces (a tab body and its close mark, say) that are kept or collapsed together. Pieces are concatenated with no separator, so any gap inside an entry is a plain unzoned piece.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(array $pieces, public readonly mixed $tag = null)</code></td><td></td></tr>
+<tr><td><code>static of(array $pieces, mixed $tag = null): self</code></td><td></td></tr>
+<tr><td><code>pieces(): array</code></td><td></td></tr>
+<tr><td><code>tag(): mixed</code></td><td></td></tr>
+<tr><td><code>width(): int</code></td><td>Total plain cell width of every piece.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-zonepiece"><code>ZonePiece</code> <small>final class</small></h4>
+<p>One independently clickable run of a ZoneRow: its PLAIN text (the only thing ever measured), an optional zone id, and an optional paint callback that turns the plain text into styled output.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $plain, public readonly ?string $id = null, ?callable $paint = null)</code></td><td></td></tr>
+<tr><td><code>static of(string $plain, ?string $id = null, ?callable $paint = null): self</code></td><td></td></tr>
+<tr><td><code>plain(): string</code></td><td>Plain text.</td></tr>
+<tr><td><code>id(): ?string</code></td><td>Zone id, or null for an unclickable piece.</td></tr>
+<tr><td><code>width(): int</code></td><td>Cell width of the plain text.</td></tr>
+<tr><td><code>painted(): string</code></td><td>The painted text (the plain text when no callback is bound).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-zoneplan"><code>ZonePlan</code> <small>final class</small></h4>
+<p>What a ZoneRow decided for one width: the entries painted, the entries collapsed, and the overflow entry standing in for them (null when nothing was dropped or no marker fits).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly array $placed, public readonly array $dropped, public readonly ?ZoneEntry $overflow)</code></td><td></td></tr>
+<tr><td><code>placed(): array</code></td><td></td></tr>
+<tr><td><code>dropped(): array</code></td><td></td></tr>
+<tr><td><code>overflow(): ?ZoneEntry</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-bar-zonerow"><code>ZoneRow</code> <small>final class</small></h4>
+<p>A one-row bar of clickable pieces that fits a width budget and answers its own click zones. The shared engine behind a menu-title bar and a window-tab strip.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>withLead(ZonePiece ...$pieces): self</code></td><td>Pieces that always lead the row and are never dropped (a <code>[+]</code> affordance, a leading gap).</td></tr>
+<tr><td><code>withEntries(array $entries): self</code></td><td></td></tr>
+<tr><td><code>withSeparator(string $separator): self</code></td><td>Plain separator between entries (default one space).</td></tr>
+<tr><td><code>withSeparatorAfter(bool $after = true): self</code></td><td>Place the separator after each entry instead of before it.</td></tr>
+<tr><td><code>withOverflow(?callable $overflow): self</code></td><td>Builds the overflow entry for a dropped count; return null for &quot;no marker&quot;. Receives the entries it would stand in for.</td></tr>
+<tr><td><code>withMarker(?callable $marker): self</code></td><td>Wraps a zoned piece&#039;s painted text for a marked render, e.g. <code>Mark::zone(...)</code>.</td></tr>
+<tr><td><code>withZoneGate(?callable $gate): self</code></td><td>Predicate deciding whether an id may carry a zone at all.</td></tr>
+<tr><td><code>width(): int</code></td><td>Plain width of the lead plus every entry and separator, no collapse.</td></tr>
+<tr><td><code>plan(?int $cols): ?ZonePlan</code></td><td>Decide the row for <code>$cols</code> (null = unbounded). Null when <code>$cols</code> is below the lead&#039;s width: nothing can be painted.</td></tr>
+<tr><td><code>render(?int $cols, bool $marked): string</code></td><td>The painted (<code>$marked</code> false) or zone-wrapped (<code>$marked</code> true) row; &#039;&#039; when nothing fits.</td></tr>
+<tr><td><code>zones(?int $cols): array</code></td><td>Click spans of the row at <code>$cols</code>, same arithmetic as render().</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-style-border">SugarCraft\Style\Border</h3>
+<h4 id="api-sugarcraft-style-border-bordergradientblend"><code>BorderGradientBlend</code> <small>final class</small></h4>
+<p>Interpolates between N colors (1-5) to produce 4 border-side colors for a smooth gradient around the border perimeter (top → right → bottom → left clockwise). Mirrors lipgloss v2&#039;s BorderGradientBlend.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly array $colors, private readonly array $sides)</code></td><td></td></tr>
+<tr><td><code>static fromColors(Color ...$colors): self</code></td><td>Build a new blend from 2-5 colors. Colors are distributed proportionally around the border perimeter and interpolated to exactly 4 side colors.</td></tr>
+<tr><td><code>colors(): array</code></td><td>The N source colors passed to the constructor.</td></tr>
+<tr><td><code>sides(): array</code></td><td>The 4 interpolated colors — one per border side in clockwise order: [top, right, bottom, left].</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-border-titleanchor"><code>TitleAnchor</code> <small>enum</small></h4>
+<p>Anchor position for a border title.</p>
+<p>Cases: <code>TopLeft</code> · <code>TopCenter</code> · <code>TopRight</code> · <code>BottomLeft</code> · <code>BottomCenter</code> · <code>BottomRight</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<h3 id="sugarcraft-style-layout">SugarCraft\Style\Layout</h3>
+<h4 id="api-sugarcraft-style-layout-constraint"><code>Constraint</code> <small>abstract class</small></h4>
+<p>Base for all constraint types used by Layout::split().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-fill"><code>Fill</code> <small>final class</small></h4>
+<p>Fills all remaining space with proportional <code>$weight</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $weight = 1)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-layout"><code>Layout</code> <small>final class</small></h4>
+<p>Constraint-based layout split facade.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static horizontal(array $constraints): self</code></td><td>Create a horizontal (left-to-right) layout.</td></tr>
+<tr><td><code>static vertical(array $constraints): self</code></td><td>Create a vertical (top-to-bottom) layout.</td></tr>
+<tr><td><code>split(Rect $area): array</code></td><td>Split the given area into Rects according to the constraints.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-length"><code>Length</code> <small>final class</small></h4>
+<p>Fixed character-cell count.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $n)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-max"><code>Max</code> <small>final class</small></h4>
+<p>Upper-bound size cap; takes less if space is insufficient.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $n)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-min"><code>Min</code> <small>final class</small></h4>
+<p>At least <code>$n</code> cells; takes more if space is available.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $n)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-percentage"><code>Percentage</code> <small>final class</small></h4>
+<p>Proportional size as a percentage of the available area.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $n)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-ratio"><code>Ratio</code> <small>final class</small></h4>
+<p>Proportional size based on a ratio (numerator / denominator).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $numerator, int $denominator)</code></td><td></td></tr>
+<tr><td><code>__get(string $name): mixed</code></td><td></td></tr>
+<tr><td><code>static length(int $n): Length</code></td><td>Fixed character-cell count.</td></tr>
+<tr><td><code>static min(int $n): Min</code></td><td>At least <code>$n</code> cells; takes more if space is available.</td></tr>
+<tr><td><code>static fill(int $weight = 1): Fill</code></td><td>Fills all remaining space; <code>$weight</code> controls proportional distribution when multiple Fill constraints compete.</td></tr>
+<tr><td><code>static percentage(int $n): Percentage</code></td><td>Proportional size as a percentage (0-100) of the available area.</td></tr>
+<tr><td><code>static ratio(int $numerator, int $denominator): Ratio</code></td><td>Proportional size based on a ratio (numerator / denominator).</td></tr>
+<tr><td><code>static max(int $n): Max</code></td><td>Upper-bound size cap; takes less if space is insufficient.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-readsconstraintpayload"><code>ReadsConstraintPayload</code> <small>trait</small></h4>
+<p>Shared unknown-property guard for the constraint wrappers.</p>
+<h4 id="api-sugarcraft-style-layout-rect"><code>Rect</code> <small>final readonly class</small></h4>
+<p>An axis-aligned rectangle within a terminal grid.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $x, public int $y, public int $width, public int $height)</code></td><td></td></tr>
+<tr><td><code>static fromSize(int $width, int $height): self</code></td><td>Create a 0,0 origin rect of the given dimensions.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-regionbridge"><code>RegionBridge</code> <small>final class</small></h4>
+<p>Converts between the two deliberately-distinct <code>Region</code> value objects that share a name across packages:</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static toBuffer(ConstraintsRegion $r): BufferRegion</code></td><td>sugar-constraints Region → sugar-cellbuffer Region.</td></tr>
+<tr><td><code>static toConstraints(BufferRegion $r): ConstraintsRegion</code></td><td>sugar-cellbuffer Region → sugar-constraints Region.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-solver"><code>Solver</code> <small>final class</small></h4>
+<p>Facade that delegates constraint solving to a LayoutSolver.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static solve(Rect $area, array $constraints, Direction $dir): array</code></td><td>Solve constraints against an area in the given direction.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-layout-solverfactory"><code>SolverFactory</code> <small>final class</small></h4>
+<p>Factory for creating a LayoutSolver instance.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static resetEnvironmentResolutionForTesting(): void</code></td><td>Drop the memoized environment decision and the notice latch. Test seam: production code resolves exactly once and never calls this.</td></tr>
+<tr><td><code>static fromEnvironment(): LayoutSolver</code></td><td>Pick the layout solver the environment asks for.</td></tr>
+<tr><td><code>static default(): LayoutSolver</code></td><td>Alias of fromEnvironment(), kept so callers written before the rename keep working (external consumers track dev-master).</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-style-listing">SugarCraft\Style\Listing</h3>
+<h4 id="api-sugarcraft-style-listing-enumerator"><code>Enumerator</code> <small>final class</small></h4>
+<p>Factory of enumerator closures for ItemList.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static dash(): \Closure</code></td><td></td></tr>
+<tr><td><code>static bullet(): \Closure</code></td><td></td></tr>
+<tr><td><code>static asterisk(): \Closure</code></td><td></td></tr>
+<tr><td><code>static arabic(): \Closure</code></td><td></td></tr>
+<tr><td><code>static alphabet(): \Closure</code></td><td></td></tr>
+<tr><td><code>static none(): \Closure</code></td><td></td></tr>
+<tr><td><code>static roman(): \Closure</code></td><td>Lowercase Roman numerals: i. ii. iii. iv. v. …</td></tr>
+<tr><td><code>static romanUpper(): \Closure</code></td><td>Uppercase Roman numerals: I. II. III. IV. V. …</td></tr>
+<tr><td><code>static decimal(): \Closure</code></td><td>Decimal-dotted: 1. 2. … 9. 10. (alias for arabic, kept for parity with lipgloss&#039;s <code>Decimal</code>).</td></tr>
+<tr><td><code>static tree(): \Closure</code></td><td>List-as-tree enumerator — emits the box-drawing branch glyphs <code>├─</code> (intermediate) and <code>└─</code> (last item) so an <code>ItemList</code> renders as a flat tree without nesting. Mirrors lipgloss&#039;s <code>list.Tree</code> enumerator.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-listing-itemlist"><code>ItemList</code> <small>final class</small></h4>
+<p>Renders an enumerated list — bullet, dash, numbered, alphabet, etc.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
+<tr><td><code>static new(string|self ...$items): self</code></td><td>Variadic constructor — accepts an arbitrary number of items in one call. Mirrors lipgloss&#039;s <code>list.New(items ...)</code> shortcut.</td></tr>
+<tr><td><code>item(string|self $text): self</code></td><td></td></tr>
+<tr><td><code>items(iterable $items): self</code></td><td></td></tr>
+<tr><td><code>enumerator(\Closure $fn): self</code></td><td></td></tr>
+<tr><td><code>itemStyle(?Style $s): self</code></td><td>Style applied to every rendered item&#039;s text. Combine with itemStyleFunc() for per-item overrides — the func wins.</td></tr>
+<tr><td><code>itemStyleFunc(?\Closure $fn): self</code></td><td>Per-item style callback: <code>$fn($index, $itemText)</code>. Applied after the static itemStyle() so a func can override per row.</td></tr>
+<tr><td><code>enumeratorStyle(?Style $s): self</code></td><td>Style applied to enumerator markers.</td></tr>
+<tr><td><code>indent(string $s): self</code></td><td>Indent string prepended to every line of a nested sublist. Defaults to two spaces; set to a styled border rune for tree-like indentation.</td></tr>
+<tr><td><code>render(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-style-table">SugarCraft\Style\Table</h3>
+<h4 id="api-sugarcraft-style-table-data"><code>Data</code> <small>interface</small></h4>
+<p>Row-reader contract consumed by Table::data(). Any data source — in-memory matrix, lazy iterator, database row-walker — implements <code>rows()</code> / <code>columns()</code> / <code>at()</code> to feed Table.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>rows(): int</code></td><td>Total row count (excluding any header).</td></tr>
+<tr><td><code>columns(): int</code></td><td>Column count. Should be uniform across rows.</td></tr>
+<tr><td><code>at(int $row, int $col): string</code></td><td>Cell content at <code>($row, $col)</code>. Coordinates are 0-based. Out-of- range coordinates may return an empty string or throw — callers should respect rows() / columns() bounds.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-table-stringdata"><code>StringData</code> <small>final class</small></h4>
+<p>Default in-memory Data implementation — a 2D string array.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(private readonly array $rows)</code></td><td></td></tr>
+<tr><td><code>static fromMatrix(iterable $matrix): self</code></td><td>Build a StringData from a 2D array. Non-string cell values are coerced via <code>(string)</code>. Ragged rows are padded with empty strings to the widest row.</td></tr>
+<tr><td><code>rows(): int</code></td><td></td></tr>
+<tr><td><code>columns(): int</code></td><td></td></tr>
+<tr><td><code>at(int $row, int $col): string</code></td><td></td></tr>
+<tr><td><code>append(string ...$cells): self</code></td><td>Append a row. Returns a new instance (immutable).</td></tr>
+<tr><td><code>static empty(): self</code></td><td>Empty <code>StringData</code> (zero rows, zero columns).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-table-table"><code>Table</code> <small>final class</small></h4>
+<p>Tabular data renderer. Builds a string with column-aligned cells, an optional header row, and an optional border (using the middle-* runes from Border).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>headers(string ...$headers): self</code></td><td></td></tr>
+<tr><td><code>row(string ...$cells): self</code></td><td></td></tr>
+<tr><td><code>rows(iterable $rows): self</code></td><td></td></tr>
+<tr><td><code>clearRows(): self</code></td><td>Drop every body row but keep the headers + every other setting intact. Mirrors lipgloss&#039;s <code>ClearRows()</code>. Useful when you want to refill a static-headers table from a streaming data source.</td></tr>
+<tr><td><code>data(Data $data): self</code></td><td>Bulk-replace body rows from any Data source. Mirrors lipgloss&#039;s <code>Data(StringData)</code> setter — pass StringData (or any custom Data implementation) for streaming ingest.</td></tr>
+<tr><td><code>border(?Border $b): self</code></td><td></td></tr>
+<tr><td><code>headerAlign(Align $a): self</code></td><td></td></tr>
+<tr><td><code>rowAlign(Align $a): self</code></td><td></td></tr>
+<tr><td><code>styleFunc(?\Closure $fn): self</code></td><td>Per-cell style callback. <code>$fn($row, $col)</code> is called for every data cell (including the header — row index === Table::HEADER_ROW for the header). Return a Style; the cell content is wrapped in <code>Style::render()</code> before alignment / border join.</td></tr>
+<tr><td><code>borderTop(bool $on = true): self</code></td><td>Toggle borders per side. Each is on by default. Mirrors lipgloss&#039;s <code>Border() / BorderTop() / BorderRight() / …</code>.</td></tr>
+<tr><td><code>borderRight(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderBottom(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderLeft(bool $on = true): self</code></td><td></td></tr>
+<tr><td><code>borderHeader(bool $on = true): self</code></td><td>Toggle the header / body separator row. Default on.</td></tr>
+<tr><td><code>borderRow(bool $on = true): self</code></td><td>Draw a separator row between every body row. Default off.</td></tr>
+<tr><td><code>borderColumn(bool $on = true): self</code></td><td>Draw vertical separators between columns. Default on. Off → cells join with a single space separator.</td></tr>
+<tr><td><code>width(?int $cells): self</code></td><td>Cap the rendered table width to <code>$cells</code> columns. When set, columns are shrunk proportionally (lipgloss-style) to fit within the cap, with a minimum of 1 cell content per column. Cell content that still exceeds the shrunken column width is truncated via Width::truncateAnsi (unless a wrap() callback is set, which then receives the shrunken width and may spread the cell over several lines). The cap is best-effort: border runes, the one-space cell padding and the 1-cell column floor are never shrunk, so a cap smaller than that fixed overhead (e.g. on all-empty rows) renders wider than requested. Pass null to remove the cap.</td></tr>
+<tr><td><code>offset(int $n): self</code></td><td>Skip the first <code>$n</code> body rows when rendering (after header). Useful for pagination. Default 0.</td></tr>
+<tr><td><code>wrap(?\Closure $fn): self</code></td><td>Cell-overflow wrap callback. Receives the raw cell value and the column&#039;s content width (after any width() cap shrink) and returns the cell&#039;s lines. When set, the callback is invoked per-cell in place of the default Width::truncateAnsi truncation, and EVERY returned line is rendered: a row whose cells wrap to N lines occupies N physical lines, shorter cells padded with blank lines. A returned line still wider than the column is truncated with Width::truncateAnsi so the grid never misaligns; an empty list renders as one blank line.</td></tr>
+<tr><td><code>render(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-style-tree">SugarCraft\Style\Tree</h3>
+<h4 id="api-sugarcraft-style-tree-enumerator"><code>Enumerator</code> <small>final class</small></h4>
+<p>Connector character set used by Tree. Each preset bundles four runes: branch (intermediate child), lastBranch (terminal child), indent (continuation prefix for an intermediate ancestor), and lastIndent (continuation prefix when the ancestor was the last child).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $branch, public readonly string $lastBranch, public readonly string $indent, public readonly string $lastIndent)</code></td><td></td></tr>
+<tr><td><code>static default(): self</code></td><td>The standard box-drawing connector set. Named <code>default()</code> — an accepted exception to the repo&#039;s no-<code>::default()</code> rule — because it mirrors charmbracelet/lipgloss/tree.DefaultEnumerator one-to-one.</td></tr>
+<tr><td><code>static rounded(): self</code></td><td></td></tr>
+<tr><td><code>static ascii(): self</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-style-tree-tree"><code>Tree</code> <small>final class</small></h4>
+<p>Renders a hierarchical tree using box-drawing connectors.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>static rootOf(string $label): self</code></td><td>Named-ctor variant of <code>Tree::new()-&gt;root($label)</code>. Mirrors lipgloss&#039;s <code>tree.Root(label)</code> package-level constructor.</td></tr>
+<tr><td><code>root(string $r): self</code></td><td></td></tr>
+<tr><td><code>value(): string</code></td><td>Read-only accessor for the configured root label.</td></tr>
+<tr><td><code>child(self|string $c): self</code></td><td></td></tr>
+<tr><td><code>offset(int $start, int $end): self</code></td><td>Render only children in the half-open <code>[start, end)</code> range. Pass <code>0</code> for either bound to mean &quot;no clamp on that end&quot; — i.e. <code>offset(2, 0)</code> skips the first two children and renders the rest; <code>offset(0, 5)</code> renders only the first five. Mirrors lipgloss&#039;s <code>Tree::Offset(start, end)</code> / <code>OffsetStart</code> / <code>OffsetEnd</code>.</td></tr>
+<tr><td><code>offsetStart(int $start): self</code></td><td>Convenience: drop the first <code>$start</code> children.</td></tr>
+<tr><td><code>offsetEnd(int $end): self</code></td><td>Convenience: keep only the first <code>$end</code> children.</td></tr>
+<tr><td><code>children(self|string ...$c): self</code></td><td></td></tr>
+<tr><td><code>hide(bool $on = true): self</code></td><td>Hide this tree&#039;s root in the output. Useful when nesting trees as siblings under a single parent — the inner tree&#039;s root is already supplied by the parent.</td></tr>
+<tr><td><code>enumerator(Enumerator $e): self</code></td><td>Swap the connector character set. Pass <code>Enumerator::default()</code> (├──/└──), <code>Enumerator::rounded()</code> (├──/╰──), or <code>Enumerator::ascii()</code> (|--/`--).</td></tr>
+<tr><td><code>indenter(?\Closure $fn): self</code></td><td>Replace the continuation indenter. <code>$fn(bool $isLast): string</code> receives whether the current branch is the last child and returns the continuation prefix used for descendant lines. Default: <code>&#039;│ &#039;</code> for non-last and <code>&#039; &#039;</code> for last.</td></tr>
+<tr><td><code>rootStyle(?Style $s): self</code></td><td></td></tr>
+<tr><td><code>itemStyle(?Style $s): self</code></td><td></td></tr>
+<tr><td><code>enumeratorStyle(?Style $s): self</code></td><td></td></tr>
+<tr><td><code>render(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+</tbody>
+</table>
+
+    <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting</h2>
+
+    <h3 id="colors-still-print-under-no-color-or-into-a-pipe" style="margin-top: 24px;">Colors still print under <code>NO_COLOR</code>, or into a pipe</h3>
+    <p><code>Style::new()</code> renders TrueColor unless a process-wide default has been pinned, and <code>Style::new()</code> never reads the environment itself, although <code>Theme::adaptive()</code> and <code>Renderer::fromEnvironment()</code> do. Negotiate the terminal's tier once at startup and pin it with <code>Style::setDefaultProfile()</code>. Every Style created afterwards downsamples to that tier, and <code>NoTty</code> strips every escape. The detection reads <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>TERM=dumb</code> through sugar-colorprofile.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+Style::setDefaultProfile(ColorProfile::detect(null, STDOUT));</code></pre>
+
+    <h3 id="theme-adaptive-picks-the-dark-palette-on-a-light-terminal" style="margin-top: 24px;"><code>Theme::adaptive()</code> picks the dark palette on a light terminal</h3>
+    <p><code>adaptive()</code> reads only the last field of <code>COLORFGBG</code>. A value in the form <code>fg;bg</code> with a background index from 0 to 255 decides light or dark by that colour's luminance. When the variable is unset, has no <code>;</code>, or holds a non-numeric or out-of-range background, the result is the fallback, which is dark by default. Many terminals never set <code>COLORFGBG</code>, so on those the fallback decides every time. Pass <code>adaptive(false)</code> to make the fallback light, or choose <code>Theme::light()</code> or <code>Theme::dark()</code> when the host knows its background.</p>
+
+    <h3 id="a-wrapped-table-cell-stays-on-one-line-or-render-throws-a-typeerror" style="margin-top: 24px;">A wrapped table cell stays on one line, or <code>render()</code> throws a TypeError</h3>
+    <p>A <code>Table::wrap()</code> callback must return a list of physical lines, not a single string with embedded newlines. Each element of the returned array becomes one rendered line of the row. Split the wrapped text into an array before returning it, so the row grows to match. A callback that returns a plain string does not stay on one line. <code>render()</code> fails with <code>array_values(): Argument #1 ($array) must be of type array, string given</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Table\Table;
+
+$table = Table::new()
+    -&gt;headers('Note')
+    -&gt;row('A long note that should wrap across several lines')
+    -&gt;wrap(fn (string $cell, int $colWidth): array =&gt;
+        explode("\n", Width::wrapAnsi($cell, $colWidth)))
+    -&gt;render();</code></pre>
+
+    <h3 id="an-overlay-hides-the-layer-beneath-it-instead-of-blending" style="margin-top: 24px;">An overlay hides the layer beneath it instead of blending</h3>
+    <p><code>Canvas</code> composites layers in z-order, and an upper cell replaces the lower cell it covers. There is no alpha blending, so every cell inside an overlay's footprint shows the overlay's content. Cells outside that footprint still show the base layer. Size the overlay to the area it needs, and keep the base visible around it.</p>
+
+    <h3 id="withembeddedtitle-adds-nothing-to-the-border" style="margin-top: 24px;"><code>withEmbeddedTitle()</code> adds nothing to the border</h3>
+    <p>An empty string is treated as no title, so the edge stays identical to an untitled border. The layout also budgets exactly one cell per junction. A title that is too long for its edge shrinks to fit and ends in <code>…</code>, so it is cut rather than wrapped. Widen the Style with <code>width()</code> or shorten the title when the cut text matters.</p>
+
+    <h3 id="upstream-mapping" style="margin-top: 32px;">Upstream mapping</h3>
+    <p>Most classes cite the upstream they mirror in their docblock, written as <code>Mirrors charmbracelet/...</code>.</p>
+    <ul>
+      <li><code>Style</code>, color downsampling: lipgloss <code>Style</code>, colorprofile <code>Writer</code></li>
+      <li><code>Theme</code> and its factories: lipgloss <code>Theme.dark()</code>, <code>Theme.dracula()</code>, <code>Theme.tokyoNight()</code>, and the rest</li>
+      <li><code>Layout::joinHorizontal()</code>, <code>joinVertical()</code>, <code>place()</code>: lipgloss <code>JoinHorizontal</code>, <code>JoinVertical</code>, <code>Place</code></li>
+      <li><code>Tree\Enumerator</code>: the default enumerator of lipgloss/tree</li>
+      <li><code>Canvas</code>: lipgloss <code>Canvas</code> (Bubble Tea v2)</li>
+    </ul>
+
+    <h2 id="changelog-and-versioning" style="margin-top: 40px;">Changelog and versioning</h2>
+    <p>The package has no separate changelog file and no release tag yet, so it publishes only <code>dev-master</code>. Its history is the commit log of the <code>sugar-style/</code> directory in the monorepo, at <a href="https://github.com/detain/sugarcraft/commits/master/sugar-style">github.com/detain/sugarcraft/commits/master/sugar-style</a>. Two deprecated accessors on <code>Style</code>, <code>getDefaultProfile()</code> among them, have a docblock that reads <code>REMOVED-IN: 2.0.0</code>, so they go in 2.0.0. The deprecated <code>Border::getTitles()</code> alias carries no removal version yet, so do not plan its removal for 2.0.0.</p>
     </div>
   </div>
 </section>

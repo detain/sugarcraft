@@ -7,6 +7,9 @@ namespace SugarCraft\Code\Tests\Tools;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\Glob;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 
 /**
@@ -158,7 +161,7 @@ final class OutputTruncationTest extends TestCase
         $this->assertStringNotContainsString('set -x trace line', $result->content());
     }
 
-    /** The same command with the cap off is the control: identical content. */
+    /** The same command with a zero bound is the control: identical content. */
     public function testTheChattyStderrCaseMatchesTheUncappedResultExactly(): void
     {
         $command = 'for i in $(seq 1 3000); do echo "+ set -x trace line $i" >&2; done; echo "BUILD OK"';
@@ -254,7 +257,14 @@ final class OutputTruncationTest extends TestCase
         yield 'production default' => [65536];
     }
 
-    public function testAZeroCapDisablesBashTruncation(): void
+    /**
+     * A zero bound no longer means unbounded: output under the 8 MiB capture
+     * ceiling is returned whole, with no marker, because nothing was dropped.
+     * Owner ruling A (2026-11-20) sets the zero-cap meaning; the overrun pin
+     * that tells the 8 MiB reading from no cap is
+     * testAZeroCapAnnouncesTheCaptureCeilingWhenOutputOverrunsIt below.
+     */
+    public function testAZeroCapLeavesOutputUnderTheCaptureCeilingUntouched(): void
     {
         $result = (new Bash(maxOutputBytes: 0))->execute([
             'command' => 'for i in $(seq 1 5000); do echo "line-$i"; done',
@@ -263,6 +273,154 @@ final class OutputTruncationTest extends TestCase
 
         $this->assertStringNotContainsString('truncated:', $result->content());
         $this->assertGreaterThan(30000, strlen($result->content()));
+    }
+
+    /**
+     * Past the 8 MiB capture ceiling a zero bound must still announce the loss:
+     * the model is told the answer is partial, and how much was refused.
+     */
+    public function testAZeroCapAnnouncesTheCaptureCeilingWhenOutputOverrunsIt(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The pipeline below needs a POSIX yes(1) and head(1).');
+        }
+
+        // 9 MiB of text on stdout: 8 MiB retained, 1 MiB dropped by the capture.
+        // yes's broken-pipe complaint is silenced so stderr stays empty and the
+        // marker's total is exactly the stdout byte count.
+        $result = (new Bash(maxOutputBytes: 0))->execute([
+            'command' => 'yes 0123456789abcdef 2>/dev/null | head -c ' . (9 * 1024 * 1024),
+            'id' => 'call_6_ceiling',
+        ]);
+
+        $this->assertFalse($result->isError());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        // The result is now clipped to the 8 MiB ceiling, marker included, so the
+        // omitted figure is at least the capture's 1 MiB drop and not exactly it.
+        $this->assertMatchesRegularExpression(
+            '/\.\.\. \[truncated: \d+ of 9437184 bytes omitted\./',
+            $result->content(),
+        );
+        preg_match('/\.\.\. \[truncated: (\d+) of/', $result->content(), $m);
+        $this->assertGreaterThanOrEqual(1048576, (int) $m[1]);
+    }
+
+    /**
+     * The 8 MiB ceiling bounds the RETURNED result, not only each stream. With
+     * both streams overrunning and a failing exit, the joined stdout and stderr
+     * used to reach the model at about 16 MiB, because a non-positive bound
+     * skips the final clip.
+     */
+    public function testAZeroCapHoldsTheReturnedResultToTheCeilingWhenBothStreamsOverrun(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The pipeline below needs a POSIX yes(1) and head(1).');
+        }
+
+        $result = (new Bash(maxOutputBytes: 0))->execute([
+            'command' => 'yes 0123456789abcdef 2>/dev/null | head -c ' . (9 * 1024 * 1024)
+                . '; yes fedcba9876543210 2>/dev/null | head -c ' . (9 * 1024 * 1024) . ' 1>&2; exit 3',
+            'id' => 'call_6_both',
+        ]);
+
+        $this->assertTrue($result->isError());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        $this->assertStringContainsString('truncated:', $result->content());
+    }
+
+    /**
+     * Grep's hit-list trim is off under a zero bound, but the returned result is
+     * still held to the 8 MiB ceiling: a failing grep that overruns both streams
+     * used to reach the model at about 16 MiB, because truncateMerged() treats
+     * a non-positive bound as "no clip". A stand-in grep on PATH stands in for
+     * the 9 MiB-per-stream overrun a real tree cannot produce on stderr.
+     */
+    public function testGrepZeroCapHoldsTheReturnedResultToTheCeilingWhenBothStreamsOverrun(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The stand-in grep below is a POSIX shell script.');
+        }
+
+        $result = $this->withStandInGrep(
+            "#!/bin/sh\n"
+            . "yes 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef 2>/dev/null | head -c 9437184\n"
+            . "yes fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 2>/dev/null | head -c 9437184 1>&2\n"
+            . "exit 2\n",
+            fn () => (new Grep(maxOutputBytes: 0))->execute([
+                'pattern' => 'needle',
+                'path' => $this->root,
+                'description' => 'sweep a zero cap over both streams',
+                'id' => 'call_grep_both',
+            ]),
+        );
+
+        $this->assertLessThanOrEqual(8 * 1024 * 1024 + 512, strlen($result->content()));
+        $this->assertStringContainsString('truncated:', $result->content());
+    }
+
+    /**
+     * The skill nudge is appended after the clip, so under a zero cap it used to
+     * ride on top of a body already held to the full 8 MiB ceiling. The stand-in
+     * grep reports one hit in a directory a skill claims, so the nudge fires and
+     * the bound must hold with it counted.
+     */
+    public function testAZeroCapChargesASkillNudgeAgainstTheCeiling(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The stand-in grep below is a POSIX shell script.');
+        }
+
+        $registry = new SkillRegistry();
+        $registry->register([
+            'php-audit' => Skill::parse(
+                "---\ndescription: Security audit for PHP code\npaths:\n  - /**/*.php\n---\nbody\n",
+                'php-audit',
+            ),
+        ]);
+
+        $hit = $this->root . '/src/App.php';
+        $result = $this->withStandInGrep(
+            "#!/bin/sh\n"
+            . "printf '%s\\n' '" . $hit . ":1:needle'\n"
+            . "yes 0123456789abcdef 2>/dev/null | head -c 9437184\n"
+            . "yes fedcba9876543210 2>/dev/null | head -c 9437184 1>&2\n"
+            . "exit 2\n",
+            fn () => (new Grep(maxOutputBytes: 0, skillNudge: SkillPathNudge::new($registry)))->execute([
+                'pattern' => 'needle',
+                'path' => $this->root,
+                'description' => 'sweep a zero cap with a skill nudge',
+                'id' => 'call_grep_nudge',
+            ]),
+        );
+
+        $this->assertStringContainsString('php-audit', $result->content());
+        $this->assertStringContainsString('truncated:', $result->content());
+        $this->assertLessThanOrEqual(8 * 1024 * 1024, strlen($result->content()));
+    }
+
+    /**
+     * Installs $script as `grep` ahead of PATH for the duration of $run, then
+     * removes it. tearDown() unlinks only direct children of the root, so a bin/
+     * left behind would raise two warnings on every run and leak into the system
+     * temp directory.
+     */
+    private function withStandInGrep(string $script, callable $run): mixed
+    {
+        $bin = $this->root . '/bin';
+        $grep = $bin . '/grep';
+        mkdir($bin, 0o777, true);
+        file_put_contents($grep, $script);
+        chmod($grep, 0o755);
+
+        $previousPath = (string) getenv('PATH');
+        putenv('PATH=' . $bin . PATH_SEPARATOR . $previousPath);
+        try {
+            return $run();
+        } finally {
+            putenv('PATH=' . $previousPath);
+            unlink($grep);
+            rmdir($bin);
+        }
     }
 
     // =========================================================================

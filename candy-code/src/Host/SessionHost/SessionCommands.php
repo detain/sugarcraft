@@ -16,6 +16,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\Live\SessionMailbox;
 use SugarCraft\Code\Agents\PrimaryAgent;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CacheHealthWatch;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -264,6 +265,9 @@ trait SessionCommands
                     $this->history = [];
                     // The breaker counted rewrites of the transcript just cleared.
                     $this->consecutiveRefills = 0;
+                    // A shell-send answer still waiting on its relay belongs to
+                    // the transcript this clear emptied (P4-12 CC-1).
+                    $this->transcriptEpoch++;
                     break;
 
                 case CommandEffectKind::RestoreCheckpoint:
@@ -448,6 +452,13 @@ trait SessionCommands
 
         $promise->then(
             function (mixed $value) use ($describe): void {
+                // The TUI's settled arm drops a shell-send answer after a /clear;
+                // the headless driver checks the same generation (P4-12 CC-1).
+                // The session id never moves for a host, so the epoch is the
+                // whole check.
+                if ($value instanceof ShellSendSettledMsg && $value->transcriptEpoch !== $this->transcriptEpoch) {
+                    return;
+                }
                 $row = $describe === null ? null : $describe($value);
                 if ($row instanceof Message) {
                     $this->appendMessageRow($row);
@@ -517,6 +528,7 @@ trait SessionCommands
         return CommandContext::new(
             history: $this->history,
             sessionId: $this->sessionId,
+            transcriptEpoch: $this->transcriptEpoch,
             root: $this->workspace->root,
             permissionGate: $this->workspace->permissionGate,
             backend: $backend,

@@ -34,14 +34,14 @@ declare(strict_types=1);
  *
  * WHAT IS PACKAGED: bin/, src/, lang/, themes/, vendor/ and LICENSE, at the
  * archive root mirroring the package layout, so the bin's `__DIR__ . '/../'`
- * candidates resolve inside the archive and every `__DIR__`-relative DATA read
- * keeps the layout it was written against — crucially RenderCommand::pickTheme,
- * which loads the three bundled themes/ JSON files through
- * Theme::fromJson(__DIR__ . '/../themes/<name>.json'). fromJson is
- * is_file()+file_get_contents — both phar://-safe (the candy-vcr glob lesson
- * does not apply here) — so themes/ needs only to BE in the manifest; its
- * absence would silently strip solarized/monokai/github from the shipped
- * artifact's theme vocabulary.
+ * candidates resolve inside the archive.
+ *
+ * THE LOAD-BEARING THEMES ARE IN VENDOR. RenderCommand::pickTheme resolves the
+ * bundled names (solarized, monokai, github) through sugar-markdown's
+ * Theme::catalog(), which reads vendor/sugarcraft/sugar-markdown/themes/ inside
+ * the archive (is_file()+file_get_contents, phar://-safe). Guard 3b refuses a
+ * vendor tree without those files. The top-level themes/ copy is packaged for
+ * the package's own ThemeLoadTest; no runtime code path reads it.
  *
  * The STUB is the source of bin/candy-mdview itself, byte-for-byte, with
  * `__HALT_COMPILER();` appended. PHP refuses `phar://` URLs as a main script
@@ -123,6 +123,17 @@ if ($vendorMode === 'published') {
 if (!is_file($package . '/vendor/autoload.php')) {
     fwrite(STDERR, "build-phar: {$package}/vendor/autoload.php is missing — run `composer install --no-dev --prefer-dist` in candy-mdview/ first.\n");
     exit(2);
+}
+
+// Guard 3b: the bundled theme names resolve through the vendored sugar-markdown,
+// so a vendor tree whose sugar-markdown lacks its themes/ would ship an artifact
+// where every bundled name fails. Refuse it instead.
+foreach (['solarized', 'monokai', 'github'] as $bundledSlug) {
+    $bundledFile = $package . '/vendor/sugarcraft/sugar-markdown/themes/' . $bundledSlug . '.json';
+    if (!is_file($bundledFile)) {
+        fwrite(STDERR, "build-phar: {$bundledFile} is missing — the bundled theme '{$bundledSlug}' resolves through the vendored sugar-markdown. Reinstall with `composer install --no-dev --prefer-dist` so sugar-markdown's themes/ is present.\n");
+        exit(2);
+    }
 }
 
 /** Roots packaged at the archive, verbatim. Everything else stays out. */

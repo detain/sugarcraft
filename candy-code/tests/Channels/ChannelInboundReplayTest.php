@@ -184,9 +184,9 @@ final class ChannelInboundReplayTest extends TestCase
         };
 
         $members = <<<PHP
-            public function start(\SugarCraft\Code\Channels\ChannelContext \$context): void
+            public function start(\SugarCraft\Plugins\PluginContext \$context): void
             {
-                file_put_contents(\$this->journal, (\$context->inbound instanceof \SugarCraft\Code\Channels\ChannelInboundLog ? 'with-log' : 'no-log') . PHP_EOL, FILE_APPEND);
+                file_put_contents(\$this->journal, (\$GLOBALS['inboxInboundProbe']() instanceof \SugarCraft\Code\Channels\ChannelInboundLog ? 'with-log' : 'no-log') . PHP_EOL, FILE_APPEND);
             }
 
             public function dispatchInboundEvent(array \$payload): bool
@@ -211,9 +211,9 @@ final class ChannelInboundReplayTest extends TestCase
         $this->inboxJournal = $this->inboxScratch . '/journal-' . (++$this->inboxSerial);
 
         $members = <<<PHP
-            public function start(\SugarCraft\Code\Channels\ChannelContext \$context): void
+            public function start(\SugarCraft\Plugins\PluginContext \$context): void
             {
-                file_put_contents(\$this->journal, (\$context->inbound instanceof \SugarCraft\Code\Channels\ChannelInboundLog ? 'with-log' : 'no-log') . PHP_EOL, FILE_APPEND);
+                file_put_contents(\$this->journal, (\$GLOBALS['inboxInboundProbe']() instanceof \SugarCraft\Code\Channels\ChannelInboundLog ? 'with-log' : 'no-log') . PHP_EOL, FILE_APPEND);
             }
 
             public function dispose(): void
@@ -229,6 +229,9 @@ final class ChannelInboundReplayTest extends TestCase
     private function inboxBoot(Bundle $bundle, ?ChannelInboundLog $ledger): ChannelRegistry
     {
         $registry = ChannelRegistry::new();
+        // Plan default (g): the fixture reads the ledger through the registry, the
+        // only host path to it, because the plugin context carries no inbound field.
+        $GLOBALS['inboxInboundProbe'] = static fn (): ?ChannelInboundLog => $registry->inboundLog();
         $registry->boot(
             [$bundle],
             [$bundle->name],
@@ -275,12 +278,12 @@ final class ChannelInboundReplayTest extends TestCase
         $name = 'cc-p4d-inb-' . $slug . '-' . \getmypid() . '-' . (++$this->inboxSerial);
         \file_put_contents($dir . '/.claude-plugin/plugin.json', json_encode(['name' => $name, 'version' => '1.0.0']));
 
-        return Bundle::fromDir($dir, 'project');
+        return Bundle::fromDir($dir, 'user');
     }
 
     private function inboxRefresh(Bundle $bundle): Bundle
     {
-        return Bundle::fromDir($bundle->dir, 'project');
+        return Bundle::fromDir($bundle->dir, 'user');
     }
 
     /**
@@ -297,7 +300,7 @@ final class ChannelInboundReplayTest extends TestCase
         $sinkLine = $sink === null ? '' : "    private string \$sink = '" . $sink . "';\n";
 
         $source = "<?php\n"
-            . "class {$id} implements \\SugarCraft\\Code\\Channels\\{$contract}\n{\n"
+            . "class {$id} implements \\SugarCraft\\Plugins\\Channel\\{$contract}\n{\n"
             . $sinkLine
             . "    private string \$journal = '" . $journal . "';\n"
             . "    public function name(): string { return '{$route}'; }\n"
