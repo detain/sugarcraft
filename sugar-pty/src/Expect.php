@@ -537,6 +537,14 @@ final class Expect
     private const DRAIN_READ_TIMEOUT_SECONDS = 0.05;
 
     /**
+     * Floor on the post-exit drain's own end, measured from the moment the exit is
+     * seen. A child that paints its last frame and exits as the wall deadline passes
+     * still has that frame read and matched; the drain overshoots the deadline by at
+     * most this much, plus one read's scheduling slack.
+     */
+    private const EXIT_DRAIN_SECONDS = 0.1;
+
+    /**
      * One bounded read window that never throws on a timeout, an EOF or a child
      * exit: the outcome is the return value, so a scripted session keeps one
      * result row per planned step whatever the child does.
@@ -546,7 +554,10 @@ final class Expect
      * passing. Master EOF stops the reads but not the wait: a child that closes its
      * tty and exits a moment later is still reported as exited. With no child to wait
      * for, EOF ends the window. Each read is clamped to the time left in the window, so
-     * the deadline binds even against a silent master. A buffer left by an earlier
+     * the deadline binds even against a silent master. The one exception is the short
+     * drain after a child exit: it runs to the later of the deadline and 0.1 s past the
+     * exit, so a last frame painted as the deadline passes is still read and matched.
+     * A buffer left by an earlier
      * `expect*` call is the window's first input: those bytes were read past that call's
      * match, so the window reports them and does not read them from the master again.
      * The window consumes that buffer. The returned {@see ExpectWindow::$next} carries the
@@ -647,7 +658,7 @@ final class Expect
                 $childExited = true;
                 // The final repaint can land a hair after the exit is observed;
                 // one bounded drain keeps it inside this window.
-                $finalWindow = $this->drainMaster($deadline);
+                $finalWindow = $this->drainMaster(\max($deadline, \microtime(true) + self::EXIT_DRAIN_SECONDS));
                 if ($finalWindow !== '') {
                     $this->recorder?->recordOutput($finalWindow);
                 }
@@ -686,16 +697,18 @@ final class Expect
 
     /**
      * Read the master until it answers nothing twice in a row, chunk-capped and
-     * clamped to the caller's wall deadline so a late child exit cannot overshoot it.
+     * clamped to `$drainEnd`. The caller passes the later of the wall deadline and
+     * a short floor from the exit, so a final frame written as the deadline passes
+     * is still read, while a late exit overshoots the deadline by a bounded amount.
      */
-    private function drainMaster(float $deadline): string
+    private function drainMaster(float $drainEnd): string
     {
         $seen = '';
         $quiet = 0;
         $budget = self::DRAIN_MAX_CHUNKS;
 
         while ($quiet < self::DRAIN_QUIET_READS && $budget-- > 0) {
-            $left = $deadline - \microtime(true);
+            $left = $drainEnd - \microtime(true);
             if ($left <= 0.0) {
                 break;
             }

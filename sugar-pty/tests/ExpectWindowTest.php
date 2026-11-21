@@ -448,19 +448,129 @@ final class ExpectWindowTest extends TestCase
         self::assertFalse($result->childExited);
     }
 
-    public function testAChildExitNearTheDeadlineDoesNotOvershootIt(): void
+    public function testAChildExitNearTheDeadlineOvershootsItOnlyByTheShortExitDrain(): void
     {
-        // The child is gone before the first read, so the post-exit drain runs with
-        // about 60 ms of deadline left. An unclamped drain would spend two quiet
-        // 50 ms reads on top of that, overshooting the deadline by roughly 90 ms.
+        // The child is gone before the first read, so the post-exit drain starts with
+        // about 60 ms of deadline left. The drain runs to the later of the deadline and
+        // 0.1 s past the exit, then stops on two quiet reads: about 0.1 s in all. The
+        // chunk and quiet-read limits still bound it, so it never runs on to the next
+        // quiet pair or to the window length.
         $started = \microtime(true);
         $result = Expect::on(self::master([]))
             ->collectWindow(5.0, \microtime(true) + 0.06, 100, 0, 0, null, self::child(true));
 
         $elapsed = \microtime(true) - $started;
-        self::assertLessThan(0.12, $elapsed, 'the post-exit drain must stay inside the wall deadline');
+        self::assertLessThan(0.3, $elapsed, 'the post-exit drain may pass the deadline only by its short floor');
         self::assertTrue($result->childExited);
-        self::assertFalse($result->wallHit, 'the child exit closed the window before the deadline was hit');
+        self::assertFalse($result->wallHit, 'the child exit closed the window, so it is not a wall hit');
+    }
+
+    public function testAFinalFrameMatchWrittenAsTheDeadlinePassesIsStillFound(): void
+    {
+        // The program paints BYE and exits just as the wall deadline passes. The main
+        // loop sees the exit only after its last read has run out the deadline, so a
+        // drain clamped to that deadline would read nothing and lose the match. The
+        // exit drain's own short floor reads the final frame and matches it.
+        $deadline = \microtime(true) + 0.1;
+        $master = new class ($deadline) implements MasterPty {
+            private bool $painted = false;
+
+            public function __construct(private float $paintAt)
+            {
+            }
+
+            public function read(int $len = 8192, ?float $timeout = 0.05): ?string
+            {
+                if (!$this->painted && \microtime(true) >= $this->paintAt) {
+                    $this->painted = true;
+
+                    return 'BYE';
+                }
+                if ($timeout !== null && $timeout > 0.0) {
+                    \usleep((int) ($timeout * 1_000_000));
+                }
+
+                return null;
+            }
+
+            public function write(string $bytes): int
+            {
+                return \strlen($bytes);
+            }
+
+            public function resize(int $cols, int $rows): void
+            {
+            }
+
+            public function size(): array
+            {
+                return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0];
+            }
+
+            public function stream(): mixed
+            {
+                throw new \LogicException('window master has no real stream');
+            }
+
+            public function setBlocking(bool $blocking): void
+            {
+            }
+
+            public function close(): void
+            {
+            }
+
+            public function isClosed(): bool
+            {
+                return false;
+            }
+
+            public function fd(): int
+            {
+                return -1;
+            }
+        };
+        // The exit is seen a hair before the deadline so the last main-loop read, not
+        // an exit check, is what runs the clock out to it.
+        $child = new class ($deadline - 0.02) implements Child {
+            public function __construct(private float $exitAt)
+            {
+            }
+
+            public function pid(): int
+            {
+                return 1;
+            }
+
+            public function exited(): bool
+            {
+                return \microtime(true) >= $this->exitAt;
+            }
+
+            public function wait(): int
+            {
+                return 0;
+            }
+
+            public function exitCode(): ?int
+            {
+                return 0;
+            }
+
+            public function kill(int $signal): void
+            {
+            }
+        };
+
+        $started = \microtime(true);
+        $result = Expect::on($master)->collectWindow(5.0, $deadline, 100, 0, 0, '/BYE/', $child);
+
+        self::assertGreaterThanOrEqual($deadline, \microtime(true), 'the deadline passed before the final frame was read');
+        self::assertTrue($result->matched, 'the final frame written at the deadline must still match');
+        self::assertSame('BYE', $result->output);
+        self::assertTrue($result->childExited);
+        self::assertFalse($result->wallHit, 'a child exit with a matched final frame is not a wall hit');
+        self::assertLessThan(1.0, \microtime(true) - $started, 'the exit drain stays short');
     }
 
     public function testAPastDeadlineReturnsAtOnceAsAWallHit(): void

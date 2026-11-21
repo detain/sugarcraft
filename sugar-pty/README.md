@@ -297,7 +297,10 @@ the consumed buffer cleared, so reusing `$e` replays bytes already reported in
 `$w->output`. Thread the totals through as well:
 `$w2 = $w1->next->collectWindow(1.0, $deadline, $cap, $w1->retained, $w1->dropped);`.
 It ends on the first of a regex match, a child exit, the window length, or the
-absolute wall `$deadline` (each read is clamped to it). Master EOF (`eof` is set)
+absolute wall `$deadline` (each read is clamped to it). The one read past the
+deadline is the short drain after a child exit, which runs to the later of the
+deadline and 0.1 s past the exit, so a last frame painted as the deadline passes is
+still read and matched. Master EOF (`eof` is set)
 stops the reads; it ends the window only when no `$child` is passed, and with a
 child the window keeps waiting for that child's exit or a match, up to the window
 length and the deadline. An invalid regex throws `\InvalidArgumentException`. The
