@@ -508,7 +508,7 @@ final class ChildRun
         // The probe reads through the spawn's recorder, which keeps the status of the
         // read that first saw the exit: that read may have been a spawn-time one, and a
         // proc_get_status() after the reap reports neither the code nor the signal.
-        // The pid is kept with it: a reaped setsid wrapper names the group its job stayed in.
+        // The pid is kept with it for the kill seam.
         $exitCode = null;
         $signal = null;
         $spawnPid = 0;
@@ -532,7 +532,8 @@ final class ChildRun
         };
         // The pid the kill seam is told. The probe records it on its first poll; a run
         // the probe never polled reads it here, through the probe, so no exit is lost.
-        // Each kill site reads it before the wrapper group, which that exit can name.
+        // The wrapper-group fallback reads the recorder itself, after the kill rung's
+        // own group read, so an exit seen by either read can name the wrapper's group.
         $pidOf = static function () use ($running, &$spawnPid): int {
             if ($spawnPid === 0) {
                 $running();
@@ -615,7 +616,7 @@ final class ChildRun
             } catch (\Throwable $e) {
                 self::closeAll($pipes);
                 $pid = $pidOf();
-                $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+                $this->killAndReap($proc, $group, $pid, $status);
                 throw $e;
             }
 
@@ -637,7 +638,7 @@ final class ChildRun
                     // before the throw leaves, as in the pipe phase above. The wait only
                     // closes the handle on the exit it returns, so the handle is still open.
                     $pid = $pidOf();
-                    $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+                    $this->killAndReap($proc, $group, $pid, $status);
                     throw $e;
                 }
                 if ($code !== null) {
@@ -646,21 +647,23 @@ final class ChildRun
                 // Output closed but the child is still running past the deadline, its idle
                 // budget or a cancel. A cancel that ended the wait is reported as CANCELLED.
                 $pid = $pidOf();
-                $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+                $code = $this->killAndReap($proc, $group, $pid, $status);
                 $outcome = $stop === self::STOP_CANCELLED ? ChildResult::CANCELLED : ChildResult::TIMED_OUT;
 
-                return self::result($r, $code, $outcome);
+                return self::result($r, $status->exitCode() ?? $code, $outcome, $status->signal());
             }
 
             $pid = $pidOf();
-            $code = $this->killAndReap($proc, $group, $this->reapedWrapperGroup($exitCode, $spawnPid), $pid, $status);
+            $code = $this->killAndReap($proc, $group, $pid, $status);
             $outcome = match (true) {
                 $stop === self::STOP_CANCELLED => ChildResult::CANCELLED,
                 $stop === self::STOP_IDLE, $r->reason === DrainResult::EXPIRED => ChildResult::TIMED_OUT,
                 default => ChildResult::PIPE_FAILED,
             };
 
-            return self::result($r, $exitCode ?? $code, $outcome, $signal);
+            // The recorder, not the probe: the kill rung's own group read can be the one
+            // that saw the child gone, and that exit is reported as well.
+            return self::result($r, $status->exitCode() ?? $code, $outcome, $status->signal());
         } finally {
             $cancelSubscription?->unsubscribe();
         }
@@ -673,14 +676,17 @@ final class ChildRun
      *
      * @param resource $proc
      */
-    private function killAndReap($proc, ?int $group, ?int $wrapper, int $pid, ChildStatus $status): ?int
+    private function killAndReap($proc, ?int $group, int $pid, ChildStatus $status): ?int
     {
         try {
             if ($this->onKill !== null && $pid > 0) {
                 ($this->onKill)($pid);
             }
         } finally {
-            $code = BoundedShutdown::terminateBounded($proc, $this->terminateGrace, $this->killGrace, self::killGroup($proc, $group, $wrapper, $status));
+            // The wrapper fallback is asked after the live group read, so an exit that
+            // read records (the child died just now) still names the wrapper's group.
+            $target = self::killGroup($proc, $group, $status) ?? $this->reapedWrapperGroup($status);
+            $code = BoundedShutdown::terminateBounded($proc, $this->terminateGrace, $this->killGrace, $target);
         }
 
         return $code;
@@ -841,7 +847,7 @@ final class ChildRun
         }
         // The spawn-time read can precede the wrapper's own setsid, so the kill rung's
         // live fallback is what reaches a group the child only now leads.
-        $target = self::killGroup($proc, $group, null, $status);
+        $target = self::killGroup($proc, $group, $status);
         if ($target !== null && \function_exists('posix_kill')) {
             @\posix_kill(-$target, 9);
         }
@@ -928,32 +934,37 @@ final class ChildRun
 
     /**
      * The group a kill rung signals: the one measured at spawn when there was one,
-     * else the group the child leads right now, else the wrapper's own pid once the
-     * probe has reaped it. The spawn-time read can miss a wrapper that has not yet
-     * made itself a group leader, and a live child still answers the live read; a
-     * reaped child answers neither, so the spawn-time value or the wrapper pid is the
-     * one that reaches its job.
+     * else the group the child leads right now. The spawn-time read can miss a wrapper
+     * that has not yet made itself a group leader, and a live child still answers the
+     * live read; a reaped child answers neither, so run()'s kill rung then falls back
+     * to {@see reapedWrapperGroup()}.
      *
      * The live read goes through the recorder, so a read that reaps the child here
-     * keeps its exit for the run.
+     * keeps its exit for the run, and the wrapper fallback asked after it sees that exit.
      *
      * @param resource $proc
      */
-    private static function killGroup($proc, ?int $measured, ?int $reapedWrapper = null, ?ChildStatus $status = null): ?int
+    private static function killGroup($proc, ?int $measured, ?ChildStatus $status = null): ?int
     {
-        return $measured ?? ($status ?? new ChildStatus($proc))->groupId() ?? $reapedWrapper;
+        return $measured ?? ($status ?? new ChildStatus($proc))->groupId();
     }
 
     /**
-     * The wrapper's own pid as a group id, once the probe has reaped a setsid-wrapped
-     * child. The wrapper leads the group its backgrounded job stayed in under that pid,
+     * The wrapper's own pid as a group id, once any read through the recorder has
+     * reaped a setsid-wrapped child: the probe's, or the kill rung's own live group
+     * read. The wrapper leads the group its backgrounded job stayed in under that pid,
      * and the live read cannot name it after the reap. The blocking path needs this for
      * the same reason ChildRunLaunch does: a cancel can land after the shell is reaped.
      * An unwrapped child never leads a group, so its pid is never offered.
      */
-    private function reapedWrapperGroup(?int $exitCode, int $spawnPid): ?int
+    private function reapedWrapperGroup(ChildStatus $status): ?int
     {
-        return $this->setsidWrapped && $exitCode !== null && $spawnPid > 0 ? $spawnPid : null;
+        if (!$this->setsidWrapped || !$status->exited()) {
+            return null;
+        }
+        $pid = $status->pid();
+
+        return $pid > 0 ? $pid : null;
     }
 
     /**

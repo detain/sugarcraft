@@ -984,6 +984,69 @@ final class ChildRunTest extends TestCase
     }
 
     /**
+     * Regression: the wrapper dies after the probe's last read, so the kill rung's own
+     * live group read is the one that reaps it. That exit is recorded, and the run must
+     * use it: the wrapper's pid still names its job's group, and the signal is reported.
+     *
+     * Made deterministic with gates instead of timing: the shell makes itself a group
+     * leader only once the heartbeat opens the gate, after the spawn-time group read,
+     * and the kill seam kills it and waits for the zombie before the rung reads the group.
+     */
+    public function testAWrapperReapedByTheKillRungsGroupReadStillNamesItsGroup(): void
+    {
+        $this->requirePosixPipes();
+        if (!\function_exists('posix_kill') || !\function_exists('posix_getpgid') || PHP_OS_FAMILY !== 'Linux' || !\is_executable('/usr/bin/setsid')) {
+            $this->markTestSkipped('needs posix_kill, posix_getpgid, /usr/bin/setsid and /proc');
+        }
+
+        $gate = sys_get_temp_dir() . '/childrun-gate-' . bin2hex(random_bytes(6));
+        $pidFile = (string) tempnam(sys_get_temp_dir(), 'childrun-rung-');
+        $inner = 'sleep 31 & echo $! > "$1"; wait';
+        $outer = 'while [ ! -e "$1" ]; do sleep 0.01; done; exec /usr/bin/setsid /bin/sh -c ' . escapeshellarg($inner) . ' sh "$2"';
+        $grandchild = 0;
+        $prepared = false;
+        try {
+            $r = ChildRun::new(['/bin/sh', '-c', $outer, 'sh', $gate, $pidFile])
+                ->withTimeout(0.5)
+                ->withSetsidWrapped(true)
+                ->withHeartbeat(0.05, static function () use ($gate): void {
+                    @touch($gate);
+                })
+                ->withOnKill(static function (int $pid) use ($pidFile, &$grandchild, &$prepared): void {
+                    $until = microtime(true) + 5.0;
+                    while (microtime(true) < $until) {
+                        $grandchild = (int) trim((string) @file_get_contents($pidFile));
+                        if ($grandchild > 0 && @\posix_getpgid($pid) === $pid) {
+                            break;
+                        }
+                        usleep(5_000);
+                    }
+                    \posix_kill($pid, 9);
+                    while (microtime(true) < $until && !self::grandchildGone($pid)) {
+                        usleep(5_000);
+                    }
+                    $prepared = $grandchild > 0 && self::grandchildGone($pid);
+                })
+                ->run();
+
+            $this->assertTrue($prepared, 'the fixture never reached a killed wrapper leading its job');
+            $this->assertSame(ChildResult::TIMED_OUT, $r->status);
+            $this->assertSame(9, $r->signal, 'the signal the rung read recorded must be reported');
+            $until = microtime(true) + 3.0;
+            while (!self::grandchildGone($grandchild) && microtime(true) < $until) {
+                usleep(20_000);
+            }
+            $this->assertTrue(self::grandchildGone($grandchild), 'the kill must reach the job through the wrapper pid');
+        } finally {
+            if ($grandchild > 0 && !self::grandchildGone($grandchild)) {
+                \posix_kill($grandchild, 9);
+            }
+            @unlink($gate);
+            @unlink($pidFile);
+        }
+    }
+
+    /**
      * Gone means signal-refused or a zombie: a PID 1 that does not reap leaves a killed
      * grandchild a zombie, which a bare posix_kill($pid, 0) would count as alive.
      */
