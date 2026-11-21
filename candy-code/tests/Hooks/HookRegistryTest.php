@@ -1935,26 +1935,39 @@ final class HookRegistryTest extends TestCase
      * the freeze being bounded, and running the script hook on top of it would
      * add to a stall that is already over budget.
      *
-     * HOW "WITHOUT RUNNING IT" IS PROVEN HERE. Not by wall clock: the hook's
-     * command touches a canary file as its FIRST act, so the denial path, which
-     * runs no hook at all, leaves the canary absent. If a regression did spawn
-     * the child, its own 0.2 s deadline still kills it, so the spawn path cannot
-     * wedge the test either.
+     * HOW "WITHOUT RUNNING IT" IS PROVEN HERE. Not by wall clock, and not by
+     * the canary alone: a child killed between its spawn and its `touch` would
+     * leave the canary absent on a run that DID start the hook. The real
+     * ScriptHook rides inside {@see countingBoundedHook()}, which counts every
+     * `execute()` and every `withTimeoutSeconds()` the registry makes on it.
+     * The registry charges a bounded hook its remainder and then executes it,
+     * so a hook it reached would show one of each; one it refused on an
+     * exhausted clock shows zero of both. That is exact, not timed: a 400 ms
+     * warmup always leaves a 0.2 s chain with a negative remainder, so the
+     * refusal fires before the charge, never on a floored 0.01 s budget. The
+     * canary stays as the second, end-to-end witness. If a regression did spawn
+     * the child, its own 0.2 s deadline still kills it, so the spawn path
+     * cannot wedge the test either.
      */
     public function testAChainThatRunsOutOfClockDeniesNamingItsBudgetWithoutRunningTheHook(): void
     {
         $canary = \sys_get_temp_dir() . '/sc_hook_never_ran_' . bin2hex(random_bytes(8));
 
+        $calls = (object) ['executes' => 0, 'charges' => 0];
+
         $this->registry->register($this->slowAllowingHook('warmup', 400_000));
-        $this->registry->register($this->hangingScriptHook(
+        $this->registry->register($this->countingBoundedHook($this->hangingScriptHook(
             'never-reached',
             0.2,
             command: 'touch ' . \escapeshellarg($canary) . '; sleep 30',
-        ));
+        ), $calls));
 
         $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
 
         $this->assertTrue($result->isDenied());
+        $this->assertSame(0, $calls->charges, 'the registry charged the hook a remainder — it reached the hook with clock left');
+        $this->assertSame(0, $calls->executes, 'ScriptHook::execute() ran — a chain that is out of clock denies '
+            . 'before the hook is invoked');
         // THE BUDGET, and it is the STOPPED hook's own figure — 0.2s is
         // `never-reached`'s declared timeout, and the whole chain's, because it
         // is the only bounded hook. The old assertion stopped here, and the
@@ -2072,6 +2085,55 @@ final class HookRegistryTest extends TestCase
             'raising those timeouts raises this budget',
             $result->message,
         );
+    }
+
+    /**
+     * $inner, unchanged, with every `execute()` and `withTimeoutSeconds()` the
+     * registry makes on it counted into $calls (shared across the charged
+     * copies, since a charge hands back a new instance).
+     */
+    private function countingBoundedHook(\SugarCraft\Code\Hooks\BoundedHookInterface $inner, \stdClass $calls): HookInterface
+    {
+        return new class($inner, $calls) implements \SugarCraft\Code\Hooks\BoundedHookInterface {
+            public function __construct(
+                private \SugarCraft\Code\Hooks\BoundedHookInterface $inner,
+                private \stdClass $calls,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->inner->name();
+            }
+
+            public function event(): HookEvent
+            {
+                return $this->inner->event();
+            }
+
+            public function matcher(): string
+            {
+                return $this->inner->matcher();
+            }
+
+            public function timeoutSeconds(): float
+            {
+                return $this->inner->timeoutSeconds();
+            }
+
+            public function withTimeoutSeconds(float $seconds): self
+            {
+                ++$this->calls->charges;
+
+                return new self($this->inner->withTimeoutSeconds($seconds), $this->calls);
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                ++$this->calls->executes;
+
+                return $this->inner->execute($context);
+            }
+        };
     }
 
     /**
