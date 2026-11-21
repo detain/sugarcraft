@@ -539,9 +539,10 @@ final class Expect
      * result row per planned step whatever the child does.
      *
      * The window ends at the first of: the regex matching the window's retained
-     * output, the child exiting, the window length elapsing, or the wall
-     * deadline passing. Each read is clamped to the time left in the window, so
-     * the deadline binds even against a silent master.
+     * output, the child exiting, the master reaching EOF, the window length
+     * elapsing, or the wall deadline passing. Each read is clamped to the time
+     * left in the window, so the deadline binds even against a silent master.
+     * An invalid regex throws `\InvalidArgumentException`, as `expectPattern` does.
      *
      * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
      * totals in and thread the returned ones into the next window. Bytes past the
@@ -571,9 +572,15 @@ final class Expect
         ?\Closure $heartbeat = null,
         ?\Closure $onChunk = null,
     ): ExpectWindow {
+        // Validate once: an invalid pattern would otherwise read as "never matched".
+        if ($regex !== null && @\preg_match($regex, '') === false) {
+            throw new \InvalidArgumentException("Expect::collectWindow: invalid regex '{$regex}'");
+        }
+
         $output = '';
         $matched = $regex === null ? null : false;
         $childExited = false;
+        $eof = false;
         $windowEnd = \min(\microtime(true) + $windowSeconds, $deadline);
 
         while (true) {
@@ -588,7 +595,14 @@ final class Expect
 
             $tick = \min(self::WINDOW_POLL_SECONDS, $windowEnd - $now);
             $chunk = $this->master->read(self::WINDOW_READ_BYTES, $tick);
-            if ($chunk !== null && $chunk !== '') {
+            if ($chunk === '') {
+                // Master EOF: no byte can follow, so end here instead of spinning
+                // empty reads for the rest of the window. `eof` tells it from a quiet window.
+                $eof = true;
+                $childExited = $child?->exited() === true;
+                break;
+            }
+            if ($chunk !== null) {
                 if ($onChunk !== null) {
                     // Fed before retention so a live tail is independent of the
                     // transcript's byte budget.
@@ -618,9 +632,12 @@ final class Expect
             }
         }
 
-        $wallHit = $matched !== true && !$childExited && \microtime(true) >= $deadline;
+        // A deadline already past on entry ends the window with no read and still counts
+        // as a wall hit. PtyDriver::collectWindow flags it only after a read, so a port
+        // that replaces PtyDriver must map that case explicitly rather than assume parity.
+        $wallHit = $matched !== true && !$childExited && !$eof && \microtime(true) >= $deadline;
 
-        return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped);
+        return new ExpectWindow($output, $matched, $childExited, $wallHit, $retained, $dropped, $eof);
     }
 
     /**

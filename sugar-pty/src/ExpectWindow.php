@@ -22,6 +22,7 @@ final class ExpectWindow
      *                            without a match or a child exit
      * @param int    $retained    session total of retained bytes after this window
      * @param int    $dropped     session total of bytes refused by the cap after this window
+     * @param bool   $eof         the master reached EOF during the window, so no more output can follow
      */
     public function __construct(
         public readonly string $output,
@@ -30,6 +31,7 @@ final class ExpectWindow
         public readonly bool $wallHit,
         public readonly int $retained,
         public readonly int $dropped,
+        public readonly bool $eof = false,
     ) {
     }
 }

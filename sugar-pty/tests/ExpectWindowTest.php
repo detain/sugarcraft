@@ -395,6 +395,67 @@ final class ExpectWindowTest extends TestCase
         self::assertTrue($result->wallHit);
     }
 
+    // ------------------------------------------------------------------- master EOF
+
+    public function testMasterEofEndsTheWindowInsteadOfSpinningIt(): void
+    {
+        // An empty read is the master's EOF: no byte can follow, so the window must
+        // end there, not spin empty reads for its whole 5 s length.
+        $started = \microtime(true);
+        $result = Expect::on(self::master(['abc', '']))
+            ->collectWindow(5.0, self::farDeadline(), 100, 0, 0, '/x/');
+
+        self::assertLessThan(1.0, \microtime(true) - $started, 'a closed master must end the window at once');
+        self::assertSame('abc', $result->output);
+        self::assertTrue($result->eof, 'EOF must be reported, not confused with a quiet window');
+        self::assertFalse($result->matched);
+        self::assertFalse($result->childExited);
+        self::assertFalse($result->wallHit, 'an EOF before the deadline is not a wall hit');
+    }
+
+    public function testAQuietWindowIsNotReportedAsEof(): void
+    {
+        $result = Expect::on(self::master(['abc']))
+            ->collectWindow(0.1, self::farDeadline(), 100, 0, 0, '/x/');
+
+        self::assertFalse($result->eof, 'a window that simply ran out of time did not see EOF');
+        self::assertFalse($result->wallHit);
+    }
+
+    public function testMasterEofWithAnExitedChildStillReportsTheExit(): void
+    {
+        // The first read is EOF, so the window ends on the EOF branch; the exited
+        // child must still be reported there rather than read as a quiet window.
+        $result = Expect::on(self::master(['']))
+            ->collectWindow(5.0, self::farDeadline(), 100, 0, 0, null, self::child(true));
+
+        self::assertSame('', $result->output);
+        self::assertTrue($result->eof);
+        self::assertTrue($result->childExited, 'the child exit is still seen when the master closes first');
+        self::assertFalse($result->wallHit);
+    }
+
+    // ------------------------------------------------------------ regex validity
+
+    public function testAnInvalidRegexThrowsInsteadOfReportingNoMatch(): void
+    {
+        // A typo in one scripted step must surface as an error, not as a pattern
+        // that never appeared, matching Expect::expectPattern.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("invalid regex '/(/'");
+
+        Expect::on(self::master(['anything']))
+            ->collectWindow(0.2, self::farDeadline(), 100, 0, 0, '/(/');
+    }
+
+    public function testAnEmptyRegexThrowsLikeExpectPattern(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        Expect::on(self::master(['anything']))
+            ->collectWindow(0.2, self::farDeadline(), 100, 0, 0, '');
+    }
+
     // -------------------------------------------------------------- side hooks
 
     public function testOnChunkAndHeartbeatFireAroundEachRead(): void
