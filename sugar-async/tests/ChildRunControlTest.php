@@ -34,7 +34,13 @@ final class ChildRunControlTest extends TestCase
         }
     }
 
-    /** Run the loop until $promise settles or $budget seconds pass; a rejection is rethrown. */
+    /**
+     * Run the loop until $promise settles or $budget seconds pass; a rejection is rethrown.
+     *
+     * A promise launch() already settled (a token cancelled before launch) skips
+     * the loop: its callbacks ran before run(), where stop() is lost, so the loop
+     * would sit out the whole budget. Same shape as ChildRunLaunchTest::settle().
+     */
     private function settle(LoopInterface $loop, PromiseInterface $promise, float $budget = 10.0): ChildResult
     {
         $result = null;
@@ -49,12 +55,13 @@ final class ChildRunControlTest extends TestCase
                 $loop->stop();
             },
         );
-        $guard = $loop->addTimer($budget, static function () use ($loop): void {
-            $loop->stop();
-        });
-
-        $loop->run();
-        $loop->cancelTimer($guard);
+        if ($result === null && $error === null) {
+            $guard = $loop->addTimer($budget, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+            $loop->cancelTimer($guard);
+        }
 
         if ($error !== null) {
             throw $error;
