@@ -26,6 +26,14 @@ final class ProcessExecutorTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
 
+    /**
+     * The heartbeat window the E646 lease tests run under, in place of the
+     * production 15 s: long enough that a fake worker's lease frame, sent
+     * right after the handshake that arms the clock, lands well inside it on
+     * a loaded machine; short enough that the pair no longer waits out 33 s.
+     */
+    private const SHRUNK_HEARTBEAT_WINDOW_SECONDS = 3;
+
     private ProcessExecutor $executor;
     private SubAgent $agent;
     private CompleteRequest $request;
@@ -1928,28 +1936,31 @@ final class ProcessExecutorTest extends TestCase
      * fix (capping the request) is forbidden; the lease bounds PARENT-side
      * reaping, never the provider call.
      *
-     * Real clock: the fake worker sleeps 18s — three seconds past the plain
-     * window — then completes. Without the lease it would be SIGKILLed at ~15s.
+     * Real clock, shrunk window: the executor's heartbeat window is
+     * {@see SHRUNK_HEARTBEAT_WINDOW_SECONDS} here (the production 15 s runs
+     * the same code), and the fake worker sleeps three seconds past it, then
+     * completes. Without the lease it would be SIGKILLed at the window.
      */
     public function testALeasedWorkerSurvivesPastTheHeartbeatWindowWhileAlive(): void
     {
+        $window = self::SHRUNK_HEARTBEAT_WINDOW_SECONDS;
         [$dir, $binary] = $this->fakeWorkerBinary(
             "printf '{\"type\":\"ready\"}\\n'\n"
             . "read -r _startup\nread -r _execute\n"
             . "printf '{\"type\":\"lease\",\"seconds\":60}\\n'\n"
-            . "sleep 18\n"
+            . 'sleep ' . ($window + 3) . "\n"
             . "printf '{\"type\":\"complete\",\"status\":\"completed\",\"output\":\"LEASED-OK\",\"tokensUsed\":0,\"costUsd\":0}\\n'\n"
         );
 
         try {
-            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: 120);
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: 120, heartbeatTimeoutSeconds: $window);
 
             $started = microtime(true);
             $result = $executor->execute($this->agent, $this->request);
 
             $this->assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
             $this->assertSame('LEASED-OK', $result->output);
-            $this->assertGreaterThanOrEqual(15.0, microtime(true) - $started, 'the test proved nothing if it finished inside the heartbeat window');
+            $this->assertGreaterThanOrEqual($window + 1.0, microtime(true) - $started, 'the test proved nothing if it finished inside the heartbeat window');
         } finally {
             @unlink($binary);
             @rmdir($dir);
@@ -1958,10 +1969,19 @@ final class ProcessExecutorTest extends TestCase
 
     /**
      * E646, polarity two: a LIVE-but-SILENT worker holds no lease and is
-     * still reaped at the plain heartbeat window.
+     * still reaped at the plain heartbeat window ({@see
+     * SHRUNK_HEARTBEAT_WINDOW_SECONDS} here; production keeps 15 s, pinned
+     * below so the shrink stays a test-only override).
      */
     public function testASilentUnleasedWorkerIsStillReapedNearTheHeartbeatTimeout(): void
     {
+        $this->assertSame(
+            15,
+            (new \ReflectionParameter([ProcessExecutor::class, '__construct'], 'heartbeatTimeoutSeconds'))->getDefaultValue(),
+            'production must keep the 15 s heartbeat window; only the tests shrink it',
+        );
+
+        $window = self::SHRUNK_HEARTBEAT_WINDOW_SECONDS;
         [$dir, $binary] = $this->fakeWorkerBinary(
             "printf '{\"type\":\"ready\"}\\n'\n"
             . "read -r _startup\nread -r _execute\n"
@@ -1970,7 +1990,7 @@ final class ProcessExecutorTest extends TestCase
 
         try {
             // timeoutSeconds: null so the heartbeat window is the only ceiling.
-            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: null);
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: null, heartbeatTimeoutSeconds: $window);
 
             $started = microtime(true);
             $result = $executor->execute($this->agent, $this->request);
@@ -1978,7 +1998,7 @@ final class ProcessExecutorTest extends TestCase
 
             $this->assertSame(AgentStatus::Failed, $result->status);
             $this->assertStringContainsString('heartbeat timeout', (string) $result->error?->getMessage());
-            $this->assertLessThan(30.0, $elapsed, 'the silent worker was not reaped near the heartbeat window');
+            $this->assertLessThan($window + 10.0, $elapsed, 'the silent worker was not reaped near the heartbeat window');
         } finally {
             @unlink($binary);
             @rmdir($dir);
