@@ -1033,7 +1033,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         if ($this->engine !== null) {
             $engine = $this->engine;
             $manager = $this->agentManager;
-            $result = self::settlingOnThrow($subAgent, fn (): ToolResult => $this->runOnEngine(
+            $result = $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (): ToolResult => $this->runOnEngine(
                 $engine,
                 $manager,
                 $subAgent,
@@ -1374,7 +1374,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $engine = $this->engine;
         $manager = $this->agentManager;
 
-        return self::settlingOnThrow($subAgent, fn (): ToolResult => $this->runOnEngine(
+        return $this->settlingOnThrow($subAgent, $this->delegationScope ?? $engine->sessionId(), fn (): ToolResult => $this->runOnEngine(
             $engine,
             $manager,
             $subAgent,
@@ -1401,13 +1401,21 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * row stayed RUNNING with no completedAt, so elapsedSeconds() counted
      * against wall-clock forever and liveRuns() listed a dead run as live.
      *
+     * The run's card under $cardScope (the session runOnEngine() records it
+     * under) is settled the same way when the throw left it RUNNING: its pid
+     * is this live process, so {@see \SugarCraft\Code\Agents\Live\AgentRunCards::statusOf()}
+     * would otherwise read the dead run as running for as long as the session
+     * lives, and `Subagents list`/`wait` would never see an outcome. A run
+     * that recorded no card has none to settle — updateRun() finds no file.
+     *
      * A row the run already settled keeps its outcome: a throw after a
-     * truthful COMPLETE does not make the work it reported undone. Nothing is
-     * swallowed; the caller sees the same throwable it saw before.
+     * truthful COMPLETE does not make the work it reported undone, and a
+     * card already off RUNNING keeps its outcome too. Nothing is swallowed;
+     * the caller sees the same throwable it saw before.
      *
      * @param \Closure(): ToolResult $run
      */
-    private static function settlingOnThrow(SubAgent $subAgent, \Closure $run): ToolResult
+    private function settlingOnThrow(SubAgent $subAgent, ?string $cardScope, \Closure $run): ToolResult
     {
         try {
             return $run();
@@ -1416,6 +1424,20 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $subAgent->status = SubAgent::STATUS_FAILED;
                 $subAgent->error = $e->getMessage();
                 $subAgent->completedAt ??= new \DateTimeImmutable();
+            }
+            if ($cardScope !== null) {
+                $error = $e->getMessage();
+                \SugarCraft\Code\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($error): array {
+                    if ($card['status'] !== \SugarCraft\Code\Agents\Live\AgentRunCards::STATUS_RUNNING) {
+                        return $card;
+                    }
+
+                    return [
+                        'status' => SubAgentActivity::OUTCOME_FAILED,
+                        'error' => $error,
+                        'finishedAt' => (int) floor(microtime(true) * 1000),
+                    ] + $card;
+                });
             }
 
             throw $e;

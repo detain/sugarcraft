@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Tools;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -94,6 +95,58 @@ final class TaskToolExecuteMergeTest extends TestCase
             $this->assertSame('activity socket closed', $row->error);
         } else {
             $this->assertNull($row->error, 'a truthful COMPLETE is not rewritten by a later throw');
+        }
+    }
+
+    /**
+     * The run's card is settled with its row: a throw that lands after the
+     * card was recorded RUNNING (with this live process's pid) must not leave
+     * it RUNNING, or `Subagents list`/`wait` reads the dead run as running
+     * for as long as the session lives. A card the run already settled keeps
+     * its outcome.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function throwingFramesForCards(): array
+    {
+        return [
+            'before the run settles' => [SubAgentActivity::OP_STARTED, SubAgentActivity::OUTCOME_FAILED],
+            'after the run settled' => [SubAgentActivity::OP_FINISHED, SubAgentActivity::OUTCOME_COMPLETE],
+        ];
+    }
+
+    #[DataProvider('throwingFramesForCards')]
+    public function testAThrowOutsideTheTurnLeavesTheRunCardTerminal(string $throwOn, string $expectedCardStatus): void
+    {
+        $session = 'merge-' . bin2hex(random_bytes(5));
+        $manager = self::sessionManager([]);
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir)))
+            ->withEngine(EngineBackend::new(new ScriptedProvider([new CompleteResponse(content: 'reported')]), 'm')->withSessionId($session))
+            ->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($throwOn): void {
+                if ($activity->op === $throwOn) {
+                    throw new \RuntimeException('activity socket closed');
+                }
+            });
+
+        $caught = null;
+        try {
+            $task->execute(self::delegation());
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'the emitter failure must still reach the caller');
+
+        $cards = AgentRunCards::runs($session);
+        $this->assertCount(1, $cards, 'the run recorded its card before the throw');
+        $card = $cards[0];
+        $this->assertSame($manager->runs()[0]->id, $card['runId']);
+        $this->assertSame($expectedCardStatus, $card['status']);
+        $this->assertSame($expectedCardStatus, AgentRunCards::statusOf($card), 'a live pid no longer reads the dead run as running');
+        $this->assertGreaterThan(0, $card['finishedAt']);
+        if ($expectedCardStatus === SubAgentActivity::OUTCOME_FAILED) {
+            $this->assertSame('activity socket closed', $card['error']);
+        } else {
+            $this->assertSame('', $card['error'], 'a settled card is not rewritten by a later throw');
         }
     }
 
