@@ -2072,6 +2072,122 @@ final class ScriptHookTest extends TestCase
         );
     }
 
+    /**
+     * @return array<string, array{0: string, 1: int, 2: string}>
+     */
+    public static function overCeilingStreams(): array
+    {
+        return [
+            // exit 3 asks with stdout as the question; exit 2 denies with stderr as the reason.
+            'stdout' => ['STDOUT', 3, 'ask'],
+            'stderr' => ['STDERR', 2, 'deny'],
+        ];
+    }
+
+    /**
+     * CC-1 (ChildRun): A HOOK PRINTING PAST THE 8 MiB CEILING IS CLIPPED TO IT,
+     * through the public path. 1,026 × 8 KiB (8 MiB plus two reads) on one
+     * stream: the verdict's own clip names the byte count it was handed, and
+     * that count is exactly the ceiling plus the constant-size stamp — so the
+     * run retained the ceiling and not one read more, whichever stream it was.
+     *
+     * @dataProvider overCeilingStreams
+     */
+    public function testAHookPrintingPastTheCeilingIsClippedToItOnEitherStream(string $stream, int $exit, string $action): void
+    {
+        $source = '$s = str_repeat("A", 8192); for ($i = 0; $i < 1026; ++$i) { fwrite(' . $stream . ', $s); }';
+        $hook = new ScriptHook(
+            name: 'loud_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: \escapeshellarg(PHP_BINARY) . ' -r ' . \escapeshellarg($source) . '; exit ' . $exit,
+            description: '',
+            timeoutSeconds: 30.0,
+        );
+
+        $result = $hook->execute($this->createContext());
+
+        $retained = 8388608 + \strlen(' … [hook output capped at 8388608 bytes; 16384 further bytes dropped]');
+        $this->assertSame($action, $result->action);
+        $this->assertStringStartsWith(str_repeat('A', 16384) . ' … [hook output truncated: 16384 of ' . $retained . ' bytes shown', $result->message);
+    }
+
+    /**
+     * CC-1 (ChildRun): A STREAMED HOOK is delivered whole and in order. The
+     * hook writes six pieces with a pause between each, so they reach the
+     * parent as separate reads; the verdict must carry every piece, in the
+     * order written, on both the stdout (allow note) and stderr (deny reason)
+     * paths.
+     */
+    public function testAStreamedHookIsDeliveredWholeAndInOrder(): void
+    {
+        $note = (new ScriptHook(
+            name: 'streamed_note',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'for i in 1 2 3 4 5 6; do printf "piece$i;"; sleep 0.05; done',
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame('allow', $note->action);
+        $this->assertSame('piece1;piece2;piece3;piece4;piece5;piece6;', $note->additionalContext);
+
+        $reason = (new ScriptHook(
+            name: 'streamed_reason',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'for i in 1 2 3 4 5 6; do printf "why$i;" >&2; sleep 0.05; done; exit 2',
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame('deny', $reason->action);
+        $this->assertSame('why1;why2;why3;why4;why5;why6;', $reason->message);
+    }
+
+    /**
+     * @return array<string, array{0: int, 1: string, 2: string}>
+     */
+    public static function silentExits(): array
+    {
+        return [
+            'exit 0 allows with nothing to carry' => [0, 'allow', ''],
+            'exit 1 denies naming its code' => [1, 'deny', 'Hook exited with code 1'],
+            'exit 2 denies naming its code' => [2, 'deny', 'Hook exited with code 2'],
+            'exit 3 asks the fallback question' => [3, 'ask', 'Hook silent_hook requires your approval'],
+            'exit 7 denies naming its code' => [7, 'deny', 'Hook exited with code 7'],
+        ];
+    }
+
+    /**
+     * CC-1 (ChildRun): A HOOK THAT EXITS WITHOUT OUTPUT gets an empty result,
+     * and its exit code is still the verdict — nothing on either stream is not
+     * a reason to read the code as anything else.
+     *
+     * @dataProvider silentExits
+     */
+    public function testAHookThatExitsWithoutOutputIsAnsweredByItsExitCode(int $exit, string $action, string $message): void
+    {
+        $result = (new ScriptHook(
+            name: 'silent_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit ' . $exit,
+            description: '',
+            timeoutSeconds: 30.0,
+        ))->execute($this->createContext());
+
+        $this->assertSame($action, $result->action);
+        if ($exit === 0) {
+            $this->assertSame('', $result->message);
+            $this->assertSame('', (string) $result->additionalContext, 'a silent allow carries no note');
+
+            return;
+        }
+        $this->assertStringStartsWith($message, $result->message);
+    }
+
     private function createContext(string $projectRoot = '/tmp'): HookContext
     {
         return new HookContext(
