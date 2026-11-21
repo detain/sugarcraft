@@ -194,6 +194,42 @@ final class ProcessOutputCaptureTest extends TestCase
         $this->assertStringContainsString('ulimit -u', $r['stderr']);
     }
 
+    /**
+     * A stdin payload the Windows runtime cannot stage is a temp-directory problem:
+     * it is named as one, with tempnam()'s warning as the cause, and never carries
+     * the process-limit hint. The staging path runs only on the Windows runtime and
+     * there is no seam to force it on another host, so the refusal mapping is driven
+     * directly with the exception ChildRun raises there.
+     */
+    public function testAStdinStagingFailureIsReportedAsATempFileProblemNotAProcessLimit(): void
+    {
+        $map = new \ReflectionMethod(self::captureHost(), 'startFailed');
+        $map->setAccessible(true);
+        $failure = new \SugarCraft\Async\StdinStagingException('ChildRun: could not stage stdin for cmd', tempDir: 'C:\\Temp');
+
+        $r = $map->invoke(null, 'cat', $failure, 'tempnam(): file created in the system\'s temporary directory');
+
+        $this->assertSame(127, $r['exitCode']);
+        $this->assertStringContainsString('its stdin could not be staged: no temp file could be created and written in C:\\Temp', $r['stderr']);
+        $this->assertStringContainsString('(tempnam(): file created', $r['stderr']);
+        $this->assertStringNotContainsString('ulimit', $r['stderr']);
+        $this->assertStringNotContainsString('proc_open() failed', $r['stderr']);
+        $this->assertStringNotContainsString('system-level spawn failure', $r['stderr']);
+    }
+
+    /** Any other refused start is still proc_open() refusing the spawn, hint included. */
+    public function testAnyOtherRefusedStartKeepsTheProcessLimitHint(): void
+    {
+        $map = new \ReflectionMethod(self::captureHost(), 'startFailed');
+        $map->setAccessible(true);
+
+        $r = $map->invoke(null, 'true', new \RuntimeException('ChildRun: could not start true'), 'fork: Resource temporarily unavailable');
+
+        $this->assertSame(127, $r['exitCode']);
+        $this->assertStringContainsString('proc_open() failed (fork: Resource temporarily unavailable)', $r['stderr']);
+        $this->assertStringContainsString('ulimit -u', $r['stderr']);
+    }
+
     private static function captureHost(): object
     {
         return new class {

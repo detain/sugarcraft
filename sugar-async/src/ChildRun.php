@@ -398,7 +398,8 @@ final class ChildRun
     /**
      * Run the child to completion, blocking the caller, and return what it wrote.
      *
-     * @throws \RuntimeException when the child cannot be started, or its stdin cannot be staged
+     * @throws StdinStagingException when the Windows runtime cannot stage the stdin payload to a temp file
+     * @throws \RuntimeException when the child cannot be started
      */
     public function run(): ChildResult
     {
@@ -774,7 +775,12 @@ final class ChildRun
         if ($this->stdin !== null && $this->stdin !== '' && WindowsPipes::runtimeNeedsIt()) {
             $staged = CoreWindowsPipes::stageStdin($this->stdin);
             if ($staged === null) {
-                throw new \RuntimeException('ChildRun: could not stage stdin for ' . $this->argv[0]);
+                $dir = sys_get_temp_dir();
+
+                throw new StdinStagingException(
+                    'ChildRun: could not stage stdin for ' . $this->argv[0] . ': no temp file could be created and written in ' . $dir,
+                    tempDir: $dir,
+                );
             }
             $stdinDescriptor = ['file', $staged, 'r'];
         } else {

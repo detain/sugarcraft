@@ -330,6 +330,35 @@ final class ChildRunTest extends TestCase
         ChildRun::new(['/nonexistent/sugar-async-probe-' . getmypid()])->run();
     }
 
+    /**
+     * A refused spawn is a plain RuntimeException, never the staging type: a caller
+     * that tells the two apart must not read a proc_open() refusal as a temp-file one.
+     */
+    public function testAProgramThatCannotStartIsNotAStdinStagingFailure(): void
+    {
+        try {
+            ChildRun::new(['/nonexistent/sugar-async-probe-' . getmypid()])->withStdin('payload')->run();
+            $this->fail('a program that cannot start must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertNotInstanceOf(\SugarCraft\Async\StdinStagingException::class, $e);
+        }
+    }
+
+    /**
+     * The staging failure stays a RuntimeException, so a caller that treats every
+     * refused start alike keeps working, and it names the temp directory. Staging runs
+     * only on the Windows runtime, with no seam to force it elsewhere, so the type is
+     * pinned directly.
+     */
+    public function testAStdinStagingFailureIsARuntimeExceptionThatNamesTheTempDirectory(): void
+    {
+        $e = new \SugarCraft\Async\StdinStagingException('could not stage', tempDir: '/no/such/tmp');
+
+        $this->assertInstanceOf(\RuntimeException::class, $e);
+        $this->assertSame('/no/such/tmp', $e->tempDir());
+        $this->assertNull((new \SugarCraft\Async\StdinStagingException('x'))->tempDir());
+    }
+
     public function testTheDefaultsArePinnedToThePumpDefaults(): void
     {
         $this->assertSame(ChildPump::DEFAULT_TIMEOUT_SECONDS, ChildRun::DEFAULT_TIMEOUT_SECONDS);

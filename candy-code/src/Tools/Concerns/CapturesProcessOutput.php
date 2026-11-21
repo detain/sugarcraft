@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tools\Concerns;
 
 use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
+use SugarCraft\Async\StdinStagingException;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -321,7 +322,7 @@ trait CapturesProcessOutput
                 throw $failure;
             }
 
-            return self::spawnRefused($command, 'proc_open() failed', error_get_last()['message'] ?? null, true);
+            return self::startFailed($command, $failure, error_get_last()['message'] ?? null);
         }
 
         // ChildRun's ladder reports whether it reaped the child, not whether the group
@@ -373,6 +374,32 @@ trait CapturesProcessOutput
             'timedOut' => $timedOut,
             'groupKilled' => $groupKilled,
         ];
+    }
+
+    /**
+     * runCaptured()'s answer for a run ChildRun refused to start. A stdin payload
+     * the Windows runtime could not stage to a temp file is a temp-directory
+     * problem, reported as one and without the process-limit hint; its cause is the
+     * tempnam()/write warning. Every other refusal is proc_open() refusing the
+     * spawn, which keeps the hint.
+     *
+     * @param string|list<string> $command
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
+     */
+    private static function startFailed(string|array $command, \RuntimeException $failure, ?string $cause): array
+    {
+        if ($failure instanceof StdinStagingException) {
+            $dir = $failure->tempDir();
+
+            return self::spawnRefused(
+                $command,
+                'its stdin could not be staged: no temp file could be created and written in '
+                    . ($dir ?? 'the temp directory'),
+                $cause,
+            );
+        }
+
+        return self::spawnRefused($command, 'proc_open() failed', $cause, true);
     }
 
     /**
