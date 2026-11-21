@@ -239,6 +239,19 @@ final class ExpectWindowTest extends TestCase
         self::assertSame(2, $result->dropped);
     }
 
+    public function testAWholeTwoByteGlyphOnTheCapEdgeIsKept(): void
+    {
+        // 'x' + é (C3 A9) + 'b' is 4 bytes; a cap of 3 ends exactly after é. The C3
+        // lead declares two bytes and both are present, so nothing is backed off. A
+        // wider two-byte lead width would back the cut off to 'x' and fail here.
+        $result = Expect::on(self::master(["x\xC3\xA9b"]))
+            ->collectWindow(0.2, self::farDeadline(), 3);
+
+        self::assertSame("x\xC3\xA9", $result->output);
+        self::assertSame(3, $result->retained);
+        self::assertSame(1, $result->dropped, 'only the trailing b is refused by the cap');
+    }
+
     public function testAFourByteGlyphSeveredAtTheCapIsCutWhole(): void
     {
         // 'a' + U+1F600 is 5 bytes. Caps 2 and 3 both split the four-byte glyph, so
