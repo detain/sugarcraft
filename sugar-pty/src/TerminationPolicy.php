@@ -110,6 +110,10 @@ final class TerminationPolicy
      * where /proc can be read; without /proc (Darwin) a zombie counts as a
      * live member, and the budgets run out to false.
      *
+     * A signal the kernel refuses (EPERM, as for a root-owned child of an
+     * unprivileged caller) does not throw: the child stays up, so the
+     * budgets run out to false.
+     *
      * @return bool whether the child (and, with group reach, its group) is
      *              gone by the end of the budgets
      */
@@ -146,6 +150,9 @@ final class TerminationPolicy
      * paid on a timer, never a loop freeze. A caller that must tell a
      * zombie-only group from a live one re-checks with
      * `BoundedShutdown::groupEmpty($child->pid())` after a false.
+     *
+     * A refused signal never throws, here or from a loop timer: it resolves
+     * false once the budgets run out, as {@see apply()} returns false.
      *
      * @return PromiseInterface<bool> resolves with whether the child (and,
      *                                with group reach, its group) reads gone
@@ -212,7 +219,15 @@ final class TerminationPolicy
                 return;
             }
             // PosixChild::kill() keeps its post-reap pid-reuse guard.
-            $child->kill($signal);
+            try {
+                $child->kill($signal);
+            } catch (PtyException) {
+                // A refused signal (EPERM: a child this uid may not signal)
+                // reads as "not gone", never as a throw: the ladder keeps
+                // probing and the budgets run out to false. In applyAsync()
+                // this callable runs on a loop timer, where a throw would
+                // escape $loop->run().
+            }
         };
     }
 

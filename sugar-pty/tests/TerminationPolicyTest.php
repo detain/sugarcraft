@@ -417,6 +417,46 @@ final class TerminationPolicyTest extends TestCase
         $this->assertFalse($child->exited(), 'the trapped SIGHUP was the only signal sent');
     }
 
+    /**
+     * A child this uid may not signal (root-owned, say a shell started via
+     * sudo) must read as "not gone", never throw: apply() returns false and
+     * applyAsync() resolves false, with no exception escaping the loop timer.
+     * PID 1 stands in for that child; the handle's proc resource is a live
+     * sleep so exited() stays false, and the policy is leader-only so no
+     * group signal (kill(-1, ...)) is ever sent.
+     */
+    public function testARefusedSignalReadsAsNotGoneInsteadOfThrowing(): void
+    {
+        $this->requirePosix();
+        if (!\function_exists('posix_kill') || @\posix_kill(1, 0) || \posix_get_last_error() !== 1) {
+            $this->markTestSkipped('needs a PID 1 this uid is refused (EPERM) permission to signal.');
+        }
+
+        $proc = \proc_open(['sleep', '30'], [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        $this->assertIsResource($proc);
+        try {
+            $unsignalable = new PosixChild(1, $proc);
+            $this->assertFalse($unsignalable->exited(), 'the stand-in must read as running');
+            $policy = $this->fastPolicy()->withGroupReach(false)->withGraceSeconds(0.05)->withKillGraceSeconds(0.1);
+
+            $this->assertFalse($policy->apply($unsignalable), 'a refused signal must read as not gone');
+
+            $loop = new StreamSelectLoop();
+            $settled = null;
+            $safety = $loop->addTimer(0.15 + self::SLACK, static fn () => $loop->stop());
+            $policy->applyAsync($unsignalable, $loop)->then(static function (bool $gone) use (&$settled, $loop, $safety): void {
+                $settled = $gone;
+                $loop->cancelTimer($safety);
+            });
+            $loop->run();
+
+            $this->assertFalse($settled, 'the async ladder must resolve false, not throw from its timer');
+        } finally {
+            \proc_terminate($proc, 9);
+            \proc_close($proc);
+        }
+    }
+
     private function fastPolicy(): TerminationPolicy
     {
         return TerminationPolicy::new()
