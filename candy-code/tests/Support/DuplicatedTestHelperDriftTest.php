@@ -131,6 +131,22 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     private const DRIFT_BOUND = 1;
 
     /**
+     * {@see declarationsIn()}'s answers, keyed by visibility alphabet and
+     * source hash.
+     *
+     * @var array<string, list<array{name:string, body:list<string>|null, signature:list<string>|null, problem:string}>>
+     */
+    private static array $declarationsMemo = [];
+
+    public static function tearDownAfterClass(): void
+    {
+        // Hundreds of MB once the whole tree is scanned: not carried into
+        // whatever test class a paratest worker runs next.
+        self::$declarationsMemo = [];
+        parent::tearDownAfterClass();
+    }
+
+    /**
      * Same-named private helpers that ARE one token apart and are meant to be,
      * each with the reason.
      *
@@ -2330,6 +2346,16 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      */
     private static function declarationsIn(string $source, array $visibility): array
     {
+        // Most tests here run driftReport() over the whole tree, each with
+        // one of a few visibility alphabets, so the same (source, alphabet)
+        // pair was tokenized and scanned about ten times per run. The scan
+        // reads nothing but its two arguments, so the answer is kept for the
+        // class's lifetime ({@see tearDownAfterClass()} drops it).
+        $key = \implode(',', $visibility) . ':' . \md5($source);
+        if (isset(self::$declarationsMemo[$key])) {
+            return self::$declarationsMemo[$key];
+        }
+
         $tokens = \token_get_all($source);
         $count = \count($tokens);
         $found = [];
@@ -2460,7 +2486,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             ];
         }
 
-        return $found;
+        return self::$declarationsMemo[$key] = $found;
     }
 
     /**
