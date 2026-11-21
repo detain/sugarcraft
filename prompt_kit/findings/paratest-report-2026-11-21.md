@@ -669,8 +669,8 @@ All in-process `STDIN` uses outside candy-code are harmless except one:
 - **The candy-code floor** is now 74-82 s, shared by KeyHelpTest, ShellContrastTest, ProcessExecutorTest,
   BinCandyCodeDispatchTest and the Palette pair. Splitting only one of them buys about 4 s. Only splitting or
   speeding up all of them together moves the wall again.
-- **Owner decisions:**
-  - whether paratest goes into each lib's `require-dev` (the lanes' uncommitted `composer.json` edits);
+- **Decided:** paratest `~7.4.9` went into `require-dev` for the 7 libs it was run on (9fc52970c).
+- **Owner decisions still open:**
   - the §10 step 5 harness choice;
   - when to refresh `scripts/parallel-tests-durations.tsv` and the ci.yml TSV-PIN figures. That belongs to
     the deferred end-of-plan figure refresh.
