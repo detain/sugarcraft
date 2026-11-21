@@ -181,14 +181,16 @@ final class ExpectWindowTest extends TestCase
 
     public function testTheSessionTotalCarriesIntoTheNextWindow(): void
     {
-        // The running session total is 5 of a 6-byte cap, so one byte of room
-        // is left for this window's 3-byte chunk: keep 'x', drop 'yz'.
+        // The running session total is 5 of a 6-byte cap with nothing dropped yet, so
+        // one byte of room is left for this window's 3-byte chunk: keep 'x', drop 'yz'.
+        // A session that has already dropped a byte has ended its transcript; that
+        // case is pinned by testRoomLeftByACutIsNotSpentInTheNextWindow.
         $result = Expect::on(self::master(['xyz']))
-            ->collectWindow(0.2, self::farDeadline(), 6, 5, 1);
+            ->collectWindow(0.2, self::farDeadline(), 6, 5, 0);
 
         self::assertSame('x', $result->output);
         self::assertSame(6, $result->retained, 'the budget is session-wide, not per window');
-        self::assertSame(3, $result->dropped, 'the earlier session drop is carried forward and added to');
+        self::assertSame(2, $result->dropped, 'the bytes past the session cap are counted as dropped');
     }
 
     public function testAFullBudgetDropsTheWholeChunk(): void
@@ -329,15 +331,48 @@ final class ExpectWindowTest extends TestCase
 
     public function testAContinuationRunAfterACutIsCountedOnlyAgainstTheCap(): void
     {
-        // The cut at 'abc' leaves a codepoint's lead behind. The next read opens with
-        // its tail; it is retained like any other byte while room remains, because
-        // only the cap refuses bytes. The 'xyz' past the room is refused.
+        // The cut backs 'abc' + E4 BD off to 'abc', leaving one byte of room. The next
+        // read opens with the tail A0 of that codepoint. Keeping it would put a byte
+        // after a gap, so every byte after the cut is refused and the room is never spent.
+        $stream = "abc\xE4\xBD\xA0xyz";
         $result = Expect::on(self::master(["abc\xE4\xBD", "\xA0xyz"]))
             ->collectWindow(0.2, self::farDeadline(), 4);
 
-        self::assertSame("abc\xA0", $result->output);
-        self::assertSame(4, $result->retained);
-        self::assertSame(5, $result->dropped, 'two bytes cut at the codepoint boundary and three past the cap');
+        self::assertSame('abc', $result->output);
+        self::assertStringStartsWith($result->output, $stream, 'the transcript is a byte prefix of the stream');
+        self::assertSame(3, $result->retained);
+        self::assertSame(6, $result->dropped, 'two bytes backed off at the cut and the four bytes after it');
+    }
+
+    public function testACutInOneReadRefusesAContinuationRunInTheSameRead(): void
+    {
+        // The same stream in one read: the cut keeps 'abc' and refuses the rest of the chunk.
+        $result = Expect::on(self::master(["abc\xE4\xBD\xA0xyz"]))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertSame('abc', $result->output);
+        self::assertSame(3, $result->retained);
+        self::assertSame(6, $result->dropped);
+    }
+
+    public function testRoomLeftByACutIsNotSpentInTheNextWindow(): void
+    {
+        // The first window cuts 'abc' + 你 back to 'abc', leaving one byte of room. The
+        // next window is handed the threaded totals and must refuse even a one-byte read,
+        // so the session transcript never resumes after the gap.
+        $first = Expect::on(self::master(["abc\xE4\xBD\xA0"]))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertSame('abc', $first->output);
+        self::assertSame(3, $first->retained);
+        self::assertSame(3, $first->dropped);
+
+        $second = Expect::on(self::master(['x']))
+            ->collectWindow(0.2, self::farDeadline(), 4, $first->retained, $first->dropped);
+
+        self::assertSame('', $second->output);
+        self::assertSame(3, $second->retained);
+        self::assertSame(4, $second->dropped, 'the one byte after the gap is refused');
     }
 
     public function testAStrayContinuationByteUnderTheCapIsRetained(): void

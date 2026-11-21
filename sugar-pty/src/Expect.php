@@ -556,10 +556,15 @@ final class Expect
      * An invalid regex throws `\InvalidArgumentException`, as `expectPattern` does.
      *
      * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
-     * totals in and thread the returned ones into the next window. Bytes past the
-     * cap are counted as dropped, never silently lost. A chunk that overruns the
-     * cap is cut at a codepoint boundary, so a multi-byte codepoint is never split
-     * by the cut itself.
+     * totals in and thread the returned ones into the next window. The transcript
+     * is a byte prefix of the child's stream: bytes are kept as the child wrote them,
+     * up to the cap, with no validation. Bytes past the cap are counted as dropped,
+     * never silently lost. A codepoint that fits whole within the cap is kept whole.
+     * A codepoint torn at the cap edge is cut back to its first byte, so the transcript
+     * stays a prefix, and after that cut every later byte is refused, in this window
+     * and in every later window that is handed the threaded totals. The transcript is
+     * not promised to be valid UTF-8: a sequence the child itself tore, or one torn by
+     * a read boundary that falls exactly on the cap, is retained as written.
      *
      * @param float         $windowSeconds Window length from now, in seconds.
      * @param float         $deadline      Absolute wall deadline, as microtime(true).
@@ -712,7 +717,8 @@ final class Expect
     /**
      * Append a chunk under a cap shared across the whole session: `$retained` is
      * the running total every window draws from, so step count cannot multiply
-     * the budget. Returns [buffer, retained, dropped].
+     * the budget. A non-zero `$dropped` means the transcript already ended, so the
+     * whole chunk is refused. Returns [buffer, retained, dropped].
      *
      * @return array{0: string, 1: int, 2: int}
      */
@@ -724,7 +730,11 @@ final class Expect
 
         // Only the cap refuses bytes: a continuation run at the head of a chunk is
         // retained like any other byte, so `dropped` means exactly the bytes the cap refused.
-        $room = $cap - $retained;
+        // Once the cap has refused a byte the transcript has ended. Room left over by a
+        // back-off cut is never spent, because a byte kept after that gap would not follow
+        // its predecessor in the stream. Keying on the threaded `dropped` total carries the
+        // refusal into every later window of the session as well.
+        $room = $dropped > 0 ? 0 : $cap - $retained;
         if ($room <= 0) {
             return [$buffer, $retained, $dropped + \strlen($chunk)];
         }
@@ -734,8 +744,8 @@ final class Expect
             $retained += \strlen($chunk);
         } else {
             // The cap is a byte budget, so a raw substr at $room can tear a multi-byte
-            // sequence and leave a lone continuation byte in the transcript. Back the
-            // cut off to a codepoint boundary; the bytes given up are counted as dropped.
+            // sequence at the cap edge. Back the cut off to the start of that sequence;
+            // the bytes given up are counted as dropped, which refuses every later byte.
             $cut = self::utf8SafeByteCut($chunk, $room);
             $buffer .= \substr($chunk, 0, $cut);
             $retained += $cut;
@@ -746,12 +756,13 @@ final class Expect
     }
 
     /**
-     * Largest cut length at or below $room bytes that does not split a UTF-8
-     * codepoint. The chunk is valid UTF-8 from its first byte, so a sequence can
-     * only be torn at the tail: scan back up to three bytes for the lead, and if
-     * its declared length exceeds the bytes present, back the cut off before it.
-     * A whole sequence's lead sits four bytes back at most, so three steps cannot
-     * miss an incomplete one.
+     * Cut length at or below $room bytes that keeps the retained part a byte
+     * prefix of the chunk without tearing a codepoint at the cap edge. Only the
+     * tail is inspected: scan back up to three bytes for a lead byte, and if its
+     * declared length runs past the cut, back the cut off to just before it. A
+     * codepoint that ends exactly at the cut is kept whole. Nothing else is
+     * checked, so the prefix is not validated as UTF-8. The caller counts the
+     * backed-off bytes as dropped, and from then on every later byte is refused.
      */
     private static function utf8SafeByteCut(string $chunk, int $room): int
     {

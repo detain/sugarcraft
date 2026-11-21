@@ -300,11 +300,14 @@ It ends on the first of a regex match, a child exit, the window length, or the
 absolute wall `$deadline` (each read is clamped to it). Master EOF (`eof` is set)
 stops the reads; it ends the window only when no `$child` is passed, and with a
 child the window keeps waiting for that child's exit or a match, up to the window
-length and the deadline. An invalid regex throws `\InvalidArgumentException`. Bytes past
-`$maxBytes` are counted as dropped. A chunk that overruns the cap is cut so the cut
-itself never splits a multi-byte codepoint; a codepoint already torn at a chunk edge
-is retained as the child wrote it, so the transcript is a prefix of the stream, not
-validated UTF-8.
+length and the deadline. An invalid regex throws `\InvalidArgumentException`. The
+window transcript is a byte prefix of the child's stream: bytes are kept as the child
+wrote them, up to `$maxBytes`, and bytes past the cap are counted as dropped. A
+codepoint that fits whole within the cap is kept whole. A codepoint torn at the cap
+edge is cut back to its first byte, so the transcript stays a prefix, and after that
+cut every later byte is refused, in that window and in every later window handed the
+threaded totals. The transcript is not validated as UTF-8: a sequence the child tore
+itself, or one split by a read that ends exactly on the cap, is kept as written.
 
 ### `PtyPool` — a concurrency ceiling, not a handle cache
 
