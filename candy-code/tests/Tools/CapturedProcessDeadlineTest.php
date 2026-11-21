@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsShell;
+use SugarCraft\Code\Support\WindowsTaskKill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 
 /**
@@ -179,6 +181,102 @@ final class CapturedProcessDeadlineTest extends TestCase
         self::assertSame(0, $run['exitCode']);
         self::assertSame('done', $run['stdout']);
         self::assertGreaterThanOrEqual(0.95, $elapsed);
+    }
+
+    /**
+     * Windows has no process group, and ChildRun's ladder ends at proc_terminate(),
+     * which kills the direct child only. The tree kill must run from the kill seam,
+     * before the first signal, while the child still roots its tree, and its verdict
+     * is the group-kill claim. Driven through the seams on a POSIX host: the family
+     * reads Windows, no detach wrapper is offered (Windows has none), and the
+     * taskkill runner stands in for taskkill /T /F by SIGKILLing the pid it is given.
+     * The runner checks the pid is alive first, so a tree kill that came after the
+     * ladder had already killed and reaped the child would fail this test.
+     */
+    public function testOnWindowsATimedOutCommandHasItsTreeKilledBeforeTheLadder(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            self::markTestSkipped('the stand-in taskkill signals through posix_kill');
+        }
+
+        $calls = [];
+        $run = $this->asWindows(
+            static function (array $argv) use (&$calls): bool {
+                $calls[] = $argv;
+                $pid = (int) end($argv);
+
+                return $pid > 0 && posix_kill($pid, 0) && posix_kill($pid, 9);
+            },
+            static fn (): array => self::host()->capture('exec sleep 30', 0.3),
+        );
+
+        self::assertTrue($run['timedOut'], var_export($run, true));
+        self::assertSame(124, $run['exitCode']);
+        self::assertCount(1, $calls, 'the tree kill runs once per kill');
+        self::assertSame(['taskkill', '/T', '/F', '/PID'], array_slice($calls[0], 0, 4));
+        self::assertTrue($run['groupKilled'], 'a tree kill taskkill confirmed is the group-kill claim on Windows');
+    }
+
+    /** A taskkill that failed walked no tree, so the claim must not be made; the ladder still kills the child. */
+    public function testOnWindowsAFailedTreeKillIsNeverClaimed(): void
+    {
+        $calls = 0;
+        $start = microtime(true);
+        $run = $this->asWindows(
+            static function (array $argv) use (&$calls): bool {
+                $calls++;
+
+                return false;
+            },
+            static fn (): array => self::host()->capture('exec sleep 30', 0.3),
+        );
+
+        self::assertTrue($run['timedOut'], var_export($run, true));
+        self::assertSame(1, $calls);
+        self::assertFalse($run['groupKilled']);
+        self::assertLessThan(3.0, microtime(true) - $start, 'the ladder must still kill the child when taskkill fails');
+    }
+
+    /**
+     * The deadline kill runs on 0.5 s graces, as it did before ChildRun took the
+     * ladder over, not on ChildRun's 1 s defaults. The child ignores SIGTERM, so it
+     * lives through the whole TERM grace and dies to SIGKILL: about 0.8 s here,
+     * against at least 1.3 s at the defaults.
+     */
+    public function testTheDeadlineKillRunsOnHalfSecondGraces(): void
+    {
+        $start = microtime(true);
+        $run = self::host()->capture('trap "" TERM; exec sleep 30', 0.3);
+        $elapsed = microtime(true) - $start;
+
+        self::assertTrue($run['timedOut'], var_export($run, true));
+        self::assertGreaterThanOrEqual(0.7, $elapsed, 'a child that ignores SIGTERM must live through the TERM grace');
+        self::assertLessThan(1.25, $elapsed, 'the TERM rung waited the 1 s default instead of the 0.5 s deadline grace');
+    }
+
+    /**
+     * Runs $body with the host reading as Windows: the injectable family, no detach
+     * wrapper, no MSYS step, and $runner standing in for taskkill. Every seam is
+     * restored, whatever $body does.
+     *
+     * @param \Closure(list<string>): bool $runner
+     * @param \Closure(): array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    private function asWindows(\Closure $runner, \Closure $body): array
+    {
+        WindowsShell::setOsFamilyForTesting('Windows');
+        WindowsTaskKill::setMsysBashForTesting('');
+        WindowsTaskKill::setRunnerForTesting($runner);
+        ProcessContainment::setDetachedSpawnCandidatesForTesting([]);
+        try {
+            return $body();
+        } finally {
+            ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
+            WindowsTaskKill::setRunnerForTesting(null);
+            WindowsTaskKill::setMsysBashForTesting(null);
+            WindowsShell::setOsFamilyForTesting(null);
+        }
     }
 
     /**

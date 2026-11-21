@@ -123,4 +123,87 @@ final class ProcessOutputCaptureTest extends TestCase
             $this->assertStringContainsString('...', $r['stderr']);
         }
     }
+
+    /**
+     * A pipe failure (ChildRun's PIPE_FAILED) ends the read early and kills the
+     * child, and the exit code that comes back is the kill's. The result must say
+     * so on stderr, the tail every cap keeps, so the code is not read as the
+     * command's own answer. ChildRun cannot be made to fail its pipes on demand,
+     * so the mapping is driven with the result such a run returns.
+     */
+    public function testAPipeFailureIsNamedOnStderrAndNotPassedOffAsAnExit(): void
+    {
+        $map = new \ReflectionMethod(self::captureHost(), 'capturedResult');
+        $map->setAccessible(true);
+
+        $r = $map->invoke(null, new \SugarCraft\Async\ChildResult('partial out', "half a li", -1, \SugarCraft\Async\ChildResult::PIPE_FAILED, 5, 5), false);
+
+        $this->assertSame(-1, $r['exitCode'], 'the exit code stays the real outcome');
+        $this->assertFalse($r['timedOut']);
+        $this->assertSame('partial out', $r['stdout']);
+        $this->assertStringStartsWith("half a li\n[output capture failed:", $r['stderr']);
+        $this->assertStringContainsString('may be incomplete', $r['stderr']);
+        $this->assertFalse($r['stderrMidLine'], 'the note ends stderr on a whole line, so no repair may drop it');
+
+        $clean = $map->invoke(null, new \SugarCraft\Async\ChildResult('out', '', 0, \SugarCraft\Async\ChildResult::EXITED, 0), false);
+        $this->assertSame('', $clean['stderr'], 'an ordinary exit carries no note');
+    }
+
+    /**
+     * The empty-command refusal says what is true of it: the command was empty.
+     * The process-limit hint belongs to a spawn the system refused, and here it
+     * would point at the wrong cause. With no detach wrapper an empty string
+     * reaches ChildRun as-is and is refused before any spawn.
+     */
+    public function testAnEmptyCommandIsRefusedWithoutTheProcessLimitHint(): void
+    {
+        \SugarCraft\Code\Support\ProcessContainment::setDetachedSpawnCandidatesForTesting([]);
+        try {
+            $r = self::captureHost()->capture('', null);
+        } finally {
+            \SugarCraft\Code\Support\ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
+        }
+
+        $this->assertSame(127, $r['exitCode']);
+        $this->assertStringContainsString('the command is empty', $r['stderr']);
+        $this->assertStringNotContainsString('ulimit', $r['stderr']);
+        $this->assertStringNotContainsString('not a problem with the command text', $r['stderr']);
+    }
+
+    /** An unreadable stdin file is the request's problem, not the system's: no process-limit hint. */
+    public function testAnUnreadableStdinFileIsRefusedWithoutTheProcessLimitHint(): void
+    {
+        $missing = sys_get_temp_dir() . '/candy-code-no-such-stdin-' . bin2hex(random_bytes(6));
+        $r = self::captureHost()->capture('cat', null, $missing);
+
+        $this->assertSame(127, $r['exitCode']);
+        $this->assertStringContainsString('could not be read', $r['stderr']);
+        $this->assertStringNotContainsString('ulimit', $r['stderr']);
+    }
+
+    /** A spawn the system refused keeps the process-limit hint. */
+    public function testASystemSpawnRefusalKeepsTheProcessLimitHint(): void
+    {
+        $refuse = new \ReflectionMethod(self::captureHost(), 'spawnRefused');
+        $refuse->setAccessible(true);
+
+        $r = $refuse->invoke(null, 'true', 'proc_open() failed', 'fork: Resource temporarily unavailable', true);
+
+        $this->assertSame(127, $r['exitCode']);
+        $this->assertStringContainsString('proc_open() failed (fork: Resource temporarily unavailable)', $r['stderr']);
+        $this->assertStringContainsString('ulimit -u', $r['stderr']);
+    }
+
+    private static function captureHost(): object
+    {
+        return new class {
+            use \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
+
+            /** @param string|list<string> $command @return array<string,mixed> */
+            public function capture(string|array $command, ?string $cwd, ?string $stdinFile = null): array
+            {
+                return $this->runCaptured($command, $cwd, stdinFile: $stdinFile);
+            }
+        };
+    }
 }

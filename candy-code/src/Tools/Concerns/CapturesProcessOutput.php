@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\Concerns;
 
+use SugarCraft\Async\ChildResult;
 use SugarCraft\Async\ChildRun;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
 use SugarCraft\Code\Support\WindowsShell;
+use SugarCraft\Code\Support\WindowsTaskKill;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -127,6 +129,25 @@ trait CapturesProcessOutput
     private const WAIT_BEAT_SECONDS = 0.2;
 
     /**
+     * Grace budgets for the deadline kill's 15→9 ladder: StatusLineCommand's
+     * 0.5 s each rather than the reaper's 1 s defaults, because the caller
+     * that set a deadline has already spent its patience. The ladder is the
+     * tail of that budget, not a second one of the same size.
+     */
+    private const DEADLINE_TERMINATE_GRACE_SECONDS = 0.5;
+    private const DEADLINE_KILL_GRACE_SECONDS = 0.5;
+
+    /**
+     * Appended to stderr when ChildRun stopped reading because the pipes failed
+     * (stream_select() kept failing). Without it the result is a bare exit code
+     * from the kill, which reads as the command's own answer.
+     */
+    private const PIPE_FAILED_NOTE =
+        '[output capture failed: reading the command\'s output kept failing, so the capture stopped early '
+        . 'and the command was killed if it was still running; the output above may be incomplete, '
+        . 'and the exit code may be the kill\'s rather than the command\'s own]';
+
+    /**
      * $maxBytes bounds what is RETAINED per stream, not what is read: ChildRun
      * drains the pipes to completion so the child never blocks on a full buffer,
      * but bytes past the bound are counted and discarded instead of accumulated.
@@ -168,6 +189,16 @@ trait CapturesProcessOutput
      * led was measured empty after the kill. A child that was not started behind a
      * containment wrapper leads no group of its own, so it is never true for one.
      * A kill that could not be confirmed is never narrated as one (ISS-014).
+     *
+     * Windows has no process group, and ChildRun's ladder ends at proc_terminate(),
+     * which kills only the direct child. There the kill seam walks the child's tree
+     * with {@see WindowsTaskKill::tree()} before the ladder's first signal, while
+     * the child still roots the tree, and `groupKilled` is taskkill's own verdict.
+     * The deadline kill runs on 0.5 s graces, not ChildRun's 1 s defaults.
+     *
+     * A pipe failure (ChildRun's PIPE_FAILED: stream_select() kept failing) ends
+     * the read early and kills the child. The result then carries a note on stderr
+     * saying the capture failed, so the exit code is not read as the command's own.
      *
      * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
      * wins over the inherited environment — and over the credential scrub,
@@ -232,7 +263,7 @@ trait CapturesProcessOutput
         try {
             $run = \is_array($spec) ? ChildRun::new(array_values($spec)) : ChildRun::commandLine($spec);
         } catch (\InvalidArgumentException $refused) {
-            return self::spawnRefused($command, 'the command text is empty', null);
+            return self::spawnRefused($command, 'the command is empty, so there was nothing to run', null);
         }
 
         // The spawn, the pumps, the deadline and the kill ladder are ChildRun's. A
@@ -251,6 +282,7 @@ trait CapturesProcessOutput
             ->withMaxBytes($maxBytes === null || $maxBytes <= 0 ? self::DEFAULT_RETAINED_BYTES : $maxBytes)
             ->withTimeout($timeoutSeconds === null ? self::UNBOUNDED_TIMEOUT_SECONDS : max(self::MINIMUM_TIMEOUT_SECONDS, $timeoutSeconds))
             ->withExitGrace(null)
+            ->withKillGrace(self::DEADLINE_TERMINATE_GRACE_SECONDS, self::DEADLINE_KILL_GRACE_SECONDS)
             ->withGroupLeader($leadsGroup)
             ->withStdin($stdin)
             ->withOnSpawn(static function (int $pid) use (&$started, &$groupPid, $leadsGroup): void {
@@ -268,6 +300,15 @@ trait CapturesProcessOutput
         if ($onWait !== null) {
             $run = $run->withHeartbeat(self::WAIT_BEAT_SECONDS, $onWait);
         }
+        // Windows: no group to signal, and proc_terminate() reaches the direct child
+        // only. The tree is walked from the kill seam, before the ladder's first
+        // signal, because taskkill /T needs the root alive to find its descendants.
+        $treeKilled = false;
+        if (WindowsShell::isWindows()) {
+            $run = $run->withOnKill(static function (int $pid) use (&$treeKilled): void {
+                $treeKilled = WindowsTaskKill::tree($pid);
+            });
+        }
 
         // ChildRun raises RuntimeException for a refused spawn only. Once the child
         // has started, a throw is a caller's own (a callback), and it must reach
@@ -280,24 +321,47 @@ trait CapturesProcessOutput
                 throw $failure;
             }
 
-            return self::spawnRefused($command, 'proc_open() failed', error_get_last()['message'] ?? null);
+            return self::spawnRefused($command, 'proc_open() failed', error_get_last()['message'] ?? null, true);
         }
 
+        // ChildRun's ladder reports whether it reaped the child, not whether the group
+        // it signalled is empty, so the group is measured now. A kill that left a
+        // member alive is never narrated as a group kill (ISS-014). On Windows the
+        // verdict is taskkill's, from the kill seam above.
+        $groupKilled = $r->timedOut()
+            && (($groupPid !== null && BoundedShutdown::groupEmpty($groupPid)) || $treeKilled);
+
+        return self::capturedResult($r, $groupKilled);
+    }
+
+    /**
+     * runCaptured()'s answer for a run ChildRun finished: the streams, the exit, the
+     * per-stream drops, and the pipe-failure note when the read failed.
+     *
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
+     */
+    private static function capturedResult(ChildResult $r, bool $groupKilled): array
+    {
         $timedOut = $r->timedOut();
         $stdoutDropped = $r->droppedBytes - $r->droppedStderrBytes;
         $stderrDropped = $r->droppedStderrBytes;
 
-        // ChildRun's ladder reports whether it reaped the child, not whether the group
-        // it signalled is empty, so the group is measured now. A kill that left a
-        // member alive is never narrated as a group kill (ISS-014).
-        $groupKilled = $timedOut && $groupPid !== null && BoundedShutdown::groupEmpty($groupPid);
+        // The note goes on stderr, the tail the presentation layer keeps under any
+        // cap. It ends the stream on a whole line, so a cap that cut stderr mid-line
+        // no longer marks its end for repair: the repair would drop the note.
+        $stderr = rtrim($r->stderr, "\n");
+        $stderrMidLine = $stderrDropped > 0 && !str_ends_with($r->stderr, "\n");
+        if ($r->status === ChildResult::PIPE_FAILED) {
+            $stderr .= ($stderr === '' ? '' : "\n") . self::PIPE_FAILED_NOTE;
+            $stderrMidLine = false;
+        }
 
         // Decided BEFORE the rtrim: a stream that lost bytes but happened to
         // stop on a newline is intact, and repairing it anyway would throw
         // away a complete line for nothing.
         return [
             'stdout' => rtrim($r->stdout, "\n"),
-            'stderr' => rtrim($r->stderr, "\n"),
+            'stderr' => $stderr,
             // A signal death reads -1 from ChildRun's poll, which is not the number the
             // result reports: the signal is, as proc_close() gives it on an unpolled child.
             'exitCode' => $timedOut ? 124 : ($r->signal ?? $r->exitCode ?? -1),
@@ -305,7 +369,7 @@ trait CapturesProcessOutput
             'stdoutDropped' => $stdoutDropped,
             'stderrDropped' => $stderrDropped,
             'stdoutMidLine' => $stdoutDropped > 0 && !str_ends_with($r->stdout, "\n"),
-            'stderrMidLine' => $stderrDropped > 0 && !str_ends_with($r->stderr, "\n"),
+            'stderrMidLine' => $stderrMidLine,
             'timedOut' => $timedOut,
             'groupKilled' => $groupKilled,
         ];
@@ -316,19 +380,27 @@ trait CapturesProcessOutput
      * reason on stderr. The run was never started, so nothing ran and nothing
      * was read.
      *
+     * $systemFailure marks a spawn the system refused (proc_open() failed), and
+     * only that case carries the process-limit hint. An empty command or an
+     * unreadable stdin file is a problem with the request, and the hint would
+     * point the reader at the wrong cause.
+     *
      * @param string|list<string> $command
      * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
      */
-    private static function spawnRefused(string|array $command, string $why, ?string $cause): array
+    private static function spawnRefused(string|array $command, string $why, ?string $cause, bool $systemFailure = false): array
     {
         $text = \is_array($command) ? implode(' ', $command) : $command;
         $shown = strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
 
         return [
             'stdout' => '',
-            'stderr' => 'Could not start the command ' . $shown . ' — ' . $why
+            'stderr' => 'Could not start the command' . ($shown === '' ? '' : ' ' . $shown) . ' — ' . $why
                 . ($cause === null ? '' : ' (' . $cause . ')')
-                . '; the command was never run. This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.',
+                . '; the command was never run.'
+                . ($systemFailure
+                    ? ' This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.'
+                    : ''),
             'exitCode' => 127,
             'truncatedBytes' => 0,
             'stdoutDropped' => 0,
