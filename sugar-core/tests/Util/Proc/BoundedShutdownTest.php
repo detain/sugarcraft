@@ -1140,4 +1140,189 @@ final class BoundedShutdownTest extends TestCase
 
         self::assertNull($answer, 'a consumed or absent handle answers null synchronously, like the sync contract');
     }
+
+    // The rows below moved here from candy-code when its ProcessReaper copy of
+    // this ladder was deleted (P1-9c-cc1). Each pins a claim that copy's tests
+    // made and that no row above already made against this class.
+
+    public function testEscalateFiresTheHookStrictlyBetweenTheRungs(): void
+    {
+        $seen = [];
+
+        $gone = BoundedShutdown::escalate(
+            static function (int $signal) use (&$seen): void {
+                $seen[] = $signal;
+            },
+            static function () use (&$seen): bool {
+                return \count($seen) >= 3;
+            },
+            0.05,
+            0.05,
+            static function () use (&$seen): void {
+                $seen[] = 'escalate';
+            },
+        );
+
+        self::assertSame([15, 'escalate', 9], $seen, 'the rungs changed order, or the notice left its place between them');
+        self::assertTrue($gone, 'a child gone after the kill rung must be reported as gone');
+    }
+
+    public function testEscalateNeverSendsNineToAChildThatTermEndsGone(): void
+    {
+        $seen = [];
+
+        $gone = BoundedShutdown::escalate(
+            static function (int $signal) use (&$seen): void {
+                $seen[] = $signal;
+            },
+            static fn (): bool => true,
+            0.05,
+            0.05,
+            static function () use (&$seen): void {
+                $seen[] = 'escalate';
+            },
+        );
+
+        self::assertSame([15], $seen, 'signal 9 (or its notice) fired for a child that honored SIGTERM');
+        self::assertTrue($gone);
+    }
+
+    public function testEscalateSpendsBothBudgetsBeforeReportingAnUnkillableChild(): void
+    {
+        $seen = [];
+        $started = \hrtime(true);
+
+        $gone = BoundedShutdown::escalate(
+            static function (int $signal) use (&$seen): void {
+                $seen[] = $signal;
+            },
+            static fn (): bool => false,
+            0.05,
+            0.05,
+        );
+        $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertSame([15, 9], $seen, 'the two-rung sequence did not complete');
+        self::assertFalse($gone, 'a never-gone child must be reported honestly');
+        self::assertGreaterThanOrEqual(0.09, $elapsedSeconds, 'a rung budget was skipped');
+        self::assertLessThan(2.0, $elapsedSeconds, 'the ladder is not bounded any more');
+    }
+
+    public function testTheDefaultRungBudgetsAreTheClassConstants(): void
+    {
+        $parameters = (new \ReflectionMethod(BoundedShutdown::class, 'escalate'))->getParameters();
+
+        self::assertSame(
+            BoundedShutdown::TERMINATE_GRACE_SECONDS,
+            $parameters[2]->getDefaultValue(),
+            'the TERM rung drifted off its documented budget',
+        );
+        self::assertSame(
+            BoundedShutdown::KILL_GRACE_SECONDS,
+            $parameters[3]->getDefaultValue(),
+            'the KILL rung drifted off its documented budget',
+        );
+    }
+
+    public function testTerminateAndAwaitExitSpendsTheDefaultTermBudgetOnARealTermIgnoringChild(): void
+    {
+        // The trap must be in effect BEFORE the ladder starts: a TERM that lands
+        // in the exec-to-trap window kills a trap-less sh at its default
+        // disposition and the ladder no-ops, testing nothing. The ready file is
+        // the handshake, written strictly after `trap`.
+        $ready = \tempnam(\sys_get_temp_dir(), 'bounded-term-ignorer-');
+        self::assertNotFalse($ready, 'could not create the readiness file');
+
+        try {
+            $process = $this->spawn([
+                '/bin/sh',
+                '-c',
+                'trap "" TERM; echo ready > "$0"; while :; do sleep 0.05; done',
+                $ready,
+            ]);
+
+            $deadline = \hrtime(true) / 1_000_000_000 + 5.0;
+            while (\trim((string) @\file_get_contents($ready)) !== 'ready' && \hrtime(true) / 1_000_000_000 < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertSame('ready', \trim((string) @\file_get_contents($ready)), 'the TERM-ignoring child never armed its trap');
+
+            $started = \hrtime(true);
+            $gone = BoundedShutdown::terminateAndAwaitExit($process);
+            $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+            self::assertTrue($gone, 'the KILL rung did not land');
+            self::assertGreaterThanOrEqual(
+                BoundedShutdown::TERMINATE_GRACE_SECONDS * 0.9,
+                $elapsedSeconds,
+                'the TERM budget was not actually spent before the KILL rung',
+            );
+            self::assertLessThan(4.0, $elapsedSeconds, 'the ladder exceeded both documented budgets');
+            self::assertFalse(\proc_get_status($process)['running']);
+        } finally {
+            @\unlink($ready);
+        }
+    }
+
+    public function testTerminateBoundedAsyncReportsASignalDeathAsTheSentinel(): void
+    {
+        $process = $this->spawn(['sleep', '30']);
+        \proc_terminate($process, 9);
+        \usleep(200_000);
+
+        $status = 'unset';
+        BoundedShutdown::terminateBoundedAsync(
+            new StreamSelectLoop(),
+            $process,
+            static function (?int $reaped) use (&$status): void {
+                $status = $reaped;
+            },
+        );
+
+        self::assertSame(-1, $status, 'the async path must report a polled signal death as the -1 sentinel, like the sync one');
+    }
+
+    public function testReapWhenExitedDeliversTheExitCodeOfAChildThatExitsWhileTheLoopRuns(): void
+    {
+        $process = $this->spawn(['/bin/sh', '-c', 'sleep 0.4; exit 3']);
+        $loop = new StreamSelectLoop();
+        $status = null;
+        $settled = false;
+        $ticks = 0;
+
+        $started = \hrtime(true);
+        BoundedShutdown::reapWhenExited($loop, $process, static function (?int $code) use (&$status, &$settled, $loop): void {
+            $status = $code;
+            $settled = true;
+            $loop->stop();
+        });
+        $callSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertFalse($settled, 'the reap answered synchronously while the child was still running');
+        self::assertLessThan(0.2, $callSeconds, 'reapWhenExited() blocked the caller');
+
+        $loop->addPeriodicTimer(0.02, static function () use (&$ticks): void {
+            ++$ticks;
+        });
+        $bound = $loop->addTimer(5.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($bound);
+
+        self::assertTrue($settled, 'the reap never settled');
+        self::assertSame(3, $status, 'the status the child exited with was not reported');
+        self::assertGreaterThanOrEqual(3, $ticks, 'the loop did not keep ticking while the child ran');
+        self::assertFalse(\is_resource($process), 'the handle was not released once the child was reaped');
+    }
+
+    public function testGraceDeadlinesMeasureOnAMonotonicClock(): void
+    {
+        // A wall-clock step (NTP) must not stretch or cut the TERM/KILL window.
+        // A live clock step cannot be staged in a test, so the source is the guard.
+        $source = (string) \file_get_contents(\dirname(__DIR__, 3) . '/src/Util/Proc/BoundedShutdown.php');
+
+        self::assertStringNotContainsString('microtime(', $source);
+        self::assertStringContainsString('hrtime(true)', $source);
+    }
 }
