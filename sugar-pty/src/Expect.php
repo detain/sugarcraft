@@ -545,8 +545,9 @@ final class Expect
      *
      * The byte budget is session-wide. Pass the running `$retained` and `$dropped`
      * totals in and thread the returned ones into the next window. Bytes past the
-     * cap are counted as dropped, never silently lost, and a multi-byte codepoint
-     * is never split at the cap edge.
+     * cap are counted as dropped, never silently lost. A chunk that overruns the
+     * cap is cut at a codepoint boundary, so a multi-byte codepoint is never split
+     * by the cut itself.
      *
      * @param float         $windowSeconds Window length from now, in seconds.
      * @param float         $deadline      Absolute wall deadline, as microtime(true).
@@ -665,23 +666,9 @@ final class Expect
             return [$buffer, $retained, $dropped];
         }
 
-        // An earlier cut may have dropped the lead of a codepoint whose tail now
-        // opens this chunk. Once the buffer ends on a whole codepoint, a continuation
-        // run at the head of the chunk has no lead left to join, so it is given up.
-        if ($buffer !== '' && self::utf8SafeByteCut($buffer, \strlen($buffer)) === \strlen($buffer)) {
-            $orphans = 0;
-            while ($orphans < 3 && $orphans < \strlen($chunk) && (\ord($chunk[$orphans]) & 0xc0) === 0x80) {
-                $orphans++;
-            }
-            if ($orphans > 0) {
-                $chunk = \substr($chunk, $orphans);
-                $dropped += $orphans;
-                if ($chunk === '') {
-                    return [$buffer, $retained, $dropped];
-                }
-            }
-        }
-
+        // Only the cap refuses bytes: a continuation run at the head of a chunk is
+        // retained like any other byte, so `dropped` keeps meaning "refused by the cap"
+        // and the transcript matches PtyDriver::retain byte for byte.
         $room = $cap - $retained;
         if ($room <= 0) {
             return [$buffer, $retained, $dropped + \strlen($chunk)];
@@ -698,18 +685,6 @@ final class Expect
             $buffer .= \substr($chunk, 0, $cut);
             $retained += $cut;
             $dropped += \strlen($chunk) - $cut;
-        }
-
-        // Once the cap is reached nothing more is retained, so a trailing sequence
-        // that is still incomplete would stay torn for good. Give those bytes back.
-        if ($retained === $cap) {
-            $safe = self::utf8SafeByteCut($buffer, \strlen($buffer));
-            $torn = \strlen($buffer) - $safe;
-            if ($torn > 0) {
-                $buffer = \substr($buffer, 0, $safe);
-                $retained -= $torn;
-                $dropped += $torn;
-            }
         }
 
         return [$buffer, $retained, $dropped];

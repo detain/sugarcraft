@@ -294,7 +294,8 @@ result row. It returns an `ExpectWindow` (`output`, `matched`, `childExited`,
 `wallHit`, and the session `retained`/`dropped` totals to thread into the next
 window). It ends on the first of a regex match, a child exit, the window length,
 or the absolute wall `$deadline` (each read is clamped to it). Bytes past
-`$maxBytes` are counted as dropped, and the cut never splits a UTF-8 codepoint.
+`$maxBytes` are counted as dropped, and a chunk that overruns the cap is cut at a
+UTF-8 codepoint boundary.
 
 ### `PtyPool` — a concurrency ceiling, not a handle cache
 

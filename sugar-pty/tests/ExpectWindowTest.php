@@ -257,30 +257,55 @@ final class ExpectWindowTest extends TestCase
         self::assertSame(3, $result->dropped);
     }
 
-    public function testAnIncompleteGlyphAtTheCapEdgeIsNotRetainedAcrossChunks(): void
+    public function testATornGlyphThatFillsTheCapIsRetainedAsAPrefixOfTheStream(): void
     {
-        // The first read ends mid-glyph and fills the cap exactly. Nothing can
-        // complete the sequence once the cap is reached, so it must not be kept.
+        // The first read ends mid-glyph and fills the cap exactly. It fits whole, so
+        // it is retained as read; the second read is refused in full. The transcript
+        // stays a prefix of the child's stream and never gains bytes it did not emit.
         $result = Expect::on(self::master(["ab\xE4\xBD", "\xA0cd"]))
             ->collectWindow(0.2, self::farDeadline(), 4);
 
-        self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'), 'the retained output must be valid UTF-8');
-        self::assertSame('abcd', $result->output);
+        self::assertSame("ab\xE4\xBD", $result->output);
         self::assertSame(4, $result->retained);
-        self::assertSame(3, $result->dropped, 'the three bytes of the glyph are counted as dropped');
+        self::assertSame(3, $result->dropped, 'the three bytes refused by the cap are counted as dropped');
     }
 
-    public function testAContinuationRunAfterACutIsNotRetained(): void
+    public function testNothingIsSplicedAfterATornTailAtTheCap(): void
     {
-        // The cut at 'abc' leaves a codepoint's lead behind; the next read opens with
-        // its tail, which must be given up rather than retained as a lone byte.
+        // 'abc' + the lead of 你 fills the cap of 4. The tail of 你 and what follows
+        // are refused by the cap, so the transcript cannot read 'abcX' with an 'X'
+        // that never followed 'abc' in the stream.
+        $result = Expect::on(self::master(["abc\xE4", "\xBD\xA0XYZ"]))
+            ->collectWindow(0.2, self::farDeadline(), 4);
+
+        self::assertSame("abc\xE4", $result->output);
+        self::assertSame(4, $result->retained);
+        self::assertSame(5, $result->dropped);
+    }
+
+    public function testAContinuationRunAfterACutIsCountedOnlyAgainstTheCap(): void
+    {
+        // The cut at 'abc' leaves a codepoint's lead behind. The next read opens with
+        // its tail; it is retained like any other byte while room remains, because
+        // only the cap refuses bytes. The 'xyz' past the room is refused.
         $result = Expect::on(self::master(["abc\xE4\xBD", "\xA0xyz"]))
             ->collectWindow(0.2, self::farDeadline(), 4);
 
-        self::assertTrue(\mb_check_encoding($result->output, 'UTF-8'), 'the retained output must be valid UTF-8');
-        self::assertSame('abcx', $result->output);
+        self::assertSame("abc\xA0", $result->output);
         self::assertSame(4, $result->retained);
-        self::assertSame(5, $result->dropped);
+        self::assertSame(5, $result->dropped, 'two bytes cut at the codepoint boundary and three past the cap');
+    }
+
+    public function testAStrayContinuationByteUnderTheCapIsRetained(): void
+    {
+        // A continuation byte with no lead, well under the cap, is the child's own
+        // output. Retaining it keeps `dropped` meaning "refused by the cap" only.
+        $result = Expect::on(self::master(['ok', "\x80"]))
+            ->collectWindow(0.2, self::farDeadline(), 100);
+
+        self::assertSame("ok\x80", $result->output);
+        self::assertSame(3, $result->retained);
+        self::assertSame(0, $result->dropped, 'no byte was refused by the cap');
     }
 
     // ------------------------------------------------------------ match verdict
