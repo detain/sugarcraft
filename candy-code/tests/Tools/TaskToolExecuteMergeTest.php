@@ -513,6 +513,48 @@ final class TaskToolExecuteMergeTest extends TestCase
     }
 
     /**
+     * The other outside-the-turn throw a forked skill can meet: its suspension
+     * store. Every run is saved before it settles, and TaskTool::suspend()
+     * absorbs only a RuntimeException from the store, so any other throwable
+     * from that write escapes the run. SuspendedDelegations is final, so the
+     * store is rooted at a path holding a NUL byte: its save() then throws a
+     * ValueError from the filesystem layer. The row must still end FAILED
+     * with an end of span, out of liveRuns(), and its card off RUNNING.
+     */
+    public function testASuspensionStoreThrowInAForkedSkillLeavesTheRowTerminal(): void
+    {
+        $session = 'merge-' . bin2hex(random_bytes(5));
+        $manager = self::sessionManager([]);
+        $task = (new TaskTool($manager, suspended: new SuspendedDelegations($this->storeDir . "\0unsaveable")))
+            ->withEngine(EngineBackend::new(new ScriptedProvider([new CompleteResponse(content: 'reported')]), 'm')->withSessionId($session));
+        $skillTool = (new SkillTool($this->forkSkillRegistry()))->withForkDelegate($task);
+
+        $caught = null;
+        try {
+            $skillTool->execute(['name' => 'fork-check', 'id' => 'skill-call']);
+        } catch (\ValueError $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'the store failure must still reach the SkillTool caller');
+
+        $runs = $manager->runs();
+        $this->assertCount(1, $runs, 'the fork ran as a delegation on the session manager');
+        $row = $runs[0];
+        $this->assertSame('checker', $row->agent->name);
+        $this->assertSame(SubAgent::STATUS_FAILED, $row->status, 'the save precedes the settle, so the run had not settled');
+        $this->assertSame($caught->getMessage(), $row->error);
+        $this->assertNotNull($row->completedAt, 'a terminal row has an end of span, so elapsed time stops counting');
+        $this->assertFalse($row->isRunning());
+        $this->assertSame([], $manager->liveRuns(), 'a dead forked run is not listed as live');
+
+        $cards = AgentRunCards::runs($session);
+        $this->assertCount(1, $cards, 'the forked run recorded its card before the throw');
+        $this->assertSame($row->id, $cards[0]['runId']);
+        $this->assertSame(SubAgentActivity::OUTCOME_FAILED, $cards[0]['status']);
+        $this->assertSame(SubAgentActivity::OUTCOME_FAILED, AgentRunCards::statusOf($cards[0]), 'a live pid no longer reads the dead run as running');
+    }
+
+    /**
      * @return array<string, string>
      */
     private static function delegation(): array
