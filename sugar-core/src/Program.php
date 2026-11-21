@@ -646,7 +646,8 @@ final class Program
             $this->writer->attach($this->loop);
             // Initial size + env + colour-profile + init Cmd. Each
             // honours the matching ProgramOptions override when set —
-            // unset falls back to the live tty / getenv() / detect().
+            // unset falls back to the live tty / getenv() / detectTerminal(), so a
+            // dumb TERM reaches the startup message as NoTty, not Ascii.
             $size = $this->options->windowSize ?? $this->tty->size();
             $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
             $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
