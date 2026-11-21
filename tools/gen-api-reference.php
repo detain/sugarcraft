@@ -20,8 +20,11 @@ declare(strict_types=1);
  * outside the tree has no source here, so its methods are not listed.
  *
  * WHAT IT WRITES. Namespace headings, then one entry per type with its first
- * PHPDoc paragraph and a method table (signature and summary). The output is
- * marked GENERATED in its first line and must never be hand-edited.
+ * PHPDoc paragraph and a method table (signature and summary). A lib named in
+ * ROWS_IN_NAMESPACE or TOP_TYPES_LISTED trims its page instead: a type outside
+ * those rows is replaced by a per-sub-namespace count line, so one entry per
+ * type holds only for a lib in neither list (see those constants' docblocks).
+ * The output is marked GENERATED in its first line and must never be hand-edited.
  *
  * TWO SOURCES FOR THE TYPE LIST. The token parser builds the entries, and a
  * line-anchored scan of the same files counts the declarations. collect()
