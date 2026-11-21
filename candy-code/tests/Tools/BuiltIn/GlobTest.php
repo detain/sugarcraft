@@ -403,9 +403,11 @@ final class GlobTest extends TestCase
     /**
      * Owner ruling A (2026-11-20): a zero cap takes the 8 MiB capture ceiling
      * rather than disabling truncation. Four short paths sit far below that
-     * ceiling, so the whole list comes back with no marker.
+     * ceiling, so the whole list comes back with no marker. This holds under
+     * either reading; the pin that tells the 8 MiB ceiling from no cap is
+     * testAZeroCapClipsAListThatOverrunsTheCaptureCeiling below.
      */
-    public function testAZeroCapTakesTheCaptureCeilingNotNoCap(): void
+    public function testAZeroCapReturnsAListUnderTheCaptureCeilingWhole(): void
     {
         $result = (new Glob(maxOutputBytes: 0, maxMatches: 0))->execute([
             'pattern' => '**/*.php',

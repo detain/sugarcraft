@@ -271,8 +271,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * exactly such lines.
      *
      * The byte figure is READ OFF $maxOutputBytes rather than written out,
-     * because a caller that raised or disabled the cap would otherwise be
-     * advertising a number that is not its own.
+     * because a caller that raised the cap, or set a zero one (which takes the
+     * 8 MiB ceiling), would otherwise be advertising a number that is not its own.
      */
     public function description(): string
     {

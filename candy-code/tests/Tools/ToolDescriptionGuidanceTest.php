@@ -171,9 +171,9 @@ final class ToolDescriptionGuidanceTest extends TestCase
     }
 
     /**
-     * A caller that disabled the cap must not advertise an unbounded result:
-     * capture still stops each stream at the 8 MiB ceiling, and the model has
-     * to be told that overflow makes the answer PARTIAL.
+     * A caller that set a zero cap must not advertise an unbounded result: a
+     * zero cap takes the 8 MiB ceiling, capture stops each stream there, and
+     * the model has to be told that overflow makes the answer PARTIAL.
      */
     public function testBashDescriptionNamesTheCaptureCeilingWhenTheCapIsDisabled(): void
     {
