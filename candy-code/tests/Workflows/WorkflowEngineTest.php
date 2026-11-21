@@ -1053,10 +1053,10 @@ final class WorkflowEngineTest extends TestCase
 
     /**
      * The gate has to reach the SubAgent itself: {@see
-     * \SugarCraft\Code\Agents\AgentManager::evaluateToolCalls()} returns
-     * immediately when `$subAgent->permissionGate` is null, so a workflow-spawned
-     * sub-agent built without one is unconditionally ungated at whatever layer
-     * eventually runs its calls — regardless of what the launch configured.
+     * \SugarCraft\Code\Agents\EngineExecutor::run()} hands
+     * `$subAgent->permissionGate` to SubAgentGrantHook as the stage preset's
+     * mode gate, so a workflow-spawned sub-agent built without one loses its
+     * preset's stricter mode — regardless of what the launch configured.
      */
     public function testEveryDispatchedSubAgentCarriesTheEnginesPermissionGate(): void
     {

@@ -324,9 +324,9 @@ final class TransientFailureTest extends TestCase
 
     public function testAPermissionDenialRaisedInsideTheStreamLoopIsNotTransient(): void
     {
-        // AgentManager::evaluateToolCalls() throws from inside the very foreach
-        // the retry wraps. This is the case that makes the allow-list an
-        // allow-list: a deny-list would have retried a denied tool call.
+        // A permission denial raised inside the stream loop must not be
+        // retried. This is the case that makes the allow-list an allow-list:
+        // a deny-list would retry a denied tool call.
         $this->assertFalse(TransientFailure::isTransient(
             new \RuntimeException('SubAgent tool call denied by permission gate: Bash'),
         ));

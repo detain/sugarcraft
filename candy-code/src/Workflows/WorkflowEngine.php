@@ -594,19 +594,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        workflow can be authored by a cloned repository and an
      *        over-claimed gate is worse than an absent one:
      *
-     *        1. Every {@see SubAgent} this engine builds carries it, so the
-     *           field holds this launch's policy rather than the `null` every
-     *           workflow-spawned sub-agent used to be built with. Read as a
-     *           correct value, not as enforcement: the only code that reads
-     *           `SubAgent::$permissionGate` is the Task path
-     *           ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}, which hands
-     *           it to {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}
-     *           as the preset's mode gate), and this engine never enters it —
-     *           every dispatch here goes through
-     *           `AgentWorkerPool::executeOne()` or `executeAll()`, and the
-     *           manager's `executeAll()` drains the pool without touching the
-     *           field. That is precisely why item 2 and not item 1 is the
-     *           enforcement.
+     *        1. Every {@see SubAgent} this engine builds carries it — or, for
+     *           a stage whose preset declares a STRICTER mode, the narrowed
+     *           gate {@see stageGate()} builds — so the field holds this
+     *           launch's policy rather than the `null` every workflow-spawned
+     *           sub-agent used to be built with. The field IS enforcement on
+     *           the forked path: when the pool runs a stage through
+     *           {@see \SugarCraft\Code\Agents\EngineExecutor} (the
+     *           `forkedExecutor` {@see \SugarCraft\Code\Cli\WorkflowEngineWiring}
+     *           installs whenever a worker provider is configured),
+     *           `EngineExecutor::run()` hands `SubAgent::$permissionGate` to
+     *           {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} as the
+     *           preset's mode gate, and `AskFreeGrant::askRisk()` reads it
+     *           too — exactly as {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}
+     *           does for `Task`. Dropping the {@see stageGate()} population
+     *           therefore drops the preset-declared stricter mode (P1-6) for
+     *           every forked stage. On the paths that do not run a stage
+     *           through `EngineExecutor` the field is carried but unread, which
+     *           is why item 2 exists as well.
      *        2. Before any stage is dispatched — and, since a stage 5 refusal
      *           must not cost four stages of real work, before the FIRST stage
      *           of the run at all ({@see firstDeclarationRefusal()}) — every

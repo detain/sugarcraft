@@ -582,18 +582,9 @@ final readonly class Agent
      * prompt was null, which after lane D means the registry had nothing to
      * list. Nothing else about this method changed.
      *
-     * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT - CORRECTED IN
-     * PLACE (prompt_plan.md section 16.8 rule 42), because the first revision
-     * of this paragraph was FALSE and it was the step's headline claim.
-     *
-     * WHAT IT USED TO SAY: that the suppression "needs a caller that renders
-     * this prompt more than once for one conversation. No caller does" - i.e.
-     * that THERE IS NO PER-STEP SEAM ON THIS PATH AT ALL, every one of the
-     * eight call sites being once-per-dispatch.
-     *
-     * WHAT IS TRUE NOW: there IS a repeated-render seam, and it is in
-     * `Workflows/WorkflowEngine.php`. Re-derived over this tree rather than
-     * reasoned about:
+     * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT: there IS a
+     * repeated-render seam, and it is in `Workflows/WorkflowEngine.php`.
+     * Re-derived over this tree rather than reasoned about:
      *
      *   - `WorkflowEngine::executePipelineStage()`'s `foreach ($nestedStages as $nestedStage)`
      *     encloses that stage's `CompleteRequest` render - ONE RENDER PER NESTED
@@ -646,10 +637,8 @@ final readonly class Agent
      *
      * WHY THE DISPOSITION STILL STANDS. The seam is real and it is still not
      * wireable here, and reason 1 - declared scope - is the one the
-     * disposition rests on. Reason 2 is a narrower fact than an earlier
-     * revision of this paragraph claimed, and the correction is recorded in
-     * place (prompt_plan.md section 16.8 rule 42) rather than overwritten,
-     * because "decisive" was the word a future reader would have cited.
+     * disposition rests on. Reason 2 is a narrower fact and is not decisive
+     * on its own.
      *
      *   1. All five repeated-render sites are in
      *      `Workflows/WorkflowEngine.php`, which is not one of P3.S6's four
@@ -657,10 +646,7 @@ final readonly class Agent
      *   2. THE SIGNAL CANNOT BE DERIVED FROM WHAT A STAGE DID - only from what
      *      its worker is structurally incapable of doing.
      *
-     *      WHAT THIS USED TO SAY: that "'Did this stage write?' is
-     *      UNANSWERABLE on this path today", and that this was decisive.
-     *
-     *      WHAT IS TRUE NOW: it is answerable, and the answer is a derivable
+     *      "Did this stage write?" is answerable, and the answer is a derivable
      *      CONSTANT. A workflow stage's worker cannot execute a tool at all.
      *      `ProcessExecutor`'s live worker script builds its request with
      *      `tools: null` - the parent sends tool NAMES,
@@ -825,9 +811,8 @@ final readonly class Agent
      * this method AND then {@see ProcessExecutor::spawnWorker()} calls it again
      * for the worker's startup message - TEN subprocesses for one dispatch, two
      * unmemoised renders of a live git section that can disagree with each
-     * other. NOT "every caller that goes through the worker pool", which is
-     * what an earlier revision of this sentence said: `Chat::executeAgents()`
-     * also goes through the pool and is not one of the
+     * other. NOT every caller that goes through the worker pool:
+     * `Chat::executeAgents()` also goes through the pool and is not one of the
      * eight call sites at all. The PARALLEL stage (`executeParallelStage()`) is a third shape
      * again - `$firstAgent->systemPrompt()` builds one `$defaultRequest`, the
      * per-task agents built in the `foreach` below it call nothing, and
@@ -840,17 +825,10 @@ final readonly class Agent
      * removal prompt_plan.md section 1.10 prohibits, and `ProcessExecutor.php`
      * is outside P3.S6's declared file list.
      *
-     * ONE PROPOSED WIRING FOR IT, MEASURED AND DECLINED - AND THE MEASUREMENT
-     * IS CORRECTED IN PLACE (prompt_plan.md section 16.8 rule 42), because the
-     * first revision quoted a number for a shape `App/App.php` cannot express.
+     * ONE PROPOSED WIRING FOR IT, MEASURED AND DECLINED: marking the block
+     * `App::dispatchSkill()` attaches with `withWriteSinceLastRender(false)`.
      *
-     * WHAT IT USED TO SAY: that handing the `SubAgent` in
-     * `App::dispatchSkill()` an agent whose block has
-     * `withWriteSinceLastRender(false)` drops the dispatch from TEN
-     * subprocesses to EIGHT, and that this is declined because it makes the
-     * two consumers "disagree MORE".
-     *
-     * WHAT IS TRUE NOW. TEN-to-EIGHT is the ASYMMETRIC edit: the
+     * TEN-to-EIGHT would be the ASYMMETRIC edit: the
      * `CompleteRequest` built from an unmarked block (five) and the worker's
      * second render from a marked one (three). `App/App.php` has no attachment
      * point that produces it. There is exactly ONE in `App.php` - the
@@ -867,12 +845,11 @@ final readonly class Agent
      *     SYMMETRIC, the single App.php dispatchSkill attachment =>  6 subprocesses; consumers agree
      *
      * The symmetric edit is 10 -> 6, and the two consumers still render
-     * BYTE-FOR-BYTE identical prompts. So the "disagree MORE" reasoning is
-     * dropped rather than quietly kept: it is a true statement about the
-     * asymmetric shape and it does not apply to the shape `App.php` offers.
+     * BYTE-FOR-BYTE identical prompts, so consumer disagreement is not a
+     * reason to decline it: that is true only of the asymmetric shape, which
+     * `App.php` does not offer.
      *
-     * WHY THE DISPOSITION STILL STANDS, on the ground that survives the
-     * correction. `App::dispatchSkill()` has NO per-step seam - it is one of
+     * WHY IT IS DECLINED. `App::dispatchSkill()` has NO per-step seam - it is one of
      * the once-per-dispatch eight, with no loop around its render - so marking
      * its block `withWriteSinceLastRender(false)` is not a suppression keyed on
      * a step that wrote nothing; it is an UNCONDITIONAL suppression of the two
@@ -885,10 +862,8 @@ final readonly class Agent
      * `dispatchSkill()` is dormant besides - its own in-code comment says so - so the six-versus-ten saving is a saving on a path nothing runs.
      *
      * AND THE SECOND PROPOSED WIRING, IN THE OTHER DECLARED FILE - ALSO
-     * MEASURED, ALSO DECLINED. An earlier revision of this block dispositioned
-     * `App/App.php` and said nothing at all about `Cli/Bootstrap.php`, which
-     * left the reader to assume no attachment point was there. One is.
-     * `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
+     * MEASURED, ALSO DECLINED. `Cli/Bootstrap.php` has an attachment point
+     * too. `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
      * production attachment points - `Bootstrap.php`
      * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)->withSettings($userConfig)))`,
      * inside `Bootstrap::agentManager()`'s roster loop) and `App::dispatchSkill()`
@@ -961,13 +936,11 @@ final readonly class Agent
      * frame. The `Bootstrap::agentManager()` attachment is downstream of none of that and cannot
      * substitute for it.
      *
-     * THE PARAGRAPH ABOVE RECORDS THAT STEP; THE BUILD-IT-OUT IT NAMED LANDED
-     * (2026-11-11, cc-fix-1111 M-11, BUILD-OUT LANDED paragraph above). The
-     * four measured rows stay TRUE exactly as written - they measure THIS
-     * assembler, and the assembler changed nothing; what changed is that
-     * `WorkflowEngine` now hands a signal-driven block to the renders that
-     * repeat, so line 4's fresh-Agent cost is what a run pays ONCE, not what
-     * every stage pays.
+     * THAT BUILD-IT-OUT IS IN PLACE (cc-fix-1111 M-11, BUILD-OUT LANDED
+     * paragraph above). The four measured rows measure THIS assembler; on
+     * the workflow path `WorkflowEngine` hands a signal-driven block to the
+     * renders that repeat, so line 4's fresh-Agent cost is what a run pays
+     * ONCE, not what every stage pays.
      *
      * AND WHY THAT DISPOSITION IS RECORDED HERE AND NOT AT THE SITE, since a
      * "do not just add the flag" note in the roster loop is exactly what the

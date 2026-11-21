@@ -496,8 +496,9 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
-     * E28: a transient failure mid-stream used to re-run evaluateToolCalls()
-     * on the retry, because the evaluation lived INSIDE the retried region.
+     * E28: a transient failure mid-stream must not re-evaluate the attempt's
+     * tool calls on the retry, which it does if evaluation sits INSIDE the
+     * retried region.
      * The user-visible price measured at the entry: one Write plus a 503
      * showed TWO approval prompts for the same tool call. The hoist moved
      * collection into the attempt and evaluation after the accepted
@@ -2525,9 +2526,7 @@ final class AgentManagerTest extends TestCase
     // ON THE TASK PATH (CC1C-c2a). Every per-call test from here down runs the
     // sub-agent through TaskTool's engine loop. The verdict is
     // AgentManager::grantRefusalFor(), which SubAgentGrantHook asks ahead of
-    // the session gate; the history below names the manager's retired
-    // sequential runner (evaluateToolCalls(), refuseCallOutsideGrant()), whose
-    // checks that verdict carries. A refused call comes back to the model as
+    // the session gate. A refused call comes back to the model as
     // that call's error result and the run goes on past it — the deliberate
     // difference the CC1C-c1 inventory records — so each test asserts the
     // refusal text the model received, that the refused tool never ran, and,
@@ -2604,8 +2603,7 @@ final class AgentManagerTest extends TestCase
 
     /**
      * A tool the agent never named at all is refused on the NAME half, and this
-     * one runs with NO gate attached — the precondition evaluateToolCalls() used
-     * to return early on. An agent's declaration is its own statement about
+     * one runs with NO gate judging it. An agent's declaration is its own statement about
      * itself; it does not become unenforceable because the caller owns no UI.
      *
      * WHAT "NO GATE" MEANS ON THE TASK PATH. `createSubAgent()` always
@@ -2987,21 +2985,13 @@ final class AgentManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // WHAT THE FIRST ROUND OF THIS ITEM DID NOT PIN. Every per-call test above
-    // emits exactly ONE ToolCall, and a model returning two calls in one
-    // response is the ordinary case. Measured at the round-60 review: adding
-    // `break;` to the end of evaluateToolCalls()'s loop -- so only call #1 is
-    // ever grant-checked, denylist-checked or gate-checked -- SURVIVED the
-    // whole candy-code suite. So did turning the gate-null `continue` into a
-    // `return`. Both were pinned below against the old direct-call sub-agent
-    // entry point. On the Task
-    // path (CC1C-c2a) the `break` shape is pinned as before: every call is
-    // its own SubAgentGrantHook verdict. evaluateToolCalls()'s gate-null
-    // `continue` is NOT re-pinned here: it lives only on the dormant
-    // direct-call sub-agent path, which no test in this file drives and CC1C-c3
-    // deletes. Its Task-path counterpart is the hook's `modeGate === null`
-    // arm, which must still grant-check the call; the gateless test below
-    // proves by behavior that no gate judged the run.
+    // MORE THAN ONE CALL PER RESPONSE. Every per-call test above emits
+    // exactly ONE ToolCall, and a model returning two calls in one response
+    // is the ordinary case. A loop that grant-checks only call #1 would pass
+    // every test above, so the tests below pin that EVERY call in a response
+    // is its own SubAgentGrantHook verdict. The hook's `modeGate === null`
+    // arm must still grant-check the call; the gateless test below proves by
+    // behavior that no gate judged the run.
     // -------------------------------------------------------------------------
 
     /**
@@ -3093,13 +3083,12 @@ final class AgentManagerTest extends TestCase
     /**
      * THE ORDER IS THE POINT, AND THE APPROVER IS THE WITNESS.
      *
-     * evaluateToolCalls() checks the grant FIRST AND UNCONDITIONALLY, and its
-     * comment gives the reason: settling the agent's own question here keeps a
+     * The grant is checked FIRST AND UNCONDITIONALLY: SubAgentGrantHook asks
+     * AgentManager::grantRefusalFor() ahead of the session gate, which keeps a
      * call the agent never asked for from ever reaching a blocking approval
-     * prompt. Nothing pinned that. Measured at the round-60 review, skipping
-     * the grant check whenever the gate answers `Ask` — an out-of-grant call
-     * routed to the human approver, precisely the outcome the comment says is
-     * prevented — SURVIVED.
+     * prompt. The mutation this pins is skipping the grant check whenever the
+     * gate answers `Ask` — an out-of-grant call routed to the human approver,
+     * precisely the outcome that ordering prevents.
      *
      * `PermissionMode::Default` answers `Ask` for `Edit`, and this approver
      * would say YES, so under that mutation the call is ALLOWED and this test
@@ -3220,7 +3209,7 @@ final class AgentManagerTest extends TestCase
      * THE PRODUCTION SHAPE OF THE MALFORMED-DENYLIST GUARD, which the roster
      * test beside it cannot reach.
      *
-     * refuseCallOutsideGrant() parses BOTH lists for their side effect before
+     * AgentManager::grantRefusalFor() parses BOTH lists for their side effect before
      * matching anything, so a malformed entry throws rather than degrading into
      * a rule that happens never to fire — and it degrades quietly: measured on
      * PHP 8.3.6, `new PermissionRule('Bash(rm -rf *', Deny)` constructs fine,
@@ -3232,9 +3221,9 @@ final class AgentManagerTest extends TestCase
      * validates the denylist only AFTER its `$patterns === []` early return, so
      * an agent with no grant never reaches that validation — and it is skipped
      * entirely when the manager holds no registry, which is every production
-     * caller today. On that path these two calls are the ONLY validation that
-     * runs at all. Measured at the round-60 review: deleting both of them from
-     * refuseCallOutsideGrant() SURVIVED the whole candy-code suite.
+     * caller today. On that path the two namePatterns() calls in
+     * grantRefusalFor() are the ONLY validation that runs at all, so deleting
+     * them is the mutation this test pins.
      */
     public function testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant(): void
     {
@@ -3266,7 +3255,7 @@ final class AgentManagerTest extends TestCase
     /**
      * The GRANT list's half of the same side-effect parse, on the same
      * registry-less path — so deleting either namePatterns() call from
-     * refuseCallOutsideGrant() reds, not just the denylist one.
+     * grantRefusalFor() reds, not just the denylist one.
      */
     public function testAMalformedGrantIsRefusedAtCallTimeWithNoRegistry(): void
     {
