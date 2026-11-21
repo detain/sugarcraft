@@ -46,9 +46,29 @@ if ($rootRunRefusal !== null) {
  * Stored in `$GLOBALS` for the same reason as every other entry this file
  * publishes: PHPUnit includes this bootstrap from inside a private method of
  * `Application`, so a bare local does not outlive the include.
+ *
+ * UNDER PARATEST THE LAUNCH HOME IS INHERITED, NOT READ. ParaTest's parent
+ * process includes this file to build the suite, so the pin below has already
+ * moved the parent's HOME when it starts its workers, and Symfony Process
+ * builds a worker's environment from `$_SERVER`, which the pin writes. Read
+ * naively, every worker's "launch home" was the sandbox itself: measured, the
+ * contract test's "the sandbox IS the launch home" red, and its share-export
+ * check reporting a sandbox write as a write to the real home. So the first
+ * bootstrap in a process tree publishes the HOME it was launched with as
+ * CANDY_CODE_SUITE_LAUNCH_HOME (both spellings, so proc_open and Symfony
+ * Process children both get it), and a bootstrap that finds it set reads the
+ * launch home from there.
  */
-$GLOBALS['__candyCodeLaunchHomeEnv'] = getenv('HOME');
-$GLOBALS['__candyCodeLaunchHomeServer'] = $_SERVER['HOME'] ?? null;
+$inheritedLaunchHome = getenv('CANDY_CODE_SUITE_LAUNCH_HOME');
+$GLOBALS['__candyCodeLaunchHomeEnv'] = getenv('CANDY_CODE_SUITE_LAUNCH_HOME') ?: getenv('HOME');
+$GLOBALS['__candyCodeLaunchHomeServer'] = \is_string($inheritedLaunchHome) && $inheritedLaunchHome !== ''
+    ? $inheritedLaunchHome
+    : ($_SERVER['HOME'] ?? null);
+if (!\is_string($inheritedLaunchHome) && \is_string($GLOBALS['__candyCodeLaunchHomeEnv'])) {
+    putenv('CANDY_CODE_SUITE_LAUNCH_HOME=' . $GLOBALS['__candyCodeLaunchHomeEnv']);
+    $_SERVER['CANDY_CODE_SUITE_LAUNCH_HOME'] = $GLOBALS['__candyCodeLaunchHomeEnv'];
+}
+unset($inheritedLaunchHome);
 
 /*
  * The suite's skip roster, armed before the first test event.
