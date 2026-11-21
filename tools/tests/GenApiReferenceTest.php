@@ -840,8 +840,28 @@ final class GenApiReferenceTest extends TestCase
         self::assertStringContainsString('<h4 id="api-sugarcraft-code-heavy1"><code>Heavy1</code>', $html);
         self::assertStringNotContainsString('api-sugarcraft-code-cli-one', $html);
         self::assertStringNotContainsString('api-sugarcraft-code-host-lone', $html);
-        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 2 public classes</li>', $html);
-        self::assertStringContainsString('<li><code>SugarCraft\Code\Host</code>: 1 public class</li>', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 2 public types</li>', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Host</code>: 1 public type</li>', $html);
+    }
+
+    public function testASubNamespaceIndexCountsInterfacesAndEnumsAsPublicTypes(): void
+    {
+        // An interface and an enum are public types too. A count of classes alone would print "0 public
+        // classes" for this sub-namespace, which is why the index says "types".
+        $files = [
+            'candy-code/src/Cli/Shape.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Cli;\n\n/** Shape. */\ninterface Shape\n{\n}\n",
+            'candy-code/src/Cli/Mode.php' => "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code\\Cli;\n\n/** Mode. */\nenum Mode\n{\n    case Fast;\n}\n",
+        ];
+        for ($i = 1; $i <= 10; $i++) {
+            $files["candy-code/src/Heavy$i.php"] = self::heavyClass('SugarCraft\\Code', "Heavy$i");
+        }
+        $root = $this->fixtureRoot($files);
+        $html = \ApiReference::generate($root, 'candy-code');
+
+        self::assertStringNotContainsString('api-sugarcraft-code-cli-shape', $html);
+        self::assertStringNotContainsString('api-sugarcraft-code-cli-mode', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 2 public types</li>', $html);
+        self::assertStringNotContainsString('public classes', $html);
     }
 
     public function testASlugsTenLargestTypesKeepTheirRowsWhereverTheySit(): void
@@ -861,7 +881,7 @@ final class GenApiReferenceTest extends TestCase
             self::assertStringContainsString('<h4 id="api-sugarcraft-code-big-big' . $i . '">', $html);
         }
         self::assertStringNotContainsString('api-sugarcraft-code-cli-small', $html);
-        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 1 public class</li>', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Cli</code>: 1 public type</li>', $html);
 
         $result = \ApiReference::coverage(\ApiReference::declaredPublic($root, 'candy-code'), $html);
         self::assertCount(10, $result['top']);
@@ -884,7 +904,7 @@ final class GenApiReferenceTest extends TestCase
 
         self::assertStringContainsString('<h4 id="api-sugarcraft-code-big-big1">', $html);
         self::assertStringNotContainsString('api-sugarcraft-code-big-small', $html);
-        self::assertStringContainsString('<li><code>SugarCraft\Code\Big</code>: 11 public classes, 10 of them with a row above</li>', $html);
+        self::assertStringContainsString('<li><code>SugarCraft\Code\Big</code>: 11 public types, 10 of them with a row above</li>', $html);
         self::assertStringNotContainsString('11 of them', $html);
     }
 

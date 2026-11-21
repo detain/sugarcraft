@@ -142,9 +142,9 @@ final class ApiReference
     public const NO_PUBLIC_CLASSES = ['sugar-clipboard', 'sugar-codec', 'sugar-jwt', 'sugar-ws-rpc'];
 
     /**
-     * Slugs whose page lists a row for each public type in one namespace only. Every type in a
-     * sub-namespace is left out, and the page carries one index line per sub-namespace that states
-     * its class count. candy-code's full listing was 2.4 MB, over the 1 MiB page-weight budget; its
+     * Slugs whose page lists a row for each public type in one namespace only. A type in any other
+     * sub-namespace is left out unless TOP_TYPES_LISTED keeps its row, and the page carries one index
+     * line per sub-namespace that states its public type count. candy-code's full listing was 2.4 MB, over the 1 MiB page-weight budget; its
      * top-level namespace alone is about 0.1 MB. A slug here is an owner-visible reduction of the
      * page, so the omission is stated on the page itself rather than left silent.
      */
@@ -1470,7 +1470,7 @@ final class ApiReference
 
         $listed = self::ROWS_IN_NAMESPACE[$slug] ?? null;
         $pinned = self::largestTypes($types, self::TOP_TYPES_LISTED[$slug] ?? 0);
-        // namespace => [public classes in it, classes with a row on this page]
+        // namespace => [public types in it, types with a row on this page]
         $omitted = [];
         foreach ($byNamespace as $namespace => $group) {
             $shown = [];
@@ -1492,12 +1492,12 @@ final class ApiReference
 
         if ($omitted !== []) {
             $out[] = '<h3>Sub-namespaces not listed row by row</h3>';
-            $out[] = '<p>A class named here has no row on this page. Each line states how many public classes its '
+            $out[] = '<p>A type named here has no row on this page. Each line states how many public types its '
                 . 'namespace holds in all, so a count here is the full count.</p>';
             $out[] = '<ul>';
             foreach ($omitted as $namespace => [$total, $shown]) {
                 $out[] = '<li><code>' . htmlspecialchars($namespace, ENT_QUOTES, 'UTF-8') . '</code>: ' . $total
-                    . ' public ' . ($total === 1 ? 'class' : 'classes')
+                    . ' public ' . ($total === 1 ? 'type' : 'types')
                     . ($shown > 0 ? ", $shown of them with a row above" : '') . '</li>';
             }
             $out[] = '</ul>';
