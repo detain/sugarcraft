@@ -744,13 +744,23 @@ final class AgentManager
      * engine path. Null means "no narrowing" (no registry, or the agent
      * declared nothing), never "grant nothing".
      *
+     * AN EMPTIED GRANT IS `[]` HERE, not the null the request-building paths
+     * send. TaskTool reads null as "inherit the engine's whole tool set", so a
+     * grant its own denylist (or `mcpServers` allowlist) empties — `tools:
+     * ['Bash']` with `disallowedTools: ['Bash']` — would otherwise advertise
+     * every session tool to the run. `[]` hands it nothing, and Runtime still
+     * puts an empty roster on the wire as null (`$app->tools ?: null`), so the
+     * provider request is the one {@see resolveGrantedTools()} measures.
+     *
      * @return ?list<Tool>
      * @throws \RuntimeException on a grant that does not resolve — the same
      *         refusal a batch gets, so the in-process path cannot be the lax one.
      */
     public function grantedToolsFor(SubAgent $subAgent): ?array
     {
-        return $this->resolveBatchGrants([$subAgent])[$subAgent->id] ?? null;
+        return $this->toolRegistry === null
+            ? null
+            : $this->resolveGrantedTools($subAgent->agent, emptiedAsAbsent: false);
     }
 
     /**
@@ -1538,13 +1548,17 @@ final class AgentManager
      * at this point, on the same resolved-then-removed footing as the denylist
      * — see the `instanceof McpToolBridge` block in the body.
      *
+     * @param bool $emptiedAsAbsent true (every request-building caller) sends a
+     *        grant its own denylist or server allowlist emptied as null, per the
+     *        measurement at the return; false returns `[]` for a caller that
+     *        reads null as "inherit everything" ({@see grantedToolsFor()}).
      * @return ?list<Tool>
      * @throws \RuntimeException When a declaration is malformed, resolves to no
      *         tool in the registry, or the registry holds a non-{@see Tool}.
      * @throws \RuntimeException When a non-empty `mcpServers` allowlist meets a
      *         bridge and holds a non-string entry ({@see McpRouter::serverAllowed()}).
      */
-    private function resolveGrantedTools(Agent $agent): ?array
+    private function resolveGrantedTools(Agent $agent, bool $emptiedAsAbsent = true): ?array
     {
         if ($this->toolRegistry === null) {
             return null;
@@ -1790,8 +1804,9 @@ final class AgentManager
         //
         // The DECISION does not rest on the paragraph. It is pinned by
         // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
-        // which reds if this returns `[]`.
-        return $granted === [] ? null : $granted;
+        // which reds if this returns `[]`. {@see grantedToolsFor()} opts out:
+        // its caller reads null as "no narrowing", so it gets the `[]`.
+        return $granted === [] && $emptiedAsAbsent ? null : $granted;
     }
 
     /**

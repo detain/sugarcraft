@@ -49,7 +49,7 @@ candy-code/tests/Cli/HelpTest.php	13.021	145
 candy-code/tests/Workflows/WorkflowEngineTest.php	12.928	55
 candy-code/tests/Commands/CustomCommandShellAndFileFormsTest.php	12.770	42
 candy-code/tests/Cli/SessionIdPresetTest.php	12.637	14
-candy-code/tests/Agents/AgentManagerTest.php	12.614	146
+candy-code/tests/Agents/AgentManagerTest.php	12.614	148
 candy-code/tests/RuntimeTest.php	12.474	156
 candy-code/tests/App/DockDragBytePathTest.php	12.392	14
 candy-code/tests/Workflows/WorkflowPauseResumeTest.php	11.809	28

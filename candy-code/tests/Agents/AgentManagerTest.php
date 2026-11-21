@@ -2671,8 +2671,10 @@ final class AgentManagerTest extends TestCase
      * @param list<string> $grant
      * @param list<string> $deny
      * @param ?list<\SugarCraft\Code\Tools\Tool> $registry
+     * @param list<\SugarCraft\Code\Tools\Tool> $engineTools the session tool
+     *        set the run's engine offers; empty (the default) offers none
      */
-    private function captureSubAgentRequestWithDenylist(array $grant, array $deny, ?array $registry): CompleteRequest
+    private function captureSubAgentRequestWithDenylist(array $grant, array $deny, ?array $registry, array $engineTools = []): CompleteRequest
     {
         $manager = new AgentManager(
             provider: $this->provider,
@@ -2693,7 +2695,7 @@ final class AgentManagerTest extends TestCase
         ));
 
         $provider = new ScriptedProvider([new CompleteResponse(content: 'done')]);
-        [$result] = $this->delegateOnTask($manager, 'denied', $provider);
+        [$result] = $this->delegateOnTask($manager, 'denied', $provider, engineTools: $engineTools);
 
         $this->assertFalse($result->isError(), $result->content());
         $this->assertCount(1, $provider->requests, 'the provider was never called');
@@ -2832,6 +2834,40 @@ final class AgentManagerTest extends TestCase
         );
 
         $this->assertNull($request->tools, 'an emptied roster is absence, not an empty tool block');
+    }
+
+    /**
+     * AN EMPTIED GRANT IS NOT "NO NARROWING". The test above offers no engine
+     * tools, so it cannot tell a run handed nothing from a run handed the
+     * engine's whole set: both reach the wire as null. With an engine that
+     * offers `Bash`, a grant its own denylist empties used to come back from
+     * {@see AgentManager::grantedToolsFor()} as null, which TaskTool reads as
+     * "inherit everything" — the model was shown the very tool the preset
+     * denies.
+     */
+    public function testAFullyDeniedGrantAdvertisesNoneOfTheEnginesTools(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['Bash'],
+            ['Bash'],
+            $this->fakeRegistry('Bash', 'Read'),
+            engineTools: $this->fakeRegistry('Bash', 'Read'),
+        );
+
+        $this->assertNull($request->tools, 'the denied grant hands the run no tools, so nothing of the engine\'s set is advertised');
+    }
+
+    /** The same leak through the server allowlist: `mcp__*` narrowed to no server. */
+    public function testAnMcpGrantNarrowedToNoServerAdvertisesNoneOfTheEnginesTools(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['mcp__*'],
+            [$this->mcpBridge('alpha')],
+            mcpServers: ['zeta'],
+            engineTools: [...$this->fakeRegistry('Bash', 'Read'), $this->mcpBridge('alpha')],
+        );
+
+        $this->assertNull($request->tools, 'an allowlist that matches no server hands the run no tools, not the engine\'s set');
     }
 
     /** Both lists are validated identically, and the message says which one was read. */
