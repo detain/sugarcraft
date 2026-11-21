@@ -587,8 +587,23 @@ final class EnvRosterDriftTest extends TestCase
 
     private function scanner(): EnvReadScanner
     {
-        return new EnvReadScanner($this->sources());
+        return self::realScanner();
     }
+
+    /**
+     * The scanner over {@see sources()}, built once per process. A build
+     * tokenizes every file under `src/` and `bin/` (about 3 s, measured), and
+     * this file plus {@see \SugarCraft\Code\Tests\Cli\HelpTest} asked for
+     * it thirteen times. Sharing it is safe: the constructor does the whole scan,
+     * every accessor hands back a copy, and no test writes into `src/` or
+     * `bin/` while the suite runs.
+     */
+    public static function realScanner(): EnvReadScanner
+    {
+        return self::$realScanner ??= new EnvReadScanner(self::sources());
+    }
+
+    private static ?EnvReadScanner $realScanner = null;
 
     /**
      * Everything the roster scan reads: every `.php` file under `src/`, and
