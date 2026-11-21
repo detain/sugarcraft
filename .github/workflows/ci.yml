@@ -354,6 +354,14 @@ jobs:
       # the checker itself.
       - name: Verify one type per PSR-4 file across every lib
         run: php tools/check-one-type-per-file.php
+      # The same autoloader rule inside the test roots, where it only bites
+      # across files: a helper type declared as an extra type in one test file
+      # and used from another resolves under serial phpunit (it loads every
+      # test file first) and is "class not found" in a ParaTest worker, which
+      # loads one file per dispatch (sugar-async FakeClock was red at four
+      # workers). tools/tests/CrossFileTestTypesToolTest.php guards the checker.
+      - name: Verify no test file uses another test file's extra type
+        run: php tools/check-cross-file-test-types.php
       # ISS-120 (sugar_issues.md): sync-sugarcraft.yml splits each package
       # with a SINGLE `splitsh-lite --prefix="$lib"` (multi-prefix is a parse
       # error in the pinned v1.0.1), so a root-only LICENSE never reaches a
