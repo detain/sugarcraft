@@ -204,6 +204,15 @@
 <tr><td><code>static encode(array $message): string</code></td><td></td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-mcpclient-protocol-refusal"><code>Refusal</code> <small>interface</small></h4>
+<p>A refused <code>candy-code.v1</code> call, read the same way on the wire and in-process.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>refusalKind(): string</code></td><td>The refusal&#039;s kind, the wire&#039;s <code>data.kind</code> (for example <code>session_not_found</code>).</td></tr>
+<tr><td><code>refusalData(): array</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-mcpclient-protocol-request"><code>Request</code> <small>final class</small></h4>
 <p>One decoded client message: a request (it has an <code>id</code>, and is answered) or a notification (it has none, and never is). The <code>id</code> is kept exactly as the client spelled it — string or integer — because a JSON-RPC response must echo it unchanged.</p>
 <table class="api-table">
@@ -221,6 +230,8 @@
 <tr><td><code>static of(ErrorCode $code, string $message, ?string $kind = null, array $data = []): self</code></td><td></td></tr>
 <tr><td><code>static invalidParams(string $message, string $kind = &#039;invalid_params&#039;): self</code></td><td></td></tr>
 <tr><td><code>static notFound(string $message, string $kind = &#039;not_found&#039;): self</code></td><td></td></tr>
+<tr><td><code>refusalKind(): string</code></td><td></td></tr>
+<tr><td><code>refusalData(): array</code></td><td>The wire&#039;s <code>data</code> object: the same fields a JSON-RPC client decodes.</td></tr>
 <tr><td><code>toArray(): array</code></td><td>The JSON-RPC <code>error</code> member.</td></tr>
 </tbody>
 </table>

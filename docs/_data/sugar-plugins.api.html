@@ -269,13 +269,6 @@
 </table>
 <h4 id="api-sugarcraft-plugins-host-refusedcall"><code>RefusedCall</code> <small>interface</small></h4>
 <p>A refusal a HostServices call rejects with: the wire&#039;s refusal, in-process.</p>
-<table class="api-table">
-<thead><tr><th>Method</th><th>Summary</th></tr></thead>
-<tbody>
-<tr><td><code>refusalKind(): string</code></td><td>The refusal&#039;s kind, the wire&#039;s <code>data.kind</code> (for example <code>session_not_found</code>).</td></tr>
-<tr><td><code>refusalData(): array</code></td><td></td></tr>
-</tbody>
-</table>
 <h4 id="api-sugarcraft-plugins-host-rootedhostservices"><code>RootedHostServices</code> <small>interface</small></h4>
 <p>The root forms of the two HostServices calls that need a root argument because no session exists yet to route them by (PL-5c-A design, section 2.6): creating a session in a named root, and listing the pending asks of a named root.</p>
 <table class="api-table">
