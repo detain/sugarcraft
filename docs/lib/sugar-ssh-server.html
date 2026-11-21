@@ -256,7 +256,7 @@ exit(Server::new()
 <tr><td>Server</td><td>new()</td><td>Start an empty middleware pipeline — this library opens no listener: the pipeline runs inside the process sshd (or your supervisor) spawns under <code>ForceCommand</code></td></tr>
 <tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
 <tr><td>Server</td><td>withTransport(Transport)</td><td>Override the active transport (default: InProcessTransport)</td></tr>
-<tr><td>Server</td><td>withKeepalive(int)</td><td>Add keepalive middleware with the given interval</td></tr>
+<tr><td>Server</td><td>withKeepalive(int)</td><td>Arm an idle keepalive beat on the server (opt-in); stored on the server, not added to the <code>use()</code> middleware stack</td></tr>
 <tr><td>Server</td><td>serve(?Session, ?Context)</td><td>Start the server (builds a fresh root <code>Context::background()</code> automatically when none is passed; supply a cancellable context to make cancel-propagation reachable through the public API)</td></tr>
 <tr><td>Context</td><td>background()</td><td>Root context — never done, not cancelable</td></tr>
 <tr><td>Context</td><td>withValue(string $k, mixed $v)</td><td>Return a new context with $k → $v attached</td></tr>
