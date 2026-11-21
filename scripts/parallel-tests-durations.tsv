@@ -253,7 +253,7 @@ candy-code/tests/Renderer/RenderMemoTest.php	2.901	42
 candy-code/tests/Protocol/SessionFeedSubagentsTest.php	2.891	3
 candy-code/tests/Tui/TextSelectionSugarMouseTest.php	2.879	4
 candy-code/tests/Workflows/WorkflowIdentifierTest.php	2.877	10
-candy-code/tests/Tools/TaskToolProgressFramesTest.php	2.866	14
+candy-code/tests/Tools/TaskToolProgressFramesTest.php	2.866	15
 candy-code/tests/MCP/McpMessageResultTypeTest.php	2.843	5
 candy-code/tests/Media/MaskIngestTest.php	2.835	29
 candy-code/tests/Server/BgPermissionAskRelayTest.php	2.826	12
@@ -2161,4 +2161,4 @@ candy-code/tests/Backend/LoopDrivenTurnTest.php	0.064	6
 candy-code/tests/Backend/ForkedTurnOwnsItsLoopTest.php	0.422	1
 candy-code/tests/Tools/CapturedOutputCapTest.php	0.200	6
 candy-code/tests/Support/DrainsStreamedChildTest.php	0.100	3
-candy-code/tests/Tools/TaskToolExecuteMergeTest.php	0.616	3
+candy-code/tests/Tools/TaskToolExecuteMergeTest.php	0.616	9
