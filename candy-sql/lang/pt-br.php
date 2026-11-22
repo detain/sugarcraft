@@ -200,6 +200,7 @@ return [
     'conn.tab_details' => 'Detalhes',
     'conn.tab_attributes' => 'Atributos',
     'conn.tab_mdl' => 'MDL',
+    'conn.detail_none' => 'Sem dados de {tab} para a thread {id}',
     'conn.vars_fail' => 'Não foi possível obter as variáveis do servidor',
     'vars.load_fail' => 'Não foi possível carregar as variáveis: {message}',
     'vars.unknown_error' => 'Erro desconhecido',

@@ -35,6 +35,7 @@
         "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
+        "sugarcraft/sugar-mouse": "dev-master",
         "sugarcraft/sugar-cli": "dev-master",
         "sugarcraft/sugar-constraints": "dev-master",
         "sugarcraft/sugar-style": "dev-master",

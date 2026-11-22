@@ -30,6 +30,31 @@ final class FakeDatabase implements DatabaseInterface
     /** @var array<string,int> Per-SQL query() call counts (TTL / query-once pins) */
     private array $queryCounts = [];
 
+    /** @var array<string, list<array<string, mixed>>> prepared-statement rows keyed by an SQL fragment */
+    private array $preparedResults = [];
+
+    /**
+     * Rows a prepared statement whose SQL contains `$sqlFragment` fetches.
+     * Without one, a prepared statement fetches no rows (the default).
+     *
+     * @param list<array<string, mixed>> $rows
+     */
+    public function setPreparedResult(string $sqlFragment, array $rows): void
+    {
+        $this->preparedResults[$sqlFragment] = $rows;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function preparedResultFor(string $sql): array
+    {
+        foreach ($this->preparedResults as $fragment => $rows) {
+            if (str_contains($sql, $fragment)) {
+                return $rows;
+            }
+        }
+        return [];
+    }
+
     public function setQueryResult(array $result): void
     {
         $this->queryResult = $result;
@@ -218,6 +243,7 @@ final class FakeStatement implements PreparedStatementInterface
 
         // Record this execution in the database
         $this->db->recordExecution($this->sql, $params ?? []);
+        $this->results = $this->db->preparedResultFor($this->sql);
 
         return true;
     }

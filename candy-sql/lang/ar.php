@@ -200,6 +200,7 @@ return [
     'conn.tab_details' => 'التفاصيل',
     'conn.tab_attributes' => 'السمات',
     'conn.tab_mdl' => 'MDL',
+    'conn.detail_none' => 'لا توجد بيانات {tab} للخيط {id}',
     'conn.vars_fail' => 'تعذّر جلب متغيرات الخادم',
     'vars.load_fail' => 'تعذّر تحميل المتغيرات: {message}',
     'vars.unknown_error' => 'خطأ غير معروف',

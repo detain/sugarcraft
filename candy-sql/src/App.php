@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\ExceptionMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
@@ -328,6 +329,9 @@ final class App implements Model
             return [$this->mutate([
                 'ui' => $this->ui->withError(Lang::t('status.async_failed', ['message' => $msg->exception->getMessage()])),
             ]), null];
+        }
+        if ($msg instanceof MouseClickMsg) {
+            return $this->routeAdminClick($msg);
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -2585,10 +2589,54 @@ final class App implements Model
         // The editor is focused only while the Query pane is active, so its
         // cursor renders only there (matching the old per-pane cursor mark).
         $editor = $p === Pane::Query ? $this->editor()->focus()[0] : $this->editor()->blur();
+        // Leaving the Admin pane drops the page's key claims: a focused
+        // Connections detail-tab bar would otherwise still claim Tab and
+        // 1-3 when the user cycles back, so the first Tab would switch a
+        // detail tab instead of the pane.
+        $admin = $this->admin;
+        if ($this->ui->pane === Pane::Admin && $p !== Pane::Admin && $admin->page !== null) {
+            $admin = $admin->withPage($admin->page->releaseKeys());
+        }
         return $this->mutate([
             'ui' => $this->ui->withPane($p),
             'query' => $this->query->withEditor($editor),
+            'admin' => $admin,
         ]);
+    }
+
+    /**
+     * Forward a mouse press to the admin page, in the page's own 1-based
+     * coordinates (the screen position minus
+     * {@see Renderer::adminPageOrigin()}). Only the Admin pane without the
+     * help overlay takes clicks; today the Connections
+     * detail-tab bar is the one page that answers them.
+     *
+     * @return array{self, ?\Closure}
+     */
+    private function routeAdminClick(MouseClickMsg $msg): array
+    {
+        if ($this->ui->pane !== Pane::Admin || $this->ui->helpOverlay) {
+            return [$this, null];
+        }
+        [$col, $row] = Renderer::adminPageOrigin($this);
+        $local = new MouseClickMsg(
+            $msg->x - $col,
+            $msg->y - $row,
+            $msg->button,
+            $msg->action,
+            $msg->shift,
+            $msg->alt,
+            $msg->ctrl,
+        );
+        $page = $this->adminPage();
+        try {
+            [$newPage, $cmd] = $page->update($local);
+            assert($newPage instanceof PageBase);
+        } catch (\Throwable) {
+            // SQL-C01 fold seam: a page failing on a click must not kill the TUI.
+            return [$this, null];
+        }
+        return [$newPage === $page && $this->admin->page !== null ? $this : $this->withAdminPage($newPage), $cmd];
     }
 
     /**

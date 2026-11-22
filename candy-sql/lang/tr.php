@@ -200,6 +200,7 @@ return [
     'conn.tab_details' => 'Ayrıntılar',
     'conn.tab_attributes' => 'Öznitelikler',
     'conn.tab_mdl' => 'MDL',
+    'conn.detail_none' => '{id} iş parçacığı için {tab} verisi yok',
     'conn.vars_fail' => 'Sunucu değişkenleri alınamadı',
     'vars.load_fail' => 'Değişkenler yüklenemedi: {message}',
     'vars.unknown_error' => 'Bilinmeyen hata',

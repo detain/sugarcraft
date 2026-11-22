@@ -20,6 +20,7 @@ use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\StatusSnapshot;
+use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Style\Style;
 use SugarCraft\Table\{Column, Row, RowData, Table};
@@ -33,6 +34,12 @@ use SugarCraft\Widgets\Tabs\Tabs;
  * selected thread (Details / Attributes / MDL) are a sugar-widgets
  * {@see Tabs} bar built with {@see Tabs::interactive()}, so it publishes
  * Mark zones for mouse clicks.
+ *
+ * The panel under the bar shows the active tab's data for the selected
+ * thread ({@see ConnectionDetailTabs}). It opens on an explicit action
+ * (Enter, a tab switch by key or click) and is fetched then, never from
+ * view(), because each read is a synchronous server round trip; a
+ * selection move while it is open refetches it, and Esc closes it.
  *
  * Detail-tab keys (AUD §2 #19). In the app, Tab cycles the focus pane and
  * the digits pick admin pages before any page sees them, so the old
@@ -85,6 +92,17 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * markers for hit-testing; the frame App paints never carries them.
      */
     private bool $publishZones = false;
+
+    /** Most lines the detail panel shows; the rest collapse into one ellipsis line. */
+    private const DETAIL_MAX_LINES = 8;
+
+    /**
+     * The open detail panel: the active tab's data for the selected thread
+     * as plain, sanitized lines, or null while the panel is closed.
+     *
+     * @var list<string>|null
+     */
+    private ?array $detailLines = null;
 
     /** Connection awaiting a kill confirmation (null = no pending kill). */
     private ?ProcesslistResult $pendingKill = null;
@@ -221,6 +239,33 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         return $this->detailBar;
     }
 
+    /**
+     * The open detail panel's lines (the active tab's data for the selected
+     * thread), or null while the panel is closed.
+     *
+     * @return list<string>|null
+     */
+    public function detailLines(): ?array
+    {
+        return $this->detailLines;
+    }
+
+    /**
+     * Blur the detail-tab bar and close its panel, so the page claims no
+     * key. App calls this when the user leaves the Admin pane: a bar left
+     * focused there would keep claiming Tab and 1-3 on the way back.
+     */
+    public function releaseKeys(): self
+    {
+        if (!$this->detailBar->focused && $this->detailLines === null) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->detailBar = $this->detailBar->blur();
+        $clone->detailLines = null;
+        return $clone;
+    }
+
     /** True while the detail-tab bar owns the tab keys (after Enter, until Esc). */
     public function detailTabsFocused(): bool
     {
@@ -256,6 +301,71 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->detailBar = $bar;
         return $clone;
+    }
+
+    /** Fetch the active tab's data for the selected thread into the panel. */
+    private function withDetailFetched(): self
+    {
+        $clone = clone $this;
+        $clone->detailLines = $clone->fetchDetailLines();
+        return $clone;
+    }
+
+    /** Refetch the panel when it is open (its thread or rows may have changed). */
+    private function withDetailRefreshed(): self
+    {
+        return $this->detailLines === null ? $this : $this->withDetailFetched();
+    }
+
+    /**
+     * The active tab's data for the selected thread, one line per field,
+     * attribute or lock. A read the server refuses (no performance_schema
+     * access) or an empty answer gives one explanatory line instead.
+     *
+     * @return list<string>
+     */
+    private function fetchDetailLines(): array
+    {
+        $thread = $this->filteredProcesslist()[$this->selectedIndex] ?? null;
+        if ($thread === null) {
+            return [Lang::t('conn.none_selected')];
+        }
+        $id = $thread->processId;
+        $data = match ($this->detailTab()) {
+            self::DETAIL_TAB_DETAILS => $this->detailTabs?->details($id),
+            self::DETAIL_TAB_ATTRIBUTES => $this->detailTabs?->attributes($id)['attributes'] ?? null,
+            default => $this->detailTabs?->mdlLocks($id),
+        };
+        if ($data === null || $data === []) {
+            return [Lang::t('conn.detail_none', [
+                'tab' => $this->detailBar->labels()[$this->detailBar->active()],
+                'id' => (string) $id,
+            ])];
+        }
+
+        $lines = [];
+        foreach ($data as $key => $value) {
+            if (\is_array($value)) {
+                // An MDL lock row: every column on one line.
+                $cells = [];
+                foreach ($value as $column => $cell) {
+                    $cells[] = $column . '=' . self::cellText($cell);
+                }
+                $lines[] = CellValue::sanitize(\implode('  ', $cells));
+            } else {
+                $lines[] = CellValue::sanitize($key . ': ' . self::cellText($value));
+            }
+        }
+        if (\count($lines) > self::DETAIL_MAX_LINES) {
+            $lines = \array_slice($lines, 0, self::DETAIL_MAX_LINES - 1);
+            $lines[] = '…';
+        }
+        return $lines;
+    }
+
+    private static function cellText(mixed $value): string
+    {
+        return \is_scalar($value) ? (string) $value : '';
     }
 
     /**
@@ -339,31 +449,32 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         // j/k or Up/Down navigate the processlist selection
         if ($ch === 'j' || $type === KeyType::Down) {
-            return [$this->withNavigateDown(), null];
+            return [$this->withNavigateDown()->withDetailRefreshed(), null];
         }
 
         if ($ch === 'k' || $type === KeyType::Up) {
-            return [$this->withNavigateUp(), null];
+            return [$this->withNavigateUp()->withDetailRefreshed(), null];
         }
 
-        // Enter focuses the detail-tab bar; Esc hands the keyboard back.
-        // While focused, the bar's own key map drives it: Tab / Shift+Tab
-        // cycle Details → Attributes → MDL, and 1/2/3 jump (AUD §2 #19).
+        // Enter focuses the detail-tab bar and opens its panel; Esc hands
+        // the keyboard back and closes the panel. While focused, the bar's
+        // own key map drives it: Tab / Shift+Tab cycle Details → Attributes
+        // → MDL, and 1/2/3 jump (AUD §2 #19).
         if ($type === KeyType::Enter && !$this->detailBar->focused) {
-            return [$this->withDetailBar($this->detailBar->focus()), null];
+            return [$this->withDetailBar($this->detailBar->focus())->withDetailFetched(), null];
         }
-        if ($type === KeyType::Escape && $this->detailBar->focused) {
-            return [$this->withDetailBar($this->detailBar->blur()), null];
+        if ($type === KeyType::Escape) {
+            return [$this->releaseKeys(), null];
         }
         if ($this->claimsKey($msg)) {
             [$bar] = $this->detailBar->update($msg);
             assert($bar instanceof Tabs);
-            return [$this->withDetailBar($bar), null];
+            return [$this->withDetailBarSwitched($bar), null];
         }
 
         // f toggles hide-sleeping filter
         if ($ch === 'f') {
-            return [$this->withToggleHideSleeping(), null];
+            return [$this->withToggleHideSleeping()->withDetailRefreshed(), null];
         }
 
         // r triggers async refresh
@@ -451,14 +562,26 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     }
 
     /**
+     * Adopt a bar the user just drove; a change of active tab (re)fetches
+     * the panel for the new tab.
+     */
+    private function withDetailBarSwitched(Tabs $bar): self
+    {
+        $switched = $bar->active() !== $this->detailBar->active();
+        $next = $this->withDetailBar($bar);
+        return $switched ? $next->withDetailFetched() : $next;
+    }
+
+    /**
      * Route a left-button press through the detail bar's Mark zones.
      *
      * The coordinates are page-relative and 1-based (column 1, row 1 is
-     * the first cell of this page's frame), the Scanner's convention; the
-     * host subtracts the page's screen origin before forwarding. The frame
-     * is re-rendered with zone markers, scanned, and a hit on a tab zone
-     * activates that tab. A click never grants keyboard focus (the Tabs
-     * law), and a miss leaves the page unchanged.
+     * the first cell of this page's frame), the Scanner's convention; App
+     * subtracts the page's screen origin ({@see \SugarCraft\Sql\Renderer::adminPageOrigin()})
+     * before forwarding. The frame is re-rendered with zone markers,
+     * scanned, and a hit on a tab zone activates that tab and opens its
+     * panel. A click never grants keyboard focus (the Tabs law), and a miss
+     * leaves the page unchanged.
      */
     private function withMouseClick(MouseMsg $msg): self
     {
@@ -473,7 +596,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         }
         [$bar] = $this->detailBar->clickZone($zone->id);
         assert($bar instanceof Tabs);
-        return $this->withDetailBar($bar);
+        $next = $this->withDetailBar($bar);
+        return $next->detailLines === null || $bar->active() !== $this->detailBar->active()
+            ? $next->withDetailFetched()
+            : $next;
     }
 
     /**
@@ -628,6 +754,12 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         $lines[] = '';
         $lines[] = $this->renderDetailTabBar();
+        if ($this->detailLines !== null) {
+            $panel = Style::new()->foreground(Color::hex('#cbd5e1'));
+            foreach ($this->detailLines as $line) {
+                $lines[] = '   ' . $panel->render($line);
+            }
+        }
         $lines[] = $this->table()->View();
         $lines[] = $this->renderKeyHints();
 

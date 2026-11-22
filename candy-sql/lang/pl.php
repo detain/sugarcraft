@@ -200,6 +200,7 @@ return [
     'conn.tab_details' => 'Szczegóły',
     'conn.tab_attributes' => 'Atrybuty',
     'conn.tab_mdl' => 'MDL',
+    'conn.detail_none' => 'Brak danych {tab} dla wątku {id}',
     'conn.vars_fail' => 'Nie można pobrać zmiennych serwera',
     'vars.load_fail' => 'Nie można wczytać zmiennych: {message}',
     'vars.unknown_error' => 'Nieznany błąd',

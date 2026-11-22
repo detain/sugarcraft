@@ -412,7 +412,35 @@ final class Renderer
         return self::frame($a, Pane::Query, Lang::t('ui.title.query'), $body, $width);
     }
 
-    private static function adminPane(App $a, int $terminalCols): string
+    /**
+     * Screen offset of the admin page's frame: subtract it from a 1-based
+     * terminal (col, row) to get the page-relative 1-based cell App
+     * forwards to the page ({@see App} mouse routing).
+     *
+     * Derived from the layout below, outermost first. Columns: the
+     * BorderFrame's left bar, the admin box's left border, its one-cell
+     * padding, the sidebar, then the two-space gap. Rows: the BorderFrame's
+     * top rule, title and divider (the title bar is never empty: it always
+     * names candy-sql), then the admin box's top border. Lines are cut,
+     * never wrapped, so no row above the page shifts with content width.
+     *
+     * @return array{int, int} (columns, rows) to subtract
+     */
+    public static function adminPageOrigin(App $a): array
+    {
+        $sidebarWidth = 0;
+        foreach (self::adminSidebarLines($a) as $line) {
+            $sidebarWidth = max($sidebarWidth, Width::string($line));
+        }
+        return [3 + $sidebarWidth + 2, 4];
+    }
+
+    /**
+     * The admin sidebar as styled text lines (no frame).
+     *
+     * @return list<string>
+     */
+    private static function adminSidebarLines(App $a): array
     {
         // Build sidebar WITHOUT frame — just styled text lines.
         // Uses orderedCases() so digit-key handler and sidebar use the same
@@ -446,7 +474,12 @@ final class Renderer
                 ->render($marker . ' ' . $digit . '. ' . $pane->label());
         }
 
-        $sidebarText = implode("\n", $sidebarLines);
+        return $sidebarLines;
+    }
+
+    private static function adminPane(App $a, int $terminalCols): string
+    {
+        $sidebarText = implode("\n", self::adminSidebarLines($a));
 
         // Get admin page content — no frame wrapping from here
         try {

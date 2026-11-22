@@ -79,6 +79,16 @@ abstract class PageBase implements Model
     }
 
     /**
+     * This page with every keyboard claim dropped (a focused component
+     * blurred), so {@see claimsKey()} answers false. App calls it when the
+     * user leaves the Admin pane; a page with no claims returns itself.
+     */
+    public function releaseKeys(): self
+    {
+        return $this;
+    }
+
+    /**
      * Render the error screen.
      *
      * With no specific message, show a neutral "no data" line rather than a

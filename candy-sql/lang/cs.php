@@ -200,6 +200,7 @@ return [
     'conn.tab_details' => 'Podrobnosti',
     'conn.tab_attributes' => 'Atributy',
     'conn.tab_mdl' => 'MDL',
+    'conn.detail_none' => 'Žádná data {tab} pro vlákno {id}',
     'conn.vars_fail' => 'Nelze načíst proměnné serveru',
     'vars.load_fail' => 'Nelze načíst proměnné: {message}',
     'vars.unknown_error' => 'Neznámá chyba',

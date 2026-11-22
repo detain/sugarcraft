@@ -43,12 +43,6 @@ parameters:
 			path: src/Admin/Connections/ConnectionCounters.php
 
 		-
-			message: '#^Property SugarCraft\\Sql\\Admin\\Connections\\ConnectionsPage\:\:\$detailTabs is never read, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: src/Admin/Connections/ConnectionsPage.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

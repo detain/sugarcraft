@@ -20,6 +20,7 @@ use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\ConnectionState;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Pane;
+use SugarCraft\Sql\Renderer;
 use SugarCraft\Sql\Tests\Admin\FakeDatabase;
 use SugarCraft\Widgets\Tabs\Tabs;
 
@@ -35,6 +36,11 @@ use SugarCraft\Widgets\Tabs\Tabs;
 final class ConnectionDetailTabsRoutingTest extends TestCase
 {
     private const LABELS = ['Details', 'Attributes', 'MDL'];
+
+    protected function tearDown(): void
+    {
+        Renderer::resetSizeCache();
+    }
 
     private function page(): ConnectionsPage
     {
@@ -242,5 +248,122 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $this->assertSame($page, $page->update(new MouseClickMsg($col, $row + 1, MouseButton::Left, MouseAction::Press))[0]);
         $this->assertSame($page, $page->update(new MouseClickMsg($col, $row, MouseButton::Right, MouseAction::Press))[0]);
         $this->assertSame($page, $page->update(new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Release))[0]);
+    }
+    // ── (c, in the app) a click on the painted screen reaches the bar ───────
+
+    /** @return array{int, int} 1-based screen (col, row) of $label in the painted bar */
+    private function screenCell(App $a, string $label): array
+    {
+        $plain = Scan::strip(\preg_replace('/\e\[[0-9;]*m/', '', $a->view()) ?? '');
+        foreach (\explode("\n", $plain) as $i => $line) {
+            if (\str_contains($line, 'Details │ Attributes │ MDL')) {
+                $at = \mb_strpos($line, 'Details │ Attributes │ MDL');
+                $offset = \mb_strpos(\mb_substr($line, $at), $label);
+                return [$at + $offset + 1, $i + 1];
+            }
+        }
+        $this->fail('the painted screen shows the detail-tab bar');
+    }
+
+    public function testAClickOnThePaintedScreenSwitchesTheTabThroughApp(): void
+    {
+        Renderer::setSize(160, 50);
+        $a = $this->adminApp();
+
+        [$col, $row] = $this->screenCell($a, 'MDL');
+        [$a, $cmd] = $a->update(new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Press));
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_MDL, $this->connections($a)->detailTab());
+        $this->assertNull($cmd);
+        $this->assertSame(Pane::Admin, $a->ui->pane);
+
+        [$col, $row] = $this->screenCell($a, 'Attributes');
+        [$a,] = $a->update(new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Press));
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_ATTRIBUTES, $this->connections($a)->detailTab());
+
+        [$missed,] = $a->update(new MouseClickMsg($col, $row - 1, MouseButton::Left, MouseAction::Press));
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_ATTRIBUTES, $this->connections($missed)->detailTab(), 'a click off the bar changes nothing');
+    }
+
+    public function testAClickOffTheAdminPaneIsIgnored(): void
+    {
+        Renderer::setSize(160, 50);
+        $db = new FakeDatabase();
+        $a = new App(ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)));
+
+        [$next, $cmd] = $a->update(new MouseClickMsg(10, 10, MouseButton::Left, MouseAction::Press));
+        $this->assertSame($a, $next);
+        $this->assertNull($cmd);
+    }
+
+    // ── (d) each tab shows its own data for the selected thread ─────────────
+
+    public function testEachDetailTabRendersItsOwnDataForTheSelectedThread(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult([
+            ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
+        ]);
+        $db->setPreparedResult('session_connect_attrs', [
+            ['id' => '7', 'attr_name' => '_client_name', 'attr_value' => 'libmysql', 'ordinal' => 0],
+        ]);
+        $db->setPreparedResult('metadata_locks', [
+            ['lock_id' => '1', 'lock_type' => 'SHARED_READ', 'lock_status' => 'GRANTED', 'lock_mode' => 'TRANSACTION', 'thread_id' => '40', 'processlist_id' => '7'],
+        ]);
+        $db->setPreparedResult('TYPE AS thread_type', [
+            ['id' => '7', 'user' => 'app', 'thread_type' => 'FOREGROUND', 'thread_name' => 'thread/sql/one_connection'],
+        ]);
+        $page = ConnectionsPage::new(new ServerContext($db));
+        $plain = static fn (ConnectionsPage $p): string => Scan::strip(\preg_replace('/\e\[[0-9;]*m/', '', $p->view()) ?? '');
+
+        $this->assertNull($page->detailLines(), 'the panel starts closed');
+        $closed = $plain($page);
+
+        [$details] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertStringContainsString('thread_name: thread/sql/one_connection', $plain($details));
+
+        [$attributes] = $details->update(new KeyMsg(KeyType::Char, '2'));
+        $this->assertStringContainsString('_client_name: libmysql', $plain($attributes));
+        $this->assertStringNotContainsString('thread_name:', $plain($attributes));
+
+        [$mdl] = $attributes->update(new KeyMsg(KeyType::Char, '3'));
+        $this->assertStringContainsString('lock_type=SHARED_READ', $plain($mdl));
+        $this->assertStringNotContainsString('_client_name', $plain($mdl));
+
+        [$back] = $mdl->update(new KeyMsg(KeyType::Escape));
+        $this->assertNull($back->detailLines(), 'Esc closes the panel');
+        $this->assertSame($closed, $plain($back->withDetailTab(ConnectionsPage::DETAIL_TAB_DETAILS)));
+    }
+
+    public function testATabTheServerRefusesSaysSoInsteadOfShowingNothing(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult([
+            ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
+        ]);
+        [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertSame(['No Details data for thread 7'], $page->detailLines());
+    }
+
+    // ── (e) leaving the Admin pane drops the bar's key claims ───────────────
+
+    public function testLeavingTheAdminPaneReleasesTheFocusedBar(): void
+    {
+        $a = $this->adminApp();
+        [$a,] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($this->connections($a)->detailTabsFocused());
+
+        [$a,] = $a->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertSame(Pane::Tables, $a->ui->pane);
+        $this->assertFalse($this->connections($a)->detailTabsFocused(), 'q back to Tables blurs the bar');
+        $this->assertNull($this->connections($a)->detailLines());
+
+        for ($i = 0; $i < 3; $i++) {
+            [$a,] = $a->update(new KeyMsg(KeyType::Tab));
+        }
+        $this->assertSame(Pane::Admin, $a->ui->pane);
+
+        [$a,] = $a->update(new KeyMsg(KeyType::Tab));
+        $this->assertNotSame(Pane::Admin, $a->ui->pane, 'the first Tab back on Admin cycles the pane');
     }
 }
