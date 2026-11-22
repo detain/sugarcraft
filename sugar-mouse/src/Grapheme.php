@@ -28,13 +28,17 @@ namespace SugarCraft\Mouse;
  * `\X` follows PCRE2's own cluster rules, which match ICU on the inputs
  * GraphemeTest cross-checks against `grapheme_extract()` (combining accents,
  * ZWJ families, flag pairs, keycaps, tag flags, skin tones, Hangul, CRLF,
- * Prepend + ASCII) but not everywhere. Two splits measured on PCRE2 10.42
+ * Prepend + ASCII) but not everywhere. Three splits measured on PCRE2 10.42
  * against ICU 74: an Indic conjunct (U+0915 U+094D U+0937, which ICU joins by
  * GB9c) comes back as two clusters and so two cells instead of one, moving
- * every zone to its right one column; and a regional indicator followed by a
+ * every zone to its right one column; a regional indicator followed by a
  * combining mark (U+1F1F8 U+0301) comes back as the indicator alone, which
- * leaves the cell count unchanged. A layout whose zones must land on the same
- * column on every host should require ext-intl.
+ * leaves the cell count unchanged; and a Prepend code point followed by a
+ * wide glyph (U+0600 U+1F468, which ICU keeps as one cluster by GB9b) comes
+ * back as the Prepend alone, so the pair measures as two clusters — three
+ * cells where ICU's one cluster measures one — moving every zone to its
+ * right two columns. A layout whose zones must land on the same column on
+ * every host should require ext-intl.
  */
 final class Grapheme
 {

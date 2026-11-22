@@ -347,8 +347,11 @@ pathological combining run) is cut there, where ICU would take it whole. Only by
 lead-byte-sized unit. `\X` approximates UAX #29 rather than implementing it:
 measured on PCRE2 10.42 against ICU 74, it splits an Indic conjunct such as
 क्ष (U+0915 U+094D U+0937) into two clusters, so a zone after it lands one
-column further right without `ext-intl`, and it splits a regional indicator
-from a combining mark after it (same cell count). ICU and PCRE also track
+column further right without `ext-intl`; it splits a regional indicator
+from a combining mark after it (same cell count); and it splits a Prepend
+code point from a wide glyph after it — U+0600 U+1F468, which ICU keeps as
+one cluster (GB9b) — so the pair measures three cells instead of one and a
+zone after it lands two columns further right. ICU and PCRE also track
 their own Unicode versions, so a code point newer than one of them can
 cluster differently host to host. Layouts whose zones must land on the same
 column on every host, including Indic text and brand-new emoji, should
@@ -356,7 +359,8 @@ require `ext-intl`. Runs of printable ASCII are taken
 in one step (no ASCII code point is Prepend, so ASCII joins only a non-ASCII
 neighbor), with the run's last byte left to the cluster path when a combining
 mark follows it; ASCII after a Prepend code point such as U+0600 stays in that
-Prepend's cluster on both paths (UAX #29 GB9b).
+Prepend's cluster on both paths (UAX #29 GB9b); a wide non-ASCII glyph after
+one does not (the U+0600 U+1F468 split above).
 
 **Re-scans re-measure only changed lines.** Pass a `LineWidthCache` to
 `Scan::parse()` (`Scanner` and `Zones\Manager` each carry one) and every
@@ -520,9 +524,13 @@ paints-no-cell/claims-nothing rule as the malformed-markup table above).
 **One hit rule — and a persistent registry.** Both layers resolve a cell
 through the same `ZoneGrid`: the SMALLEST covering area wins (nested
 components: innermost wins), and equal areas go to the first-registered zone.
-`Scanner::hit()` and `Manager::zoneAt()` / `anyInBounds()` therefore always
-name the same owner for one painted frame (they used to disagree: the
-Scanner once resolved by registration order alone), and the Manager's
+`Scanner::hit()` and `Manager::zoneAt()` / `anyInBounds()` therefore name
+the same owner for a frame when the Manager holds exactly that frame's
+zones — it scanned the frame and every id the frame did not paint was
+cleared (the `idsAbsentFromFrame()` prune step below); a Manager still
+holding zones from earlier frames can resolve a cell to one of those
+instead. (They used to disagree even then: the Scanner once resolved by
+registration order alone.) The Manager's
 lookups scan one grid bucket instead of the whole registry. The primitive
 `Scanner::scan()` replaces its whole zone set from the frame it parses;
 `Manager::scan()` merges into its registry: ids re-recorded in a new frame are replaced and
