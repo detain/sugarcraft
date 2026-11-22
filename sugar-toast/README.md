@@ -316,6 +316,36 @@ if ($msg instanceof RepaintMsg) {
 - **`secondsUntilNextExpiry(): ?float`** — the same as a delay from now, clamped
   to `>= 0.0` (an already-due alert yields `0.0`), or `null` if nothing expires.
 
+`tickCmd(): ?\Closure` packages that recipe: it is the `Cmd::tick()` for the
+soonest live expiry, delivering a `ToastTickMsg` (its `at` is the instant it
+was scheduled for), or `null` when no live alert is waiting to expire — so a
+quiet queue arms nothing, and a queue whose timed alerts have all expired
+arms nothing either. Return it after every toast change and re-ask on the
+tick:
+
+```php
+use SugarCraft\Toast\{Alert, Toast, ToastTickMsg, ToastType};
+
+$toast = Toast::new()->push(Alert::new(ToastType::Error, 'Disk full')->withTtl(3.0));
+$cmd = $toast->tickCmd();   // fires in 3 s with a ToastTickMsg
+
+// in update():
+if ($msg instanceof ToastTickMsg) {
+    $this->toast = $this->toast->pruneExpired();
+    return [$this, $this->toast->tickCmd()];   // null once nothing is left to expire
+}
+```
+
+`Alert::withTtl(float $seconds)` is the relative lifetime for a pre-built
+alert: the clock starts when `push()` queues it, not when the alert is built
+(that is `withExpiry()`), and it overrides the toast's `withDuration()`.
+
+A host that keeps its frame as a sugar-cellbuffer `Buffer` paints the toast
+layer straight into it with `compositeInto(Buffer $buffer): Buffer` — the
+same boxes on the same cells `view()` paints for that canvas, with no
+background string to re-parse; the buffer keeps its size, so a box taller
+than it is clipped.
+
 ## Internationalization
 
 Every user-facing string the renderer emits — type labels, the `+N more` action
@@ -623,6 +653,8 @@ already over the new cap survive until the next push evicts them.
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
+| `->tickCmd(): ?\Closure` | `Cmd::tick()` delivering a `ToastTickMsg` at the soonest live expiry; `null` when no live alert is waiting to expire — see Loop Integration |
+| `->compositeInto(Buffer $buffer): Buffer` | Paint the toast layer into a host's cell buffer (same placement as `view()`, clipped to the buffer) — see Loop Integration |
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files every queued alert into history and mutes rendering until `clear()`; `clear()` resets the dismissed state but files nothing into history; `pruneExpired()` drops expired alerts silently — see History Log |
 | `->history(): list<Alert>` | Every recorded alert — dismissed, `DropOldest` evictees, `DropNewest` refusals; cumulative, `clear()` never resets it — see History Log |
 | `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — the index space `cancelAlert()`/`extendAlert()`/`actionRects()` share |
@@ -643,6 +675,8 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
+| `Alert` | `withTtl(float $seconds)` | Relative lifetime armed when `push()` queues the alert (finite, `> 0`); overrides `withDuration()` — see Loop Integration |
+| `Alert` | `->ttl: ?float` | Pending relative lifetime (seconds); `push()` arms it into `expiresAt` |
 | `Alert` | `new(ToastType, ?string, ?float, ?float, array, ?Color, ?Color, ?Color, bool $persistent = false, ?string $id = null)` | Factory — constructor mirror (`type`/`message` positional, the rest named); the one seed door, see Persistent Alerts |
 | `Alert` | `->type: ToastType` | Severity — drives icon, palette and the accessible label (public readonly) |
 | `Alert` | `->message: ?string` | User-visible message text (`null` renders as empty) |
@@ -669,6 +703,7 @@ already over the new cap survive until the next push evicts them.
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (non-empty string; readonly) — inline SGR kept, other control/escape constructs stripped, printable-empty refused |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
+| `ToastTickMsg` | `->at: float` | The expiry instant a `tickCmd()` tick was scheduled for |
 | `HistoryLog` | `new(array $entries = []): self` | Factory mirroring the sibling `::new()`s; seeds from a `list<Alert>`, garbage throws |
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |

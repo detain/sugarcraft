@@ -53,9 +53,15 @@ final class Alert
      *        appends.
      * @param AlertTypeDefinition|null $definition  Custom type (registry-resolved by
      *        Toast::alert()/progressToast()); $type then holds its base severity. null = a plain built-in
+     * @param float|null $ttl  Relative lifetime in seconds, armed when the
+     *        alert is QUEUED (Toast::push() turns it into $expiresAt =
+     *        now + $ttl), so an alert built ahead of time does not spend its
+     *        lifetime before it is shown. Must be finite and > 0. null = no
+     *        relative lifetime. An explicit $expiresAt wins over it.
      * @throws \InvalidArgumentException when $progress is non-finite, when
-     *         $expiresAt is non-finite or below the epoch floor, or when
-     *         $actions is not a list of Action instances
+     *         $expiresAt is non-finite or below the epoch floor, when $ttl
+     *         is not finite and > 0, or when $actions is not a list of
+     *         Action instances
      */
     public function __construct(
         public readonly ToastType $type,
@@ -69,7 +75,11 @@ final class Alert
         public readonly bool $persistent = false,
         public readonly ?string $id = null,
         public readonly ?AlertTypeDefinition $definition = null,
+        public readonly ?float $ttl = null,
     ) {
+        if ($ttl !== null && (!\is_finite($ttl) || $ttl <= 0.0)) {
+            throw new \InvalidArgumentException('Alert $ttl ' . self::TTL_RULE . $ttl);
+        }
         if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < self::EPOCH_FLOOR)) {
             throw new \InvalidArgumentException('Alert $expiresAt ' . self::EXPIRY_RULE . $expiresAt);
         }
@@ -104,6 +114,9 @@ final class Alert
         . 'NAN/INF never expire and a sub-epoch (duration-shaped) value is born expired — '
         . 'both silently; relative lifetimes belong in withDuration()/$ttlSeconds/withExpiry() — got ';
 
+    /** Message tail for the $ttl guard (constructor and withTtl()). */
+    public const TTL_RULE = 'must be a finite number of seconds above 0 (a relative lifetime); got ';
+
     /**
      * Factory mirroring Action::new() / Toast::new() — Alert once had only
      * the bare ctor while its siblings led with ::new().
@@ -123,6 +136,7 @@ final class Alert
         bool $persistent = false,
         ?string $id = null,
         ?AlertTypeDefinition $definition = null,
+        ?float $ttl = null,
     ): self {
         return (new self($type, $message))->mutate([
             'expiresAt' => $expiresAt,
@@ -134,6 +148,7 @@ final class Alert
             'persistent' => $persistent,
             'id' => $id,
             'definition' => $definition,
+            'ttl' => $ttl,
         ]);
     }
 
@@ -169,6 +184,7 @@ final class Alert
             persistent: $pick('persistent', $this->persistent),
             id: $pick('id', $this->id),
             definition: $pick('definition', $this->definition),
+            ttl: $pick('ttl', $this->ttl),
         );
     }
 
@@ -208,7 +224,7 @@ final class Alert
      */
     public function withCancelledExpiry(): self
     {
-        return $this->mutate(['expiresAt' => null, 'persistent' => true]);
+        return $this->mutate(['expiresAt' => null, 'persistent' => true, 'ttl' => null]);
     }
 
     /**
@@ -222,12 +238,37 @@ final class Alert
         return $this->mutate([
             'expiresAt' => \microtime(true) + $additionalSeconds,
             'persistent' => false,
+            'ttl' => null,
         ]);
     }
 
+    /**
+     * Expire $duration seconds from NOW (the clock starts at this call).
+     * Clears persistence and any pending {@see withTtl()} lifetime.
+     */
     public function withExpiry(float $duration): self
     {
-        return $this->mutate(['expiresAt' => \microtime(true) + $duration, 'persistent' => false]);
+        return $this->mutate(['expiresAt' => \microtime(true) + $duration, 'persistent' => false, 'ttl' => null]);
+    }
+
+    /**
+     * Give the alert a relative lifetime that starts when it is QUEUED:
+     * `Alert::new(ToastType::Error, $msg)->withTtl(3.0)` shows for three
+     * seconds from the moment {@see Toast::push()} takes it, however long the
+     * alert waited before. Unlike {@see withExpiry()} (which starts the clock
+     * now), nothing is armed yet, so the alert is not expired until pushed.
+     * Clears any absolute expiry and the persistent sentinel, and overrides
+     * the toast's withDuration() default.
+     *
+     * @throws \InvalidArgumentException when $seconds is not finite and > 0
+     */
+    public function withTtl(float $seconds): self
+    {
+        if (!\is_finite($seconds) || $seconds <= 0.0) {
+            throw new \InvalidArgumentException('withTtl() $seconds ' . self::TTL_RULE . $seconds);
+        }
+
+        return $this->mutate(['ttl' => $seconds, 'expiresAt' => null, 'persistent' => false]);
     }
 
     /**

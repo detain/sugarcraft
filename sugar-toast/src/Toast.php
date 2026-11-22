@@ -10,6 +10,7 @@ use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\CellBuffer\Region;
 use SugarCraft\CellBuffer\Position as BufferPosition;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -511,13 +512,18 @@ final class Toast
      * (when the alert carries no expiry of its own), the expired-on-write
      * prune, and the maxConcurrent/overflow policy, exactly like {@see alert()}.
      *
+     * An alert carrying a relative lifetime ({@see Alert::withTtl()}) is armed
+     * here: its clock starts now, and it takes precedence over withDuration().
+     *
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function push(Alert $alert): self
     {
         $clone = clone $this;
 
-        if ($alert->expiresAt === null && !$alert->persistent && $clone->duration !== null) {
+        if ($alert->ttl !== null && $alert->expiresAt === null && !$alert->persistent) {
+            $alert = $alert->withExpiry($alert->ttl);
+        } elseif ($alert->expiresAt === null && !$alert->persistent && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
 
@@ -877,6 +883,41 @@ final class Toast
     }
 
     /**
+     * The command that wakes the host when the next live alert expires, or
+     * null when nothing is waiting to expire (no live alert auto-dismisses,
+     * every timed alert has already expired, or the toast is dismissed).
+     *
+     * The TEA form of {@see secondsUntilNextExpiry()}: return it from init()
+     * and from update() after any toast change, and on the
+     * {@see ToastTickMsg} it delivers call {@see pruneExpired()} and ask
+     * again. A host that does so redraws exactly when an alert leaves the
+     * screen instead of polling on a fixed interval.
+     *
+     * @return \Closure|null a sugar-core Cmd::tick() delivering ToastTickMsg
+     */
+    public function tickCmd(): ?\Closure
+    {
+        if ($this->dismissed) {
+            return null;
+        }
+        $soonest = null;
+        foreach ($this->queue as $alert) {
+            if ($alert->persistent || $alert->expiresAt === null || $alert->isExpired()) {
+                continue;
+            }
+            if ($soonest === null || $alert->expiresAt < $soonest) {
+                $soonest = $alert->expiresAt;
+            }
+        }
+        if ($soonest === null) {
+            return null;
+        }
+        $at = $soonest;
+
+        return Cmd::tick(\max(0.0, $at - \microtime(true)), static fn (): ToastTickMsg => new ToastTickMsg($at));
+    }
+
+    /**
      * Return the history of dismissed alerts.
      *
      * Bare accessor per project convention (no `get` prefix).
@@ -952,13 +993,48 @@ final class Toast
      */
     private function composite(array $layout): string
     {
-        $viewport = $layout['viewport'];
+        return $this->blitBoxes($layout['viewport'], $layout['boxes'])->toAnsi();
+    }
+
+    /**
+     * Paint the toast layer into a host's cell buffer and return the result.
+     *
+     * The cell-level twin of {@see view()}: a host that already holds its
+     * frame as a sugar-cellbuffer Buffer composites the boxes straight into
+     * it, with no background string to re-parse each frame. The buffer is
+     * the canvas: its width caps the boxes as the viewport width does, the
+     * stack folds to its height, and a box taller than it is clipped (the
+     * returned buffer always keeps the given size). Placement, fold-to-fit
+     * and host zone carry are view()'s own, so the boxes land on the same
+     * cells view() paints for the same canvas. With nothing to show the
+     * buffer comes back unchanged.
+     *
+     * @throws \InvalidArgumentException under the same viewport bounds as view()
+     */
+    public function compositeInto(Buffer $buffer): Buffer
+    {
+        $this->guardViewport($buffer->width(), $buffer->height());
+        if ($this->dismissed || $this->queue === [] || $this->activeAlerts() === []) {
+            return $buffer;
+        }
+        $envCtx = [$this->coloursSuppressed(), $this->reducedMotionPreferred()];
+
+        return $this->blitBoxes($buffer, $this->placeBoxes($buffer->width(), $buffer->height(), $envCtx)['boxes']);
+    }
+
+    /**
+     * Blit placed boxes onto a canvas.
+     *
+     * @param list<array{buffer:Buffer,x:int,y:int}> $boxes
+     */
+    private function blitBoxes(Buffer $viewport, array $boxes): Buffer
+    {
         $bgGrid = $viewport;
 
         // Region spans exactly the box, so nothing right of a narrow box is
         // overwritten with blanks; geometry comes from the shared layout()
         // pass — the same numbers actionRects() reports.
-        foreach ($layout['boxes'] as $placed) {
+        foreach ($boxes as $placed) {
             $box = $placed['buffer'];
             $region = new Region(BufferPosition::new($placed['x'], $placed['y']), $box->width(), $box->height());
             $viewport = $viewport->withRegion($region, $box);
@@ -967,7 +1043,7 @@ final class Toast
             }
         }
 
-        return $viewport->toAnsi();
+        return $viewport;
     }
 
     /**
@@ -1143,6 +1219,44 @@ final class Toast
      */
     private function layout(string $background, int $viewportWidth, int $viewportHeight): ?array
     {
+        $this->guardViewport($viewportWidth, $viewportHeight);
+
+        if ($this->dismissed || $this->queue === []) {
+            return null;
+        }
+        if ($this->activeAlerts() === []) {
+            return null;
+        }
+
+        $bgLines = $this->splitLines($background);
+        // TST-ENVPERF: the env predicates are evaluated ONCE for this render
+        // and threaded through the scan/apply helpers ([c0]=colour-suppression,
+        // [c1]=reduced-motion). The docblock's "read per render, not cached"
+        // cadence holds — every call below happens inside this single pass;
+        // the NEXT view() re-reads, so a host flipping NO_COLOR between frames
+        // heals on the next frame exactly as before.
+        $envCtx = [$this->coloursSuppressed(), $this->reducedMotionPreferred()];
+        $placed = $this->placeBoxes($viewportWidth, max(\count($bgLines), $viewportHeight), $envCtx);
+
+        $viewport = Buffer::new($placed['frameWidth'], $placed['contentHeight']);
+        $viewport = $this->fillViewportFromString($viewport, $bgLines, $envCtx);
+
+        return [
+            'viewport' => $viewport,
+            'boxes' => $placed['boxes'],
+            'frameWidth' => $placed['frameWidth'],
+            'contentHeight' => $placed['contentHeight'],
+        ];
+    }
+
+    /**
+     * The viewport bounds every render door enforces (fail-fast: a frame
+     * allocates width*height cells eagerly).
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function guardViewport(int $viewportWidth, int $viewportHeight): void
+    {
         if ($viewportWidth < 1 || $viewportWidth > self::MAX_VIEWPORT_DIMENSION) {
             throw new \InvalidArgumentException(\sprintf(
                 'viewportWidth %d is outside the supported range 1..%d (sugar-toast::MAX_VIEWPORT_DIMENSION)',
@@ -1166,26 +1280,22 @@ final class Toast
                 self::MAX_VIEWPORT_CELLS
             ));
         }
+    }
 
-        if ($this->dismissed || $this->queue === []) {
-            return null;
-        }
-        $active = $this->activeAlerts();
-        if ($active === []) {
-            return null;
-        }
-
-        $bgLines = $this->splitLines($background);
-        // TST-ENVPERF: the env predicates are evaluated ONCE for this render
-        // and threaded through the scan/apply helpers ([c0]=colour-suppression,
-        // [c1]=reduced-motion). The docblock's "read per render, not cached"
-        // cadence holds — every call below happens inside this single pass;
-        // the NEXT view() re-reads, so a host flipping NO_COLOR between frames
-        // heals on the next frame exactly as before.
-        $envCtx = [$this->coloursSuppressed(), $this->reducedMotionPreferred()];
+    /**
+     * Render each active alert to its box, fold the stack to the canvas
+     * budget, and place every box: the geometry {@see layout()} and
+     * {@see compositeInto()} share. Callers have already checked that at
+     * least one alert is active.
+     *
+     * @param array{0:bool,1:bool} $envCtx
+     * @return array{boxes:list<array{alert:?Alert,buffer:Buffer,x:int,y:int,index:int,fold:int}>,frameWidth:int,contentHeight:int}
+     */
+    private function placeBoxes(int $viewportWidth, int $budget, array $envCtx): array
+    {
         $boxes = [];
         $stackHeight = 0;
-        foreach ($active as $index => $alert) {
+        foreach ($this->activeAlerts() as $index => $alert) {
             $box = $this->renderAlertToBuffer($alert, $viewportWidth, $envCtx);
             $boxes[] = ['alert' => $alert, 'buffer' => $box, 'x' => 0, 'y' => 0, 'index' => $index, 'fold' => 0];
             $stackHeight += $box->height();
@@ -1199,7 +1309,6 @@ final class Toast
         // canvas budget and the surplus folds into one '+N hidden' row;
         // hidden alerts stay live in activeAlerts()/history(). A stack that
         // fits is byte-identical to before.
-        $budget = max(\count($bgLines), $viewportHeight);
         if (\count($boxes) > 1 && !$this->stackFits(\array_map(static fn (array $b): int => $b['buffer']->height(), $boxes), $budget)) {
             $boxes = $this->foldToFit($boxes, $budget, $envCtx);
             $stackHeight = 0;
@@ -1217,15 +1326,7 @@ final class Toast
             $stackedBefore += $box->height();
         }
 
-        $viewport = Buffer::new($frameWidth, $contentHeight);
-        $viewport = $this->fillViewportFromString($viewport, $bgLines, $envCtx);
-
-        return [
-            'viewport' => $viewport,
-            'boxes' => $boxes,
-            'frameWidth' => $frameWidth,
-            'contentHeight' => $contentHeight,
-        ];
+        return ['boxes' => $boxes, 'frameWidth' => $frameWidth, 'contentHeight' => $contentHeight];
     }
 
     /**
