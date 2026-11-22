@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'El ancho de columna debe ser >= 0',
     'tabs.bad_index'              => 'índice de pestaña fuera de rango',
     'tabs.neg_width'              => 'el ancho de pestañas debe ser >= 0',
+    'tabs.neg_padding'            => 'el relleno de la etiqueta de pestaña debe ser >= 0',
     'tabs.zone_key_empty'         => 'la clave de zona de pestaña no debe estar vacía',
     'tabs.close_glyph_empty'      => 'el símbolo de cierre de pestaña no debe estar vacío',
     'table.dim_nonneg'            => 'el ancho/alto de la tabla debe ser >= 0',

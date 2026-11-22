@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Šířka sloupce musí být >= 0',
     'tabs.bad_index'              => 'index karty mimo rozsah',
     'tabs.neg_width'              => 'šířka karet musí být >= 0',
+    'tabs.neg_padding'            => 'odsazení popisku karty musí být >= 0',
     'tabs.zone_key_empty'         => 'klíč zóny záložky nesmí být prázdný',
     'tabs.close_glyph_empty'      => 'symbol zavření záložky nesmí být prázdný',
     'table.dim_nonneg'            => 'šířka/výška tabulky musí být >= 0',

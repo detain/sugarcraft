@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Sütun genişliği >= 0 olmalıdır',
     'tabs.bad_index'              => 'sekme indeksi aralık dışında',
     'tabs.neg_width'              => 'sekme genişliği >= 0 olmalıdır',
+    'tabs.neg_padding'            => 'sekme etiketi dolgusu >= 0 olmalıdır',
     'tabs.zone_key_empty'         => 'sekme bölgesi anahtarı boş olamaz',
     'tabs.close_glyph_empty'      => 'sekme kapatma simgesi boş olamaz',
     'table.dim_nonneg'            => 'tablo genişlik/yüksekliği >= 0 olmalıdır',

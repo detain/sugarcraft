@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => '列幅は >= 0 である必要があります',
     'tabs.bad_index'              => 'タブインデックスが範囲外です',
     'tabs.neg_width'              => 'タブの幅は >= 0 である必要があります',
+    'tabs.neg_padding'            => 'タブラベルの余白は >= 0 である必要があります',
     'tabs.zone_key_empty'         => 'タブのゾーンキーは空にできません',
     'tabs.close_glyph_empty'      => 'タブの閉じる記号は空にできません',
     'table.dim_nonneg'            => 'テーブルの幅/高さは >= 0 である必要があります',

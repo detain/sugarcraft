@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => 'Spaltenbreite muss >= 0 sein',
     'tabs.bad_index'              => 'Tabellenindex außerhalb des Bereichs',
     'tabs.neg_width'              => 'Tabs-Breite muss >= 0 sein',
+    'tabs.neg_padding'            => 'Innenabstand der Tab-Beschriftung muss >= 0 sein',
     'tabs.zone_key_empty'         => 'Zonenschlüssel des Tabs darf nicht leer sein',
     'tabs.close_glyph_empty'      => 'Schließen-Symbol des Tabs darf nicht leer sein',
     'table.dim_nonneg'            => 'Tabellen-Breite/-Höhe muss >= 0 sein',

@@ -12,6 +12,7 @@ return [
     'column.width_nonneg'         => '列宽必须 >= 0',
     'tabs.bad_index'              => '标签索引超出范围',
     'tabs.neg_width'              => '标签宽度必须 >= 0',
+    'tabs.neg_padding'            => '标签文字内边距必须 >= 0',
     'tabs.zone_key_empty'         => '标签页区域键不能为空',
     'tabs.close_glyph_empty'      => '标签页关闭符号不能为空',
     'table.dim_nonneg'            => '表格宽/高必须 >= 0',

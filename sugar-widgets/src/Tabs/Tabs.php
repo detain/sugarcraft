@@ -127,6 +127,8 @@ final class Tabs implements Model
         public readonly ?Style $badgeStyle = null,
         public readonly ?Mark $mark = null,
         public readonly string $placeholder = '',
+        public readonly int $paddingLeft = 1,
+        public readonly int $paddingRight = 1,
     ) {
         $labelCount = count($labels);
         if ($active < 0 || ($labelCount > 0 && $active >= $labelCount)) {
@@ -499,7 +501,10 @@ final class Tabs implements Model
     /**
      * The sanitized, unstyled texts of tab `$i` — the single source both
      * the draw ({@see tabPieces()}) and the pricing ({@see tabWidth()})
-     * read, so priced and drawn widths never drift.
+     * read, so priced and drawn widths never drift. The label carries the
+     * configured {@see withLabelPadding()} cells on each side; spans(),
+     * tabAt(), clickAt() and the scroll window all measure these texts, so
+     * the hit-test follows any padding without arithmetic of its own.
      *
      * @return array{label:string, badge:?string, close:?string}
      */
@@ -507,7 +512,9 @@ final class Tabs implements Model
     {
         $badge = isset($this->badges[$i]) ? self::sanitizeLabel($this->badges[$i]) : '';
         return [
-            'label' => ' ' . self::sanitizeLabel($this->labels[$i]) . ' ',
+            'label' => str_repeat(' ', $this->paddingLeft)
+                . self::sanitizeLabel($this->labels[$i])
+                . str_repeat(' ', $this->paddingRight),
             'badge' => $badge === '' ? null : $badge . ' ',
             'close' => $this->closable ? $this->closeGlyph . ' ' : null,
         ];
@@ -898,6 +905,24 @@ final class Tabs implements Model
     }
 
     /**
+     * Set the blank cells drawn on each side of every label (default 1 and
+     * 1: ` Home `). `withLabelPadding(0, 0)` draws the bare label, for a
+     * host that frames its tabs itself. Only the label is padded: a badge
+     * and the close affordance keep their own trailing cell. Spans, tabAt(),
+     * clickAt() and the scroll window measure the padded text, so hit-tests
+     * stay on the drawn cells for any padding.
+     *
+     * @throws \InvalidArgumentException when either value is negative.
+     */
+    public function withLabelPadding(int $left, int $right): self
+    {
+        if ($left < 0 || $right < 0) {
+            throw new \InvalidArgumentException(Lang::t('tabs.neg_padding'));
+        }
+        return $this->mutate(paddingLeft: $left, paddingRight: $right);
+    }
+
+    /**
      * Manually set the scroll offset (first visible tab index), clamped to
      * the tab list. Auto-scroll that keeps the active tab visible is driven
      * internally by {@see update()} — this setter pins an explicit offset.
@@ -1174,6 +1199,8 @@ final class Tabs implements Model
         ?Mark $mark = null,
         bool $markSet = false,
         ?string $placeholder = null,
+        ?int $paddingLeft = null,
+        ?int $paddingRight = null,
     ): self {
         return new self(
             active: $active ?? $this->active,
@@ -1197,6 +1224,8 @@ final class Tabs implements Model
             badgeStyle: $badgeStyleSet ? $badgeStyle : $this->badgeStyle,
             mark: $markSet ? $mark : $this->mark,
             placeholder: $placeholder ?? $this->placeholder,
+            paddingLeft: $paddingLeft ?? $this->paddingLeft,
+            paddingRight: $paddingRight ?? $this->paddingRight,
         );
     }
 
