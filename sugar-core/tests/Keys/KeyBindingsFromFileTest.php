@@ -69,6 +69,18 @@ final class KeyBindingsFromFileTest extends TestCase
         self::assertSame(['quit', 'save', 'help', 'prev'], $b->actions(), 'declaration order is kept');
     }
 
+    public function testANumericActionIdIsReplacedNotDuplicated(): void
+    {
+        $path = $this->write('keys.json', '{"1": ["x"]}');
+
+        $b = KeyBindings::fromFile($path, KeyBindings::fromMap(['1' => ['q']]));
+
+        self::assertSame(['1'], $b->actions(), 'no phantom action is created');
+        self::assertSame(['x'], $b->tokens('1'));
+        self::assertSame('1', $b->actionFor(new KeyMsg(KeyType::Char, 'x')));
+        self::assertNull($b->actionFor(new KeyMsg(KeyType::Char, 'q')), 'the replaced chord is gone');
+    }
+
     public function testAFileMayDeclareNewActionsOnAnEmptyBase(): void
     {
         $path = $this->write('keys.json', '{"jump": ["g"]}');

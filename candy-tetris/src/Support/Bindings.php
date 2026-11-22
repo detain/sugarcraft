@@ -180,11 +180,13 @@ final class Bindings
     /**
      * App-side actuation door (candy-tetris-034): under a ctrl chord only
      * 'ctrl+…' tokens of the action actuate; without one only plain
-     * tokens do. The shared sugar-core registry folds modifiers away by
-     * design ("a legacy 'q' gate fires on Ctrl+Q too"), which for this
-     * game meant Ctrl+C answered the plain 'c' token and actuated HOLD
-     * mid-drop instead of leaving — while the interrupt itself exited
-     * nothing. Releases and repeats never actuate (m11), on either leg.
+     * tokens do. The sugar-core registry once folded modifiers away, so
+     * Ctrl+C answered the plain 'c' token and actuated HOLD mid-drop
+     * instead of leaving. Its matches() is now chord-exact, which already
+     * gives this split, and also stops a bare token firing under Alt or
+     * Shift (Alt+c no longer holds, Shift+Space no longer hard-drops); the
+     * ctrl leg stays as a pin of the contract. Releases and repeats never
+     * actuate (m11), on either leg.
      */
     public static function actuates(KeyBindings $keys, KeyMsg $msg, string $id): bool
     {

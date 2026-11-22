@@ -31,8 +31,11 @@ use SugarCraft\Widgets\Lang;
  * the host's call ({@see withOpen()}), on whatever key the host binds.
  *
  * Its own navigation keys are a {@see KeyBindings} registry too
- * ({@see defaultKeys()}), so `withKeys(KeyBindings::fromFile(...))` remaps
- * them like any other app binding.
+ * ({@see defaultKeys()}), so
+ * `withKeys(KeyBindings::fromFile($path, HelpOverlay::defaultKeys()))`
+ * remaps them like any other app binding. Pass the defaults as the base:
+ * without one the registry holds only the actions the file names, and the
+ * rest (`close` among them) would answer to no key.
  *
  * Mirrors the charmbracelet/bubbles help.Model full view (ShowAll) composed
  * with viewport.Model scrolling; upstream ships the two separately.

@@ -171,6 +171,28 @@ final class HelpOverlayTest extends TestCase
         self::assertSame(1, $o->offset);
     }
 
+    public function testAPartialKeyFileFoldedOnTheDefaultsKeepsTheOtherBindings(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sc-overlay-keys-');
+        self::assertIsString($path);
+        try {
+            file_put_contents($path, '{"scroll-down": ["ctrl+n"]}');
+            $o = self::overlay()->withKeys(KeyBindings::fromFile($path, HelpOverlay::defaultKeys()));
+        } finally {
+            unlink($path);
+        }
+
+        [$o] = $o->update(new KeyMsg(KeyType::Char, 'n', ctrl: true));
+        self::assertSame(1, $o->offset, 'the file remaps scroll-down');
+
+        [$o] = self::press($o, KeyType::Up);
+        self::assertSame(0, $o->offset, 'an action the file does not name keeps its default');
+
+        [$closed, $cmd] = self::press($o, KeyType::Escape);
+        self::assertFalse($closed->open, 'close still answers to Escape');
+        self::assertNotNull($cmd);
+    }
+
     public function testShorterContentOrTallerWindowReclampsTheOffset(): void
     {
         [$o] = self::press(self::overlay(), KeyType::End);

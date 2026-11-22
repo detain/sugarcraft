@@ -200,7 +200,10 @@ final class KeyBindings
      * string); each entry REPLACES that action's chords, the same contract
      * as {@see withOverride()}, and an empty list unbinds the action. A
      * missing file is "no overrides": $base comes back unchanged, so an app
-     * can always point at its XDG slot. Anything else wrong — a slot that is
+     * that passes its defaults as $base can always point at its XDG slot.
+     * With no $base the result holds only the actions the file names, and a
+     * missing file yields an empty registry that matches nothing, so an app
+     * with defaults must pass them. Anything else wrong — a slot that is
      * not a plain file (symlink, FIFO, socket: refused by lstat, never
      * followed or opened), an oversized file, malformed JSON, a bad shape or
      * a token {@see parseChord()} rejects — throws, and nothing is applied:
@@ -275,7 +278,15 @@ final class KeyBindings
             $overrides[$id] = array_values(array_unique($chords));
         }
 
-        return $base->mutate(['actions' => array_merge($base->actions, $overrides)]);
+        // Assigned one by one, not array_merge(): PHP stores a numeric-looking
+        // id such as '1' as an int key, which array_merge() would renumber
+        // into a new phantom action instead of replacing the base's.
+        $actions = $base->actions;
+        foreach ($overrides as $id => $chords) {
+            $actions[$id] = $chords;
+        }
+
+        return $base->mutate(['actions' => $actions]);
     }
 
     /**
@@ -424,7 +435,7 @@ final class KeyBindings
      */
     public function actionFor(Msg $msg): ?string
     {
-        foreach (array_keys($this->actions) as $id) {
+        foreach ($this->actions() as $id) {
             if ($this->matches($msg, $id)) {
                 return $id;
             }
@@ -483,7 +494,9 @@ final class KeyBindings
      */
     public function actions(): array
     {
-        return array_keys($this->actions);
+        // A numeric-looking id is an int array key; hand it back as the string
+        // it was declared as.
+        return array_map(strval(...), array_keys($this->actions));
     }
 
     /**
