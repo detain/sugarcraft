@@ -113,10 +113,19 @@ final class Splitter
      * below the minimum while the span can hold every pane at the minimum.
      * Called before {@see withBounds()} (no span yet), the list is kept and
      * fitted once bounds arrive, so the call order does not matter.
+     *
+     * @throws \InvalidArgumentException when a size is negative: the minimum
+     *         floor cannot repair it on a span too small to hold every pane,
+     *         so it would put dividers on off-screen cells.
      */
     public function withSizes(int ...$sizes): self
     {
         $sizes = \array_values($sizes);
+        foreach ($sizes as $i => $size) {
+            if ($size < 0) {
+                throw new \InvalidArgumentException("Pane sizes must not be negative, got {$size} at index {$i}");
+            }
+        }
         if ($this->span() <= 0) {
             return $this->mutate(pending: $sizes);
         }

@@ -220,4 +220,19 @@ final class SplitterTest extends TestCase
         $this->assertFalse($same->isDragging());
         $this->assertSame([6, 6, 8], $more->sizes);
     }
+
+    public function testWithSizesRejectsANegativeSize(): void
+    {
+        $split = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'), Node::leaf('c'))->withBounds(0, 0, 2, 3);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Pane sizes must not be negative, got -1 at index 0');
+        $split->withSizes(-1, 5, 5);
+    }
+
+    public function testWithSizesRejectsANegativeSizeBeforeBounds(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withSizes(3, -2);
+    }
 }
