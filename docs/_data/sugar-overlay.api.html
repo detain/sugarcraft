@@ -10,6 +10,43 @@
 <tr><td><code>static fromArray(array $frame): self</code></td><td>Compatibility adapter for the legacy array shape returned by Animation\Slide::apply() (public since 1.x — the shape stays until the 2.0 flip, this wraps it at the consumer).</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-overlay-modal"><code>Modal</code> <small>interface</small></h4>
+<p>One modal layer a ModalStack paints and routes keys to.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>render(int $cols, int $rows): string</code></td><td>The modal&#039;s body for a canvas of $cols x $rows cells. The stack places it with the layer&#039;s Placement and veil (dim, border); the modal only decides what it shows and may size itself to the canvas.</td></tr>
+<tr><td><code>handleKey(KeyMsg $msg): array</code></td><td>React to a key while this modal is on top.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-overlay-modalstack"><code>ModalStack</code> <small>final class</small></h4>
+<p>Modals stacked in push order: the last pushed is on top, gets every key, and paints over everything beneath it.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>push(Modal $modal, ?Veil $veil = null): self</code></td><td>Push a modal on top.</td></tr>
+<tr><td><code>pop(): self</code></td><td>Drop the top modal (a no-op on an empty stack).</td></tr>
+<tr><td><code>top(): ?Modal</code></td><td>The modal on top, or null when the stack is empty.</td></tr>
+<tr><td><code>handleKey(KeyMsg $msg): array</code></td><td>Route a key to the top modal. The modal it returns replaces it; null closes it. An empty stack ignores the key (the host routes it on).</td></tr>
+<tr><td><code>render(string $background, int $cols, int $rows): string</code></td><td>Paint every modal, bottom to top, over $background.</td></tr>
+<tr><td><code>all(): array</code></td><td></td></tr>
+<tr><td><code>isEmpty(): bool</code></td><td></td></tr>
+<tr><td><code>count(): int</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-overlay-placement"><code>Placement</code> <small>final class</small></h4>
+<p>Where an overlay lands on its canvas: a vertical and a horizontal anchor plus a cell offset.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(Position $vertical = Position::CENTER, Position $horizontal = Position::CENTER, int $x = 0, int $y = 0): self</code></td><td>Anchor pair plus offset; CENTER/CENTER with no offset by default.</td></tr>
+<tr><td><code>static centered(int $x = 0, int $y = 0): self</code></td><td>CENTER/CENTER, the modal anchor, with an optional nudge.</td></tr>
+<tr><td><code>withAnchors(Position $vertical, Position $horizontal): self</code></td><td>Same offset, new anchors.</td></tr>
+<tr><td><code>withOffset(int $x, int $y): self</code></td><td>Same anchors, the offset replaced.</td></tr>
+<tr><td><code>offsetBy(int $dx, int $dy): self</code></td><td>Same anchors, the offset moved by ($dx, $dy).</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-overlay-position"><code>Position</code> <small>enum</small></h4>
 <p>Overlay position constants.</p>
 <p>Cases: <code>TOP</code> · <code>RIGHT</code> · <code>BOTTOM</code> · <code>LEFT</code> · <code>CENTER</code> · <code>TOP_RIGHT</code> · <code>BOTTOM_RIGHT</code> · <code>BOTTOM_LEFT</code> · <code>TOP_LEFT</code></p>
@@ -66,6 +103,8 @@
 <tr><td><code>withAutoSize(bool $enabled = true): self</code></td><td>Set the auto-size flag.</td></tr>
 <tr><td><code>withBorder(?Border $border): self</code></td><td>Set the border chrome for wrapping veil content, or clear it with null.</td></tr>
 <tr><td><code>withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self</code></td><td>Set the vertical and horizontal position anchors for this veil.</td></tr>
+<tr><td><code>withPlacement(Placement $placement): self</code></td><td>Store a placement on this veil: the anchor pair and offset a VeilStack::compositeAll() or ModalStack pass places it with. Same storage as withPosition() (which can also clear an axis); read it back with placement().</td></tr>
+<tr><td><code>placement(): Placement</code></td><td>The stored placement, an unset axis reading as CENTER (the default every stack pass applies).</td></tr>
 <tr><td><code>withContent(string $content): self</code></td><td>Attach the overlay content this veil paints when a VeilStack drives it. A veil WITHOUT content acts as a backdrop-only layer: the stack pass dims (or passes through) the canvas beneath it and writes no foreground of its own.</td></tr>
 <tr><td><code>withUntrustedContent(string $content): self</code></td><td>withContent() for text you do NOT trust: before attaching, the sweep applies Sanitize::untrustedForDisplay() (SGR/OSC/C1 controls marked invisible, CRLF and lone CR folded to LF) plus stripZoneSentinels() (forged U+E000/U+E001 zone sentinels removed), then folds TAB to four spaces — the fixed cost Width itself charges a tab, NOT the cell the terminal moves to (a surviving TAB advances to the next 8-column stop). The fold keeps the compositor&#039;s width accounting from being poisoned by a byte whose painted width differs from the one Width charges. Image markers (U+E002 and up) are preserved by design.</td></tr>
 <tr><td><code>content(): string</code></td><td>Read-only accessor for the stack-driven overlay content (&#039;&#039; = none).</td></tr>
@@ -86,7 +125,8 @@
 <tr><td><code>animate(string $foreground, string $background, Position $vertical, Position $horizontal, float $progress, int $xOffset = 0, int $yOffset = 0): string</code></td><td>Apply animation and composite the overlay onto the background.</td></tr>
 <tr><td><code>coveredCells(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): ?array</code></td><td>Which canvas cells the composite actually covers — the rect zone-lift hosts need to know which hot zones an overlay hides (sugar-overlay-012).</td></tr>
 <tr><td><code>overflowFor(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): ?array</code></td><td>How far the block overhangs the canvas — the predicate that lets a host warn BEFORE rendering a clipped modal (sugar-overlay-007).</td></tr>
-<tr><td><code>composite(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string</code></td><td></td></tr>
+<tr><td><code>composite(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string</code></td><td>Composite a foreground string over a background string.</td></tr>
+<tr><td><code>place(string $foreground, string $background, ?Placement $at = null): string</code></td><td>Composite $foreground over $background at a Placement: the one placement door every other spelling routes through (composite(), centered(), animate(), the stack passes). Omitting $at uses this veil&#039;s own placement().</td></tr>
 <tr><td><code>splitLines(string $text): array</code></td><td>Split a multi-line string into an array of lines.</td></tr>
 <tr><td><code>maxLineWidth(array $lines): int</code></td><td>Get the maximum line width (in characters) of an array of lines.</td></tr>
 <tr><td><code>lineWidth(string $line): int</code></td><td>Get the display width of a single line, in terminal cells.</td></tr>

@@ -359,7 +359,7 @@ Bottom bar</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static leaf(string $content = &#039;&#039;): self</code></td><td></td></tr>
+<tr><td><code>static leaf(string|Buffer $content = &#039;&#039;): self</code></td><td>A leaf paints either text or pre-built cells. Text is the historical door: it is sanitized at the paint boundary and word-wrapped into the region. A Buffer is placed cell for cell (each cell keeps its own pen, link and width), so a host that already renders into cells does not have to flatten them into escape strings for the panel to re-parse.</td></tr>
 <tr><td><code>static horizontal(Node ...$children): self</code></td><td></td></tr>
 <tr><td><code>static vertical(Node ...$children): self</code></td><td></td></tr>
 <tr><td><code>static noBorder(Node $child): self</code></td><td>No-border wrapper — suppresses every frame and every divider through the whole subtree, so adjacent panels render touching. Contrast with self::withBorder(false), which hides one node&#039;s own frame and leaves the rest of the layout&#039;s rules in place. The wrapper carries border:false and threads $noFrames on render (see SugarPanels::renderNoBorder; pinned by tests/FramingAndSeparatorsTest.php).</td></tr>
@@ -382,6 +382,11 @@ Bottom bar</code></pre>
 <tr><td><code>withAlignH(?Align $a): self</code></td><td>Set horizontal text alignment (sugar-panels-specific). Passing null CLEARS the alignment — content renders left-aligned.</td></tr>
 <tr><td><code>withAlignV(?VAlign $v): self</code></td><td>Set vertical text alignment (sugar-panels-specific). Passing null CLEARS the alignment — content renders top-aligned.</td></tr>
 <tr><td><code>withContent(string $content): self</code></td><td>Painted string for a leaf. Containers paint their children, never a content string, so content set on a container is stored but inert.</td></tr>
+<tr><td><code>withCells(?Buffer $cells): self</code></td><td>Cells for a leaf to paint instead of its text content. While cells are set they win over $content; passing null returns the leaf to its text. Cells are placed top-left in the padded content box and clipped to it; leaf style and alignment apply to text only.</td></tr>
+<tr><td><code>withScrollOffset(int $rows): self</code></td><td>Skip this many rows of leaf content from the top (text rows after word wrap, or cell rows). Negative values clamp to 0. At render time the offset also clamps to the last full page, so scrolling past the end shows the final rows instead of an empty box.</td></tr>
+<tr><td><code>withFocused(bool $focused = true): self</code></td><td>Mark this node as focused: its frame paints with the focus border set (withFocusBorderStyle(), default Border::thick()) and the focus pen (withFocusStyle()). A node whose frame is hidden has no focus frame to show. Layout is unchanged: focus never moves a cell.</td></tr>
+<tr><td><code>withFocusBorderStyle(?Border $border): self</code></td><td>Border set for the focus frame; null restores Border::thick().</td></tr>
+<tr><td><code>withFocusStyle(?Style $style): self</code></td><td>Pen for the focus frame glyphs; null paints them unstyled.</td></tr>
 <tr><td><code>totalWidth(): int</code></td><td>Total width including border, padding, the node&#039;s own left+right margin, and — for HORIZONTAL layouts only — the inter-child spacing. Vertical spacing consumes rows, never columns, so it is excluded from the width footprint (mirroring totalHeight()&#039;s treatment of horizontal spacing).</td></tr>
 <tr><td><code>totalHeight(): int</code></td><td></td></tr>
 <tr><td><code>marginWidth(): int</code></td><td>The node&#039;s own horizontal margin (left + right).</td></tr>
@@ -397,6 +402,25 @@ Bottom bar</code></pre>
 <tr><td><code>static paintedTitle(string $title): string</code></td><td>Normalise a box title.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-panels-splitter"><code>Splitter</code> <small>final class</small></h4>
+<p>A run of panes split along one axis with draggable dividers.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static horizontal(Node ...$panes): self</code></td><td>Panes side by side; dividers are vertical and drag by column.</td></tr>
+<tr><td><code>static vertical(Node ...$panes): self</code></td><td>Panes stacked top to bottom; dividers are horizontal and drag by row.</td></tr>
+<tr><td><code>withPanes(Node ...$panes): self</code></td><td>Replace the panes. Sizes survive when the pane count is unchanged; otherwise the span is shared out again equally.</td></tr>
+<tr><td><code>withBounds(int $x, int $y, int $width, int $height): self</code></td><td>Where the splitter is painted, in screen cells. Existing sizes are rescaled proportionally to the new span (equal shares when none were set), so a terminal resize keeps the split&#039;s proportions.</td></tr>
+<tr><td><code>withSizes(int ...$sizes): self</code></td><td>Set the pane sizes explicitly (cells along the axis). The list is fitted to the span: a short or long total is rescaled, and no pane goes below the minimum while the span can hold every pane at the minimum. Called before withBounds() (no span yet), the list is kept and fitted once bounds arrive, so the call order does not matter.</td></tr>
+<tr><td><code>withMinPaneSize(int $cells): self</code></td><td>Smallest size a drag may leave a pane with (clamped to at least 1).</td></tr>
+<tr><td><code>withDividerDrag(int $position, ?int $divider = null): self</code></td><td>Move a divider so it lands on screen column (row, for a vertical splitter) $position.</td></tr>
+<tr><td><code>dividerAt(int $col, int $row): ?int</code></td><td>Which divider sits at screen cell ($col, $row), or null. Divider <code>i</code> is the last column (row) of pane <code>i</code>, across the splitter&#039;s full cross extent.</td></tr>
+<tr><td><code>dividerPositions(): array</code></td><td>Screen column (row) of each divider, in order.</td></tr>
+<tr><td><code>isDragging(): bool</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td>Drive divider drag from mouse messages.</td></tr>
+<tr><td><code>node(): Node</code></td><td>The layout tree for the current sizes: a frameless, spacing-0 container whose panes are weighted by their sizes, so SugarPanels gives each pane exactly its cells when the tree is rendered at the splitter&#039;s span. A pane&#039;s own flex weight is cleared and its min* along the axis becomes its size (the splitter owns that axis). Before bounds are known the panes are returned unweighted.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-panels-sugarpanels"><code>SugarPanels</code> <small>final class</small></h4>
 <p>Box-drawing layout renderer.</p>
 <table class="api-table">
@@ -404,11 +428,12 @@ Bottom bar</code></pre>
 <tbody>
 <tr><td><code>static new(): self</code></td><td>Create a new SugarPanels instance — the canonical door (mirrors the house <code>::new()</code> factory convention Node follows). It is sugar over the identical public constructor below; both are documented at self::__construct().</td></tr>
 <tr><td><code>__construct()</code></td><td>Create a new SugarPanels instance.</td></tr>
-<tr><td><code>leaf(string $content = &#039;&#039;): Node</code></td><td></td></tr>
+<tr><td><code>leaf(string|Buffer $content = &#039;&#039;): Node</code></td><td>A leaf of text, or of pre-built cells (see Node::leaf()).</td></tr>
 <tr><td><code>horizontal(Node ...$children): Node</code></td><td></td></tr>
 <tr><td><code>vertical(Node ...$children): Node</code></td><td></td></tr>
 <tr><td><code>noBorder(Node $child): Node</code></td><td></td></tr>
 <tr><td><code>render(Node $root, int $width, int $height): string</code></td><td>Render a layout node tree into a string within the given viewport.</td></tr>
+<tr><td><code>paintedLeaves(): int</code></td><td>How many leaves the last render() painted.</td></tr>
 <tr><td><code>resetPreviousFrame(): void</code></td><td>Reset the previous-frame buffer, forcing the next render to emit a full frame (used on window resize or cursor-position-lost events).</td></tr>
 </tbody>
 </table>
