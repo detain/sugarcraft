@@ -223,6 +223,15 @@ final class ScannerTest extends TestCase
         self::assertSame($scanner->idsStartingWith(''), $scanner->prefixed(''), 'empty prefix selects all, both spellings');
     }
 
+    /** A purely numeric id is an int array key; the filter must not hand it to str_starts_with() raw. */
+    public function testIdsStartingWithAcceptsNumericZoneIds(): void
+    {
+        $scanner = Scanner::new()->scan(Mark::zone('42', 'hi') . Mark::zone('btn', 'x'));
+
+        self::assertSame([42], array_keys($scanner->idsStartingWith('4')));
+        self::assertSame([], $scanner->prefixed('b4'));
+    }
+
     public function testIdsStartingWithReturnsEmptyArrayForNoMatch(): void
     {
         $mark = new Mark();

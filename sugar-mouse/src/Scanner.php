@@ -98,7 +98,7 @@ final class Scanner
     {
         $result = [];
         foreach ($this->zones as $id => $zone) {
-            if (str_starts_with($id, $prefix) === true) {
+            if (str_starts_with((string) $id, $prefix) === true) { // numeric ids are int keys
                 $result[$id] = $zone;
             }
         }

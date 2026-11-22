@@ -656,6 +656,27 @@ final class ManagerTest extends TestCase
     }
 
     /**
+     * A purely numeric zone id becomes an int array key; the prefixed scan
+     * filter and the prune loop must still hand strings to str_starts_with()
+     * and clear() under strict_types.
+     */
+    public function testNumericZoneIdsSurviveThePrefixFilterAndThePruneLoop(): void
+    {
+        $p = Manager::newWithIdPrefix('1-');
+        $this->assertSame('hix', $p->scan(Mark::zone('42', 'hi') . Mark::zone('1-keep', 'x')));
+        $this->assertSame(['1-keep'], array_keys($p->all()));
+
+        $u = Manager::newUnprefixed();
+        $u->scan(Mark::zone('42', 'hello') . '|' . Mark::zone('keep', 'x'));
+        $absent = $u->idsAbsentFromFrame(['keep']);
+        $this->assertSame(['42'], $absent);
+        foreach ($absent as $id) {
+            $u->clear($id);
+        }
+        $this->assertSame(['keep'], array_keys($u->all()));
+    }
+
+    /**
      * SM-S12: newGlobal() is a deprecated thin alias of newUnprefixed() —
      * same shape (no id prefix, instance independent of the shared
      * defaultManager). Pinned so the alias can never drift into a second

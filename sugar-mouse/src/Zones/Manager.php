@@ -265,6 +265,8 @@ final class Manager
         // The primitive layer (Scan) is the single source of truth for parsing + bounds.
         $this->grid = null;
         foreach (Scan::parse($rendered, $width, $this->lineWidths) as $id => $mouseZone) {
+            // Array keys come back int for a purely numeric id; strict_types needs the string.
+            $id = (string) $id;
             if ($this->idPrefix !== '' && !str_starts_with($id, $this->idPrefix)) {
                 continue; // foreign namespace in the same frame — strip it, don't own it
             }
@@ -322,7 +324,7 @@ final class Manager
         $absent = [];
         foreach (array_keys($this->zones) as $id) {
             if (!isset($seen[$id])) {
-                $absent[] = $id;
+                $absent[] = (string) $id; // numeric ids come back as int keys; clear() takes ?string
             }
         }
         return $absent;
