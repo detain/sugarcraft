@@ -11,21 +11,6 @@
 <tr><td><code>static debugAllowed(): bool</code></td><td>The single opt-in question. Literal env name: tests/EnvRosterTest.php token-scans reads like this one and demands the README row.</td></tr>
 </tbody>
 </table>
-<h4 id="api-sugarcraft-pty-child"><code>Child</code> <small>class</small></h4>
-<p>Handle to a child process spawned through \SugarCraft\Pty\Posix\PosixSlavePty::spawn().</p>
-<table class="api-table">
-<thead><tr><th>Method</th><th>Summary</th></tr></thead>
-<tbody>
-<tr><td><code>__construct(public readonly int $pid, $process)</code></td><td></td></tr>
-<tr><td><code>__destruct()</code></td><td></td></tr>
-<tr><td><code>exited(): bool</code></td><td></td></tr>
-<tr><td><code>wait(): int</code></td><td></td></tr>
-<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS, bool $fallbackPoll = true): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
-<tr><td><code>waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = self::EXIT_FALLBACK_POLL_SECONDS): PromiseInterface</code></td><td>Async variant of wait(): returns a ReactPHP promise that resolves with the child&#039;s exit code without ever blocking the event loop.</td></tr>
-<tr><td><code>exitCode(): ?int</code></td><td></td></tr>
-<tr><td><code>pid(): int</code></td><td></td></tr>
-</tbody>
-</table>
 <h4 id="api-sugarcraft-pty-controllingterminal"><code>ControllingTerminal</code> <small>final class</small></h4>
 <p>Static utility for claiming a file descriptor as the calling process&#039;s controlling terminal.</p>
 <table class="api-table">
@@ -94,7 +79,7 @@
 </table>
 <h4 id="api-sugarcraft-pty-ptyexception"><code>PtyException</code> <small>class</small></h4>
 <p>Raised when a PTY syscall fails or the host environment cannot support PTY allocation (Windows, sandboxed macOS, restricted <code>/dev/ptmx</code>, etc.).</p>
-<h4 id="api-sugarcraft-pty-ptypool"><code>PtyPool</code> <small>final class</small></h4>
+<h4 id="api-sugarcraft-pty-ptylimiter"><code>PtyLimiter</code> <small>final class</small></h4>
 <p>Bounded-concurrency wrapper around PtySystem for high-churn scenarios (SSH servers, supervisors, test harnesses) that want a hard ceiling on simultaneously-open PTY pairs.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
@@ -125,17 +110,15 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(int $chunkBytes = self::DEFAULT_CHUNK_BYTES, int $selectTimeoutUs = self::DEFAULT_SELECT_TIMEOUT_US, float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC, float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC, string $veof = self::DEFAULT_VEOF, ?\Closure $keepalive = null, ?\Closure $onIdle = null, ?\Closure $onResize = null, ?\Closure $onChildExit = null, ?\SugarCraft\Core\Recorder $recorder = null, ?int $pumpDeadlineUs = null, ?\Closure $onSigwinch = null)</code></td><td></td></tr>
+<tr><td><code>__construct(int $chunkBytes = self::DEFAULT_CHUNK_BYTES, int $selectTimeoutUs = self::DEFAULT_SELECT_TIMEOUT_US, float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC, float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC, string $veof = self::DEFAULT_VEOF, ?\Closure $onIdle = null, ?\Closure $onResize = null, ?\Closure $onChildExit = null, ?\SugarCraft\Core\Recorder $recorder = null, ?int $pumpDeadlineUs = null)</code></td><td></td></tr>
 <tr><td><code>static sshDefault(): self</code></td><td>SSH-session-tuned preset — historically the values hardcoded in InProcessTransport. Those values BECAME the class defaults, so this is now an alias for <code>new self()</code>: every field equals its <code>DEFAULT_*</code> constant. Kept as a named entry point for call sites that mean &quot;pump an interactive SSH session&quot; rather than &quot;whatever the defaults happen to be&quot;.</td></tr>
 <tr><td><code>withChunkBytes(int $v): self</code></td><td></td></tr>
 <tr><td><code>withSelectTimeoutUs(int $v): self</code></td><td></td></tr>
 <tr><td><code>withFlushDeadlineSec(float $v): self</code></td><td></td></tr>
 <tr><td><code>withStdinEofGraceSec(float $v): self</code></td><td></td></tr>
 <tr><td><code>withVEOF(string $v): self</code></td><td>Replace the EOF byte (default \x04). Named after the termios spelling of the concept; the backing property is <code>$veof</code>.</td></tr>
-<tr><td><code>withKeepalive(?\Closure $v): self</code></td><td>Set the legacy heartbeat hook. It stays a separate callback delivered after <code>onIdle</code> on every idle tick — see the property docblock; new code should prefer withOnIdle().</td></tr>
 <tr><td><code>withOnIdle(?\Closure $v): self</code></td><td></td></tr>
 <tr><td><code>withOnResize(?\Closure $v): self</code></td><td>Register the polled size-diff observer. See the onResize docblock: it fires on an idle tick after the consumer&#039;s SignalForwarder has resized the master — and never on a session that opened at 0x0 until a real size is established.</td></tr>
-<tr><td><code>withOnSigwinch(?\Closure $v): self</code></td><td></td></tr>
 <tr><td><code>withOnChildExit(?\Closure $v): self</code></td><td></td></tr>
 <tr><td><code>withRecorder(?\SugarCraft\Core\Recorder $v): self</code></td><td>Attach (or detach) a tee target for stdin / output / resize events. Returns a new PumpOptions — never mutates <code>$this</code>.</td></tr>
 <tr><td><code>withPumpDeadlineUs(?int $v): self</code></td><td>Attach (or detach) the optional pump-loop caller-bound (E717). Returns a new PumpOptions — never mutates <code>$this</code>.</td></tr>
@@ -148,7 +131,7 @@
 <tbody>
 <tr><td><code>static attachSigwinchToFd(int $fd, callable $sizeProvider, ?callable $onResize = null, bool $async = true): bool</code></td><td>Variant of attachSigwinch() that targets a raw file descriptor instead of a <code>MasterPty</code>. Calls <code>SizeIoctl::setSizeViaLibc()</code> directly so callers holding a plain <code>/dev/tty</code> fd can forward resize events without a PTY.</td></tr>
 <tr><td><code>static attachSigwinch(MasterPty $master, callable $sizeProvider, bool $async = true): bool</code></td><td>Install a <code>SIGWINCH</code> handler that calls <code>$sizeProvider()</code> and pipes the returned <code>[cols, rows]</code> into <code>$pty-&gt;resize()</code>.</td></tr>
-<tr><td><code>static attachSigchld(callable $reaper, bool $async = true): bool</code></td><td>Install a <code>SIGCHLD</code> handler that calls <code>$reaper()</code> whenever any child terminates. The reaper typically iterates known Child instances and probes <code>proc_get_status()</code> on each.</td></tr>
+<tr><td><code>static attachSigchld(callable $reaper, bool $async = true): bool</code></td><td>Install a <code>SIGCHLD</code> handler that calls <code>$reaper()</code> whenever any child terminates. The reaper typically iterates known \SugarCraft\Pty\Contract\Child instances and probes <code>proc_get_status()</code> on each.</td></tr>
 <tr><td><code>static dispatch(): void</code></td><td>Pump pending signals through to their handlers when async mode is off. No-op if pcntl is missing.</td></tr>
 <tr><td><code>static reset(int ...$signals): void</code></td><td>Restore the default disposition for one or more signals — or, called with NO arguments, perform a full lifecycle reset: detach every handler this class installed and clear all static state.</td></tr>
 <tr><td><code>static attachedSignals(): array</code></td><td>Signal numbers with a handler currently installed by this class. Diagnostic companion to reset().</td></tr>
@@ -314,7 +297,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-exception-poolexhaustedexception"><code>PoolExhaustedException</code> <small>final class</small></h4>
-<p>Raised when \SugarCraft\Pty\PtyPool::acquire() is called while the pool is at capacity. Extends PtyException so callers already catching the generic sugar-pty type don&#039;t miss the back-pressure signal.</p>
+<p>Raised when \SugarCraft\Pty\PtyLimiter::acquire() is called while the pool is at capacity. Extends PtyException so callers already catching the generic sugar-pty type don&#039;t miss the back-pressure signal.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -327,7 +310,6 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static forPosixOnly(string $detectedPlatform): self</code></td><td></td></tr>
-<tr><td><code>static forDeferredBackend(string $backend): self</code></td><td>Raised when a backend that is not yet implemented is selected via <code>SUGARCRAFT_PTY_BACKEND</code>.</td></tr>
 <tr><td><code>static forPosixFfiUnavailable(string $detectedPlatform): self</code></td><td>Raised when the POSIX pty backend is hard-pinned on a host it cannot bind. Mirrors forConPtyUnavailable(): the forgiving mode is <code>auto</code>, and a pin that says POSIX must never be quietly answered with ConPTY (no <code>fd()</code>/<code>stream()</code>, <code>kill(2)</code> collapse) just because the host happens to be Windows — operators believing FFI semantics held was the exact failure this symmetric refusal removes (PTY-15).</td></tr>
 <tr><td><code>static forConPtyUnavailable(string $reason): self</code></td><td></td></tr>
 </tbody>
@@ -421,11 +403,11 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>__construct(public readonly int $pid, $process)</code></td><td></td></tr>
 <tr><td><code>withKillOnDrop(?TerminationPolicy $policy = null): self</code></td><td>A handle on the same child that tears it down when the handle is destroyed while the child still runs.</td></tr>
 <tr><td><code>killOnDrop(): bool</code></td><td>Whether destroying this handle tears a still-running child down.</td></tr>
 <tr><td><code>__destruct()</code></td><td></td></tr>
 <tr><td><code>kill(int $signal): void</code></td><td>Send a signal to the child process.</td></tr>
-<tr><td><code>__construct(public readonly int $pid, $process)</code></td><td></td></tr>
 <tr><td><code>exited(): bool</code></td><td></td></tr>
 <tr><td><code>wait(): int</code></td><td></td></tr>
 <tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS, bool $fallbackPoll = true): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
@@ -489,7 +471,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-posix-posixpump"><code>PosixPump</code> <small>final class</small></h4>
-<p>Byte pump that forwards stdin ↔ master PTY with back-pressure, EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.</p>
+<p>Byte pump that forwards stdin ↔ master PTY with back-pressure, EOF grace, and optional idle / resize / child-exit callbacks.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
