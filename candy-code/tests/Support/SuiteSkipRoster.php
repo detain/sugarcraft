@@ -688,17 +688,6 @@ final class SuiteSkipRoster
     }
 
     /**
-     * Whether the C-TUI-6.d Windows smoke arms run instead of skipping: they
-     * drive real Git-for-Windows bash.exe, the real `taskkill` tree ladder,
-     * and a real ConPTY allocation, none of which exist on this Linux box.
-     * The gate is the platform itself — {@see expectedForLayout()} lifts the
-     * three rostered entries exactly where this answers true, and the test
-     * bodies call THIS method, so skip and roster cannot drift. The
-     * windows-smoke CI job is the runner where the assertions execute; on
-     * every other shape the entries stay dormant skips, never silent
-     * absences. No spawn, no FFI here — one string comparison.
-     */
-    /**
      * Whether a php child can start at all with `TMPDIR=/`: `php -r 'exit(0);'`
      * in the same minimal environment the root-refusal children get, minus the
      * bootstrap, so the answer is about php starting and never about the guard
@@ -738,6 +727,17 @@ final class SuiteSkipRoster
         return $verdict = proc_close($process) === 0;
     }
 
+    /**
+     * Whether the C-TUI-6.d Windows smoke arms run instead of skipping: they
+     * drive real Git-for-Windows bash.exe, the real `taskkill` tree ladder,
+     * and a real ConPTY allocation, none of which exist on this Linux box.
+     * The gate is the platform itself — {@see expectedForLayout()} lifts the
+     * three rostered entries exactly where this answers true, and the test
+     * bodies call THIS method, so skip and roster cannot drift. The
+     * windows-smoke CI job is the runner where the assertions execute; on
+     * every other shape the entries stay dormant skips, never silent
+     * absences. No spawn, no FFI here — one string comparison.
+     */
     public static function windowsSmokeRuns(): bool
     {
         return \PHP_OS_FAMILY === 'Windows';
