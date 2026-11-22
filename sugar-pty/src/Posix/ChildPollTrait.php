@@ -282,6 +282,15 @@ trait ChildPollTrait
      * @param float              $fallbackPollSec probe cadence in seconds, used
      *                                            only where SIGCHLD cannot be
      *                                            delivered
+     * @param bool               $fallbackPoll    false arms no periodic probe:
+     *                                            where SIGCHLD cannot be
+     *                                            delivered, or once another
+     *                                            handler displaces the listener,
+     *                                            this child's exit goes unwatched
+     *                                            and $fn does not run, so a
+     *                                            caller with another exit
+     *                                            signal (a PTY master's EOF)
+     *                                            never polls
      * @return \Closure():void detaches $fn if it has not run yet (removes the
      *                         listener or timer); a no-op once $fn has run
      * @throws \InvalidArgumentException if $fallbackPollSec is not a finite
@@ -291,6 +300,7 @@ trait ChildPollTrait
         LoopInterface $loop,
         callable $fn,
         float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS,
+        bool $fallbackPoll = true,
     ): \Closure {
         if (!\is_finite($fallbackPollSec) || $fallbackPollSec <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('child.on_exit_poll_invalid', [
@@ -383,7 +393,7 @@ trait ChildPollTrait
 
         // Runs from SigchldOwner::checkDisplaced() and from the disposition
         // re-check below: it reads the disposition, never the child.
-        $handover = static function () use (&$timer, &$watchId, &$armedDisposition, &$recheck, $loop, $probe, $fallbackPollSec): void {
+        $handover = static function () use (&$timer, &$watchId, &$armedDisposition, &$recheck, $loop, $probe, $fallbackPollSec, $fallbackPoll): void {
             if ($timer !== null || $watchId === null || self::sigchldDisposition() === $armedDisposition) {
                 return;
             }
@@ -394,7 +404,9 @@ trait ChildPollTrait
                 $loop->cancelTimer($recheck);
                 $recheck = null;
             }
-            $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+            if ($fallbackPoll) {
+                $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+            }
         };
 
         // A bare pcntl_signal() passes neither point checkDisplaced() runs at,
@@ -438,7 +450,9 @@ trait ChildPollTrait
             return $detach;
         }
 
-        $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+        if ($fallbackPoll) {
+            $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+        }
 
         return $detach;
     }

@@ -20,8 +20,8 @@ use SugarCraft\Pty\Tests\Support\RecordingLoop;
 
 /**
  * P1-8c: Expect::expectAsync() reads on the Expect's loop through
- * addReadStream(), settles through a promise, and arms no periodic timer
- * except the child's own exit poll where SIGCHLD cannot be delivered.
+ * addReadStream(), settles through a promise, and arms no periodic timer on
+ * any loop, including one where SIGCHLD cannot be delivered.
  *
  * Every loop here is the test's own (never the shared Loop::get()), and every
  * run sits behind a safety timer so a promise that never settles fails
@@ -256,34 +256,35 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame([\SIGCHLD], $loop->signalsRemoved, 'the exit listener must be removed once it fired');
     }
 
-    public function testOnALoopThatRefusesSignalsTheExitPollIsTheOnlyPeriodicTimerAndSettlingCancelsIt(): void
+    public function testOnALoopThatRefusesSignalsNoPeriodicTimerIsArmedAndTheMasterEofEndsTheWait(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('POSIX only.');
         }
 
         // The path a host without ext-pcntl takes: onExit() cannot ride
-        // SIGCHLD, so it probes exited() on a periodic timer instead.
+        // SIGCHLD, and expectAsync() turns its periodic probe off, so the
+        // child's exit is not watched and the master's EOF ends the wait.
         [$master, $peer] = $this->socketMaster();
-        $child = $this->spawnShell('sleep 0.1; exit 4');
+        $child = $this->spawnShell('sleep 0.05; exit 4');
         $loop = new RecordingLoop(refuseSignals: true);
         $loop->addTimer(0.02, static fn () => \fwrite($peer, 'no prompt here'));
+        $loop->addTimer(0.3, static fn () => \fclose($peer));
 
         $started = \microtime(true);
         $promise = Expect::on($master, loop: $loop)->expectAsync('PROMPT', 4.0, child: $child);
-        $this->assertSame([0.015], $loop->periodicTimers, 'the exit poll is the one periodic timer armed');
+        $this->assertSame([], $loop->periodicTimers, 'expectAsync must arm no periodic timer where SIGCHLD cannot be delivered');
         [, $error] = $this->settle($loop, $promise);
 
         $this->assertInstanceOf(ExpectEofException::class, $error);
-        $this->assertStringContainsString('child exited with code 4', $error->getMessage());
+        $this->assertStringNotContainsString('child exited', $error->getMessage(), 'the master EOF, not an exit probe, must end the wait');
         $this->assertSame('no prompt here', $error->buffer);
-        $this->assertLessThan(3.0, \microtime(true) - $started, 'the exit, not the timeout, must end the wait');
+        $this->assertLessThan(3.0, \microtime(true) - $started, 'the EOF, not the timeout, must end the wait');
         $this->assertSame([], $loop->signalsAdded);
-        $this->assertSame([0.015], $loop->periodicTimers, 'the drain must add no periodic timer of its own');
-        $this->assertSame(0, $loop->pendingPeriodicTimers(), 'settling must cancel the exit poll');
+        $this->assertSame([], $loop->periodicTimers, 'nothing periodic may be armed while the wait is pending');
     }
 
-    public function testAMatchOnALoopThatRefusesSignalsCancelsTheExitPoll(): void
+    public function testAMatchOnALoopThatRefusesSignalsArmsNoPeriodicTimer(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('POSIX only.');
@@ -300,7 +301,7 @@ final class ExpectAsyncTest extends TestCase
         $this->assertNull($error);
         $this->assertSame('PROMPT', $value);
         $this->assertFalse($child->exited());
-        $this->assertSame(0, $loop->pendingPeriodicTimers(), 'a match must cancel the exit poll');
+        $this->assertSame([], $loop->periodicTimers, 'a refused SIGCHLD must not turn into a periodic exit probe');
     }
 
     public function testAFinalFrameWrittenJustAfterTheExitStillMatches(): void

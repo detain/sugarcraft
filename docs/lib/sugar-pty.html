@@ -338,7 +338,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td><code>__destruct()</code></td><td></td></tr>
 <tr><td><code>exited(): bool</code></td><td></td></tr>
 <tr><td><code>wait(): int</code></td><td></td></tr>
-<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
+<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS, bool $fallbackPoll = true): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
 <tr><td><code>waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = self::EXIT_FALLBACK_POLL_SECONDS): PromiseInterface</code></td><td>Async variant of wait(): returns a ReactPHP promise that resolves with the child&#039;s exit code without ever blocking the event loop.</td></tr>
 <tr><td><code>exitCode(): ?int</code></td><td></td></tr>
 <tr><td><code>pid(): int</code></td><td></td></tr>
@@ -764,7 +764,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td><code>__construct(public readonly int $pid, $process)</code></td><td></td></tr>
 <tr><td><code>exited(): bool</code></td><td></td></tr>
 <tr><td><code>wait(): int</code></td><td></td></tr>
-<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
+<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS, bool $fallbackPoll = true): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
 <tr><td><code>waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = self::EXIT_FALLBACK_POLL_SECONDS): PromiseInterface</code></td><td>Async variant of wait(): returns a ReactPHP promise that resolves with the child&#039;s exit code without ever blocking the event loop.</td></tr>
 <tr><td><code>exitCode(): ?int</code></td><td></td></tr>
 <tr><td><code>pid(): int</code></td><td></td></tr>
@@ -800,7 +800,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td><code>wait(): int</code></td><td>Override of ChildPollTrait::wait(): drains the captured pipes every poll iteration so the child never blocks writing into a full pipe buffer while we&#039;re sleeping. Without this, <code>/bin/sh -c &#039;yes | head&#039;</code>-style commands deadlock.</td></tr>
 <tr><td><code>__destruct()</code></td><td></td></tr>
 <tr><td><code>exited(): bool</code></td><td></td></tr>
-<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
+<tr><td><code>onExit(LoopInterface $loop, callable $fn, float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS, bool $fallbackPoll = true): \Closure</code></td><td>Run $fn once, with the exit status, when this child exits.</td></tr>
 <tr><td><code>waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = self::EXIT_FALLBACK_POLL_SECONDS): PromiseInterface</code></td><td>Async variant of wait(): returns a ReactPHP promise that resolves with the child&#039;s exit code without ever blocking the event loop.</td></tr>
 <tr><td><code>exitCode(): ?int</code></td><td></td></tr>
 <tr><td><code>pid(): int</code></td><td></td></tr>

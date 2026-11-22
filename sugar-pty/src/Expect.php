@@ -608,12 +608,12 @@ final class Expect
      * The read never polls: bytes arrive through `$loop->addReadStream()` on
      * the master's stream, and the timeout and the post-exit drain are
      * one-shot timers. The exit is reported by the child's `onExit()`, which
-     * rides the loop's SIGCHLD and arms no periodic timer. Where SIGCHLD
-     * cannot be delivered (no ext-pcntl, a loop whose `addSignal()` throws,
-     * or the other cases `onExit()` lists), `onExit()` falls back to a
-     * periodic exit probe (about every 15 ms) for as long as the promise is
-     * pending, and settling cancels it. Without `$child` nothing periodic is
-     * armed on any loop. The
+     * rides the loop's SIGCHLD, with its periodic fallback probe turned off,
+     * so no periodic timer is armed on any loop. Where SIGCHLD cannot be
+     * delivered (no ext-pcntl, a loop whose `addSignal()` throws, or the
+     * other cases `onExit()` lists) the exit is not watched at all: the wait
+     * ends on the master's EOF, which a PTY master reads once the child's
+     * side closes, or on the timeout. The
      * stream is switched to non-blocking while the promise is pending and
      * put back when it settles. One pending expectAsync() per master: a loop
      * keeps one read listener per stream, so a second call that has to read
@@ -829,7 +829,9 @@ final class Expect
         if ($child !== null) {
             // The last frame can land a hair after the exit is seen, so the
             // stream stays watched for EXIT_DRAIN_SECONDS before the verdict.
-            $detachExit = $child->onExit($loop, static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
+            // fallbackPoll: false, so a host that cannot deliver SIGCHLD
+            // falls back to the master's EOF, never to a periodic probe.
+            $detachExit = $child->onExit(loop: $loop, fallbackPoll: false, fn: static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
                 $detachExit = null;
                 if ($settled || $pull()) {
                     return;
