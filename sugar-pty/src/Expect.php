@@ -67,6 +67,16 @@ final class Expect
     public const SEND_STALL_BUDGET_SEC = 0.1;
 
     /**
+     * Streams with an expectAsync() read listener armed, keyed by resource
+     * id. A loop keeps one read listener per stream, and a settling call
+     * removes the stream's listener outright, so a second pending call on the
+     * same stream would be starved; it is refused instead.
+     *
+     * @var array<int, true>
+     */
+    private static array $asyncReaders = [];
+
+    /**
      * @param string      $buffer    Unconsumed bytes read past the last match.
      * @param string|null $lastMatch The most recent successful needle or matched
      *                               substring (when `expectPattern` matched).
@@ -600,8 +610,11 @@ final class Expect
      * timers, and the exit is reported by the child's `onExit()` (SIGCHLD,
      * with that method's own fallback where SIGCHLD cannot be delivered). The
      * stream is switched to non-blocking while the promise is pending and
-     * put back when it settles. One pending expectAsync() per master: a
-     * second read listener on the same stream would not be armed.
+     * put back when it settles. One pending expectAsync() per master: a loop
+     * keeps one read listener per stream, so a second call that has to read
+     * while another is pending on the same stream throws instead of being
+     * starved. A call the carried buffer already satisfies reads nothing and
+     * is always allowed.
      *
      * This instance is immutable and the promise yields text only, so the
      * bytes read past the match are not carried into a successor; a session
@@ -616,7 +629,8 @@ final class Expect
      * @throws \InvalidArgumentException synchronously when the Expect has no loop,
      *         or on an invalid needle, pattern, timeout or child
      * @throws \RuntimeException synchronously when the master has no stream
-     *         (a ConPTY master on Windows)
+     *         (a ConPTY master on Windows), or when another expectAsync() is
+     *         still pending on the master's stream
      */
     public function expectAsync(
         string|array $needle,
@@ -686,6 +700,13 @@ final class Expect
             return \React\Promise\resolve($first);
         }
 
+        $streamId = \get_resource_id($stream);
+        if (isset(self::$asyncReaders[$streamId])) {
+            throw new \RuntimeException(
+                'Expect::expectAsync: another expectAsync() is still pending on this master; settle or cancel it first',
+            );
+        }
+
         $restoreBlocking = (bool) (\stream_get_meta_data($stream)['blocked'] ?? true);
         if ($restoreBlocking) {
             @\stream_set_blocking($stream, false);
@@ -701,12 +722,13 @@ final class Expect
 
         // Removes everything this call armed. True only for the first caller,
         // so a promise settles once whichever event gets there first.
-        $disarm = static function () use (&$settled, &$timeoutTimer, &$graceTimer, &$detachExit, $loop, $stream, $restoreBlocking): bool {
+        $disarm = static function () use (&$settled, &$timeoutTimer, &$graceTimer, &$detachExit, $loop, $stream, $streamId, $restoreBlocking): bool {
             if ($settled) {
                 return false;
             }
             $settled = true;
             $loop->removeReadStream($stream);
+            unset(self::$asyncReaders[$streamId]);
             if ($timeoutTimer !== null) {
                 $loop->cancelTimer($timeoutTimer);
                 $timeoutTimer = null;
@@ -747,9 +769,12 @@ final class Expect
         // (ext-uv, ext-ev) never reports bytes PHP's stream layer already
         // pulled into its own buffer, so one readiness event must drain them.
         // A pass stops at DRAIN_MAX_CHUNKS so a child still writing cannot pin
-        // the loop, and a capped pass continues on the next tick. True once
-        // the promise has settled.
-        $pull = function () use (&$pull, &$buffer, &$settled, $loop, $search, $disarm, $deferred, $eof, $fail): bool {
+        // the loop, and a capped pass continues on the next tick. At most one
+        // continuation is pending: a readiness event during a busy stream
+        // must not start a second chain, or per-tick work grows every tick.
+        // True once the promise has settled.
+        $tickPending = false;
+        $pull = function () use (&$pull, &$buffer, &$settled, &$tickPending, $loop, $search, $disarm, $deferred, $eof, $fail): bool {
             try {
                 for ($i = 0; $i < self::DRAIN_MAX_CHUNKS && !$settled; $i++) {
                     $chunk = $this->master->read($this->readChunk, null);
@@ -771,8 +796,10 @@ final class Expect
             } catch (\Throwable $error) {
                 $fail($error);
             }
-            if (!$settled) {
-                $loop->futureTick(static function () use (&$pull, &$settled): void {
+            if (!$settled && !$tickPending) {
+                $tickPending = true;
+                $loop->futureTick(static function () use (&$pull, &$settled, &$tickPending): void {
+                    $tickPending = false;
                     if (!$settled) {
                         $pull();
                     }
@@ -782,6 +809,7 @@ final class Expect
             return $settled;
         };
 
+        self::$asyncReaders[$streamId] = true;
         $loop->addReadStream($stream, static function () use ($pull): void {
             $pull();
         });

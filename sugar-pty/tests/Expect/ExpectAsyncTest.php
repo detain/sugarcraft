@@ -136,6 +136,51 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame('PROMPT', $value);
     }
 
+    public function testReadinessEventsDuringACappedDrainKeepOneContinuationPending(): void
+    {
+        // A child still writing keeps every drain pass at DRAIN_MAX_CHUNKS, and
+        // each readiness event lands while the last pass's continuation is
+        // still queued. Each event must not start a chain of its own: one
+        // per event grows the per-tick work every iteration of the wait.
+        [$master, $peer] = $this->socketMaster();
+        \fwrite($peer, \str_repeat('x', 20000));
+        $loop = new ListenerCapturingLoop();
+
+        $promise = Expect::on($master, readChunk: 16, loop: $loop)->expectAsync('NEVER', 0.2);
+        $this->assertCount(1, $loop->readListeners);
+        for ($i = 0; $i < 5; $i++) {
+            ($loop->readListeners[0])();
+        }
+
+        $this->assertSame(1, $loop->ticksScheduled, 'five capped passes must leave one continuation pending, not five');
+        [, $error] = $this->settle($loop, $promise);
+        $this->assertInstanceOf(ExpectTimeoutException::class, $error);
+    }
+
+    public function testASecondPendingCallOnTheSameMasterThrowsInsteadOfStarving(): void
+    {
+        [$master, $peer] = $this->socketMaster();
+        $loop = new StreamSelectLoop();
+        $expect = Expect::on($master, loop: $loop);
+
+        $first = $expect->expectAsync('AAA', 1.0);
+        try {
+            $expect->expectAsync('BBB', 3.0);
+            $this->fail('a second pending expectAsync() on the same master must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('still pending', $e->getMessage());
+        }
+
+        // Settling the first frees the master for the next call.
+        $first->then(null, static fn () => null);
+        $first->cancel();
+        $loop->addTimer(0.02, static fn () => \fwrite($peer, 'xx BBB yy'));
+        [$value, $error] = $this->settle($loop, $expect->expectAsync('BBB', 2.0));
+
+        $this->assertNull($error);
+        $this->assertSame('BBB', $value);
+    }
+
     public function testAMatchAlreadyInTheBufferResolvesWithoutReading(): void
     {
         [$master] = $this->socketMaster();
@@ -593,6 +638,9 @@ final class ListenerCapturingLoop implements LoopInterface
     /** @var list<callable> */
     public array $readListeners = [];
 
+    /** futureTick() calls so far, all still pending until run(). */
+    public int $ticksScheduled = 0;
+
     public function __construct()
     {
         $this->inner = new StreamSelectLoop();
@@ -634,6 +682,7 @@ final class ListenerCapturingLoop implements LoopInterface
 
     public function futureTick($listener): void
     {
+        $this->ticksScheduled++;
         $this->inner->futureTick($listener);
     }
 
