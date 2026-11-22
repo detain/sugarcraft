@@ -263,8 +263,8 @@ side performs the raw-mode switch; there is no single right answer.
 
 ### `Expect` — scripted automation over a master
 
-Immutable expect-style helper wrapping a `MasterPty`. `Expect::on($master, $readChunk = 4096, ?Recorder)`
-binds an instance; `send()` / `sendLine($line, $eol = "\n")` write to
+Immutable expect-style helper wrapping a `MasterPty`. `Expect::on($master, $readChunk = 4096, ?Recorder, ?LoopInterface $loop = null)`
+binds an instance (the loop is needed only by `expectAsync()`); `send()` / `sendLine($line, $eol = "\n")` write to
 the master immediately (side effect — the returned instance carries no
 extra state). The matchers block (default timeout 5 s) until the byte
 stream yields them, returning a new instance that exposes the matched
