@@ -644,6 +644,17 @@ the last data byte. While a remainder is still draining after stdin
 EOF, every successful write restarts the `stdinEofGraceSec` window: the
 grace is "this long with no progress", not a cut-off mid-delivery.
 
+The output side has a bound too. After the pump loop exits, `PosixPump`
+drains the master's tail and delivers any bytes STDOUT still owes within
+`flushDeadlineSec`. STDOUT is switched to non-blocking for that drain and
+switched back afterwards, so a reader that has stopped reading cannot
+hold `run()` past the deadline. Bytes still undelivered at the deadline,
+or refused by a write error such as EPIPE, are dropped and counted:
+`PosixPump::droppedBytes()` and `ReactPump::droppedBytes()` report the
+count for the last run. Every byte read from the master is either
+delivered or counted, so with a recorder attached, recorded output equals
+delivered plus dropped.
+
 ## Pump callbacks
 
 `PumpOptions` exposes four optional callbacks covering the pump loop

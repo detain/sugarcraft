@@ -171,6 +171,12 @@ final class ReactPump
     /** Bytes read from the master that STDOUT has not taken yet. */
     private string $pendingSink = '';
 
+    /**
+     * Bytes this run read from the master but could not deliver to STDOUT
+     * (write error, or a remainder still owed at teardown). Reset by start().
+     */
+    private int $droppedBytes = 0;
+
     private bool $sinkWriteAttached = false;
 
     private bool $masterReadHeld = false;
@@ -253,6 +259,7 @@ final class ReactPump
         $this->onData = $onData;
         $this->pendingStdin = '';
         $this->pendingSink = '';
+        $this->droppedBytes = 0;
         $this->sinkWriteAttached = false;
         $this->masterReadHeld = false;
         $this->flushing = false;
@@ -324,6 +331,23 @@ final class ReactPump
         return $this->running;
     }
 
+    /**
+     * How many bytes the most recent run read from the master and then had
+     * to drop instead of delivering to `$stdoutStream`: a chunk refused by a
+     * write error (EPIPE), or the remainder STDOUT still owed when the pump
+     * finished. Every byte read from the master is either delivered or
+     * counted here, so with a recorder attached, recorded output =
+     * delivered + droppedBytes(). Bytes handed only to `$onData` are never
+     * counted. Reset by {@see start()}; read it once the promise settles.
+     *
+     * Same counter as {@see PosixPump::droppedBytes()}. Original work: no
+     * upstream counterpart.
+     */
+    public function droppedBytes(): int
+    {
+        return $this->droppedBytes;
+    }
+
     private function onMasterReadable(): void
     {
         if (!$this->running) {
@@ -352,6 +376,7 @@ final class ReactPump
             $written = @\fwrite($this->stdoutStream, $bytes);
             if ($written === false) {
                 // EPIPE — peer closed the read end; sync pump exits here too.
+                $this->droppedBytes += \strlen($bytes);
                 $this->finish();
                 return;
             }
@@ -548,6 +573,7 @@ final class ReactPump
         }
         $written = $this->stdoutStream === null ? false : @\fwrite($this->stdoutStream, $this->pendingSink);
         if ($written === false) {
+            $this->droppedBytes += \strlen($this->pendingSink);
             $this->pendingSink = '';
             $this->detachSinkWrite();
             $this->finish();
@@ -716,9 +742,10 @@ final class ReactPump
         $this->detachSinkWrite();
         if ($this->pendingSink !== '' && $this->stdoutStream !== null) {
             // One last synchronous attempt before the caller's blocking
-            // mode is restored; a stream that still refuses is dropped,
-            // not carried into the next run().
-            @\fwrite($this->stdoutStream, $this->pendingSink);
+            // mode is restored; what the stream still refuses is dropped
+            // and counted, not carried into the next run().
+            $written = @\fwrite($this->stdoutStream, $this->pendingSink);
+            $this->droppedBytes += \strlen($this->pendingSink) - ($written === false ? 0 : $written);
             $this->pendingSink = '';
         }
         $this->masterReadHeld = false;

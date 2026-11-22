@@ -475,6 +475,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>droppedBytes(): int</code></td><td>How many bytes the most recent run() read from the master and then had to drop instead of delivering to STDOUT.</td></tr>
 <tr><td><code>run(MasterPty $master, $stdinStream, $stdoutStream, ?Child $child = null, ?PumpOptions $opts = null): int</code></td><td>Run the byte pump until pump conditions trigger: child exits, STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace window elapses.</td></tr>
 </tbody>
 </table>
@@ -510,6 +511,7 @@
 <tr><td><code>start(MasterPty $master, $stdinStream = null, $stdoutStream = null, ?Child $child = null, ?PumpOptions $opts = null, ?\Closure $onData = null): PromiseInterface</code></td><td>Start pumping. Parameter order mirrors PosixPump::run(); <code>$stdinStream</code> and <code>$stdoutStream</code> are optional here so callers can consume master output purely through <code>$onData</code> (e.g. feeding a sugar-vterm Terminal) without wiring host stdio.</td></tr>
 <tr><td><code>stop(): void</code></td><td>Detach from the event loop: removes every read/write-stream registration and cancels all timers, then resolves the pending promise with the sync pump&#039;s exit-code contract. Idempotent — safe to call from <code>finally</code> blocks after the pump already finished on its own.</td></tr>
 <tr><td><code>isRunning(): bool</code></td><td>Whether a started pump has not yet finished/stopped.</td></tr>
+<tr><td><code>droppedBytes(): int</code></td><td>How many bytes the most recent run read from the master and then had to drop instead of delivering to <code>$stdoutStream</code>: a chunk refused by a write error (EPIPE), or the remainder STDOUT still owed when the pump finished. Every byte read from the master is either delivered or counted here, so with a recorder attached, recorded output = delivered + droppedBytes(). Bytes handed only to <code>$onData</code> are never counted. Reset by start(); read it once the promise settles.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-posix-streampump"><code>StreamPump</code> <small>final class</small></h4>

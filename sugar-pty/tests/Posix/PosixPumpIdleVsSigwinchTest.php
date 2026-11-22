@@ -229,7 +229,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
      * (documented flake envelope on saturated shards, the lesson the
      * signal-sibling suites learned). PosixPump wakes on
      * stream_select only: no loop handle, no timer API anywhere in
-     * its body, and no object state at all on an instance. This pin
+     * its body, and only scalar buffers and counters on an instance. This pin
      * is deterministic and runs without a PTY.
      */
     public function testPosixPumpArmsNoTimersByCensusNotWallClock(): void
@@ -249,7 +249,7 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
         $pump = new PosixPump();
         foreach ((new \ReflectionObject($pump))->getProperties() as $property) {
             $property->setAccessible(true);
-            $this->assertIsString(
+            $this->assertIsScalar(
                 $property->getValue($pump),
                 \sprintf('PosixPump property $%s must stay scalar; a loop or timer handle there would arm wall-clock waits', $property->getName()),
             );

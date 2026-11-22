@@ -57,6 +57,34 @@ final class PosixPump implements PumpContract
     private string $pendingSink = '';
 
     /**
+     * Bytes the last {@see run()} read from the master but could not deliver
+     * to STDOUT: the remainder still owed when the bounded drain hit its
+     * deadline, or a chunk refused by a write error (EPIPE). Reset by every
+     * run(). Read it through {@see droppedBytes()}.
+     */
+    private int $droppedBytes = 0;
+
+    /**
+     * How many bytes the most recent {@see run()} read from the master and
+     * then had to drop instead of delivering to STDOUT.
+     *
+     * The drain after the pump loop is bounded by
+     * {@see PumpOptions::$flushDeadlineSec}: a sink that stops taking bytes
+     * no longer holds run() hostage, and whatever it still owes at the
+     * deadline is dropped and counted here. A write error (the reader is
+     * gone) drops the refused chunk the same way. Every byte read from the
+     * master is either delivered or counted, so with a recorder attached,
+     * recorded output = delivered + droppedBytes(). Zero after a run that
+     * delivered everything; reset at the start of each run().
+     *
+     * Original work: no upstream counterpart.
+     */
+    public function droppedBytes(): int
+    {
+        return $this->droppedBytes;
+    }
+
+    /**
      * Run the byte pump until pump conditions trigger: child exits,
      * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
      * window elapses.
@@ -100,6 +128,7 @@ final class PosixPump implements PumpContract
         // that run's master, never this one.
         $this->pendingStdin = '';
         $this->pendingSink = '';
+        $this->droppedBytes = 0;
 
         // Non-blocking mode is CALLER state on caller-owned streams: the
         // pump borrows it for the duration of one run() and hands it back,
@@ -108,22 +137,43 @@ final class PosixPump implements PumpContract
         $masterStream = $master->stream();
         $masterWasBlocking = (bool) (\stream_get_meta_data($masterStream)['blocked'] ?? true);
         $stdinWasBlocking = (bool) (\stream_get_meta_data($stdinStream)['blocked'] ?? true);
+        $stdoutWasBlocking = \is_resource($stdoutStream)
+            && (bool) (\stream_get_meta_data($stdoutStream)['blocked'] ?? true);
         \stream_set_blocking($masterStream, false);
         \stream_set_blocking($stdinStream, false);
 
+        // One deadline bounds the whole drain: the post-loop master read AND
+        // the final delivery of whatever STDOUT still owes. Null until the
+        // drain starts (an exception out of pump() skips straight to the
+        // final delivery, which then gets a window of its own).
+        $drainDeadline = null;
         try {
             $this->pump($master, $stdinStream, $stdoutStream, $child, $opts);
-            $this->flushMaster($master, $stdoutStream, $child, $opts);
+            $drainDeadline = \microtime(true) + $opts->flushDeadlineSec;
+            // The drain borrows STDOUT in non-blocking mode: a blocking
+            // fwrite to a stalled reader would sit past the deadline, which
+            // is exactly the unbounded flush this phase must not have.
+            if ($stdoutWasBlocking) {
+                @\stream_set_blocking($stdoutStream, false);
+            }
+            $this->flushMaster($master, $stdoutStream, $child, $opts, $drainDeadline);
         } finally {
             @\stream_set_blocking($masterStream, $masterWasBlocking);
             @\stream_set_blocking($stdinStream, $stdinWasBlocking);
             if ($this->pendingSink !== '') {
-                // One last delivery attempt against the caller's own
-                // (typically blocking) stdout mode; a remainder that STILL
-                // does not fit is dropped here, not carried into the next
-                // run().
-                @\fwrite($stdoutStream, $this->pendingSink);
+                // Last bounded delivery of the owed remainder; what STILL
+                // does not fit by the deadline is dropped and counted, never
+                // carried into the next run().
+                $left = BoundedSinkFlush::flush(
+                    $stdoutStream,
+                    $this->pendingSink,
+                    $drainDeadline ?? \microtime(true) + $opts->flushDeadlineSec,
+                );
+                $this->droppedBytes += \strlen($left);
                 $this->pendingSink = '';
+            }
+            if ($stdoutWasBlocking && \is_resource($stdoutStream)) {
+                @\stream_set_blocking($stdoutStream, true);
             }
         }
 
@@ -353,27 +403,29 @@ final class PosixPump implements PumpContract
     }
 
     /**
-     * Drain remaining bytes from master after the pump loop exits.
+     * Drain remaining bytes from master after the pump loop exits, bounded
+     * by `$flushDeadline` (STDOUT is non-blocking for the duration, so no
+     * single write can outlast it). A remainder STDOUT still owes when the
+     * deadline lapses, or when a write fails, is left in
+     * {@see $pendingSink} for run()'s final bounded delivery and drop count.
      *
-     * @param resource $stdoutStream
+     * @param resource   $stdoutStream
+     * @param float|null $flushDeadline absolute deadline; null = now + flushDeadlineSec
      */
     private function flushMaster(
         MasterPty $master,
         $stdoutStream,
         ?Child $child,
         PumpOptions $opts,
+        ?float $flushDeadline = null,
     ): void {
-        $flushDeadline = \microtime(true) + $opts->flushDeadlineSec;
+        $flushDeadline ??= \microtime(true) + $opts->flushDeadlineSec;
         while (\microtime(true) < $flushDeadline) {
             if ($this->pendingSink !== '') {
-                $written = @\fwrite($stdoutStream, $this->pendingSink);
-                if ($written === false) {
-                    return; // EPIPE: nothing left to flush to
+                $this->pendingSink = BoundedSinkFlush::flush($stdoutStream, $this->pendingSink, $flushDeadline);
+                if ($this->pendingSink !== '') {
+                    return; // deadline reached or EPIPE: run() counts the rest
                 }
-                if ($written > 0) {
-                    $this->pendingSink = (string) \substr($this->pendingSink, $written);
-                }
-                \usleep(1_000);
                 continue;
             }
             $tail = $master->read($opts->chunkBytes);
@@ -396,6 +448,7 @@ final class PosixPump implements PumpContract
             }
             $written = @\fwrite($stdoutStream, $tail);
             if ($written === false) {
+                $this->droppedBytes += \strlen($tail);
                 return;
             }
             if ($written < \strlen($tail)) {
@@ -470,6 +523,7 @@ final class PosixPump implements PumpContract
         }
         $written = @\fwrite($stdoutStream, $bytes);
         if ($written === false) {
+            $this->droppedBytes += \strlen($bytes);
             return false; // EPIPE: the reader is gone
         }
         if ($written < \strlen($bytes)) {

@@ -39,6 +39,11 @@ final class PumpOptions
      * the PTY. Drains any tail bytes the kernel buffered on the master
      * after the child exited or stdin EOF'd.
      *
+     * {@see \SugarCraft\Pty\Posix\PosixPump} bounds its whole drain by
+     * this window, including the final delivery of bytes STDOUT still owes:
+     * what the sink has not taken when it lapses is dropped and counted in
+     * {@see \SugarCraft\Pty\Posix\PosixPump::droppedBytes()}.
+     *
      * The inline post-loop flush window of sugar-ssh-server's
      * InProcessTransport became DEFAULT_FLUSH_DEADLINE_SEC here.
      */
@@ -71,7 +76,7 @@ final class PumpOptions
     /** @param int<1, max> stream_select timeout in microseconds */
     public readonly int $selectTimeoutUs;
 
-    /** @param float<0, max> max time to wait for a write to complete */
+    /** @param float<0, max> bound on the post-loop drain, final STDOUT delivery included */
     public readonly float $flushDeadlineSec;
 
     /** @param float<0, max> grace period after stdin closes before stopping pump */
