@@ -99,6 +99,34 @@ final class TextSelectionSugarMouseTest extends TestCase
         self::assertGreaterThan(2000, $checked, 'the sweep actually ran');
     }
 
+    public function testASpanStartingOnAWideGlyphsSecondHalfPaintsWhatItCopies(): void
+    {
+        // Row 4 is '│  日本 omega  │': 日 fills cols 4-5, 本 cols 6-7. The span
+        // runs from 日's second half (col 5) through the 'o' (col 9).
+        $sel = TextSelection::at(5, 4, [2, 5, 4, 13])?->withHead(9, 4);
+        self::assertNotNull($sel);
+
+        $painted = $sel->highlight(self::LINES, Style::new()->reverse());
+
+        self::assertSame('本 o', $sel->extract(self::LINES));
+        self::assertSame('│    本 omega  │', Ansi::strip($painted[3]), 'both halves of 日 paint blank and no glyph repeats');
+        self::assertSame(Width::string(self::LINES[3]), Width::string($painted[3]), 'the row keeps its cell count');
+    }
+
+    public function testASingleCellSpanOnAWideGlyphsSecondHalfPaintsOneBlankCell(): void
+    {
+        // Only col 5, the second half of 日, is covered: nothing is copied, so
+        // the paint is one blank cell, not a repeated 本 that widens the row.
+        $sel = TextSelection::at(5, 4, [2, 5, 4, 13])?->withHead(5, 4);
+        self::assertNotNull($sel);
+
+        $painted = $sel->highlight(self::LINES, Style::new()->reverse());
+
+        self::assertSame('', $sel->extract(self::LINES));
+        self::assertSame('│    本 omega  │', Ansi::strip($painted[3]), '本 paints once');
+        self::assertSame(Width::string(self::LINES[3]), Width::string($painted[3]), 'the row keeps its cell count');
+    }
+
     public function testRangeIsSugarMousesOwnSnapshotOfTheSameGesture(): void
     {
         $sel = TextSelection::at(9, 4, [2, 5, 4, 13])?->withHead(5, 2);
@@ -160,7 +188,9 @@ final class TextSelectionSugarMouseTest extends TestCase
 
     // =========================================================================
     // The pre-rewire 0-based geometry, transcribed from TextSelection as it
-    // stood before it delegated to sugar-mouse. Reference only.
+    // stood before it delegated to sugar-mouse, plus the one later deliberate
+    // wide-glyph left-edge fix noted in legacyExtract() and legacyHighlight().
+    // Reference only.
     // =========================================================================
 
     /**
@@ -236,7 +266,15 @@ final class TextSelectionSugarMouseTest extends TestCase
         for ($row = $startRow; $row <= $endRow; $row++) {
             [$from, $to] = self::legacySpan($sel, $row) ?? [0, -1];
             $plain = Ansi::strip($lines[$row] ?? '');
-            $rows[] = rtrim(Width::takeAnsi(Width::dropAnsi($plain, $from), $to - $from + 1), " \t");
+            $cells = $to - $from + 1;
+            // The one deliberate change since the rewire (sugar-mouse
+            // d43be6353f, SelectionRange::extract()): a wide glyph straddling
+            // the span's left edge is dropped whole, and its covered half
+            // comes off the take budget, so a span starting on its second
+            // half no longer copies the next glyph past the span's end.
+            $rest = Width::dropAnsi($plain, $from);
+            $lead = min($cells, max(0, Width::string($plain) - $from - Width::string($rest)));
+            $rows[] = rtrim(Width::takeAnsi($rest, $cells - $lead), " \t");
         }
         while ($rows !== [] && trim((string) $rows[0]) === '') {
             array_shift($rows);
@@ -268,7 +306,13 @@ final class TextSelectionSugarMouseTest extends TestCase
             $line = $lines[$row];
             $head = Width::truncateAnsi($line, $from);
             $pad = str_repeat(' ', max(0, $from - Width::string($head)));
-            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $from), $cells));
+            // The same left-edge rule as legacyExtract() (sugar-mouse
+            // SelectionRange::highlight()): the covered half of a wide glyph
+            // straddling the span's left edge paints blank, so the run does
+            // not repaint the glyph after it and the tail repeat it.
+            $rest = Width::dropAnsi($line, $from);
+            $lead = min($cells, max(0, Width::string($line) - $from - Width::string($rest)));
+            $run = str_repeat(' ', $lead) . Ansi::strip(Width::takeAnsi($rest, $cells - $lead));
             $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
             $lines[$row] = $head . Ansi::reset() . $pad . $style->render($run) . Ansi::reset() . Width::dropAnsi($line, $from + $cells);
         }
