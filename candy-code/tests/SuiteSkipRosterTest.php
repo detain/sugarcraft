@@ -107,6 +107,13 @@ final class SuiteSkipRosterTest extends TestCase
     private const WINDOWS_CHATTY_TIMEOUT_ENTRY =
         'SugarCraft\\Code\\Tests\\Windows\\WindowsBashSmokeTest::testAChildThatNeverStopsWritingStillTimesOut';
 
+    /** The root-temp-dir child keys: the roster's private `ROOT_TMPDIR_REFUSAL` / `ROOT_TMPDIR_HATCH`, by literal. */
+    private const ROOT_TMPDIR_REFUSAL_ENTRY =
+        'SugarCraft\\Code\\Tests\\SuiteRootRunRefusalTest::testAChildBootstrapWithTmpdirRootRefusesTheLaunch';
+
+    private const ROOT_TMPDIR_HATCH_ENTRY =
+        'SugarCraft\\Code\\Tests\\SuiteRootRunRefusalTest::testAChildBootstrapWithTheHatchStillRefusesTheTempRoot';
+
     /** The LANE-CC macOS setsid-preference key: the roster's private `SETSID_PREFERENCE`, by literal; same predicate. */
     private const SETSID_ENTRY =
         'SugarCraft\\Code\\Tests\\Support\\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
@@ -319,6 +326,11 @@ final class SuiteSkipRosterTest extends TestCase
                     ? []
                     : [
                         self::SETSID_ENTRY => SuiteSkipRoster::EXPECTED[self::SETSID_ENTRY],
+                    ]) + (SuiteSkipRoster::rootTmpdirChildStarts()
+                    ? []
+                    : [
+                        self::ROOT_TMPDIR_REFUSAL_ENTRY => SuiteSkipRoster::EXPECTED[self::ROOT_TMPDIR_REFUSAL_ENTRY],
+                        self::ROOT_TMPDIR_HATCH_ENTRY => SuiteSkipRoster::EXPECTED[self::ROOT_TMPDIR_HATCH_ENTRY],
                     ]) + [
                         self::HELP_POISON_ENTRY => SuiteSkipRoster::EXPECTED[self::HELP_POISON_ENTRY],
                     ],
@@ -355,6 +367,10 @@ final class SuiteSkipRosterTest extends TestCase
             }
             if (ProcessContainment::locateOnPath('setsid') !== '') {
                 unset($expected[self::SETSID_ENTRY]);
+            }
+            if (SuiteSkipRoster::rootTmpdirChildStarts()) {
+                unset($expected[self::ROOT_TMPDIR_REFUSAL_ENTRY]);
+                unset($expected[self::ROOT_TMPDIR_HATCH_ENTRY]);
             }
 
             self::assertSame(
@@ -413,6 +429,10 @@ final class SuiteSkipRosterTest extends TestCase
             }
             if (ProcessContainment::locateOnPath('setsid') !== '') {
                 unset($unarmed[self::SETSID_ENTRY]);
+            }
+            if (SuiteSkipRoster::rootTmpdirChildStarts()) {
+                unset($unarmed[self::ROOT_TMPDIR_REFUSAL_ENTRY]);
+                unset($unarmed[self::ROOT_TMPDIR_HATCH_ENTRY]);
             }
 
             self::assertSame(

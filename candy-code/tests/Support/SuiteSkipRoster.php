@@ -282,6 +282,24 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Support\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
 
     /**
+     * The root-temp-dir child keys: `SuiteRootRunRefusalTest` proves the
+     * bootstrap refuses `TMPDIR=/` by starting a child php with exactly that
+     * environment, which proves something only where php itself can start
+     * with it. Swoole 6.2.0 aborts every CLI php started with `TMPDIR=/`
+     * before a line of PHP runs (`std::out_of_range`, exit 134; measured
+     * 2026-11-21), so on a host with it loaded the child dies before the guard
+     * can refuse anything. {@see rootTmpdirChildStarts()} IS the gate both
+     * bodies call, and {@see expectedForLayout()} lifts both entries wherever
+     * it answers true (CI, and any host without such an extension).
+     */
+    private const ROOT_TMPDIR_REFUSAL =
+        'SugarCraft\Code\Tests\SuiteRootRunRefusalTest::testAChildBootstrapWithTmpdirRootRefusesTheLaunch';
+
+    /** The hatch arm of the same child, under the same predicate and lift as {@see ROOT_TMPDIR_REFUSAL}. */
+    private const ROOT_TMPDIR_HATCH =
+        'SugarCraft\Code\Tests\SuiteRootRunRefusalTest::testAChildBootstrapWithTheHatchStillRefusesTheTempRoot';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * Every entry is conditional on a layout, environment or platform gate -- the
@@ -407,6 +425,16 @@ final class SuiteSkipRoster
                 . 'including this box and the ubuntu CI legs) expectedForLayout() lifts the entry '
                 . 'and the pin asserts native-wrapper preference for real; the predicate IS the '
                 . 'body gate',
+        self::ROOT_TMPDIR_REFUSAL
+            => 'conditional host gate: rostered while php itself cannot start with TMPDIR=/ on '
+                . 'this host (swoole 6.2.0 aborts every CLI php so started, exit 134), so the '
+                . 'child dies before the guard it exists to prove can refuse anything. Where '
+                . 'rootTmpdirChildStarts() answers true (CI, and any host without such an '
+                . 'extension) expectedForLayout() lifts the entry and the child judges the '
+                . 'refusal for real; the predicate IS the body gate',
+        self::ROOT_TMPDIR_HATCH
+            => 'conditional host gate: the hatch arm of the same TMPDIR=/ child, under the same '
+                . 'rootTmpdirChildStarts() body gate and the same lift as ROOT_TMPDIR_REFUSAL',
         'SugarCraft\Code\Tests\Cli\HelpTest::testAPoisonedCataloguePageIsSanitizedWithoutLosingItsRows'
             => 'accepted local red quarantine (owner ruling 2026-11-18, "HelpTest poison"): the body '
                 . 'is kept unchanged and skips itself with markTestSkipped() until the poisoned-catalogue '
@@ -670,6 +698,46 @@ final class SuiteSkipRoster
      * every other shape the entries stay dormant skips, never silent
      * absences. No spawn, no FFI here — one string comparison.
      */
+    /**
+     * Whether a php child can start at all with `TMPDIR=/`: `php -r 'exit(0);'`
+     * in the same minimal environment the root-refusal children get, minus the
+     * bootstrap, so the answer is about php starting and never about the guard
+     * (a neutered guard still answers true here, and its tests run and go red).
+     * This IS the gate `SuiteRootRunRefusalTest`'s two child arms call. A
+     * spawn that cannot even be made answers true, so the tests run and report
+     * the real failure rather than skipping it away. Process-memoised: the
+     * roster computation and the two bodies share one spawn.
+     */
+    public static function rootTmpdirChildStarts(): bool
+    {
+        static $verdict = null;
+
+        if ($verdict !== null) {
+            return $verdict;
+        }
+
+        $pipes = [];
+        $process = proc_open(
+            [\PHP_BINARY, '-r', 'exit(0);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['PATH' => '/usr/bin:/bin', 'TMPDIR' => '/'],
+        );
+
+        if (!\is_resource($process)) {
+            return $verdict = true;
+        }
+
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+
+        return $verdict = proc_close($process) === 0;
+    }
+
     public static function windowsSmokeRuns(): bool
     {
         return \PHP_OS_FAMILY === 'Windows';
@@ -732,6 +800,11 @@ final class SuiteSkipRoster
 
         if (ProcessContainment::locateOnPath('setsid') !== '') {
             unset($effective[self::SETSID_PREFERENCE]);
+        }
+
+        if (self::rootTmpdirChildStarts()) {
+            unset($effective[self::ROOT_TMPDIR_REFUSAL]);
+            unset($effective[self::ROOT_TMPDIR_HATCH]);
         }
 
         return $effective;
