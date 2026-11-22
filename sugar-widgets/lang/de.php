@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'Innenabstand der Tab-Beschriftung muss >= 0 sein',
     'tabs.zone_key_empty'         => 'Zonenschlüssel des Tabs darf nicht leer sein',
     'tabs.close_glyph_empty'      => 'Schließen-Symbol des Tabs darf nicht leer sein',
+    'tabs.scroll_mark_empty'      => 'Scroll-Markierung des Tabs darf nicht leer sein',
     'table.dim_nonneg'            => 'Tabellen-Breite/-Höhe muss >= 0 sein',
     'table.page_size_nonneg'      => 'Seitengröße muss >= 0 sein',
     'table.set_columns_type'      => 'Spalten müssen Spalten-Instanzen sein',

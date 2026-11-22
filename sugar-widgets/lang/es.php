@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'el relleno de la etiqueta de pestaña debe ser >= 0',
     'tabs.zone_key_empty'         => 'la clave de zona de pestaña no debe estar vacía',
     'tabs.close_glyph_empty'      => 'el símbolo de cierre de pestaña no debe estar vacío',
+    'tabs.scroll_mark_empty'      => 'la marca de desplazamiento de pestaña no debe estar vacía',
     'table.dim_nonneg'            => 'el ancho/alto de la tabla debe ser >= 0',
     'table.page_size_nonneg'      => 'el tamaño de página debe ser >= 0',
     'table.set_columns_type'      => 'las columnas deben ser instancias de columna',

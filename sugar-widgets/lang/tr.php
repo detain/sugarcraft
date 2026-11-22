@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'sekme etiketi dolgusu >= 0 olmalıdır',
     'tabs.zone_key_empty'         => 'sekme bölgesi anahtarı boş olamaz',
     'tabs.close_glyph_empty'      => 'sekme kapatma simgesi boş olamaz',
+    'tabs.scroll_mark_empty'      => 'sekme kaydırma işareti boş olmamalıdır',
     'table.dim_nonneg'            => 'tablo genişlik/yüksekliği >= 0 olmalıdır',
     'table.page_size_nonneg'      => 'sayfa boyutu >= 0 olmalıdır',
     'table.set_columns_type'      => 'sütunlar birer sütun örneği olmalı',

@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'tab label padding must be >= 0',
     'tabs.zone_key_empty'         => 'tab zone key must not be empty',
     'tabs.close_glyph_empty'      => 'tab close glyph must not be empty',
+    'tabs.scroll_mark_empty'      => 'tab scroll mark must not be empty',
     'table.dim_nonneg'            => 'table width/height must be >= 0',
     'table.page_size_nonneg'      => 'page size must be >= 0',
     'table.set_columns_type'      => 'columns must be column instances',

@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'la spaziatura dell\'etichetta della scheda deve essere >= 0',
     'tabs.zone_key_empty'         => 'la chiave di zona della scheda non deve essere vuota',
     'tabs.close_glyph_empty'      => 'il simbolo di chiusura della scheda non deve essere vuoto',
+    'tabs.scroll_mark_empty'      => 'il segno di scorrimento della scheda non deve essere vuoto',
     'table.dim_nonneg'            => 'la larghezza/altezza della tabella deve essere >= 0',
     'table.page_size_nonneg'      => 'la dimensione della pagina deve essere >= 0',
     'table.set_columns_type'      => 'le colonne devono essere istanze di colonna',

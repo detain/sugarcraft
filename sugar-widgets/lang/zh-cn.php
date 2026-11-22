@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => '标签文字内边距必须 >= 0',
     'tabs.zone_key_empty'         => '标签页区域键不能为空',
     'tabs.close_glyph_empty'      => '标签页关闭符号不能为空',
+    'tabs.scroll_mark_empty'      => '标签滚动标记不能为空',
     'table.dim_nonneg'            => '表格宽/高必须 >= 0',
     'table.page_size_nonneg'      => '页面大小必须 >= 0',
     'table.set_columns_type'      => '列必须是列实例',

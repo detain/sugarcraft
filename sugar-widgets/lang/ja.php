@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'タブラベルの余白は >= 0 である必要があります',
     'tabs.zone_key_empty'         => 'タブのゾーンキーは空にできません',
     'tabs.close_glyph_empty'      => 'タブの閉じる記号は空にできません',
+    'tabs.scroll_mark_empty'      => 'タブのスクロールマークは空にできません',
     'table.dim_nonneg'            => 'テーブルの幅/高さは >= 0 である必要があります',
     'table.page_size_nonneg'      => 'ページサイズは >= 0 である必要があります',
     'table.set_columns_type'      => '列は列インスタンスである必要があります',

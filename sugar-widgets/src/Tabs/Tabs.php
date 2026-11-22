@@ -63,13 +63,16 @@ use SugarCraft\Mouse\Zones\MsgZoneInBounds;
  *
  * Tabs render as a single line: ` Home  │  Profile  │  Settings `.
  * The active tab uses the configured {@see $activeStyle}; inactive tabs
- * use {@see $inactiveStyle}. The divider is rendered in the inactive style.
+ * use {@see $inactiveStyle}. The divider is rendered in the
+ * {@see withDividerStyle()} style, or the inactive style when none is set.
  *
  * When the rendered tab bar exceeds {@see $width}, it is clipped to the
- * available space and ellipsis (`…`) are shown on the overflow side(s)
- * to indicate hidden tabs. `width 0` means NO clip — the whole bar
- * renders (W-35 dimension law; `::new()` defaults to 0 like
- * {@see Table}, whose default is 0 = auto).
+ * available space and scroll marks (`…` by default, see
+ * {@see withScrollMarks()}) are shown on the overflow side(s) to indicate
+ * hidden tabs. `width 0` means NO clip — the whole bar renders (W-35
+ * dimension law; `::new()` defaults to 0 like {@see Table}, whose default
+ * is 0 = auto). {@see withScrollWindow()} picks how the window follows the
+ * active tab.
  *
  * Mirrors charmbracelet/bubbles `Tabs`.
  */
@@ -77,6 +80,9 @@ final class Tabs implements Model
 {
     /** Default close-affordance glyph for {@see withClosable()}. */
     public const CLOSE_GLYPH = '×';
+
+    /** Default glyph of both scroll marks for {@see withScrollMarks()}. */
+    public const SCROLL_MARK = '…';
 
     /** @var list<string> */
     public readonly array $labels;
@@ -129,6 +135,12 @@ final class Tabs implements Model
         public readonly string $placeholder = '',
         public readonly int $paddingLeft = 1,
         public readonly int $paddingRight = 1,
+        public readonly ?Style $dividerStyle = null,
+        public readonly string $leftMark = self::SCROLL_MARK,
+        public readonly string $rightMark = self::SCROLL_MARK,
+        public readonly ?Style $markStyle = null,
+        public readonly bool $separatorAfterLeft = true,
+        public readonly ScrollWindow $scrollWindow = ScrollWindow::Offset,
     ) {
         $labelCount = count($labels);
         if ($active < 0 || ($labelCount > 0 && $active >= $labelCount)) {
@@ -142,8 +154,10 @@ final class Tabs implements Model
         }
         ksort($badges);
         $this->badges = $badges;
-        $this->scrollOffset = max(0, $scrollOffset);
-        $this->scrollEnd = $this->computeScrollEnd();
+        $this->scrollOffset = $scrollWindow === ScrollWindow::FirstKeepingActive
+            ? $this->firstOffsetKeepingActive()
+            : max(0, $scrollOffset);
+        $this->scrollEnd = $this->computeScrollEnd($this->scrollOffset);
     }
 
     /** Bubble-Tea Init — Tabs has no background commands. */
@@ -280,12 +294,12 @@ final class Tabs implements Model
         $parts = $this->windowParts();
 
         if (!$this->marksZones()) {
-            $line = implode(
-                $this->inactiveStyle->render($this->divider),
+            $line = $this->joinParts(
+                $parts,
                 array_map(fn(array $part): string => $this->renderPieces($part[0]), $parts),
             );
             if ($this->width > 0 && Width::string($line) > $this->width) {
-                $line = Width::truncateAnsi($line, $this->width - 1) . '…';
+                $line = Width::truncateAnsi($line, $this->clipBudget()) . $this->renderMark($this->rightMark);
             }
             return $line;
         }
@@ -296,8 +310,8 @@ final class Tabs implements Model
         // cut inside a marker pair, orphaning sentinels. Price and clip the
         // unmarked content, then mark only the survivors.
         if ($this->width > 0 && $this->plainWidth($parts) > $this->width) {
-            [$kept, $tail] = $this->clipParts($parts, $this->width - 1);
-            return $this->assembleMarked($kept) . $tail . '…';
+            [$kept, $tail] = $this->clipParts($parts, $this->clipBudget());
+            return $this->assembleMarked($kept) . $tail . $this->renderMark($this->rightMark);
         }
         return $this->assembleMarked($parts);
     }
@@ -322,13 +336,13 @@ final class Tabs implements Model
         $parts = $this->windowParts();
         $dividerWidth = Width::string($this->divider);
         $bound = $this->width > 0 && $this->plainWidth($parts) > $this->width
-            ? $this->width - 1
+            ? $this->clipBudget()
             : PHP_INT_MAX;
 
         $spans = [];
         $cursor = 0;
         foreach ($parts as $k => [$pieces, $tabIndex]) {
-            if ($k > 0) {
+            if ($this->joinsWithDivider($parts, $k)) {
                 $cursor += $dividerWidth;
             }
             $start = $cursor;
@@ -354,8 +368,8 @@ final class Tabs implements Model
     }
 
     /**
-     * The visible tab under bar column `$col`, or null (a divider, an
-     * ellipsis, or past the end).
+     * The visible tab under bar column `$col`, or null (a divider, a
+     * scroll mark, or past the end).
      */
     public function tabAt(int $col): ?int
     {
@@ -431,9 +445,9 @@ final class Tabs implements Model
     }
 
     /**
-     * The parts view() draws, left to right: an optional left `…`, the
-     * tabs of the scroll window, an optional right `…`. Each part is its
-     * pieces plus the tab index it belongs to (null for an ellipsis).
+     * The parts view() draws, left to right: an optional left scroll mark,
+     * the tabs of the scroll window, an optional right scroll mark. Each
+     * part is its pieces plus the tab index it belongs to (null for a mark).
      *
      * The stored scrollEnd IS the visible window's last index: it is
      * computed once per state by computeScrollEnd() using the same ellipsis
@@ -461,15 +475,73 @@ final class Tabs implements Model
 
         $parts = [];
         if ($leftEllipsis) {
-            $parts[] = [[['…', null, false]], null];
+            $parts[] = [[[$this->leftMark, $this->markStyle, false]], null];
         }
         for ($i = $visibleStart; $i <= $visibleEnd; $i++) {
             $parts[] = [$this->tabPieces($i), $i];
         }
         if ($rightEllipsis) {
-            $parts[] = [[['…', null, false]], null];
+            $parts[] = [[[$this->rightMark, $this->markStyle, false]], null];
         }
         return $parts;
+    }
+
+    /**
+     * Whether part `$k` is drawn after a divider: every part but the first
+     * is, except the first tab after a left scroll mark when
+     * {@see withScrollMarks()} turned the separator after the left mark off.
+     * The left mark is the only part that can lead with a null tab index:
+     * a window always holds at least one tab.
+     *
+     * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
+     */
+    private function joinsWithDivider(array $parts, int $k): bool
+    {
+        if ($k === 0) {
+            return false;
+        }
+        return $this->separatorAfterLeft || $k !== 1 || $parts[0][1] !== null;
+    }
+
+    /**
+     * Join the rendered `$parts` with the styled divider where
+     * {@see joinsWithDivider()} puts one.
+     *
+     * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
+     * @param list<string> $rendered
+     */
+    private function joinParts(array $parts, array $rendered): string
+    {
+        $divider = $this->renderDivider($this->divider);
+        $line = '';
+        foreach ($rendered as $k => $text) {
+            if ($this->joinsWithDivider($parts, $k)) {
+                $line .= $divider;
+            }
+            $line .= $text;
+        }
+        return $line;
+    }
+
+    /** Divider text in the divider style, or the inactive style when none is set. */
+    private function renderDivider(string $text): string
+    {
+        return ($this->dividerStyle ?? $this->inactiveStyle)->render($text);
+    }
+
+    /** A scroll mark in the mark style, or unstyled when none is set. */
+    private function renderMark(string $mark): string
+    {
+        return $this->markStyle?->render($mark) ?? $mark;
+    }
+
+    /**
+     * The cells an overflowing line keeps before the right mark the clip
+     * appends after them.
+     */
+    private function clipBudget(): int
+    {
+        return max(0, $this->width - Width::string($this->rightMark));
     }
 
     /**
@@ -535,7 +607,7 @@ final class Tabs implements Model
     {
         $cells = 0;
         foreach ($parts as $k => [$pieces]) {
-            if ($k > 0) {
+            if ($this->joinsWithDivider($parts, $k)) {
                 $cells += Width::string($this->divider);
             }
             foreach ($pieces as [$text]) {
@@ -572,7 +644,7 @@ final class Tabs implements Model
             }
             $rendered[] = $out;
         }
-        return implode($this->inactiveStyle->render($this->divider), $rendered);
+        return $this->joinParts($parts, $rendered);
     }
 
     /** @param list<array{0:string, 1:?Style, 2:bool}> $pieces */
@@ -619,8 +691,8 @@ final class Tabs implements Model
         $dividerCells = Width::string($this->divider);
         $out = [];
         $used = 0;
-        foreach ($parts as [$pieces, $tabIndex]) {
-            $lead = $out === [] ? 0 : $dividerCells;
+        foreach ($parts as $k => [$pieces, $tabIndex]) {
+            $lead = $this->joinsWithDivider($parts, $k) ? $dividerCells : 0;
             $cost = $lead + $this->plainWidth([[$pieces, $tabIndex]]);
             if ($used + $cost <= $budget) {
                 $out[] = [$pieces, $tabIndex];
@@ -631,7 +703,7 @@ final class Tabs implements Model
             if ($room <= 0) {
                 $left = $budget - $used;
                 $tail = $left > 0
-                    ? $this->inactiveStyle->render(Width::truncateAnsi($this->divider, $left))
+                    ? $this->renderDivider(Width::truncateAnsi($this->divider, $left))
                     : '';
                 return [$out, $tail];
             }
@@ -923,9 +995,67 @@ final class Tabs implements Model
     }
 
     /**
+     * Style the divider text between tabs (and a divider the width clips).
+     * Null, the default, draws it in the inactive tab style.
+     */
+    public function withDividerStyle(?Style $style): self
+    {
+        return $this->mutate(dividerStyle: $style, dividerStyleSet: true);
+    }
+
+    /**
+     * Set the marks drawn when tabs are scrolled off each side of a
+     * width-bounded bar, and the style they are drawn in. The right mark is
+     * also the one an overflowing line ends with once it is clipped. The
+     * defaults ({@see SCROLL_MARK} on both sides, no style, a divider after
+     * the left mark) are the bar's frame without this call.
+     * `$separatorAfterLeft = false` draws the first visible tab right after
+     * the left mark, with no divider between them; the right mark keeps its
+     * divider. Marks are sanitized like labels; the scroll window, spans()
+     * and the hit-tests price them at their drawn width, and the window
+     * scrolls to keep the active tab in view under the new widths.
+     *
+     * @throws \InvalidArgumentException when either mark has no width after sanitizing.
+     */
+    public function withScrollMarks(
+        string $left,
+        string $right,
+        ?Style $markStyle = null,
+        bool $separatorAfterLeft = true,
+    ): self {
+        $cleanLeft = self::sanitizeLabel($left);
+        $cleanRight = self::sanitizeLabel($right);
+        if (Width::string($cleanLeft) === 0 || Width::string($cleanRight) === 0) {
+            throw new \InvalidArgumentException(Lang::t('tabs.scroll_mark_empty'));
+        }
+        return $this->mutate(
+            leftMark: $cleanLeft,
+            rightMark: $cleanRight,
+            markStyle: $markStyle,
+            markStyleSet: true,
+            separatorAfterLeft: $separatorAfterLeft,
+        )->adjustScroll($this->active);
+    }
+
+    /**
+     * Pick how the scroll window follows the active tab:
+     * {@see ScrollWindow::Offset} (the default) keeps the stored offset and
+     * slides it by the least that reveals the active tab;
+     * {@see ScrollWindow::FirstKeepingActive} scans from the first tab and
+     * shows the first run of tabs that keeps the active tab in view, and
+     * ignores {@see withScrollOffset()}.
+     */
+    public function withScrollWindow(ScrollWindow $mode): self
+    {
+        return $this->mutate(scrollWindow: $mode);
+    }
+
+    /**
      * Manually set the scroll offset (first visible tab index), clamped to
      * the tab list. Auto-scroll that keeps the active tab visible is driven
      * internally by {@see update()} — this setter pins an explicit offset.
+     * Under {@see ScrollWindow::FirstKeepingActive} the active tab alone
+     * decides the window, so the pinned offset is not used.
      */
     public function withScrollOffset(int $offset): self
     {
@@ -1048,7 +1178,9 @@ final class Tabs implements Model
      */
     private function adjustScroll(int $tabIndex): self
     {
-        if ($this->width <= 0) {
+        // FirstKeepingActive derives the offset in the constructor from the
+        // active tab, so every rebuild already shows the right window.
+        if ($this->width <= 0 || $this->scrollWindow === ScrollWindow::FirstKeepingActive) {
             return $this;
         }
         $count = count($this->labels);
@@ -1103,24 +1235,26 @@ final class Tabs implements Model
      * control-char sanitization view() renders, so the stored window and
      * the drawn window cannot drift.
      */
-    private function computeScrollEnd(): int
+    private function computeScrollEnd(int $offset): int
     {
         $count = count($this->labels);
         if ($count === 0 || $this->width <= 0) {
             return $count - 1;
         }
 
-        $start = min($this->scrollOffset, $count - 1);
+        $start = min($offset, $count - 1);
         $dividerWidth = Width::string($this->divider);
-        // The left `…` is never standalone: view() joins it to the first
-        // tab with a divider, so cells before the first label starts.
-        $cursor = $this->rendersLeftEllipsis() ? 1 + $dividerWidth : 0;
+        // The left mark is never standalone: view() joins it to the first
+        // tab (with a divider unless the separator is off), so it occupies
+        // cells before the first label starts.
+        $cursor = $this->rendersLeftEllipsis($offset) ? $this->leftLeadWidth() : 0;
 
         for ($i = $start; $i < $count; $i++) {
             $labelEnd = $cursor + $this->tabWidth($i);
-            // A right `…` follows every tab except the last; the clip
-            // guard preserves only width-1 cells once that line overflows.
-            $bound = $i < $count - 1 ? $this->width - 1 : $this->width;
+            // A right mark follows every tab except the last; the clip
+            // guard preserves only width minus the mark's cells once that
+            // line overflows.
+            $bound = $i < $count - 1 ? $this->clipBudget() : $this->width;
             if ($labelEnd > $bound && $i > $start) {
                 return $i - 1;
             }
@@ -1138,12 +1272,39 @@ final class Tabs implements Model
      * width they would eat the whole bar and the active tab would vanish
      * from the frame and from spans(), so the marker is dropped instead.
      */
-    private function rendersLeftEllipsis(): bool
+    private function rendersLeftEllipsis(?int $offset = null): bool
     {
+        $offset ??= $this->scrollOffset;
         return $this->width > 0
-            && $this->scrollOffset > 0
-            && min($this->scrollOffset, count($this->labels) - 1) > 0
-            && 1 + Width::string($this->divider) < $this->width - 1;
+            && $offset > 0
+            && min($offset, count($this->labels) - 1) > 0
+            && $this->leftLeadWidth() < $this->clipBudget();
+    }
+
+    /** Cells the left mark and its separator take before the first visible tab. */
+    private function leftLeadWidth(): int
+    {
+        return Width::string($this->leftMark)
+            + ($this->separatorAfterLeft ? Width::string($this->divider) : 0);
+    }
+
+    /**
+     * The {@see ScrollWindow::FirstKeepingActive} offset: the smallest one
+     * whose window draws the active tab. The active tab's own offset always
+     * qualifies, because a window keeps its first tab even when it alone
+     * overflows.
+     */
+    private function firstOffsetKeepingActive(): int
+    {
+        if ($this->labels === [] || $this->width <= 0) {
+            return 0;
+        }
+        for ($offset = 0; $offset < $this->active; $offset++) {
+            if ($this->computeScrollEnd($offset) >= $this->active) {
+                return $offset;
+            }
+        }
+        return $this->active;
     }
 
     /**
@@ -1201,6 +1362,14 @@ final class Tabs implements Model
         ?string $placeholder = null,
         ?int $paddingLeft = null,
         ?int $paddingRight = null,
+        ?Style $dividerStyle = null,
+        bool $dividerStyleSet = false,
+        ?string $leftMark = null,
+        ?string $rightMark = null,
+        ?Style $markStyle = null,
+        bool $markStyleSet = false,
+        ?bool $separatorAfterLeft = null,
+        ?ScrollWindow $scrollWindow = null,
     ): self {
         return new self(
             active: $active ?? $this->active,
@@ -1226,6 +1395,12 @@ final class Tabs implements Model
             placeholder: $placeholder ?? $this->placeholder,
             paddingLeft: $paddingLeft ?? $this->paddingLeft,
             paddingRight: $paddingRight ?? $this->paddingRight,
+            dividerStyle: $dividerStyleSet ? $dividerStyle : $this->dividerStyle,
+            leftMark: $leftMark ?? $this->leftMark,
+            rightMark: $rightMark ?? $this->rightMark,
+            markStyle: $markStyleSet ? $markStyle : $this->markStyle,
+            separatorAfterLeft: $separatorAfterLeft ?? $this->separatorAfterLeft,
+            scrollWindow: $scrollWindow ?? $this->scrollWindow,
         );
     }
 

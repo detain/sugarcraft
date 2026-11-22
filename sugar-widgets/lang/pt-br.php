@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'o preenchimento do rótulo da aba deve ser >= 0',
     'tabs.zone_key_empty'         => 'a chave de zona da aba não pode estar vazia',
     'tabs.close_glyph_empty'      => 'o símbolo de fechar aba não pode estar vazio',
+    'tabs.scroll_mark_empty'      => 'a marca de rolagem da aba não deve estar vazia',
     'table.dim_nonneg'            => 'a largura/altura da tabela deve ser >= 0',
     'table.page_size_nonneg'      => 'o tamanho da página deve ser >= 0',
     'table.set_columns_type'      => 'as colunas devem ser instâncias de coluna',

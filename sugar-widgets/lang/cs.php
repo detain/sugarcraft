@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'odsazení popisku karty musí být >= 0',
     'tabs.zone_key_empty'         => 'klíč zóny záložky nesmí být prázdný',
     'tabs.close_glyph_empty'      => 'symbol zavření záložky nesmí být prázdný',
+    'tabs.scroll_mark_empty'      => 'značka posunu karty nesmí být prázdná',
     'table.dim_nonneg'            => 'šířka/výška tabulky musí být >= 0',
     'table.page_size_nonneg'      => 'velikost strany musí být >= 0',
     'table.set_columns_type'      => 'sloupce musí být instance sloupce',

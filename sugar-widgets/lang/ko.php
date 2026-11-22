@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => '탭 레이블 여백은 >= 0 이어야 합니다',
     'tabs.zone_key_empty'         => '탭 영역 키는 비워 둘 수 없습니다',
     'tabs.close_glyph_empty'      => '탭 닫기 기호는 비워 둘 수 없습니다',
+    'tabs.scroll_mark_empty'      => '탭 스크롤 표시는 비어 있으면 안 됩니다',
     'table.dim_nonneg'            => '테이블 너비/높이는 >= 0이어야 합니다',
     'table.page_size_nonneg'      => '페이지 크기는 >= 0 이어야 합니다',
     'table.set_columns_type'      => '열은 열 인스턴스여야 합니다',

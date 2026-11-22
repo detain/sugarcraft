@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'حشوة تسمية علامة التبويب يجب أن تكون >= 0',
     'tabs.zone_key_empty'         => 'يجب ألا يكون مفتاح منطقة التبويب فارغًا',
     'tabs.close_glyph_empty'      => 'يجب ألا يكون رمز إغلاق التبويب فارغًا',
+    'tabs.scroll_mark_empty'      => 'علامة تمرير علامة التبويب يجب ألا تكون فارغة',
     'table.dim_nonneg'            => 'عرض/ارتفاع الجدول يجب أن يكون >= 0',
     'table.page_size_nonneg'      => 'حجم الصفحة يجب أن يكون >= 0',
     'table.set_columns_type'      => 'يجب أن تكون القيم مثيلات أعمدة',

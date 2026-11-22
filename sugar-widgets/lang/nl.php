@@ -15,6 +15,7 @@ return [
     'tabs.neg_padding'            => 'opvulling van tablabel moet >= 0 zijn',
     'tabs.zone_key_empty'         => 'de zonesleutel van het tabblad mag niet leeg zijn',
     'tabs.close_glyph_empty'      => 'het sluitsymbool van het tabblad mag niet leeg zijn',
+    'tabs.scroll_mark_empty'      => 'scrollmarkering van tab mag niet leeg zijn',
     'table.dim_nonneg'            => 'tabel breedte/hoogte moet >= 0 zijn',
     'table.page_size_nonneg'      => 'paginagrootte moet >= 0 zijn',
     'table.set_columns_type'      => 'kolommen moeten kolom-instanties zijn',
