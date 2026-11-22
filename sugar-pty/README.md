@@ -393,6 +393,45 @@ because signal dispositions are process-global and `ext-pcntl` is
 optional. Use it when you own the process's signal handling and want
 exit notifications without a poll timer.
 
+### `TerminationPolicy` — bounded teardown of a child
+
+An immutable description of how a child is ended: a first signal
+(SIGHUP by default, the signal a PTY session gets when its terminal goes
+away), a grace period, SIGKILL, a window to confirm it, and whether each
+signal reaches the child's whole process group (on by default, so the
+program under a shell dies with the shell). `apply()` blocks for at most
+the two budgets; `applyAsync()` runs the same ladder on loop timers and
+returns a `PromiseInterface<bool>`. Neither reimplements the ladder: they
+run sugar-core's `BoundedShutdown::escalate()` and `escalateAsync()`.
+
+```php
+use SugarCraft\Pty\TerminationPolicy;
+
+$policy = TerminationPolicy::new()
+    ->withGraceSeconds(0.5)       // SIGHUP, then 0.5 s before SIGKILL
+    ->withKillGraceSeconds(1.0);  // window to confirm the SIGKILL landed
+
+$gone = $policy->apply($child);   // $child is a PosixChild
+$policy->applyAsync($child, $loop)->then(fn (bool $gone) => null);
+```
+
+Kill on drop is opt-in. `PosixChild::withKillOnDrop(?TerminationPolicy)`
+returns a second handle on the same child that runs the policy (the default
+one when none is given) if it is destroyed while the child still runs, then
+reaps the child. The receiver keeps the default drop, which reaps an exited
+child and leaves a running one alone.
+
+Keep the result: it is the new handle, not a flag set on `$child`. A bare
+`$child->withKillOnDrop();` statement drops that handle at once, which
+tears the still-running child down while `$child` lives on. A pending
+`onExit()` or `waitAsync()` on the handle does not keep it alive, so the
+drop still runs and the pending callback then gets the exit status.
+
+```php
+$child = $child->withKillOnDrop(TerminationPolicy::new()->withGraceSeconds(0.5));
+unset($child);                    // SIGHUP, up to 0.5 s, SIGKILL, reap
+```
+
 ## Recording sessions (Recorder tap)
 
 `PumpOptions` accepts an optional `SugarCraft\Core\Recorder`.
@@ -500,9 +539,12 @@ application can drive PTY sessions without stalling its loop:
   (and optional host stdin) with the loop via `addReadStream()`;
   returns a promise that resolves with the sync pump's exit-code
   contract (exit code / `0` no-child / `-1` still-running-at-teardown).
-- **`PosixChild::waitAsync()`** — promise-returning `wait()`. Periodic
-  non-blocking `exited()` poll (FFI `waitpid(WNOHANG)` fast path);
-  cancelling the promise cancels its poll timer only.
+- **`PosixChild::onExit($loop, $fn)`** — runs `$fn` once with the exit
+  status when the child exits, woken by `SIGCHLD` through the loop's own
+  `addSignal()`; the child is not polled on a timer. Returns a closure that
+  detaches `$fn` if it has not run yet.
+- **`PosixChild::waitAsync()`** — promise-returning `wait()`, built on
+  `onExit()`; cancelling the promise detaches its listener only.
 - **`MultiPump::runAsync()`** — promise-returning `run()`. One
   `ReactPump` per session; resolves with the session-id → exit-code map
   once every child exits / every master EOFs.
@@ -540,11 +582,26 @@ streams + timers) and resolves the pending promise — nothing leaks
 into the loop. All loop-accepting APIs take an optional
 `LoopInterface` so tests and multi-loop apps can inject their own.
 
-Child-exit detection polls `exited()` on a timer (at the
-`selectTimeoutUs` cadence for the pump, 15 ms default for
-`waitAsync()`) instead of trapping `SIGCHLD`: signal dispositions are
-process-global, so a handler would conflict with user code and with
-`SignalForwarder`, and `ext-pcntl` is not guaranteed to be loaded.
+`onExit()` and `waitAsync()` detect the exit through `SIGCHLD`, registered
+with the loop's `addSignal()` so the loop multiplexes it with every other
+listener; each wakeup probes only this child (`waitpid(pid, WNOHANG)`).
+They fall back to a periodic `exited()` probe (15 ms by default) only where
+`SIGCHLD` cannot be delivered: no `ext-pcntl`, a loop without signal
+support, a second loop while another loop holds `onExit()` listeners
+(`SIGCHLD` has one process-wide handler, so only one loop at a time gets
+signal delivery), or a `SIGCHLD` handler the loop does not own (one
+installed with `pcntl_signal()` directly, such as
+`SignalForwarder::attachSigchld()`, or `SIG_IGN`), which the loop's listener
+would otherwise replace. A handler installed after `onExit()` silences the
+loop's listener. `SignalForwarder::attachSigchld()` and every later
+`onExit()` or `waitAsync()` call compare the `SIGCHLD` disposition with the
+one each pending listener armed under and switch a displaced one to the
+fallback probe at once; a once-a-second re-check of the disposition (it never
+probes the child) catches a bare `pcntl_signal()`, so that exit is still
+reported, up to about a second late. The handler is put back when the
+listener goes. Install such a handler before calling `onExit()` to avoid the
+delay.
+`ReactPump` still polls `exited()` at its `selectTimeoutUs` cadence.
 
 The blocking APIs (`PosixPump::run()`, `Child::wait()`,
 `MultiPump::run()`) are unchanged — the async layer is purely

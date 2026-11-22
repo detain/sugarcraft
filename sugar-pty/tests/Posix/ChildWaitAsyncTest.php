@@ -10,8 +10,9 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Pty\Posix\PosixChild;
 
 /**
- * Plan item 8.3 — PosixChild::waitAsync(). Verifies the timer-poll
- * promise resolves with the correct exit code without blocking the
+ * Plan item 8.3 — PosixChild::waitAsync(). Verifies the promise (built
+ * on onExit() since P1-8b; the poll interval is now only the fallback
+ * cadence, see ChildOnExitTest) resolves with the correct exit code without blocking the
  * loop, that cancellation stops the poll timer, and that multiple
  * concurrent waitAsync() calls all resolve.
  *

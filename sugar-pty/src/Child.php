@@ -43,4 +43,22 @@ class Child
     {
         $this->pollDestruct();
     }
+
+    /**
+     * A second handle on the same child: a clone whose process handle and
+     * exit-code cache are bound by reference to this one's, so a reap or a
+     * close through either handle is seen by both.
+     *
+     * @internal the base of {@see \SugarCraft\Pty\Posix\PosixChild}'s
+     *           with*() views; folded into PosixChild with the rest of this
+     *           class.
+     */
+    protected function shareHandle(): static
+    {
+        $view = clone $this;
+        $view->process = &$this->process;
+        $view->exitCode = &$this->exitCode;
+
+        return $view;
+    }
 }

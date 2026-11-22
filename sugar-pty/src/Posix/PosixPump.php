@@ -392,6 +392,11 @@ final class PosixPump implements PumpContract
                 \usleep(20_000);
                 continue;
             }
+            // Tee the tail like the main loop does: a child that exits before
+            // the loop's first read hands ALL of its output to this drain.
+            if ($opts->recorder !== null) {
+                $opts->recorder->recordOutput($tail);
+            }
             $written = @\fwrite($stdoutStream, $tail);
             if ($written === false) {
                 return;

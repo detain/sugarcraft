@@ -183,6 +183,10 @@ final class SignalForwarder
      * any child terminates. The reaper typically iterates known
      * {@see Child} instances and probes `proc_get_status()` on each.
      *
+     * It replaces the loop's SIGCHLD handler, so a pending
+     * {@see \SugarCraft\Pty\Posix\PosixChild::onExit()} listener would stop
+     * hearing exits; attaching hands each such wait to its fallback poll.
+     *
      * @param callable(): void $reaper
      * @return bool false means NOT attached — either the host lacks
      *              pcntl/`SIGCHLD` or `pcntl_signal()` refused the
@@ -205,6 +209,9 @@ final class SignalForwarder
         if (!@\pcntl_signal(SIGCHLD, $handler)) {
             return false;
         }
+        // This handler replaced any armed onExit() listener's: hand those
+        // waits to their fallback poll so they still settle.
+        Posix\SigchldOwner::checkDisplaced();
         self::$attached[SIGCHLD] = true;
         self::ensureAsync($async);
         return true;
