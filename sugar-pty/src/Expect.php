@@ -758,7 +758,7 @@ final class Expect
 
         $deferred = new Deferred(static function (callable $resolve, callable $reject) use ($disarm): void {
             if ($disarm()) {
-                $reject(new \RuntimeException('Expect::expectAsync cancelled before a match'));
+                $reject(new \RuntimeException('Expect::expectAsync canceled before a match'));
             }
         });
         $fail = static function (\Throwable $error) use ($disarm, $deferred): void {
@@ -822,41 +822,51 @@ final class Expect
             return $settled;
         };
 
-        self::$asyncReaders[$streamId] = true;
-        $loop->addReadStream($stream, static function () use ($pull): void {
-            $pull();
-        });
-        // An earlier read on this stream (a blocking expect*() call, or an
-        // expectAsync() that matched mid-burst) can leave bytes in PHP's
-        // stream buffer, where a loop polling the fd never sees them, so one
-        // drain runs on the next tick whether or not readiness is reported.
-        $scheduleDrain();
+        // Any of the arming calls below can throw (a loop that refuses the
+        // fd, a timer or the exit hook), and no promise is returned then, so
+        // whatever was armed is taken down here or the reader flag would
+        // refuse every later call on this master.
+        try {
+            self::$asyncReaders[$streamId] = true;
+            $loop->addReadStream($stream, static function () use ($pull): void {
+                $pull();
+            });
+            // An earlier read on this stream (a blocking expect*() call, or an
+            // expectAsync() that matched mid-burst) can leave bytes in PHP's
+            // stream buffer, where a loop polling the fd never sees them, so one
+            // drain runs on the next tick whether or not readiness is reported.
+            $scheduleDrain();
 
-        $timeoutTimer = $loop->addTimer($timeoutSec, static function () use (&$timeoutTimer, &$buffer, $needles, $isPattern, $timeoutSec, $fail): void {
-            $timeoutTimer = null;
-            $fail($isPattern
-                ? ExpectTimeoutException::forPattern($needles[0], $timeoutSec, $buffer)
-                : ExpectTimeoutException::forNeedles($needles, $timeoutSec, $buffer));
-        });
+            $timeoutTimer = $loop->addTimer($timeoutSec, static function () use (&$timeoutTimer, &$buffer, $needles, $isPattern, $timeoutSec, $fail): void {
+                $timeoutTimer = null;
+                $fail($isPattern
+                    ? ExpectTimeoutException::forPattern($needles[0], $timeoutSec, $buffer)
+                    : ExpectTimeoutException::forNeedles($needles, $timeoutSec, $buffer));
+            });
 
-        if ($child !== null) {
-            // The last frame can land a hair after the exit is seen, so the
-            // stream stays watched for EXIT_DRAIN_SECONDS before the verdict.
-            // fallbackPoll: false, so a host that cannot deliver SIGCHLD
-            // falls back to the master's EOF, never to a periodic probe.
-            $detachExit = $child->onExit(loop: $loop, fallbackPoll: false, fn: static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
-                $detachExit = null;
-                if ($settled || $pull()) {
-                    return;
-                }
-                $graceTimer = $loop->addTimer(self::EXIT_DRAIN_SECONDS, static function () use (&$graceTimer, &$buffer, $code, $pull, $needles, $isPattern, $fail): void {
-                    $graceTimer = null;
-                    if ($pull()) {
+            if ($child !== null) {
+                // The last frame can land a hair after the exit is seen, so the
+                // stream stays watched for EXIT_DRAIN_SECONDS before the verdict.
+                // fallbackPoll: false, so a host that cannot deliver SIGCHLD
+                // falls back to the master's EOF, never to a periodic probe.
+                $detachExit = $child->onExit(loop: $loop, fallbackPoll: false, fn: static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
+                    $detachExit = null;
+                    if ($settled || $pull()) {
                         return;
                     }
-                    $fail(ExpectEofException::forChildExit($needles, $code, $buffer, $isPattern));
+                    $graceTimer = $loop->addTimer(self::EXIT_DRAIN_SECONDS, static function () use (&$graceTimer, &$buffer, $code, $pull, $needles, $isPattern, $fail): void {
+                        $graceTimer = null;
+                        if ($pull()) {
+                            return;
+                        }
+                        $fail(ExpectEofException::forChildExit($needles, $code, $buffer, $isPattern));
+                    });
                 });
-            });
+            }
+        } catch (\Throwable $error) {
+            $disarm();
+
+            throw $error;
         }
 
         return $deferred->promise();

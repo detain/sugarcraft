@@ -199,6 +199,32 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame('BBB', $value);
     }
 
+    public function testALoopThatRefusesTheStreamLeavesTheMasterFreeAndBlocking(): void
+    {
+        [$master, $peer] = $this->socketMaster();
+        $loop = new RecordingLoop();
+        $loop->failNextReadStream = new \RuntimeException('loop refused the fd');
+        $expect = Expect::on($master, loop: $loop);
+
+        try {
+            $expect->expectAsync('PROMPT', 1.0);
+            $this->fail('a loop that refuses the stream must make expectAsync() throw');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('loop refused the fd', $e->getMessage());
+        }
+
+        $this->assertTrue(
+            \stream_get_meta_data($master->stream())['blocked'],
+            'a failed arm must put the stream back in blocking mode',
+        );
+        // The reader flag was cleared, so the next call arms and settles.
+        $loop->addTimer(0.02, static fn () => \fwrite($peer, 'xx PROMPT yy'));
+        [$value, $error] = $this->settle($loop, $expect->expectAsync('PROMPT', 2.0));
+
+        $this->assertNull($error);
+        $this->assertSame('PROMPT', $value);
+    }
+
     public function testAMatchAlreadyInTheBufferResolvesWithoutReading(): void
     {
         [$master] = $this->socketMaster();
@@ -380,7 +406,7 @@ final class ExpectAsyncTest extends TestCase
         $promise->cancel();
 
         $this->assertInstanceOf(\RuntimeException::class, $error);
-        $this->assertStringContainsString('cancelled', $error->getMessage());
+        $this->assertStringContainsString('canceled', $error->getMessage());
         // The read listener and the timeout timer are gone, so run() returns at once.
         $started = \microtime(true);
         $loop->run();

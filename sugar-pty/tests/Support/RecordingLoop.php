@@ -27,7 +27,7 @@ final class RecordingLoop implements LoopInterface
     /** @var list<float> intervals passed to addTimer(), one-shots that may re-arm themselves */
     public array $oneShotTimers = [];
 
-    /** @var array<int, true> periodic timers armed and not yet cancelled, by object id */
+    /** @var array<int, true> periodic timers armed and not yet canceled, by object id */
     private array $pendingPeriodic = [];
 
     /** @var list<int> signals passed to addSignal() and accepted */
@@ -36,6 +36,9 @@ final class RecordingLoop implements LoopInterface
     /** @var list<int> signals passed to removeSignal() */
     public array $signalsRemoved = [];
 
+    /** Thrown by the next addReadStream() call instead of adding the listener. */
+    public ?\Throwable $failNextReadStream = null;
+
     public function __construct(private readonly bool $refuseSignals = false)
     {
         $this->inner = new StreamSelectLoop();
@@ -43,6 +46,12 @@ final class RecordingLoop implements LoopInterface
 
     public function addReadStream($stream, $listener): void
     {
+        if ($this->failNextReadStream !== null) {
+            $error = $this->failNextReadStream;
+            $this->failNextReadStream = null;
+
+            throw $error;
+        }
         $this->inner->addReadStream($stream, $listener);
     }
 
@@ -83,7 +92,7 @@ final class RecordingLoop implements LoopInterface
         $this->inner->cancelTimer($timer);
     }
 
-    /** How many periodic timers are armed and not yet cancelled. */
+    /** How many periodic timers are armed and not yet canceled. */
     public function pendingPeriodicTimers(): int
     {
         return \count($this->pendingPeriodic);
