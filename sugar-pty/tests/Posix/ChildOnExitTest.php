@@ -174,6 +174,79 @@ final class ChildOnExitTest extends TestCase
         $this->assertSame([4], $calls);
     }
 
+    public function testWithTheFallbackOffALoopThatCannotDeliverSignalsGetsNoPoll(): void
+    {
+        $loop = new RecordingLoop(refuseSignals: true);
+        $child = $this->spawnShell('exit 4');
+
+        $calls = [];
+        $detach = $child->onExit($loop, static function (int $code) use (&$calls): void {
+            $calls[] = $code;
+        }, 0.01, fallbackPoll: false);
+
+        $this->assertSame([], $loop->periodicTimers, 'fallbackPoll: false must arm no periodic probe');
+        $this->assertSame([], $loop->signalsAdded);
+
+        // Bounded wait, long enough for a 0.01 s poll to have fired many times.
+        $safety = $loop->addTimer(0.2, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($safety);
+        $detach();
+
+        $this->assertSame([], $calls, 'with nothing watching, the exit goes unreported');
+        $this->assertSame([], $loop->periodicTimers);
+    }
+
+    public function testWithTheFallbackOffTheSignalPathArmsNoDispositionRecheck(): void
+    {
+        $this->requireSigchld();
+
+        $loop = new RecordingLoop();
+        $child = $this->spawnShell('sleep 0.1; exit 5');
+
+        $calls = [];
+        $child->onExit($loop, static function (int $code) use (&$calls): void {
+            $calls[] = $code;
+        }, 0.01, fallbackPoll: false);
+
+        // The re-check exists only to hand a displaced listener to the poll;
+        // with no poll to hand to it would be a 1 Hz timer for nothing.
+        $this->assertSame([], $loop->oneShotTimers, 'fallbackPoll: false must arm no disposition re-check');
+        $this->assertSame([\SIGCHLD], $loop->signalsAdded);
+
+        $this->runBounded($loop, static function () use (&$calls): bool {
+            return $calls !== [];
+        });
+
+        $this->assertSame([5], $calls, 'the exit must still be reported through SIGCHLD');
+        $this->assertSame([], $loop->periodicTimers);
+    }
+
+    public function testWithTheFallbackOffADisplacedListenerIsNotHandedToAPoll(): void
+    {
+        $this->requireSigchld();
+
+        $loop = new RecordingLoop();
+        $first = $this->spawnShell('sleep 0.2; exit 8');
+        $second = $this->spawnShell('sleep 0.1; exit 9');
+
+        $detachFirst = $first->onExit($loop, static function (): void {
+        }, 0.01, fallbackPoll: false);
+        $this->assertSame([\SIGCHLD], $loop->signalsAdded);
+
+        $foreign = static function (): void {
+        };
+        \pcntl_signal(\SIGCHLD, $foreign);
+        $detach = $second->onExit($loop, static function (): void {
+        }, 0.02, fallbackPoll: false);
+
+        $this->assertSame([], $loop->periodicTimers, 'a displaced listener with the fallback off must not start a poll');
+        $detach();
+        $detachFirst();
+        $this->assertSame([\SIGCHLD], $loop->signalsRemoved);
+        $this->assertSame($foreign, \pcntl_signal_get_handler(\SIGCHLD), 'the foreign handler must survive');
+    }
+
     public function testFallsBackToAPollWhenAForeignSigchldHandlerIsInstalled(): void
     {
         $this->requireSigchld();

@@ -237,7 +237,8 @@ trait ChildPollTrait
      * sleeps until a SIGCHLD arrives. One probe runs on the next tick after the
      * listener is armed, because a SIGCHLD delivered before that was not heard.
      * The only timer is a one-shot, re-armed once a second, that reads the
-     * SIGCHLD disposition and never the child (see below).
+     * SIGCHLD disposition and never the child (see below); with
+     * $fallbackPoll false not even that one is armed.
      *
      * THE FALLBACK. A periodic {@see exited()} probe every $fallbackPollSec
      * takes over only where SIGCHLD cannot be delivered: no ext-pcntl (no
@@ -282,6 +283,18 @@ trait ChildPollTrait
      * @param float              $fallbackPollSec probe cadence in seconds, used
      *                                            only where SIGCHLD cannot be
      *                                            delivered
+     * @param bool               $fallbackPoll    false arms no periodic probe:
+     *                                            where SIGCHLD cannot be
+     *                                            delivered, or once another
+     *                                            handler displaces the listener,
+     *                                            this child's exit goes unwatched
+     *                                            and $fn does not run, so a
+     *                                            caller with another exit
+     *                                            signal (a PTY master's EOF)
+     *                                            never polls; the once-a-second
+     *                                            disposition re-check is not
+     *                                            armed either, so no timer of
+     *                                            any kind repeats
      * @return \Closure():void detaches $fn if it has not run yet (removes the
      *                         listener or timer); a no-op once $fn has run
      * @throws \InvalidArgumentException if $fallbackPollSec is not a finite
@@ -291,6 +304,7 @@ trait ChildPollTrait
         LoopInterface $loop,
         callable $fn,
         float $fallbackPollSec = self::EXIT_FALLBACK_POLL_SECONDS,
+        bool $fallbackPoll = true,
     ): \Closure {
         if (!\is_finite($fallbackPollSec) || $fallbackPollSec <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('child.on_exit_poll_invalid', [
@@ -383,7 +397,7 @@ trait ChildPollTrait
 
         // Runs from SigchldOwner::checkDisplaced() and from the disposition
         // re-check below: it reads the disposition, never the child.
-        $handover = static function () use (&$timer, &$watchId, &$armedDisposition, &$recheck, $loop, $probe, $fallbackPollSec): void {
+        $handover = static function () use (&$timer, &$watchId, &$armedDisposition, &$recheck, $loop, $probe, $fallbackPollSec, $fallbackPoll): void {
             if ($timer !== null || $watchId === null || self::sigchldDisposition() === $armedDisposition) {
                 return;
             }
@@ -394,7 +408,9 @@ trait ChildPollTrait
                 $loop->cancelTimer($recheck);
                 $recheck = null;
             }
-            $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+            if ($fallbackPoll) {
+                $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+            }
         };
 
         // A bare pcntl_signal() passes neither point checkDisplaced() runs at,
@@ -429,7 +445,9 @@ trait ChildPollTrait
 
         if ($listener !== null) {
             $armedDisposition = self::sigchldDisposition();
-            if ($armedDisposition !== null) {
+            // With the fallback off a handover has no poll to start, so the
+            // re-check would be a 1 Hz timer that can change nothing.
+            if ($armedDisposition !== null && $fallbackPoll) {
                 $watchId = SigchldOwner::watch($handover);
                 $armRecheck();
             }
@@ -438,7 +456,9 @@ trait ChildPollTrait
             return $detach;
         }
 
-        $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+        if ($fallbackPoll) {
+            $timer = $loop->addPeriodicTimer($fallbackPollSec, $probe);
+        }
 
         return $detach;
     }

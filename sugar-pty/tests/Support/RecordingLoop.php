@@ -24,11 +24,20 @@ final class RecordingLoop implements LoopInterface
     /** @var list<float> intervals passed to addPeriodicTimer() */
     public array $periodicTimers = [];
 
+    /** @var list<float> intervals passed to addTimer(), one-shots that may re-arm themselves */
+    public array $oneShotTimers = [];
+
+    /** @var array<int, true> periodic timers armed and not yet canceled, by object id */
+    private array $pendingPeriodic = [];
+
     /** @var list<int> signals passed to addSignal() and accepted */
     public array $signalsAdded = [];
 
     /** @var list<int> signals passed to removeSignal() */
     public array $signalsRemoved = [];
+
+    /** Thrown by the next addReadStream() call instead of adding the listener. */
+    public ?\Throwable $failNextReadStream = null;
 
     public function __construct(private readonly bool $refuseSignals = false)
     {
@@ -37,6 +46,12 @@ final class RecordingLoop implements LoopInterface
 
     public function addReadStream($stream, $listener): void
     {
+        if ($this->failNextReadStream !== null) {
+            $error = $this->failNextReadStream;
+            $this->failNextReadStream = null;
+
+            throw $error;
+        }
         $this->inner->addReadStream($stream, $listener);
     }
 
@@ -57,19 +72,30 @@ final class RecordingLoop implements LoopInterface
 
     public function addTimer($interval, $callback): TimerInterface
     {
+        $this->oneShotTimers[] = (float) $interval;
+
         return $this->inner->addTimer($interval, $callback);
     }
 
     public function addPeriodicTimer($interval, $callback): TimerInterface
     {
         $this->periodicTimers[] = (float) $interval;
+        $timer = $this->inner->addPeriodicTimer($interval, $callback);
+        $this->pendingPeriodic[\spl_object_id($timer)] = true;
 
-        return $this->inner->addPeriodicTimer($interval, $callback);
+        return $timer;
     }
 
     public function cancelTimer(TimerInterface $timer): void
     {
+        unset($this->pendingPeriodic[\spl_object_id($timer)]);
         $this->inner->cancelTimer($timer);
+    }
+
+    /** How many periodic timers are armed and not yet canceled. */
+    public function pendingPeriodicTimers(): int
+    {
+        return \count($this->pendingPeriodic);
     }
 
     public function futureTick($listener): void

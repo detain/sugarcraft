@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Recorder;
 use SugarCraft\Pty\Contract\Child;
@@ -63,6 +67,16 @@ final class Expect
     public const SEND_STALL_BUDGET_SEC = 0.1;
 
     /**
+     * Streams with an expectAsync() read listener armed, keyed by resource
+     * id. A loop keeps one read listener per stream, and a settling call
+     * removes the stream's listener outright, so a second pending call on the
+     * same stream would be starved; it is refused instead.
+     *
+     * @var array<int, true>
+     */
+    private static array $asyncReaders = [];
+
+    /**
      * @param string      $buffer    Unconsumed bytes read past the last match.
      * @param string|null $lastMatch The most recent successful needle or matched
      *                               substring (when `expectPattern` matched).
@@ -78,10 +92,15 @@ final class Expect
      *                                   {@see self::DEFAULT_MAX_BUFFER} (1 MiB).
      *                                   null = explicit opt-OUT: unbounded capture.
      *                                   When set, the buffer is trimmed to this size after
-     *                                   each read to prevent unbounded growth.
+     *                                   each read to prevent unbounded growth. `expectAny`
+     *                                   trims only after a pass has searched the fresh
+     *                                   chunk, so its buffer (and the one a match carries
+     *                                   forward) can exceed the cap by up to one read chunk.
      * @param int|null       $searchWindow Number of bytes at the buffer tail to search;
      *                                   null = search entire buffer (original behaviour).
      *                                   Reduces O(n²) re-scan cost for long sessions.
+     * @param LoopInterface|null $loop  The event loop {@see expectAsync()} reads on;
+     *                                   null leaves only the blocking matchers usable.
      */
     public function __construct(
         public readonly MasterPty $master,
@@ -92,6 +111,7 @@ final class Expect
         public readonly ?Recorder $recorder = null,
         public readonly ?int $maxBuffer = self::DEFAULT_MAX_BUFFER,
         public readonly ?int $searchWindow = null,
+        public readonly ?LoopInterface $loop = null,
     ) {
         if ($readChunk <= 0) {
             throw new \InvalidArgumentException("readChunk must be > 0, got {$readChunk}");
@@ -109,13 +129,20 @@ final class Expect
      * pexpect's `pexpect.spawn(...)` after the child has been forked —
      * this lib expects the caller to handle the spawn separately so
      * the master can be reused across multiple Expect chains.
+     *
+     * Pass `$loop` to enable {@see expectAsync()}, which reads on that loop
+     * instead of blocking; the blocking matchers ignore it.
      */
-    public static function on(MasterPty $master, int $readChunk = self::DEFAULT_READ_CHUNK, ?Recorder $recorder = null): self
-    {
+    public static function on(
+        MasterPty $master,
+        int $readChunk = self::DEFAULT_READ_CHUNK,
+        ?Recorder $recorder = null,
+        ?LoopInterface $loop = null,
+    ): self {
         if ($readChunk <= 0) {
             throw new \InvalidArgumentException("readChunk must be > 0, got {$readChunk}");
         }
-        return new self($master, readChunk: $readChunk, recorder: $recorder);
+        return new self($master, readChunk: $readChunk, recorder: $recorder, loop: $loop);
     }
 
     /**
@@ -312,53 +339,19 @@ final class Expect
     public function expectAny(array $needles, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
     {
         self::assertTimeoutIsNonNegative($timeoutSec);
-        if ($needles === []) {
-            throw new \InvalidArgumentException('Expect::expectAny requires at least one needle');
-        }
-        foreach ($needles as $i => $needle) {
-            if (!\is_string($needle) || $needle === '') {
-                throw new \InvalidArgumentException("Expect::expectAny needle at index {$i} must be a non-empty string");
-            }
-        }
+        $needles = $this->validatedNeedles($needles, 'expectAny');
+        $maxNeedleLen = self::longestNeedle($needles);
 
         $deadline = \microtime(true) + $timeoutSec;
         $buffer = $this->buffer;
-        $maxNeedleLen = 0;
-        foreach ($needles as $needle) {
-            $maxNeedleLen = \max($maxNeedleLen, \strlen($needle));
-        }
 
-        // Fail loud: a literal needle longer than the buffer cap could
-        // never survive the per-read trim, so the match is impossible by
-        // construction. Reject the configuration instead of spinning
-        // until timeout with a silently amnesic buffer.
-        if ($this->maxBuffer !== null && $this->maxBuffer < $maxNeedleLen) {
-            throw new \InvalidArgumentException(
-                "Expect::expectAny maxBuffer ({$this->maxBuffer}) is smaller than the longest needle ({$maxNeedleLen}); the needle could never match",
-            );
-        }
+        // Resume cursor per needle (rank 79): see scanNeedles().
+        $resumeAt = \array_fill(0, \count($needles), 0);
 
         while (true) {
-            $bestPos = null;
-            $bestNeedle = null;
-
-            // searchWindow: only look at the last N bytes to bound O(n) re-scan cost.
-            $searchStart = $this->searchWindow !== null
-                ? \max(0, \strlen($buffer) - $this->searchWindow)
-                : 0;
-
-            foreach ($needles as $needle) {
-                $pos = \strpos($buffer, $needle, $searchStart);
-                if ($pos === false) {
-                    continue;
-                }
-                if ($bestPos === null || $pos < $bestPos) {
-                    $bestPos = $pos;
-                    $bestNeedle = $needle;
-                }
-            }
-            if ($bestNeedle !== null) {
-                /** @var int $bestPos — guarded above with $bestNeedle */
+            $hit = $this->scanNeedles($buffer, $needles, $resumeAt);
+            if ($hit !== null) {
+                [$bestPos, $bestNeedle] = $hit;
                 $before = \substr($buffer, 0, $bestPos);
                 $remaining = \substr($buffer, $bestPos + \strlen($bestNeedle));
                 return $this->mutate([
@@ -367,6 +360,8 @@ final class Expect
                     'before' => $before,
                 ]);
             }
+
+            $buffer = $this->trimAfterPass($buffer, $maxNeedleLen, $resumeAt);
 
             $remaining = $deadline - \microtime(true);
             if ($remaining <= 0) {
@@ -385,11 +380,155 @@ final class Expect
             }
             $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
-
-            // Enforce maxBuffer: trim from front, keeping enough trailing bytes
-            // to still match the longest needle.
-            $buffer = $this->trimBuffer($buffer, $maxNeedleLen);
         }
+    }
+
+    /**
+     * The needle list validated the way every literal matcher needs it:
+     * non-empty, every entry a non-empty string, and no needle longer than
+     * the buffer cap. Returns the needles reindexed from 0.
+     *
+     * @param array<mixed> $needles
+     * @return list<string>
+     */
+    private function validatedNeedles(array $needles, string $method): array
+    {
+        if ($needles === []) {
+            throw new \InvalidArgumentException("Expect::{$method} requires at least one needle");
+        }
+        foreach ($needles as $i => $needle) {
+            if (!\is_string($needle) || $needle === '') {
+                throw new \InvalidArgumentException("Expect::{$method} needle at index {$i} must be a non-empty string");
+            }
+        }
+        /** @var list<string> $needles */
+        $needles = \array_values($needles);
+        $maxNeedleLen = self::longestNeedle($needles);
+
+        // Fail loud: a literal needle longer than the buffer cap could
+        // never survive the per-read trim, so the match is impossible by
+        // construction. Reject the configuration instead of spinning
+        // until timeout with a silently amnesic buffer.
+        if ($this->maxBuffer !== null && $this->maxBuffer < $maxNeedleLen) {
+            throw new \InvalidArgumentException(
+                "Expect::{$method} maxBuffer ({$this->maxBuffer}) is smaller than the longest needle ({$maxNeedleLen}); the needle could never match",
+            );
+        }
+
+        return $needles;
+    }
+
+    /** @param list<string> $needles */
+    private static function longestNeedle(array $needles): int
+    {
+        $max = 0;
+        foreach ($needles as $needle) {
+            $max = \max($max, \strlen($needle));
+        }
+
+        return $max;
+    }
+
+    /**
+     * One search pass over `$buffer`: the earliest needle occurrence, ties
+     * broken by needle order, as [offset, needle], or null.
+     *
+     * `$resumeAt` holds a cursor per needle (rank 79): the first buffer offset
+     * at which that needle has not been tried yet. A failed pass proves no
+     * occurrence STARTS before `strlen - strlen(needle) + 1`, so the next
+     * pass starts there instead of rescanning from byte 0. A needle can
+     * still complete across the read boundary: its start sits inside the
+     * last strlen(needle) - 1 bytes, which the cursor never passes.
+     *
+     * @param list<string>   $needles
+     * @param array<int,int> $resumeAt updated in place for every needle that missed
+     * @return array{0: int, 1: string}|null
+     */
+    private function scanNeedles(string $buffer, array $needles, array &$resumeAt): ?array
+    {
+        $bestPos = null;
+        $bestNeedle = null;
+
+        // searchWindow: only look at the last N bytes to bound O(n) re-scan cost.
+        $searchStart = $this->searchWindow !== null
+            ? \max(0, \strlen($buffer) - $this->searchWindow)
+            : 0;
+
+        foreach ($needles as $i => $needle) {
+            $pos = \strpos($buffer, $needle, \max($searchStart, $resumeAt[$i]));
+            if ($pos === false) {
+                $resumeAt[$i] = \max(0, \strlen($buffer) - \strlen($needle) + 1);
+                continue;
+            }
+            if ($bestPos === null || $pos < $bestPos) {
+                $bestPos = $pos;
+                $bestNeedle = $needle;
+            }
+        }
+
+        return $bestNeedle === null ? null : [(int) $bestPos, $bestNeedle];
+    }
+
+    /**
+     * Enforce maxBuffer only AFTER a pass has searched every byte: trimming a
+     * fresh chunk before the search would cut away a match lying in, or
+     * spanning, the bytes the cap gives up. The trim keeps at least the
+     * longest needle, and each cursor already sits within that tail, so
+     * shifting the cursors by the cut never skips an untried offset. The
+     * buffer therefore peaks at maxBuffer plus one read chunk while a pass
+     * runs.
+     *
+     * @param array<int,int> $resumeAt shifted in place by the cut
+     */
+    private function trimAfterPass(string $buffer, int $maxNeedleLen, array &$resumeAt): string
+    {
+        $untrimmed = \strlen($buffer);
+        $buffer = $this->trimBuffer($buffer, $maxNeedleLen);
+        $cut = $untrimmed - \strlen($buffer);
+        if ($cut > 0) {
+            foreach ($resumeAt as $i => $offset) {
+                $resumeAt[$i] = \max(0, $offset - $cut);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * One PCRE pass over `$buffer` (or its searchWindow tail) as
+     * [full-buffer offset, matched text], or null on no match.
+     *
+     * @return array{0: int, 1: string}|null
+     * @throws \InvalidArgumentException on an invalid regex
+     */
+    private function matchPattern(string $regex, string $buffer, string $method): ?array
+    {
+        $matches = [];
+
+        // searchWindow: only feed the last N bytes to preg_match to bound
+        // the cost of anchored regexes that scan the full buffer.
+        $windowed = $this->searchWindow !== null && \strlen($buffer) > $this->searchWindow;
+        $searchBuffer = $windowed ? \substr($buffer, -$this->searchWindow) : $buffer;
+
+        // Suppress warning for invalid regex — we handle the false case below.
+        $rc = @\preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
+        if ($rc === false) {
+            $error = \preg_last_error();
+            $msg = \preg_last_error_msg() ?: "preg_match failed (error code {$error})";
+            throw new \InvalidArgumentException(
+                "Expect::{$method}: invalid regex '{$regex}': {$msg}",
+            );
+        }
+        if ($rc !== 1) {
+            return null;
+        }
+
+        /** @var array{0: array{0: string, 1: int}} $matches */
+        [$matchText, $offset] = $matches[0];
+        // Adjust offset to account for searchWindow slicing.
+        $absoluteOffset = $windowed ? \strlen($buffer) - (int) $this->searchWindow + $offset : $offset;
+
+        return [$absoluteOffset, $matchText];
     }
 
     /**
@@ -411,30 +550,9 @@ final class Expect
         $buffer = $this->buffer;
 
         while (true) {
-            $matches = [];
-
-            // searchWindow: only feed the last N bytes to preg_match to bound
-            // the cost of anchored regexes that scan the full buffer.
-            $searchBuffer = $this->searchWindow !== null && \strlen($buffer) > $this->searchWindow
-                ? \substr($buffer, -$this->searchWindow)
-                : $buffer;
-
-            // Suppress warning for invalid regex — we handle the false case below.
-            $rc = @\preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
-            if ($rc === false) {
-                $error = \preg_last_error();
-                $msg = \preg_last_error_msg() ?: "preg_match failed (error code {$error})";
-                throw new \InvalidArgumentException(
-                    "Expect::expectPattern: invalid regex '{$regex}': {$msg}",
-                );
-            }
-            if ($rc === 1) {
-                /** @var array{0: array{0: string, 1: int}} $matches */
-                [$matchText, $offset] = $matches[0];
-                // Adjust offset to account for searchWindow slicing.
-                $absoluteOffset = $this->searchWindow !== null && \strlen($buffer) > $this->searchWindow
-                    ? \strlen($buffer) - $this->searchWindow + $offset
-                    : $offset;
+            $hit = $this->matchPattern($regex, $buffer, 'expectPattern');
+            if ($hit !== null) {
+                [$absoluteOffset, $matchText] = $hit;
                 $before = \substr($buffer, 0, $absoluteOffset);
                 $remaining = \substr($buffer, $absoluteOffset + \strlen($matchText));
                 return $this->mutate([
@@ -466,6 +584,292 @@ final class Expect
             // for any plausible match (use a safe minimum of 1 KiB).
             $buffer = $this->trimBuffer($buffer, 1024);
         }
+    }
+
+    /**
+     * The non-blocking form of {@see expectAny()} and {@see expectPattern()}:
+     * it reads on the Expect's event loop and returns a promise instead of
+     * blocking until a match.
+     *
+     * `$needle` is a literal needle, a list of literal needles raced like
+     * {@see expectAny()} (earliest offset wins, ties by list order), or, with
+     * `$isPattern: true`, one PCRE pattern. The buffer an earlier `expect*`
+     * call carried forward is searched first, and literal needles resume
+     * their search window between reads exactly as the blocking form does.
+     *
+     * The promise resolves with the matched text: the needle, or the
+     * substring the pattern matched. It rejects with
+     * {@see ExpectTimeoutException} once `$timeoutSec` passes with no match,
+     * and with {@see ExpectEofException} when the master reaches EOF, or when
+     * `$child` exits and a short drain of what it wrote last (0.1 s) brings no
+     * match. Cancelling the promise detaches everything it armed and rejects
+     * it with a \RuntimeException. A read error rejects it with that error.
+     *
+     * The read never polls: bytes arrive through `$loop->addReadStream()` on
+     * the master's stream, plus one drain on the next tick after arming for
+     * bytes PHP's stream layer already buffered, and the timeout and the
+     * post-exit drain are one-shot timers. The exit is reported by the
+     * child's `onExit()`, which rides the loop's SIGCHLD, with its periodic
+     * fallback probe and its disposition re-check turned off, so no timer
+     * repeats on any loop while the wait is pending. Where SIGCHLD cannot be
+     * delivered (no ext-pcntl, a loop whose `addSignal()` throws, or the
+     * other cases `onExit()` lists) the exit is not watched at all: the wait
+     * ends on the master's EOF, which a PTY master reads once the child's
+     * side closes, or on the timeout. The
+     * stream is switched to non-blocking while the promise is pending and
+     * put back when it settles. One pending expectAsync() per master: a loop
+     * keeps one read listener per stream, so a second call that has to read
+     * while another is pending on the same stream throws instead of being
+     * starved. A call the carried buffer already satisfies reads nothing and
+     * is always allowed.
+     *
+     * This instance is immutable and the promise yields text only, so the
+     * bytes read past the match are not carried into a successor; a session
+     * that needs them stays on the blocking matchers.
+     *
+     * @param string|list<string> $needle    literal needle(s), or one PCRE pattern
+     * @param float               $timeoutSec seconds from this call
+     * @param bool                $isPattern  treat `$needle` as one PCRE pattern
+     * @param Child|null          $child      whose exit without a match rejects;
+     *                                        it must offer `onExit()`
+     * @return PromiseInterface<string>
+     * @throws \InvalidArgumentException synchronously when the Expect has no loop,
+     *         or on an invalid needle, pattern, timeout or child
+     * @throws \RuntimeException synchronously when the master has no stream
+     *         (a ConPTY master on Windows), or when another expectAsync() is
+     *         still pending on the master's stream
+     */
+    public function expectAsync(
+        string|array $needle,
+        float $timeoutSec = self::DEFAULT_TIMEOUT_SEC,
+        bool $isPattern = false,
+        ?Child $child = null,
+    ): PromiseInterface {
+        $loop = $this->loop;
+        if ($loop === null) {
+            throw new \InvalidArgumentException(
+                'Expect::expectAsync needs an event loop: build the Expect with Expect::on($master, loop: $loop)',
+            );
+        }
+        self::assertTimeoutIsNonNegative($timeoutSec);
+        if ($isPattern) {
+            if (!\is_string($needle) || $needle === '') {
+                throw new \InvalidArgumentException('Expect::expectAsync pattern must be one non-empty string');
+            }
+            // Validates the regex now, so a bad one throws here and not on the loop.
+            $this->matchPattern($needle, '', 'expectAsync');
+            $needles = [$needle];
+        } else {
+            $needles = $this->validatedNeedles(\is_string($needle) ? [$needle] : $needle, 'expectAsync');
+        }
+        if ($child !== null && !\method_exists($child, 'onExit')) {
+            throw new \InvalidArgumentException(
+                'Expect::expectAsync child ' . $child::class . ' has no onExit(), and its exit cannot be awaited without polling',
+            );
+        }
+
+        // ConPtyMasterPty::stream() throws a PtyException (a \RuntimeException):
+        // there is no stream to watch, and a periodic read is not an option.
+        $stream = $this->master->stream();
+        if (!\is_resource($stream)) {
+            throw new \RuntimeException('Expect::expectAsync: the master has no stream to read on the loop');
+        }
+
+        $buffer = $this->buffer;
+        $resumeAt = \array_fill(0, \count($needles), 0);
+        $maxNeedleLen = self::longestNeedle($needles);
+
+        // One pass over the buffer: the matched text, or null after the trim
+        // the blocking form applies between reads.
+        $search = function () use (&$buffer, &$resumeAt, $needles, $isPattern, $maxNeedleLen): ?string {
+            if ($isPattern) {
+                $hit = $this->matchPattern($needles[0], $buffer, 'expectAsync');
+                if ($hit === null) {
+                    $buffer = $this->trimBuffer($buffer, 1024);
+
+                    return null;
+                }
+
+                return $hit[1];
+            }
+            $hit = $this->scanNeedles($buffer, $needles, $resumeAt);
+            if ($hit === null) {
+                $buffer = $this->trimAfterPass($buffer, $maxNeedleLen, $resumeAt);
+
+                return null;
+            }
+
+            return $hit[1];
+        };
+
+        $first = $search();
+        if ($first !== null) {
+            return \React\Promise\resolve($first);
+        }
+
+        $streamId = \get_resource_id($stream);
+        if (isset(self::$asyncReaders[$streamId])) {
+            throw new \RuntimeException(
+                'Expect::expectAsync: another expectAsync() is still pending on this master; settle or cancel it first',
+            );
+        }
+
+        $restoreBlocking = (bool) (\stream_get_meta_data($stream)['blocked'] ?? true);
+        if ($restoreBlocking) {
+            @\stream_set_blocking($stream, false);
+        }
+
+        $settled = false;
+        /** @var TimerInterface|null $timeoutTimer */
+        $timeoutTimer = null;
+        /** @var TimerInterface|null $graceTimer */
+        $graceTimer = null;
+        /** @var \Closure|null $detachExit */
+        $detachExit = null;
+
+        // Removes everything this call armed. True only for the first caller,
+        // so a promise settles once whichever event gets there first.
+        $disarm = static function () use (&$settled, &$timeoutTimer, &$graceTimer, &$detachExit, $loop, $stream, $streamId, $restoreBlocking): bool {
+            if ($settled) {
+                return false;
+            }
+            $settled = true;
+            $loop->removeReadStream($stream);
+            unset(self::$asyncReaders[$streamId]);
+            if ($timeoutTimer !== null) {
+                $loop->cancelTimer($timeoutTimer);
+                $timeoutTimer = null;
+            }
+            if ($graceTimer !== null) {
+                $loop->cancelTimer($graceTimer);
+                $graceTimer = null;
+            }
+            if ($detachExit !== null) {
+                $detach = $detachExit;
+                $detachExit = null;
+                $detach();
+            }
+            if ($restoreBlocking && \is_resource($stream)) {
+                @\stream_set_blocking($stream, true);
+            }
+
+            return true;
+        };
+
+        $deferred = new Deferred(static function (callable $resolve, callable $reject) use ($disarm): void {
+            if ($disarm()) {
+                $reject(new \RuntimeException('Expect::expectAsync canceled before a match'));
+            }
+        });
+        $fail = static function (\Throwable $error) use ($disarm, $deferred): void {
+            if ($disarm()) {
+                $deferred->reject($error);
+            }
+        };
+        $eof = static function () use (&$buffer, $needles, $isPattern, $fail): void {
+            $fail($isPattern
+                ? ExpectEofException::forPattern($needles[0], $buffer)
+                : ExpectEofException::forNeedles($needles, $buffer));
+        };
+
+        // Reads until the master answers nothing: a loop that polls the fd
+        // (ext-uv, ext-ev) never reports bytes PHP's stream layer already
+        // pulled into its own buffer, so one readiness event must drain them.
+        // A pass stops at DRAIN_MAX_CHUNKS so a child still writing cannot pin
+        // the loop, and a capped pass continues on the next tick. At most one
+        // continuation is pending: a readiness event during a busy stream
+        // must not start a second chain, or per-tick work grows every tick.
+        // True once the promise has settled.
+        $tickPending = false;
+        /** @var \Closure|null $pull */
+        $pull = null;
+        $scheduleDrain = static function () use (&$pull, &$settled, &$tickPending, $loop): void {
+            if ($settled || $tickPending) {
+                return;
+            }
+            $tickPending = true;
+            $loop->futureTick(static function () use (&$pull, &$settled, &$tickPending): void {
+                $tickPending = false;
+                if (!$settled) {
+                    $pull();
+                }
+            });
+        };
+        $pull = function () use (&$buffer, &$settled, $scheduleDrain, $search, $disarm, $deferred, $eof, $fail): bool {
+            try {
+                for ($i = 0; $i < self::DRAIN_MAX_CHUNKS && !$settled; $i++) {
+                    $chunk = $this->master->read($this->readChunk, null);
+                    if ($chunk === null) {
+                        return $settled;
+                    }
+                    if ($chunk === '') {
+                        $eof();
+
+                        return true;
+                    }
+                    $this->recorder?->recordOutput($chunk);
+                    $buffer .= $chunk;
+                    $match = $search();
+                    if ($match !== null && $disarm()) {
+                        $deferred->resolve($match);
+                    }
+                }
+            } catch (\Throwable $error) {
+                $fail($error);
+            }
+            $scheduleDrain();
+
+            return $settled;
+        };
+
+        // Any of the arming calls below can throw (a loop that refuses the
+        // fd, a timer or the exit hook), and no promise is returned then, so
+        // whatever was armed is taken down here or the reader flag would
+        // refuse every later call on this master.
+        try {
+            self::$asyncReaders[$streamId] = true;
+            $loop->addReadStream($stream, static function () use ($pull): void {
+                $pull();
+            });
+            // An earlier read on this stream (a blocking expect*() call, or an
+            // expectAsync() that matched mid-burst) can leave bytes in PHP's
+            // stream buffer, where a loop polling the fd never sees them, so one
+            // drain runs on the next tick whether or not readiness is reported.
+            $scheduleDrain();
+
+            $timeoutTimer = $loop->addTimer($timeoutSec, static function () use (&$timeoutTimer, &$buffer, $needles, $isPattern, $timeoutSec, $fail): void {
+                $timeoutTimer = null;
+                $fail($isPattern
+                    ? ExpectTimeoutException::forPattern($needles[0], $timeoutSec, $buffer)
+                    : ExpectTimeoutException::forNeedles($needles, $timeoutSec, $buffer));
+            });
+
+            if ($child !== null) {
+                // The last frame can land a hair after the exit is seen, so the
+                // stream stays watched for EXIT_DRAIN_SECONDS before the verdict.
+                // fallbackPoll: false, so a host that cannot deliver SIGCHLD
+                // falls back to the master's EOF, never to a periodic probe.
+                $detachExit = $child->onExit(loop: $loop, fallbackPoll: false, fn: static function (int $code) use (&$detachExit, &$graceTimer, &$settled, &$buffer, $loop, $pull, $needles, $isPattern, $fail): void {
+                    $detachExit = null;
+                    if ($settled || $pull()) {
+                        return;
+                    }
+                    $graceTimer = $loop->addTimer(self::EXIT_DRAIN_SECONDS, static function () use (&$graceTimer, &$buffer, $code, $pull, $needles, $isPattern, $fail): void {
+                        $graceTimer = null;
+                        if ($pull()) {
+                            return;
+                        }
+                        $fail(ExpectEofException::forChildExit($needles, $code, $buffer, $isPattern));
+                    });
+                });
+            }
+        } catch (\Throwable $error) {
+            $disarm();
+
+            throw $error;
+        }
+
+        return $deferred->promise();
     }
 
     /**
