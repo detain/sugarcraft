@@ -287,7 +287,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
     <p>The table below lists the public classes a caller normally reaches. <code>PtySystemFactory</code> is the entry point to use. The contract types under <code>SugarCraft\Pty\Contract</code> carry no logic.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>PtySystemFactory</td><td>new()</td><td>Build the platform PtySystem, honoring SUGARCRAFT_PTY_BACKEND (default() is a deprecated alias)</td></tr>
+<tr><td>PtySystemFactory</td><td>new()</td><td>Build the platform PtySystem, honoring SUGARCRAFT_PTY_BACKEND</td></tr>
 <tr><td>PosixPtySystem / PosixPtyPair</td><td>open(cols, rows) / master() / slave()</td><td>POSIX implementation of the PtySystem contract; the pair hands out the master and slave ends</td></tr>
 <tr><td>PosixMasterPty</td><td>read(), write(), resize(), size(), stream(), close()</td><td>POSIX implementation of the MasterPty contract; <code>read()</code> with a null timeout blocks per the stream's mode, and <code>close()</code> is idempotent and throws PtyException if the close fails</td></tr>
 <tr><td>PosixSlavePty</td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>Spawn on a pair from PtySystem::open(); explicit geometry applied on every spawn, null keeps the pair's current size</td></tr>

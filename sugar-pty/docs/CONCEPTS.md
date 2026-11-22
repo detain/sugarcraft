@@ -301,12 +301,12 @@ PHP-stream-wrapping or `php://fd/N` quirks. `Pump` and `Termios` are
 contracts for the same reason: a `MockPump` in tests, an
 `InMemoryTermios` in unit tests, no FFI required.
 
-Only two top-level `src/` classes are deprecated: the `Pty` facade
-(a `MasterPty` adapter over the same `PosixPtySystem` path) and the
-`Child` class (a backward-compatibility shim that `PosixChild` still *extends* —
-not a pure alias: it carries the promoted constructor and the public `$pid`
-property). Both go away at v2.0, and consumers on the old shape keep working
-until then. The v2.0 plan folds that promoted constructor and the
+Only one top-level `src/` class is deprecated: the `Child` class (a
+backward-compatibility shim that `PosixChild` still *extends* — not a pure
+alias: it carries the promoted constructor and the public `$pid` property).
+The old `Pty` facade has been deleted; open a pair with
+`PtySystemFactory::new()->open()` instead. `Child` goes away at v2.0, and
+consumers on the old shape keep working until then. The v2.0 plan folds that promoted constructor and the
 `ChildPollTrait` plumbing into `PosixChild` itself *before* deleting `Child`,
 and `final` keeps the debt from growing meanwhile. `Spawn` is **not** a deprecated facade: it is `@internal`,
 load-bearing for every spawn path, and not removal-scheduled.
