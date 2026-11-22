@@ -611,17 +611,7 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $db = new FakeDatabase();
         $db->setQueryResult(self::threads(['7', '8', '9']));
         $page = ConnectionsPage::new(new ServerContext($db));
-        $highlighted = static function (ConnectionsPage $p): array {
-            $hits = [];
-            foreach (\explode("\n", $p->table()->View()) as $line) {
-                // Reverse video (SGR 7), alone or merged into a longer SGR.
-                if (\preg_match('/\e\[(?:[0-9]+;)*7(?:;[0-9]+)*m/', $line) === 1
-                    && \preg_match('/thread-(\d+)-sql/', self::plain($line), $m) === 1) {
-                    $hits[] = $m[1];
-                }
-            }
-            return \array_values(\array_unique($hits));
-        };
+        $highlighted = static fn (ConnectionsPage $p): array => self::highlightedIn($p->table()->View());
 
         $this->assertSame(['7'], $highlighted($page));
         [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
@@ -634,6 +624,90 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $db->setQueryResult(self::threads(['7']));
         [$page] = $page->update(new ReloadReportMsg());
         $this->assertSame([], $highlighted($page));
+    }
+
+    /**
+     * The thread ids on highlighted (reverse-video) lines of a rendered frame.
+     *
+     * @return list<string>
+     */
+    private static function highlightedIn(string $view): array
+    {
+        $hits = [];
+        foreach (\explode("\n", $view) as $line) {
+            // Reverse video (SGR 7), alone or merged into a longer SGR.
+            if (\preg_match('/\e\[(?:[0-9]+;)*7(?:;[0-9]+)*m/', $line) === 1
+                && \preg_match('/thread-(\d+)-sql/', self::plain($line), $m) === 1) {
+                $hits[] = $m[1];
+            }
+        }
+        return \array_values(\array_unique($hits));
+    }
+
+    public function testASelectionInTheRowsThePanelTrimsStaysPaintedAndHighlighted(): void
+    {
+        $page = ConnectionsPage::new(new ServerContext($this->busyDb(8)));
+        $closed = \count(\explode("\n", $page->view()));
+
+        [$page] = $page->withHeightBudget($closed + 2)->update(new KeyMsg(KeyType::Enter));
+        for ($i = 0; $i < 7; $i++) {
+            [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        }
+        $this->assertSame(7, $page->selectedIndex());
+
+        $view = $page->view();
+        $this->assertCount($closed + 2, \explode("\n", $view), 'the page still fills its budget exactly');
+        $this->assertSame(['8'], self::highlightedIn($view), 'the panel thread is painted and highlighted');
+        $this->assertStringNotContainsString('thread-1-sql', self::plain($view), 'the window scrolled, not trimmed below the cursor');
+        $this->assertStringNotContainsString('thread-2-sql', self::plain($view));
+    }
+
+    public function testASelectionPastTheRowWindowScrollsTheTableToIt(): void
+    {
+        $page = ConnectionsPage::new(new ServerContext($this->busyDb(60)));
+        [$page] = $page->update(new KeyMsg(KeyType::Enter));
+        for ($i = 0; $i < 55; $i++) {
+            [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        }
+        $this->assertSame(55, $page->selectedIndex());
+
+        $view = $page->view();
+        $this->assertSame(['56'], self::highlightedIn($view));
+        $plain = self::plain($view);
+        $this->assertStringContainsString('thread-7-sql', $plain, 'fifty rows end at the selection');
+        $this->assertStringNotContainsString('thread-6-sql', $plain);
+        $this->assertStringNotContainsString('thread-57-sql', $plain);
+    }
+
+    public function testAReloadReadsThePanelOnlyForANewThreadAndSurvivesAFailedRead(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult(self::threads(['7', '8']));
+        $page = ConnectionsPage::new(new ServerContext($db));
+        [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        [$page] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 8'], $page->detailLines());
+
+        // Any read from here on fails with a non-PDO error.
+        $db->setPrepareThrows(new \RuntimeException('server gone'));
+
+        // A steady poll: the same thread stays under the selection, so no read.
+        [$steady] = $page->update(new ReloadReportMsg());
+        $this->assertSame(['No Details data for thread 8'], $steady->detailLines(), 'no read on an unchanged selection');
+        $this->assertTrue($steady->detailTabsFocused());
+
+        // A different thread lands under the selection: the read fails, the
+        // panel closes, and the processlist refresh is kept.
+        $db->setQueryResult(self::threads(['5', '7', '8']));
+        [$moved, $cmd] = $steady->update(new ReloadReportMsg());
+        $this->assertNull($cmd);
+        $this->assertNull($moved->detailLines(), 'a failed read closes the panel instead of describing the wrong thread');
+        $this->assertFalse($moved->detailTabsFocused());
+        $this->assertCount(3, $moved->filteredProcesslist(), 'the processlist refresh survives the failed read');
+
+        $db->setPrepareThrows(null);
+        [$reopened] = $moved->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 7'], $reopened->detailLines());
     }
 
     public function testWithDetailTabRefetchesAnOpenPanelAndLeavesAClosedOneClosed(): void

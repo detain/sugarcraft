@@ -39,7 +39,14 @@ use SugarCraft\Widgets\Tabs\Tabs;
  * thread ({@see ConnectionDetailTabs}). It opens on an explicit action
  * (Enter, a tab switch by key or click) and is fetched then, never from
  * view(), because each read is a synchronous server round trip; a
- * selection move while it is open refetches it, and Esc closes it.
+ * selection move while it is open refetches it, and Esc closes it. A data
+ * reload (every admin poll tick) reads only when a different thread now
+ * sits under the selection, and a failed read there closes the panel
+ * without undoing the processlist and counter refresh.
+ *
+ * The table paints a window of at most {@see ROW_WINDOW} rows (fewer when
+ * the panel takes height) that always contains the selection, so the
+ * highlighted row and the thread the panel describes stay on screen.
  *
  * Detail-tab keys (AUD §2 #19). In the app, Tab cycles the focus pane and
  * the digits pick admin pages before any page sees them, so the old
@@ -116,6 +123,9 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * @var list<string>|null
      */
     private ?array $detailLines = null;
+
+    /** The thread the open panel was read for (null: no thread was selected). */
+    private int|string|null $detailThreadId = null;
 
     /** Connection awaiting a kill confirmation (null = no pending kill). */
     private ?ProcesslistResult $pendingKill = null;
@@ -323,7 +333,31 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     {
         $clone = clone $this;
         $clone->detailLines = $clone->fetchDetailLines();
+        $clone->detailThreadId = $clone->threadUnderSelection()?->processId;
         return $clone;
+    }
+
+    private function threadUnderSelection(): ?ProcesslistResult
+    {
+        return $this->filteredProcesslist()[$this->selectedIndex] ?? null;
+    }
+
+    /**
+     * After a data reload: refetch an open panel only when the reload put
+     * a different thread under the selection, so a steady poll does no
+     * read. A failed read closes the panel and blurs the bar (the Esc
+     * state, which Enter reopens) instead of discarding the reload.
+     */
+    private function withDetailFollowingReload(): self
+    {
+        if ($this->detailLines === null || $this->threadUnderSelection()?->processId === $this->detailThreadId) {
+            return $this;
+        }
+        try {
+            return $this->withDetailFetched();
+        } catch (\Throwable) {
+            return $this->releaseKeys();
+        }
     }
 
     /** Refetch the panel when it is open (its thread or rows may have changed). */
@@ -341,7 +375,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     private function fetchDetailLines(): array
     {
-        $thread = $this->filteredProcesslist()[$this->selectedIndex] ?? null;
+        $thread = $this->threadUnderSelection();
         if ($thread === null) {
             return [Lang::t('conn.none_selected')];
         }
@@ -440,8 +474,8 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             }
             // The rows under the selection may have moved: an open panel
             // re-reads the thread that now sits at selectedIndex, the row the
-            // table highlights.
-            return [$clone->withDetailRefreshed(), null];
+            // table highlights, when that is a different thread.
+            return [$clone->withDetailFollowingReload(), null];
         }
 
         if ($msg instanceof MouseMsg) {
@@ -835,8 +869,9 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         $over = $tableHeight + \count($panel) - $room;
         if ($over > 0) {
-            $rows = \array_slice($this->filteredProcesslist(), 0, self::ROW_WINDOW);
-            $table = $this->buildTable(\array_slice($rows, 0, \max(0, \count($rows) - $over)));
+            $rows = $this->filteredProcesslist();
+            $painted = \min(\count($rows), self::ROW_WINDOW);
+            $table = $this->buildTable($rows, \max(0, $painted - $over));
         }
         return [$panel, $table];
     }
@@ -952,9 +987,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * Build a sugar-table Table from processlist rows.
      *
      * @param list<ProcesslistResult> $rows
+     * @param int $limit most rows to paint
      * @return Table
      */
-    private function buildTable(array $rows): Table
+    private function buildTable(array $rows, int $limit = self::ROW_WINDOW): Table
     {
         $columns = $this->buildColumns();
         // SQL-P09 (adminpages-010): the SHOW FULL PROCESSLIST mirror carries
@@ -963,18 +999,27 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         // terminal can show is pure churn. Every interaction keeps reading
         // the complete filteredProcesslist(); only string construction is
         // bounded.
-        $tableRows = $this->buildRows(\array_slice($rows, 0, self::ROW_WINDOW));
+        //
+        // The painted window scrolls so the selection is its last row once
+        // the cursor moves past it: the highlighted row is the thread the
+        // detail panel describes, and both must stay on screen.
+        $limit = \min(\max(0, $limit), self::ROW_WINDOW);
+        $start = $this->selectedIndex >= $limit && $this->selectedIndex < \count($rows)
+            ? $this->selectedIndex - $limit + 1
+            : 0;
+        $tableRows = $this->buildRows(\array_slice($rows, $start, $limit));
 
-        // The highlight follows the page cursor, the row the detail panel
-        // describes. A selection outside the painted window (or past the end
-        // after a reload) shows no highlight rather than a wrong one.
-        $shown = $this->selectedIndex >= 0 && $this->selectedIndex < \count($tableRows);
+        // The highlight follows the page cursor. A selection past the end
+        // after a reload (or a zero-row window) shows no highlight rather
+        // than a wrong one.
+        $cursor = $this->selectedIndex - $start;
+        $shown = $cursor >= 0 && $cursor < \count($tableRows);
         $table = Table::fromColumns($columns)
             ->withRows($tableRows)
             ->withSelectable($shown)
             ->withZebra();
         if ($shown) {
-            $table = $table->withSelectedIndex($this->selectedIndex);
+            $table = $table->withSelectedIndex($cursor);
         }
 
         if ($this->filters->skipFullInfo) {
