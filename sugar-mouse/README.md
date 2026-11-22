@@ -345,8 +345,10 @@ cluster. Only bytes that are not valid UTF-8 fall back to one lead-byte-sized
 unit. ICU and PCRE track their own Unicode versions, so a code point newer
 than one of them can still cluster differently host to host; layouts that
 mark brand-new emoji should pin `ext-intl`. Runs of printable ASCII are taken
-in one step (an ASCII byte never extends a cluster), with the run's last byte
-left to the cluster path when a combining mark follows it.
+in one step (no ASCII code point is Prepend, so ASCII joins only a non-ASCII
+neighbor), with the run's last byte left to the cluster path when a combining
+mark follows it; ASCII after a Prepend code point such as U+0600 stays in that
+Prepend's cluster on both paths (UAX #29 GB9b).
 
 **Re-scans re-measure only changed lines.** Pass a `LineWidthCache` to
 `Scan::parse()` (`Scanner` and `Zones\Manager` each carry one) and every

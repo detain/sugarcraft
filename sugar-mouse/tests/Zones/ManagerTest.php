@@ -361,13 +361,13 @@ final class ManagerTest extends TestCase
 
     /**
      * When two zones of equal area both contain the mouse, the FIRST
-     * recorded zone wins — matching the primitive Scanner's
-     * earliest-registered rule.
+     * recorded zone wins — the same tie rule Scanner::hit() applies after
+     * its smallest-area step (both go through ZoneGrid::smallestAt()).
      *
      * Constructible via two scan frames: mark() emits one zone per call,
      * but scan() MERGES, so scanning the same column range under a second
      * id leaves both zones registered over the identical rectangle. The
-     * strict `<` comparison in anyInBounds then keeps the first entry.
+     * strict `<` comparison in ZoneGrid::smallestAt() then keeps the first entry.
      */
     public function testAnyInBoundsTieBreaksToFirstInserted(): void
     {

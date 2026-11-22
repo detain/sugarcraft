@@ -74,16 +74,19 @@ final class Grapheme
 
         $first = self::scalarLength($s, $i);
         $end = $i + $first;
-        // An ASCII byte never extends a cluster (UAX #29 GB999), CR LF aside,
-        // so a unit followed by ASCII — or by nothing — is complete as is.
         if ($s[$i] === "\r" && ($s[$i + 1] ?? '') === "\n") {
             return "\r\n";
         }
-        if ($end >= $len || ord($s[$end]) < 0x80) {
+        // Only an ASCII LEAD followed by ASCII (or by nothing) is complete as
+        // is: no ASCII code point is Prepend, and a following ASCII byte only
+        // joins a cluster whose last code point is Prepend (UAX #29 GB9b,
+        // e.g. U+0600 + "a" is one cluster). A non-ASCII lead therefore keeps
+        // following ASCII bytes in its window, so \X can apply GB9b.
+        if ($end >= $len || (ord($s[$i]) < 0x80 && ord($s[$end]) < 0x80)) {
             return substr($s, $i, $first);
         }
 
-        for ($taken = 1; $taken < self::WINDOW && $end < $len && ord($s[$end]) >= 0x80; $taken++) {
+        for ($taken = 1; $taken < self::WINDOW && $end < $len; $taken++) {
             $end += self::scalarLength($s, $end);
         }
         $window = substr($s, $i, min($end, $len) - $i);

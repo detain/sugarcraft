@@ -32,6 +32,10 @@ final class GraphemeTest extends TestCase
         yield 'skin tone' => ["👍\u{1F3FD} ok", "👍\u{1F3FD}"];
         yield 'crlf' => ["\r\nx", "\r\n"];
         yield 'cjk' => ['日本', '日'];
+        // GB9b: a Prepend code point joins the ASCII character after it.
+        yield 'prepend before ascii letter' => ["\u{0600}a", "\u{0600}a"];
+        yield 'prepend before ascii digit' => ["\u{06DD}1x", "\u{06DD}1"];
+        yield 'non-ascii before ascii' => ['éa', 'é'];
     }
 
     #[DataProvider('clusters')]
@@ -90,6 +94,20 @@ final class GraphemeTest extends TestCase
         self::assertSame(2, $zones['a']->startCol);
         self::assertSame(3, $zones['b']->startCol);
         self::assertSame(3, $zones['c']->startCol);
+    }
+
+    /**
+     * GB9b: a Prepend code point and the ASCII letter after it are one
+     * cluster, so the zone after them starts one cell in, not two. The
+     * fallback must keep that ASCII byte in the Prepend's window.
+     */
+    public function testPrependClusterBeforeAsciiAdvancesOnce(): void
+    {
+        self::assertSame("\u{0600}a", Grapheme::nextWithoutIntl("\u{0600}a" . Mark::zone('x', 'y'), 0));
+
+        $zones = Scan::parse("\u{0600}a" . Mark::zone('x', 'y'));
+
+        self::assertSame(2, $zones['x']->startCol);
     }
 
     /**

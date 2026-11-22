@@ -784,10 +784,13 @@ final class Scan
      * grapheme cluster ({@see Grapheme::next()}), or a whole run of printable
      * ASCII at once.
      *
-     * The run is safe to take in one step because an ASCII byte never extends
-     * a cluster (UAX #29 GB999) and each printable ASCII byte is one cell. Its
-     * LAST byte is left to the cluster path when non-ASCII follows, since a
-     * combining mark there joins it ("e" + U+0301 is one cell, not two).
+     * The run is safe to take in one step because no ASCII code point is
+     * Prepend, so an ASCII byte joins the one after it only when that one is
+     * non-ASCII, and each printable ASCII byte is one cell. Its LAST byte is
+     * left to the cluster path when non-ASCII follows, since a combining mark
+     * there joins it ("e" + U+0301 is one cell, not two). ASCII that follows
+     * a Prepend code point (UAX #29 GB9b, U+0600 + "a") is never the start of
+     * a run here: the cluster path that took the Prepend took it too.
      *
      * Known divergence class (portability): with ext-intl the cluster
      * boundary is the host ICU's UAX #29 answer; without it, PCRE's (see

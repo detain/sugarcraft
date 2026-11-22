@@ -60,21 +60,22 @@ Source: findings/plan_sugar-mouse.md — Item 5.1
 
 ## Scanner::hit() — grid-bucket spatial index
 
-- `Scanner::hit()` is backed by a lazily built grid-bucket index
-  (`GRID_BUCKET` = 32 cells): each zone is hashed into every bucket its
-  bounding box overlaps, so a lookup scans only the (usually tiny)
-  candidate list of the queried bucket — sub-linear for the dense
-  table/list/grid UIs bubblezone targets.
-- Buckets are populated in zone insertion order, so among overlapping
-  zones the earliest-registered still wins — identical result to the old
-  O(n) linear scan (the Zones Manager layer's lookup is different:
-  smallest-area wins, ties go to the first recorded — see
-  src/Zones/Manager.php).
+- `Scanner::hit()` and `Zones\Manager::zoneAt()` share ONE hit rule,
+  `ZoneGrid::smallestAt()` (src/ZoneGrid.php): among the zones covering a
+  cell the smallest area wins, and equal areas go to the earliest
+  registered. Do not restore first-registered ordering in either layer or
+  pin it in a test — that reintroduces the split P2-8 removed.
+- The index is a lazily built grid-bucket map (`ZoneGrid::BUCKET` = 32
+  cells): each zone is hashed into every bucket its bounding box overlaps,
+  in insertion order, so a lookup scans only the (usually tiny) candidate
+  list of the queried bucket — sub-linear for the dense table/list/grid
+  UIs bubblezone targets.
 - The index is invalidated on every `scan()`/`clear()` and rebuilt on the
-  next `hit()` (`Scanner.php:115-162`).
-- **Stale-warning for this file's history:** an earlier entry claimed
-  hit() was an unindexed O(n) scan citing `Scanner.php:83-86`; that was
-  superseded when the index landed (index-invalidation tests included).
+  next `hit()`.
+- **Stale-warning for this file's history:** earlier entries claimed
+  hit() was an unindexed O(n) scan, and later that it resolved by
+  earliest-registered zone with a `GRID_BUCKET` constant in Scanner; both
+  were superseded (2026-11-22, P2-8: one smallest-area rule in ZoneGrid).
 Source: findings/plan_sugar-mouse.md — Item 5.2 (closed: index shipped)
 
 ## Memoization opportunity for repeated scans
