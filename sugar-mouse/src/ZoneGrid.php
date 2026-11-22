@@ -29,12 +29,24 @@ use SugarCraft\Mouse\Zones\Zone as ZonesZone;
  * frozen snapshot: callers build one per zone set and drop it when the set
  * changes.
  *
+ * A zone whose box overlaps more than {@see MAX_ZONE_BUCKETS} buckets is
+ * kept on a short "wide" list that every lookup scans instead, so building
+ * the grid costs at most that many entries per zone. Without the cap the
+ * fill scaled with box AREA: one zone 25000 cells on a side would write
+ * ~611k bucket keys and exhaust a 128M memory limit on the first click.
+ *
  * @template T of Zone|ZonesZone
  */
 final class ZoneGrid
 {
     /** Cells per bucket side. */
     public const BUCKET = 32;
+
+    /**
+     * Most buckets one zone may occupy; a larger box goes on {@see $wide}.
+     * 256 buckets cover a 512 × 512 cell box, past any real terminal.
+     */
+    public const MAX_ZONE_BUCKETS = 256;
 
     /**
      * Bucket key "bx:by" => indexes into {@see $zones}, ascending (so
@@ -45,15 +57,29 @@ final class ZoneGrid
     private array $buckets = [];
 
     /**
+     * Indexes of zones too large to bucket, ascending; checked on every
+     * lookup.
+     *
+     * @var list<int>
+     */
+    private array $wide = [];
+
+    /**
      * @param list<T> $zones registration order
      */
     private function __construct(private readonly array $zones)
     {
         foreach ($zones as $index => $zone) {
+            $bxStart = self::bucket($zone->startCol);
+            $byStart = self::bucket($zone->startRow);
             $bxEnd = self::bucket($zone->endCol);
             $byEnd = self::bucket($zone->endRow);
-            for ($by = self::bucket($zone->startRow); $by <= $byEnd; $by++) {
-                for ($bx = self::bucket($zone->startCol); $bx <= $bxEnd; $bx++) {
+            if (($bxEnd - $bxStart + 1) * ($byEnd - $byStart + 1) > self::MAX_ZONE_BUCKETS) {
+                $this->wide[] = $index;
+                continue;
+            }
+            for ($by = $byStart; $by <= $byEnd; $by++) {
+                for ($bx = $bxStart; $bx <= $bxEnd; $bx++) {
                     $this->buckets[$bx . ':' . $by][] = $index;
                 }
             }
@@ -126,8 +152,15 @@ final class ZoneGrid
      */
     private function candidates(int $col, int $row): array
     {
+        $indexes = $this->buckets[self::bucket($col) . ':' . self::bucket($row)] ?? [];
+        if ($this->wide !== []) {
+            // Both lists ascend; re-sort the union so candidates keep
+            // registration order (the equal-area tie-break).
+            $indexes = [...$indexes, ...$this->wide];
+            sort($indexes);
+        }
         $hits = [];
-        foreach ($this->buckets[self::bucket($col) . ':' . self::bucket($row)] ?? [] as $index) {
+        foreach ($indexes as $index) {
             $zone = $this->zones[$index];
             if ($col >= $zone->startCol && $col <= $zone->endCol
                 && $row >= $zone->startRow && $row <= $zone->endRow

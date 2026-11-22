@@ -152,6 +152,33 @@ final class HitRuleTest extends TestCase
         self::assertSame(0, $mismatches);
     }
 
+    /**
+     * Grid build cost must not scale with a zone's box AREA: one zone 25000
+     * cells on a side used to fill ~611k bucket keys and exhaust a 128M limit
+     * on the first click. An oversized box goes on the wide list instead, and
+     * the hit rule (smallest wins, ties to the first registered) still holds
+     * across both lists.
+     */
+    public function testAHugeZoneIsIndexedWithoutFillingEveryBucket(): void
+    {
+        $before = memory_get_usage();
+        $grid = ZoneGrid::of([
+            Zone::new('tieA', 100, 100, 101, 101),
+            Zone::new('huge', 1, 1, 25000, 25000),
+            Zone::new('tieB', 100, 100, 101, 101),
+            Zone::new('wideTie', 1, 1, 25000, 25000),
+        ]);
+        self::assertLessThan(1024 * 1024, memory_get_usage() - $before);
+
+        self::assertSame('huge', $grid->smallestAt(24999, 24999)?->id);
+        self::assertSame('tieA', $grid->smallestAt(100, 100)?->id);
+        self::assertSame(
+            ['tieA', 'tieB', 'huge', 'wideTie'],
+            array_map(static fn (Zone $z): string => $z->id, $grid->allAt(101, 101)),
+        );
+        self::assertSame([], $grid->allAt(25001, 1));
+    }
+
     public function testHostileCoordinatesHitNothing(): void
     {
         $grid = ZoneGrid::of([Zone::new('z', 1, 1, 40, 40)]);

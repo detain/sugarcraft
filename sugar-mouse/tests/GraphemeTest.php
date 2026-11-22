@@ -168,6 +168,28 @@ final class GraphemeTest extends TestCase
     }
 
     /**
+     * GB9b joins a Prepend code point to the zone sentinel after it. The
+     * scanner must still end the cluster at the sentinel and decode the tag,
+     * or the zone is silently dropped while strip() hides the markup.
+     */
+    public function testPrependRightBeforeAZoneTagKeepsTheZone(): void
+    {
+        $zones = Scan::parse("\u{0600}" . Mark::zone('btn', 'abc'));
+        self::assertArrayHasKey('btn', $zones);
+        self::assertSame(2, $zones['btn']->startCol);
+        self::assertSame(4, $zones['btn']->endCol);
+
+        $zones = Scan::parse("x\u{0600}" . Mark::zone('btn', 'abc'));
+        self::assertArrayHasKey('btn', $zones);
+        self::assertSame(3, $zones['btn']->startCol);
+
+        // A Prepend before a CLOSE tag must not swallow it either.
+        $zones = Scan::parse(Mark::zone('end', "ab\u{0600}") . 'z');
+        self::assertArrayHasKey('end', $zones);
+        self::assertSame(1, $zones['end']->startCol);
+    }
+
+    /**
      * The printable-ASCII fast path must leave a run's last byte to the
      * cluster path when a combining mark follows it.
      */

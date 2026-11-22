@@ -815,6 +815,21 @@ final class Scan
         }
 
         $cluster = Grapheme::next($rendered, $i);
+        // A Prepend code point joins whatever follows it (UAX #29 GB9b), a
+        // zone sentinel too: "\u{0600}" . U+E000 is one cluster, and taking
+        // it whole would skip the tag as text and silently drop the zone.
+        // End the cluster at the first sentinel inside it so the caller's
+        // tag path sees it. 0xEE is a lead byte, so any match is aligned.
+        $cut = strlen($cluster);
+        foreach ([Sentinel::OPEN, Sentinel::CLOSE] as $sentinel) {
+            $at = strpos($cluster, $sentinel, 1);
+            if ($at !== false && $at < $cut) {
+                $cut = $at;
+            }
+        }
+        if ($cut < strlen($cluster)) {
+            $cluster = substr($cluster, 0, $cut);
+        }
         return [strlen($cluster), Width::string($cluster)];
     }
 }
