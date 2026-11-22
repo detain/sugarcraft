@@ -127,15 +127,16 @@ Bottom bar</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>SugarPanels</td><td>new()</td><td>Create a panels instance</td></tr>
-<tr><td>SugarPanels</td><td>leaf(string)</td><td>Leaf node with string content</td></tr>
+<tr><td>SugarPanels</td><td>leaf(string|Buffer)</td><td>Leaf node with string content, or a cell <code>Buffer</code> it paints cell for cell</td></tr>
 <tr><td>SugarPanels</td><td>horizontal(Node ...)</td><td>Horizontal (row) layout</td></tr>
 <tr><td>SugarPanels</td><td>vertical(Node ...)</td><td>Vertical (column) layout</td></tr>
 <tr><td>SugarPanels</td><td>noBorder(Node)</td><td>Suppresses every frame and every divider through the whole subtree — adjacent panels render touching</td></tr>
 <tr><td>SugarPanels</td><td>render(Node, int $width, int $height)</td><td>Paint one frame to an ANSI string; throws InvalidArgumentException on a viewport outside the documented ranges</td></tr>
+<tr><td>SugarPanels</td><td>paintedLeaves(): int</td><td>How many leaves the last <code>render()</code> painted; a same-size frame with the same layout repaints only the leaves whose text, cells, style, frame, scroll offset or focus changed</td></tr>
 <tr><td>SugarPanels</td><td>resetPreviousFrame()</td><td>Drop the frame cache — the next render() repaints full, without erasing</td></tr>
 <tr><td>SugarPanels</td><td>MAX_VIEWPORT_DIMENSION</td><td>4096 cells — largest viewport side accepted</td></tr>
 <tr><td>SugarPanels</td><td>MAX_VIEWPORT_CELLS</td><td>1 000 000 cells — largest viewport area accepted (printed as 1000000 in the exception message)</td></tr>
-<tr><td>Node</td><td>leaf(string)</td><td>Static leaf constructor</td></tr>
+<tr><td>Node</td><td>leaf(string|Buffer)</td><td>Static leaf constructor; a <code>Buffer</code> is placed cell for cell instead of text</td></tr>
 <tr><td>Node</td><td>horizontal(Node ...)</td><td>Static horizontal constructor</td></tr>
 <tr><td>Node</td><td>vertical(Node ...)</td><td>Static vertical constructor</td></tr>
 <tr><td>Node</td><td>noBorder(Node)</td><td>Static no-border wrapper — suppresses every frame and every divider through the whole subtree</td></tr>
@@ -156,6 +157,16 @@ Bottom bar</code></pre>
 <tr><td>Node</td><td>withMargin(int $top, ...)</td><td>Outer margin (top/right/bottom/left)</td></tr>
 <tr><td>Node</td><td>withAlignH(?Align)</td><td>Horizontal text alignment (null clears)</td></tr>
 <tr><td>Node</td><td>withAlignV(?VAlign)</td><td>Vertical text alignment (null clears)</td></tr>
+<tr><td>Node</td><td>withCells(?Buffer)</td><td>Cells a leaf paints instead of its text, placed top-left in the padded content box and clipped to it; null returns the leaf to its text</td></tr>
+<tr><td>Node</td><td>withScrollOffset(int $rows)</td><td>Skip this many rows of leaf content from the top (text rows after wrap, or cell rows); clamps to 0 and to the last full page</td></tr>
+<tr><td>Node</td><td>withFocused(bool = true)</td><td>Paint the node's frame with the focus border set and pen; layout is unchanged</td></tr>
+<tr><td>Node</td><td>withFocusBorderStyle(?Border) / withFocusStyle(?Style)</td><td>Border set (null restores <code>Border::thick()</code>) and pen (null paints unstyled) for the focus frame</td></tr>
+<tr><td>Splitter</td><td>horizontal(Node ...) / vertical(Node ...)</td><td>A run of panes split along one axis with draggable dividers; divider <code>i</code> sits on the last column (row) of pane <code>i</code></td></tr>
+<tr><td>Splitter</td><td>withBounds(int $x, int $y, int $width, int $height)</td><td>Where the splitter is painted, in screen cells; existing sizes rescale proportionally (equal shares when none were set)</td></tr>
+<tr><td>Splitter</td><td>withSizes(int ...) / withMinPaneSize(int) / withPanes(Node ...)</td><td>Explicit pane sizes fitted to the span (kept until <code>withBounds()</code> when called first), the drag floor, and replacement panes (sizes survive an unchanged count)</td></tr>
+<tr><td>Splitter</td><td>update(Msg): [Splitter, null] / withDividerDrag(int $position, ?int $divider = null)</td><td>Drag driven by mouse messages: a left press on a divider grabs it, motion moves it, the release lets go; each move trades cells between the two neighbors only</td></tr>
+<tr><td>Splitter</td><td>dividerAt(int $col, int $row): ?int / dividerPositions() / isDragging()</td><td>Divider hit test and screen positions</td></tr>
+<tr><td>Splitter</td><td>node(): Node</td><td>The frameless, spacing-0 layout tree that gives each pane exactly its size</td></tr>
 </table>
     <!-- api-reference:generated -->
   </div>
