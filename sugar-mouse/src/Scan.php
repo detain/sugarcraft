@@ -794,9 +794,12 @@ final class Scan
      *
      * Known divergence class (portability): with ext-intl the cluster
      * boundary is the host ICU's UAX #29 answer; without it, PCRE's (see
-     * {@see Grapheme}). The two agree on ZWJ emoji, flags and combining runs
-     * but track different Unicode versions, so a code point newer than one of
-     * them can still cluster differently host to host. The README's Scan rules
+     * {@see Grapheme}). The two agree on ZWJ emoji, flag pairs and an accent
+     * on a Latin base, but PCRE's `\X` only approximates UAX #29: it splits
+     * an Indic conjunct ICU joins (one cell more without ext-intl) and a
+     * regional indicator from a combining mark after it, and a code point
+     * newer than either library's Unicode tables can cluster differently
+     * too. {@see Grapheme} lists the measured cases; the README's Scan rules
      * carry the consumer-facing version of this note.
      *
      * @return array{0:int,1:int} [bytes, cells]

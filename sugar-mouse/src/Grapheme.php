@@ -15,12 +15,25 @@ namespace SugarCraft\Mouse;
  * every zone to its right would register shifted.
  *
  * With ext-intl the boundary is ICU's UAX #29 answer (`grapheme_extract`).
- * Without it, {@see nextWithoutIntl()} asks PCRE's own UAX #29 matcher (`\X`,
- * always compiled into PHP) over a short window of whole code points, so a
- * host without ext-intl still measures per cluster instead of falling back to
- * per code point. Only bytes that are not valid UTF-8 degrade to a single
- * lead-byte-sized unit — the same posture the scanner always had for them;
- * a valid cluster followed by such bytes still measures as one cluster.
+ * Without it, {@see nextWithoutIntl()} asks PCRE's extended grapheme cluster
+ * matcher (`\X`, always compiled into PHP) over a short window of whole code
+ * points, so a host without ext-intl still measures per cluster instead of
+ * falling back to per code point. Only bytes that are not valid UTF-8 degrade
+ * to a single lead-byte-sized unit — the same posture the scanner always had
+ * for them; a valid cluster followed by such bytes still measures as one
+ * cluster.
+ *
+ * The fallback is an approximation of UAX #29, not an implementation of it.
+ * `\X` follows PCRE2's own cluster rules, which match ICU on the inputs
+ * GraphemeTest cross-checks against `grapheme_extract()` (combining accents,
+ * ZWJ families, flag pairs, keycaps, tag flags, skin tones, Hangul, CRLF,
+ * Prepend + ASCII) but not everywhere. Two splits measured on PCRE2 10.42
+ * against ICU 74: an Indic conjunct (U+0915 U+094D U+0937, which ICU joins by
+ * GB9c) comes back as two clusters and so two cells instead of one, moving
+ * every zone to its right one column; and a regional indicator followed by a
+ * combining mark (U+1F1F8 U+0301) comes back as the indicator alone, which
+ * leaves the cell count unchanged. A layout whose zones must land on the same
+ * column on every host should require ext-intl.
  */
 final class Grapheme
 {

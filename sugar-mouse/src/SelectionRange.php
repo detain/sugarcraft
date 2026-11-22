@@ -64,7 +64,8 @@ final class SelectionRange
      * @param int|null $edgeFrom left edge of the region's text column; null defaults to the left endpoint,
      *                           and an explicit edge crossing right of the end cell is clamped to it
      * @param int|null $edgeTo   right edge of the region's text column; null defaults to the right endpoint,
-     *                           and an explicit edge crossing left of the start cell is clamped to it
+     *                           and an explicit edge crossing left of the start cell is clamped to it.
+     *                           Only a pair given in reverse order is swapped; a lone edge never moves the other.
      *
      * @throws \InvalidArgumentException when any coordinate is off-terminal (< 1)
      */
@@ -77,8 +78,15 @@ final class SelectionRange
             ? [$rowB, $colB, $rowA, $colA]
             : [$rowA, $colA, $rowB, $colB];
 
-        $low  = min($edgeFrom ?? min($colA, $colB), $edgeTo ?? max($colA, $colB));
-        $high = max($edgeFrom ?? min($colA, $colB), $edgeTo ?? max($colA, $colB));
+        // A swapped edge PAIR describes the same column, so only two explicit
+        // edges are reordered. A lone explicit edge never moves the other one
+        // off its endpoint default: min/max over a default would let an
+        // edgeFrom right of both endpoints become the right edge.
+        $low  = $edgeFrom ?? min($colA, $colB);
+        $high = $edgeTo ?? max($colA, $colB);
+        if ($edgeFrom !== null && $edgeTo !== null && $low > $high) {
+            [$low, $high] = [$high, $low];
+        }
 
         // The envelope: edges may WIDEN the region (that is what {@see Selection::range()}
         // passes, so its middle rows sweep whole) but no edge may cross inside its own
@@ -212,7 +220,16 @@ final class SelectionRange
             $line = $lines[$index];
             $head = Width::truncateAnsi($line, $before);
             $pad = str_repeat(' ', max(0, $before - Width::string($head)));
-            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $before), $cells));
+            // A wide glyph straddling the span's LEFT edge is dropped whole by
+            // both truncateAnsi() (head) and dropAnsi() (run): $pad blanks its
+            // uncovered half, and $lead blanks the covered half, so the run
+            // starts on its own column and the row keeps its cell count. (On
+            // the RIGHT edge takeAnsi() keeps the straddler whole and the tail's
+            // dropAnsi() skips it whole, so those two already meet, the same
+            // glyph extract() copies.)
+            $rest = Width::dropAnsi($line, $before);
+            $lead = min($cells, max(0, Width::string($line) - $before - Width::string($rest)));
+            $run = str_repeat(' ', $lead) . Ansi::strip(Width::takeAnsi($rest, $cells - $lead));
             $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
 
             $lines[$index] = $head . Ansi::reset() . $pad . $paint($run) . Ansi::reset()

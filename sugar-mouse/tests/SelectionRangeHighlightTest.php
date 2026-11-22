@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mouse\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\SelectionRange;
 
 /**
@@ -59,6 +60,30 @@ final class SelectionRangeHighlightTest extends TestCase
         $lines = SelectionRange::new(1, 3, 1, 4)->highlight(['日本語'], static fn (string $run): string => '<' . $run . '>');
 
         self::assertSame(["日\e[0m<本>\e[0m語"], $lines);
+    }
+
+    public function testASelectionStartingOnAWideGlyphsSecondHalfKeepsTheRowWidth(): void
+    {
+        // 中 spans cells 1-2 and 文 cells 3-4: the span [2,3] starts on 中's
+        // second half. Its covered half paints blank, 文 stays on cells 3-4,
+        // and "ab" stays on cells 5-6 instead of shifting one column left.
+        $lines = SelectionRange::new(1, 2, 1, 3)->highlight(['中文ab'], static fn (string $run): string => '<' . $run . '>');
+
+        self::assertSame(["\e[0m < 文>\e[0mab"], $lines);
+    }
+
+    public function testEverySpanOverWideGlyphsKeepsTheRowsCellCount(): void
+    {
+        $row = '中文ab';
+        $width = Width::string($row);
+
+        for ($from = 1; $from <= $width; $from++) {
+            for ($to = $from; $to <= $width; $to++) {
+                [$painted] = SelectionRange::new(1, $from, 1, $to)->highlight([$row]);
+
+                self::assertSame($width, Width::string($painted), "span [{$from},{$to}]");
+            }
+        }
     }
 
     public function testHighlightAndExtractCoverTheSameCells(): void

@@ -13,9 +13,10 @@ use SugarCraft\Mouse\Scan;
 /**
  * P2-8 (g), audit rank 110: the scanner measures one grapheme CLUSTER per
  * step, never one code point — including on hosts without ext-intl, where
- * the fallback now asks PCRE's UAX #29 `\X` instead of consuming a single
- * scalar (which split ZWJ emoji, flags and combining runs and shifted every
- * zone to their right).
+ * the fallback now asks PCRE's `\X` instead of consuming a single scalar
+ * (which split ZWJ emoji, flags and combining runs and shifted every zone to
+ * their right). `\X` only approximates UAX #29, so agreement with ICU is
+ * claimed, and cross-checked, only for the corpus in clusters().
  */
 final class GraphemeTest extends TestCase
 {

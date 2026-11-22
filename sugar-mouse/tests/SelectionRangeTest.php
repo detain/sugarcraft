@@ -216,6 +216,24 @@ final class SelectionRangeTest extends TestCase
         self::assertSame([4, 5], $range->spanOnRow(4));
     }
 
+    public function testALoneExplicitEdgeLeavesTheOtherOnItsEndpointDefault(): void
+    {
+        // Only edgeFrom is given, right of both endpoints: the right edge
+        // still defaults to the right endpoint (20), so row 1 is [20, 20],
+        // never widened to [20, 30].
+        $range = SelectionRange::new(1, 20, 3, 5, edgeFrom: 30);
+
+        self::assertSame([20, 20], $range->spanOnRow(1));
+        self::assertFalse($range->cellContains(1, 21));
+        self::assertSame([5, 5], $range->spanOnRow(3));
+
+        // Mirror: only edgeTo, left of both endpoints, never widens the left edge.
+        $range = SelectionRange::new(1, 20, 3, 5, edgeTo: 2);
+
+        self::assertSame([5, 5], $range->spanOnRow(3));
+        self::assertSame([20, 20], $range->spanOnRow(1));
+    }
+
     public function testEdgeCrossingInsideTheStartCellIsClampedToIt(): void
     {
         // The reported shape: new(1,3,3,6, edgeTo:1) — an edge pair sitting
