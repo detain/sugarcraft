@@ -1221,13 +1221,15 @@ final class Tabs implements Model
      * The cursor walks to the cell where each candidate label ENDS, and a
      * tab only enters the window if it survives rendering: the window's
      * last tab needs to fit within the bar (`labelEnd <= width`), while
-     * any other candidate also owes a right `…` for the tabs it hides —
-     * when the line runs wide view()'s guard keeps `width - 1` cells
-     * before appending its own `…`, so a mid-list tail tab renders whole
-     * only while `labelEnd <= width - 1`. Pricing the left `…` is part of
+     * any other candidate also owes the right mark for the tabs it hides —
+     * when the line runs wide view()'s guard keeps only clipBudget()
+     * cells (width minus the right mark's display width) before
+     * appending that mark, so a mid-list tail tab renders whole only
+     * while `labelEnd <= clipBudget()`. Pricing the left mark is part of
      * the same honesty: view() joins it with a divider, so it already
-     * occupies cells before the first label starts. Under-counting any
-     * of this (one bare cell for the right `…`, nothing for the left)
+     * occupies leftLeadWidth() cells before the first label starts.
+     * Under-counting any of this (too few cells for a wide right mark,
+     * nothing for the left)
      * let the stored window claim a tab view() then clipped away — the
      * bold active tab could silently vanish (r87 review MAJOR). The
      * first tab after the offset is included even if it alone overflows
@@ -1265,10 +1267,11 @@ final class Tabs implements Model
     }
 
     /**
-     * Whether view() will prepend a left `…` for the current offset.
+     * Whether view() will prepend the left mark for the current offset.
      *
-     * The `…` and its divider must leave at least one cell of the first
-     * window tab before the clip guard's `width - 1` bound: at a narrower
+     * The left mark and its divider (leftLeadWidth()) must leave at least
+     * one cell of the first window tab before the clip guard's
+     * clipBudget() bound (width minus the right mark's cells): at a narrower
      * width they would eat the whole bar and the active tab would vanish
      * from the frame and from spans(), so the marker is dropped instead.
      */
