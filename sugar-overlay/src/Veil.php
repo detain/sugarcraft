@@ -128,6 +128,13 @@ final class Veil
     private readonly string $content;
 
     /**
+     * Background/foreground tokenize memo (rank 35): a composite over the
+     * same backdrop reuses its row segments instead of re-scanning every row.
+     * Pure, so it is shared with every clone (see {@see SegmentMemo}).
+     */
+    private readonly SegmentMemo $segments;
+
+    /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
      * @param AnimationKind|Fade|Scale|Slide|null $animation Animation driver for transitions
      * @param int $zIndex Stacking order
@@ -144,6 +151,7 @@ final class Veil
      * @param int $posX X offset in columns
      * @param int $posY Y offset in rows
      * @param string $content Overlay content for stack-driven compositing
+     * @param SegmentMemo|null $segments Shared tokenize memo (null = a fresh one)
      */
     private function __construct(
         int $backdropOpacity = 0,
@@ -162,6 +170,7 @@ final class Veil
         int $posY = 0,
         string $content = '',
         bool $reducedMotion = false,
+        ?SegmentMemo $segments = null,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
         $this->animation = $animation;
@@ -179,6 +188,7 @@ final class Veil
         $this->posX = $posX;
         $this->posY = $posY;
         $this->content = $content;
+        $this->segments = $segments ?? new SegmentMemo();
     }
 
     /**
@@ -194,8 +204,8 @@ final class Veil
      *
      * Every production modal spells the same thing — a 50% backdrop and the
      * CENTER/CENTER anchor pair (upstream's Bubble Tea modal recipe). This
-     * delegates to exactly that call, byte for byte; it is shorthand, never
-     * a second code path.
+     * delegates to {@see place()} with {@see Placement::centered()}, byte for
+     * byte; it is shorthand, never a second code path.
      */
     public static function centered(
         string $content,
@@ -206,7 +216,7 @@ final class Veil
     ): string {
         return self::new()
             ->withBackdrop($dimmingPercent)
-            ->composite($content, $backdrop, Position::CENTER, Position::CENTER, $xOffset, $yOffset);
+            ->place($content, $backdrop, Placement::centered($xOffset, $yOffset));
     }
 
     /**
@@ -339,6 +349,8 @@ final class Veil
      */
     public function withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self
     {
+        // The positional spelling of withPlacement() that can also CLEAR an
+        // axis; placement() reads the stored pair back as one Placement.
         return $this->mutate(
             vPosition: $vertical,
             vPositionSet: true,
@@ -346,6 +358,31 @@ final class Veil
             hPositionSet: true,
             posX: $x,
             posY: $y,
+        );
+    }
+
+    /**
+     * Store a placement on this veil: the anchor pair and offset a
+     * {@see VeilStack::compositeAll()} or {@see ModalStack} pass places it
+     * with. Same storage as {@see withPosition()} (which can also clear an
+     * axis); read it back with {@see placement()}.
+     */
+    public function withPlacement(Placement $placement): self
+    {
+        return $this->withPosition($placement->vertical, $placement->horizontal, $placement->x, $placement->y);
+    }
+
+    /**
+     * The stored placement, an unset axis reading as CENTER (the default
+     * every stack pass applies).
+     */
+    public function placement(): Placement
+    {
+        return Placement::new(
+            $this->vPosition ?? Position::CENTER,
+            $this->hPosition ?? Position::CENTER,
+            $this->posX,
+            $this->posY,
         );
     }
 
@@ -831,33 +868,6 @@ final class Veil
     }
 
     /**
-     * Composite a foreground string over a background string.
-     *
-     * On the first composite (or after a resize), emits the full output.
-     * On subsequent composites with the same dimensions, emits only the
-     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
-     *
-     * The background is the canvas and the overlay is clipped to it. A
-     * background with no cells (the empty string, or rows of zero width)
-     * offers no canvas, so the overlay itself is returned as the frame
-     * (mirroring upstream's `bg == ""` early return). That frame still goes
-     * through the diff session like any other, so the next composite diffs
-     * against what was actually emitted; a frame with no cells at all resets
-     * the session, forcing the next one out in full.
-     *
-     * Two branches beside that mirror are DELIBERATELY unmirrored (see the
-     * README's Divergences from Upstream section, sugar-overlay-079/080):
-     * a single-line fg/bg pair is composited normally instead of returning
-     * the fg raw (upstream ignores width there; this lib never does), and an
-     * empty fg over a real canvas dims per backdropOpacity instead of
-     * passing the bg verbatim (pure pass-through holds only at opacity 0).
-     *
-     * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
-     * @param string    $background   The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or links in the BACKDROP mint real zones and links too (the same zero-assumption walk paints it); sweep untrusted backdrop text before compositing.
-     * @param Position $vertical     Vertical position anchor
-     * @param Position $horizontal    Horizontal position anchor
-     * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
-    /**
      * The single placement computation every public spell shares: split,
      * border chrome, one tokenize per row, anchor resolution, offsets.
      *
@@ -871,29 +881,20 @@ final class Veil
      *
      * @return array{canvasEmpty: bool, bgLines: list<string>, bgSegs: array<int, list<array{string,int}>>, bgWidths: list<int>, bgWidth: int, bgHeight: int, fgLines: list<string>, fgSegs: array<int, list<array{string,int}>>, fgWidths: list<int>, fgWidth: int, fgHeight: int, x: int, y: int}
      */
-    private function resolvePlacement(
-        string $foreground,
-        string $background,
-        Position $vertical,
-        Position $horizontal,
-        int $xOffset,
-        int $yOffset,
-    ): array {
-        $bgLines  = $this->splitLines($background);
-        $bgHeight = \count($bgLines);
+    private function resolvePlacement(string $foreground, string $background, Placement $at): array
+    {
         // One tokenize per row (sugar-overlay-003): widths, the covered-row
         // clips and both prefix/suffix splits all fold from these segment
         // lists — the same numbers the old repeated MarkedFrame::measure()/
         // take()/drop() string walks produced, at one walk per row instead
-        // of 7-10 per frame.
-        $bgSegs   = [];
-        $bgWidths = [];
-        foreach ($bgLines as $r => $line) {
-            $segs         = MarkedFrame::segments($line);
-            $bgSegs[$r]   = $segs;
-            $bgWidths[$r] = MarkedFrame::measureSegments($segs);
-        }
-        $bgWidth = $bgWidths === [] ? 0 : \max($bgWidths);
+        // of 7-10 per frame. The rows come from the segment memo (rank 35):
+        // re-compositing over an unchanged backdrop re-scans nothing.
+        $bg       = $this->segments->segment('background', $background);
+        $bgLines  = $bg['lines'];
+        $bgHeight = \count($bgLines);
+        $bgSegs   = $bg['segs'];
+        $bgWidths = $bg['widths'];
+        $bgWidth  = $bg['width'];
 
         // Border chrome is unconditional: a set border wraps the foreground
         // before any measurement, so anchoring and diffing see the bordered
@@ -904,16 +905,12 @@ final class Veil
             $foreground = $this->applyBorderChrome($foreground);
         }
 
-        $fgLines  = $this->splitLines($foreground);
+        $fg       = $this->segments->segment('foreground', $foreground);
+        $fgLines  = $fg['lines'];
         $fgHeight = \count($fgLines);
-        $fgSegs   = [];
-        $fgWidths = [];
-        foreach ($fgLines as $r => $line) {
-            $segs         = MarkedFrame::segments($line);
-            $fgSegs[$r]   = $segs;
-            $fgWidths[$r] = MarkedFrame::measureSegments($segs);
-        }
-        $fgWidth = $fgWidths === [] ? 0 : \max($fgWidths);
+        $fgSegs   = $fg['segs'];
+        $fgWidths = $fg['widths'];
+        $fgWidth  = $fg['width'];
 
         if ($bgHeight === 0 || $bgWidth === 0) {
             // No canvas to clip against; composite() returns the overlay
@@ -947,8 +944,8 @@ final class Veil
         // arms rely on partial-width paints at negative x; a fit-to-canvas
         // mode that shrinks the backdrop's canvas instead is a product
         // design seam, not silently added here.
-        $baseX = $horizontal->xOffset($fgWidth, $bgWidth);
-        $baseY = \max(0, $vertical->yOffset($fgHeight, $bgHeight));
+        $baseX = $at->horizontal->xOffset($fgWidth, $bgWidth);
+        $baseY = \max(0, $at->vertical->yOffset($fgHeight, $bgHeight));
 
         // Apply additional offsets
         return [
@@ -957,8 +954,8 @@ final class Veil
             'bgWidth' => $bgWidth, 'bgHeight' => $bgHeight,
             'fgLines' => $fgLines, 'fgSegs' => $fgSegs, 'fgWidths' => $fgWidths,
             'fgWidth' => $fgWidth, 'fgHeight' => $fgHeight,
-            'x' => $baseX + $xOffset,
-            'y' => $baseY + $yOffset,
+            'x' => $baseX + $at->x,
+            'y' => $baseY + $at->y,
         ];
     }
 
@@ -981,7 +978,7 @@ final class Veil
         int $xOffset = 0,
         int $yOffset = 0,
     ): ?array {
-        $p        = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+        $p        = $this->resolvePlacement($foreground, $background, Placement::new($vertical, $horizontal, $xOffset, $yOffset));
         $fgWidths = $p['fgWidths'];
 
         if ($p['canvasEmpty']) {
@@ -1050,7 +1047,7 @@ final class Veil
         int $xOffset = 0,
         int $yOffset = 0,
     ): ?array {
-        $p = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+        $p = $this->resolvePlacement($foreground, $background, Placement::new($vertical, $horizontal, $xOffset, $yOffset));
 
         if ($p['canvasEmpty']) {
             // No canvas, no clipping: the overlay itself is the frame.
@@ -1074,6 +1071,32 @@ final class Veil
     }
 
     /**
+     * Composite a foreground string over a background string.
+     *
+     * On the first composite (or after a resize), emits the full output.
+     * On subsequent composites with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
+     * The background is the canvas and the overlay is clipped to it. A
+     * background with no cells (the empty string, or rows of zero width)
+     * offers no canvas, so the overlay itself is returned as the frame
+     * (mirroring upstream's `bg == ""` early return). That frame still goes
+     * through the diff session like any other, so the next composite diffs
+     * against what was actually emitted; a frame with no cells at all resets
+     * the session, forcing the next one out in full.
+     *
+     * Two branches beside that mirror are DELIBERATELY unmirrored (see the
+     * README's Divergences from Upstream section, sugar-overlay-079/080):
+     * a single-line fg/bg pair is composited normally instead of returning
+     * the fg raw (upstream ignores width there; this lib never does), and an
+     * empty fg over a real canvas dims per backdropOpacity instead of
+     * passing the bg verbatim (pure pass-through holds only at opacity 0).
+     *
+     * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
+     * @param string    $background   The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or links in the BACKDROP mint real zones and links too (the same zero-assumption walk paints it); sweep untrusted backdrop text before compositing.
+     * @param Position $vertical     Vertical position anchor
+     * @param Position $horizontal    Horizontal position anchor
+     * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
      * @param int       $yOffset      Additional lines downward (+) / upward (-)
      * @return string                 The composited output
      */
@@ -1085,7 +1108,21 @@ final class Veil
         int $xOffset = 0,
         int $yOffset = 0,
     ): string {
-        $p = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+        return $this->place($foreground, $background, Placement::new($vertical, $horizontal, $xOffset, $yOffset));
+    }
+
+    /**
+     * Composite $foreground over $background at a {@see Placement}: the one
+     * placement door every other spelling routes through
+     * ({@see composite()}, {@see centered()}, {@see animate()}, the stack
+     * passes). Omitting $at uses this veil's own {@see placement()}.
+     *
+     * Same frame protocol, trust boundary and diff session as
+     * {@see composite()}.
+     */
+    public function place(string $foreground, string $background, ?Placement $at = null): string
+    {
+        $p = $this->resolvePlacement($foreground, $background, $at ?? $this->placement());
 
         $bgLines  = $p['bgLines'];
         $bgSegs   = $p['bgSegs'];
@@ -1393,6 +1430,7 @@ final class Veil
         ?int $posY = null,
         ?string $content = null,
         ?bool $reducedMotion = null,
+        ?SegmentMemo $segments = null,
     ): self {
         return new self(
             backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
@@ -1415,6 +1453,7 @@ final class Veil
             posY: $posY ?? $this->posY,
             content: $content ?? $this->content,
             reducedMotion: $reducedMotion ?? $this->reducedMotion,
+            segments: $segments ?? $this->segments,
         );
     }
 
@@ -1715,6 +1754,7 @@ final class Veil
             posY: $this->posY,
             content: $this->content,
             reducedMotion: $this->reducedMotion,
+            segments: $this->segments,
         );
     }
 

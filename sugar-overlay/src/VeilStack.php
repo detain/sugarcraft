@@ -126,13 +126,14 @@ final class VeilStack implements \Countable
         // Sort by z-index ascending so lowest renders first
         $sorted = $this->sorted();
         $result = $background;
+        $at     = Placement::new($vertical, $horizontal, $xOffset, $yOffset);
         foreach ($sorted as $veil) {
             // Use withoutSession() so inner compositing always emits full frame
             // output, not a delta that would corrupt the chaining computation.
             // The veil's OWN content rides over the ACCUMULATED $result — using
             // the accumulated canvas as the foreground instead would cover every
             // row and make the whole pass a silent no-op.
-            $result = $veil->withoutSession()->composite($veil->content(), $result, $vertical, $horizontal, $xOffset, $yOffset);
+            $result = $veil->withoutSession()->place($veil->content(), $result, $at);
         }
         return $result;
     }
@@ -170,13 +171,12 @@ final class VeilStack implements \Countable
             // output, not a delta that would corrupt the chaining computation.
             // $result (not $background) is the backdrop: later layers must see
             // everything earlier layers painted.
-            $result = $veil->withoutSession()->composite(
+            // placement() reads the veil's own anchor (CENTER when unset) and
+            // offsets; the stack-wide nudge rides on top of them.
+            $result = $veil->withoutSession()->place(
                 $veil->content(),
                 $result,
-                $veil->vPosition() ?? Position::CENTER,
-                $veil->hPosition() ?? Position::CENTER,
-                $veil->positionX() + $xOffset,
-                $veil->positionY() + $yOffset,
+                $veil->placement()->offsetBy($xOffset, $yOffset),
             );
         }
         return $result;

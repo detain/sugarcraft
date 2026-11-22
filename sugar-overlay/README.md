@@ -412,6 +412,67 @@ $stack = VeilStack::new()
 echo $stack->compositeAll($background) . "\n";
 ```
 
+### One placement value: Placement and place()
+
+Every door above spells the same thing — a vertical anchor, a horizontal
+anchor and a cell offset — and they all route through one placement path.
+`Placement` is that value, and `Veil::place()` is the door that takes it:
+`composite()` builds a `Placement` from its positional arguments,
+`Veil::centered()` uses `Placement::centered()`, and the stack passes read a
+veil's stored placement. `withPlacement()` stores one on the veil (the same
+storage `withPosition()` writes) and `placement()` reads it back, an unset axis
+reading as `CENTER`.
+
+```php
+<?php
+use SugarCraft\Overlay\{Placement, Position, Veil};
+
+$background = str_repeat("base canvas line ................\n", 6);
+
+$tooltip = Veil::new()->withPlacement(Placement::new(Position::TOP, Position::RIGHT, -1, 1));
+
+echo $tooltip->place('[tip]', $background) . "\n";            // the veil's own placement
+echo Veil::new()->place('[ok]', $background, Placement::centered(0, -1)) . "\n";
+```
+
+## ModalStack
+
+A host with several dialogs needs one answer to "which one is live?":
+`ModalStack` keeps modals in push order, routes keys to the top one, and
+paints them bottom to top over the host's frame. A modal implements
+`Modal` — `render(int $cols, int $rows): string` and
+`handleKey(KeyMsg $msg): array{?Modal, ?Closure}`, returning the next modal or
+`null` to close itself. Each layer's look and placement is a `Veil` (default:
+the `Veil::centered()` preset, a 50% backdrop at CENTER/CENTER). The order is
+push order; `withZIndex()` is not consulted here.
+
+```php
+<?php
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Overlay\{Modal, ModalStack};
+
+final class Confirm implements Modal
+{
+    public function render(int $cols, int $rows): string
+    {
+        return "[ delete? y/n ]";
+    }
+
+    public function handleKey(KeyMsg $msg): array
+    {
+        return $msg->type === KeyType::Escape ? [null, null] : [$this, null];
+    }
+}
+
+$stack = ModalStack::new()->push(new Confirm());
+echo $stack->top() !== null ? "a modal is live\n" : "no modal\n";
+echo $stack->render(str_repeat("host frame ............\n", 5), 24, 5) . "\n";
+
+[$stack] = $stack->handleKey(new KeyMsg(KeyType::Escape));   // Escape closes it
+echo count($stack) . " modals\n";
+```
+
 ## Auto-Size (deprecated)
 
 There is no fixed-width/height mode in sugar-overlay: an overlay has
@@ -776,6 +837,9 @@ instance; the instance also carries a private render session (see
 | `withBorder(?Border $border): self` | wrap content in sugar-style border chrome |
 | `border(): ?Border` | current border |
 | `withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self` | per-veil anchor for `VeilStack::compositeAll()` (null = follow the stack anchor) |
+| `withPlacement(Placement $placement): self` | store a placement on the veil (same storage as `withPosition()`) |
+| `placement(): Placement` | the stored placement, an unset axis reading as `CENTER` |
+| `place(string $foreground, string $background, ?Placement $at = null): string` | the one placement door: `composite()` at a `Placement` (null = the veil's own) |
 | `vPosition(): ?Position` / `hPosition(): ?Position` | the stored vertical / horizontal anchors |
 | `positionX(): int` / `positionY(): int` | the stored x / y nudges |
 | `withContent(string $content): self` | set the payload — **verbatim**, a documented trust boundary (see Security) |
@@ -800,6 +864,27 @@ instance; the instance also carries a private render session (see
 | `lastFullFrame(): ?string` | the remembered full frame (`null` on a pristine session) |
 | `resetPreviousFrame(): void` | forget the remembered frame (next `composite()` re-emits full) |
 | `withoutSession(): self` | copy with a fresh render session — resets the remembered frame, preserves everything else |
+
+### Placement
+
+Immutable anchor pair plus offset, shared by every placement door.
+
+| Method | Description |
+|---|---|
+| `Placement::new(Position $vertical = CENTER, Position $horizontal = CENTER, int $x = 0, int $y = 0): self` | anchors plus cell offset |
+| `Placement::centered(int $x = 0, int $y = 0): self` | CENTER/CENTER with an optional nudge |
+| `withAnchors(Position $vertical, Position $horizontal): self` / `withOffset(int $x, int $y): self` / `offsetBy(int $dx, int $dy): self` | new placement with the anchors or offset replaced / moved |
+
+### ModalStack and Modal
+
+| Method | Description |
+|---|---|
+| `ModalStack::new(): self` | empty stack |
+| `push(Modal $modal, ?Veil $veil = null): self` | put a modal on top (default veil: 50% backdrop, centered); throws `OverflowException` past `MAX_LAYERS` |
+| `pop(): self` / `top(): ?Modal` / `all(): list<Modal>` / `isEmpty(): bool` / `count(): int` | stack access, bottom to top |
+| `handleKey(KeyMsg $msg): array{ModalStack, ?Closure}` | route a key to the top modal; a `null` modal back closes it |
+| `render(string $background, int $cols, int $rows): string` | paint every layer bottom to top (full frames) |
+| `Modal::render(int $cols, int $rows): string` / `Modal::handleKey(KeyMsg $msg): array{?Modal, ?Closure}` | the modal contract |
 
 ### Position
 
