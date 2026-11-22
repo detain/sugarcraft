@@ -294,7 +294,8 @@ final class Tabs implements Model
         // cut inside a marker pair, orphaning sentinels. Price and clip the
         // unmarked content, then mark only the survivors.
         if ($this->width > 0 && $this->plainWidth($parts) > $this->width) {
-            return $this->assembleMarked($this->clipParts($parts, $this->width - 1)) . '…';
+            [$kept, $tail] = $this->clipParts($parts, $this->width - 1);
+            return $this->assembleMarked($kept) . $tail . '…';
         }
         return $this->assembleMarked($parts);
     }
@@ -597,8 +598,14 @@ final class Tabs implements Model
      * straddling piece truncated — still whole marker pairs once re-marked
      * — and later parts drop.
      *
+     * A divider the edge reaches before the next part's first cell is not
+     * dropped: the unmarked path truncates the joined line and keeps the
+     * divider's leading cells, so it comes back as the styled tail, drawn
+     * after the kept parts. Without it a marked bar is narrower than the
+     * same unmarked bar and the row shifts when markup is toggled.
+     *
      * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
-     * @return list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}>
+     * @return array{0:list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}>, 1:string}
      */
     private function clipParts(array $parts, int $budget): array
     {
@@ -614,6 +621,13 @@ final class Tabs implements Model
                 continue;
             }
             $room = $budget - $used - $lead;
+            if ($room <= 0) {
+                $left = $budget - $used;
+                $tail = $left > 0
+                    ? $this->inactiveStyle->render(Width::truncateAnsi($this->divider, $left))
+                    : '';
+                return [$out, $tail];
+            }
             $kept = [];
             foreach ($pieces as [$text, $style, $isClose]) {
                 if ($room <= 0) {
@@ -623,12 +637,10 @@ final class Tabs implements Model
                 $kept[] = [$cells <= $room ? $text : Width::truncateAnsi($text, $room), $style, $isClose];
                 $room -= $cells;
             }
-            if ($kept !== []) {
-                $out[] = [$kept, $tabIndex];
-            }
+            $out[] = [$kept, $tabIndex];
             break;
         }
-        return $out;
+        return [$out, ''];
     }
 
     /** Currently active tab index (0-based). */

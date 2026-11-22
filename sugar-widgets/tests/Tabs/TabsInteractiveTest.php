@@ -579,6 +579,36 @@ final class TabsInteractiveTest extends TestCase
         $this->assertLessThanOrEqual(10, \SugarCraft\Core\Util\Width::string(Scan::strip($view)));
     }
 
+    public function testMarkedClippedBarKeepsTheDividerStraddlingTheEdge(): void
+    {
+        // The clip edge lands inside the divider after "za": the unmarked
+        // path truncates the joined line and keeps the divider's first
+        // cells, so the marked paths must draw the same 14-cell frame.
+        $t = Tabs::new(['vr', 'za', 'ave', 'hafwf', 'iil', 'yu'], 14)
+            ->withDivider(' | ')
+            ->withActive(1)
+            ->withActiveStyle(Style::new())
+            ->withInactiveStyle(Style::new());
+
+        $unmarked = $t->view();
+        $this->assertSame(' vr  |  za  |…', $unmarked);
+        $this->assertSame($unmarked, Scan::strip($t->withMark(Mark::new())->view()));
+        $this->assertSame($unmarked, Scan::strip($t->withZoneManager(Manager::newPrefix('d'))->view()));
+    }
+
+    public function testMarkedClippedBarKeepsAWholeDividerWithNoRoomAfterIt(): void
+    {
+        // The divider fits exactly and leaves no cell for the next tab.
+        $t = Tabs::new(['ab', 'cd', 'ef'], 8)
+            ->withDivider(' | ')
+            ->withActiveStyle(Style::new())
+            ->withInactiveStyle(Style::new());
+
+        $unmarked = $t->view();
+        $this->assertSame(' ab  | …', $unmarked);
+        $this->assertSame($unmarked, Scan::strip($t->withMark(Mark::new())->view()));
+    }
+
     // ── (f) Tabs::interactive ────────────────────────────────────────────────
 
     public function testInteractiveWithManager(): void
