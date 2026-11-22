@@ -796,10 +796,11 @@ final class Scan
      * boundary is the host ICU's UAX #29 answer; without it, PCRE's (see
      * {@see Grapheme}). The two agree on ZWJ emoji, flag pairs and an accent
      * on a Latin base, but PCRE's `\X` only approximates UAX #29: it splits
-     * an Indic conjunct ICU joins (one cell more without ext-intl) and a
-     * regional indicator from a combining mark after it, and a code point
-     * newer than either library's Unicode tables can cluster differently
-     * too. {@see Grapheme} lists the measured cases; the README's Scan rules
+     * an Indic conjunct ICU joins (one cell more without ext-intl), a
+     * regional indicator from a combining mark after it, and a Prepend code
+     * point from an Extended_Pictographic one after it (the emoji's own
+     * width more without ext-intl), and a code point newer than either
+     * library's Unicode tables can cluster differently too. {@see Grapheme} lists the measured cases; the README's Scan rules
      * carry the consumer-facing version of this note.
      *
      * @return array{0:int,1:int} [bytes, cells]

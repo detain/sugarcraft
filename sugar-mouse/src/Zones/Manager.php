@@ -377,7 +377,10 @@ final class Manager
      * its first-ever recording). This is THE hit
      * rule, shared with the primitive {@see \SugarCraft\Mouse\Scanner::hit()}
      * through {@see ZoneGrid}, so both layers name the same owner for one
-     * painted frame. This registry has no stacking concept — no priority,
+     * painted frame when this Manager holds exactly that frame's zones (it
+     * scanned the frame and every id the frame did not paint was cleared via
+     * {@see idsAbsentFromFrame()}); zones kept from earlier frames can win a
+     * cell the frame's Scanner gives to another zone. This registry has no stacking concept — no priority,
      * layer, or modal state — see the overlay contract in README's Zones
      * section before scanning a full-screen modal over a live registry.
      * Returns null if no zone matches (or if the Msg isn't a {@see MouseMsg}

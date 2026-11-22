@@ -33,12 +33,17 @@ namespace SugarCraft\Mouse;
  * GB9c) comes back as two clusters and so two cells instead of one, moving
  * every zone to its right one column; a regional indicator followed by a
  * combining mark (U+1F1F8 U+0301) comes back as the indicator alone, which
- * leaves the cell count unchanged; and a Prepend code point followed by a
- * wide glyph (U+0600 U+1F468, which ICU keeps as one cluster by GB9b) comes
- * back as the Prepend alone, so the pair measures as two clusters — three
- * cells where ICU's one cluster measures one — moving every zone to its
- * right two columns. A layout whose zones must land on the same column on
- * every host should require ext-intl.
+ * leaves the cell count unchanged; and a Prepend code point followed by an
+ * Extended_Pictographic code point (an emoji, narrow or wide: U+0600 U+1F468
+ * or U+0600 U+2764, which ICU keeps as one cluster by GB9b) comes back as the
+ * Prepend alone, so the pair measures as two clusters — one cell plus the
+ * glyph's own width, where ICU's one cluster measures one — moving every zone
+ * to its right by that glyph's width: two columns after U+1F468, one after
+ * U+2764. The trigger is the Extended_Pictographic property, not display
+ * width: a Prepend before a CJK ideograph (U+4E00), an Indic letter
+ * (U+0915), a Latin letter (U+00E9) or a regional indicator (U+1F1F8) stays
+ * one cluster on both paths. A layout whose zones must land on the same
+ * column on every host should require ext-intl.
  */
 final class Grapheme
 {

@@ -349,9 +349,14 @@ measured on PCRE2 10.42 against ICU 74, it splits an Indic conjunct such as
 क्ष (U+0915 U+094D U+0937) into two clusters, so a zone after it lands one
 column further right without `ext-intl`; it splits a regional indicator
 from a combining mark after it (same cell count); and it splits a Prepend
-code point from a wide glyph after it — U+0600 U+1F468, which ICU keeps as
-one cluster (GB9b) — so the pair measures three cells instead of one and a
-zone after it lands two columns further right. ICU and PCRE also track
+code point from an Extended_Pictographic code point (an emoji, narrow or
+wide) after it — U+0600 U+1F468 or U+0600 U+2764, which ICU keeps as one
+cluster (GB9b) — so the pair measures one cell plus the emoji's own width
+instead of one, and a zone after it lands that many columns further right
+(two after U+1F468, one after U+2764). The trigger is the
+Extended_Pictographic property, not display width: a Prepend before a CJK
+ideograph, an Indic or Latin letter, or a regional indicator stays one
+cluster on both paths. ICU and PCRE also track
 their own Unicode versions, so a code point newer than one of them can
 cluster differently host to host. Layouts whose zones must land on the same
 column on every host, including Indic text and brand-new emoji, should
@@ -359,8 +364,8 @@ require `ext-intl`. Runs of printable ASCII are taken
 in one step (no ASCII code point is Prepend, so ASCII joins only a non-ASCII
 neighbor), with the run's last byte left to the cluster path when a combining
 mark follows it; ASCII after a Prepend code point such as U+0600 stays in that
-Prepend's cluster on both paths (UAX #29 GB9b); a wide non-ASCII glyph after
-one does not (the U+0600 U+1F468 split above).
+Prepend's cluster on both paths (UAX #29 GB9b); an Extended_Pictographic
+code point after one does not (the U+0600 U+1F468 / U+2764 split above).
 
 **Re-scans re-measure only changed lines.** Pass a `LineWidthCache` to
 `Scan::parse()` (`Scanner` and `Zones\Manager` each carry one) and every
