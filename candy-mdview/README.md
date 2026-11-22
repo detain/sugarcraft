@@ -481,7 +481,7 @@ and the path through `StyleGuide`.
 candy-mdview declares its direct dependencies: **sugar-markdown** (renderer +
 themes), **sugar-forms** (Viewport), **sugar-core** (TEA runtime, width,
 sanitize), **sugar-colorprofile** (terminal capability probing),
-**sugar-style**, **sugar-async** (the bounded await on the color probe), and
+**sugar-async** (the bounded await on the color probe), and
 **symfony/console** (`^6.4 || ^7.0`) — the app is a
 Symfony Console program (`Application` extends
 `Symfony\Component\Console\Application`; the whole flag and exit-code surface
