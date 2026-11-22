@@ -15,11 +15,15 @@ use SugarCraft\Mouse\Scan;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
+use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 use SugarCraft\Sql\Admin\ServerContext;
 use SugarCraft\Sql\App;
+use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
+use SugarCraft\Sql\App\UiState;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Lang;
 use SugarCraft\Sql\Pane;
 use SugarCraft\Sql\Renderer;
 use SugarCraft\Sql\Tests\Admin\FakeDatabase;
@@ -324,6 +328,33 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    public function testAStatementTimeoutOnAClaimedTabSwitchIgnoresTheKeyInsteadOfCrashing(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult([
+            ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
+        ]);
+        // A focused bar on a page with thread 7 selected, pinned into App
+        // state, so a tab switch really reaches the server.
+        [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
+        $this->assertInstanceOf(ConnectionsPage::class, $page);
+        $this->assertTrue($page->detailTabsFocused());
+        $this->assertNotSame([Lang::t('conn.none_selected')], $page->detailLines(), 'a thread is selected');
+        $a = new App(
+            ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)),
+            ui: new UiState(pane: Pane::Admin),
+            admin: new AdminState(page: $page),
+        );
+
+        // The server stalls: the next tab's fetch times out in prepare().
+        $db->setPrepareThrows(new StatementTimeoutException());
+        foreach ([new KeyMsg(KeyType::Tab), new KeyMsg(KeyType::Tab, shift: true), new KeyMsg(KeyType::Char, '2')] as $key) {
+            [$next, $cmd] = $a->update($key);
+            $this->assertSame($a, $next, "{$key->string()}: the key is ignored, the TUI survives");
+            $this->assertNull($cmd);
+        }
+    }
+
     // ── (d) each tab shows its own data for the selected thread ─────────────
 
     public function testEachDetailTabRendersItsOwnDataForTheSelectedThread(): void
@@ -339,7 +370,14 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
             ['lock_id' => '1', 'lock_type' => 'SHARED_READ', 'lock_status' => 'GRANTED', 'lock_mode' => 'TRANSACTION', 'thread_id' => '40', 'processlist_id' => '7'],
         ]);
         $db->setPreparedResult('TYPE AS thread_type', [
-            ['id' => '7', 'user' => 'app', 'thread_type' => 'FOREGROUND', 'thread_name' => 'thread/sql/one_connection'],
+            // Every column ConnectionDetailTabs::details() selects, so the
+            // panel's line cap is exercised at its real width.
+            [
+                'id' => '7', 'user' => 'app', 'host' => 'h', 'db' => 'shop',
+                'command' => 'Query', 'time' => '12', 'state' => 'Sending data',
+                'info' => 'SELECT * FROM big_table', 'thread_type' => 'FOREGROUND',
+                'thread_name' => 'thread/sql/one_connection',
+            ],
         ]);
         $page = ConnectionsPage::new(new ServerContext($db));
         $plain = static fn (ConnectionsPage $p): string => Scan::strip(\preg_replace('/\e\[[0-9;]*m/', '', $p->view()) ?? '');
@@ -348,7 +386,10 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $closed = $plain($page);
 
         [$details] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertStringContainsString('info: SELECT * FROM big_table', $plain($details), 'the running SQL is never truncated away');
+        $this->assertStringContainsString('thread_type: FOREGROUND', $plain($details));
         $this->assertStringContainsString('thread_name: thread/sql/one_connection', $plain($details));
+        $this->assertNotContains('…', $details->detailLines() ?? [], 'ten Details columns fit under the cap');
 
         [$attributes] = $details->update(new KeyMsg(KeyType::Char, '2'));
         $this->assertStringContainsString('_client_name: libmysql', $plain($attributes));

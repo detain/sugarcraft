@@ -93,8 +93,12 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     private bool $publishZones = false;
 
-    /** Most lines the detail panel shows; the rest collapse into one ellipsis line. */
-    private const DETAIL_MAX_LINES = 8;
+    /**
+     * Most lines the detail panel shows; the rest collapse into one ellipsis
+     * line. Above the Details tab's ten columns (id through thread_name), so
+     * info, the running SQL text, is never the line that collapses.
+     */
+    private const DETAIL_MAX_LINES = 12;
 
     /**
      * The open detail panel: the active tab's data for the selected thread

@@ -19,6 +19,9 @@ final class FakeDatabase implements DatabaseInterface
 
     /** When set, exec() logs the SQL and then throws this (GTID-failure pins). */
     private ?\Throwable $execException = null;
+
+    /** When set, prepare() throws this (a stalled server's statement timeout). */
+    private ?\Throwable $prepareException = null;
     private string $serverVersion = 'MySQL version 8.0.33';
 
     /** @var list<array{sql: string, values: array}> */
@@ -136,6 +139,12 @@ final class FakeDatabase implements DatabaseInterface
         $this->execException = $e;
     }
 
+    /** Make the next prepare() calls throw (e.g. a StatementTimeoutException). */
+    public function setPrepareThrows(?\Throwable $e): void
+    {
+        $this->prepareException = $e;
+    }
+
     /** @return list<string> Raw SQL strings passed to exec(), in order. */
     public function execLog(): array
     {
@@ -174,6 +183,9 @@ final class FakeDatabase implements DatabaseInterface
      */
     public function prepare(string $sql): ?PreparedStatementInterface
     {
+        if ($this->prepareException !== null) {
+            throw $this->prepareException;
+        }
         // Always return a statement; any stored exception will be thrown at execute() time
         return new FakeStatement($sql, $this);
     }

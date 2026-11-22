@@ -364,8 +364,16 @@ final class App implements Model
                 && ($msg->type === KeyType::Escape
                     || $page->isModal()
                     || (!$this->io->isPromptOpen() && !$this->edit->isOpen() && $page->claimsKey($msg)))) {
-                [$newPage, $cmd] = $page->update($msg);
-                assert($newPage instanceof PageBase);
+                try {
+                    [$newPage, $cmd] = $page->update($msg);
+                    assert($newPage instanceof PageBase);
+                } catch (\Throwable) {
+                    // SQL-C01 fold seam, as on the delegated-key and click
+                    // paths: a claimed key can fetch (a detail-tab switch
+                    // reads the new tab's data), and a stalled server's
+                    // StatementTimeoutException degrades to "key ignored".
+                    return [$this, null];
+                }
                 return [$this->withAdminPage($newPage), $cmd];
             }
         }
