@@ -16,8 +16,8 @@ use SugarCraft\Pty\PtySystemFactory;
  * tool's session engine ({@see \SugarCraft\Code\Tools\BuiltIn\PtyRun}) and
  * the Bash-interactive capture path in
  * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput} — each called
- * the deprecated `SugarCraft\Pty\Pty` facade directly. That facade hardwires
- * `PosixPtySystem` and can never answer on Windows. `PtySystemFactory::new()`
+ * the `SugarCraft\Pty\Pty` facade (since deleted) directly. That facade hardwired
+ * `PosixPtySystem` and could never answer on Windows. `PtySystemFactory::new()`
  * picks the OS-safe system instead: the ConPTY pair there, and on Linux and
  * macOS the SAME canonical `PosixPtySystem` path the facade always used, so
  * every opener that goes through the pair gains the Windows arm without this

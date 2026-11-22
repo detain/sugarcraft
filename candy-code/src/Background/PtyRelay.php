@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Support\ProcessContainment;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 
 /**
  * The relay process that keeps an interactive background shell's pty master
@@ -104,7 +104,7 @@ final class PtyRelay
     private const TICK_MICROSECONDS = 50000;
 
     /**
-     * The timeout handed to {@see \SugarCraft\Pty\Pty::read()} AFTER select
+     * The timeout handed to {@see \SugarCraft\Pty\Posix\PosixMasterPty::read()} AFTER select
      * already reported the master readable. read()'s deadline arithmetic
      * answers null for a 0.0 timeout without looking (deadline == now is
      * "expired"), so the loop needs a hair of a real ceiling — the pending
@@ -166,7 +166,7 @@ final class PtyRelay
         // except to say so and leave the never-started shape behind.
         if (
             !\extension_loaded('pcntl') || !\function_exists('posix_kill')
-            || !\class_exists(Pty::class)
+            || !\class_exists(PosixPtySystem::class)
         ) {
             \fwrite(\STDERR, "pty relay: refused — pty mechanism unavailable in this process\n");
 
@@ -273,12 +273,16 @@ final class PtyRelay
             // the same reason). locateOnPath() is the house PATH probe; the
             // '/bin/bash' literal is the fail-closed fallback when PATH has
             // no bash but the canonical location does.
-            $pty = Pty::open($cols, $rows);
+            // The POSIX system directly, not PtySystemFactory: this relay is
+            // POSIX-only by construction (pcntl_fork, setsid, the shim's
+            // TIOCSCTTY), so no backend choice exists to defer to.
+            $pair = (new PosixPtySystem())->open($cols, $rows);
+            $pty = $pair->master();
             $shell = ProcessContainment::locateOnPath('bash');
             if ($shell === '') {
                 $shell = '/bin/bash';
             }
-            $child = $pty->spawn([$shell, '-c', $command], null, $cols, $rows, true);
+            $child = $pair->slave()->spawn([$shell, '-c', $command], null, $cols, $rows, true);
             $childPid = $child->pid();
         } catch (\Throwable $failure) {
             if ($pty !== null) {

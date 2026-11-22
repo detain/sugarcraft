@@ -2774,7 +2774,7 @@ final class DocFigureProseDriftTest extends TestCase
      * The second half used to pin a runtime/dev split - "sugar-pty's exclusion
      * is not an oversight" - and asserted the dev side was non-empty. It WAS
      * the oversight (crush_libs.md sugar-pty #5): `CapturesProcessOutput`
-     * opens `\SugarCraft\Pty\Pty` from `src/`, so a `--no-dev` install
+     * opened sugar-pty's (since deleted) `Pty` facade from `src/`, so a `--no-dev` install
      * leaned on sugar-core's transitive pin to keep interactive capture
      * working. The property that actually matters is the one that split was
      * standing in for, so that is what is pinned now: every sibling namespace

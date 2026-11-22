@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 
 /**
  * Phase 9 layer A — interactive-prompt containment for tool shell-outs.
@@ -589,8 +589,9 @@ final class InteractivePromptContainmentTest extends TestCase
         ));
 
         try {
-            $pty = Pty::open();
-            $child = $pty->spawn([PHP_BINARY, $fixture], null, 80, 24, true);
+            $pair = (new PosixPtySystem())->open();
+            $pty = $pair->master();
+            $child = $pair->slave()->spawn([PHP_BINARY, $fixture], null, 80, 24, true);
 
             // Bounded read, never an unbounded wait: a regressed (attached)
             // grandchild hanging on `cat /dev/tty` must surface as a red
