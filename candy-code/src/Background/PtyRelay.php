@@ -325,11 +325,9 @@ final class PtyRelay
             if ($fifo !== false) {
                 @\fclose($fifo);
             }
-            if ($pty !== null) {
-                try {
-                    $pty->close();
-                } catch (\Throwable) {
-                }
+            try {
+                $pty->close();
+            } catch (\Throwable) {
             }
             \fwrite(\STDERR, "pty relay: the transcript sinks could not be opened\n");
 

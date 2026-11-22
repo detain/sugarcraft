@@ -541,12 +541,6 @@ parameters:
 			path: src/Background/PtyRelay.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between SugarCraft\\Pty\\Pty and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: src/Background/PtyRelay.php
-
-		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1

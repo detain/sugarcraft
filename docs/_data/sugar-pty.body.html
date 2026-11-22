@@ -83,18 +83,12 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
     <p>The spawn routes through <code>bin/pty-shim.php</code>, which does <code>setsid()</code>, <code>ioctl(0, TIOCSCTTY, 0)</code> and <code>pcntl_exec()</code> between <code>proc_open</code> and the real command. It requires <code>ext-pcntl</code>. Each spawn pays a shim startup cost. The cost is opt-in because non-interactive spawns do not benefit from it.</p>
 
     <h2 style="margin-top: 40px;">API</h2>
-    <p>The table below lists the public classes a caller normally reaches. <code>Pty</code> is a deprecated facade kept for compatibility, and <code>PtySystemFactory</code> is the entry point to use. The contract types under <code>SugarCraft\Pty\Contract</code> carry no logic.</p>
+    <p>The table below lists the public classes a caller normally reaches. <code>PtySystemFactory</code> is the entry point to use. The contract types under <code>SugarCraft\Pty\Contract</code> carry no logic.</p>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>open(cols = 80, rows = 24)</td><td>Allocate master/slave PTY pair (FD_CLOEXEC master, winsize applied at open)</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>(facade) Spawn child with PTY; explicit geometry applied before the spawn and re-asserted after it, null keeps the pair's current size</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>read(len, timeout = 0.05)</td><td>Read bytes from PTY; null timeout = mode-governed blocking</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>write(data)</td><td>Write bytes to PTY</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>resize(cols, rows) / size()</td><td>Resize the terminal window, and read its size back</td></tr>
-<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>close()</td><td>Idempotent; always close(2)s the master fd and throws PtyException if that close (or the stream wrapper's fclose) fails</td></tr>
 <tr><td>PtySystemFactory</td><td>new()</td><td>Build the platform PtySystem, honoring SUGARCRAFT_PTY_BACKEND (default() is a deprecated alias)</td></tr>
 <tr><td>PosixPtySystem / PosixPtyPair</td><td>open(cols, rows) / master() / slave()</td><td>POSIX implementation of the PtySystem contract; the pair hands out the master and slave ends</td></tr>
-<tr><td>PosixMasterPty</td><td>read(), write(), resize(), size(), stream()</td><td>POSIX implementation of the MasterPty contract; <code>Pty</code> delegates to the same path</td></tr>
+<tr><td>PosixMasterPty</td><td>read(), write(), resize(), size(), stream(), close()</td><td>POSIX implementation of the MasterPty contract; <code>read()</code> with a null timeout blocks per the stream's mode, and <code>close()</code> is idempotent and throws PtyException if the close fails</td></tr>
 <tr><td>PosixSlavePty</td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>Spawn on a pair from PtySystem::open(); explicit geometry applied on every spawn, null keeps the pair's current size</td></tr>
 <tr><td>Kernel32ConPty</td><td>(FFI binding)</td><td>FFI binding of the ConPtyApi surface to <code>kernel32.dll</code>, used by the Windows ConPTY backend</td></tr>
 <tr><td>Libc</td><td>lib(), kill(pid, signal)</td><td>Lazy FFI handle to the C library; <code>kill()</code> uses <code>posix_kill()</code> when ext-posix is loaded, libc <code>kill(2)</code> over FFI otherwise</td></tr>
@@ -181,7 +175,7 @@ while (!$decoder-&gt;isEof()) {
     </table>
 
     <h2 style="margin-top: 40px;">Architecture</h2>
-    <p>The source is organized by family. <code>src/Contract/</code> holds the interfaces. <code>src/Posix/</code> holds the Linux and macOS implementation, and <code>src/Windows/</code> the ConPTY one. <code>src/Input/</code> and <code>src/Output/</code> hold the opt-in readers, and <code>src/Concerns/</code> holds the shared libc access. Everything else is a top-level factory, facade, pump-options or support class.</p>
+    <p>The source is organized by family. <code>src/Contract/</code> holds the interfaces. <code>src/Posix/</code> holds the Linux and macOS implementation, and <code>src/Windows/</code> the ConPTY one. <code>src/Input/</code> and <code>src/Output/</code> hold the opt-in readers, and <code>src/Concerns/</code> holds the shared libc access. Everything else is a top-level factory, pump-options or support class.</p>
     <h3 style="margin-top: 24px;">Backend selection</h3>
     <table class="api-table">
     <tr><th>Value</th><th>Behavior</th></tr>
