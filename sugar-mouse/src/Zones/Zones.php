@@ -149,7 +149,9 @@ final class Zones
      * string prefix scoped to the default manager), this returns a
      * **fresh prefixed Manager**. Compose multiple components by
      * giving each its own prefixed manager rather than sharing the
-     * default.
+     * default. Draws from the process registry's counter, with the same
+     * {@see ZoneRegistry::isolated()} injection caveat as
+     * {@see Manager::newPrefix()}.
      */
     public static function newPrefix(string $prefix = ''): Manager
     {

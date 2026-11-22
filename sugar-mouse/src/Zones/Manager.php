@@ -115,10 +115,14 @@ final class Manager
      * manager never silently merges the two registries.
      *
      * Routes through the process {@see ZoneRegistry}
-     * ({@see Zones::registry()}), whose counter is the one process-wide
-     * counter every {@see ZoneRegistry::new()} registry shares, so the prefix
-     * is unique in the process. Only a {@see ZoneRegistry::isolated()}
-     * registry keeps a counter of its own, unique within that registry.
+     * ({@see Zones::registry()}). While that is a {@see ZoneRegistry::new()}
+     * registry, its counter is the one process-wide counter every such
+     * registry shares, so the prefix is unique in the process. A
+     * {@see ZoneRegistry::isolated()} registry keeps a counter of its own,
+     * unique within that registry only — and once one is injected with
+     * {@see Zones::setRegistry()}, this static door draws from it: it starts
+     * again at `1-` and can reissue a prefix a manager built before the
+     * injection still holds, so keep those managers off each other's frames.
      */
     public static function newPrefix(string $prefix = ''): self
     {

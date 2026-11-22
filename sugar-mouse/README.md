@@ -528,7 +528,8 @@ paints-no-cell/claims-nothing rule as the malformed-markup table above).
 
 **One hit rule — and a persistent registry.** Both layers resolve a cell
 through the same `ZoneGrid`: the SMALLEST covering area wins (nested
-components: innermost wins), and equal areas go to the first-registered zone.
+components: innermost wins), and equal areas go to the zone the latest scan
+closed first (a re-scanned id takes that scan's close order).
 `Scanner::hit()` and `Manager::zoneAt()` / `anyInBounds()` therefore name
 the same owner for a frame when the Manager holds exactly that frame's
 zones — it scanned the frame and every id the frame did not paint was
@@ -579,8 +580,13 @@ Beyond `mark()` / `scan()` / `get()`:
 - `Manager::newPrefix(string $prefix = '')` — namespace every id with a
   prefix so two SugarMouse-aware components don't collide on `'item-0'`.
   Called without an argument, it auto-generates a monotonic prefix from the
-  process `ZoneRegistry`, unique in the process; an app that injects its own
-  registry calls `$registry->newPrefix()` instead. `Manager::newWithIdPrefix($prefix)` is the
+  process `ZoneRegistry`, unique in the process while that registry is a
+  `ZoneRegistry::new()` one; an app that injects its own registry calls
+  `$registry->newPrefix()` instead. Caveat: after
+  `Zones::setRegistry(ZoneRegistry::isolated())` the static door (this and
+  `Zones::newPrefix()`) follows the isolated registry's own counter, which
+  starts again at `1-`, so it can reissue a prefix a manager built before the
+  injection still holds; keep those managers off each other's frames. `Manager::newWithIdPrefix($prefix)` is the
   raw factory with no counter bookkeeping.
 - `zone(ZoneId)` — the typed spelling of `get()`; `lineWidths()` — the
   manager's `LineWidthCache`.
@@ -634,7 +640,10 @@ counter, so no two default registries ever hand out the same prefix (the
 guarantee the static `Manager::newPrefix()` always gave). Only
 `ZoneRegistry::isolated()` keeps a counter of its own, starting at `1-` and
 unique within that registry alone; its managers must not scan frames painted
-by another registry's. The registry slot and the process counter are the only
+by another registry's. Injecting one with `Zones::setRegistry()` moves the
+static `Manager::newPrefix()` / `Zones::newPrefix()` onto that counter too, so
+the static door can then reissue a prefix handed out before the injection.
+The registry slot and the process counter are the only
 static state in the Zones layer:
 
 ```php
