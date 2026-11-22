@@ -157,6 +157,15 @@ final class FocusScrollAndCellsTest extends TestCase
         $this->assertStringNotContainsString("\x1b[2J", $rows[0]);
     }
 
+    public function testTheRendererLeafHelperAcceptsCells(): void
+    {
+        $buffer = Buffer::new(2, 1)->withCellAt(0, 0, Cell::new('z'));
+        $panels = SugarPanels::new();
+
+        $this->assertSame($buffer, $panels->leaf($buffer)->cells);
+        $this->assertEquals(Node::leaf($buffer), $panels->leaf($buffer));
+    }
+
     public function testWithCellsSwapsBackToText(): void
     {
         $node = Node::leaf('text')->withBorder(false)->withCells(Buffer::new(2, 1))->withCells(null);

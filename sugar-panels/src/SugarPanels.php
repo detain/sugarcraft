@@ -200,7 +200,8 @@ final class SugarPanels
     // renderer-dependent, and both spellings build identical nodes.
     // -------------------------------------------------------------------------
 
-    public function leaf(string $content = ''): Node
+    /** A leaf of text, or of pre-built cells (see {@see Node::leaf()}). */
+    public function leaf(string|Buffer $content = ''): Node
     {
         return Node::leaf($content);
     }
