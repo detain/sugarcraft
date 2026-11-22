@@ -99,7 +99,15 @@ final class KeyMap
                 }
             }
 
-            $bindings = $bindings->withOverride($id, ...$tokens);
+            // The registry's own chord grammar is the last word: a token
+            // the vocab gate above admits but parseChord() refuses must
+            // still surface as this loader's RuntimeException, never as an
+            // InvalidArgumentException outside the documented contract.
+            try {
+                $bindings = $bindings->withOverride($id, ...$tokens);
+            } catch (\InvalidArgumentException $problem) {
+                throw new \RuntimeException(self::problem($path, "unknown key name for \"$id\": " . $problem->getMessage()), 0, $problem);
+            }
         }
 
         return $bindings;

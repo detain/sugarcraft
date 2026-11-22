@@ -187,6 +187,13 @@ final class Bindings
      * Shift (Alt+c no longer holds, Shift+Space no longer hard-drops); the
      * ctrl leg stays as a pin of the contract. Releases and repeats never
      * actuate (m11), on either leg.
+     *
+     * Shift over any other named key still answers the bare token, as it
+     * did under the old fold: a player steering with Shift held (the decoder
+     * reports CSI 1;2D as Left with shift set) must keep moving, and
+     * Shift+Enter must still begin. The fallback applies only when no action
+     * binds that exact shift+ chord, so a remap of 'shift+left' keeps its
+     * own key.
      */
     public static function actuates(KeyBindings $keys, KeyMsg $msg, string $id): bool
     {
@@ -198,7 +205,16 @@ final class Bindings
             return in_array('ctrl+' . KeyBindings::tokenOf($msg), $keys->tokens($id), true);
         }
 
-        return $keys->matches($msg, $id);
+        if ($keys->matches($msg, $id)) {
+            return true;
+        }
+
+        return $msg->shift === true
+            && $msg->alt === false
+            && $msg->type !== KeyType::Char
+            && $msg->type !== KeyType::Space
+            && $keys->actionFor($msg) === null
+            && in_array(KeyBindings::tokenOf($msg), $keys->tokens($id), true);
     }
 
     /**
@@ -214,8 +230,13 @@ final class Bindings
     {
         $token = strtolower($token);
 
+        // One ctrl+ prefix at most: sugar-core's parseChord() refuses a
+        // repeated modifier ('ctrl+ctrl+c'), so recursing through every
+        // prefix would admit a token the registry then throws on.
         if (str_starts_with($token, 'ctrl+') && $token !== 'ctrl+') {
-            return self::isKnownToken(substr($token, 5));
+            $base = substr($token, 5);
+
+            return !str_starts_with($base, 'ctrl+') && self::isKnownToken($base);
         }
 
         if ($token === 'char' || $token === '') {

@@ -210,4 +210,37 @@ final class KeyActuationTest extends TestCase
         [, $cmd] = self::fresh()->update($repeater);
         self::assertNull($cmd, 'a ctrl+c REPEAT must not answer the quit gate');
     }
+    public function testShiftHeldOverANamedKeyStillSteersThePiece(): void
+    {
+        // InputReader decodes CSI 1;2D as Left with shift set. The chord-exact
+        // registry would read that as 'shift+left' and leave move-left deaf
+        // while Shift is held; the bare arrow must keep steering.
+        $game = self::fresh();
+
+        [$moved] = $game->update(new KeyMsg(KeyType::Left, shift: true));
+
+        self::assertSame($game->piece->x - 1, $moved->piece->x, 'Shift+Left must still move left');
+    }
+
+    public function testShiftFoldsOnlyOverNamedKeysThatNoChordClaims(): void
+    {
+        $keys = \SugarCraft\Tetris\Support\Bindings::table();
+        $actuates = static fn (KeyMsg $msg, string $id): bool
+            => \SugarCraft\Tetris\Support\Bindings::actuates($keys, $msg, $id);
+
+        self::assertTrue($actuates(new KeyMsg(KeyType::Right, shift: true), 'move-right'));
+        self::assertTrue($actuates(new KeyMsg(KeyType::Up, shift: true), 'rotate-cw'));
+        self::assertTrue($actuates(new KeyMsg(KeyType::Down, shift: true), 'soft-drop'));
+        self::assertTrue($actuates(new KeyMsg(KeyType::Enter, shift: true), 'begin'));
+
+        // The documented chord-exact changes stay: Shift+Space and Alt+arrow.
+        self::assertFalse($actuates(new KeyMsg(KeyType::Space, ' ', shift: true), 'hard-drop'));
+        self::assertFalse($actuates(new KeyMsg(KeyType::Left, alt: true), 'move-left'));
+        self::assertFalse($actuates(new KeyRepeatMsg(KeyType::Left, shift: true), 'move-left'));
+
+        // A remap that claims the exact chord keeps it to itself.
+        $remapped = $keys->withOverride('hold', 'shift+left');
+        self::assertTrue(\SugarCraft\Tetris\Support\Bindings::actuates($remapped, new KeyMsg(KeyType::Left, shift: true), 'hold'));
+        self::assertFalse(\SugarCraft\Tetris\Support\Bindings::actuates($remapped, new KeyMsg(KeyType::Left, shift: true), 'move-left'));
+    }
 }

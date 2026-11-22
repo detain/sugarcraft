@@ -166,6 +166,16 @@ final class KeyMapTest extends TestCase
         $this->expectRefusal('{"quit": ["ctrl+spce"]}', 'unknown key name');
     }
 
+    public function testARepeatedCtrlPrefixIsRefusedByTheVocabGate(): void
+    {
+        // sugar-core parseChord() refuses a repeated modifier. The vocab
+        // gate must agree, so the refusal is this loader's RuntimeException
+        // naming the token, never an InvalidArgumentException from the
+        // registry that escapes the load() contract.
+        self::assertFalse(Bindings::isKnownToken('ctrl+ctrl+c'));
+        $this->expectRefusal('{"quit": ["ctrl+ctrl+c"], "hold": ["x"]}', 'unknown key name');
+    }
+
     public function testWideNamedKeyAndMultibyteRunePassThePrintableGate(): void
     {
         // 'backspace' is the widest named token the shipped decoder answers

@@ -30,6 +30,15 @@ declare(strict_types=1);
  * case is dropped (m26), so `shift+a` is rejected as a token rather than
  * accepted as a binding no key press could ever produce.
  *
+ * Legacy-terminal gap: a few Ctrl+letter chords share their byte with a named
+ * key, and InputReader decodes the named key with ctrl unset. Ctrl+H (0x08)
+ * arrives as `backspace`, Ctrl+I (0x09) as `tab`, Ctrl+J and Ctrl+M (0x0a,
+ * 0x0d) as `enter`, and Ctrl+[ (0x1b) as `escape`. parseChord() still accepts
+ * `ctrl+h`, `ctrl+i`, `ctrl+j`, `ctrl+m` and `ctrl+[`, because a terminal that
+ * speaks the kitty keyboard protocol reports them as real chords, but on a
+ * legacy terminal those bindings never fire. Bind the named key instead when
+ * the app must work everywhere.
+ *
  * The same token across two actions is legal and meaningful: dispatch decides
  * which action matters on a given screen, and one physical key actuating a
  * context-dependent action is normal keyboard design (space can begin one
