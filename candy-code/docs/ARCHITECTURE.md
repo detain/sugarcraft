@@ -1397,8 +1397,9 @@ only through the settings layers like every other key.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`candy-code serve`'s HTTP + WebSocket transport), twenty-three SugarCraft siblings: `sugar-core` (the MVC-style runtime —
-`Program`, `Model`, `Cmd`), `sugar-forms`, `sugar-style` (styles),
+`candy-code serve`'s HTTP + WebSocket transport), twenty-four SugarCraft siblings: `sugar-core` (the MVC-style runtime —
+`Program`, `Model`, `Cmd`), `sugar-forms`, `sugar-widgets` (the tab strips
+the settings editor and the media form render through), `sugar-style` (styles),
 `sugar-markdown`, `sugar-fuzzy`, `sugar-overlay`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
 `sugar-toast` (the toast a settings save reports through),
