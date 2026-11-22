@@ -23,7 +23,8 @@ namespace SugarCraft\Pty\Posix;
  * Original work: no upstream counterpart (creack/pty and portable-pty leave
  * the copy loop to the caller).
  *
- * @internal shared by {@see PosixPump}; not part of the public API.
+ * @internal shared by {@see PosixPump} and {@see ReactPump}; not part of the
+ *           public API.
  */
 final class BoundedSinkFlush
 {

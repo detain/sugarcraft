@@ -192,6 +192,14 @@ final class ReactPump
     /** Set once the child was observed as exited; drains tail bytes until finish. */
     private bool $flushing = false;
 
+    /**
+     * Absolute end of the post-child-exit flush window, set with
+     * {@see $flushing}. finish() delivers the owed STDOUT remainder against
+     * it, so the window is spent once, never twice; null = finish() opens a
+     * fresh `flushDeadlineSec` window of its own (mirrors PosixPump::run()).
+     */
+    private ?float $flushDeadlineAt = null;
+
     /** Whether any master/stdin I/O happened since the last poll tick (idle detection). */
     private bool $sawIo = false;
 
@@ -263,6 +271,7 @@ final class ReactPump
         $this->sinkWriteAttached = false;
         $this->masterReadHeld = false;
         $this->flushing = false;
+        $this->flushDeadlineAt = null;
         $this->sawIo = false;
         $this->pumpDeadlineAt = $opts->pumpDeadlineUs === null
             ? null
@@ -318,7 +327,10 @@ final class ReactPump
      * registration and cancels all timers, then resolves the pending
      * promise with the sync pump's exit-code contract. Idempotent —
      * safe to call from `finally` blocks after the pump already
-     * finished on its own.
+     * finished on its own. A STDOUT remainder still owed at teardown is
+     * delivered first, bounded by `PumpOptions::$flushDeadlineSec` (the
+     * sync pump's drain window), so this call can take up to that long
+     * against a slow reader; what does not fit counts in droppedBytes().
      */
     public function stop(): void
     {
@@ -621,6 +633,7 @@ final class ReactPump
 
         if ($this->child !== null && !$this->flushing && $this->child->exited()) {
             $this->flushing = true;
+            $this->flushDeadlineAt = \microtime(true) + $this->opts->flushDeadlineSec;
             // Child is gone: stop forwarding stdin, cancel any pending
             // stdin-EOF grace, and bound the tail drain by the flush
             // deadline (mirrors PosixPump::flushMaster()).
@@ -741,11 +754,17 @@ final class ReactPump
         $this->detachMasterWrite();
         $this->detachSinkWrite();
         if ($this->pendingSink !== '' && $this->stdoutStream !== null) {
-            // One last synchronous attempt before the caller's blocking
-            // mode is restored; what the stream still refuses is dropped
-            // and counted, not carried into the next run().
-            $written = @\fwrite($this->stdoutStream, $this->pendingSink);
-            $this->droppedBytes += \strlen($this->pendingSink) - ($written === false ? 0 : $written);
+            // Last bounded delivery of the owed remainder, the same window
+            // PosixPump::run() gives its drain: a slow reader still gets
+            // flushDeadlineSec to take it (an already-spent post-exit window
+            // leaves one attempt). What STILL does not fit is dropped and
+            // counted, never carried into the next run().
+            $left = BoundedSinkFlush::flush(
+                $this->stdoutStream,
+                $this->pendingSink,
+                $this->flushDeadlineAt ?? \microtime(true) + $this->opts->flushDeadlineSec,
+            );
+            $this->droppedBytes += \strlen($left);
             $this->pendingSink = '';
         }
         $this->masterReadHeld = false;

@@ -229,6 +229,71 @@ final class PumpDroppedBytesTest extends TestCase
     }
 
     /**
+     * ReactPump's teardown gives the owed remainder the same bounded flush
+     * window PosixPump's drain does. It used to make one non-blocking fwrite
+     * and count the rest as dropped, so a reader that would take the bytes
+     * a moment later lost them on the ReactPump path only. Here the sink is
+     * the stdin pipe of a reader that wakes after the pump deadline but well
+     * inside flushDeadlineSec: nothing may be dropped.
+     */
+    public function testReactPumpDeliversTheRemainderToASlowReaderWithinTheFlushWindow(): void
+    {
+        $this->requireShell();
+
+        $reader = \proc_open(
+            ['/bin/sh', '-c', 'sleep 1; wc -c'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($reader);
+        [$sink, $count] = $pipes;
+        \stream_set_blocking($sink, false);
+
+        $loop = new StreamSelectLoop();
+        $recorder = new CountingRecorder();
+        $pair = (new PosixPtySystem())->open(80, 24);
+        $child = null;
+        try {
+            $child = $pair->slave()->spawn([
+                '/bin/sh', '-c', 'head -c ' . self::FLOOD_BYTES . ' /dev/zero | tr "\\0" a; sleep 30',
+            ]);
+            $opts = (new PumpOptions())
+                ->withRecorder($recorder)
+                ->withPumpDeadlineUs(300_000)
+                ->withFlushDeadlineSec(10.0);
+            $pump = new ReactPump($loop);
+            $settled = false;
+            $pump->start($pair->master(), null, $sink, $child, $opts)
+                ->then(static function () use (&$settled, $loop): void {
+                    $settled = true;
+                    $loop->stop();
+                });
+            $watchdog = $loop->addTimer(20.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($watchdog);
+
+            $this->assertTrue($settled, 'the pump never settled');
+            $this->assertSame(0, $pump->droppedBytes(), 'the slow reader\'s bytes were dropped instead of flushed');
+            \fclose($sink);
+            $sink = null;
+            $delivered = (int) \trim((string) \stream_get_contents($count));
+            $this->assertGreaterThan(0, $recorder->outputBytes);
+            $this->assertSame($recorder->outputBytes, $delivered, 'every byte read from the master must reach the reader');
+        } finally {
+            if ($child !== null && !$child->exited()) {
+                $child->kill(9);
+                $child->wait();
+            }
+            $pair->master()->close();
+            if ($sink !== null) {
+                \fclose($sink);
+            }
+            \fclose($count);
+            \proc_close($reader);
+        }
+    }
+
+    /**
      * Everything the sink delivered. The FIFO read end is O_RDWR, so it
      * never sees EOF; a non-blocking read stops at the empty pipe instead.
      *
