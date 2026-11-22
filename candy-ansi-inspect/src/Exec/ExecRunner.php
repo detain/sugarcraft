@@ -13,8 +13,9 @@ use SugarCraft\AnsiInspect\StreamingInspector;
  * it prints, segment by segment, as they dispatch.
  *
  * This is the thin CLI leg only: spawning, pumping and reaping are entirely
- * sugar-pty's job ({@see \SugarCraft\Pty\Pty::open()} → `spawn()` → `read()`
- * with a finite timeout → {@see \SugarCraft\Pty\Child::wait()}). The runner
+ * sugar-pty's job ({@see \SugarCraft\Pty\PtySystemFactory::new()} → `open()`
+ * → `slave()->spawn()` → master `read()` with a finite timeout →
+ * {@see \SugarCraft\Pty\Contract\Child::wait()}). The runner
  * never reimplements a PTY primitive — it reads the master the way the CLI
  * reads stdin (AIP-04) and feeds the very same {@see StreamingInspector}, so
  * `-- cmd` output and piped output share one byte-fidelity implementation.
@@ -130,7 +131,7 @@ final class ExecRunner
                 throw new \RuntimeException('sugar-pty is not installed');
             }
             // PtySystemFactory picks the host backend (POSIX openpty, or
-            // ConPTY on Windows); the raw POSIX Pty::open() cannot run there.
+            // ConPTY on Windows); a hardwired PosixPtySystem cannot run there.
             $pair = \SugarCraft\Pty\PtySystemFactory::new()->open();
             try {
                 $child = $pair->slave()->spawn($cmd);

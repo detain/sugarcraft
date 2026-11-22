@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Support;
 
-use SugarCraft\Pty\Child;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixChild;
+use SugarCraft\Pty\Posix\PosixMasterPty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 
 /**
  * bin/candy-top running on a REAL pty, driven without script(1) or sleeps.
@@ -19,7 +20,7 @@ final class PtyRun
 {
     private string $output = '';
 
-    private function __construct(private readonly Pty $pty, private readonly Child $child)
+    private function __construct(private readonly PosixMasterPty $pty, private readonly PosixChild $child)
     {
     }
 
@@ -29,7 +30,7 @@ final class PtyRun
         if (PHP_OS_FAMILY === 'Windows') {
             return 'POSIX ptys only';
         }
-        if (!class_exists(Pty::class)) {
+        if (!class_exists(PosixPtySystem::class)) {
             return 'sugar-pty is not installed (php scripts/refresh-deps.php --mode=linked --libs=candy-top)';
         }
         if (!extension_loaded('ffi') || !extension_loaded('pcntl') || !extension_loaded('posix')) {
@@ -39,7 +40,7 @@ final class PtyRun
             return '/dev/ptmx is missing';
         }
         try {
-            Pty::open()->close();
+            (new PosixPtySystem())->open()->master()->close();
         } catch (\Throwable $e) {
             return 'pty cannot open: ' . $e->getMessage();
         }
@@ -62,8 +63,8 @@ final class PtyRun
             'LC_ALL' => 'C.UTF-8',
             'CANDY_TOP_LOGO' => 'off',
         ];
-        $pty = Pty::open($cols, $rows);
-        $child = $pty->spawn(
+        $pair = (new PosixPtySystem())->open($cols, $rows);
+        $child = $pair->slave()->spawn(
             [PHP_BINARY, dirname(__DIR__, 2) . '/bin/candy-top', ...$args],
             [...$base, ...$env],
             $cols,
@@ -71,7 +72,7 @@ final class PtyRun
             controllingTerminal: true,
         );
 
-        return new self($pty, $child);
+        return new self($pair->master(), $child);
     }
 
     public function pid(): int
