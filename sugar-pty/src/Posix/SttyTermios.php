@@ -32,6 +32,16 @@ final class SttyTermios implements Termios
     public const TCSADRAIN = 1;
     public const TCSAFLUSH = 2;
 
+    /**
+     * Wall-clock bound on one stty(1) run, output collection included. stty
+     * answers in milliseconds, so a run still going after this is wedged; it
+     * is killed and reported as a failure instead of hanging the caller.
+     */
+    public const DEFAULT_TIMEOUT_SEC = 5.0;
+
+    /** The bound in force; a private seam so a test can shorten the wedge case. */
+    private static float $timeoutSec = self::DEFAULT_TIMEOUT_SEC;
+
     private int $fd;
     private string $savedMode;
     private bool $raw = false;
@@ -138,11 +148,13 @@ final class SttyTermios implements Termios
 
     /**
      * Run stty with the given arguments against this fd (as the child's
-     * stdin) and capture stdout.
+     * stdin) and capture stdout. Both output pipes are drained together and
+     * the run is bounded by {@see DEFAULT_TIMEOUT_SEC}.
      *
      * @param string ...$args stty subcommand and flags
      * @return string stdout content
-     * @throws RuntimeException if the fd cannot be aliased or stty exits non-zero
+     * @throws RuntimeException if the fd cannot be aliased, stty exits non-zero,
+     *                          or stty is still running at the bound (it is killed)
      */
     private function runStty(string ...$args): string
     {
@@ -171,18 +183,77 @@ final class SttyTermios implements Termios
             throw new RuntimeException('stty ' . \implode(' ', $args) . ' failed: proc_open returned false');
         }
 
-        $out = \stream_get_contents($pipes[1]);
-        $err = \stream_get_contents($pipes[2]);
+        [$out, $err, $timedOut] = self::collect($pipes[1], $pipes[2], \microtime(true) + self::$timeoutSec);
         \fclose($pipes[1]);
         \fclose($pipes[2]);
+        if ($timedOut) {
+            \proc_terminate($proc, 9);
+        }
         $rc = \proc_close($proc);
 
+        if ($timedOut) {
+            throw new RuntimeException(
+                'stty ' . \implode(' ', $args) . ' failed: no exit within '
+                . self::$timeoutSec . 's (killed)'
+            );
+        }
         if ($rc !== 0) {
             throw new RuntimeException(
                 'stty ' . \implode(' ', $args) . ' failed with rc=' . $rc . ': ' . \trim($err)
             );
         }
 
-        return $out ?? '';
+        return $out;
+    }
+
+    /**
+     * Read stdout and stderr TOGETHER until both reach EOF or the deadline
+     * passes (AUD §2 #59). Reading stdout to EOF first deadlocked as soon
+     * as stty wrote more to stderr than the pipe buffer holds: stty blocked
+     * on the full stderr pipe and never closed stdout, while this side
+     * blocked waiting for that stdout EOF.
+     *
+     * @param resource $stdout
+     * @param resource $stderr
+     * @return array{0: string, 1: string, 2: bool} [stdout, stderr, timed out]
+     */
+    private static function collect($stdout, $stderr, float $deadlineAt): array
+    {
+        \stream_set_blocking($stdout, false);
+        \stream_set_blocking($stderr, false);
+        $open = [1 => $stdout, 2 => $stderr];
+        $buf = [1 => '', 2 => ''];
+
+        while ($open !== []) {
+            $leftUs = (int) (($deadlineAt - \microtime(true)) * 1_000_000);
+            if ($leftUs <= 0) {
+                return [$buf[1], $buf[2], true];
+            }
+            $read = \array_values($open);
+            $write = null;
+            $except = null;
+            $ready = PosixMasterPty::retryOnEintr($read, $write, $except, 0, \min($leftUs, 100_000));
+            if ($ready === false) {
+                // A select failure on our own pipes is not recoverable by
+                // waiting; treat it like a wedged run so the child is reaped.
+                return [$buf[1], $buf[2], true];
+            }
+            if ($ready === 0) {
+                continue;
+            }
+            foreach ($open as $n => $pipe) {
+                if (!\in_array($pipe, $read, true)) {
+                    continue;
+                }
+                $chunk = @\fread($pipe, 8192);
+                if ($chunk !== false && $chunk !== '') {
+                    $buf[$n] .= $chunk;
+                } elseif (\feof($pipe)) {
+                    unset($open[$n]);
+                }
+            }
+        }
+
+        return [$buf[1], $buf[2], false];
     }
 }
