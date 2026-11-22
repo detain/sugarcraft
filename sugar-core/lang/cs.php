@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'soubor klávesových zkratek {path} obsahuje prázdný název akce',
     'keys.file_bad_tokens' => 'soubor klávesových zkratek {path}: klávesy pro "{action}" musí být kombinace nebo seznam kombinací',
     'keys.file_bad_chord' => 'soubor klávesových zkratek {path}: akce "{action}": {reason}',
+    'keys.file_unknown_action' => 'soubor klávesových zkratek {path}: neznámá akce "{action}"',
 ];

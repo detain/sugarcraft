@@ -225,11 +225,15 @@ final class KeyBindings
      * instead of throwing at the host.
      * With no $base the result holds only the actions the file names, and a
      * missing file yields an empty registry that matches nothing, so an app
-     * with defaults must pass them. Anything else wrong — a slot hidden
+     * with defaults must pass them. A non-empty $base declares the app's
+     * vocabulary, so unlike {@see fromMap()} the file may only rebind ids
+     * the base already holds: a misspelled action name throws instead of
+     * loading as a new action nothing dispatches on. Anything else wrong — a slot hidden
      * behind an unsearchable directory or a non-directory parent, a slot
      * that is not a plain file (symlink, FIFO, socket: refused by lstat,
-     * never followed or opened), an oversized file, malformed JSON, a bad shape or
-     * a token {@see parseChord()} rejects — throws, and nothing is applied:
+     * never followed or opened), an oversized file, malformed JSON, a bad shape,
+     * an action id a non-empty base does not declare, or a token
+     * {@see parseChord()} rejects — throws, and nothing is applied:
      * a typo must not half-load and strand a binding mid-session.
      *
      * @throws \RuntimeException naming the path and the problem
@@ -289,6 +293,12 @@ final class KeyBindings
             $id = (string) $id;
             if ($id === '') {
                 throw new \RuntimeException(Lang::t('keys.file_empty_action', ['path' => $path]));
+            }
+            // A non-empty base is the app's vocabulary, so an id it does not
+            // declare is a typo (`qiut`) that would bind nothing; only an
+            // empty base lets the file declare actions of its own.
+            if ($base->actions !== [] && !\array_key_exists($id, $base->actions)) {
+                throw new \RuntimeException(Lang::t('keys.file_unknown_action', ['path' => $path, 'action' => self::visible($id)]));
             }
             if (\is_string($tokens)) {
                 $tokens = [$tokens];

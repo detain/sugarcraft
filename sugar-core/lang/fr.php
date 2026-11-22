@@ -135,4 +135,5 @@ return [
     'keys.file_empty_action' => 'le fichier de raccourcis {path} contient un nom d’action vide',
     'keys.file_bad_tokens' => 'fichier de raccourcis {path} : les touches de « {action} » doivent être une combinaison ou une liste de combinaisons',
     'keys.file_bad_chord' => 'fichier de raccourcis {path} : action « {action} » : {reason}',
+    'keys.file_unknown_action' => 'fichier de raccourcis {path} : action inconnue « {action} »',
 ];

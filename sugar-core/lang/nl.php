@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'sneltoetsbestand {path} bevat een lege actienaam',
     'keys.file_bad_tokens' => 'sneltoetsbestand {path}: de toetsen voor "{action}" moeten een combinatie of een lijst met combinaties zijn',
     'keys.file_bad_chord' => 'sneltoetsbestand {path}: actie "{action}": {reason}',
+    'keys.file_unknown_action' => 'sneltoetsbestand {path}: onbekende actie "{action}"',
 ];

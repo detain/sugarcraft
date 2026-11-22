@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => '{path} tuş atama dosyasında boş bir eylem adı var',
     'keys.file_bad_tokens' => '{path} tuş atama dosyası: "{action}" için tuşlar bir kombinasyon veya kombinasyon listesi olmalıdır',
     'keys.file_bad_chord' => '{path} tuş atama dosyası: "{action}" eylemi: {reason}',
+    'keys.file_unknown_action' => '{path} tuş atama dosyası: bilinmeyen eylem "{action}"',
 ];

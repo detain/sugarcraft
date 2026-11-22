@@ -145,4 +145,5 @@ return [
     'keys.file_empty_action' => 'key binding file {path} has an empty action name',
     'keys.file_bad_tokens' => 'key binding file {path}: the keys for "{action}" must be a chord string or a list of chord strings',
     'keys.file_bad_chord' => 'key binding file {path}: action "{action}": {reason}',
+    'keys.file_unknown_action' => 'key binding file {path}: unknown action "{action}"',
 ];

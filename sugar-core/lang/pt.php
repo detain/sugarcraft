@@ -131,4 +131,5 @@ return [
     'keys.file_empty_action' => 'o ficheiro de atalhos {path} tem um nome de ação vazio',
     'keys.file_bad_tokens' => 'ficheiro de atalhos {path}: as teclas de "{action}" têm de ser uma combinação ou uma lista de combinações',
     'keys.file_bad_chord' => 'ficheiro de atalhos {path}: ação "{action}": {reason}',
+    'keys.file_unknown_action' => 'ficheiro de atalhos {path}: ação desconhecida "{action}"',
 ];

@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'plik skrótów {path} zawiera pustą nazwę akcji',
     'keys.file_bad_tokens' => 'plik skrótów {path}: klawisze dla "{action}" muszą być kombinacją lub listą kombinacji',
     'keys.file_bad_chord' => 'plik skrótów {path}: akcja "{action}": {reason}',
+    'keys.file_unknown_action' => 'plik skrótów {path}: nieznana akcja "{action}"',
 ];

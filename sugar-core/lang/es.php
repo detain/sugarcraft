@@ -131,4 +131,5 @@ return [
     'keys.file_empty_action' => 'el archivo de atajos {path} tiene un nombre de acción vacío',
     'keys.file_bad_tokens' => 'archivo de atajos {path}: las teclas de "{action}" deben ser una combinación o una lista de combinaciones',
     'keys.file_bad_chord' => 'archivo de atajos {path}: acción "{action}": {reason}',
+    'keys.file_unknown_action' => 'archivo de atajos {path}: acción desconocida "{action}"',
 ];

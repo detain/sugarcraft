@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'il file delle scorciatoie {path} contiene un nome di azione vuoto',
     'keys.file_bad_tokens' => 'file delle scorciatoie {path}: i tasti di "{action}" devono essere una combinazione o un elenco di combinazioni',
     'keys.file_bad_chord' => 'file delle scorciatoie {path}: azione "{action}": {reason}',
+    'keys.file_unknown_action' => 'file delle scorciatoie {path}: azione sconosciuta "{action}"',
 ];

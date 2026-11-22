@@ -131,4 +131,5 @@ return [
     'keys.file_empty_action' => 'Tastenbelegungsdatei {path} enthält einen leeren Aktionsnamen',
     'keys.file_bad_tokens' => 'Tastenbelegungsdatei {path}: die Tasten für "{action}" müssen eine Kombination oder eine Liste von Kombinationen sein',
     'keys.file_bad_chord' => 'Tastenbelegungsdatei {path}: Aktion "{action}": {reason}',
+    'keys.file_unknown_action' => 'Tastenbelegungsdatei {path}: unbekannte Aktion "{action}"',
 ];

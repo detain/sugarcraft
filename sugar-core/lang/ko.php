@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => '키 바인딩 파일 {path}에 빈 동작 이름이 있습니다',
     'keys.file_bad_tokens' => '키 바인딩 파일 {path}: "{action}"의 키는 조합 하나 또는 조합 목록이어야 합니다',
     'keys.file_bad_chord' => '키 바인딩 파일 {path}: 동작 "{action}": {reason}',
+    'keys.file_unknown_action' => '키 바인딩 파일 {path}: 알 수 없는 동작 "{action}"',
 ];

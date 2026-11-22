@@ -100,6 +100,19 @@ final class KeyBindingsFromFileTest extends TestCase
         self::assertSame(['jump' => ['g']], KeyBindings::fromFile($path)->map());
     }
 
+    public function testAnActionTheNonEmptyBaseDoesNotDeclareThrows(): void
+    {
+        $path = $this->write('keys.json', '{"quit": ["x"], "qiut": ["ctrl+q"]}');
+
+        try {
+            KeyBindings::fromFile($path, KeyBindings::defaults());
+            self::fail('a misspelled action name loaded as a new action');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString($path, $e->getMessage());
+            self::assertStringContainsString('qiut', $e->getMessage());
+        }
+    }
+
     public function testAnEmptyOrWhitespaceOnlyFileIsNoOverrides(): void
     {
         $base = self::base();
@@ -130,6 +143,7 @@ final class KeyBindingsFromFileTest extends TestCase
         yield 'shift on a rune'    => ['{"quit": ["shift+q"]}'];
         yield 'escape byte'        => ['{"quit": ["\u001b[2J"]}'];
         yield 'bad one of many'    => ['{"save": ["ctrl+s"], "quit": ["ctrl+"]}'];
+        yield 'unknown action'     => ['{"save": ["f2"], "qiut": ["ctrl+q"]}'];
     }
 
     #[DataProvider('malformedFiles')]

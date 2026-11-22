@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'キー割り当てファイル {path} に空のアクション名があります',
     'keys.file_bad_tokens' => 'キー割り当てファイル {path}: "{action}" のキーは組み合わせ 1 つか組み合わせのリストである必要があります',
     'keys.file_bad_chord' => 'キー割り当てファイル {path}: アクション "{action}": {reason}',
+    'keys.file_unknown_action' => 'キー割り当てファイル {path}: 不明なアクション "{action}"',
 ];

@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'в файле привязок клавиш {path} пустое имя действия',
     'keys.file_bad_tokens' => 'файл привязок клавиш {path}: клавиши для "{action}" должны быть сочетанием или списком сочетаний',
     'keys.file_bad_chord' => 'файл привязок клавиш {path}: действие "{action}": {reason}',
+    'keys.file_unknown_action' => 'файл привязок клавиш {path}: неизвестное действие "{action}"',
 ];

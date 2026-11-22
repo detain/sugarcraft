@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => 'يحتوي ملف ربط المفاتيح {path} على اسم إجراء فارغ',
     'keys.file_bad_tokens' => 'ملف ربط المفاتيح {path}: يجب أن تكون مفاتيح "{action}" تركيبة أو قائمة تركيبات',
     'keys.file_bad_chord' => 'ملف ربط المفاتيح {path}: الإجراء "{action}": {reason}',
+    'keys.file_unknown_action' => 'ملف ربط المفاتيح {path}: إجراء غير معروف "{action}"',
 ];

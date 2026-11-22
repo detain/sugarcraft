@@ -126,4 +126,5 @@ return [
     'keys.file_empty_action' => '按键绑定文件 {path} 含有空的操作名',
     'keys.file_bad_tokens' => '按键绑定文件 {path}：“{action}”的按键必须是一个组合键或组合键列表',
     'keys.file_bad_chord' => '按键绑定文件 {path}：操作“{action}”：{reason}',
+    'keys.file_unknown_action' => '按键绑定文件 {path}：未知操作“{action}”',
 ];
