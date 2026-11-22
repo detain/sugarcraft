@@ -80,6 +80,22 @@ final class GraphemeTest extends TestCase
     }
 
     /**
+     * ICU skips a stray lead byte and returns the cluster after it; next()
+     * must not take that answer, or the following cell is measured twice and
+     * every zone to its right shifts one column on hosts with ext-intl.
+     */
+    public function testStrayLeadBeforeAsciiIsItsOwnUnitOnBothPaths(): void
+    {
+        self::assertSame("\xff", Grapheme::nextWithoutIntl("\xffb", 0));
+        self::assertSame("\xff", Grapheme::next("\xffb", 0));
+        self::assertSame('b', Grapheme::next("\xffb", 1));
+
+        $zones = Scan::parse("\xffb" . Mark::zone('z', 'Q'));
+
+        self::assertSame(2, $zones['z']->startCol);
+    }
+
+    /**
      * A multi-byte lead whose continuation bytes are missing is only its
      * maximal subpart (ICU's unit too): it never swallows a following
      * newline, ESC or sentinel lead.

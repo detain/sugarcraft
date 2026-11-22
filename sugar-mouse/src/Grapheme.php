@@ -54,7 +54,13 @@ final class Grapheme
         if ($hasGraphemeExtract === true) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (is_string($cluster) === true && $cluster !== '') {
+            // On malformed UTF-8 ICU skips a stray lead and returns the NEXT
+            // cluster ("\xffb" at 0 yields "b"), which would measure that cell
+            // twice. Accept its answer only when it IS the input at $i, as
+            // sugar-core's Width::nextCluster does.
+            if (is_string($cluster) === true && $cluster !== ''
+                && substr_compare($s, $cluster, $i, strlen($cluster)) === 0
+            ) {
                 return $cluster;
             }
         }
