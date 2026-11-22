@@ -284,8 +284,32 @@ final class BuiltInToolCorpus
      */
     public static function classNames(?string $srcDir = null, string $namespacePrefix = self::NAMESPACE_PREFIX): array
     {
-        $srcDir ??= self::srcDir();
+        if ($srcDir === null) {
+            return self::$realTreeClassNames[$namespacePrefix] ??= self::scanClassNames(self::srcDir(), $namespacePrefix);
+        }
 
+        return self::scanClassNames($srcDir, $namespacePrefix);
+    }
+
+    /**
+     * The real tree's scan, once per process and prefix. A scan tokenizes
+     * every file under `src/` (about 1.7 s, measured), and
+     * `BuiltInToolTest::createTool()` reaches it through {@see instances()} once
+     * per test, 196 times. `src/` does not change under a running suite, since
+     * no test writes into it (see the injectable-tree note on
+     * {@see classNames()}), so the class list is safe to keep. The instances are
+     * not: {@see instances()} still builds fresh ones per call. A synthetic tree
+     * is never memoized; its tests write it, scan it, and rewrite it.
+     *
+     * @var array<string, list<class-string<Tool>>>
+     */
+    private static array $realTreeClassNames = [];
+
+    /**
+     * @return list<class-string<Tool>>
+     */
+    private static function scanClassNames(string $srcDir, string $namespacePrefix): array
+    {
         $classes = [];
         foreach (self::sourceFiles($srcDir) as $relative) {
             $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));

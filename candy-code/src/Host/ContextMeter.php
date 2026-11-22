@@ -82,6 +82,23 @@ final class ContextMeter
      */
     public const DOCUMENT_ATTACHMENT_TOKEN_ESTIMATE = 1600;
 
+    /**
+     * Each sent row's share of {@see rawTokens()}, kept per row.
+     *
+     * WHY. The status bar asks for the estimate on every frame, twice (the
+     * figure and its percentage), and the estimate used to re-read every
+     * row's text each time, so a frame's cost grew with the transcript's
+     * size: on KeyHelpTest's 2,400-row history it was 72% of the test. A
+     * {@see Message} and its {@see Attachment}s are readonly, so a row's
+     * share is fixed once computed, and a WeakMap lets go of the row when
+     * the transcript does. It caches a pure function of the row, so the
+     * meter stays stateless in the sense above: no session's figure depends
+     * on anything another session did.
+     *
+     * @var \WeakMap<Message, int>|null
+     */
+    private static ?\WeakMap $rowShares = null;
+
     private function __construct()
     {
     }
@@ -114,31 +131,47 @@ final class ContextMeter
     public function rawTokens(array $history): int
     {
         // A UI-only row is never sent (audit 15b-03), so it occupies none
-        // of the window this estimates. Script-weighted, not codepoints/4
-        // (audit 15b-13); S-X09: the +10 role-overhead law is shared with
-        // ContextCompactor through TokenEstimate::ofMessages().
-        $sent = array_filter($history, static fn(Message $m): bool => !$m->uiOnly);
-        $total = TokenEstimate::ofMessages(array_map(static fn(Message $m): string => $m->content, $sent));
-        foreach ($sent as $msg) {
-            // Audit 15b-15: an attached file is inlined into the request and
-            // an image billed as image tokens, so both occupy the window - a
-            // 256 KiB `@file` must reach the tiers, not hide behind a short
-            // prompt.
-            foreach ($msg->attachments as $attachment) {
-                if (!$attachment instanceof Attachment || $attachment->data === null) {
-                    continue;
-                }
-                // CTX-2: a document's bytes are binary too - flat floor, never
-                // the text heuristic.
-                if ($attachment->type === AttachmentType::Document) {
-                    $total += self::DOCUMENT_ATTACHMENT_TOKEN_ESTIMATE;
-
-                    continue;
-                }
-                $total += $attachment->type === AttachmentType::Image
-                    ? self::IMAGE_ATTACHMENT_TOKEN_ESTIMATE
-                    : TokenEstimate::ofText($attachment->data);
+        // of the window this estimates.
+        self::$rowShares ??= new \WeakMap();
+        $total = 0;
+        foreach ($history as $msg) {
+            if ($msg->uiOnly) {
+                continue;
             }
+            $total += self::$rowShares[$msg] ??= self::rowShare($msg);
+        }
+
+        return $total;
+    }
+
+    /**
+     * One sent row's tokens: its text and its inlined attachments.
+     *
+     * Script-weighted, not codepoints/4 (audit 15b-13); S-X09: the +10
+     * role-overhead law is shared with ContextCompactor through
+     * TokenEstimate::ofMessages().
+     */
+    private static function rowShare(Message $msg): int
+    {
+        $total = TokenEstimate::ofMessages([$msg->content]);
+        // Audit 15b-15: an attached file is inlined into the request and
+        // an image billed as image tokens, so both occupy the window - a
+        // 256 KiB `@file` must reach the tiers, not hide behind a short
+        // prompt.
+        foreach ($msg->attachments as $attachment) {
+            if (!$attachment instanceof Attachment || $attachment->data === null) {
+                continue;
+            }
+            // CTX-2: a document's bytes are binary too - flat floor, never
+            // the text heuristic.
+            if ($attachment->type === AttachmentType::Document) {
+                $total += self::DOCUMENT_ATTACHMENT_TOKEN_ESTIMATE;
+
+                continue;
+            }
+            $total += $attachment->type === AttachmentType::Image
+                ? self::IMAGE_ATTACHMENT_TOKEN_ESTIMATE
+                : TokenEstimate::ofText($attachment->data);
         }
 
         return $total;

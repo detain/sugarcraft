@@ -41,7 +41,8 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-phpunit": "^2.0"
+        "phpstan/phpstan-phpunit": "^2.0",
+        "brianium/paratest": "~7.4.9"
     },
     "suggest": {
         "ext-pcntl": "Graceful signal handling on POSIX: SIGINT/SIGTERM/SIGHUP routed through the program's stop path, SIGWINCH resize callbacks, and Ctrl-Z suspend/resume. Without it these degrade silently (native Windows never has it); see README, Signals, raw TTY and terminal degradation.",

@@ -133,22 +133,38 @@ final class PosixPumpTest extends TestCase
         }
     }
 
+    /**
+     * The pump's own stdin and stdout, never the runner's. With no child the
+     * run ends on stdin EOF, and the runner's STDIN gives none: an interactive
+     * phpunit waits for Ctrl-D, and a ParaTest worker's STDIN is its command
+     * pipe, which stays open until the run ends. The worker then hung until
+     * HangWatchdog killed it (exit 137) at every K. The pump also sets its
+     * stdin non-blocking, which on the real STDIN reaches the worker's pipe.
+     * /dev/null is at EOF at once and can be selected, which php://memory
+     * cannot.
+     */
     public function testRunWithNullChildReturnsZero(): void
     {
         $this->requirePtySyscalls();
 
         $system = new PosixPtySystem();
         $pair = $system->open(80, 24);
+        $stdin = \fopen('/dev/null', 'rb');
+        $stdout = \fopen('/dev/null', 'wb');
+        $this->assertIsResource($stdin);
+        $this->assertIsResource($stdout);
 
         try {
             $master = $pair->master();
 
             $pump = new PosixPump();
-            $exitCode = $pump->run($master, \STDIN, \STDOUT, null);
+            $exitCode = $pump->run($master, $stdin, $stdout, null);
 
             $this->assertSame(0, $exitCode);
         } finally {
             $pair->master()->close();
+            \fclose($stdin);
+            \fclose($stdout);
         }
     }
 }

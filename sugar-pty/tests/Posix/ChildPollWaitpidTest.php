@@ -107,15 +107,17 @@ final class ChildPollWaitpidTest extends TestCase
     {
         $this->requireSh();
 
-        // Spawn a long-running process.
-        [$proc, $pid] = $this->spawn('sleep 10');
+        // Spawn a long-running process; exec, so the pid is the sleep itself.
+        [$proc, $pid] = $this->spawn('exec sleep 10');
         $stub = $this->makeStub($pid, $proc);
 
         // exited() should return false (null from tryWaitpid triggers fallback).
         $this->assertFalse($stub->exited());
         $this->assertNull($stub->exitCode());
 
-        // Clean up.
+        // Clean up. proc_close() waits for the child, so kill it first: closing
+        // a live `sleep 10` held the test for the whole ten seconds.
+        \proc_terminate($proc, 9);
         \proc_close($proc);
     }
 

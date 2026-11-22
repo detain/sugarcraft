@@ -32,7 +32,7 @@ final class ProcessExecutor implements ExecutorInterface
     /**
      * agentId -> Unix time until which the worker has leased the heartbeat
      * window (E646). A `lease` frame extends the effective heartbeat deadline
-     * past {@see HEARTBEAT_TIMEOUT_SECS} without capping the provider call:
+     * past the heartbeat window ({@see $heartbeatTimeoutSeconds}) without capping the provider call:
      * the lease is the worker's signed promise that it is working on a
      * request it cannot speak during — see createLiveWorkerScript()'s
      * non-streaming branch. A dead worker still closes stdout and is reaped
@@ -152,7 +152,25 @@ final class ProcessExecutor implements ExecutorInterface
          * one to the other.
          */
         private readonly bool $simulatedWorker = false,
-    ) {}
+        /**
+         * The parent's heartbeat window in seconds: how long a worker may
+         * stay silent, holding no lease, before it is declared dead and
+         * reaped (E646).
+         *
+         * Production passes nothing and gets {@see HEARTBEAT_TIMEOUT_SECS},
+         * three of the live worker's {@see HEARTBEAT_INTERVAL_SECS} beats.
+         * The E646 tests drive fake workers that never beat, and a shorter
+         * window lets them prove the reaping and the lease in seconds rather
+         * than waiting out the real window twice, which was 33 s of the
+         * suite's longest file. The clock is time(), whole seconds, so a
+         * window under one second is refused.
+         */
+        private readonly int $heartbeatTimeoutSeconds = self::HEARTBEAT_TIMEOUT_SECS,
+    ) {
+        if ($heartbeatTimeoutSeconds < 1) {
+            throw new \InvalidArgumentException("heartbeatTimeoutSeconds must be at least 1, got {$heartbeatTimeoutSeconds}");
+        }
+    }
 
     /**
      * The worker-provider spec this executor hands to every child, or null
@@ -802,7 +820,7 @@ final class ProcessExecutor implements ExecutorInterface
     private function effectiveHeartbeatDeadline(string $agentId): int
     {
         return max(
-            ($this->lastHeartbeat[$agentId] ?? time()) + self::HEARTBEAT_TIMEOUT_SECS,
+            ($this->lastHeartbeat[$agentId] ?? time()) + $this->heartbeatTimeoutSeconds,
             $this->heartbeatLeaseUntil[$agentId] ?? 0,
         );
     }

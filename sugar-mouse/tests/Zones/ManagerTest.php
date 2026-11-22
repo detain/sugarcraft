@@ -702,30 +702,3 @@ final class ManagerTest extends TestCase
         );
     }
 }
-
-final class ZoneRoutingModel implements \SugarCraft\Core\Model
-{
-    public ?\SugarCraft\Mouse\Zones\MsgZoneInBounds $lastInBoundsHit  = null;
-    public ?\SugarCraft\Core\Msg\MouseMsg    $lastPlainMouse   = null;
-
-    public function init(): ?\Closure { return null; }
-
-    public function update(\SugarCraft\Core\Msg $msg): array
-    {
-        $next = clone $this;
-        if ($msg instanceof \SugarCraft\Mouse\Zones\MsgZoneInBounds) {
-            $next->lastInBoundsHit = $msg;
-        } elseif ($msg instanceof \SugarCraft\Core\Msg\MouseMsg) {
-            $next->lastPlainMouse = $msg;
-        }
-        return [$next, null];
-    }
-
-    public function view(): string { return ''; }
-
-    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
-    {
-        return null;
-    }
-
-}

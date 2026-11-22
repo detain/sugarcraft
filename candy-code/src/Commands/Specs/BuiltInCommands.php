@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Commands\Specs;
 
+use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Core\I18n\T;
 
 /**
@@ -50,6 +52,9 @@ final class BuiltInCommands
 
     /** @var array<string, array<string, BuiltInCommand>> by locale, then by every dispatching spelling */
     private static array $bySpelling = [];
+
+    /** @var array<string, array<string, CommandSpec>> by locale, then by {@see PaletteAction} value */
+    private static array $byPaletteAction = [];
 
     private function __construct()
     {
@@ -140,6 +145,32 @@ final class BuiltInCommands
         }
 
         return self::$bySpelling[$locale][$spelling] ?? null;
+    }
+
+    /**
+     * The row that owns $action, or null when no row carries it.
+     *
+     * INDEXED, NOT SCANNED. The palette asks this once per row label, and asks
+     * it again for every label it compares ({@see PaletteAction::byLabel()}),
+     * several times a frame. A scan of every row per question was about half
+     * of a palette render's time (profiled on PaletteScrollAnchorTest). The
+     * index is built once per locale beside {@see self::forSpelling()}, and
+     * the first row in spec-file order wins, as the scan did.
+     */
+    public static function forPaletteAction(PaletteAction $action): ?CommandSpec
+    {
+        $locale = T::locale();
+        if (!isset(self::$byPaletteAction[$locale])) {
+            self::$byPaletteAction[$locale] = [];
+            foreach (self::all() as $command) {
+                $owned = $command->spec->paletteAction;
+                if ($owned !== null) {
+                    self::$byPaletteAction[$locale][$owned->value] ??= $command->spec;
+                }
+            }
+        }
+
+        return self::$byPaletteAction[$locale][$action->value] ?? null;
     }
 
     /**

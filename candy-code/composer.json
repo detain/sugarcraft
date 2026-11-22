@@ -75,7 +75,8 @@
         "mockery/mockery": "^1.6",
         "ratchet/pawl": "^0.4",
         "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-phpunit": "^2.0"
+        "phpstan/phpstan-phpunit": "^2.0",
+        "brianium/paratest": "~7.4.9"
     },
     "scripts": {
         "test": "vendor/bin/phpunit",

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
 
 /**
  * THE BOOTSTRAP ACTUALLY RUNS THE ROOT REFUSAL — pinned from the source side
@@ -87,6 +88,10 @@ final class SuiteRootRunRefusalTest extends TestCase
 
     public function testAChildBootstrapWithTmpdirRootRefusesTheLaunch(): void
     {
+        if (!SuiteSkipRoster::rootTmpdirChildStarts()) {
+            self::markTestSkipped('php itself cannot start with TMPDIR=/ on this host (swoole 6.2.0 aborts it, exit 134), so the child would die before the guard could refuse anything; SuiteSkipRoster rosters this skip exactly there.');
+        }
+
         // THE REAL BEHAVIOUR, driveable without root: TMPDIR=/ is refused at
         // every uid. The child is handed a minimal environment (absolute php,
         // absolute require, HOME and TMPDIR only) — nothing it reads exists
@@ -124,6 +129,10 @@ final class SuiteRootRunRefusalTest extends TestCase
 
     public function testAChildBootstrapWithTheHatchStillRefusesTheTempRoot(): void
     {
+        if (!SuiteSkipRoster::rootTmpdirChildStarts()) {
+            self::markTestSkipped('php itself cannot start with TMPDIR=/ on this host (swoole 6.2.0 aborts it, exit 134), so the child would die before the guard could refuse anything; SuiteSkipRoster rosters this skip exactly there.');
+        }
+
         // The non-escapability of the `/` arm, driven through the REAL wrapper
         // rather than the pure static: the hatch is set, the temp root is set,
         // and the launch still stops.

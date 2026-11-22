@@ -885,8 +885,8 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-3 (J): the hook runtime budgets — the 60s default quoted on
-     * three pages, the 200ms drain slice shared by three files under a "five
-     * wakeups a second" justification, the 16,384 quartet whose 16,465 example
+     * three pages, StatusLineCommand's 200ms drain slice (ScriptHook's own slice
+     * left with its pump when the hook moved onto ChildRun), the 16,384 quartet whose 16,465 example
      * is re-derived from the ACTUAL clip marker re-extracted from clip(), the
      * 8 wrapped permission rows, the 10,000-byte note cap, and the
      * PAGE_SIZE * 32 env-entry cap — all live off their constants.
@@ -917,28 +917,27 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertSame((int) $timeout, (int) $m[1], 'docs/TROUBLESHOOTING.md timeout figure drifted from DEFAULT_TIMEOUT_SECONDS');
 
-        $slice = (float) $hookClass->getConstant('DRAIN_SLICE_SECONDS');
-        self::assertSame(
-            (float) (new \ReflectionClass(StatusLineCommand::class))->getConstant('DRAIN_SLICE_SECONDS'),
-            $slice,
-            'the prose promises StatusLineCommand shares ScriptHook::DRAIN_SLICE_SECONDS — one side moved',
-        );
-        $sliceDoc = self::docBlockOf(ScriptHook::class, 'DRAIN_SLICE_SECONDS');
-        self::assertSame(
-            1,
-            preg_match('/this trades that for (\w+) wakeups a second/', $sliceDoc, $m),
-            'the drain-slice sentence no longer spells its wakeups-per-second',
-        );
-        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
-        self::assertSame($wordNumbers[$m[1]] ?? -1, intdiv(1000, (int) round($slice * 1000)), 'the spelled wakeups-per-second no longer equals 1s / DRAIN_SLICE_SECONDS — flip both together');
+        // cc1-b2b moved the hook's child onto ChildRun, which owns that select
+        // loop and its slice, and ScriptHook's DRAIN_SLICE_SECONDS went with its
+        // pump. StatusLineCommand keeps its own 200ms slice, and its doc-block
+        // tells that history with the figure; pin the figure to the constant,
+        // and pin that the hook still runs through ChildRun and claims no slice.
+        self::assertFalse($hookClass->hasConstant('DRAIN_SLICE_SECONDS'), 'ScriptHook has a drain slice again, but StatusLineCommand\'s doc-block says ChildRun owns the hook\'s select loop');
         self::assertSame(
             1,
-            preg_match("/DRAIN_SLICE_SECONDS\}'\s+\*\s+(\d+)ms, for its reason/s", self::docBlockOf(StatusLineCommand::class, 'DRAIN_SLICE_SECONDS'), $m),
-            'the StatusLine drain doc no longer cites the shared slice with its millisecond figure',
+            preg_match('/ChildRun::(?:new|commandLine)\(/', self::sourceOf('Hooks/ScriptHook.php')),
+            'ScriptHook no longer runs its child through ChildRun, so the drain-slice history in StatusLineCommand must be re-read',
         );
-        self::assertSame((int) round($slice * 1000), (int) $m[1], 'StatusLine prose milliseconds drifted from the shared slice');
+        $slice = (float) (new \ReflectionClassConstant(StatusLineCommand::class, 'DRAIN_SLICE_SECONDS'))->getValue();
+        $sliceDoc = self::docBlockOf(StatusLineCommand::class, 'DRAIN_SLICE_SECONDS');
+        self::assertSame(
+            1,
+            preg_match("/the (\\d+)ms slice ScriptHook's own pump used before the hook/", $sliceDoc, $m),
+            'the StatusLine drain doc no longer states the slice it kept with its millisecond figure',
+        );
+        self::assertSame((int) round($slice * 1000), (int) $m[1], 'StatusLine prose milliseconds drifted from its DRAIN_SLICE_SECONDS');
         // runShellSubstitution waits through ChildRun, which owns its own slice; no
-        // prose may claim it shares ScriptHook's constant.
+        // prose may claim it shares StatusLineCommand's.
         $specBody = self::bodyExcerpt(self::sourceOf('Commands/CommandSpec.php'), 'runShellSubstitution', 5000);
         self::assertSame(
             1,
@@ -948,7 +947,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringNotContainsString(
             'CommandSpec::runShellSubstitution',
             $sliceDoc,
-            'ScriptHook must not claim CommandSpec waits at its slice: ChildRun owns that wait',
+            'StatusLineCommand must not claim CommandSpec waits at its slice: ChildRun owns that wait',
         );
 
         $deny = (int) $hookClass->getConstant('MAX_DENY_REASON_BYTES');
@@ -2563,7 +2562,9 @@ final class DocFigureProseDriftTest extends TestCase
     /**
      * E686 tranche-7 (AF, closing E353's decision by FOLD): the three runtime
      * sentences in HOOKS.md that restate constants or whole-tree absence — the
-     * stream_select retry budget against DRAIN_SELECT_RETRIES, the sweep's
+     * stream_select retry budget against ChildPump::SELECT_RETRIES (the hook's
+     * child drains through ChildRun::run(), which pumps at ChildPump's default
+     * budget since cc1-b2b), the sweep's
      * bare-temp prefix list against ToolIpcFiles::sweep()'s own constant list
      * (why sc-hook-ctx/ can never be swept, re-derived from the same values),
      * and the [exit-1] non-blocking marker against every src/ line outside the
@@ -2576,7 +2577,13 @@ final class DocFigureProseDriftTest extends TestCase
         $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
 
         self::assertSame(1, preg_match('/retried up to (\d+) consecutive times/', $hooks, $retries), 'the EINTR ride-out sentence no longer states its budget');
-        self::assertSame((int) $retries[1], (int) (new \ReflectionClassConstant(ScriptHook::class, 'DRAIN_SELECT_RETRIES'))->getValue(), 'the retry figure drifted from ScriptHook::DRAIN_SELECT_RETRIES');
+        // ScriptHook's own retry budget left with its pump (cc1-b2b): the hook's
+        // child drains through ChildRun::run(), which builds a ChildPump and
+        // never overrides its select budget, so the figure is ChildPump's.
+        $childRun = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Async\ChildRun::class))->getFileName());
+        self::assertSame(1, preg_match('/ChildPump::new\(/', $childRun), 'ChildRun no longer drains through ChildPump, so the EINTR sentence must be re-read');
+        self::assertStringNotContainsString('withSelectRetries(', $childRun, 'ChildRun now sets its own select budget, so the retry figure is no longer ChildPump::SELECT_RETRIES');
+        self::assertSame((int) $retries[1], (int) (new \ReflectionClassConstant(\SugarCraft\Async\ChildPump::class, 'SELECT_RETRIES'))->getValue(), 'the retry figure drifted from ChildPump::SELECT_RETRIES');
 
         self::assertSame(1, preg_match('/matches only its (\w+) bare-temp prefixes \(([^)]+)\)/', $hooks, $sweep), 'the never-swept argument no longer counts and names the prefixes in one breath');
         $sweepBody = self::bodyExcerpt(self::sourceOf('Support/ToolIpcFiles.php'), 'sweep', 2400);
@@ -2788,10 +2795,10 @@ final class DocFigureProseDriftTest extends TestCase
         $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
         self::assertSame(
             1,
-            preg_match('/(\w+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
+            preg_match('/([\w-]+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
             'the siblings sentence no longer runs from a spelled count through the named list into the ext-sqlite3 paragraph that follows',
         );
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24, 'twenty-five' => 25];
         self::assertArrayHasKey($m[1], $words, "the spelled count '{$m[1]}' is outside the pinned word map — extend it deliberately");
 
         preg_match_all('/`(candy-[a-z]+|sugar-overlay|sugar-[a-z-]+)`/', $m[2], $named);

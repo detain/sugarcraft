@@ -30,7 +30,8 @@
         "sugarcraft/sugar-core": "dev-master"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "brianium/paratest": "~7.4.9"
     },
     "suggest": {
         "ext-posix": "Liveness probing of server children, lock owners and fork successors (signal 0, plus /proc state and start-time checks where procfs exists); without it these probes fail open as alive"

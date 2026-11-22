@@ -356,7 +356,12 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
         self::assertNotNull($caught, 'a server that never answered initialize must not be connected');
         self::assertStringContainsString('No response received for initialize request', $caught->getMessage());
         self::assertGreaterThanOrEqual(0.45, $elapsed, 'connect() gave up before its budget');
-        self::assertLessThan(5.0, $elapsed, 'connect() outlived its budget by far');
+        // The upper bound only has to tell the 0.5 s budget from the 60 s
+        // default a lost budget would fall back to (HANDSHAKE_TIMEOUT_SECONDS).
+        // Alone this takes 1.0 s (30 of 30 runs, 2026-11-21), but a K=32
+        // ParaTest run at load 49 measured 5.64 s against the old 5.0 bound;
+        // 15 s keeps 4x clear of the default and clear of load.
+        self::assertLessThan(15.0, $elapsed, 'connect() outlived its budget by far');
         self::assertFalse($client->isConnected());
         $this->assertTheFixtureIsGone();
     }

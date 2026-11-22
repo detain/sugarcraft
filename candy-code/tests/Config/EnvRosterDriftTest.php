@@ -587,8 +587,23 @@ final class EnvRosterDriftTest extends TestCase
 
     private function scanner(): EnvReadScanner
     {
-        return new EnvReadScanner($this->sources());
+        return self::realScanner();
     }
+
+    /**
+     * The scanner over {@see sources()}, built once per process. A build
+     * tokenizes every file under `src/` and `bin/` (about 3 s, measured), and
+     * this file plus {@see \SugarCraft\Code\Tests\Cli\HelpTest} asked for
+     * it thirteen times. Sharing it is safe: the constructor does the whole scan,
+     * every accessor hands back a copy, and no test writes into `src/` or
+     * `bin/` while the suite runs.
+     */
+    public static function realScanner(): EnvReadScanner
+    {
+        return self::$realScanner ??= new EnvReadScanner(self::sources());
+    }
+
+    private static ?EnvReadScanner $realScanner = null;
 
     /**
      * Everything the roster scan reads: every `.php` file under `src/`, and
@@ -610,20 +625,22 @@ final class EnvRosterDriftTest extends TestCase
     public static function sources(): array
     {
         $root = realpath(__DIR__ . '/../..');
-        self::assertIsString($root);
+        if (!\is_string($root)) {
+            throw new \RuntimeException('candy-code/ does not resolve, so no roster can be derived');
+        }
 
         $sources = [];
         foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src')) as $file) {
             if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
                 continue;
             }
-            $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::read($file->getPathname());
+            $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::readSource($file->getPathname());
         }
         foreach (new \DirectoryIterator($root . '/bin') as $file) {
             if ($file->isDot() || !$file->isFile()) {
                 continue;
             }
-            $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::read($file->getPathname());
+            $sources[substr($file->getPathname(), \strlen($root) + 1)] = self::readSource($file->getPathname());
         }
         ksort($sources);
 
@@ -674,6 +691,25 @@ final class EnvRosterDriftTest extends TestCase
     {
         $text = file_get_contents($path);
         self::assertIsString($text, $path . ' is unreadable, so any roster derived from it is void');
+
+        return $text;
+    }
+
+    /**
+     * read() for the source walk, which throws instead of asserting. The walk
+     * feeds realScanner(), built once per process by whichever test or data
+     * provider asks first (HelpTest's provider builds it at suite load). An
+     * assertion per file there was counted on that first test, or on nothing
+     * when a provider built it, so the suite's assertion total depended on
+     * which file ran first in the process: 1,413 apart between a serial run
+     * and a ParaTest one, and CI's conservation check compares it exactly.
+     */
+    private static function readSource(string $path): string
+    {
+        $text = file_get_contents($path);
+        if (!\is_string($text)) {
+            throw new \RuntimeException($path . ' is unreadable, so any roster derived from it is void');
+        }
 
         return $text;
     }

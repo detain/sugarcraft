@@ -73,13 +73,18 @@ php tools/check-path-repos.php --fix --strict-closure \
   && git checkout -- '*/composer.json'                  # injection restores a full local closure
 php tools/check-child-lifetimes.php                     # every exposed proc_open child is accounted for
 php tools/check-one-type-per-file.php                   # every PSR-4 file declares only its own type
+php tools/check-cross-file-test-types.php               # no test file uses a type declared inside another test file
 php tools/check-lib-licenses.php                        # every split package carries the root LICENSE
 ```
 
-The last gate exists because Composer's PSR-4 autoloader finds a type only in
+The one-type gate exists because Composer's PSR-4 autoloader finds a type only in
 the file named after it: a second class, enum or interface declared inside
 another class's file resolves only if that file was loaded first, and is
-"class not found" otherwise. Give every type its own file.
+"class not found" otherwise. Give every type its own file. In `tests/` a helper
+type may stay in the one test file that uses it, but once a second test file
+uses it, it needs its own file too: serial phpunit loads every test file before
+running any, so the second file works by luck, and a ParaTest worker, which
+loads one file at a time, fails "class not found".
 
 The injection line is the only entry that writes to your tree, and the revert is
 narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in

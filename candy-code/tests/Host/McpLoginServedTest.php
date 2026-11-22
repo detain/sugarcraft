@@ -308,7 +308,12 @@ final class McpLoginServedTest extends TestCase
     private function noticeRows(SessionHost $host, string $sessionId): array
     {
         $log = $host->events();
-        self::assertNotNull($log, 'the fixture store is durable');
+        // fail(), not an assert: the pump tests call this once per poll, and an
+        // assertion here would make their assertion count depend on how many
+        // polls the child took (the pinned suite figure counts assertions exactly).
+        if ($log === null) {
+            self::fail('the fixture store is durable');
+        }
         $rows = [];
         foreach ($log->since($sessionId, 0, 200) as $event) {
             if ($event['type'] === 'message.created' && (($event['payload']['kind'] ?? null)) === 'notice') {

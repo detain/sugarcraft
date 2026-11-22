@@ -493,8 +493,20 @@ final class StatusLineCommandTest extends TestCase
         // frame, whatever PHPUnit's failOnWarning later says about the suite:
         // the handler below catches exactly the class of diagnostic the `@`
         // legs exist to swallow.
+        //
+        // The handler honors `@` the way PHP's own display and PHPUnit's
+        // handler do: PHP calls a user handler even for a suppressed
+        // diagnostic, with error_reporting() masked. Without that check this
+        // test asserted a race. `run()` offers the payload with `@fwrite`, and
+        // a child that exits before the write (`exit 9` on a loaded box)
+        // leaves no reader, so the write fails with EPIPE, silently in
+        // production but caught here (red once at load 46 in a K=32 ParaTest
+        // run; reproduced every time by letting the child exit first).
         $caught = [];
         set_error_handler(static function (int $errno, string $message) use (&$caught): bool {
+            if ((error_reporting() & $errno) === 0) {
+                return true;
+            }
             if ($errno !== E_DEPRECATED && $errno !== E_USER_DEPRECATED) {
                 $caught[] = $message;
             }

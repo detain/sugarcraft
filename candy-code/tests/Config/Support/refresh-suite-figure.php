@@ -4,10 +4,14 @@
  * Regenerate tests/Config/Support/suite-figure.json from a REAL full-run JUnit
  * log (E669 maintained-artifact convention).
  *
+ *   bash scripts/paratest.sh --out /tmp/pt-refresh    # from the monorepo root
  *   cd candy-code
- *   php vendor/bin/phpunit -c phpunit.xml --log-junit /tmp/junit.xml
- *   php tests/Config/Support/refresh-suite-figure.php /tmp/junit.xml
+ *   php tests/Config/Support/refresh-suite-figure.php /tmp/pt-refresh/junit.xml
  *   # then update the README.md headline from the printed figures
+ *
+ * ParaTest merges its workers' logs into one <dir>/junit.xml with the same
+ * single top-level <testsuite> a serial `--log-junit` run writes, so either
+ * log passes the gate below; the ParaTest run is the one CI's test cell uses.
  *
  * The root <testsuite> element carries the totals PHPUnit itself reported;
  * nothing here estimates or re-counts — a figure without a generator is the
@@ -101,7 +105,7 @@ $figures = [
 $payload = $figures + [
     'measured_at' => (new DateTimeImmutable('now'))->format('Y-m-d'),
     'php' => PHP_VERSION,
-    'command' => 'php vendor/bin/phpunit -c phpunit.xml --log-junit <file> (cwd=candy-code, linked siblings, monorepo sandbox root)',
+    'command' => 'bash scripts/paratest.sh --out <dir> (cwd=monorepo root, junit at <dir>/junit.xml, linked siblings, monorepo sandbox root)',
     'regenerate' => 'php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=candy-code) — then update the README headline from the same run',
 ];
 

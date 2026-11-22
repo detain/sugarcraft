@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tests\Support\ChildOpcache;
 
 /**
  * rv-tui-5 (fix 4): every `--output-format json` envelope carries a
@@ -302,7 +303,7 @@ NEEDLE;
 
         try {
             foreach (['tools', 'clean'] as $mode) {
-                $process = proc_open([PHP_BINARY, $file, $mode, $root, $dir], [
+                $process = proc_open([PHP_BINARY, ...ChildOpcache::iniArgs(), $file, $mode, $root, $dir], [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
                     2 => ['pipe', 'w'],
@@ -443,7 +444,7 @@ NEEDLE;
 
         try {
             foreach (['carried', 'clean'] as $mode) {
-                $process = proc_open([PHP_BINARY, $file, $mode, $root, $dir, 'agt7b-' . $mode . '-session'], [
+                $process = proc_open([PHP_BINARY, ...ChildOpcache::iniArgs(), $file, $mode, $root, $dir, 'agt7b-' . $mode . '-session'], [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
                     2 => ['pipe', 'w'],
@@ -590,7 +591,7 @@ NEEDLE;
                 $file = $dir . '/agt7b-batch-child-' . $mode . '.php';
                 \file_put_contents($file, $script);
                 $process = \proc_open(
-                    [PHP_BINARY, $file, $mode, $root, $dir, 'agt7b-batch-' . $mode . '-session'],
+                    [PHP_BINARY, ...ChildOpcache::iniArgs(), $file, $mode, $root, $dir, 'agt7b-batch-' . $mode . '-session'],
                     [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                     $pipes,
                     $root,

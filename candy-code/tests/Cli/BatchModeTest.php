@@ -10,6 +10,7 @@ use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Tests\Support\ChildOpcache;
 
 /**
  * BM-1 (RS-DRIVER, owner ruled BUILD — smallest shape): --batch executes
@@ -439,7 +440,7 @@ final class BatchModeTest extends TestCase
         $file = $dir . '/bm-batch-child.php';
         self::assertIsInt(file_put_contents($file, $script));
 
-        $process = proc_open([PHP_BINARY, $file, json_encode($flags, \JSON_THROW_ON_ERROR), $root], [
+        $process = proc_open([PHP_BINARY, ...ChildOpcache::iniArgs(), $file, json_encode($flags, \JSON_THROW_ON_ERROR), $root], [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],

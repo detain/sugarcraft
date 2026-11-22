@@ -131,6 +131,22 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     private const DRIFT_BOUND = 1;
 
     /**
+     * {@see declarationsIn()}'s answers, keyed by visibility alphabet and
+     * source hash.
+     *
+     * @var array<string, list<array{name:string, body:list<string>|null, signature:list<string>|null, problem:string}>>
+     */
+    private static array $declarationsMemo = [];
+
+    public static function tearDownAfterClass(): void
+    {
+        // Hundreds of MB once the whole tree is scanned: not carried into
+        // whatever test class a paratest worker runs next.
+        self::$declarationsMemo = [];
+        parent::tearDownAfterClass();
+    }
+
+    /**
      * Same-named private helpers that ARE one token apart and are meant to be,
      * each with the reason.
      *
@@ -2330,6 +2346,16 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      */
     private static function declarationsIn(string $source, array $visibility): array
     {
+        // Most tests here run driftReport() over the whole tree, each with
+        // one of a few visibility alphabets, so the same (source, alphabet)
+        // pair was tokenized and scanned about ten times per run. The scan
+        // reads nothing but its two arguments, so the answer is kept for the
+        // class's lifetime ({@see tearDownAfterClass()} drops it).
+        $key = \implode(',', $visibility) . ':' . \md5($source);
+        if (isset(self::$declarationsMemo[$key])) {
+            return self::$declarationsMemo[$key];
+        }
+
         $tokens = \token_get_all($source);
         $count = \count($tokens);
         $found = [];
@@ -2460,7 +2486,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             ];
         }
 
-        return $found;
+        return self::$declarationsMemo[$key] = $found;
     }
 
     /**
@@ -2851,6 +2877,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'HEAVY_CHARS' => 'The resume-cost family pins one heavy-transcript size (the design example 336_000 chars ~ 84k tokens) across the Chat guard suite and the Host estimate suite; the figure is the class of history both doors judge, so a re-roll of the design example moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure, foreign pick f4e747cf0 half).',
         'RFC_POINT' => 'The three Web Push suites (subscription store, revoke rotation, credential prune) all use the one public P-256 point from the RFC 8291 sample: a published protocol test vector, not a per-suite identity, so a re-roll would move the trio together.',
         'RFC_AUTH' => 'The auth secret paired with RFC_POINT in the same RFC 8291 sample, shared by the same three Web Push suites for the same reason.',
+        'REQUEST_TIMEOUT_SECONDS' => 'The two LSP stderr-drain suites (the idle-drain suite and the dispatch-pump suite) connect fixtures that never speak LSP, so the timeout bounds only disconnect()\'s unanswered shutdown request; one value keeps both rows short, and a change moves the pair together. The stdin-wedge suite\'s 10 s exchange budget is the drift polity.',
     ];
 
     /**
@@ -2895,6 +2922,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'NOW' => 'Two unrelated fixed clocks: a Unix timestamp for the model-metadata cache age, a small float for the agent line\'s elapsed time.',
         'CAPTION' => 'The tool-result wire siblings each feed their own leg\'s caption text (an image caption against a PDF caption) as the tool_result payload; the values differ because the leg under test does, and the shared VERTEX_MODEL pair lives on the duplication map.',
         'T0' => 'Two unrelated nominal clocks that share an abbreviation: the resume-cost suite pins 1_700_000_000 as an int because its value is fed to DateTimeImmutable("…") for transcript-age arithmetic, while the away-tracker suite pins 1_800_000_000.0 as a float because AwayTracker::focusLost()/focusGained() take float instants and its pins ride sub-second offsets. Neither file reads the other, and the int/float spelling is each suite\'s own time type rather than one copy fixed in one place, so consolidating would couple two clocks that re-roll independently (adjudicated 2026-10-31, master guard-cure t677, after the C-TUI-3.g weld landed the away-tracker file beside the older estimate suite).',
+        'REQUEST_TIMEOUT_SECONDS' => 'The stdin-wedge suite gives fixtures that do answer a generous 10 s exchange budget, so a red row is failing on the drain; the stderr-drain pair\'s 1 s bounds only an unanswered shutdown request. Different clocks for different jobs; the identical pair lives on the duplication map.',
     ];
 
     /**

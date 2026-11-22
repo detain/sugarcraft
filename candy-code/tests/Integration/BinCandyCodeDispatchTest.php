@@ -12,6 +12,7 @@ use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Cli\ParsedArgs;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Tests\Support\ChildOpcache;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -2213,7 +2214,9 @@ final class BinCandyCodeDispatchTest extends TestCase
     private function runBin(array $args, ?array $env = null): array
     {
         $root = \dirname(__DIR__, 2);
-        $command = 'exec ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($root . '/bin/candy-code');
+        // ~140 launches of the same checkout: reuse what the first one compiled.
+        $command = 'exec ' . \escapeshellarg(\PHP_BINARY) . ' ' . ChildOpcache::iniArgsForShell()
+            . ' ' . \escapeshellarg($root . '/bin/candy-code');
         foreach ($args as $arg) {
             $command .= ' ' . \escapeshellarg($arg);
         }

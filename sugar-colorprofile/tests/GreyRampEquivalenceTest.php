@@ -24,102 +24,47 @@ use SugarCraft\ColorProfile\Color;
  * outside the documented cube-midpoint set.
  *
  * The reference table is DERIVED from Color::fromAnsi256Index() itself, so
- * a table change cannot mask an encoder regression. Sweeps are strided to
- * keep this file's runtime well under a minute; the exhaustive 16,777,216-
- * color sweep is opt-in via COLORPROFILE_FULL_SWEEP=1 and tagged @group
- * slow so default runs skip it without hiding the coverage claim.
+ * a table change cannot mask an encoder regression (the oracle lives in
+ * GreyRampBruteForce). The two dense sweeps, the stride-4 cube and every
+ * grey-ramp midpoint color, run as slice files (GreyRampStrideSweepSlice*Test,
+ * GreyRampMidpointSweepSlice*Test) so ParaTest can spread them over workers;
+ * this file pins that the slices still partition them. The exhaustive
+ * 16,777,216-color sweep is opt-in via COLORPROFILE_FULL_SWEEP=1 and tagged
+ * @group slow so default runs skip it without hiding the coverage claim.
  */
 final class GreyRampEquivalenceTest extends TestCase
 {
-    /** Channel values whose exact cube tie SC resolves UP; the index equality leg is suspended there. */
-    private const CUBE_MIDPOINTS = [115, 155, 195, 235];
-
-    /** @var list<array{int,int,int}> squared-RGB reference slots 16..255 */
-    private static array $slotRgb = [];
-
-    /** @return list<array{int,int,int}> */
-    private static function slotTable(): array
-    {
-        if (self::$slotRgb === []) {
-            for ($i = 16; $i <= 255; $i++) {
-                $p = Color::fromAnsi256Index($i);
-                self::$slotRgb[] = [$p->r, $p->g, $p->b];
-            }
-        }
-        return self::$slotRgb;
-    }
-
-    /** @return array{int,int} [lowest-index winner, minimal squared-RGB distance] */
-    private static function brute(int $r, int $g, int $b): array
-    {
-        $best = 16;
-        $bestDist = -1;
-        foreach (self::slotTable() as $slot => [$pr, $pg, $pb]) {
-            $d = ($r - $pr) ** 2 + ($g - $pg) ** 2 + ($b - $pb) ** 2;
-            if ($bestDist < 0 || $d < $bestDist) {
-                $bestDist = $d;
-                $best = 16 + $slot;
-            }
-        }
-        return [$best, $bestDist];
-    }
+    use GreyRampBruteForce;
 
     /**
-     * One sampled color: distance is always minimal; the index matches the
-     * brute lowest-index winner unless the color sits on a cube midpoint.
+     * The two dense sweeps moved to slice files (GreyRampMidpointSweepCase,
+     * GreyRampStrideSweepCase). This pins that the slices still cover exactly
+     * what the single-file sweeps did: every grey-ramp midpoint sum
+     * 39, 69, …, 699 and every stride-4 red value 0, 4, …, 252, each once.
      */
-    private function assertColorAgreesWithBruteForce(int $r, int $g, int $b): void
+    public function testTheSweepSlicesPartitionTheOriginalSweeps(): void
     {
-        $enc = (new Color($r, $g, $b))->toAnsi256Index();
-        $p = Color::fromAnsi256Index($enc);
-        $encDist = ($r - $p->r) ** 2 + ($g - $p->g) ** 2 + ($b - $p->b) ** 2;
-        [$idx, $dist] = self::brute($r, $g, $b);
-
-        self::assertSame($dist, $encDist, "encoder distance not minimal at ({$r},{$g},{$b})");
-        if (!in_array($r, self::CUBE_MIDPOINTS, true)
-            && !in_array($g, self::CUBE_MIDPOINTS, true)
-            && !in_array($b, self::CUBE_MIDPOINTS, true)) {
-            self::assertSame($idx, $enc, "encoder index disagrees with brute force at ({$r},{$g},{$b})");
+        $sums = [];
+        for ($slice = 0; $slice < GreyRampMidpointSweepCase::SLICES; $slice++) {
+            self::assertTrue(
+                class_exists(__NAMESPACE__ . "\\GreyRampMidpointSweepSlice{$slice}Test"),
+                "midpoint slice {$slice} has no test file",
+            );
+            array_push($sums, ...GreyRampMidpointSweepCase::sumsOf($slice));
         }
-    }
+        sort($sums);
+        self::assertSame(range(39, 699, 30), $sums, 'midpoint slices must cover every ramp midpoint sum exactly once');
 
-    /**
-     * Stride-4 sweep of the whole RGB cube (262,144 colors). No stride-4
-     * channel hits an odd cube midpoint and no stride-4 sum hits a grey ramp
-     * midpoint, so the full 262,144-color set asserts the strong claim.
-     */
-    public function testStrideSweepAgreesWithBruteForceOnEveryColor(): void
-    {
-        $checked = 0;
-        for ($r = 0; $r <= 252; $r += 4) {
-            for ($g = 0; $g <= 252; $g += 4) {
-                for ($b = 0; $b <= 252; $b += 4) {
-                    $this->assertColorAgreesWithBruteForce($r, $g, $b);
-                    $checked++;
-                }
-            }
+        $reds = [];
+        for ($slice = 0; $slice < GreyRampStrideSweepCase::SLICES; $slice++) {
+            self::assertTrue(
+                class_exists(__NAMESPACE__ . "\\GreyRampStrideSweepSlice{$slice}Test"),
+                "stride slice {$slice} has no test file",
+            );
+            array_push($reds, ...GreyRampStrideSweepCase::redsOf($slice));
         }
-        self::assertSame(262144, $checked, 'stride sweep must cover 64^3 colors');
-    }
-
-    /**
-     * Dense sweep of every color on a grey-ramp midpoint sum (avg = 13,
-     * 23, …, 233 → r+g+b = 39, 69, …, 699). This is the exact set the old
-     * round-up pick mis-binned; the probe must land the lower bin, i.e. the
-     * brute-force lowest-index winner, every time.
-     */
-    public function testEveryGreyRampMidpointColorResolvesToTheBruteForceBin(): void
-    {
-        $checked = 0;
-        for ($sum = 39; $sum <= 699; $sum += 30) {
-            for ($r = max(0, $sum - 510); $r <= min(255, $sum); $r++) {
-                for ($g = max(0, $sum - $r - 255); $g <= min(255, $sum - $r); $g++) {
-                    $this->assertColorAgreesWithBruteForce($r, $g, $sum - $r - $g);
-                    $checked++;
-                }
-            }
-        }
-        self::assertGreaterThan(15000, $checked, 'midpoint band sweep must be dense');
+        sort($reds);
+        self::assertSame(range(0, 252, 4), $reds, 'stride slices must cover every stride-4 red value exactly once');
     }
 
     /**

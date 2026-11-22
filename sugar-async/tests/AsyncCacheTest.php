@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncCache;
+use SugarCraft\Async\Tests\Support\FakeClock;
 
 use function React\Promise\reject;
 use function React\Promise\resolve;

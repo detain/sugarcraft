@@ -41,7 +41,8 @@
         "ext-ssh2": "Lets User::generateKeyPair mint account keypairs in-process; without it, key generation needs ssh-keygen on PATH. It plays no part in authentication — the SSH dispatcher answers AccessControl and stored keys alone (finding 099)."
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "brianium/paratest": "~7.4.9"
     },
     "autoload": {
         "psr-4": {

@@ -115,6 +115,24 @@ final class CommandRegistry
             return $spec->name;
         }
 
+        return self::$derivedLabels[$spec->description] ??= self::labelFromDescription($spec->description);
+    }
+
+    /**
+     * Derived labels by the description they came from. The F10 menu
+     * rebuilds its tree on every frame and derives each row's label again,
+     * which was about 9% of a shell frame (profiled on ShellContrastTest).
+     * The derivation reads nothing but the text, so the text is the whole
+     * key: a locale switch brings new descriptions, not stale labels, and
+     * the map holds one entry per built-in description seen.
+     *
+     * @var array<string, string>
+     */
+    private static array $derivedLabels = [];
+
+    /** {@see derivedMenuLabel()}'s derivation, from the description alone. */
+    private static function labelFromDescription(string $description): string
+    {
         // First clause: the sentence before the first ". ", "! " or "? " (a
         // word-internal period has no trailing space, so "PNG's" survives), or
         // the first line. Drop one trailing parenthetical — it is a usage hint,
@@ -123,7 +141,7 @@ final class CommandRegistry
         // it collides `/permissions` ("…session's permission mode…") with
         // `/budget` ("…session's reported spend…") at the fit budget, where the
         // first row would win dispatch for both.
-        $clause = preg_split('/[.!?]\s+|\n/u', $spec->description, 2)[0] ?? $spec->description;
+        $clause = preg_split('/[.!?]\s+|\n/u', $description, 2)[0] ?? $description;
         $clause = \trim((string) preg_replace('/\s*\([^()]*\)\s*$/u', '', $clause));
         $clause = str_replace("this session's ", '', $clause);
 
@@ -211,13 +229,7 @@ final class CommandRegistry
      */
     public static function forPaletteAction(PaletteAction $action): ?CommandSpec
     {
-        foreach (self::all() as $spec) {
-            if ($spec->paletteAction === $action) {
-                return $spec;
-            }
-        }
-
-        return null;
+        return BuiltInCommands::forPaletteAction($action);
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Support;
 
+use PHPUnit\Event\EventFacadeIsSealedException;
 use PHPUnit\Event\Facade as EventFacade;
 use PHPUnit\Event\Test\Finished;
 use PHPUnit\Event\Test\FinishedSubscriber;
@@ -45,20 +46,31 @@ final class SharedLoopResidueGuard
         if (self::$installed) {
             return;
         }
-        self::$installed = true;
 
-        EventFacade::instance()->registerSubscriber(new class implements FinishedSubscriber {
-            public function notify(Finished $event): void
-            {
-                SharedLoopResidueGuard::check($event->test()->id());
-            }
-        });
-        EventFacade::instance()->registerSubscriber(new class implements ExecutionFinishedSubscriber {
-            public function notify(ExecutionFinished $event): void
-            {
-                SharedLoopResidueGuard::report();
-            }
-        });
+        // ParaTest's parent process seals the facade BEFORE it includes this
+        // bootstrap (WrapperRunner::run() seals, then SuiteLoader loads the
+        // bootstrap to discover tests). That process only builds the suite and
+        // never runs a test, so there is nothing for the guard to watch there;
+        // the workers load the bootstrap before sealing and arm it normally.
+        // Only the sealed case is swallowed: any other failure here is a real
+        // bug in the guard and must stay loud.
+        try {
+            EventFacade::instance()->registerSubscriber(new class implements FinishedSubscriber {
+                public function notify(Finished $event): void
+                {
+                    SharedLoopResidueGuard::check($event->test()->id());
+                }
+            });
+            EventFacade::instance()->registerSubscriber(new class implements ExecutionFinishedSubscriber {
+                public function notify(ExecutionFinished $event): void
+                {
+                    SharedLoopResidueGuard::report();
+                }
+            });
+        } catch (EventFacadeIsSealedException) {
+            return;
+        }
+        self::$installed = true;
 
         \register_shutdown_function(static function (): void {
             if (self::$offenders !== [] && \getenv('CANDY_CODE_ALLOW_LOOP_RESIDUE') !== '1') {

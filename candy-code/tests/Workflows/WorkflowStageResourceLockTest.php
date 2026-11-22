@@ -304,7 +304,12 @@ final class WorkflowStageResourceLockTest extends TestCase
                 if (!proc_get_status($process)['running']) {
                     self::fail('the lock holder exited before taking the lock: ' . (string) @file_get_contents($this->tempDir . '/holder.out'));
                 }
-                self::assertLessThan($deadline, microtime(true), 'the lock holder never announced itself');
+                // fail(), not an assert: this runs once per poll, and an assertion here
+                // would make the test's assertion count depend on how many polls the
+                // child took (the pinned suite figure counts assertions exactly).
+                if (microtime(true) >= $deadline) {
+                    self::fail('the lock holder never announced itself');
+                }
                 usleep(25_000);
             }
 

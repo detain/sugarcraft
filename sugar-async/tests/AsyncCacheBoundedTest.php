@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncCache;
+use SugarCraft\Async\Tests\Support\FakeClock;
 
 use function React\Promise\resolve;
 
@@ -232,22 +233,5 @@ final class AsyncCacheBoundedTest extends TestCase
             $outcome = $value;
         });
         self::assertSame($expected, $outcome);
-    }
-}
-
-final class FakeClock
-{
-    public function __construct(private float $now = 1000.0)
-    {
-    }
-
-    public function __invoke(): float
-    {
-        return $this->now;
-    }
-
-    public function advance(float $seconds): void
-    {
-        $this->now += $seconds;
     }
 }

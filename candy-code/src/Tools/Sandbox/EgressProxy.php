@@ -89,7 +89,9 @@ final class EgressProxy
 
         $parentPid = function_exists('posix_getppid') ? posix_getppid() : 0;
         $stdin = defined('STDIN') ? STDIN : null;
+        $stdinWasBlocking = false;
         if (is_resource($stdin)) {
+            $stdinWasBlocking = (bool) (stream_get_meta_data($stdin)['blocked'] ?? false);
             @stream_set_blocking($stdin, false);
         }
 
@@ -116,12 +118,32 @@ final class EgressProxy
             $loop->stop();
         });
 
-        if (function_exists('pcntl_signal')) {
-            @pcntl_signal(SIGTERM, $close);
-            @pcntl_signal(SIGHUP, $close);
+        // What this call changes in its process is put back when the loop
+        // stops. EgressProxyProcess gives serve() a process of its own, but
+        // the injected-loop seam runs it inside a caller that carries on, and
+        // a SIGTERM handler left installed there is inherited by everything
+        // that caller forks later, which then survives SIGTERM. Measured
+        // 2026-11-21: AgentWorkerPool's cancel tests got `completed` back
+        // from workers forked in a ParaTest worker that had run
+        // EgressProxyTest first.
+        $priorHandlers = [];
+        if (function_exists('pcntl_signal') && function_exists('pcntl_signal_get_handler')) {
+            foreach ([SIGTERM, SIGHUP] as $signal) {
+                $priorHandlers[$signal] = pcntl_signal_get_handler($signal);
+                @pcntl_signal($signal, $close);
+            }
         }
 
-        $loop->run();
+        try {
+            $loop->run();
+        } finally {
+            foreach ($priorHandlers as $signal => $handler) {
+                @pcntl_signal($signal, $handler);
+            }
+            if ($stdinWasBlocking && is_resource($stdin)) {
+                @stream_set_blocking($stdin, true);
+            }
+        }
         return 0;
     }
 

@@ -46,6 +46,11 @@ final class ChildRunLaunchTest extends TestCase
     /**
      * Run the loop until $promise settles or $budget seconds pass, then return
      * the result. A rejection is rethrown; a budget overrun fails the test.
+     *
+     * A promise launch() already settled (a spawn failure, an onSpawn throw) skips
+     * the loop: its callbacks ran before run(), where stop() is lost, so the loop
+     * would sit out the whole budget. A test that needs the loop afterwards, such
+     * as for the abandoned child's reap timer, drives it itself.
      */
     private function settle(LoopInterface $loop, PromiseInterface $promise, float $budget = 10.0): ChildResult
     {
@@ -61,12 +66,14 @@ final class ChildRunLaunchTest extends TestCase
                 $loop->stop();
             },
         );
-        $guard = $loop->addTimer($budget, static function () use ($loop): void {
-            $loop->stop();
-        });
+        if ($result === null && $error === null) {
+            $guard = $loop->addTimer($budget, static function () use ($loop): void {
+                $loop->stop();
+            });
 
-        $loop->run();
-        $loop->cancelTimer($guard);
+            $loop->run();
+            $loop->cancelTimer($guard);
+        }
 
         if ($error !== null) {
             throw $error;
@@ -516,10 +523,15 @@ final class ChildRunLaunchTest extends TestCase
                 $rejected = $e;
                 $loop->stop();
             });
-        $loop->addTimer(5.0, static function () use ($loop): void {
-            $loop->stop();
-        });
-        $loop->run();
+        // An unstartable program rejects inside launch(), before run(): running the
+        // loop then would only sit out the 5 s guard.
+        if ($rejected === null) {
+            $guard = $loop->addTimer(5.0, static function () use ($loop): void {
+                $loop->stop();
+            });
+            $loop->run();
+            $loop->cancelTimer($guard);
+        }
 
         $this->assertInstanceOf(\RuntimeException::class, $rejected);
     }
@@ -1104,6 +1116,7 @@ final class ChildRunLaunchTest extends TestCase
         }
 
         $this->assertGreaterThan(0, $pid);
+        $this->runUntil($loop, static fn (): bool => !\posix_kill($pid, 0));
         $this->assertFalse(\posix_kill($pid, 0), 'the child must be killed and reaped, not left running');
     }
 

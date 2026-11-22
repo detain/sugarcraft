@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Tests\Renderer;
 
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\Color;
 use SugarCraft\ColorProfile\ColorDistance;
@@ -26,79 +25,7 @@ use SugarCraft\Image\TmuxPassthroughDecorator;
  */
 final class SixelStreamTest extends TestCase
 {
-    private const ESC = "\x1b";
-
-    /**
-     * Collect every `$write` argument from a band stream in order.
-     *
-     * @return list<string>
-     */
-    private function collect(SixelRenderer $renderer, ImageSource $image, int $width, ?int $height = null): array
-    {
-        $chunks = [];
-        $renderer->encodeBandStream($image, $width, static function (string $chunk) use (&$chunks): void {
-            $chunks[] = $chunk;
-        }, $height);
-
-        return $chunks;
-    }
-
-    /**
-     * @return array<string, array{0: SixelRenderer, 1: string, 2: int, 3: int|null}>
-     */
-    public static function corpus(): array
-    {
-        $plain = new SixelRenderer();
-        $atkinson = new SixelRenderer(Dither::Atkinson);
-        $ordered = new SixelRenderer(Dither::FloydSteinberg);
-        $fewColors = new SixelRenderer(Dither::None, 16);
-        $truecolorish = new SixelRenderer(Dither::Stucki, 256);
-        $tallCells = new SixelRenderer(Dither::None, 256, 10, 20);
-
-        return [
-            // width 8 → pixelW 80 (non-multiple of 6), height 4 → partial last band.
-            'flat red, default cells' => [$plain, __DIR__ . '/../fixtures/8x4_red.png', 8, 4],
-            'opaque noise, truecolor dither' => [$truecolorish, __DIR__ . '/../fixtures/500x400_noise.png', 30, 24],
-            'transparent hole, atkinson' => [$atkinson, __DIR__ . '/../fixtures/2x2_transparent_halfblock.png', 12, null],
-            'few colours, no dither' => [$fewColors, __DIR__ . '/../fixtures/500x400_noise.png', 17, null],
-            'aspect-derived height' => [$ordered, __DIR__ . '/../fixtures/8x4_red.png', 13, null],
-            'tall cell box' => [$tallCells, __DIR__ . '/../fixtures/500x400_noise.png', 9, 7],
-        ];
-    }
-
-    #[DataProvider('corpus')]
-    public function testStreamConcatenationEqualsRender(SixelRenderer $renderer, string $fixture, int $width, ?int $height): void
-    {
-        $image = ImageSource::fromFile($fixture);
-        $chunks = $this->collect($renderer, $image, $width, $height);
-
-        $this->assertSame(
-            $renderer->render($image, $width, $height),
-            implode('', $chunks),
-            'joining every streamed fragment must equal the one-shot render',
-        );
-    }
-
-    #[DataProvider('corpus')]
-    public function testStreamIsActuallyChunked(SixelRenderer $renderer, string $fixture, int $width, ?int $height): void
-    {
-        $image = ImageSource::fromFile($fixture);
-        $chunks = $this->collect($renderer, $image, $width, $height);
-
-        // header + at least one band + terminator, i.e. genuinely fragmented.
-        $this->assertGreaterThan(2, count($chunks), 'a multi-band image must produce several writes');
-    }
-
-    #[DataProvider('corpus')]
-    public function testHeaderFirstAndTerminatorLast(SixelRenderer $renderer, string $fixture, int $width, ?int $height): void
-    {
-        $image = ImageSource::fromFile($fixture);
-        $chunks = $this->collect($renderer, $image, $width, $height);
-
-        $this->assertStringStartsWith(self::ESC . 'P', $chunks[0], 'the first fragment opens the DCS');
-        $this->assertStringContainsString('q"', $chunks[0], 'raster attributes ride in the header fragment');
-        $this->assertSame(self::ESC . '\\', end($chunks), 'the final fragment is the string terminator');
-    }
+    use SixelStreamFixtures;
 
     public function testBandCountMatchesPixelCanvasHeight(): void
     {
@@ -592,33 +519,6 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * Arming the dial on a sparse census must NOT change bytes — the
-     * router sends samples ≤ budget back through median-cut, so the opt-in
-     * is inert without merge mass. On a dense census (4096 noise samples vs
-     * 256 colours) the PNN path fires and replaces the median-cut palette.
-     */
-    public function testQualityArmedRoutesOnlyWhenTheCensusOutweighsTheBudget(): void
-    {
-        $flat = ImageSource::fromFile(__DIR__ . '/../fixtures/8x4_red.png');
-        $armedFlat = (new SixelRenderer())->withQuality(5)->render($flat, 8, 4);
-        $this->assertStringStartsWith(self::ESC . 'P', $armedFlat);
-        $this->assertSame(
-            sha1($armedFlat),
-            'd883ac34846a2a92d12e03f16e4f793e354a4ad9',
-            'quality-armed sparse render keeps the median-cut bytes',
-        );
-
-        $noise = ImageSource::fromFile(__DIR__ . '/../fixtures/500x400_noise.png');
-        $median = (new SixelRenderer(Dither::Stucki, 256))->render($noise, 30, 24);
-        $pnn = (new SixelRenderer(Dither::Stucki, 256))->withQuality(5)->render($noise, 30, 24);
-
-        $this->assertStringStartsWith(self::ESC . 'P', $pnn);
-        $this->assertSame(self::ESC . '\\', substr($pnn, -2), 'the PNN render is a well-formed DCS');
-        $this->assertNotSame($median, $pnn, 'the dense census must route to the PNN palette');
-        $this->assertSame(sha1($median), 'c79e84bfb8cfee4e0b240e73f62a5908b84f98c4', 'the unarmed render keeps its base bytes');
-    }
-
-    /**
      * Every wither carries the rung, in both stacking orders, and an
      * out-of-range rung is refused at the boundary (constructor and wither).
      */
@@ -647,48 +547,6 @@ final class SixelStreamTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         (new SixelRenderer())->withQuality(10);
-    }
-
-    /**
-     * Representative render corpus with base-tree digests (captured
-     * BEFORE the band-diff landed, stream == render on every row). The
-     * changed-columns bitset + PaletteIndex palette-hash memo are an
-     * optimisation only: any byte moving here is a visual regression, not
-     * a speed-up. Covers holes (transparent Atkinson), trailing zero runs
-     * (tall-cells None), full-width masks (flat red), 16-colour budgets,
-     * and both frozen gradient digests.
-     *
-     * 2026-11-04: the three null-height entries were re-pinned for the
-     * cell-aspect correctness fix (auto height now divides by the cell aspect
-     * too — {@see \SugarCraft\Image\CellGeometry}). Movement is geometry-only:
-     * each entry reproduces its pre-fix digest when the old auto height is
-     * passed explicitly. The five explicit-box entries never moved.
-     *
-     * @return array<string, array{0: string, 1: string, 2: int, 3: int|null, 4: string, 5: int}>
-     */
-    public static function bandDiffCorpus(): array
-    {
-        return [
-            'flat red, default cells' => ['d883ac34846a2a92d12e03f16e4f793e354a4ad9', '8x4_red.png', 8, 4, 'floyd-steinberg', 256],
-            'opaque noise, truecolor dither' => ['c79e84bfb8cfee4e0b240e73f62a5908b84f98c4', '500x400_noise.png', 30, 24, 'stucki', 256],
-            'transparent hole, atkinson' => ['6d46a90747cb4e053a2be46f711d8870a7250967', '2x2_transparent_halfblock.png', 12, null, 'atkinson', 256],
-            'few colours, no dither' => ['0d1c5ecba4b05d7b219a045c5d29634b9e85566f', '500x400_noise.png', 17, null, 'none', 16],
-            'aspect-derived height' => ['65e3145d376ef1d23c6d6c3a5ca6f6346819bf28', '8x4_red.png', 13, null, 'floyd-steinberg', 256],
-            'tall cell box' => ['aa3e43fa4ad1f7e34db6685a683f23adb1af9464', '500x400_noise.png', 9, 7, 'none', 256],
-            'gradient, no dither' => ['c65c8465e501645f8eb6c76bb46a97cf38e948d0', 'gradient_64x64.png', 16, 12, 'none', 256],
-            'gradient, floyd-steinberg' => ['47d7e3d7b2e1a1a3e21e363f836d6d03410987f8', 'gradient_64x64.png', 16, 12, 'floyd-steinberg', 256],
-        ];
-    }
-
-    #[DataProvider('bandDiffCorpus')]
-    public function testBandDiffGuardKeepsRepresentativeBytesFrozen(
-        string $digest, string $file, int $width, ?int $height, string $dither, int $maxColors,
-    ): void {
-        $renderer = new SixelRenderer(Dither::from($dither), $maxColors);
-        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/' . $file);
-
-        $this->assertSame($digest, sha1($renderer->render($image, $width, $height)), $file . ' ' . $dither);
-        $this->assertSame($digest, sha1(implode('', $this->collect($renderer, $image, $width, $height))), 'streamed concat rides the same bytes');
     }
 
     /**

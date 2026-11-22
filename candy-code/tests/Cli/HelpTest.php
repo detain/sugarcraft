@@ -11,7 +11,6 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Config\EnvRosterDriftTest;
-use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
 use SugarCraft\Code\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
@@ -204,7 +203,7 @@ final class HelpTest extends TestCase
      */
     private static function liveRoster(): array
     {
-        $scanner = new EnvReadScanner(EnvRosterDriftTest::sources());
+        $scanner = EnvRosterDriftTest::realScanner();
 
         $names = array_merge(array_keys($scanner->reads()), array_keys($scanner->exported()));
         $names = array_values(array_unique($names));

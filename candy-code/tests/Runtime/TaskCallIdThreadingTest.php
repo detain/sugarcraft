@@ -71,9 +71,13 @@ final class TaskCallIdThreadingTest extends TestCase
 
         self::assertCount(1, $messages);
         self::assertNotSame([], $beats, 'the run must report at least its start and finish');
-        foreach ($beats as $beat) {
-            self::assertSame('call_task_7', $beat->parentCallId, sprintf('a %s beat lost its Task call', $beat->op));
-        }
+        // One assertion over every beat: how many progress beats a run reports
+        // depends on timing, and the pinned suite figure counts assertions.
+        $lost = array_values(array_map(
+            static fn (SubAgentActivity $beat): string => $beat->op,
+            array_filter($beats, static fn (SubAgentActivity $beat): bool => $beat->parentCallId !== 'call_task_7'),
+        ));
+        self::assertSame([], $lost, 'these beats lost their Task call');
     }
 
     public function testTheCallIdOverwritesAnyTheModelSentAndReachesOnlyAToolThatAsksForIt(): void

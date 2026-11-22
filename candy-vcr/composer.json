@@ -46,7 +46,8 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
         "sugarcraft/sugar-testing": "dev-master",
-        "symfony/yaml": "^6.4 || ^7.0"
+        "symfony/yaml": "^6.4 || ^7.0",
+        "brianium/paratest": "~7.4.9"
     },
     "suggest": {
         "ext-gd": "Required by the default gd rasterizer backend (render-tape / render-batch GIF output); TapeToGif::new() fails loud when it is absent.",

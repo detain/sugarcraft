@@ -98,6 +98,21 @@ final class StartupSummary
     private static array $gathered = [];
 
     /**
+     * The version string, read once per process ({@see cheapFacts()}).
+     *
+     * WHY MEMOIZED: on a development checkout {@see Help::versionString()}
+     * runs two bounded git children (`rev-parse` and `status`), and
+     * cheapFacts() runs on EVERY paint, ahead of the frame memo, so even a
+     * memoized frame paid for both. Profiled on PaletteScrollAnchorTest, that
+     * was about a quarter of a frame. One read per process is exact for what
+     * the line reports: the code that runs only changes when the process is
+     * replaced (a self-update restarts it), the same reasoning as the status
+     * line's memo in HandlesRunControl::statusLineStdin(). Null until a read
+     * succeeds, so a read that threw is retried on the next paint.
+     */
+    private static ?string $version = null;
+
+    /**
      * The painted block: the summary rows, each one faint (ISS-096's lesson —
      * the placeholder's mood was always "quiet context", which is what a
      * Style spells, not what literal delimiters fake).
@@ -292,15 +307,17 @@ final class StartupSummary
     {
         self::$cache = [];
         self::$gathered = [];
+        self::$version = null;
     }
 
     /**
-     * The facts a frame can settle without touching git or the disk scan:
-     * the Composer version, the live backend's provider and model, the
-     * permission mode, the working directory, and the conversation's tip
-     * slot. Read on the paint path on purpose — every one is an in-process
-     * value this process already holds (or a const version string), so
-     * {@see render()} never stalls, gathered bag or not.
+     * The facts a frame can settle without touching the disk scan: the
+     * version, the live backend's provider and model, the permission mode,
+     * the working directory, and the conversation's tip slot. Read on the
+     * paint path on purpose — every one is an in-process value this process
+     * already holds, so {@see render()} never stalls, gathered bag or not.
+     * The version is the one that is not free: a development checkout asks
+     * git for it, so it is read once and kept ({@see self::$version}).
      *
      * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, tipIndex: int, update: ?string}
      */
@@ -309,7 +326,7 @@ final class StartupSummary
         $root = $chat->projectRoot();
 
         return [
-            'version' => self::tryFact(static fn(): string => Help::versionString()) ?? 'unknown',
+            'version' => (self::$version ??= self::tryFact(static fn(): string => Help::versionString())) ?? 'unknown',
             'provider' => $provider,
             'model' => $model,
             'mode' => $mode,

@@ -221,6 +221,7 @@ reproduce.
     php tools/check-path-repos.php --unused
     php tools/check-child-lifetimes.php
     php tools/check-one-type-per-file.php
+    php tools/check-cross-file-test-types.php
     php tools/check-lib-licenses.php
     php tools/check-path-repos.php --fix --strict-closure \
       && php tools/check-path-repos.php --strict-closure \

@@ -1397,7 +1397,7 @@ only through the settings layers like every other key.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`candy-code serve`'s HTTP + WebSocket transport), twenty SugarCraft siblings: `sugar-core` (the MVC-style runtime —
+`candy-code serve`'s HTTP + WebSocket transport), twenty-three SugarCraft siblings: `sugar-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `sugar-forms`, `sugar-style` (styles),
 `sugar-markdown`, `sugar-fuzzy`, `sugar-overlay`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
@@ -1408,8 +1408,14 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 (the pseudo-terminal interactive tool output is captured through),
 `sugar-async` (the shared retry/backoff and cancellation primitives),
 `sugar-ansi-parser` (the escape-sequence parser `pty_run` reads output with),
-`sugar-ignore` (the gitignore-style matcher behind `Tools\IgnoreRules`) and `sugar-releases` (the release selection and update engine
-behind `self-update` and the launch-time update notice).
+`sugar-ignore` (the gitignore-style matcher behind `Tools\IgnoreRules`),
+`sugar-releases` (the release selection and update engine behind `self-update`
+and the launch-time update notice), `sugar-plugins` (the plugin contracts, host
+services and prompt fence the plugin bundles run against),
+`sugar-serve-protocol` (the `candy-code.v1` wire contract that `candy-code serve`
+and its clients share) and `sugar-colorprofile` (the detection chain
+sugar-core's `ColorProfile::detect()` hands off to when it is installed, so
+it is required although `src/` never names it).
 
 `ext-sqlite3` is declared, and `src/` constructs it in two places: `Agents\TaskList`'s task database and `doctor`'s in-memory extension probe. The session store reaches SQLite through **PDO**; `doctor` reports `pdo_sqlite` and `ext-sqlite3` separately because the task list does not go through PDO.
 

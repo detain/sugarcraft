@@ -13,13 +13,31 @@ use SugarCraft\Pty\Contract\Termios;
  * tests can swap out the libc / stty surface entirely. When null
  * (production path), enableRawMode() still resolves via
  * TermiosFactory just like before.
+ *
+ * Every backend here gets a private stream, never `\STDIN`: an injected
+ * Termios skips the isatty check, so enableRawMode() really does
+ * `stream_set_blocking($stream, false)`, and the hung-up and failed-restore
+ * paths never get to set it back. O_NONBLOCK lives on the open file
+ * description, so on `\STDIN` that outlived the test: under ParaTest, STDIN is
+ * the worker's command pipe, the next read came back empty, and the worker
+ * exited 0 with the crash blamed on whichever file it was handed next
+ * (PosixBackendTest, run right after this file at -p 1).
  */
 final class PosixBackendInjectedTermiosTest extends TestCase
 {
+    /** @return resource */
+    private function privateStream()
+    {
+        $stream = \fopen('php://memory', 'r+b');
+        $this->assertIsResource($stream);
+
+        return $stream;
+    }
+
     public function testEnableRawModeUsesInjectedTermios(): void
     {
         $stub = new SpyTermios();
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
 
         $backend->enableRawMode();
 
@@ -50,7 +68,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
     public function testRestoreReplaysTheSavedSnapshot(): void
     {
         $stub = new SpyTermios();
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
 
         $backend->enableRawMode();
         $appliedAfterRaw = $stub->raw->applyCalls;
@@ -83,7 +101,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
     public function testEnableRawModeIsIdempotent(): void
     {
         $stub = new SpyTermios();
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
 
         $backend->enableRawMode();
         $backend->enableRawMode();
@@ -102,7 +120,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
     {
         $stub = new SpyTermios();
         $stub->hungUp = true;
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
         $backend->enableRawMode();
 
         $backend->restore();
@@ -118,7 +136,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
     {
         $stub = new SpyTermios();
         $stub->failRestore = true;
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
         $backend->enableRawMode();
 
         try {
@@ -134,7 +152,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
     public function testRestoreWithoutPriorEnableIsNoop(): void
     {
         $stub = new SpyTermios();
-        $backend = new PosixBackend(\STDIN, $stub);
+        $backend = new PosixBackend($this->privateStream(), $stub);
 
         $backend->restore();
 
