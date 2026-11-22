@@ -283,4 +283,20 @@ final class PumpOptionsTest extends TestCase
         $this->expectException(\TypeError::class);
         new PumpOptions(4096, 50000, 0.5, 0.3, "\x04", static fn (): null => null);
     }
+
+    public function testAClosureInTheRemovedTrailingOnSigwinchSlotFailsLoudly(): void
+    {
+        // PHP drops an extra positional argument silently, so without the
+        // reserved twelfth slot this resize hook would vanish without error.
+        $this->expectException(\TypeError::class);
+        new PumpOptions(4096, 50000, 0.5, 0.3, "\x04", null, null, null, null, null, null, static fn (int $c, int $r): null => null);
+    }
+
+    public function testAPositionalNullInTheRemovedTrailingSlotStillConstructs(): void
+    {
+        $opts = new PumpOptions(4096, 50000, 0.5, 0.3, "\x04", null, null, null, null, null, null, null);
+
+        $this->assertNull($opts->onResize);
+        $this->assertNull($opts->withChunkBytes(8)->onResize);
+    }
 }

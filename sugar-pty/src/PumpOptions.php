@@ -169,6 +169,7 @@ final class PumpOptions
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
      * @param int<1, max>|null               $pumpDeadlineUs
+     * @param null                          $removedOnSigwinch reserved trailing slot, must stay null (see below)
      *
      * `$removedKeepalive` holds the sixth slot the removed keepalive hook
      * used (P1-8e). Dropping the slot outright would shift onIdle,
@@ -177,6 +178,13 @@ final class PumpOptions
      * `null`, the slot keeps a positional `null` binding as before and
      * turns a positional closure into a TypeError; register an idle
      * hook through `$onIdle` instead.
+     *
+     * `$removedOnSigwinch` holds the trailing twelfth slot the removed
+     * onSigwinch alias used, for the same reason: PHP silently drops an
+     * extra positional argument to a user function, so without the slot a
+     * positional resize closure there would be discarded and never fire.
+     * Typed `null`, it turns that closure into a TypeError; register the
+     * resize hook through `$onResize` instead.
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -190,6 +198,7 @@ final class PumpOptions
         ?\Closure $onChildExit = null,
         ?\SugarCraft\Core\Recorder $recorder = null,
         ?int $pumpDeadlineUs = null,
+        null $removedOnSigwinch = null,
     ) {
         if ($pumpDeadlineUs !== null && $pumpDeadlineUs <= 0) {
             throw new \InvalidArgumentException(
