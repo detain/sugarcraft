@@ -130,6 +130,17 @@ final class SplitterTest extends TestCase
         $this->assertSame([20, 60], $split->withBounds(0, 0, 80, 4)->sizes);
     }
 
+    public function testZeroSpanResizeKeepsProportions(): void
+    {
+        $split = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withBounds(0, 0, 100, 10)->withSizes(30, 70);
+
+        $collapsed = $split->withBounds(0, 0, 0, 10);
+        $this->assertSame([], $collapsed->sizes, 'no span, so nothing is fitted');
+
+        $this->assertSame([30, 70], $collapsed->withBounds(0, 0, 100, 10)->sizes);
+        $this->assertSame([30, 70], $collapsed->withBounds(0, 0, 0, 10)->withBounds(0, 0, 100, 10)->sizes, 'a second zero span keeps the parked sizes');
+    }
+
     public function testSizesSetBeforeBoundsAreFittedWhenBoundsArrive(): void
     {
         $before = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withSizes(30, 70);

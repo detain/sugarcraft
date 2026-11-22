@@ -101,7 +101,9 @@ final class Splitter
             width: $width,
             height: $height,
             sizes: self::fit($this->sizes !== [] ? $this->sizes : $this->pending, \count($this->panes), $span, $this->minPaneSize),
-            pending: $span > 0 ? [] : $this->pending,
+            // A zero span parks the current sizes so a later resize restores
+            // the proportions instead of falling back to equal shares.
+            pending: $span > 0 ? [] : ($this->sizes !== [] ? $this->sizes : $this->pending),
         );
     }
 
