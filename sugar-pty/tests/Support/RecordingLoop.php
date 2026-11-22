@@ -24,6 +24,9 @@ final class RecordingLoop implements LoopInterface
     /** @var list<float> intervals passed to addPeriodicTimer() */
     public array $periodicTimers = [];
 
+    /** @var list<float> intervals passed to addTimer(), one-shots that may re-arm themselves */
+    public array $oneShotTimers = [];
+
     /** @var array<int, true> periodic timers armed and not yet cancelled, by object id */
     private array $pendingPeriodic = [];
 
@@ -60,6 +63,8 @@ final class RecordingLoop implements LoopInterface
 
     public function addTimer($interval, $callback): TimerInterface
     {
+        $this->oneShotTimers[] = (float) $interval;
+
         return $this->inner->addTimer($interval, $callback);
     }
 

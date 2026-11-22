@@ -606,10 +606,12 @@ final class Expect
      * it with a \RuntimeException. A read error rejects it with that error.
      *
      * The read never polls: bytes arrive through `$loop->addReadStream()` on
-     * the master's stream, and the timeout and the post-exit drain are
-     * one-shot timers. The exit is reported by the child's `onExit()`, which
-     * rides the loop's SIGCHLD, with its periodic fallback probe turned off,
-     * so no periodic timer is armed on any loop. Where SIGCHLD cannot be
+     * the master's stream, plus one drain on the next tick after arming for
+     * bytes PHP's stream layer already buffered, and the timeout and the
+     * post-exit drain are one-shot timers. The exit is reported by the
+     * child's `onExit()`, which rides the loop's SIGCHLD, with its periodic
+     * fallback probe and its disposition re-check turned off, so no timer
+     * repeats on any loop while the wait is pending. Where SIGCHLD cannot be
      * delivered (no ext-pcntl, a loop whose `addSignal()` throws, or the
      * other cases `onExit()` lists) the exit is not watched at all: the wait
      * ends on the master's EOF, which a PTY master reads once the child's
@@ -779,7 +781,21 @@ final class Expect
         // must not start a second chain, or per-tick work grows every tick.
         // True once the promise has settled.
         $tickPending = false;
-        $pull = function () use (&$pull, &$buffer, &$settled, &$tickPending, $loop, $search, $disarm, $deferred, $eof, $fail): bool {
+        /** @var \Closure|null $pull */
+        $pull = null;
+        $scheduleDrain = static function () use (&$pull, &$settled, &$tickPending, $loop): void {
+            if ($settled || $tickPending) {
+                return;
+            }
+            $tickPending = true;
+            $loop->futureTick(static function () use (&$pull, &$settled, &$tickPending): void {
+                $tickPending = false;
+                if (!$settled) {
+                    $pull();
+                }
+            });
+        };
+        $pull = function () use (&$buffer, &$settled, $scheduleDrain, $search, $disarm, $deferred, $eof, $fail): bool {
             try {
                 for ($i = 0; $i < self::DRAIN_MAX_CHUNKS && !$settled; $i++) {
                     $chunk = $this->master->read($this->readChunk, null);
@@ -801,15 +817,7 @@ final class Expect
             } catch (\Throwable $error) {
                 $fail($error);
             }
-            if (!$settled && !$tickPending) {
-                $tickPending = true;
-                $loop->futureTick(static function () use (&$pull, &$settled, &$tickPending): void {
-                    $tickPending = false;
-                    if (!$settled) {
-                        $pull();
-                    }
-                });
-            }
+            $scheduleDrain();
 
             return $settled;
         };
@@ -818,6 +826,11 @@ final class Expect
         $loop->addReadStream($stream, static function () use ($pull): void {
             $pull();
         });
+        // An earlier read on this stream (a blocking expect*() call, or an
+        // expectAsync() that matched mid-burst) can leave bytes in PHP's
+        // stream buffer, where a loop polling the fd never sees them, so one
+        // drain runs on the next tick whether or not readiness is reported.
+        $scheduleDrain();
 
         $timeoutTimer = $loop->addTimer($timeoutSec, static function () use (&$timeoutTimer, &$buffer, $needles, $isPattern, $timeoutSec, $fail): void {
             $timeoutTimer = null;

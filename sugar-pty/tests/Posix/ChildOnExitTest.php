@@ -197,6 +197,31 @@ final class ChildOnExitTest extends TestCase
         $this->assertSame([], $loop->periodicTimers);
     }
 
+    public function testWithTheFallbackOffTheSignalPathArmsNoDispositionRecheck(): void
+    {
+        $this->requireSigchld();
+
+        $loop = new RecordingLoop();
+        $child = $this->spawnShell('sleep 0.1; exit 5');
+
+        $calls = [];
+        $child->onExit($loop, static function (int $code) use (&$calls): void {
+            $calls[] = $code;
+        }, 0.01, fallbackPoll: false);
+
+        // The re-check exists only to hand a displaced listener to the poll;
+        // with no poll to hand to it would be a 1 Hz timer for nothing.
+        $this->assertSame([], $loop->oneShotTimers, 'fallbackPoll: false must arm no disposition re-check');
+        $this->assertSame([\SIGCHLD], $loop->signalsAdded);
+
+        $this->runBounded($loop, static function () use (&$calls): bool {
+            return $calls !== [];
+        });
+
+        $this->assertSame([5], $calls, 'the exit must still be reported through SIGCHLD');
+        $this->assertSame([], $loop->periodicTimers);
+    }
+
     public function testWithTheFallbackOffADisplacedListenerIsNotHandedToAPoll(): void
     {
         $this->requireSigchld();

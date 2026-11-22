@@ -137,6 +137,23 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame('PROMPT', $value);
     }
 
+    public function testBytesAlreadyReadableAreDrainedWithoutAReadinessEvent(): void
+    {
+        // An earlier blocking read can leave a burst in PHP's stream buffer,
+        // which a loop that polls the fd (ext-uv) never reports as readable.
+        // This loop never fires a read listener at all, so only the drain
+        // expectAsync() schedules when it arms can find the needle.
+        [$master, $peer] = $this->socketMaster();
+        \fwrite($peer, 'xx PROMPT yy');
+        $loop = new ListenerCapturingLoop();
+
+        $promise = Expect::on($master, loop: $loop)->expectAsync('PROMPT', 1.0);
+        [$value, $error] = $this->settle($loop, $promise);
+
+        $this->assertNull($error, 'buffered bytes must be read with no readiness event');
+        $this->assertSame('PROMPT', $value);
+    }
+
     public function testReadinessEventsDuringACappedDrainKeepOneContinuationPending(): void
     {
         // A child still writing keeps every drain pass at DRAIN_MAX_CHUNKS, and
@@ -252,6 +269,13 @@ final class ExpectAsyncTest extends TestCase
         $this->assertSame('no prompt here', $error->buffer);
         $this->assertLessThan(3.0, \microtime(true) - $started, 'the exit, not the timeout, must end the wait');
         $this->assertSame([], $loop->periodicTimers, 'expectAsync must arm no periodic timer');
+        // A self-re-arming one-shot repeats as surely as a periodic timer, so
+        // every one-shot is accounted for: the test's write, the post-exit
+        // drain, the timeout and the settle() safety cap. onExit()'s 1 s
+        // disposition re-check must not be among them.
+        $oneShots = $loop->oneShotTimers;
+        \sort($oneShots);
+        $this->assertSame([0.02, 0.1, 4.0, self::SAFETY_SECONDS], $oneShots, 'expectAsync must arm no re-arming one-shot timer');
         $this->assertSame([\SIGCHLD], $loop->signalsAdded, 'the exit must ride the loop\'s own SIGCHLD');
         $this->assertSame([\SIGCHLD], $loop->signalsRemoved, 'the exit listener must be removed once it fired');
     }
