@@ -359,6 +359,48 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         }
     }
 
+    public function testAStatementTimeoutOnAnOpenPanelRefetchStillMovesFiltersAndRefreshes(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult([
+            ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
+            ['Id' => '8', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 2'],
+        ]);
+        $open = static function () use ($db): ConnectionsPage {
+            [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
+            assert($page instanceof ConnectionsPage);
+            return $page;
+        };
+        $page = $open();
+        $this->assertNotNull($page->detailLines(), 'the panel is open on a healthy server');
+
+        // The server stalls: every refetch of the open panel times out.
+        $db->setPrepareThrows(new StatementTimeoutException());
+
+        [$down, $cmd] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertInstanceOf(ConnectionsPage::class, $down);
+        $this->assertSame(1, $down->selectedIndex(), 'j still moves the selection');
+        $this->assertNull($down->detailLines(), 'the failed read closes the panel');
+        $this->assertFalse($down->detailTabsFocused(), 'and hands the keyboard back');
+        $this->assertNull($cmd);
+
+        [$up] = $down->update(new KeyMsg(KeyType::Up));
+        $this->assertSame(0, $up->selectedIndex(), 'a closed panel reads nothing, so Up moves freely');
+
+        $db->setPrepareThrows(null);
+        $page = $open();
+        $db->setPrepareThrows(new StatementTimeoutException());
+        [$up] = $page->update(new KeyMsg(KeyType::Char, 'k'));
+        $this->assertNull($up->detailLines(), 'k on a stalled server closes the panel instead of throwing');
+
+        [$filtered] = $page->update(new KeyMsg(KeyType::Char, 'f'));
+        $this->assertNull($filtered->detailLines(), 'f still toggles; the panel closes');
+
+        [$refreshed, $cmd] = $page->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertNull($refreshed->detailLines(), 'r still refreshes; the panel closes');
+        $this->assertNotNull($cmd, 'and the reload is still dispatched');
+    }
+
     // ── (d) each tab shows its own data for the selected thread ─────────────
 
     public function testEachDetailTabRendersItsOwnDataForTheSelectedThread(): void

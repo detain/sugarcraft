@@ -360,10 +360,22 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         }
     }
 
-    /** Refetch the panel when it is open (its thread or rows may have changed). */
+    /**
+     * Refetch the panel when it is open (its thread or rows may have
+     * changed). A failed read (a stalled server's StatementTimeoutException)
+     * closes the panel as {@see withDetailFollowingReload()} does, so the
+     * move, filter or refresh that asked for it still lands.
+     */
     private function withDetailRefreshed(): self
     {
-        return $this->detailLines === null ? $this : $this->withDetailFetched();
+        if ($this->detailLines === null) {
+            return $this;
+        }
+        try {
+            return $this->withDetailFetched();
+        } catch (\Throwable) {
+            return $this->releaseKeys();
+        }
     }
 
     /**
