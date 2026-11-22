@@ -65,7 +65,7 @@ final class KeyBindingsChordTest extends TestCase
         yield 'inner whitespace'   => ['ctrl+ s'];
         yield 'control byte'       => ["ctrl+\x1b"];
         yield 'newline'            => ["\n"];
-        yield 'over long'          => [str_repeat('x', 33)];
+        yield 'over long'          => [str_repeat('x', 41)];
         yield 'invalid utf8'       => ["\xff"];
         yield 'modifier name only' => ['ctrl'];
     }
@@ -109,6 +109,25 @@ final class KeyBindingsChordTest extends TestCase
         self::assertSame('shift+space', KeyBindings::chordOf(new KeyMsg(KeyType::Char, ' ', shift: true)));
         // tokenOf() stays modifier-free (its documented v1 contract).
         self::assertSame('s', KeyBindings::tokenOf(new KeyMsg(KeyType::Char, 's', ctrl: true)));
+    }
+
+    public function testEveryNamedKeyChordOfRoundTripsUnderAllModifiers(): void
+    {
+        // The length cap must admit every chord chordOf() can emit, so a
+        // binding can be declared for any key the terminal reports.
+        $b = KeyBindings::new()->bind('ff', 'ctrl+alt+shift+media_fast_forward');
+        $msg = new KeyMsg(KeyType::MediaFastForward, alt: true, ctrl: true, shift: true);
+
+        self::assertSame('ctrl+alt+shift+media_fast_forward', KeyBindings::chordOf($msg));
+        self::assertTrue($b->matches($msg, 'ff'));
+
+        foreach (KeyType::cases() as $type) {
+            if ($type === KeyType::Char) {
+                continue;
+            }
+            $chord = KeyBindings::chordOf(new KeyMsg($type, alt: true, ctrl: true, shift: true));
+            self::assertSame($chord, KeyBindings::parseChord($chord), $type->name);
+        }
     }
 
     public function testChordBindingsMatchOnlyWithTheirModifiers(): void

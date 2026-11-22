@@ -152,11 +152,12 @@ final class KeyBindings
     private const MODIFIERS = ['ctrl', 'alt', 'shift'];
 
     /**
-     * Longest chord accepted, in bytes. `ctrl+alt+shift+kp_separator` is 27;
-     * anything past this is not a key name, and a help column cannot absorb
-     * it without lying about what the key is.
+     * Longest chord accepted, in bytes. The longest chord {@see chordOf()}
+     * can produce, `ctrl+alt+shift+media_fast_forward`, is 33; anything past
+     * this is not a key name, and a help column cannot absorb it without
+     * lying about what the key is.
      */
-    private const MAX_CHORD_BYTES = 32;
+    private const MAX_CHORD_BYTES = 40;
 
     /**
      * Largest override file {@see fromFile()} reads. A key map is a few
