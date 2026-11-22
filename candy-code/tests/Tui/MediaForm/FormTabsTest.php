@@ -114,6 +114,29 @@ final class FormTabsTest extends TestCase
         });
     }
 
+    /**
+     * The guard's exact-fit boundary: ' Generation params ' plus both marks
+     * needs exactly 21 cells, so width 21 still draws the tab and its span,
+     * and only width 20 falls back to the marks alone.
+     */
+    public function testAnActiveTabThatExactlyFitsWithItsMarksIsStillDrawn(): void
+    {
+        $labels = ['Prompt', 'Generation params', 'Extra'];
+
+        self::assertSame(
+            [
+                self::MUTED . "‹\e[0m" . self::ACTIVE . " Generation params \e[0m" . self::MUTED . "›\e[0m",
+                [[1, 20, 1]],
+            ],
+            $this->render($labels, 1, 21),
+        );
+        self::assertSame(
+            [self::MUTED . "‹\e[0m" . self::MUTED . "›\e[0m", []],
+            $this->render($labels, 1, 20),
+            'one cell short of the exact fit the guard draws the marks alone',
+        );
+    }
+
     public function testNaturalWidthCountsCellsAndSeparatorsWithoutMarks(): void
     {
         self::assertSame(0, FormTabs::naturalWidth([]));
