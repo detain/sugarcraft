@@ -25,7 +25,7 @@ use SugarCraft\Style\Style;
 final class FormTabsTest extends TestCase
 {
     private const MUTED = "\e[38;2;139;143;168m";
-    private const SEP = "\e[38;2;20;20;20m│\e[0m";
+    private const DIVIDER = "\e[38;2;20;20;20m│\e[0m";
     private const ACTIVE = "\e[1;7m\e[38;2;112;145;245m";
     private const INACTIVE = "\e[38;2;197;201;212m";
     private const FRAME_LEFT = "\e[38;2;112;145;245m│\e[0m ";
@@ -48,9 +48,9 @@ final class FormTabsTest extends TestCase
     {
         self::assertSame(
             [
-                self::INACTIVE . " Prompt \e[0m" . self::SEP
-                    . self::ACTIVE . " Generation params \e[0m" . self::SEP
-                    . self::INACTIVE . " Extra \e[0m" . self::SEP
+                self::INACTIVE . " Prompt \e[0m" . self::DIVIDER
+                    . self::ACTIVE . " Generation params \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Extra \e[0m" . self::DIVIDER
                     . self::INACTIVE . " Hires \e[0m",
                 [[0, 8, 0], [9, 28, 1], [29, 36, 2], [37, 44, 3]],
             ],
@@ -81,7 +81,7 @@ final class FormTabsTest extends TestCase
     {
         self::assertSame(
             [
-                self::ACTIVE . " One \e[0m" . self::SEP . self::INACTIVE . " Two \e[0m" . self::MUTED . "›\e[0m",
+                self::ACTIVE . " One \e[0m" . self::DIVIDER . self::INACTIVE . " Two \e[0m" . self::MUTED . "›\e[0m",
                 [[0, 5, 0], [6, 11, 1]],
             ],
             $this->render(['One', 'Two', 'Three', 'Four'], 0, 12),
@@ -126,9 +126,9 @@ final class FormTabsTest extends TestCase
             $form = MediaForm::open(MediaRequest::new());
 
             self::assertSame(
-                self::FRAME_LEFT . self::ACTIVE . " Prompt \e[0m" . self::SEP
-                    . self::INACTIVE . " Generation params \e[0m" . self::SEP
-                    . self::INACTIVE . " Extra \e[0m" . self::SEP
+                self::FRAME_LEFT . self::ACTIVE . " Prompt \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Generation params \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Extra \e[0m" . self::DIVIDER
                     . self::INACTIVE . " Hires. fix \e[0m" . self::MUTED . "›\e[0m       " . self::FRAME_RIGHT,
                 $this->stripLine($form),
             );
@@ -145,9 +145,9 @@ final class FormTabsTest extends TestCase
             self::assertNotNull($right);
             self::assertSame(1, $right->state()->section);
             self::assertSame(
-                self::FRAME_LEFT . self::INACTIVE . " Prompt \e[0m" . self::SEP
-                    . self::ACTIVE . " Generation params \e[0m" . self::SEP
-                    . self::INACTIVE . " Extra \e[0m" . self::SEP
+                self::FRAME_LEFT . self::INACTIVE . " Prompt \e[0m" . self::DIVIDER
+                    . self::ACTIVE . " Generation params \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Extra \e[0m" . self::DIVIDER
                     . self::INACTIVE . " Hires. fix \e[0m" . self::MUTED . "›\e[0m       " . self::FRAME_RIGHT,
                 $this->stripLine($right),
             );
@@ -157,9 +157,9 @@ final class FormTabsTest extends TestCase
             self::assertNotNull($left);
             self::assertSame(10, $left->state()->section, 'Left from the first tab wraps to the last');
             self::assertSame(
-                self::FRAME_LEFT . self::MUTED . "‹\e[0m" . self::INACTIVE . " Scripts \e[0m" . self::SEP
-                    . self::INACTIVE . " Override settings \e[0m" . self::SEP
-                    . self::INACTIVE . " Presets \e[0m" . self::SEP
+                self::FRAME_LEFT . self::MUTED . "‹\e[0m" . self::INACTIVE . " Scripts \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Override settings \e[0m" . self::DIVIDER
+                    . self::INACTIVE . " Presets \e[0m" . self::DIVIDER
                     . self::ACTIVE . " Output \e[0m        " . self::FRAME_RIGHT,
                 $this->stripLine($left),
             );
