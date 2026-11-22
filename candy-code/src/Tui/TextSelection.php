@@ -192,7 +192,15 @@ final class TextSelection
             $line = $lines[$index];
             $head = Width::truncateAnsi($line, $before);
             $pad = str_repeat(' ', max(0, $before - Width::string($head)));
-            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $before), $cells));
+            // sugar-mouse SelectionRange::highlight()'s left-edge rule, which
+            // extract() already gets by delegation: a wide glyph straddling the
+            // span's left edge is dropped whole by both truncateAnsi() and
+            // dropAnsi(), so its covered half paints blank and comes off the
+            // run budget instead of the run repainting the next glyph the tail
+            // then repeats.
+            $rest = Width::dropAnsi($line, $before);
+            $lead = min($cells, max(0, Width::string($line) - $before - Width::string($rest)));
+            $run = str_repeat(' ', $lead) . Ansi::strip(Width::takeAnsi($rest, $cells - $lead));
             $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
 
             $lines[$index] = $head . Ansi::reset() . $pad . $style->render($run) . Ansi::reset() . Width::dropAnsi($line, $before + $cells);
