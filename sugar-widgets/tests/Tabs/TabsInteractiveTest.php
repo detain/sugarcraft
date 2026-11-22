@@ -422,6 +422,18 @@ final class TabsInteractiveTest extends TestCase
         $this->assertSame([], Tabs::new()->spans());
     }
 
+    public function testNarrowScrolledBarDropsLeftEllipsisSoTheActiveTabStaysDrawn(): void
+    {
+        // At width 5 the left `…` plus its divider would fill the whole
+        // width-1 budget and leave the active tab with no cell at all.
+        $t = $this->plain(['Home', 'Profile'], 5)->withActive(1);
+        $this->assertSame(' Pro…', $t->view());
+        $this->assertSame(1, $t->tabAt(0));
+        $spans = $t->spans();
+        $this->assertCount(1, $spans);
+        $this->assertSame([1, 0, 4], [$spans[0]->index, $spans[0]->start, $spans[0]->end]);
+    }
+
     public function testTabAtResolvesColumns(): void
     {
         $t = $this->plain();
@@ -521,6 +533,22 @@ final class TabsInteractiveTest extends TestCase
         $t = $this->plain(['One', 'Two', 'Three', 'Four', 'Five', 'Six'], 20)->withMark(Mark::new());
         [$next] = $t->clickZone($t->zoneKey . 'tab-5');
         $this->assertSame(0, $next->active());
+    }
+
+    public function testUnboundedBarAnswersZonesOnEveryDrawnTabDespiteScrollOffset(): void
+    {
+        // Width 0 draws every tab whatever the stored offset, so the zones
+        // it emits for tabs before the offset must still answer.
+        $t = $this->plain()->withClosable()->withMark(Mark::new())->withScrollOffset(1);
+        $this->assertStringContainsString($t->zoneKey . 'tab-0', $t->view());
+        $this->assertSame(0, $t->spans()[0]->index);
+
+        [$next] = $t->withActive(2)->clickZone($t->zoneKey . 'tab-0');
+        $this->assertSame(0, $next->active());
+
+        [$closed, $cmd] = $t->clickZone($t->zoneKey . 'close-0');
+        $this->assertSame(['Inbox', 'Settings'], $closed->labels());
+        $this->assertSame(0, $cmd()->index);
     }
 
     public function testClickZoneWithoutMarkupIsInert(): void

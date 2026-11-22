@@ -946,10 +946,15 @@ final class Tabs implements Model
         return $idx >= 0 && $idx < count($this->labels) ? $idx : null;
     }
 
-    /** Whether tab `$i` is inside the current scroll window. */
+    /**
+     * Whether tab `$i` is inside the window view() draws. The window start
+     * is the one windowParts() uses: an unbounded bar (width 0) draws every
+     * tab whatever the stored scrollOffset, so zones on it must all answer.
+     */
     private function isVisible(int $i): bool
     {
-        return $i >= $this->scrollOffset && $i <= $this->scrollEnd;
+        $start = $this->width > 0 ? min($this->scrollOffset, count($this->labels) - 1) : 0;
+        return $i >= $start && $i <= $this->scrollEnd;
     }
 
     /** @throws \InvalidArgumentException when `$index` is not a tab. */
@@ -1088,12 +1093,20 @@ final class Tabs implements Model
         return $count - 1;
     }
 
-    /** Whether view() will prepend a left `…` for the current offset. */
+    /**
+     * Whether view() will prepend a left `…` for the current offset.
+     *
+     * The `…` and its divider must leave at least one cell of the first
+     * window tab before the clip guard's `width - 1` bound: at a narrower
+     * width they would eat the whole bar and the active tab would vanish
+     * from the frame and from spans(), so the marker is dropped instead.
+     */
     private function rendersLeftEllipsis(): bool
     {
         return $this->width > 0
             && $this->scrollOffset > 0
-            && min($this->scrollOffset, count($this->labels) - 1) > 0;
+            && min($this->scrollOffset, count($this->labels) - 1) > 0
+            && 1 + Width::string($this->divider) < $this->width - 1;
     }
 
     /**
