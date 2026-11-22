@@ -570,6 +570,26 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
     }
 
     /**
+     * The detail-tab bar line takes a row above the table even while the
+     * panel is closed, so at the height where the bar tips a closed page
+     * one row past its budget, the table gives up that row: the page stays
+     * inside the budget and the key hints stay its last line instead of
+     * being cut off the bottom by the frame.
+     */
+    public function testAClosedPanelPageStaysInsideATightHeightBudget(): void
+    {
+        $page = ConnectionsPage::new(new ServerContext($this->busyDb(3)));
+        $closed = \count(\explode("\n", $page->view()));
+
+        $lines = \explode("\n", self::plain($page->withHeightBudget($closed - 1)->view()));
+        $this->assertCount($closed - 1, $lines, 'the closed page fits its budget exactly');
+        $this->assertStringContainsString(Lang::t('conn.help_full'), (string) \end($lines), 'the key hints stay the last line');
+        $this->assertStringContainsString('thread-2-sql', \implode("\n", $lines));
+        $this->assertStringNotContainsString('thread-3-sql', \implode("\n", $lines), 'the table gives up exactly the overflow row');
+        $this->assertStringContainsString(Lang::t('conn.tab_details'), \implode("\n", $lines), 'the detail-tab bar stays painted');
+    }
+
+    /**
      * On a short processlist the table has fewer rows to give up than the
      * panel's four-line floor: the panel takes less (or nothing) instead,
      * and the table keeps the selected row.

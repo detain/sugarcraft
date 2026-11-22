@@ -48,8 +48,9 @@ use SugarCraft\Widgets\Tabs\Tabs;
  * Esc closes the panel.
  *
  * The table paints a window of at most {@see ROW_WINDOW} rows (fewer when
- * the panel takes height) that always contains the selection, so the
- * highlighted row and the thread the panel describes stay on screen.
+ * the panel or a short height budget takes height) that always contains
+ * the selection, so the highlighted row and the thread the panel describes
+ * stay on screen.
  *
  * Detail-tab keys (AUD §2 #19). In the app, Tab cycles the focus pane and
  * the digits pick admin pages before any page sees them, so the old
@@ -880,6 +881,11 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * table never drops below its chrome plus the selected row, so on a
      * short processlist the panel gets fewer lines, or none.
      *
+     * A closed panel goes through the same fit: the detail-tab bar line
+     * takes a row above the table, so a table that overflows the budget on
+     * its own gives up its overflow rows too, rather than letting the frame
+     * cut the key-hint line off the bottom.
+     *
      * @param int $fixed rows the page takes besides the panel and the table
      * @return array{list<string>, Table}
      */
@@ -887,7 +893,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     {
         $table = $this->table();
         $panel = $this->detailLines ?? [];
-        if ($panel === [] || $this->heightBudget === null) {
+        if ($this->heightBudget === null) {
             return [$panel, $table];
         }
 
@@ -904,13 +910,14 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $rows = $this->filteredProcesslist();
         $painted = \min(\count($rows), self::ROW_WINDOW);
         $keep = \min(1, $painted);
-        $tableFloor = \substr_count($this->buildTable($rows, $keep)->View(), "\n") + 1;
-        $take = \max(0, \min(\count($panel), \max($slack, self::DETAIL_MIN_LINES), $room - $tableFloor));
-        if ($take === 0) {
-            return [[], $table];
-        }
-        if ($take < \count($panel)) {
-            $panel = [...\array_slice($panel, 0, $take - 1), '…'];
+        if ($panel !== []) {
+            $tableFloor = \substr_count($this->buildTable($rows, $keep)->View(), "\n") + 1;
+            $take = \max(0, \min(\count($panel), \max($slack, self::DETAIL_MIN_LINES), $room - $tableFloor));
+            if ($take === 0) {
+                $panel = [];
+            } elseif ($take < \count($panel)) {
+                $panel = [...\array_slice($panel, 0, $take - 1), '…'];
+            }
         }
 
         $over = $tableHeight + \count($panel) - $room;
