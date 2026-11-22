@@ -377,8 +377,32 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td><code>__construct(public Zone $zone, public int $button)</code></td><td></td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-mouse-grapheme"><code>Grapheme</code> <small>final class</small></h4>
+<p>Grapheme-cluster extraction for the zone scanner: one user-perceived character per call, never one code point.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static next(string $s, int $i): string</code></td><td>The grapheme cluster starting at byte offset $i of $s (&#039;&#039; when $i is at or past the end).</td></tr>
+<tr><td><code>static nextWithoutIntl(string $s, int $i): string</code></td><td>The cluster at $i found without ext-intl: PCRE <code>\X</code> over a window of up to WINDOW whole code points. Public so the fallback can be verified on hosts that do have ext-intl.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-mouse-lang"><code>Lang</code> <small>final class</small></h4>
 <p>Per-library translation facade for sugar-mouse.</p>
+<h4 id="api-sugarcraft-mouse-linewidthcache"><code>LineWidthCache</code> <small>final class</small></h4>
+<p>Remembers the painted width of frame lines that carry no zone markup, so re-scanning a frame whose lines did not change skips the per-cluster walk for them.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>beginFrame(): void</code></td><td>Start a new frame: entries not looked up since the previous beginFrame() are dropped at the next one.</td></tr>
+<tr><td><code>lookup(string $line): ?int</code></td><td>The cached width of $line, or null when it is not cached.</td></tr>
+<tr><td><code>store(string $line, int $width): void</code></td><td>Record the width the walk measured for an inert $line.</td></tr>
+<tr><td><code>hits(): int</code></td><td>Lookups answered from the cache since construction.</td></tr>
+<tr><td><code>misses(): int</code></td><td>Lookups the cache could not answer since construction.</td></tr>
+<tr><td><code>size(): int</code></td><td>Lines held across both generations.</td></tr>
+<tr><td><code>clear(): void</code></td><td>Forget every cached line.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-mouse-mark"><code>Mark</code> <small>final class</small></h4>
 <p>Wrap $content with sentinel zone markers so Scanner can later extract bounding boxes without any external Manager wiring.</p>
 <table class="api-table">
@@ -416,7 +440,7 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static parse(string $rendered, ?int $width = null): array</code></td><td>Feed a rendered string through the scanner and return all discovered zones.</td></tr>
+<tr><td><code>static parse(string $rendered, ?int $width = null, ?LineWidthCache $cache = null): array</code></td><td>Feed a rendered string through the scanner and return all discovered zones.</td></tr>
 <tr><td><code>static strip(string $rendered): string</code></td><td>Remove this package&#039;s PUA sentinel tags from a rendered frame, leaving the visible content byte-for-byte intact.</td></tr>
 </tbody>
 </table>
@@ -425,13 +449,17 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>__construct()</code></td><td></td></tr>
 <tr><td><code>static new(): self</code></td><td>Factory — creates an empty scanner ready for scan().</td></tr>
 <tr><td><code>scan(string $rendered, ?int $width = null): self</code></td><td>Parse zone sentinels from $rendered, populate the zone registry, and return $this for chaining.</td></tr>
 <tr><td><code>get(string $id): ?Zone</code></td><td>Return the zone with the given id, or null if not found.</td></tr>
 <tr><td><code>all(): array</code></td><td>Return all scanned zones keyed by id.</td></tr>
 <tr><td><code>idsStartingWith(string $prefix): array</code></td><td>Return all zones whose id starts with $prefix.</td></tr>
 <tr><td><code>prefixed(string $prefix): array</code></td><td></td></tr>
-<tr><td><code>hit(int $col, int $row): ?Zone</code></td><td>Reverse-lookup: return the first zone whose bounding box contains (col, row), or null if no zone matches.</td></tr>
+<tr><td><code>hit(int $col, int $row): ?Zone</code></td><td>Reverse-lookup: the zone that owns cell (col, row), or null if no zone covers it.</td></tr>
+<tr><td><code>hitAll(int $col, int $row): array</code></td><td>Every zone covering cell (col, row), innermost first (ascending area, equal areas in registration order) — the full stack hit() picks the head of.</td></tr>
+<tr><td><code>zone(ZoneId $id): ?Zone</code></td><td>The zone recorded under a typed id — the ZoneId spelling of get().</td></tr>
+<tr><td><code>lineWidths(): LineWidthCache</code></td><td>The line-width cache scan() reads and fills.</td></tr>
 <tr><td><code>clear(): void</code></td><td>Clear all recorded zones.</td></tr>
 </tbody>
 </table>
@@ -461,6 +489,7 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td><code>cellContains(int $row, int $col): bool</code></td><td>True when $row/$col is covered by the selection — by the STREAM shape, not merely by the bounding rectangle. A cell on the first row left of the start (or on the last row right of the end) sits inside the bbox yet was never swept, and copying or highlighting it would be a lie.</td></tr>
 <tr><td><code>cells(): \Generator</code></td><td>Every covered cell in reading order.</td></tr>
 <tr><td><code>extract(array $lines): string</code></td><td>The text this range covers, read from the frame&#039;s lines.</td></tr>
+<tr><td><code>highlight(array $lines, ?\Closure $paint = null): array</code></td><td>$lines with the covered cells repainted — reverse video unless $paint says otherwise.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-mouse-sentinel"><code>Sentinel</code> <small>final class</small></h4>
@@ -490,6 +519,44 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td><code>setPressZone(Zone $zone, int $button): void</code></td><td>Inject the zone that was hit at the time of the press event. Call this immediately after track(Press) when you have the zone. The Release call must still carry the fresh re-hit zone for the Release-agreement gate — setPressZone() only stores the press half.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-mouse-zonegrid"><code>ZoneGrid</code> <small>final class</small></h4>
+<p>The bucket-grid spatial index and the package&#039;s ONE hit rule.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static of(iterable $zones): self</code></td><td>Index a zone set. Iteration order is registration order — the equal-area tie-break.</td></tr>
+<tr><td><code>count(): int</code></td><td>Number of indexed zones.</td></tr>
+<tr><td><code>smallestAt(int $col, int $row): Zone|ZonesZone|null</code></td><td>The zone that owns cell ($col, $row), 1-based: the smallest covering area, ties to the first registered. Null when no zone covers it.</td></tr>
+<tr><td><code>allAt(int $col, int $row): array</code></td><td>Every zone covering cell ($col, $row), innermost first: ascending area, equal areas in registration order (PHP&#039;s sort is stable).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mouse-zoneid"><code>ZoneId</code> <small>final class</small></h4>
+<p>A typed zone id: a namespace (what kind of thing the zone is — <code>toolcall</code>, <code>tab</code>, <code>menuitem</code>) plus a key (which one — <code>42</code>, <code>settings</code>).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static of(string $namespace, string|int $key = &#039;&#039;): self</code></td><td>Build a typed id.</td></tr>
+<tr><td><code>static parse(string $wire): ?self</code></td><td>Read a wire id back into its typed form, or null when it is not one a of() call could have produced (invalid id material, an empty namespace, or a trailing <code>:</code> with no key) — such a zone is simply not routable, never an error.</td></tr>
+<tr><td><code>wire(): string</code></td><td>The id Mark writes and Zone::$id reads back.</td></tr>
+<tr><td><code>intKey(): ?int</code></td><td>The key as an integer, or null when it is not a canonical decimal integer that fits in an int (<code>7</code> and <code>-3</code> are; <code>07</code>, <code>7a</code>, `<code> and an overflowing run are not). Replaces the </code>(int) substr(...)` idiom, which turned every malformed suffix into row 0.</td></tr>
+<tr><td><code>inNamespace(string $namespace): bool</code></td><td></td></tr>
+<tr><td><code>equals(self $other): bool</code></td><td></td></tr>
+<tr><td><code>mark(string $content): string</code></td><td>Wrap $content in zone markup for this id (Mark::zone()).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-mouse-zonerouter"><code>ZoneRouter</code> <small>final class</small></h4>
+<p>Dispatch a zone hit to a handler keyed by a typed ZoneId, instead of a chain of <code>str_starts_with($id, &#039;prefix:&#039;)</code> tests and <code>substr</code> parsing.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>on(ZoneId $id, \Closure $handler): self</code></td><td>Route the exact id $id to $handler, replacing any earlier route for it.</td></tr>
+<tr><td><code>onNamespace(string $namespace, \Closure $handler): self</code></td><td>Route every id in $namespace that has no exact route to $handler, replacing any earlier route for the namespace.</td></tr>
+<tr><td><code>handles(string|ZoneId $id): bool</code></td><td>True when route() would call a handler for $id.</td></tr>
+<tr><td><code>route(string|ZoneId $id, mixed ...$args): mixed</code></td><td>Call the handler routed for $id with <code>($zoneId, ...$args)</code> and return its result, or null when no route matches. A handler may itself return null; ask handles() first when the two must be told apart.</td></tr>
+<tr><td><code>routeMouse(MouseMsg|MouseEvent $event, Scanner|Manager $zones): mixed</code></td><td>Hit-test $event against $zones (the shared smallest-area rule) and route the owning zone: the handler receives <code>($zoneId, $event, $zone)</code>. Null when no zone covers the cell or the hit zone has no route.</td></tr>
+</tbody>
+</table>
 <h3 id="sugarcraft-mouse-zones">SugarCraft\Mouse\Zones</h3>
 <h4 id="api-sugarcraft-mouse-zones-dragtracker"><code>DragTracker</code> <small>final class</small></h4>
 <p>Tracks press → move → release drag sequences within and across zones.</p>
@@ -513,9 +580,11 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>__construct()</code></td><td>Public for BC; newUnprefixed() is the house spelling.</td></tr>
 <tr><td><code>static newUnprefixed(): self</code></td><td>Build a fresh un-prefixed manager, independent of every other instance. The name says what it builds: a manager with NO id prefix. Distinct from the Zones facade&#039;s shared default manager (Zones::defaultManager()) — use that one only when the whole program agrees on a single zone namespace.</td></tr>
 <tr><td><code>static newGlobal(): self</code></td><td></td></tr>
 <tr><td><code>static newPrefix(string $prefix = &#039;&#039;): self</code></td><td>Build a manager that namespaces every id with a unique prefix.</td></tr>
+<tr><td><code>static newWithIdPrefix(string $prefix): self</code></td><td>A manager stamping exactly <code>$prefix</code> onto every id, with no counter bookkeeping — the raw constructor ZoneRegistry::newPrefix() builds on. An empty prefix builds an un-prefixed manager. Prefer newPrefix() (or a registry&#039;s) unless the prefix is already known to be unique.</td></tr>
 <tr><td><code>setEnabled(bool $on): void</code></td><td>Toggle marker emission and scanning. When <code>$enabled = false</code>, <code>mark()</code> returns <code>$content</code> verbatim (no markers wrapped — but the id is STILL validated, so flipping the manager off must not become a way to smuggle an illegal id through the emit path) and <code>scan()</code> is a no-op pass-through. Useful for non-interactive output (CI logs, file dumps) where the markers add nothing.</td></tr>
 <tr><td><code>isEnabled(): bool</code></td><td></td></tr>
 <tr><td><code>motionTrackingAnsi(bool $on): string</code></td><td>Build the all-motion tracking byte sequence — RETURNS bytes, emits nothing. The old <code>setMotionTracking</code> name taught setter reflexes and a discarded call was a silent zero-effect failure; this name states what the method is.</td></tr>
@@ -528,9 +597,11 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td><code>idsAbsentFromFrame(iterable $scannedIds): array</code></td><td>Generation-diff prune helper: the registered ids that did not appear among <code>$scannedIds</code>, in insertion order.</td></tr>
 <tr><td><code>clear(?string $id = null): void</code></td><td>Forget zone state. With no argument, drops every recorded zone (the original <code>clear()</code> shape, kept for back-compat). Pass an <code>$id</code> to drop a single zone — equivalent to the upstream <code>Manager::Clear(id string)</code> overload. Like get(), the <code>$id</code> may be the short or the wire spelling.</td></tr>
 <tr><td><code>close(): void</code></td><td>Tear down the manager. Mirrors bubblezone&#039;s <code>Manager::Close()</code> — upstream stops the background <code>zoneWorker</code> goroutine here. Our port computes everything synchronously inside <code>scan()</code> so there is no worker to stop, but <code>close()</code> still drops every recorded zone and disables the manager so subsequent <code>mark()</code> / <code>scan()</code> calls become pass-throughs. Idempotent.</td></tr>
-<tr><td><code>anyInBounds(Msg $mouse): ?Zone</code></td><td>Walk the recorded zones and return the innermost (smallest-area) one whose bounds contain <code>$mouse</code>. When zones nest, the smallest one wins; on equal area the first-recorded zone wins. That tie rule is the only part the primitive \SugarCraft\Mouse\Scanner <code>hit()</code> shares: the Scanner resolves purely by earliest registration, so the two layers can disagree about who owns one painted frame. This registry has no stacking concept — no priority, layer, or modal state — see the overlay contract in README&#039;s Zones section before scanning a full-screen modal over a live registry. Returns null if no zone matches (or if the Msg isn&#039;t a MouseMsg to begin with — handy when an update() loop routes every Msg here without filtering first).</td></tr>
+<tr><td><code>anyInBounds(Msg $mouse): ?Zone</code></td><td>The innermost (smallest-area) recorded zone whose bounds contain <code>$mouse</code>; on equal area the first-recorded zone wins. This is THE hit rule, shared with the primitive \SugarCraft\Mouse\Scanner::hit() through ZoneGrid, so both layers name the same owner for one painted frame. This registry has no stacking concept — no priority, layer, or modal state — see the overlay contract in README&#039;s Zones section before scanning a full-screen modal over a live registry. Returns null if no zone matches (or if the Msg isn&#039;t a MouseMsg to begin with — handy when an update() loop routes every Msg here without filtering first).</td></tr>
 <tr><td><code>allInBounds(Msg $mouse): array</code></td><td>Every zone whose bounds contain <code>$mouse</code>, ordered innermost first (ascending area; equal areas keep registration order, matching anyInBounds()). Lets a consumer route a click to ALL owners of a cell — e.g. a container and the button inside it — instead of only the smallest.</td></tr>
 <tr><td><code>zoneAt(int $col, int $row): ?Zone</code></td><td>Pure-geometry lookup without a Msg: the innermost zone covering cell ($col, $row), 1-based — same area/tie rule as anyInBounds(). Lets consumers resolve what is under the wheel, the caret, or an arbitrary position without fabricating a MouseMsg.</td></tr>
+<tr><td><code>zone(\SugarCraft\Mouse\ZoneId $id): ?Zone</code></td><td>The zone recorded under a typed id — the \SugarCraft\Mouse\ZoneId spelling of get() (short or wire form, like get()).</td></tr>
+<tr><td><code>lineWidths(): LineWidthCache</code></td><td>The line-width cache scan() reads and fills.</td></tr>
 <tr><td><code>anyInBoundsAndUpdate(Model $model, Msg $mouse): array</code></td><td>Hit-test <code>$mouse</code> against every recorded zone. If a zone matches, dispatch a MsgZoneInBounds carrying the hit zone + the original Msg through <code>$model-&gt;update()</code> and return the resulting pair <code>[Model, ?Cmd]</code>. If nothing matches, dispatch the original Msg verbatim.</td></tr>
 </tbody>
 </table>
@@ -587,12 +658,26 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <tr><td><code>withCurrentZoneId(?string $id): self</code></td><td>Return a new tracker with a specific current zone id. Intended for state snapshot/restore rather than direct use. Pass null to clear the hovered state; an owed Enter is dropped (a restored id replaces the enter flow, it does not continue it).</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-mouse-zones-zoneregistry"><code>ZoneRegistry</code> <small>final class</small></h4>
+<p>The per-application home of the state the Zones layer used to keep in statics: the default Manager and the counter behind auto-generated Manager::newPrefix() prefixes.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>defaultManager(): Manager</code></td><td>This registry&#039;s shared default manager (un-prefixed), built lazily on first access and kept so zone state persists across <code>mark() → scan() → get()</code> cycles.</td></tr>
+<tr><td><code>setDefaultManager(?Manager $manager): void</code></td><td>Replace the default manager; null drops it so the next defaultManager() builds a fresh enabled one.</td></tr>
+<tr><td><code>newPrefix(string $prefix = &#039;&#039;): Manager</code></td><td>A manager that namespaces every id with a prefix unique within THIS registry. Same contract as Manager::newPrefix(): an empty $prefix auto-generates <code>&lt;n&gt;-</code>; an explicit numeric <code>&lt;n&gt;-</code> prefix is reserved, so a later auto prefix never merges into it.</td></tr>
+<tr><td><code>newUnprefixed(): Manager</code></td><td>A fresh un-prefixed manager, independent of the default one.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-mouse-zones-zones"><code>Zones</code> <small>final class</small></h4>
 <p>Package-level facade over a single shared Manager instance.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static defaultManager(): Manager</code></td><td>The shared default Manager. Lazily constructed on first access; survives between calls so zone state persists across <code>mark() → scan() → get()</code> cycles.</td></tr>
+<tr><td><code>static registry(): ZoneRegistry</code></td><td>The process registry the facade and the static Manager::newPrefix() route through, built lazily on first use.</td></tr>
+<tr><td><code>static setRegistry(?ZoneRegistry $registry): void</code></td><td>Replace the process registry; null drops it, so the next call builds a fresh one (an empty default manager and a prefix counter back at 0).</td></tr>
+<tr><td><code>static defaultManager(): Manager</code></td><td>The shared default Manager of the process registry. Lazily constructed on first access; survives between calls so zone state persists across <code>mark() → scan() → get()</code> cycles.</td></tr>
 <tr><td><code>static setDefaultManager(?Manager $m): void</code></td><td>Replace the shared default manager. Mostly useful in tests (<code>tearDown(): Zones::setDefaultManager(null)</code> flushes state) or when you want every package-level call to route through a pre-configured prefixed manager.</td></tr>
 <tr><td><code>static mark(string $id, string $content): string</code></td><td>Mirrors bubblezone&#039;s package-level <code>Mark</code>.</td></tr>
 <tr><td><code>static scan(string $rendered, ?int $width = null): string</code></td><td>Mirrors bubblezone&#039;s <code>Scan</code>. <code>$width</code> clamps zone columns into [1, $width].</td></tr>

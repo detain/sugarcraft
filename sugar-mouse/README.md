@@ -74,16 +74,21 @@ the house convention from AGENTS.md, landed in SM-S31).
 |---|---|
 | `Mark` | Emits the private-use sentinel tags around content; helpers sweep untrusted labels and render hostile ids safely (member details in the census below) |
 | `Scan` | Stateless, reentrant decoder behind `Scanner` — the static `Scan::parse($rendered, $width)` returns `id => Zone`; `Scan::strip($rendered)` is the public static byte-wise marker remover |
-| `Scanner` | Parse sentinels; `get(id)` and `hit(col, row)` lookups |
+| `Scanner` | Parse sentinels; `get(id)` / `zone(ZoneId)` and `hit(col, row)` / `hitAll(col, row)` lookups |
+| `ZoneGrid` | The bucket-grid index and the package's one hit rule (smallest covering area wins, ties to the first registered), shared by `Scanner` and `Zones\Manager` |
+| `ZoneId` | Typed zone id — namespace plus key, wire spelling `namespace:key` — so consumers stop parsing string prefixes |
+| `ZoneRouter` | Immutable dispatch table from typed ids (exact id, or whole namespace) to handlers; `routeMouse()` hit-tests and routes in one call |
+| `LineWidthCache` | Widths of unchanged inert lines, so a re-scan only re-measures the lines that changed (`Scanner` and `Manager` each own one) |
+| `Grapheme` | One grapheme cluster per step: ext-intl when loaded, PCRE `\X` otherwise |
 | `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `inBounds(MouseEvent)` |
 | `ZoneClickTracker` | Press+Release dedup per button |
 | `MouseEvent` | Immutable event (x, y, button, action enum) |
 | `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum; also carries the X10 button consts `BUTTON_LEFT/MIDDLE/RIGHT` and the wheel pair `BUTTON_WHEEL_UP/BUTTON_WHEEL_DOWN` (legacy of the primitive's numeric-button vocabulary) |
 | `Selection` | Press → drag → release text-selection state machine over a selectable region |
-| `SelectionRange` | Normalized, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
+| `SelectionRange` | Normalized, inclusive stream range a selection covers; `extract()` copies its text out of a frame and `highlight()` repaints the covered cells |
 | `Sentinel` | The two framing codepoints (`U+E000` open / `U+E001` close), anchored to sugar-core |
 | `ClickResult` | The agreed press+release pair `ZoneClickTracker::track()` returns on a confirmed click |
-| `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, five bare keys under Lang namespace `mouse`; the `sugar-mouse:` label rides inside each message) |
+| `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, seven bare keys under Lang namespace `mouse`; the `sugar-mouse:` label rides inside each message) |
 | `Zones\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` — the only Zones-layer message that lives outside the `Msg\` namespace |
 ### Primitive API (member census)
 
@@ -97,12 +102,15 @@ the house convention from AGENTS.md, landed in SM-S31).
 | `Mark` | `isValidId(id)` | The id grammar predicate shared by encoder and decoder |
 | `Mark` | `untrusted(text)` | Sweep foreign sentinel framing bytes off labels you did not render |
 | `Mark` | `escapeForMessage(id)` | Render a hostile id safely inside an error message |
-| `Scan` | `parse(rendered, ?width)` | Static decode: `id => Zone` bounding boxes (width clamps, zero-paint rects drop) |
+| `Scan` | `parse(rendered, ?width, ?cache)` | Static decode: `id => Zone` bounding boxes (width clamps, zero-paint rects drop); an optional `LineWidthCache` skips re-measuring unchanged inert lines, same result |
 | `Scan` | `strip(rendered)` | Byte-wise tag removal — same rule `parse()` decodes, so bounds and bytes stay in lock-step |
 | `Scanner` | `new()` | House factory for the registry-backed reverse-lookup |
 | `Scanner` | `scan(frame, ?width)` | Record the frame's zones (replaces previously recorded ids) |
 | `Scanner` | `get(id)` | One zone by id |
-| `Scanner` | `hit(col, row)` | Smallest zone under a cell (col-first!) |
+| `Scanner` | `hit(col, row)` | Smallest zone under a cell, ties to the first registered (col-first!) — the same rule as `Manager::zoneAt()` |
+| `Scanner` | `hitAll(col, row)` | Every zone under a cell, innermost first |
+| `Scanner` | `zone(ZoneId)` | One zone by typed id |
+| `Scanner` | `lineWidths()` | The `LineWidthCache` the scanner carries between scans |
 | `Scanner` | `all()` | Every recorded zone (ids this frame and earlier registered) |
 | `Scanner` | `idsStartingWith(prefix)` | The reading side of the prefix vocabulary (`newPrefix()` stamps, this selects) |
 | `Scanner` | `prefixed(prefix)` | @deprecated alias of `idsStartingWith()`; kept for live external callers |
@@ -127,6 +135,14 @@ the house convention from AGENTS.md, landed in SM-S31).
 | `SelectionRange` | `cellContains(row, col)` | Is this cell selected |
 | `SelectionRange` | `cells()` | Generator over every selected `[row, col]` in reading order |
 | `SelectionRange` | `extract(lines)` | The copied text out of a painted frame (row R is `lines[R - 1]`) |
+| `SelectionRange` | `highlight(lines, ?paint)` | The frame with the covered cells repainted from plain text (reverse video by default; pass `$style->render(...)` for a theme color) |
+| `ZoneGrid` | `of(zones)` / `smallestAt(col, row)` / `allAt(col, row)` / `count()` | Build the index; the owning zone; the innermost-first stack |
+| `ZoneId` | `of(namespace, key)` / `parse(wire)` | Build (throws on bad material) / read back (null when not a typed id) |
+| `ZoneId` | `wire()` / `intKey()` / `inNamespace(ns)` / `equals(id)` / `mark(content)` | Wire spelling; strict integer key (null for `07`, `7a`, overflow); namespace equality; markup |
+| `ZoneRouter` | `new()` / `on(ZoneId, handler)` / `onNamespace(ns, handler)` | Immutable registration; an exact route beats a namespace route; namespaces match by equality, never by prefix |
+| `ZoneRouter` | `route(id, ...args)` / `handles(id)` / `routeMouse(event, scanner\|manager)` | Dispatch `(ZoneId, ...args)`; is anything routed; hit-test then dispatch `(ZoneId, event, zone)` |
+| `LineWidthCache` | `new()` / `lookup()` / `store()` / `beginFrame()` / `hits()` / `misses()` / `size()` / `clear()` | Two-generation width cache (`parse()` calls `beginFrame()` itself) |
+| `Grapheme` | `next(s, i)` / `nextWithoutIntl(s, i)` | The cluster at byte `i`; the no-intl fallback, public so it can be checked against ICU |
 
 ### Choosing your tracker idiom
 
@@ -150,9 +166,11 @@ family-wide BC break — an open owner decision.
 `Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
 an immutable adapter over a cloned `Selection` machine, reads its geometry and
 copied text through `SelectionRange`, and speaks the same 1-based cells end to
-end. What it keeps locally is what this lib leaves to the app — a
-drift-latched dragging flag, the release/copy record, and the highlight
-repaint.
+end. The highlight repaint now lives here too (`SelectionRange::highlight()`,
+style injected as a closure so this lib needs no sugar-style); candy-code's own
+copy moves onto it in a later step. What the adapter keeps locally is what
+this lib leaves to the app — a drift-latched dragging flag and the
+release/copy record.
 
 The `Zones` layer (`Manager`, `Zones`, `Zone` adapter, `ZoneHoverTracker`,
 `DragTracker`, `MultiClickTracker`) is documented in its own section below.
@@ -316,16 +334,27 @@ no click ever matches. Opened short of it (`'12' . zone("\nabcdef")`),
 it claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2
 of row 2. Opened at column 1, its box also spans the unpainted row 1.
 
-**Grapheme clustering is host-dependent.** Cell columns advance one
-grapheme cluster at a time, so how a cluster *ends* decides where zones
-land. With `ext-intl` the split follows the bundled ICU's UAX #29 rules;
-without it (or when `grapheme_extract()` returns `''` mid-sequence) the
-lead-byte fallback consumes one scalar at a time. ZWJ emoji families,
-regional-indicator flags and base+combining runs therefore cluster — and
-advance — differently between hosts, shifting the bounding boxes around
-them. Layouts that mark wide glyphs and ship on machines without a pinned
-ICU should install `ext-intl`. The column math is otherwise correct per
-cluster, just not identical per cluster *set*.
+**Grapheme clustering follows the host's Unicode tables.** Cell columns
+advance one grapheme cluster at a time, so how a cluster *ends* decides where
+zones land. With `ext-intl` the split follows the bundled ICU's UAX #29
+rules; without it (or when `grapheme_extract()` returns `''` mid-sequence)
+`Grapheme` asks PCRE's own UAX #29 matcher (`\X`, always compiled into PHP)
+over a short window of whole code points, so ZWJ emoji families,
+regional-indicator flags and base+combining runs still advance as ONE
+cluster. Only bytes that are not valid UTF-8 fall back to one lead-byte-sized
+unit. ICU and PCRE track their own Unicode versions, so a code point newer
+than one of them can still cluster differently host to host; layouts that
+mark brand-new emoji should pin `ext-intl`. Runs of printable ASCII are taken
+in one step (an ASCII byte never extends a cluster), with the run's last byte
+left to the cluster path when a combining mark follows it.
+
+**Re-scans re-measure only changed lines.** Pass a `LineWidthCache` to
+`Scan::parse()` (`Scanner` and `Zones\Manager` each carry one) and every
+*inert* line — no zone markup, no lone `\r`, no DCS/SOS/PM/APC string — has
+its width cached by content. A transcript that appends at the bottom then pays
+the per-cluster walk only for the new lines; the result is identical with or
+without the cache. The cache keeps two generations (this frame's lines and the
+last frame's), so its memory stays bounded to about two frames.
 
 ## Multi-row zones
 
@@ -478,19 +507,21 @@ opens fully past the right edge, or any viewport narrower than one column
 — is dropped rather than collapsed onto the edge column (the same
 paints-no-cell/claims-nothing rule as the malformed-markup table above).
 
-**Two engines, two rules — and a persistent registry.** The primitive
-`Scanner::scan()` replaces its whole zone set from the frame it parses, and
-its `hit()` resolves ties by earliest registration. `Manager::scan()`
-merges into its registry: ids re-recorded in a new frame are replaced, and
+**One hit rule — and a persistent registry.** Both layers resolve a cell
+through the same `ZoneGrid`: the SMALLEST covering area wins (nested
+components: innermost wins), and equal areas go to the first-registered zone.
+`Scanner::hit()` and `Manager::zoneAt()` / `anyInBounds()` therefore always
+name the same owner for one painted frame (they used to disagree: the
+Scanner once resolved by registration order alone), and the Manager's
+lookups scan one grid bucket instead of the whole registry. The primitive
+`Scanner::scan()` replaces its whole zone set from the frame it parses;
+`Manager::scan()` merges into its registry: ids re-recorded in a new frame are replaced, and
 ids not present are kept. The consequence: a zone whose widget stopped
 rendering stays clickable until something replaces it under the same id,
 `clear($id)` removes it, or `close()` wipes the registry. So re-scan every
 frame you want authoritative, and clear ids you retire —
 `idsAbsentFromFrame($seen)` turns a frame's painted-id list into exactly the
-ids to drop. Manager hit-testing resolves
-the SMALLEST covering area first (nested components: innermost wins), ties
-between equal areas go to the first-recorded zone — the one point where it
-agrees with the primitive's registration-order rule. Use `allInBounds($msg)`
+ids to drop. Use `allInBounds($msg)`
 for the full
 stack (smallest first) and `zoneAt($col, $row)` to hit-test cells without a
 mouse message (scroll wheel landed here, tooltip anchor, etc.).
@@ -523,7 +554,12 @@ Beyond `mark()` / `scan()` / `get()`:
   returns content verbatim and `scan()` is identity.
 - `Manager::newPrefix(string $prefix = '')` — namespace every id with a
   prefix so two SugarMouse-aware components don't collide on `'item-0'`.
-  Called without an argument, it auto-generates a monotonic prefix.
+  Called without an argument, it auto-generates a monotonic prefix from the
+  process `ZoneRegistry`; an app that injects its own registry calls
+  `$registry->newPrefix()` instead. `Manager::newWithIdPrefix($prefix)` is the
+  raw factory with no counter bookkeeping.
+- `zone(ZoneId)` — the typed spelling of `get()`; `lineWidths()` — the
+  manager's `LineWidthCache`.
 - `prefix()` — read-only accessor for the prefix string.
 - `get($id)` / `all()` / `clear(?$id)` — single-zone lookup, every
   zone, and targeted-or-wipe-all clear.
@@ -562,6 +598,44 @@ if (Zones::get('header')?->inBounds($mouse)) { /* … */ }
 useful in tests (`Zones::setDefaultManager(null)` flushes state) or
 when you want every package-level call routed through a prefixed
 manager.
+
+**No hidden statics: the registry.** Everything the facade remembers — the
+default manager and the auto-prefix counter behind `newPrefix()` — lives in
+one `ZoneRegistry` instance (`Zones::registry()`), and that slot is the only
+static state in the Zones layer. Programs and tests that want isolation build
+their own and pass it around; two registries share nothing:
+
+```php
+use SugarCraft\Mouse\Zones\ZoneRegistry;
+
+$zones = ZoneRegistry::new();
+$list  = $zones->newPrefix();          // "1-", unique within $zones
+$main  = $zones->defaultManager();     // this program's default manager
+Zones::setRegistry(null);              // tests: reset the process registry wholesale
+```
+
+### Typed zone ids and routing
+
+`ZoneId::of('toolcall', 42)` marks, scans and strips exactly like the string
+id `toolcall:42` — the string API is untouched — and a `ZoneRouter` dispatches
+a hit by type instead of by `str_starts_with()` and `(int) substr()`:
+
+```php
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Mouse\{ZoneId, ZoneRouter};
+
+$frame  = ZoneId::of('menu', 'quit')->mark('Quit') . ' ' . ZoneId::of('row', 3)->mark('third row');
+$router = ZoneRouter::new()
+    ->on(ZoneId::of('menu', 'quit'), fn (ZoneId $id, MouseMsg $m) => 'quit')
+    ->onNamespace('row', fn (ZoneId $id, MouseMsg $m) => $id->intKey()); // null for a malformed key, never 0
+
+$result = $router->routeMouse($msg, $scanner); // or a Zones\Manager; null when nothing routed
+```
+
+An exact route beats a namespace route; a namespace matches by equality
+(`tab` never catches `tabs:3`); a zone whose id is not a typed id is simply
+unrouted. With a prefixed `Manager`, routes are written against the ids
+passed to `mark()` — the manager's prefix is stripped before parsing.
 
 ### Hover tracking
 
@@ -862,7 +936,9 @@ the Zones rows answer "what does the app-facing manager and its trackers do".
 | Class | Method | Description |
 |---|---|---|
 | `Manager` | `newUnprefixed()` | Build a fresh un-prefixed manager independent of every other instance — not the shared default (that is `Zones::defaultManager()`); formerly spelled `newGlobal()`, which remains as a deprecated alias |
-| `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
+| `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation (counter in the process `ZoneRegistry`) |
+| `Manager` | `newWithIdPrefix(prefix)` | Raw prefixed factory, no counter bookkeeping |
+| `Manager` | `zone(ZoneId)` / `lineWidths()` | Typed lookup / the manager's line-width cache |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
 | `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newUnprefixed()` manager records every id), strip markers, clamp columns to `?width` |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
@@ -876,6 +952,8 @@ the Zones rows answer "what does the app-facing manager and its trackers do".
 | `Zone` | `toMouseEvent(mouseMsg)` | Core→primitive action/button bridge |
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
 | `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newUnprefixed()` builds a different, independent instance) |
+| `Zones` (static) | `registry()` / `setRegistry(?registry)` | The process `ZoneRegistry` holding the facade's state / replace or reset it |
+| `ZoneRegistry` | `new()` / `defaultManager()` / `setDefaultManager(?m)` / `newPrefix(prefix)` / `newUnprefixed()` | Per-app home of the default manager and prefix counter — inject one instead of relying on statics |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
 | `ZoneHoverTracker` | `currentZone()` | Get the hovered Zone or null |
