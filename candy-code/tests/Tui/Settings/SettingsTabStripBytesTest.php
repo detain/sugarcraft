@@ -23,12 +23,12 @@ use SugarCraft\Style\Style;
  */
 final class SettingsTabStripBytesTest extends TestCase
 {
-    private const MUTED = "\e[38;2;139;143;168m";
+    private const STRIP_MARK = "\e[38;2;139;143;168m";
     private const TAB_DIVIDER = "\e[38;2;20;20;20m│\e[0m";
-    private const ACTIVE = "\e[1;7m\e[38;2;112;145;245m";
-    private const INACTIVE = "\e[38;2;197;201;212m";
-    private const FRAME_LEFT = "\e[38;2;112;145;245m│\e[0m ";
-    private const FRAME_RIGHT = "\e[38;2;112;145;245m│\e[0m";
+    private const STRIP_ACTIVE = "\e[1;7m\e[38;2;112;145;245m";
+    private const STRIP_INACTIVE = "\e[38;2;197;201;212m";
+    private const BORDER_LEFT = "\e[38;2;112;145;245m│\e[0m ";
+    private const BORDER_RIGHT = "\e[38;2;112;145;245m│\e[0m";
     private const FIRST_WINDOW_ZONES = [
         [2, 2, 20, 'settings:tab:0'],
         [2, 21, 33, 'settings:tab:1'],
@@ -40,10 +40,10 @@ final class SettingsTabStripBytesTest extends TestCase
     {
         self::assertSame(
             [
-                self::INACTIVE . " Model \e[0m" . self::TAB_DIVIDER
-                    . self::ACTIVE . " Providers \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Permissions \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Keys \e[0m",
+                self::STRIP_INACTIVE . " Model \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_ACTIVE . " Providers \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Permissions \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Keys \e[0m",
                 [[0, 7, 0], [8, 19, 1], [20, 33, 2], [34, 40, 3]],
             ],
             $this->render(['Model', 'Providers', 'Permissions', 'Keys'], 1, 80),
@@ -56,23 +56,23 @@ final class SettingsTabStripBytesTest extends TestCase
 
         self::assertSame(
             [
-                self::MUTED . "‹\e[0m" . self::ACTIVE . " Appearance \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Keys \e[0m" . self::MUTED . "›\e[0m",
+                self::STRIP_MARK . "‹\e[0m" . self::STRIP_ACTIVE . " Appearance \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Keys \e[0m" . self::STRIP_MARK . "›\e[0m",
                 [[1, 13, 3], [14, 20, 4]],
             ],
             $this->render($labels, 3, 24),
         );
         self::assertSame(
             [
-                self::MUTED . "‹\e[0m" . self::INACTIVE . " Keys \e[0m" . self::TAB_DIVIDER
-                    . self::ACTIVE . " MCP \e[0m",
+                self::STRIP_MARK . "‹\e[0m" . self::STRIP_INACTIVE . " Keys \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_ACTIVE . " MCP \e[0m",
                 [[1, 7, 4], [8, 13, 5]],
             ],
             $this->render($labels, 5, 24),
             'scrolled to the last tab only the left mark is drawn',
         );
         self::assertSame(
-            [self::ACTIVE . " Model \e[0m" . self::MUTED . "›\e[0m", [[0, 7, 0]]],
+            [self::STRIP_ACTIVE . " Model \e[0m" . self::STRIP_MARK . "›\e[0m", [[0, 7, 0]]],
             $this->render(['Model', 'Providers', 'Permissions'], 0, 18),
             'tabs hidden on the right end in the right mark',
         );
@@ -88,21 +88,21 @@ final class SettingsTabStripBytesTest extends TestCase
         $labels = ['Model', 'Providers', 'Permissions'];
 
         self::assertSame(
-            [self::MUTED . "‹\e[0m" . self::MUTED . "›\e[0m", []],
+            [self::STRIP_MARK . "‹\e[0m" . self::STRIP_MARK . "›\e[0m", []],
             $this->render($labels, 1, 12),
         );
         self::assertSame(
-            [self::MUTED . "‹\e[0m" . self::ACTIVE . " Providers \e[0m" . self::MUTED . "›\e[0m", [[1, 12, 1]]],
+            [self::STRIP_MARK . "‹\e[0m" . self::STRIP_ACTIVE . " Providers \e[0m" . self::STRIP_MARK . "›\e[0m", [[1, 12, 1]]],
             $this->render($labels, 1, 13),
             'at the exact fit the tab and its span are drawn',
         );
         self::assertSame(
-            [self::MUTED . "›\e[0m", []],
+            [self::STRIP_MARK . "›\e[0m", []],
             $this->render(['Providers'], 0, 10),
             'with nothing to its left the guard draws the right mark alone',
         );
         self::assertSame(
-            [self::MUTED . "‹\e[0m" . self::MUTED . "›\e[0m", []],
+            [self::STRIP_MARK . "‹\e[0m" . self::STRIP_MARK . "›\e[0m", []],
             $this->render(['Model', 'Providers'], 1, 11),
             'an active last tab still draws the right mark: the guard draws it unconditionally',
         );
@@ -114,17 +114,17 @@ final class SettingsTabStripBytesTest extends TestCase
             $editor = SettingsEditor::open(self::sources());
 
             self::assertSame(
-                self::FRAME_LEFT . self::ACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Agent loop \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Context & Compaction \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Permissions \e[0m" . self::MUTED . "›\e[0m        " . self::FRAME_RIGHT,
+                self::BORDER_LEFT . self::STRIP_ACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Agent loop \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Context & Compaction \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Permissions \e[0m" . self::STRIP_MARK . "›\e[0m        " . self::BORDER_RIGHT,
                 $this->stripLine($editor, 80),
             );
             self::assertSame(self::FIRST_WINDOW_ZONES, $this->tabZones($editor, 80));
 
             self::assertSame(
-                self::FRAME_LEFT . self::ACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Agent loop \e[0m" . self::MUTED . "›\e[0m     " . self::FRAME_RIGHT,
+                self::BORDER_LEFT . self::STRIP_ACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Agent loop \e[0m" . self::STRIP_MARK . "›\e[0m     " . self::BORDER_RIGHT,
                 $this->stripLine($editor, 40),
             );
             self::assertSame(
@@ -142,10 +142,10 @@ final class SettingsTabStripBytesTest extends TestCase
             $right = $editor->update(new KeyMsg(KeyType::Right));
             self::assertNotNull($right);
             self::assertSame(
-                self::FRAME_LEFT . self::INACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
-                    . self::ACTIVE . " Agent loop \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Context & Compaction \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Permissions \e[0m" . self::MUTED . "›\e[0m        " . self::FRAME_RIGHT,
+                self::BORDER_LEFT . self::STRIP_INACTIVE . " Model & Provider \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_ACTIVE . " Agent loop \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Context & Compaction \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Permissions \e[0m" . self::STRIP_MARK . "›\e[0m        " . self::BORDER_RIGHT,
                 $this->stripLine($right, 80),
             );
             self::assertSame(self::FIRST_WINDOW_ZONES, $this->tabZones($right, 80));
@@ -154,12 +154,12 @@ final class SettingsTabStripBytesTest extends TestCase
             self::assertNotNull($left);
             self::assertTrue($left->onFilesTab(), 'Left from the first tab wraps to the last');
             self::assertSame(
-                self::FRAME_LEFT . self::MUTED . "‹\e[0m" . self::INACTIVE . " Git & Automation \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Interface \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Hooks & MCP \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Server \e[0m" . self::TAB_DIVIDER
-                    . self::INACTIVE . " Advanced \e[0m" . self::TAB_DIVIDER
-                    . self::ACTIVE . " Files \e[0m    " . self::FRAME_RIGHT,
+                self::BORDER_LEFT . self::STRIP_MARK . "‹\e[0m" . self::STRIP_INACTIVE . " Git & Automation \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Interface \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Hooks & MCP \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Server \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_INACTIVE . " Advanced \e[0m" . self::TAB_DIVIDER
+                    . self::STRIP_ACTIVE . " Files \e[0m    " . self::BORDER_RIGHT,
                 $this->stripLine($left, 80),
             );
             self::assertSame(
