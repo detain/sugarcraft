@@ -155,6 +155,35 @@ final class GraphemeTest extends TestCase
     }
 
     /**
+     * A cluster longer than the first fallback window (32 code points) stays
+     * one cluster: the window grows instead of cutting it into pieces that
+     * each carry width, so the zone after it lands where ICU puts it.
+     */
+    public function testClusterLongerThanTheFirstWindowStaysWhole(): void
+    {
+        $family = implode("\u{200D}", array_fill(0, 20, '👨')); // 39 code points
+        self::assertSame(39, mb_strlen($family));
+
+        self::assertSame($family, Grapheme::nextWithoutIntl($family . 'x', 0));
+        if (function_exists('grapheme_extract')) {
+            self::assertSame(grapheme_extract($family . 'x', 1, GRAPHEME_EXTR_COUNT, 0), Grapheme::nextWithoutIntl($family . 'x', 0));
+        }
+
+        $zones = Scan::parse($family . Mark::zone('z', 'x'));
+        self::assertSame(3, $zones['z']->startCol);
+    }
+
+    /**
+     * The grown window still has a hard cap (4096 code points), so a
+     * pathological combining run is cut there rather than matched whole.
+     */
+    public function testFallbackWindowStopsAtItsHardCap(): void
+    {
+        $zalgo = 'e' . str_repeat("\u{0301}", 5000) . 'x';
+        self::assertSame(4096, mb_strlen(Grapheme::nextWithoutIntl($zalgo, 0)));
+    }
+
+    /**
      * GB9b: a Prepend code point and the ASCII letter after it are one
      * cluster, so the zone after them starts one cell in, not two. The
      * fallback must keep that ASCII byte in the Prepend's window.

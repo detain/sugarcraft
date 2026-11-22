@@ -16,8 +16,9 @@ namespace SugarCraft\Mouse;
  *
  * With ext-intl the boundary is ICU's UAX #29 answer (`grapheme_extract`).
  * Without it, {@see nextWithoutIntl()} asks PCRE's extended grapheme cluster
- * matcher (`\X`, always compiled into PHP) over a short window of whole code
- * points, so a host without ext-intl still measures per cluster instead of
+ * matcher (`\X`, always compiled into PHP) over a window of whole code points
+ * that grows while the cluster fills it (capped at {@see MAX_WINDOW} code
+ * points), so a host without ext-intl still measures per cluster instead of
  * falling back to per code point. Only bytes that are not valid UTF-8 degrade
  * to a single lead-byte-sized unit — the same posture the scanner always had
  * for them; a valid cluster followed by such bytes still measures as one
@@ -38,11 +39,18 @@ namespace SugarCraft\Mouse;
 final class Grapheme
 {
     /**
-     * Code points a fallback window holds. The longest clusters in real
-     * frames — ZWJ family sequences and emoji tag flags — run to about ten
-     * code points; the margin keeps a pathological run bounded.
+     * Code points the first fallback window holds. The longest clusters in
+     * real frames — ZWJ family sequences and emoji tag flags — run to about
+     * ten code points, so one window almost always settles the boundary.
      */
     private const WINDOW = 32;
+
+    /**
+     * Code points a fallback window may grow to. A cluster that still fills
+     * the window at this size is cut here; the window doubles up to it, so a
+     * long cluster costs a few re-matches, never a per-code-point loop.
+     */
+    private const MAX_WINDOW = 4096;
 
     private function __construct()
     {
@@ -82,8 +90,9 @@ final class Grapheme
 
     /**
      * The cluster at $i found without ext-intl: PCRE `\X` over a window of
-     * up to {@see WINDOW} whole code points. Public so the fallback can be
-     * verified on hosts that do have ext-intl.
+     * {@see WINDOW} whole code points, grown while the cluster fills it, up to
+     * {@see MAX_WINDOW}. Public so the fallback can be verified on hosts that
+     * do have ext-intl.
      */
     public static function nextWithoutIntl(string $s, int $i): string
     {
@@ -106,23 +115,38 @@ final class Grapheme
             return substr($s, $i, $first);
         }
 
-        for ($taken = 1; $taken < self::WINDOW && $end < $len; $taken++) {
-            $end += self::scalarLength($s, $end);
-        }
-        $window = substr($s, $i, min($end, $len) - $i);
+        // A cluster that fills the whole window may continue past it, so the
+        // window grows until \X ends inside it, the window reaches the end of
+        // the string or an invalid unit, or the hard cap is hit. Cutting at a
+        // fixed count would split a long ZWJ run into pieces that each carry
+        // width and diverge from ICU's column count.
+        $taken = 1;
+        $limit = self::WINDOW;
+        while (true) {
+            for (; $taken < $limit && $end < $len; $taken++) {
+                $end += self::scalarLength($s, $end);
+            }
+            $window = substr($s, $i, min($end, $len) - $i);
+            $atStringEnd = $end >= $len;
 
-        // A /u match fails on the whole window when ANY byte in it is not
-        // valid UTF-8, so a later stray byte would cut a valid cluster down to
-        // its lead unit. No cluster spans an invalid unit, so matching the
-        // valid prefix gives the same boundary ICU would.
-        if (preg_match('//u', $window) !== 1) {
-            $window = self::validPrefix($window);
+            // A /u match fails on the whole window when ANY byte in it is not
+            // valid UTF-8, so a later stray byte would cut a valid cluster
+            // down to its lead unit. No cluster spans an invalid unit, so
+            // matching the valid prefix gives the same boundary ICU would.
+            $cut = false;
+            if (preg_match('//u', $window) !== 1) {
+                $window = self::validPrefix($window);
+                $cut = true;
+            }
+            if ($window === '' || preg_match('/\A\X/u', $window, $match) !== 1 || $match[0] === '') {
+                // The lead unit itself is not valid UTF-8: it alone is the answer.
+                return substr($s, $i, $first);
+            }
+            if ($atStringEnd || $cut || strlen($match[0]) < strlen($window) || $limit >= self::MAX_WINDOW) {
+                return $match[0];
+            }
+            $limit = min($limit * 2, self::MAX_WINDOW);
         }
-        if ($window !== '' && preg_match('/\A\X/u', $window, $match) === 1 && $match[0] !== '') {
-            return $match[0];
-        }
-        // The lead unit itself is not valid UTF-8: it alone is the answer.
-        return substr($s, $i, $first);
     }
 
     /** The leading whole scalars of $window up to its first invalid UTF-8 unit. */

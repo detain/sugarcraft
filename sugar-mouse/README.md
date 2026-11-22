@@ -339,9 +339,11 @@ advance one grapheme cluster at a time, so how a cluster *ends* decides where
 zones land. With `ext-intl` the split follows the bundled ICU's UAX #29
 rules; without it (or when `grapheme_extract()` returns `''` mid-sequence)
 `Grapheme` asks PCRE's extended grapheme cluster matcher (`\X`, always
-compiled into PHP) over a short window of whole code points, so ZWJ emoji
+compiled into PHP) over a window of whole code points, so ZWJ emoji
 families, regional-indicator flags and an accent on a Latin base still
-advance as ONE cluster. Only bytes that are not valid UTF-8 fall back to one
+advance as ONE cluster. The window starts at 32 code points and doubles while
+the cluster fills it, up to 4096; only a cluster longer than that (a
+pathological combining run) is cut there, where ICU would take it whole. Only bytes that are not valid UTF-8 fall back to one
 lead-byte-sized unit. `\X` approximates UAX #29 rather than implementing it:
 measured on PCRE2 10.42 against ICU 74, it splits an Indic conjunct such as
 क्ष (U+0915 U+094D U+0937) into two clusters, so a zone after it lands one

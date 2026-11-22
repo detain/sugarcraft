@@ -383,7 +383,7 @@ $picked = $range?->extract($lines) ?? '';</code></pre>
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static next(string $s, int $i): string</code></td><td>The grapheme cluster starting at byte offset $i of $s (&#039;&#039; when $i is at or past the end).</td></tr>
-<tr><td><code>static nextWithoutIntl(string $s, int $i): string</code></td><td>The cluster at $i found without ext-intl: PCRE <code>\X</code> over a window of up to WINDOW whole code points. Public so the fallback can be verified on hosts that do have ext-intl.</td></tr>
+<tr><td><code>static nextWithoutIntl(string $s, int $i): string</code></td><td>The cluster at $i found without ext-intl: PCRE <code>\X</code> over a window of WINDOW whole code points, grown while the cluster fills it, up to MAX_WINDOW. Public so the fallback can be verified on hosts that do have ext-intl.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-mouse-lang"><code>Lang</code> <small>final class</small></h4>
