@@ -134,6 +134,33 @@ final class PermissionGateHookTest extends TestCase
     }
 
     /**
+     * CC4-1: the rm root-or-home floor's denial renders as the bare mode
+     * sentence, byte for byte, in every mode and for every tool that reaches
+     * it — the floor writes no reason, so no " — why" tail is appended.
+     */
+    public function testTheRmFloorDenialMessageIsTheBareModeSentenceInEveryMode(): void
+    {
+        $shellSend = \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME;
+        $calls = [
+            ['Bash', ['command' => 'rm -rf /']],
+            ['Bash', ['command' => "rm -fr '~'"]],
+            ['Bash', ['command' => 'sudo rm --recursive --force "$HOME"']],
+            ['PtyRun', ['command' => 'rm -rf /*']],
+            [$shellSend, ['shell_id' => 'sh-12345678', 'keys' => 'rm -rf ~/<Enter>']],
+        ];
+
+        foreach (PermissionMode::cases() as $mode) {
+            $hook = new PermissionGateHook(new PermissionGate($mode, [], new \SugarCraft\Code\Permissions\SafetyClassifier()));
+            foreach ($calls as [$tool, $args]) {
+                $result = $hook->execute($this->context($tool, $args));
+                $label = $tool . ' ' . json_encode($args) . ' in ' . $mode->value;
+                $this->assertTrue($result->isDenied(), $label);
+                $this->assertSame("Permission mode '{$mode->value}' does not allow {$tool}.", $result->message, $label);
+            }
+        }
+    }
+
+    /**
      * Ordering contract from the class docblock: the built-ins are the
      * narrower, more specific hazard check, and their verdict (an ASK for a
      * destructive match) short-circuits the scan before the gate's broad-policy

@@ -899,6 +899,162 @@ final class PermissionGateTest extends TestCase
     }
 
     // =========================================================================
+    // CC4-1 — the rm root-or-home floor, pinned across its move into RmRfFloor
+    // =========================================================================
+
+    /**
+     * Representative root and home operands, bare and quoted.
+     *
+     * @return list<string>
+     */
+    private static function rmFloorRootOrHomeOperands(): array
+    {
+        return ['/', '"/"', "'/'", '/*', '//', '~', '"~"', "'~'", '~/', '~root', '$HOME', '"$HOME"', '${HOME}', '$HOME/'];
+    }
+
+    /**
+     * Every spelling of "recursive and force" the floor recognises, quoted
+     * and split included.
+     *
+     * @return list<string>
+     */
+    private static function rmFloorRecursiveForceFlags(): array
+    {
+        return ['-rf', '-fr', '-Rf', '-r -f', '-f -r', '--recursive --force', '--rec --forc', "'-rf'", '"-rf"'];
+    }
+
+    /**
+     * The floor denies every combination of a recursive+force spelling and a
+     * root-or-home operand, in every mode, and leaves no reason, channel
+     * reason or forced-ask mark behind: the denial the hook renders from it
+     * is the bare mode sentence (pinned in PermissionGateHookTest).
+     */
+    public function testRmFloorDeniesEveryRootOrHomeOperandWithRecursiveAndForceInEveryModeWithoutAReason(): void
+    {
+        foreach (PermissionMode::cases() as $mode) {
+            $gate = new PermissionGate($mode, [], new SafetyClassifier());
+            foreach (self::rmFloorRecursiveForceFlags() as $flags) {
+                foreach (self::rmFloorRootOrHomeOperands() as $operand) {
+                    $command = "rm {$flags} {$operand}";
+                    $label = json_encode($command) . ' in ' . $mode->value;
+                    $this->assertSame(
+                        PermissionDecision::Deny,
+                        $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+                        $label,
+                    );
+                    $this->assertNull($gate->lastAutoReason(), $label . ' left an auto reason');
+                    $this->assertNull($gate->lastChannelReason(), $label . ' left a channel reason');
+                    $this->assertFalse($gate->lastAskForced(), $label . ' left a forced-ask mark');
+                }
+            }
+        }
+    }
+
+    /**
+     * The floor sits before the Auto strike counters, so its denial records
+     * no block.
+     */
+    public function testRmFloorDenialLeavesTheAutoStrikeCountersUntouched(): void
+    {
+        $gate = new PermissionGate(PermissionMode::Auto, [], new SafetyClassifier());
+
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /'])));
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf ~'])));
+
+        $breaker = $gate->autoBreaker();
+        $this->assertSame(0, $breaker['consecutiveBlocks']);
+        $this->assertSame(0, $breaker['totalBlocks']);
+        $this->assertNull($breaker['lastBlockedCategory']);
+    }
+
+    /**
+     * Root or home without BOTH flags, recursive+force against anything that
+     * is not root or home, and words that are not an `rm` command all stay
+     * Allow under `bypass-permissions`.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function rmFloorNonMatchingCommands(): iterable
+    {
+        foreach (self::rmFloorRootOrHomeOperands() as $operand) {
+            yield "recursive only on {$operand}" => ["rm -r {$operand}"];
+            yield "force only on {$operand}" => ["rm -f {$operand}"];
+            yield "no flags on {$operand}" => ["rm {$operand}"];
+        }
+        yield 'quoted relative build dir' => ['rm -rf "./build"'];
+        yield 'quoted etc' => ["rm -rf '/etc'"];
+        yield 'tmp subdir' => ['rm -rf /tmp/foo'];
+        yield 'home subdir' => ['rm -rf ~/project'];
+        yield 'quoted HOME subdir' => ['rm -rf "$HOME/x"'];
+        yield 'bare relative word' => ['rm -rf relative'];
+        yield 'HOMEDIR is not HOME' => ['rm -rf $HOMEDIR'];
+        yield 'rmdir is not rm' => ['rmdir /'];
+        yield 'grm is not rm' => ['grm -rf /'];
+        yield 'ls with the same flags' => ['ls -rf /'];
+        yield 'rm as an echo argument' => ['echo rm -rf ~'];
+    }
+
+    #[DataProvider('rmFloorNonMatchingCommands')]
+    public function testRmFloorLeavesNonMatchingCommandsAllowedUnderBypass(string $command): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+            json_encode($command) . ' is not rm recursive+force on root or home',
+        );
+    }
+
+    /**
+     * Only a shell-subject tool's command (and ShellSend's typed lines) is
+     * judged: a non-shell tool carrying the same text, and a Bash call with no
+     * usable command, are not the floor's business.
+     */
+    public function testRmFloorJudgesOnlyShellBoundText(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'Read', arguments: ['command' => 'rm -rf /'])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'Bash', arguments: [])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => ['rm', '-rf', '/']])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => ''])));
+    }
+
+    /**
+     * PtyRun's command and each decoded step, and each decoded line of a
+     * ShellSend's keystrokes, reach the same floor.
+     */
+    public function testRmFloorJudgesPtyRunStepsAndShellSendLines(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+        $shellSend = \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME;
+
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'PtyRun', arguments: ['command' => 'rm -rf /'])));
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'PtyRun', arguments: ['command' => 'sh', 'steps' => [['send' => 'rm -rf ~<Enter>']]])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'PtyRun', arguments: ['command' => 'sh', 'steps' => [['send' => 'rm -rf ./build<Enter>']]])));
+
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: $shellSend, arguments: ['shell_id' => 'sh-12345678', 'keys' => 'rm -rf /<Enter>'])));
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: $shellSend, arguments: ['shell_id' => 'sh-12345678', 'keys' => "ls\nrm -fr '~'<Enter>"])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: $shellSend, arguments: ['shell_id' => 'sh-12345678', 'keys' => 'rm -rf ./build<Enter>'])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: $shellSend, arguments: ['shell_id' => 'sh-12345678', 'keys' => ''])));
+    }
+
+    /**
+     * Past the length door the floor pre-scans for an `rm` word: a long line
+     * with none is skipped, a long line that holds one is still judged.
+     */
+    public function testRmFloorJudgesCommandsPastTheLengthDoor(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+        $padding = str_repeat('x', PermissionGate::MAX_REASONED_COMMAND_BYTES + 16);
+
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => "echo {$padding}; rm -rf /"])));
+        $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => "echo {$padding}; r'm' -rf ~"])));
+        $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => "echo {$padding}; ls -rf /"])));
+    }
+
+    // =========================================================================
     // R3(d) — Auto mode fails closed without a classifier
     // =========================================================================
 
