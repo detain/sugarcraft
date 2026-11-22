@@ -134,13 +134,21 @@ final class Scan
      *                         the edge column (an edge sliver would steal
      *                         clicks from the real content there).
      *                         null = no clamp (default).
+     * @param LineWidthCache|null $cache When provided, the painted width of
+     *                         every inert line (no zone markup, no lone CR, no
+     *                         DCS/SOS/PM/APC string) is read from or stored in
+     *                         it, so re-scanning unchanged lines skips the
+     *                         per-cluster walk. The result is identical with
+     *                         or without it. One parse() is one frame: the
+     *                         cache's {@see LineWidthCache::beginFrame()} runs
+     *                         first.
      *
      * @return array<string, Zone> id => Zone, in close order
      *
      * @throws \InvalidArgumentException When the same zone id is opened twice
      *         in one render (see the class docblock's malformed-markup matrix).
      */
-    public static function parse(string $rendered, ?int $width = null): array
+    public static function parse(string $rendered, ?int $width = null, ?LineWidthCache $cache = null): array
     {
         /**
          * Zones whose open tag has been seen and whose close has not.
@@ -173,6 +181,9 @@ final class Scan
         $painted = 0; // total display cells painted so far
         $len     = strlen($rendered);
         $i       = 0;
+        $atLineStart = true;
+
+        $cache?->beginFrame();
 
         // Precompute every close-sentinel byte offset in one O(n) pass so the
         // per-open-sentinel id-terminator lookup below is an O(log n) binary
@@ -187,6 +198,23 @@ final class Scan
         }
 
         while ($i < $len) {
+            if ($atLineStart === true && $cache !== null) {
+                $atLineStart = false;
+                $end = self::inertLineEnd($rendered, $i, $len);
+                if ($end > $i) {
+                    $line = substr($rendered, $i, $end - $i);
+                    $w = $cache->lookup($line);
+                    if ($w === null) {
+                        $w = self::inertWidth($rendered, $i, $end, $len);
+                        $cache->store($line, $w);
+                    }
+                    $col     += $w;
+                    $painted += $w;
+                    $i        = $end;
+                    continue;
+                }
+            }
+
             $b = $rendered[$i];
 
             if ($b === "\xEE" && $i + 2 < $len && $rendered[$i + 1] === "\x80") {
@@ -271,18 +299,7 @@ final class Scan
             // these breaks a truncated CSI swallowed the cancel byte and
             // whatever followed — text mis-measured, or a whole zone lost.
             if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === '[') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    $c = ord($rendered[$j]);
-                    if ($c === 0x1b || $c === 0x0d || $c === 0x0a) {
-                        break;
-                    }
-                    $j++;
-                    if ($c >= 0x40 && $c <= 0x7e) {
-                        break;
-                    }
-                }
-                $i = $j;
+                $i = self::skipCsi($rendered, $i, $len);
                 continue;
             }
 
@@ -293,15 +310,7 @@ final class Scan
             // swallowed ESC here would eat the next sequence's introducer and
             // mis-measure everything after it.
             if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === ']') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    if ($rendered[$j] === "\x07") { $j++; break; }
-                    if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') { $j += 2; break; }
-                    if ($rendered[$j] === "\x1b") { break; }
-                    if ($rendered[$j] === "\x0d" || $rendered[$j] === "\x0a") { break; }
-                    $j++;
-                }
-                $i = $j;
+                $i = self::skipOsc($rendered, $i, $len);
                 continue;
             }
 
@@ -413,15 +422,15 @@ final class Scan
                 $row++;
                 $col = 1;
                 $i++;
+                $atLineStart = true;
                 continue;
             }
 
-            // Plain visible character — measure display width and advance.
-            $cluster  = self::nextGrapheme($rendered, $i);
-            $w        = Width::string($cluster);
+            // Plain visible text — measure display width and advance.
+            [$bytes, $w] = self::visible($rendered, $i, $len);
             $col     += $w;
             $painted += $w;
-            $i       += strlen($cluster);
+            $i       += $bytes;
         }
 
         return $zones;
@@ -668,48 +677,141 @@ final class Scan
     }
 
     /**
-     * Return the next grapheme cluster starting at byte offset $i.
+     * Offset where the inert line starting at $i ends, or $i itself when the
+     * line is not inert (or empty) and must be walked byte by byte.
      *
-     * Edge case: grapheme_extract() can return an empty string '' when
-     * the offset $i lands mid-grapheme (e.g., in the middle of a combine
-     * sequence).  The fallback UTF-8 byte scan handles this by returning
-     * the next valid multi-byte sequence starting at $i.  This can produce
-     * a grapheme that is technically a continuation of a sequence started
-     * before $i, but in terminal output this is unlikely to cause issues
-     * since combining characters are normally printed after their base.
-     *
-     * Known divergence class (portability): with ext-intl the boundary is the
-     * host ICU's UAX #29 answer; the fallback consumes one scalar. ZWJ emoji
-     * sequences, regional-indicator flags and base+combining runs split into
-     * several clusters without ext-intl — each advancing its own column — so
-     * identical frames can produce shifted bounding boxes across hosts. The
-     * README's Scan rules carry the consumer-facing version of this note.
+     * Inert means the walk's state can change only by the width it paints:
+     * no sentinel byte pair (a tag, or the lead of one), no lone CR (it moves
+     * the column back and touches open zones), and no DCS / SOS / PM / APC
+     * introducer (those strings do not stop at LF, so they can run past the
+     * line). A trailing CR of a CRLF is left outside the line: the main walk
+     * still turns it into the newline.
      */
-    private static function nextGrapheme(string $s, int $i): string
+    private static function inertLineEnd(string $rendered, int $i, int $len): int
     {
-        // Function-local memo of the extension probe: availability is fixed
-        // for the process, so pay function_exists() once instead of once per
-        // cluster.  Deliberately not a class property — Scan carries no
-        // static scan state (reentrancy, pinned by ScanMalformedMarkupTest),
-        // and this flag cannot affect any parse result.
-        static $hasGraphemeExtract = null;
-        $hasGraphemeExtract ??= function_exists('grapheme_extract');
+        $nl  = strpos($rendered, "\n", $i);
+        $end = $nl === false ? $len : $nl;
+        if ($end > $i && $rendered[$end - 1] === "\r") {
+            $end--;
+        }
+        if ($end <= $i) {
+            return $i;
+        }
+        $line = substr($rendered, $i, $end - $i);
+        if (str_contains($line, "\xEE\x80") || str_contains($line, "\r")
+            || str_contains($line, "\x1bP") || str_contains($line, "\x1bX")
+            || str_contains($line, "\x1b^") || str_contains($line, "\x1b_")
+        ) {
+            return $i;
+        }
+        return $end;
+    }
 
-        if ($hasGraphemeExtract === true) {
-            $next = 0;
-            $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (is_string($cluster) === true && $cluster !== '') {
-                return $cluster;
+    /**
+     * Painted width of the inert run [$i, $end): the exact subset of the
+     * main walk an inert line can reach (CSI, OSC, visible clusters), so a
+     * cached width always equals what the walk would have measured.
+     */
+    private static function inertWidth(string $rendered, int $i, int $end, int $len): int
+    {
+        $width = 0;
+        while ($i < $end) {
+            if ($rendered[$i] === "\x1b" && ($rendered[$i + 1] ?? '') === '[') {
+                $i = self::skipCsi($rendered, $i, $len);
+                continue;
+            }
+            if ($rendered[$i] === "\x1b" && ($rendered[$i + 1] ?? '') === ']') {
+                $i = self::skipOsc($rendered, $i, $len);
+                continue;
+            }
+            [$bytes, $w] = self::visible($rendered, $i, $len);
+            $width += $w;
+            $i     += $bytes;
+        }
+        return $width;
+    }
+
+    /**
+     * Offset just past the CSI sequence introduced at $i (ESC [). Stops
+     * BEFORE a bare ESC (it cancels the sequence and introduces the next
+     * one) and before a CR/LF (the newline branches must still see it).
+     */
+    private static function skipCsi(string $rendered, int $i, int $len): int
+    {
+        $j = $i + 2;
+        while ($j < $len) {
+            $c = ord($rendered[$j]);
+            if ($c === 0x1b || $c === 0x0d || $c === 0x0a) {
+                break;
+            }
+            $j++;
+            if ($c >= 0x40 && $c <= 0x7e) {
+                break;
             }
         }
-        $b = ord($s[$i]);
-        $bytes = match (true) {
-            ($b & 0x80) === 0    => 1,
-            ($b & 0xe0) === 0xc0 => 2,
-            ($b & 0xf0) === 0xe0 => 3,
-            ($b & 0xf8) === 0xf0 => 4,
-            default              => 1,
-        };
-        return substr($s, $i, $bytes);
+        return $j;
+    }
+
+    /**
+     * Offset just past the OSC string introduced at $i (ESC ]): through its
+     * BEL or ST, or up to (not over) a cancelling bare ESC or a CR/LF.
+     */
+    private static function skipOsc(string $rendered, int $i, int $len): int
+    {
+        $j = $i + 2;
+        while ($j < $len) {
+            if ($rendered[$j] === "\x07") {
+                $j++;
+                break;
+            }
+            if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') {
+                $j += 2;
+                break;
+            }
+            if ($rendered[$j] === "\x1b") {
+                break;
+            }
+            if ($rendered[$j] === "\x0d" || $rendered[$j] === "\x0a") {
+                break;
+            }
+            $j++;
+        }
+        return $j;
+    }
+
+    /**
+     * Bytes consumed and cells painted by the visible text at $i: one
+     * grapheme cluster ({@see Grapheme::next()}), or a whole run of printable
+     * ASCII at once.
+     *
+     * The run is safe to take in one step because an ASCII byte never extends
+     * a cluster (UAX #29 GB999) and each printable ASCII byte is one cell. Its
+     * LAST byte is left to the cluster path when non-ASCII follows, since a
+     * combining mark there joins it ("e" + U+0301 is one cell, not two).
+     *
+     * Known divergence class (portability): with ext-intl the cluster
+     * boundary is the host ICU's UAX #29 answer; without it, PCRE's (see
+     * {@see Grapheme}). The two agree on ZWJ emoji, flags and combining runs
+     * but track different Unicode versions, so a code point newer than one of
+     * them can still cluster differently host to host. The README's Scan rules
+     * carry the consumer-facing version of this note.
+     *
+     * @return array{0:int,1:int} [bytes, cells]
+     */
+    private static function visible(string $rendered, int $i, int $len): array
+    {
+        static $printable = null;
+        $printable ??= implode('', array_map('chr', range(0x20, 0x7e)));
+
+        $run = strspn($rendered, $printable, $i);
+        if ($run > 0 && $i + $run < $len && ord($rendered[$i + $run]) >= 0x80) {
+            $run--;
+        }
+        if ($run > 0) {
+            return [$run, $run];
+        }
+
+        $cluster = Grapheme::next($rendered, $i);
+        return [strlen($cluster), Width::string($cluster)];
     }
 }

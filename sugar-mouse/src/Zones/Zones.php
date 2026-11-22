@@ -29,25 +29,48 @@ use SugarCraft\Core\Msg;
  * if (Zones::get('header')?->inBounds($mouse)) { … }
  * ```
  *
- * Prefer an explicit `Manager::newUnprefixed()` per-program when you want
- * isolation between sub-trees (e.g. tests, library composition).
- * The default manager is convenient for app code that has only one
- * UI tree.
+ * Prefer an injected {@see ZoneRegistry} (or an explicit
+ * `Manager::newUnprefixed()`) per program when you want isolation between
+ * sub-trees (e.g. tests, library composition). The facade is convenient for
+ * app code that has only one UI tree.
+ *
+ * All of the facade's state — the default manager and the auto-prefix
+ * counter — lives in ONE {@see ZoneRegistry} instance ({@see registry()});
+ * the slot holding it is the only static state in the Zones layer, and
+ * {@see setRegistry()} swaps or resets it wholesale.
  */
 final class Zones
 {
-    private static ?Manager $default = null;
+    private static ?ZoneRegistry $registry = null;
 
     private function __construct() {}
 
     /**
-     * The shared default {@see Manager}. Lazily constructed on first
-     * access; survives between calls so zone state persists across
-     * `mark() → scan() → get()` cycles.
+     * The process registry the facade and the static
+     * {@see Manager::newPrefix()} route through, built lazily on first use.
+     */
+    public static function registry(): ZoneRegistry
+    {
+        return self::$registry ??= ZoneRegistry::new();
+    }
+
+    /**
+     * Replace the process registry; null drops it, so the next call builds a
+     * fresh one (an empty default manager and a prefix counter back at 0).
+     */
+    public static function setRegistry(?ZoneRegistry $registry): void
+    {
+        self::$registry = $registry;
+    }
+
+    /**
+     * The shared default {@see Manager} of the process registry. Lazily
+     * constructed on first access; survives between calls so zone state
+     * persists across `mark() → scan() → get()` cycles.
      */
     public static function defaultManager(): Manager
     {
-        return self::$default ??= Manager::newUnprefixed();
+        return self::registry()->defaultManager();
     }
 
     /**
@@ -58,7 +81,7 @@ final class Zones
      */
     public static function setDefaultManager(?Manager $m): void
     {
-        self::$default = $m;
+        self::registry()->setDefaultManager($m);
     }
 
     /** Mirrors bubblezone's package-level `Mark`. */
@@ -123,7 +146,7 @@ final class Zones
      */
     public static function newPrefix(string $prefix = ''): Manager
     {
-        return Manager::newPrefix($prefix);
+        return self::registry()->newPrefix($prefix);
     }
 
     /** Mirrors bubblezone's `AnyInBounds`. */

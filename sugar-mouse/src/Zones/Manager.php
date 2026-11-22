@@ -8,8 +8,10 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Mouse\LineWidthCache;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scan;
+use SugarCraft\Mouse\ZoneGrid;
 
 /**
  * Mouse-zone manager. Wraps content with sentinel-tagged zone markers
@@ -53,8 +55,23 @@ final class Manager
     private array $zones = [];
     private bool $enabled = true;
     private string $idPrefix = '';
-    /** Class-level counter that gives every prefix-bearing manager a unique tag. */
-    private static int $prefixCounter = 0;
+
+    /**
+     * Lazily-built spatial index over {@see $zones}, holding the package's
+     * one hit rule. null until the first hit-test after the registry changes.
+     *
+     * @var ZoneGrid<Zone>|null
+     */
+    private ?ZoneGrid $grid = null;
+
+    /** Widths of unchanged inert lines, carried from one scan to the next. */
+    private readonly LineWidthCache $lineWidths;
+
+    /** Public for BC; {@see newUnprefixed()} is the house spelling. */
+    public function __construct()
+    {
+        $this->lineWidths = LineWidthCache::new();
+    }
 
     /**
      * Build a fresh un-prefixed manager, independent of every other
@@ -96,20 +113,28 @@ final class Manager
      * An explicit numeric prefix that collides with the auto shape is
      * RESERVED: the counter jumps past it, so a later auto-generated
      * manager never silently merges the two registries.
+     *
+     * The counter lives in the process {@see ZoneRegistry}
+     * ({@see Zones::registry()}); a program that injects its own registry
+     * calls {@see ZoneRegistry::newPrefix()} on it instead, and its prefixes
+     * are then unique within that registry.
      */
     public static function newPrefix(string $prefix = ''): self
     {
+        return Zones::registry()->newPrefix($prefix);
+    }
+
+    /**
+     * A manager stamping exactly `$prefix` onto every id, with no counter
+     * bookkeeping — the raw constructor {@see ZoneRegistry::newPrefix()}
+     * builds on. An empty prefix builds an un-prefixed manager. Prefer
+     * {@see newPrefix()} (or a registry's) unless the prefix is already known
+     * to be unique.
+     */
+    public static function newWithIdPrefix(string $prefix): self
+    {
         $m = new self();
-        if ($prefix === '') {
-            $m->idPrefix = (string) (++self::$prefixCounter) . '-';
-            return $m;
-        }
-
         $m->idPrefix = $prefix;
-        if (preg_match('/^(\d+)-$/', $prefix, $reserved) === 1) {
-            self::$prefixCounter = max(self::$prefixCounter, (int) $reserved[1]);
-        }
-
         return $m;
     }
 
@@ -237,7 +262,8 @@ final class Manager
         }
 
         // The primitive layer (Scan) is the single source of truth for parsing + bounds.
-        foreach (Scan::parse($rendered, $width) as $id => $mouseZone) {
+        $this->grid = null;
+        foreach (Scan::parse($rendered, $width, $this->lineWidths) as $id => $mouseZone) {
             if ($this->idPrefix !== '' && !str_starts_with($id, $this->idPrefix)) {
                 continue; // foreign namespace in the same frame — strip it, don't own it
             }
@@ -306,6 +332,7 @@ final class Manager
      */
     public function clear(?string $id = null): void
     {
+        $this->grid = null;
         if ($id === null) {
             $this->zones = [];
             return;
@@ -331,21 +358,24 @@ final class Manager
     public function close(): void
     {
         $this->zones = [];
+        $this->grid = null;
         $this->enabled = false;
     }
 
     /**
-     * Walk the recorded zones and return the innermost (smallest-area) one
-     * whose bounds contain `$mouse`. When zones nest, the smallest one wins;
-     * on equal area the first-recorded zone wins. That tie rule is the only
-     * part the primitive {@see \SugarCraft\Mouse\Scanner} `hit()` shares:
-     * the Scanner resolves purely by earliest registration, so the two
-     * layers can disagree about who owns one painted frame. This registry
-     * has no stacking concept — no priority, layer, or modal state — see the
-     * overlay contract in README's Zones section before scanning a
-     * full-screen modal over a live registry. Returns null if no zone
-     * matches (or if the Msg isn't a {@see MouseMsg} to begin with — handy
-     * when an update() loop routes every Msg here without filtering first).
+     * The innermost (smallest-area) recorded zone whose bounds contain
+     * `$mouse`; on equal area the first-recorded zone wins. This is THE hit
+     * rule, shared with the primitive {@see \SugarCraft\Mouse\Scanner::hit()}
+     * through {@see ZoneGrid}, so both layers name the same owner for one
+     * painted frame. This registry has no stacking concept — no priority,
+     * layer, or modal state — see the overlay contract in README's Zones
+     * section before scanning a full-screen modal over a live registry.
+     * Returns null if no zone matches (or if the Msg isn't a {@see MouseMsg}
+     * to begin with — handy when an update() loop routes every Msg here
+     * without filtering first).
+     *
+     * Backed by the bucket grid, so a click or hover motion scans one
+     * bucket's candidates, not the whole registry.
      *
      * Staleness: reflects the last scan() — zones from frames that scrolled
      * off stay hit-eligible until their id is re-scanned or cleared; prune
@@ -358,18 +388,7 @@ final class Manager
         if (!$mouse instanceof MouseMsg) {
             return null;
         }
-        $hit = null;
-        $smallestArea = PHP_INT_MAX;
-        foreach ($this->zones as $zone) {
-            if ($zone->inBounds($mouse) === true) {
-                $area = $zone->width() * $zone->height();
-                if ($area < $smallestArea) {
-                    $smallestArea = $area;
-                    $hit = $zone;
-                }
-            }
-        }
-        return $hit;
+        return $this->zoneAt($mouse->x, $mouse->y);
     }
 
     /**
@@ -385,18 +404,10 @@ final class Manager
      */
     public function allInBounds(Msg $mouse): array
     {
-        if (!$mouse instanceof MouseMsg) {
+        if (!$mouse instanceof MouseMsg || $this->zones === []) {
             return [];
         }
-        $hits = [];
-        foreach ($this->zones as $zone) {
-            if ($zone->inBounds($mouse) === true) {
-                $hits[] = $zone;
-            }
-        }
-        usort($hits, static fn (Zone $a, Zone $b): int
-            => ($a->width() * $a->height()) <=> ($b->width() * $b->height()));
-        return $hits;
+        return $this->grid()->allAt($mouse->x, $mouse->y);
     }
 
     /**
@@ -409,20 +420,31 @@ final class Manager
      */
     public function zoneAt(int $col, int $row): ?Zone
     {
-        $hit = null;
-        $smallestArea = PHP_INT_MAX;
-        foreach ($this->zones as $zone) {
-            if ($zone->startCol <= $col && $col <= $zone->endCol
-                && $zone->startRow <= $row && $row <= $zone->endRow
-            ) {
-                $area = $zone->width() * $zone->height();
-                if ($area < $smallestArea) {
-                    $smallestArea = $area;
-                    $hit = $zone;
-                }
-            }
+        if ($this->zones === []) {
+            return null;
         }
-        return $hit;
+        return $this->grid()->smallestAt($col, $row);
+    }
+
+    /**
+     * The zone recorded under a typed id — the {@see \SugarCraft\Mouse\ZoneId}
+     * spelling of {@see get()} (short or wire form, like get()).
+     */
+    public function zone(\SugarCraft\Mouse\ZoneId $id): ?Zone
+    {
+        return $this->get($id->wire());
+    }
+
+    /** The line-width cache {@see scan()} reads and fills. */
+    public function lineWidths(): LineWidthCache
+    {
+        return $this->lineWidths;
+    }
+
+    /** @return ZoneGrid<Zone> */
+    private function grid(): ZoneGrid
+    {
+        return $this->grid ??= ZoneGrid::of($this->zones);
     }
 
     /**

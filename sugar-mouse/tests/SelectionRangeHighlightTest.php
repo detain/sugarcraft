@@ -1,0 +1,79 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Mouse\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Mouse\SelectionRange;
+
+/**
+ * P2-8 (d): `SelectionRange::highlight()`, ported from candy-code's
+ * `Tui\TextSelection::highlight()` (the head / patch / tail splice), with the
+ * style injected as a closure so sugar-mouse stays free of sugar-style.
+ * `extract()` already lived here; its pins are in {@see SelectionRangeTest}.
+ */
+final class SelectionRangeHighlightTest extends TestCase
+{
+    public function testDefaultPaintIsReverseVideoOverThePlainRun(): void
+    {
+        $lines = SelectionRange::new(1, 7, 1, 11)->highlight(['hello world', 'second line']);
+
+        self::assertSame([
+            "hello \e[0m\e[7mworld\e[27m\e[0m",
+            'second line',
+        ], $lines);
+    }
+
+    public function testStreamShapeAcrossRowsKeepsTheStylingEitherSide(): void
+    {
+        $range = SelectionRange::new(1, 3, 3, 2, 1, 6);
+        $lines = $range->highlight(
+            ["\e[31mabcdef\e[0m", '', 'xyz', 'untouched'],
+            static fn (string $run): string => '[' . $run . ']',
+        );
+
+        self::assertSame([
+            // First row: from the start cell to the right edge; the red head
+            // keeps its color and the run is repainted from plain text.
+            "\e[31mab\e[0m\e[0m[cdef]\e[0m\e[31m\e[0m",
+            // A blank middle row still shows as one continuous band.
+            "\e[0m[      ]\e[0m",
+            // Last row stops at the end cell, inclusive.
+            "\e[0m[xy]\e[0mz",
+            // Outside the range: byte-for-byte untouched.
+            'untouched',
+        ], $lines);
+    }
+
+    public function testRowsTheFrameLacksAreSkipped(): void
+    {
+        $lines = SelectionRange::new(2, 1, 5, 2)->highlight(['a', 'bcd']);
+
+        self::assertSame(['a', "\e[0m\e[7mbc\e[27m\e[0md"], $lines);
+    }
+
+    public function testWideCellsAreCutOnCellBoundaries(): void
+    {
+        // 日 and 本 are two cells each: cells 3-4 are exactly 本.
+        $lines = SelectionRange::new(1, 3, 1, 4)->highlight(['日本語'], static fn (string $run): string => '<' . $run . '>');
+
+        self::assertSame(["日\e[0m<本>\e[0m語"], $lines);
+    }
+
+    public function testHighlightAndExtractCoverTheSameCells(): void
+    {
+        $frame = ['  first line  ', '  second', '  third line'];
+        $range = SelectionRange::new(1, 3, 3, 7, 3, 12);
+
+        $marked = $range->highlight($frame, static fn (string $run): string => "\x01{$run}\x02");
+        $covered = [];
+        foreach ($marked as $line) {
+            if (preg_match("/\x01([^\x02]*)\x02/", $line, $m) === 1) {
+                $covered[] = rtrim($m[1]);
+            }
+        }
+
+        self::assertSame($range->extract($frame), implode("\n", $covered));
+    }
+}

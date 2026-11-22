@@ -152,7 +152,8 @@ final class ScannerTest extends TestCase
         $rendered = $mark->wrap('first', 'OVERLAP') . $mark->wrap('second', 'LAP');
 
         $scanner = Scanner::new()->scan($rendered);
-        // Both zones contain the 'O' region — first registered should win.
+        // Adjacent, not overlapping: (1, 1) is only inside 'first'. The
+        // overlap rule (smallest area wins) is pinned in HitRuleTest.
         $zone = $scanner->hit(1, 1);
         self::assertSame('first', $zone?->id);
     }
@@ -493,11 +494,11 @@ final class ScannerTest extends TestCase
     // ─── [PERF] hit() grid-bucket index ─────────────────────────────────────
 
     /**
-     * The grid-bucket index must return byte-for-byte what the old linear
-     * scan did: for every cell in a wide, tall layout the indexed hit() must
-     * equal a brute-force "first zone (in insertion order) whose bbox contains
+     * The grid-bucket index must return byte-for-byte what a linear scan
+     * does: for every cell in a wide, tall layout of non-overlapping zones the
+     * indexed hit() must equal a brute-force "the zone whose bbox contains
      * (col,row)".  The layout spans multiple grid buckets on both axes
-     * (GRID_BUCKET = 32) so multi-bucket zone registration is exercised.
+     * (ZoneGrid::BUCKET = 32) so multi-bucket zone registration is exercised.
      */
     public function testHitMatchesLinearScanAcrossManyBuckets(): void
     {
@@ -535,10 +536,10 @@ final class ScannerTest extends TestCase
     }
 
     /**
-     * Overlapping zones that straddle a bucket boundary: the earliest-inserted
-     * zone (first finalized) must still win, exactly as the linear scan did.
-     * Nested markup — inner closes first, so it is inserted before outer — and
-     * both cover column 40 (bucket 1).
+     * Overlapping zones that straddle a bucket boundary: the smaller (inner)
+     * zone must win under the one hit rule. Nested markup — inner closes
+     * first, so it is also inserted before outer — and both cover column 40
+     * (bucket 1).
      */
     public function testHitPrefersFirstInsertedZoneAcrossBucketBoundary(): void
     {
@@ -549,7 +550,7 @@ final class ScannerTest extends TestCase
         $scanner = Scanner::new()->scan($rendered);
 
         // Column 40 lands inside both zones and in a non-zero bucket; inner is
-        // finalized (closed) first, so it is the first insertion-order match.
+        // the smaller covering zone.
         self::assertSame('inner', $scanner->hit(40, 1)?->id);
         // Column 5 is only inside outer.
         self::assertSame('outer', $scanner->hit(5, 1)?->id);

@@ -20,23 +20,25 @@ namespace SugarCraft\Mouse;
  */
 final class Scanner
 {
-    /**
-     * Grid quantisation for the {@see hit()} spatial index — each bucket
-     * covers a GRID_BUCKET × GRID_BUCKET block of terminal cells.
-     */
-    private const GRID_BUCKET = 32;
-
     /** @var array<string, Zone> */
     private array $zones = [];
 
     /**
-     * Lazily-built bucket index: "bx:by" => list of zones (in insertion
-     * order) whose bounding box overlaps that grid bucket.  null until the
-     * first {@see hit()} after a {@see scan()}/{@see clear()}.
+     * Lazily-built spatial index over {@see $zones} (the package's one hit
+     * rule lives there). null until the first {@see hit()} after a
+     * {@see scan()}/{@see clear()}.
      *
-     * @var array<string, list<Zone>>|null
+     * @var ZoneGrid<Zone>|null
      */
-    private ?array $grid = null;
+    private ?ZoneGrid $grid = null;
+
+    /** Widths of unchanged inert lines, carried from one scan to the next. */
+    private readonly LineWidthCache $lineWidths;
+
+    public function __construct()
+    {
+        $this->lineWidths = LineWidthCache::new();
+    }
 
     /**
      * Factory — creates an empty scanner ready for scan().
@@ -50,6 +52,10 @@ final class Scanner
      * Parse zone sentinels from $rendered, populate the zone registry,
      * and return $this for chaining.
      *
+     * Lines that carry no zone markup and did not change since the previous
+     * scan are not re-measured: their widths come from this scanner's
+     * {@see LineWidthCache} ({@see lineWidths()}).
+     *
      * @param string $rendered The rendered string containing zone sentinels.
      * @param int|null $width  Optional terminal viewport width.  When set,
      *                         zone start/end columns are clamped into
@@ -57,7 +63,7 @@ final class Scanner
      */
     public function scan(string $rendered, ?int $width = null): self
     {
-        $this->zones = Scan::parse($rendered, $width);
+        $this->zones = Scan::parse($rendered, $width, $this->lineWidths);
         $this->grid = null; // invalidate the spatial index — zones changed.
         return $this;
     }
@@ -113,22 +119,18 @@ final class Scanner
     }
 
     /**
-     * Reverse-lookup: return the first zone whose bounding box contains
-     * (col, row), or null if no zone matches.
+     * Reverse-lookup: the zone that owns cell (col, row), or null if no zone
+     * covers it.
      *
-     * Backed by a lazily-built grid-bucket index: zones are bucketed by the
-     * GRID_BUCKET × GRID_BUCKET blocks their bbox overlaps, so a lookup only
-     * scans the (usually tiny) candidate list in the queried bucket instead of
-     * every zone — sub-linear for the dense table/list/grid UIs bubblezone
-     * targets.  The index is built once on the first call after a scan and
-     * reused until the zone set changes.
+     * THE hit rule, shared with {@see \SugarCraft\Mouse\Zones\Manager::zoneAt()}
+     * and `anyInBounds()` through {@see ZoneGrid}: the SMALLEST covering area
+     * wins (nested components: the innermost one), and equal areas go to the
+     * zone registered first (scan close order). Both layers therefore name
+     * the same owner for a painted frame.
      *
-     * "First zone" is preserved verbatim: buckets are populated in zone
-     * insertion order, so among overlapping zones the earliest-registered
-     * still wins. Registration order is the whole rule here — unlike
-     * {@see \SugarCraft\Mouse\Zones\Manager::anyInBounds()}, which resolves
-     * by smallest area first, so one frame can have different hit owners in
-     * the two layers (see the README overlay contract).
+     * Backed by a lazily-built grid-bucket index, so a lookup scans only the
+     * candidates of one bucket instead of every zone. The index is built once
+     * on the first call after a scan and reused until the zone set changes.
      *
      * @param int $col Terminal column (1-based).
      * @param int $row Terminal row (1-based).
@@ -138,56 +140,39 @@ final class Scanner
         if ($this->zones === []) {
             return null;
         }
-        $this->grid ??= $this->buildGrid();
-
-        $key = self::bucket($col) . ':' . self::bucket($row);
-        foreach ($this->grid[$key] ?? [] as $zone) {
-            if ($col >= $zone->startCol && $col <= $zone->endCol
-                && $row >= $zone->startRow && $row <= $zone->endRow
-            ) {
-                return $zone;
-            }
-        }
-        return null;
+        $this->grid ??= ZoneGrid::of($this->zones);
+        return $this->grid->smallestAt($col, $row);
     }
 
     /**
-     * Bucket coordinate for a 1-based terminal column/row.
+     * Every zone covering cell (col, row), innermost first (ascending area,
+     * equal areas in registration order) — the full stack {@see hit()} picks
+     * the head of.
      *
-     * Off-grid coordinates (col/row < 1, reachable from hostile input fed to
-     * hit()) map to bucket -1, which no zone can ever occupy: zones register
-     * at columns and rows >= 1.  The guard also keeps `$coord - 1` an int —
-     * PHP_INT_MIN - 1 would overflow to float and TypeError inside intdiv().
+     * @return list<Zone>
      */
-    private static function bucket(int $coord): int
+    public function hitAll(int $col, int $row): array
     {
-        if ($coord < 1) {
-            return -1;
+        if ($this->zones === []) {
+            return [];
         }
-        return intdiv($coord - 1, self::GRID_BUCKET);
+        $this->grid ??= ZoneGrid::of($this->zones);
+        return $this->grid->allAt($col, $row);
     }
 
     /**
-     * Populate the grid index from the current zone set, iterating in
-     * insertion order so each bucket's candidate list preserves it.
-     *
-     * @return array<string, list<Zone>>
+     * The zone recorded under a typed id — the {@see ZoneId} spelling of
+     * {@see get()}.
      */
-    private function buildGrid(): array
+    public function zone(ZoneId $id): ?Zone
     {
-        $grid = [];
-        foreach ($this->zones as $zone) {
-            $bxStart = self::bucket($zone->startCol);
-            $bxEnd   = self::bucket($zone->endCol);
-            $byStart = self::bucket($zone->startRow);
-            $byEnd   = self::bucket($zone->endRow);
-            for ($by = $byStart; $by <= $byEnd; $by++) {
-                for ($bx = $bxStart; $bx <= $bxEnd; $bx++) {
-                    $grid[$bx . ':' . $by][] = $zone;
-                }
-            }
-        }
-        return $grid;
+        return $this->zones[$id->wire()] ?? null;
+    }
+
+    /** The line-width cache {@see scan()} reads and fills. */
+    public function lineWidths(): LineWidthCache
+    {
+        return $this->lineWidths;
     }
 
     /**

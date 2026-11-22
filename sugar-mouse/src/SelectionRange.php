@@ -13,8 +13,9 @@ use SugarCraft\Core\Util\Width;
  *
  * Ported upstream from candy-code's `Tui\TextSelection`. The mode framing
  * and gesture story are told once in {@see Selection}'s class docblock;
- * this class is that gesture's geometry and nothing else: no model, no
- * clipboard, no painting.
+ * this class is that gesture's geometry plus the two frame operations every
+ * consumer of it needs — {@see extract()} (the copied text) and
+ * {@see highlight()} (the repainted band). No model, no clipboard.
  *
  * stream, not block. The first row runs from the start cell to the text
  * column's right edge, middle rows are whole, the last row stops at the end
@@ -168,6 +169,57 @@ final class SelectionRange
         }
 
         return implode("\n", $rows);
+    }
+
+    /**
+     * $lines with the covered cells repainted — reverse video unless $paint
+     * says otherwise.
+     *
+     * Ported from candy-code's `Tui\TextSelection::highlight()`. The covered
+     * run of each row is repainted from its PLAIN text, so the highlight reads
+     * the same over every color the frame uses; the cells either side keep
+     * their own styling (a head / patch / tail splice, with a reset on each
+     * seam so the head's open SGR cannot bleed into the patch). A row shorter
+     * than its span is padded with spaces, so a selection through a blank row
+     * still shows as one continuous band. Rows the range covers but $lines
+     * lacks are skipped; rows outside the range are returned untouched.
+     *
+     * @param list<string>                 $lines the painted frame; row R is $lines[R - 1]
+     * @param (\Closure(string): string)|null $paint styles one row's plain run;
+     *        null paints SGR 7 (reverse) closed by SGR 27. Pass a style's
+     *        renderer as a first-class callable (`$style->render(...)`) to use
+     *        a theme color instead.
+     * @return list<string>
+     */
+    public function highlight(array $lines, ?\Closure $paint = null): array
+    {
+        $paint ??= static fn (string $run): string => Ansi::sgr(7) . $run . Ansi::sgr(27);
+
+        for ($row = $this->startRow; $row <= $this->endRow; $row++) {
+            $index = $row - 1;
+            if (!isset($lines[$index])) {
+                continue;
+            }
+
+            [$from, $to] = $this->spanOnRow($row) ?? [1, 0];
+            $cells = $to - $from + 1;
+            if ($cells <= 0) {
+                continue;
+            }
+
+            // Cells left of the span: a 1-based column $from has $from - 1 before it.
+            $before = $from - 1;
+            $line = $lines[$index];
+            $head = Width::truncateAnsi($line, $before);
+            $pad = str_repeat(' ', max(0, $before - Width::string($head)));
+            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $before), $cells));
+            $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
+
+            $lines[$index] = $head . Ansi::reset() . $pad . $paint($run) . Ansi::reset()
+                . Width::dropAnsi($line, $before + $cells);
+        }
+
+        return $lines;
     }
 
     /**
