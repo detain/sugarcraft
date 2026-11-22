@@ -89,15 +89,35 @@ final class ZoneRegistryTest extends TestCase
         self::assertSame($manager, $registry->defaultManager());
     }
 
-    public function testResettingTheProcessRegistryStartsFresh(): void
+    public function testResettingTheProcessRegistryDropsZonesButNeverReissuesAPrefix(): void
     {
+        Zones::setRegistry(ZoneRegistry::new());
         Zones::defaultManager()->scan(Mark::zone('stale', 'S'));
-        Manager::newPrefix();
+        $before = Manager::newPrefix();
 
         Zones::setRegistry(null);
 
         self::assertNull(Zones::get('stale'));
-        self::assertSame('1-', Manager::newPrefix()->prefix());
+        $after = Manager::newPrefix();
+        self::assertSame('1-', $before->prefix());
+        self::assertSame('2-', $after->prefix(), 'a reset keeps the prefix counter monotonic');
+
+        // The pre-reset manager's zones must not register in the post-reset one.
+        $after->scan($before->mark('x', 'X'));
+        self::assertNull($after->get('x'));
+    }
+
+    public function testSuccessorCarriesTheCounterButNotTheDefaultManager(): void
+    {
+        $registry = ZoneRegistry::new();
+        $registry->newPrefix('4-');
+        $registry->defaultManager()->scan(Mark::zone('x', 'X'));
+
+        $next = $registry->successor();
+
+        self::assertSame('5-', $next->newPrefix()->prefix());
+        self::assertNull($next->defaultManager()->get('x'));
+        self::assertSame('5-', $registry->newPrefix()->prefix(), 'the old registry keeps its own counter');
     }
 
     public function testNewWithIdPrefixDoesNoCounterBookkeeping(): void

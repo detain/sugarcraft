@@ -55,12 +55,15 @@ final class Zones
     }
 
     /**
-     * Replace the process registry; null drops it, so the next call builds a
-     * fresh one (an empty default manager and a prefix counter back at 0).
+     * Replace the process registry; null resets it to an empty default
+     * manager while auto prefixes keep counting up, so no process-registry
+     * prefix is ever issued twice ({@see ZoneRegistry::successor()}). An
+     * injected registry keeps its own counter: managers from two registries
+     * may share a prefix and must not scan each other's frames.
      */
     public static function setRegistry(?ZoneRegistry $registry): void
     {
-        self::$registry = $registry;
+        self::$registry = $registry ?? self::$registry?->successor();
     }
 
     /**

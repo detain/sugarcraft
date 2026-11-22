@@ -75,6 +75,20 @@ final class ZoneRegistry
         return Manager::newWithIdPrefix($prefix);
     }
 
+    /**
+     * A new registry with no default manager whose auto prefixes continue
+     * after this one's. {@see Zones::setRegistry()} resets through it, so a
+     * manager built before the reset never shares a prefix with one built
+     * after it: {@see Manager::scan()} accepts any id that starts with its
+     * prefix, and two managers holding `1-` would accept each other's zones.
+     */
+    public function successor(): self
+    {
+        $next = new self();
+        $next->prefixCounter = $this->prefixCounter;
+        return $next;
+    }
+
     /** A fresh un-prefixed manager, independent of the default one. */
     public function newUnprefixed(): Manager
     {

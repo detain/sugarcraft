@@ -80,6 +80,24 @@ final class GraphemeTest extends TestCase
     }
 
     /**
+     * An invalid byte later in the fallback window must not cut the valid
+     * cluster before it down to its lead unit: hosts with and without
+     * ext-intl measure the same bytes the same way.
+     */
+    public function testValidClusterBeforeAnInvalidByteStaysWhole(): void
+    {
+        $family = "👨\u{200D}👩\u{200D}👧";
+        $subject = $family . "\xff" . 'x';
+
+        self::assertSame($family, Grapheme::nextWithoutIntl($subject, 0));
+        self::assertSame("e\u{0301}", Grapheme::nextWithoutIntl("e\u{0301}\xfex", 0));
+        self::assertSame("\xff", Grapheme::nextWithoutIntl($subject, strlen($family)));
+        if (function_exists('grapheme_extract')) {
+            self::assertSame(grapheme_extract($subject, 1, GRAPHEME_EXTR_COUNT, 0), Grapheme::nextWithoutIntl($subject, 0));
+        }
+    }
+
+    /**
      * A zone right of each cluster lands exactly where a terminal paints it:
      * the cluster advances by its own display width, once.
      */

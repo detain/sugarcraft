@@ -206,7 +206,7 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * Covers lines 165-174: nextGrapheme() fallback when grapheme_extract
+     * Covers the Grapheme::next() fallback when grapheme_extract
      * returns an empty string.
      *
      * With a combining character sequence (e + combining acute accent),
@@ -528,7 +528,7 @@ final class ScanTest extends TestCase
         self::assertSame(5, $zones['real']->endCol);
     }
 
-    // ─── nextGrapheme() fallback paths ───────────────────────────────────────
+    // ─── Grapheme::next() fallback paths ─────────────────────────────────────
 
     /**
      * When grapheme_extract() lands mid-grapheme on a combining character
@@ -553,7 +553,7 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * Exercise the 3-byte UTF-8 branch in nextGrapheme's fallback path.
+     * Exercise the 3-byte UTF-8 branch in Grapheme::next()'s fallback path.
      * A CJK character is 3 bytes (E0 A0 80 pattern).  The 3-byte branch
      * ($b & 0xf0 === 0xe0) must be exercised.
      */
@@ -570,7 +570,7 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * Exercise the 2-byte UTF-8 branch in nextGrapheme's fallback path.
+     * Exercise the 2-byte UTF-8 branch in Grapheme::next()'s fallback path.
      * Latin-1 Supplement chars like "é" are 2 bytes (C3 A9 pattern).
      * The 2-byte branch ($b & 0xe0 === 0xc0) must be exercised.
      */

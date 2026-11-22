@@ -19,7 +19,8 @@ namespace SugarCraft\Mouse;
  * always compiled into PHP) over a short window of whole code points, so a
  * host without ext-intl still measures per cluster instead of falling back to
  * per code point. Only bytes that are not valid UTF-8 degrade to a single
- * lead-byte-sized unit — the same posture the scanner always had for them.
+ * lead-byte-sized unit — the same posture the scanner always had for them;
+ * a valid cluster followed by such bytes still measures as one cluster.
  */
 final class Grapheme
 {
@@ -91,12 +92,33 @@ final class Grapheme
         }
         $window = substr($s, $i, min($end, $len) - $i);
 
-        // A window that is not valid UTF-8 makes the /u match fail; the
-        // lead unit alone is then the answer, exactly as before this class.
-        if (preg_match('/\A\X/u', $window, $match) === 1 && $match[0] !== '') {
+        // A /u match fails on the whole window when ANY byte in it is not
+        // valid UTF-8, so a later stray byte would cut a valid cluster down to
+        // its lead unit. No cluster spans an invalid unit, so matching the
+        // valid prefix gives the same boundary ICU would.
+        if (preg_match('//u', $window) !== 1) {
+            $window = self::validPrefix($window);
+        }
+        if ($window !== '' && preg_match('/\A\X/u', $window, $match) === 1 && $match[0] !== '') {
             return $match[0];
         }
+        // The lead unit itself is not valid UTF-8: it alone is the answer.
         return substr($s, $i, $first);
+    }
+
+    /** The leading whole scalars of $window up to its first invalid UTF-8 unit. */
+    private static function validPrefix(string $window): string
+    {
+        $len = strlen($window);
+        $end = 0;
+        while ($end < $len) {
+            $unit = self::scalarLength($window, $end);
+            if (preg_match('//u', substr($window, $end, $unit)) !== 1) {
+                break;
+            }
+            $end += $unit;
+        }
+        return substr($window, 0, $end);
     }
 
     /** Byte length of the UTF-8 unit whose lead byte sits at $i (1 for a stray byte). */

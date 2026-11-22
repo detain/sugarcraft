@@ -613,7 +613,7 @@ use SugarCraft\Mouse\Zones\ZoneRegistry;
 $zones = ZoneRegistry::new();
 $list  = $zones->newPrefix();          // "1-", unique within $zones
 $main  = $zones->defaultManager();     // this program's default manager
-Zones::setRegistry(null);              // tests: reset the process registry wholesale
+Zones::setRegistry(null);              // tests: drop the default manager; auto prefixes keep counting
 ```
 
 ### Typed zone ids and routing
@@ -955,7 +955,7 @@ the Zones rows answer "what does the app-facing manager and its trackers do".
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
 | `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newUnprefixed()` builds a different, independent instance) |
 | `Zones` (static) | `registry()` / `setRegistry(?registry)` | The process `ZoneRegistry` holding the facade's state / replace or reset it |
-| `ZoneRegistry` | `new()` / `defaultManager()` / `setDefaultManager(?m)` / `newPrefix(prefix)` / `newUnprefixed()` | Per-app home of the default manager and prefix counter — inject one instead of relying on statics |
+| `ZoneRegistry` | `new()` / `defaultManager()` / `setDefaultManager(?m)` / `newPrefix(prefix)` / `newUnprefixed()` / `successor()` | Per-app home of the default manager and prefix counter — inject one instead of relying on statics; `successor()` is an empty registry whose auto prefixes continue after this one's |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
 | `ZoneHoverTracker` | `currentZone()` | Get the hovered Zone or null |
