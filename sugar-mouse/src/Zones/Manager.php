@@ -114,10 +114,11 @@ final class Manager
      * RESERVED: the counter jumps past it, so a later auto-generated
      * manager never silently merges the two registries.
      *
-     * The counter lives in the process {@see ZoneRegistry}
-     * ({@see Zones::registry()}); a program that injects its own registry
-     * calls {@see ZoneRegistry::newPrefix()} on it instead, and its prefixes
-     * are then unique within that registry.
+     * Routes through the process {@see ZoneRegistry}
+     * ({@see Zones::registry()}), whose counter is the one process-wide
+     * counter every {@see ZoneRegistry::new()} registry shares, so the prefix
+     * is unique in the process. Only a {@see ZoneRegistry::isolated()}
+     * registry keeps a counter of its own, unique within that registry.
      */
     public static function newPrefix(string $prefix = ''): self
     {

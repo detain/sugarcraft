@@ -574,8 +574,8 @@ Beyond `mark()` / `scan()` / `get()`:
 - `Manager::newPrefix(string $prefix = '')` — namespace every id with a
   prefix so two SugarMouse-aware components don't collide on `'item-0'`.
   Called without an argument, it auto-generates a monotonic prefix from the
-  process `ZoneRegistry`; an app that injects its own registry calls
-  `$registry->newPrefix()` instead. `Manager::newWithIdPrefix($prefix)` is the
+  process `ZoneRegistry`, unique in the process; an app that injects its own
+  registry calls `$registry->newPrefix()` instead. `Manager::newWithIdPrefix($prefix)` is the
   raw factory with no counter bookkeeping.
 - `zone(ZoneId)` — the typed spelling of `get()`; `lineWidths()` — the
   manager's `LineWidthCache`.
@@ -618,18 +618,28 @@ useful in tests (`Zones::setDefaultManager(null)` flushes state) or
 when you want every package-level call routed through a prefixed
 manager.
 
-**No hidden statics: the registry.** Everything the facade remembers — the
-default manager and the auto-prefix counter behind `newPrefix()` — lives in
-one `ZoneRegistry` instance (`Zones::registry()`), and that slot is the only
-static state in the Zones layer. Programs and tests that want isolation build
-their own and pass it around; two registries share nothing:
+**No hidden statics: the registry.** The facade's default manager lives in
+one `ZoneRegistry` instance (`Zones::registry()`). Programs and tests that
+want isolation build their own and pass it around; registries never share a
+default manager or zones. Auto prefixes have one scope rule, because
+`Manager::scan()` accepts any id that starts with its prefix and two managers
+holding the same `<n>-` absorb each other's zones: every `ZoneRegistry::new()`
+registry — the process registry among them — draws from ONE process-wide
+counter, so no two default registries ever hand out the same prefix (the
+guarantee the static `Manager::newPrefix()` always gave). Only
+`ZoneRegistry::isolated()` keeps a counter of its own, starting at `1-` and
+unique within that registry alone; its managers must not scan frames painted
+by another registry's. The registry slot and the process counter are the only
+static state in the Zones layer:
 
 ```php
 use SugarCraft\Mouse\Zones\ZoneRegistry;
 
 $zones = ZoneRegistry::new();
-$list  = $zones->newPrefix();          // "1-", unique within $zones
+$list  = $zones->newPrefix();          // "<n>-", unique in the process
 $main  = $zones->defaultManager();     // this program's default manager
+$test  = ZoneRegistry::isolated();
+$test->newPrefix();                    // "1-", unique within $test only
 Zones::setRegistry(null);              // tests: drop the default manager; auto prefixes keep counting
 ```
 
@@ -972,7 +982,7 @@ the Zones rows answer "what does the app-facing manager and its trackers do".
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
 | `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newUnprefixed()` builds a different, independent instance) |
 | `Zones` (static) | `registry()` / `setRegistry(?registry)` | The process `ZoneRegistry` holding the facade's state / replace or reset it |
-| `ZoneRegistry` | `new()` / `defaultManager()` / `setDefaultManager(?m)` / `newPrefix(prefix)` / `newUnprefixed()` / `successor()` | Per-app home of the default manager and prefix counter — inject one instead of relying on statics; `successor()` is an empty registry whose auto prefixes continue after this one's |
+| `ZoneRegistry` | `new()` / `isolated()` / `defaultManager()` / `setDefaultManager(?m)` / `newPrefix(prefix)` / `newUnprefixed()` / `successor()` | Per-app home of the default manager — inject one instead of relying on statics; `new()` registries share the process-wide prefix counter, `isolated()` keeps its own; `successor()` is an empty registry whose auto prefixes continue after this one's |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
 | `ZoneHoverTracker` | `currentZone()` | Get the hovered Zone or null |

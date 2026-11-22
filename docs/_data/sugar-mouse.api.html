@@ -296,11 +296,12 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static new(): self</code></td><td></td></tr>
+<tr><td><code>static new(): self</code></td><td>A registry whose auto prefixes come from the one process-wide counter.</td></tr>
+<tr><td><code>static isolated(): self</code></td><td>A registry with its own auto prefix counter, starting at <code>1-</code>. Its prefixes are unique within this registry only: a manager it hands out may share a prefix with one from any other registry.</td></tr>
 <tr><td><code>defaultManager(): Manager</code></td><td>This registry&#039;s shared default manager (un-prefixed), built lazily on first access and kept so zone state persists across <code>mark() → scan() → get()</code> cycles.</td></tr>
 <tr><td><code>setDefaultManager(?Manager $manager): void</code></td><td>Replace the default manager; null drops it so the next defaultManager() builds a fresh enabled one.</td></tr>
-<tr><td><code>newPrefix(string $prefix = &#039;&#039;): Manager</code></td><td>A manager that namespaces every id with a prefix unique within THIS registry. Same contract as Manager::newPrefix(): an empty $prefix auto-generates <code>&lt;n&gt;-</code>; an explicit numeric <code>&lt;n&gt;-</code> prefix is reserved, so a later auto prefix never merges into it.</td></tr>
-<tr><td><code>successor(): self</code></td><td>A new registry with no default manager whose auto prefixes continue after this one&#039;s. Zones::setRegistry() resets through it, so a manager built before the reset never shares a prefix with one built after it: Manager::scan() accepts any id that starts with its prefix, and two managers holding <code>1-</code> would accept each other&#039;s zones.</td></tr>
+<tr><td><code>newPrefix(string $prefix = &#039;&#039;): Manager</code></td><td>A manager that namespaces every id with a prefix unique within this registry&#039;s counter scope (the process for new(), the registry for isolated()). Same contract as Manager::newPrefix(): an empty $prefix auto-generates <code>&lt;n&gt;-</code>; an explicit numeric <code>&lt;n&gt;-</code> prefix is reserved, so a later auto prefix never merges into it.</td></tr>
+<tr><td><code>successor(): self</code></td><td>A new registry with no default manager whose auto prefixes continue after this one&#039;s. Zones::setRegistry() resets through it, so a manager built before the reset never shares a prefix with one built after it: Manager::scan() accepts any id that starts with its prefix, and two managers holding <code>1-</code> would accept each other&#039;s zones. A new() registry&#039;s successor shares the process counter; an isolated() one&#039;s starts from a copy of its counter.</td></tr>
 <tr><td><code>newUnprefixed(): Manager</code></td><td>A fresh un-prefixed manager, independent of the default one.</td></tr>
 </tbody>
 </table>
@@ -310,7 +311,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static registry(): ZoneRegistry</code></td><td>The process registry the facade and the static Manager::newPrefix() route through, built lazily on first use.</td></tr>
-<tr><td><code>static setRegistry(?ZoneRegistry $registry): void</code></td><td>Replace the process registry; null resets it to an empty default manager while auto prefixes keep counting up, so no process-registry prefix is ever issued twice (ZoneRegistry::successor()). An injected registry keeps its own counter: managers from two registries may share a prefix and must not scan each other&#039;s frames.</td></tr>
+<tr><td><code>static setRegistry(?ZoneRegistry $registry): void</code></td><td>Replace the process registry; null resets it to an empty default manager while auto prefixes keep counting up, so no process-registry prefix is ever issued twice (ZoneRegistry::successor()). A ZoneRegistry::new() registry draws from the same process-wide counter, so injecting one keeps that guarantee; an injected ZoneRegistry::isolated() registry keeps its own counter, and its managers may share a prefix with another registry&#039;s and must not scan each other&#039;s frames.</td></tr>
 <tr><td><code>static defaultManager(): Manager</code></td><td>The shared default Manager of the process registry. Lazily constructed on first access; survives between calls so zone state persists across <code>mark() → scan() → get()</code> cycles.</td></tr>
 <tr><td><code>static setDefaultManager(?Manager $m): void</code></td><td>Replace the shared default manager. Mostly useful in tests (<code>tearDown(): Zones::setDefaultManager(null)</code> flushes state) or when you want every package-level call to route through a pre-configured prefixed manager.</td></tr>
 <tr><td><code>static mark(string $id, string $content): string</code></td><td>Mirrors bubblezone&#039;s package-level <code>Mark</code>.</td></tr>

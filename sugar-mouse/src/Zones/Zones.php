@@ -34,10 +34,11 @@ use SugarCraft\Core\Msg;
  * sub-trees (e.g. tests, library composition). The facade is convenient for
  * app code that has only one UI tree.
  *
- * All of the facade's state — the default manager and the auto-prefix
- * counter — lives in ONE {@see ZoneRegistry} instance ({@see registry()});
- * the slot holding it is the only static state in the Zones layer, and
- * {@see setRegistry()} swaps or resets it wholesale.
+ * The facade's default manager lives in ONE {@see ZoneRegistry} instance
+ * ({@see registry()}), and {@see setRegistry()} swaps or resets it
+ * wholesale. The slot holding it and the process-wide auto prefix counter
+ * every {@see ZoneRegistry::new()} registry shares are the only static
+ * state in the Zones layer.
  */
 final class Zones
 {
@@ -57,9 +58,12 @@ final class Zones
     /**
      * Replace the process registry; null resets it to an empty default
      * manager while auto prefixes keep counting up, so no process-registry
-     * prefix is ever issued twice ({@see ZoneRegistry::successor()}). An
-     * injected registry keeps its own counter: managers from two registries
-     * may share a prefix and must not scan each other's frames.
+     * prefix is ever issued twice ({@see ZoneRegistry::successor()}). A
+     * {@see ZoneRegistry::new()} registry draws from the same process-wide
+     * counter, so injecting one keeps that guarantee; an injected
+     * {@see ZoneRegistry::isolated()} registry keeps its own counter, and its
+     * managers may share a prefix with another registry's and must not scan
+     * each other's frames.
      */
     public static function setRegistry(?ZoneRegistry $registry): void
     {

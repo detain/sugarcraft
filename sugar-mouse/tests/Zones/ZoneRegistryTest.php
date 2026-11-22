@@ -13,8 +13,10 @@ use SugarCraft\Mouse\Zones\Zones;
 /**
  * P2-8 (c): the Zones layer's static defaults (the facade's default manager
  * and Manager's auto-prefix counter) now live in a {@see ZoneRegistry}
- * instance. Two registries share nothing; the facade routes through one
- * process registry, the only static slot left.
+ * instance. Registries never share zones; every ZoneRegistry::new() registry
+ * draws auto prefixes from one process-wide counter (the guarantee the old
+ * static Manager::newPrefix() gave), while ZoneRegistry::isolated() keeps a
+ * counter of its own. The facade routes through one process registry.
  */
 final class ZoneRegistryTest extends TestCase
 {
@@ -23,19 +25,63 @@ final class ZoneRegistryTest extends TestCase
         Zones::setRegistry(null);
     }
 
-    public function testTwoRegistriesKeepIndependentPrefixCounters(): void
+    public function testTwoDefaultRegistriesNeverHandOutTheSamePrefix(): void
     {
         $a = ZoneRegistry::new();
         $b = ZoneRegistry::new();
 
+        $issued = [
+            $a->newPrefix()->prefix(),
+            $b->newPrefix()->prefix(),
+            $a->newPrefix()->prefix(),
+            $b->newPrefix()->prefix(),
+            Manager::newPrefix()->prefix(),
+        ];
+        self::assertSame($issued, array_values(array_unique($issued)), 'one process-wide counter behind every new() registry');
+    }
+
+    public function testDefaultRegistryManagersNeverAbsorbEachOthersZones(): void
+    {
+        $a = ZoneRegistry::new()->newPrefix();
+        $b = ZoneRegistry::new()->newPrefix();
+
+        $b->scan($a->mark('x', 'X'));
+
+        self::assertNull($b->get('x'), 'a manager from another default registry must not claim the zone');
+    }
+
+    public function testANumericPrefixReservedInOneDefaultRegistryIsSkippedByAnother(): void
+    {
+        $a = ZoneRegistry::new();
+        $b = ZoneRegistry::new();
+        $next = (int) rtrim($a->newPrefix()->prefix(), '-') + 1;
+
+        $b->newPrefix($next . '-');
+
+        self::assertSame(($next + 1) . '-', $a->newPrefix()->prefix());
+    }
+
+    public function testTwoIsolatedRegistriesKeepPerRegistryPrefixCounters(): void
+    {
+        $a = ZoneRegistry::isolated();
+        $b = ZoneRegistry::isolated();
+
         self::assertSame('1-', $a->newPrefix()->prefix());
         self::assertSame('2-', $a->newPrefix()->prefix());
-        self::assertSame('1-', $b->newPrefix()->prefix(), 'b never saw a\'s numbers');
+        self::assertSame('1-', $b->newPrefix()->prefix(), 'documented: an isolated counter is unique within its registry only');
+    }
+
+    public function testAnIsolatedRegistryLeavesTheProcessCounterAlone(): void
+    {
+        $before = (int) rtrim(ZoneRegistry::new()->newPrefix()->prefix(), '-');
+        ZoneRegistry::isolated()->newPrefix('500000-');
+
+        self::assertSame(($before + 1) . '-', ZoneRegistry::new()->newPrefix()->prefix());
     }
 
     public function testExplicitNumericPrefixIsReservedWithinTheRegistry(): void
     {
-        $registry = ZoneRegistry::new();
+        $registry = ZoneRegistry::isolated();
 
         self::assertSame('5-', $registry->newPrefix('5-')->prefix());
         self::assertSame('6-', $registry->newPrefix()->prefix());
@@ -45,7 +91,7 @@ final class ZoneRegistryTest extends TestCase
 
     public function testAnUnreachablyLargeNumericPrefixLeavesTheAutoCounterUsable(): void
     {
-        $registry = ZoneRegistry::new();
+        $registry = ZoneRegistry::isolated();
         $registry->newPrefix('2-');
 
         self::assertSame('99999999999999999999-', $registry->newPrefix('99999999999999999999-')->prefix());
@@ -86,7 +132,7 @@ final class ZoneRegistryTest extends TestCase
 
     public function testFacadeAndStaticNewPrefixRouteThroughTheProcessRegistry(): void
     {
-        $registry = ZoneRegistry::new();
+        $registry = ZoneRegistry::isolated();
         Zones::setRegistry($registry);
 
         self::assertSame($registry, Zones::registry());
@@ -102,7 +148,7 @@ final class ZoneRegistryTest extends TestCase
 
     public function testResettingTheProcessRegistryDropsZonesButNeverReissuesAPrefix(): void
     {
-        Zones::setRegistry(ZoneRegistry::new());
+        Zones::setRegistry(ZoneRegistry::isolated());
         Zones::defaultManager()->scan(Mark::zone('stale', 'S'));
         $before = Manager::newPrefix();
 
@@ -120,7 +166,7 @@ final class ZoneRegistryTest extends TestCase
 
     public function testSuccessorCarriesTheCounterButNotTheDefaultManager(): void
     {
-        $registry = ZoneRegistry::new();
+        $registry = ZoneRegistry::isolated();
         $registry->newPrefix('4-');
         $registry->defaultManager()->scan(Mark::zone('x', 'X'));
 
@@ -131,9 +177,20 @@ final class ZoneRegistryTest extends TestCase
         self::assertSame('5-', $registry->newPrefix()->prefix(), 'the old registry keeps its own counter');
     }
 
+    public function testADefaultRegistrySuccessorKeepsDrawingFromTheProcessCounter(): void
+    {
+        $registry = ZoneRegistry::new();
+        $first = $registry->newPrefix()->prefix();
+
+        $next = $registry->successor();
+        $issued = [$first, $next->newPrefix()->prefix(), $registry->newPrefix()->prefix()];
+
+        self::assertSame($issued, array_values(array_unique($issued)));
+    }
+
     public function testNewWithIdPrefixDoesNoCounterBookkeeping(): void
     {
-        Zones::setRegistry(ZoneRegistry::new());
+        Zones::setRegistry(ZoneRegistry::isolated());
 
         self::assertSame('9-', Manager::newWithIdPrefix('9-')->prefix());
         self::assertSame('1-', Manager::newPrefix()->prefix(), 'the raw factory reserves nothing');
@@ -142,9 +199,10 @@ final class ZoneRegistryTest extends TestCase
 
     /**
      * The registry is the point: no class of the Zones layer may grow new
-     * static state. The facade's registry slot is the single exception.
+     * static state. The facade's registry slot and the one process-wide
+     * prefix counter are the only exceptions.
      */
-    public function testTheFacadeRegistrySlotIsTheOnlyStaticState(): void
+    public function testTheRegistrySlotAndProcessCounterAreTheOnlyStaticState(): void
     {
         $statics = [];
         foreach (glob(dirname(__DIR__, 2) . '/src/{,Zones/,Zones/Msg/}*.php', GLOB_BRACE) ?: [] as $file) {
@@ -165,6 +223,10 @@ final class ZoneRegistryTest extends TestCase
             }
         }
 
-        self::assertSame([Zones::class . '::$registry'], array_values(array_unique($statics)));
+        sort($statics);
+        self::assertSame(
+            [ZoneRegistry::class . '::$processPrefixCounter', Zones::class . '::$registry'],
+            array_values(array_unique($statics)),
+        );
     }
 }
