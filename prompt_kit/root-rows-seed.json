@@ -689,7 +689,7 @@
         "sugar-pty": {
             "readme": {
                 "needles": [
-                    "Pseudo-terminal primitives — `PtySystemFactory` → `Contract\\PtySystem` master/slave: POSIX via FFI to libc (Linux/macOS, opt-in controlling terminal) plus a Windows ConPTY backend (`CreatePseudoConsole`; beware its empty-`$env` full-parent inversion). Legacy `Pty` facade @deprecated through v1.x."
+                    "Pseudo-terminal primitives — `PtySystemFactory` master/slave: POSIX FFI to libc (opt-in controlling terminal) plus a Windows ConPTY backend."
                 ],
                 "dead": []
             },
