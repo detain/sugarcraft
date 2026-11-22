@@ -221,7 +221,7 @@ final class BackgroundShellRegistry
 
     /**
      * Default pty geometry for {@see startInteractive()} — the classic
-     * 80x24 the sugar-pty facade itself carries, so a shell that queries
+     * 80x24 terminal default, so a shell that queries
      * `stty size` sees a terminal shape even before any caller resizes.
      */
     public const INTERACTIVE_COLS = 80;

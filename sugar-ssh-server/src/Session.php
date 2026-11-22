@@ -177,7 +177,7 @@ final class Session
      * Geometry as the peer declared it, or the default - never zero.
      *
      * `COLUMNS=0`, and `COLUMNS=eighty` (which casts to 0), used to be handed
-     * straight through to `Pty::spawn()`, where a zero-width PTY confuses
+     * straight through to the PTY spawn, where a zero-width PTY confuses
      * every client that asks its own terminal how big it is. A value that is
      * not a positive integer is treated as undeclared.
      *

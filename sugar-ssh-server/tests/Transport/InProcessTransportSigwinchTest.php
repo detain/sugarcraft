@@ -112,7 +112,7 @@ final class InProcessTransportSigwinchTest extends TestCase
                     $baselineCols = (int) $m[2];
                 }
             }
-            $this->assertSame(100, $baselineCols, "baseline must be 100 cols (initial Pty::spawn size); got " . \var_export($baselineCols, true));
+            $this->assertSame(100, $baselineCols, "baseline must be 100 cols (initial PTY spawn size); got " . \var_export($baselineCols, true));
 
             // Step 2: update size file + signal SIGWINCH.
             \file_put_contents($sizeFile, "150 50");
