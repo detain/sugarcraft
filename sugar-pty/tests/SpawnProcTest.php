@@ -7,7 +7,7 @@ namespace SugarCraft\Pty\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Child;
 use SugarCraft\Pty\Master;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Spawn;
 
@@ -37,9 +37,10 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = Spawn::proc($pty->master, ['/bin/true']);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true']);
 
             $this->assertInstanceOf(Child::class, $child);
             $this->assertGreaterThan(0, $child->pid, 'pid must be a positive integer');
@@ -55,9 +56,10 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = Spawn::proc($pty->master, ['/bin/false']);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/false']);
             $exit = $child->wait();
 
             $this->assertNotSame(0, $exit, '/bin/false must report non-zero exit');
@@ -80,9 +82,10 @@ final class SpawnProcTest extends TestCase
         // wired to the slave tty, so bytes it prints come back out the
         // master end — verifies the shared handle wired stdout correctly,
         // not just that the process spawned.
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = Spawn::proc($pty->master, ['/bin/sh', '-c', 'printf PTY_OK']);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/sh', '-c', 'printf PTY_OK']);
 
             $seen = '';
             $deadline = \microtime(true) + 2.0;
@@ -115,10 +118,11 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $child = Spawn::proc(
-                $pty->master,
+                new Master($pty->fd(), $pair->slavePath()),
                 ['/bin/sh', '-c', 'exit ${MY_VAR:-99}'],
                 null, // inherit parent env.
             );
@@ -132,10 +136,11 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $child = Spawn::proc(
-                $pty->master,
+                new Master($pty->fd(), $pair->slavePath()),
                 ['/bin/sh', '-c', 'exit ${MY_VAR:-7}'],
                 ['MY_VAR' => '42'],
             );
@@ -149,12 +154,13 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessageMatches('#non-empty#');
 
-            Spawn::proc($pty->master, []);
+            Spawn::proc(new Master($pty->fd(), $pair->slavePath()), []);
         } finally {
             $pty->close();
         }
@@ -164,11 +170,15 @@ final class SpawnProcTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
+        // Captured while open: fd() itself refuses on a closed master, and
+        // the claim here is that the spawn (not the accessor) throws.
+        $master = new Master($pty->fd(), $pair->slavePath());
         $pty->close();
 
         $this->expectException(PtyException::class);
-        Spawn::proc($pty->master, ['/bin/true']);
+        Spawn::proc($master, ['/bin/true']);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -183,9 +193,10 @@ final class SpawnProcTest extends TestCase
             $this->markTestSkipped('pcntl extension is required for controlling terminal.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = Spawn::proc($pty->master, ['/bin/true'], null, true);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true'], null, true);
 
             $this->assertInstanceOf(Child::class, $child);
             $this->assertGreaterThan(0, $child->pid);
@@ -308,10 +319,11 @@ final class SpawnProcTest extends TestCase
             $this->markTestSkipped('/bin/sh is required.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $child = Spawn::proc(
-                $pty->master,
+                new Master($pty->fd(), $pair->slavePath()),
                 ['/bin/sh', '-c', 'printf "[token:%s]" "$SUGAR_PTY_SHIM_AUTOLOAD"'],
                 ['PATH' => (string) \getenv('PATH'), 'SUGAR_PTY_SHIM_AUTOLOAD' => '/tmp/forged-by-caller.php'],
                 true,
@@ -368,10 +380,11 @@ final class SpawnProcTest extends TestCase
 
         $previous = \getenv('SUGAR_PTY_SHIM_AUTOLOAD');
         \putenv('SUGAR_PTY_SHIM_AUTOLOAD=/tmp/forged-inherited.php');
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $child = Spawn::proc(
-                $pty->master,
+                new Master($pty->fd(), $pair->slavePath()),
                 ['/bin/sh', '-c', 'printf "[token:%s]" "$SUGAR_PTY_SHIM_AUTOLOAD"'],
                 null,
                 true,
@@ -416,12 +429,13 @@ final class SpawnProcTest extends TestCase
             $this->markTestSkipped('This test is only meaningful when pcntl is NOT loaded.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(PtyException::class);
             $this->expectExceptionMessageMatches('#pcntl#');
 
-            Spawn::proc($pty->master, ['/bin/true'], null, true);
+            Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true'], null, true);
         } finally {
             $pty->close();
         }
@@ -435,7 +449,8 @@ final class SpawnProcTest extends TestCase
             $this->markTestSkipped('pcntl extension is required.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // The shim path is calculated as __DIR__ . '/../bin/pty-shim.php'.
             // We can verify wrapInShim throws by checking the shim exists.
@@ -444,7 +459,7 @@ final class SpawnProcTest extends TestCase
                 $this->markTestSkipped('pty-shim.php is not readable.');
             }
 
-            $child = Spawn::proc($pty->master, ['/bin/true'], null, true);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true'], null, true);
             $this->assertSame(0, $child->wait());
         } finally {
             $pty->close();
@@ -484,10 +499,11 @@ final class SpawnProcTest extends TestCase
             $this->markTestSkipped('The controlling-terminal shim needs ext-pcntl.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $census = 'cd /proc/$$/fd && for f in *; do printf "FD %s=%s\n" "$f" "$(readlink "$f")"; done; printf CENSUS_DONE';
-            $child = Spawn::proc($pty->master, ['/bin/sh', '-c', $census], null, $controllingTerminal);
+            $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/sh', '-c', $census], null, $controllingTerminal);
 
             $seen = '';
             $deadline = \microtime(true) + 5.0;
@@ -507,7 +523,7 @@ final class SpawnProcTest extends TestCase
             \preg_match_all('/^FD (\d+)=(.*?)\r?$/m', $seen, $m, PREG_SET_ORDER);
             $slaveFds = [];
             foreach ($m as [, $fd, $target]) {
-                if ($target === $pty->master->slavePath) {
+                if ($target === $pair->slavePath()) {
                     $slaveFds[] = (int) $fd;
                 }
             }

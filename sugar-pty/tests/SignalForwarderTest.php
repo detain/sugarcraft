@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\SignalForwarder;
 
 final class SignalForwarderTest extends TestCase
@@ -40,7 +40,8 @@ final class SignalForwarderTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $invocations = 0;
             $ok = SignalForwarder::attachSigwinch(
@@ -74,7 +75,8 @@ final class SignalForwarderTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $invocations = 0;
         SignalForwarder::attachSigwinch(
             $pty,
@@ -87,7 +89,7 @@ final class SignalForwarderTest extends TestCase
 
         $pty->close();
 
-        // Once the Pty is closed, SIGWINCH receipt must NOT call the
+        // Once the master is closed, SIGWINCH receipt must NOT call the
         // size provider — the handler short-circuits via isClosed().
         \posix_kill(\posix_getpid(), SIGWINCH);
         SignalForwarder::dispatch();
@@ -100,7 +102,8 @@ final class SignalForwarderTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             SignalForwarder::attachSigwinch(
                 $pty,
@@ -114,7 +117,7 @@ final class SignalForwarderTest extends TestCase
             \posix_kill(\posix_getpid(), SIGWINCH);
             SignalForwarder::dispatch();
 
-            // Pty still operational after the swallowed throw.
+            // Master still operational after the swallowed throw.
             $this->assertFalse($pty->isClosed());
         } finally {
             $pty->close();
@@ -152,7 +155,7 @@ final class SignalForwarderTest extends TestCase
             $this->markTestSkipped('SIGWINCH not available.');
         }
 
-        // Schedule a SIGWINCH for ~30 ms from now. Pty::read() is
+        // Schedule a SIGWINCH for ~30 ms from now. The master read() is
         // mid-stream_select; the signal interrupts it (EINTR) and the
         // read loop dispatches pending pcntl handlers and re-arms the
         // deadline. The full read should still time out at ~80 ms,
@@ -160,7 +163,8 @@ final class SignalForwarderTest extends TestCase
         \pcntl_async_signals(true);
         $invocations = 0;
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             SignalForwarder::attachSigwinch(
                 $pty,
@@ -214,7 +218,8 @@ final class SignalForwarderTest extends TestCase
             $this->markTestSkipped('SIGWINCH not available.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $tmp = \tempnam(\sys_get_temp_dir(), 'sugar-pty-sigwinch-');
         $this->assertNotFalse($tmp);
 
@@ -228,7 +233,7 @@ final class SignalForwarderTest extends TestCase
             // Spawn a child that sleeps long enough for us to deliver
             // the SIGWINCH AND for the dispatch to land before tput
             // queries TIOCGWINSZ on the slave PTY.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', "sleep 0.05; tput cols > {$tmp}; tput lines >> {$tmp}"],
                 ['TERM' => 'xterm-256color', 'PATH' => '/usr/bin:/bin'],
             );

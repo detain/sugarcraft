@@ -44,8 +44,7 @@ final class PosixPtySystem implements PtySystem
      *
      * @param int $cols Terminal column count (default 80).
      * @param int $rows Terminal row count (default 24).
-     * Narrowed (covariantly) to {@see PosixPtyPair} so in-package callers —
-     * the deprecated {@see \SugarCraft\Pty\Pty} facade delegates here —
+     * Narrowed (covariantly) to {@see PosixPtyPair} so POSIX-only callers
      * get the concrete {@see PosixMasterPty} without a runtime type check.
      *
      * @see creack/pty.Open()

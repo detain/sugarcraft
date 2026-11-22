@@ -43,8 +43,8 @@ final class Spawn
 
     /**
      * @internal Live internal helper reached via
-     *           {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()} and
-     *           {@see \SugarCraft\Pty\Pty::spawn()}. Not removal-scheduled.
+     *           {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()}.
+     *           Not removal-scheduled.
      *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env  null inherits the parent

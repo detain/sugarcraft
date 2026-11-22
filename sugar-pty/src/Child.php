@@ -7,7 +7,8 @@ namespace SugarCraft\Pty;
 use SugarCraft\Pty\Posix\ChildPollTrait;
 
 /**
- * Handle to a child process spawned through {@see Pty::spawn()}.
+ * Handle to a child process spawned through
+ * {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()}.
  *
  * @deprecated since v0.x; use SugarCraft\Pty\Posix\PosixChild directly.
  *             Will be removed in v2.0. Not a pure alias: PosixChild

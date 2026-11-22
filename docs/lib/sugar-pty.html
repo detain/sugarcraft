@@ -330,7 +330,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-child"><code>Child</code> <small>class</small></h4>
-<p>Handle to a child process spawned through Pty::spawn().</p>
+<p>Handle to a child process spawned through \SugarCraft\Pty\Posix\PosixSlavePty::spawn().</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -408,24 +408,6 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(public readonly int $fd, public readonly string $slavePath)</code></td><td></td></tr>
-</tbody>
-</table>
-<h4 id="api-sugarcraft-pty-pty"><code>Pty</code> <small>final class</small></h4>
-<table class="api-table">
-<thead><tr><th>Method</th><th>Summary</th></tr></thead>
-<tbody>
-<tr><td><code>__construct(public readonly Master $master, private readonly PosixMasterPty $impl)</code></td><td></td></tr>
-<tr><td><code>static open(int $cols = self::DEFAULT_COLS, int $rows = self::DEFAULT_ROWS): self</code></td><td>Open a PTY pair through the canonical PosixPtySystem::open().</td></tr>
-<tr><td><code>spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child</code></td><td>Spawn <code>$cmd</code> on this PTY&#039;s slave with the requested geometry.</td></tr>
-<tr><td><code>resize(int $cols, int $rows): void</code></td><td></td></tr>
-<tr><td><code>size(): array</code></td><td></td></tr>
-<tr><td><code>stream(): mixed</code></td><td></td></tr>
-<tr><td><code>setBlocking(bool $blocking): void</code></td><td></td></tr>
-<tr><td><code>read(int $len = 8192, ?float $timeout = 0.05): ?string</code></td><td></td></tr>
-<tr><td><code>write(string $bytes): int</code></td><td></td></tr>
-<tr><td><code>close(): void</code></td><td></td></tr>
-<tr><td><code>isClosed(): bool</code></td><td></td></tr>
-<tr><td><code>fd(): int</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-pty-ptyexception"><code>PtyException</code> <small>class</small></h4>

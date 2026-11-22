@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
 
@@ -68,7 +68,8 @@ final class SignalForwarderReactLoopTest extends TestCase
         $this->requirePcntlAndReact();
 
         $loop = \React\EventLoop\Loop::get();
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $invocations = 0;
 
         try {

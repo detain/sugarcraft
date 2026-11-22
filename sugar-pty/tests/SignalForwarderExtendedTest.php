@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\SignalForwarder;
 
 /**
@@ -60,7 +60,8 @@ final class SignalForwarderExtendedTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $invoked = 0;
             $ok = SignalForwarder::attachSigwinchToFd(
@@ -91,7 +92,8 @@ final class SignalForwarderExtendedTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $resizeCalled = false;
             $ok = SignalForwarder::attachSigwinchToFd(
@@ -120,7 +122,8 @@ final class SignalForwarderExtendedTest extends TestCase
         $this->requirePtySyscalls();
         $this->requirePcntl();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $reads = 0;
             $applied = null;

@@ -22,8 +22,8 @@ interface MasterPty
      * one-argument shape can never hang a caller. With a finite $timeout the
      * wait is bounded by an internal select. With $timeout = null NO mode
      * control happens — the read inherits the stream's current blocking mode,
-     * which only stream_set_blocking on {@see stream()} (or Pty::setBlocking()
-     * via the facade) changes and which a freshly opened master defaults to
+     * which only stream_set_blocking on {@see stream()} (or
+     * {@see setBlocking()}) changes and which a freshly opened master defaults to
      * BLOCKING. Passing null therefore requires the caller to have armed
      * non-blocking mode itself, or to accept an unbounded wait.
      *
@@ -73,7 +73,7 @@ interface MasterPty
     /**
      * Toggle blocking mode on the master without exposing the stream.
      *
-     * The lever a {@see \SugarCraft\Pty\Pty} facade user already knows;
+     * The lever the since-deleted `Pty` facade carried;
      * it was only ever reachable on the contract through
      * `stream_set_blocking($master->stream(), ...)`, which made the
      * sanctioned path bypass the type. POSIX arms flip the fd; ConPTY

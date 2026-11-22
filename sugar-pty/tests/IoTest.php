@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 
 final class IoTest extends TestCase
@@ -16,7 +16,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $a = $pty->stream();
             $b = $pty->stream();
@@ -31,7 +32,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $pty->setBlocking(false);
             $start = \microtime(true);
@@ -52,7 +54,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $start = \microtime(true);
             $bytes = $pty->read(1024, 0.05);
@@ -70,7 +73,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $written = $pty->write("hello\n");
             $this->assertSame(6, $written);
@@ -86,10 +90,11 @@ final class IoTest extends TestCase
             $this->markTestSkipped('echo binary not found.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $marker = 'sugar-pty-marker-' . \bin2hex(\random_bytes(4));
-            $child = $pty->spawn(['/bin/sh', '-c', "echo {$marker}"]);
+            $child = $pair->slave()->spawn(['/bin/sh', '-c', "echo {$marker}"]);
             $child->wait();
 
             // Drain master in non-blocking mode until either we see the
@@ -122,7 +127,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // Default mode is blocking; switch to non-blocking and
             // verify read() returns instantly when there's no data.
@@ -142,7 +148,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(\InvalidArgumentException::class);
             $pty->read(0);
@@ -155,7 +162,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(\InvalidArgumentException::class);
             $pty->read(1024, -0.5);
@@ -168,7 +176,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $pty->close();
 
         $this->expectException(PtyException::class);
@@ -179,7 +188,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $pty->close();
 
         $this->expectException(PtyException::class);
@@ -190,7 +200,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $pty->close();
 
         $this->expectException(PtyException::class);
@@ -201,7 +212,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $stream = $pty->stream();
         $this->assertIsResource($stream);
 
@@ -221,7 +233,8 @@ final class IoTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         // Don't call stream() / read() / write() / setBlocking() — the
         // Libc::close() path runs and the test (PR1's contract) still
         // produces a clean teardown.

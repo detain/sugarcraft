@@ -6,16 +6,16 @@ namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Contract\SlavePty;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Tests\Support\PtyCapability;
 
 /**
  * M21/m17 (round lib-fixes-1103): spawn geometry must never restamp a
  * default window over a size the caller already chose. The contract
- * declares `?int = null` (keep-current), and the facade honours it the
- * same way PosixSlavePty does.
+ * declares `?int = null` (keep-current), and PosixSlavePty honours it.
+ * (Moved here from the deleted `Pty` facade's own geometry test.)
  */
-final class FacadeSpawnGeometryTest extends TestCase
+final class SlaveSpawnGeometryTest extends TestCase
 {
     public function testContractTeachesKeepCurrentGeometry(): void
     {
@@ -30,15 +30,16 @@ final class FacadeSpawnGeometryTest extends TestCase
         $this->assertNull($rows->getDefaultValue(), 'SlavePty::spawn $rows must default to null (keep current)');
     }
 
-    public function testFacadeSpawnKeepsOpenGeometryWhenGeometryOmitted(): void
+    public function testSlaveSpawnKeepsOpenGeometryWhenGeometryOmitted(): void
     {
         if (!PtyCapability::ptySyscallsUsable()) {
             $this->markTestSkipped('Requires usable FFI PTY syscalls.');
         }
 
-        $pty = Pty::open(cols: 132, rows: 43);
+        $pair = (new PosixPtySystem())->open(cols: 132, rows: 43);
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/sh', '-c', 'exec sleep 30']);
+            $child = $pair->slave()->spawn(['/bin/sh', '-c', 'exec sleep 30']);
             try {
                 $size = $pty->size();
                 $this->assertSame(132, $size['cols'], 'omitted geometry must keep the open() width');
@@ -52,15 +53,16 @@ final class FacadeSpawnGeometryTest extends TestCase
         }
     }
 
-    public function testFacadeSpawnPartialGeometryKeepsTheOtherDimension(): void
+    public function testSlaveSpawnPartialGeometryKeepsTheOtherDimension(): void
     {
         if (!PtyCapability::ptySyscallsUsable()) {
             $this->markTestSkipped('Requires usable FFI PTY syscalls.');
         }
 
-        $pty = Pty::open(cols: 120, rows: 50);
+        $pair = (new PosixPtySystem())->open(cols: 120, rows: 50);
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/sh', '-c', 'exec sleep 30'], cols: 90);
+            $child = $pair->slave()->spawn(['/bin/sh', '-c', 'exec sleep 30'], cols: 90);
             try {
                 $size = $pty->size();
                 $this->assertSame(90, $size['cols']);

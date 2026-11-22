@@ -6,7 +6,8 @@ namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Argv;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Master;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Spawn;
 
@@ -72,10 +73,11 @@ final class ArgvTest extends TestCase
      */
     public function testSpawnFailureMessageCarriesNoArguments(): void
     {
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             try {
-                $child = Spawn::proc($pty->master, ['/no/such/binary-pty08', '--sekrit=do-not-log-me']);
+                $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/no/such/binary-pty08', '--sekrit=do-not-log-me']);
                 $child->wait();
                 self::assertNotSame(0, $child->exitCode() ?? 0, 'a deferred ENOENT must still exit non-zero');
 

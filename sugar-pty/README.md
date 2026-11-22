@@ -104,15 +104,20 @@ one final tail read — that is the shape
 Production code should wrap the drain and reap in `try/finally` so
 `$master->close()` runs even when a throw escapes the loop.
 
-### Legacy facade (deprecated)
+### Legacy facade (removed)
 
-`SugarCraft\Pty\Pty` and the `Child` class its `spawn()` returns are
-`@deprecated` shims kept for consumers predating the contract split —
-`Pty::open()` delegates to the same `PosixPtySystem` path, and both
-go away at v2.0. New code should use `PtySystemFactory` as above.
+The `SugarCraft\Pty\Pty` facade (`Pty::open()` → `$pty->spawn()`) has
+been deleted: it was a pure delegation to `PosixPtySystem`, and its last
+in-tree callers were migrated. `Pty::open($cols, $rows)` is
+`(new PosixPtySystem())->open($cols, $rows)` (or `PtySystemFactory::new()`
+for the host backend), `$pty->spawn(...)` is `$pair->slave()->spawn(...)`,
+and the read/write/resize/size/stream/close calls live on
+`$pair->master()`. The `Child` class a spawn returns is still a
+`@deprecated` base of `Posix\PosixChild`, scheduled to be folded into it.
 (`PtySystemFactory::default()` — the old name of `::new()` — has already
-been deleted: it carried no behaviour of its own and its last live callers
-were migrated in-tree, so `::new()` is the single factory entry point.)
+been deleted too: it carried no behaviour of its own and its last live
+callers were migrated in-tree, so `::new()` is the single factory entry
+point.)
 
 Rename bookkeeping: this package was formerly published as
 `sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
@@ -121,10 +126,7 @@ Rename bookkeeping: this package was formerly published as
 
 Names below: `$system` is a `Contract\PtySystem` from
 `PtySystemFactory::new()`, `$pair` is what `$system->open()` returns,
-`$master`/`$child` are its `master()`/spawn results, and `$pty` is the
-deprecated facade object from `Pty::open()` — its rows are marked
-*(facade)*. Contract users go through `$pair->slave()->spawn(...)`
-and `$pair->master()`, not `$pty`.
+`$master`/`$child` are its `master()`/spawn results.
 
 Names below are relative to `SugarCraft\Pty`: contracts in `SugarCraft\Pty\Contract`,
 POSIX machinery in `SugarCraft\Pty\Posix`, the Windows backend in
@@ -133,12 +135,11 @@ exceptions at the package root.
 
 | Call | What it does |
 |---|---|
-| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet — `posix_openpt + grantpt + unlockpt + ptsname_r` — on -1; on Linux the same quartet is used directly. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the legacy `Master` value object (readonly fd + slavePath) belongs to the deprecated `Pty` facade. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
-| `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; an EMPTY array means an EMPTY environment on every backend, Windows included). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
+| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet — `posix_openpt + grantpt + unlockpt + ptsname_r` — on -1; on Linux the same quartet is used directly. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the low-level `Master` value object (readonly fd + slavePath) is what `PosixSlavePty::spawn()` hands the low-level `Spawn::proc()` helper. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). |
 | `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The child never holds the slave beyond fds 0–2, per platform: on Linux the parent holds **no** slave handle at all (the pair carries the path; each `spawn()` opens the slave `O_CLOEXEC` itself and dup2s it into the stdio slots), on Darwin the parent additionally holds a winsize-anchor slave fd marked `FD_CLOEXEC` (best-effort — an anchor it cannot mark is dropped rather than leaked into children). |
 | `$master->read(int $len=8192, ?float $timeout=0.05): ?string` | `null` on timeout (idle), `''` on confirmed EOF, bytes otherwise. EINTR-safe. The default is finite on purpose — pass `null` explicitly for a mode-governed blocking read that parks until data or EOF arrives. |
 | `$master->write(string $bytes): int` | Returns bytes written. |
-| `$master->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master — a contract member since PTY-13, so the lever no longer requires reaching through `stream()`; `PosixMasterPty` flips the `php://fd/` resource and `ConPtyMasterPty` throws (no POSIX blocking mode exists there — poll `read($len, $timeout)`). The deprecated `$pty->setBlocking()` facade delegates here unchanged. The pumps save and restore this mode around their own temporary flips, so your setting stands outside a `PosixPump`/`ReactPump` run. |
+| `$master->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master — a contract member since PTY-13, so the lever no longer requires reaching through `stream()`; `PosixMasterPty` flips the `php://fd/` resource and `ConPtyMasterPty` throws (no POSIX blocking mode exists there — poll `read($len, $timeout)`). The pumps save and restore this mode around their own temporary flips, so your setting stands outside a `PosixPump`/`ReactPump` run. |
 | `$master->resize(int $cols, int $rows): void` | TIOCSWINSZ on the master fd. |
 | `$master->size(): array{rows,cols,xpix,ypix}` | TIOCGWINSZ readback. |
 | `$master->fd(): int` | The raw OS descriptor, for direct `ioctl`/FFI use. Throws `PtyException` once the master is closed — probe with `isClosed()` first when a soft answer beats an exception. |
@@ -889,7 +890,7 @@ The library is organised by family: `src/Contract/` (pure interfaces),
 `src/Posix/` (Linux/macOS implementation), `src/Windows/` (ConPTY
 implementation), `src/Input/` (`PtyInputDecoder`), `src/Output/`
 (`AnsiOutputParser` / `SgrHandler`), `src/Concerns/` (`LibcAccess`),
-`src/Exception/`, plus the top-level factory, facade, pump-options and
+`src/Exception/`, plus the top-level factory, pump-options and
 support classes. The contract/implementation split is the organising
 principle.
 

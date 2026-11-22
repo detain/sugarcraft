@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\SizeIoctl;
 
@@ -17,7 +17,8 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $pty->resize(120, 40);
             $size = $pty->size();
@@ -35,7 +36,8 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $pty->resize(100, 30);
             $pty->resize(100, 30);
@@ -56,7 +58,8 @@ final class ResizeTest extends TestCase
         // 0×0 is a valid winsize per the kernel — used by detached
         // sessions and by `tput` when the slave has no controlling
         // terminal yet.
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $pty->resize(0, 0);
             $size = $pty->size();
@@ -71,7 +74,8 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(\InvalidArgumentException::class);
             $pty->resize(-1, 24);
@@ -84,7 +88,8 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $pty->close();
 
         $this->expectException(PtyException::class);
@@ -95,14 +100,15 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/true']);
+            $child = $pair->slave()->spawn(['/bin/true']);
             $child->wait();
 
             $size = $pty->size();
-            $this->assertSame(Pty::DEFAULT_COLS, $size['cols']);
-            $this->assertSame(Pty::DEFAULT_ROWS, $size['rows']);
+            $this->assertSame(80, $size['cols']);
+            $this->assertSame(24, $size['rows']);
         } finally {
             $pty->close();
         }
@@ -112,9 +118,10 @@ final class ResizeTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/true'], null, 132, 50);
+            $child = $pair->slave()->spawn(['/bin/true'], null, 132, 50);
             $child->wait();
 
             $size = $pty->size();
@@ -132,7 +139,8 @@ final class ResizeTest extends TestCase
             $this->markTestSkipped('tput is required to verify child-side TIOCGWINSZ.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $tmp = \tempnam(\sys_get_temp_dir(), 'sugar-pty-tput-');
         $this->assertNotFalse($tmp);
 
@@ -144,7 +152,7 @@ final class ResizeTest extends TestCase
             // needing the master-fd read primitive that PR4 ships.
             // tput queries TIOCGWINSZ on stdin (the slave PTY), not
             // stdout — redirection of stdout doesn't affect the query.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', "tput cols > {$tmp}; tput lines >> {$tmp}"],
                 ['TERM' => 'xterm-256color', 'PATH' => '/usr/bin:/bin'],
                 95,

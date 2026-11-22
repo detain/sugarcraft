@@ -6,7 +6,7 @@ namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Child;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Spawn;
 
@@ -26,9 +26,10 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/true']);
+            $child = $pair->slave()->spawn(['/bin/true']);
             $this->assertInstanceOf(Child::class, $child);
             $this->assertGreaterThan(0, $child->pid, 'pid should be a real process id');
             $this->assertSame(0, $child->wait());
@@ -43,9 +44,10 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/false']);
+            $child = $pair->slave()->spawn(['/bin/false']);
             $exit = $child->wait();
             $this->assertNotSame(0, $exit, '/bin/false must report a non-zero exit code');
             $this->assertSame(1, $exit, '/bin/false convention is exit 1');
@@ -58,9 +60,10 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(['/bin/true']);
+            $child = $pair->slave()->spawn(['/bin/true']);
             $first  = $child->wait();
             $second = $child->wait();
             $third  = $child->wait();
@@ -75,12 +78,13 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // Sleep just long enough that the child is reliably running
             // when exited() is first polled, but short enough not to
             // bloat the test runtime — 50 ms is a comfortable margin.
-            $child = $pty->spawn(['/bin/sh', '-c', 'sleep 0.05']);
+            $child = $pair->slave()->spawn(['/bin/sh', '-c', 'sleep 0.05']);
             $child->wait();
             $this->assertTrue($child->exited());
             $this->assertNotNull($child->exitCode());
@@ -93,12 +97,13 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // /bin/sh -c 'exit ${MY_CODE:-7}' propagates a custom env
             // var into the exit code so we can observe env passing
             // without needing to read PTY output (PR4 territory).
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', 'exit ${MY_CODE:-7}'],
                 ['MY_CODE' => '3'],
             );
@@ -112,10 +117,11 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $this->expectException(\InvalidArgumentException::class);
-            $pty->spawn([]);
+            $pair->slave()->spawn([]);
         } finally {
             $pty->close();
         }
@@ -125,11 +131,12 @@ final class SpawnTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $pty->close();
 
         $this->expectException(PtyException::class);
-        $pty->spawn(['/bin/true']);
+        $pair->slave()->spawn(['/bin/true']);
     }
 
     public function testChildRejectsNonResource(): void

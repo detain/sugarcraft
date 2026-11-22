@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\Posix\PosixSlavePty;
 use SugarCraft\Pty\PtyException;
 
 final class ControllingTerminalTest extends TestCase
@@ -30,7 +31,8 @@ final class ControllingTerminalTest extends TestCase
             $this->markTestSkipped('ps binary required to query session id.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $tmp = \tempnam(\sys_get_temp_dir(), 'sugar-pty-sid-');
         $this->assertNotFalse($tmp);
 
@@ -38,7 +40,7 @@ final class ControllingTerminalTest extends TestCase
             // The shim does setsid() before exec — making the child its
             // own session leader. After exec, the shell's $$ (the pid)
             // and the kernel's reported sid for the same pid must match.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', "echo \$\$ > {$tmp}; ps -o sid= -p \$\$ >> {$tmp}"],
                 null,
                 80,
@@ -71,14 +73,15 @@ final class ControllingTerminalTest extends TestCase
             $this->markTestSkipped('ps binary required.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         $tmp = \tempnam(\sys_get_temp_dir(), 'sugar-pty-sid-');
         $this->assertNotFalse($tmp);
 
         try {
             // WITHOUT controllingTerminal:true, the child inherits the
             // PHPUnit / parent process's session — pid !== sid.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', "echo \$\$ > {$tmp}; ps -o sid= -p \$\$ >> {$tmp}"],
             );
             $child->wait();
@@ -110,14 +113,15 @@ final class ControllingTerminalTest extends TestCase
             $this->markTestSkipped('sleep binary required.');
         }
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             $start = \microtime(true);
             // sleep 10 — should normally take 10 seconds. With the
             // shim claiming the slave as ctty, writing 0x03 to the
             // master makes the kernel deliver SIGINT to the child's
             // process group, which terminates `sleep` immediately.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sleep', '10'],
                 null,
                 80,
@@ -153,14 +157,15 @@ final class ControllingTerminalTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // Without controllingTerminal:true, the child has no ctty,
             // so writing Ctrl+C to the master goes nowhere — the child
             // runs to completion. We use a short sleep so the test
             // doesn't take forever to confirm.
             $start = \microtime(true);
-            $child = $pty->spawn(['/bin/sleep', '0.5']);
+            $child = $pair->slave()->spawn(['/bin/sleep', '0.5']);
 
             \usleep(50_000);
             $pty->write("\x03");
@@ -178,7 +183,7 @@ final class ControllingTerminalTest extends TestCase
     public function testControllingTerminalDefaultsOff(): void
     {
         // Spec assertion via reflection — default param value is false.
-        $reflection = new \ReflectionClass(Pty::class);
+        $reflection = new \ReflectionClass(PosixSlavePty::class);
         $method = $reflection->getMethod('spawn');
         $params = $method->getParameters();
         $ctParam = null;
@@ -200,9 +205,10 @@ final class ControllingTerminalTest extends TestCase
         // /bin/true via the shim must exit cleanly. This catches shim
         // bugs early — if setsid / TIOCSCTTY / pcntl_exec misfires,
         // /bin/true would either not run or exit non-zero.
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/true'],
                 null,
                 80,
@@ -219,12 +225,13 @@ final class ControllingTerminalTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pty = Pty::open();
+        $pair = (new PosixPtySystem())->open();
+        $pty = $pair->master();
         try {
             // pcntl_exec inherits env from the calling proc (the shim),
             // which inherits from proc_open. So a custom env var set
             // via spawn() must reach the actual cmd's view of $ENV.
-            $child = $pty->spawn(
+            $child = $pair->slave()->spawn(
                 ['/bin/sh', '-c', 'exit ${SHIM_TEST_CODE:-9}'],
                 ['SHIM_TEST_CODE' => '42'],
                 80,

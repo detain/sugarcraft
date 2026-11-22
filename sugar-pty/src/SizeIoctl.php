@@ -167,8 +167,8 @@ final class SizeIoctl
      * {@see getSizeViaLibc()} before assuming any winsize-bearing
      * ioctl can succeed straight through the cdef on arm64 Darwin.
      *
-     * Centralised here so both legacy `Pty::resize()` and
-     * `PosixMasterPty::resize()` get the fix transparently.
+     * Centralised here so `PosixMasterPty::resize()` (and every other
+     * TIOCSWINSZ writer) gets the fix transparently.
      *
      * @see SttyTermios::sttyArgs() for the Darwin `-f` flag convention
      */

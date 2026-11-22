@@ -81,7 +81,7 @@ final class PosixMasterPty implements MasterPty
      * the select arm is skipped entirely and @fread runs on the stream
      * AS-IS, so the wait is governed by the stream's blocking mode —
      * set only externally via stream_set_blocking($master->stream(),
-     * false) or Pty::setBlocking(). Callers passing null must ensure
+     * false) or setBlocking(). Callers passing null must ensure
      * non-blocking mode themselves or accept the blocking read. The
      * mode is deliberately NOT forced here: the stream is shared with
      * PosixPump/MultiPump selects and owned by the caller's mode choice.
