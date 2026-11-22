@@ -1334,7 +1334,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // `@return` block. Cheap variant — the tag still attaches, only the
         // prose is dropped by reflection. Retire by merging the two blocks
         // over the helper.
-        'tests/Chat/McpLoginForkTest.php:309',
+        'tests/Chat/McpLoginForkTest.php:314',
         // W24 / C-CTX-5.b (50800af96): the prose naming the session's own
         // backend slot sits above setHeld()'s `@param` block while
         // setSessionBackend() below carries none. Costly variant. Retire by
