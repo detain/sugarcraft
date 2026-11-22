@@ -469,16 +469,36 @@ final class KeyBindings
      */
     public function matches(Msg $msg, string $id): bool
     {
-        if (!$msg instanceof KeyMsg || $msg instanceof KeyReleaseMsg || $msg instanceof KeyRepeatMsg) {
+        return self::chordsMatch($msg, $this->actions[$id] ?? []);
+    }
+
+    /**
+     * The matching rule behind {@see matches()}, over a bare chord list.
+     *
+     * True when $msg has the shape of a press (a base KeyMsg or KeyPressMsg,
+     * never a KeyReleaseMsg or KeyRepeatMsg) and {@see chordOf()} of it is
+     * one of $chords. It exists so a binding built from this registry
+     * somewhere else (sugar-widgets `Key\Binding::chords()`, which
+     * `Key\KeyView` hands to the help footer) answers a key press exactly as
+     * the registry does, by calling this rule instead of keeping a copy:
+     * a Char rune `' '` meets `space`, and Shift over a letter meets the bare
+     * letter.
+     *
+     * @internal shared with sugar-widgets Key\Binding; call matches() instead.
+     *
+     * @param list<string> $chords canonical chords, as parseChord() spells them
+     */
+    public static function chordsMatch(Msg $msg, array $chords): bool
+    {
+        if ($chords === []
+            || !$msg instanceof KeyMsg
+            || $msg instanceof KeyReleaseMsg
+            || $msg instanceof KeyRepeatMsg
+        ) {
             return false;
         }
 
-        $tokens = $this->actions[$id] ?? [];
-        if ($tokens === []) {
-            return false;
-        }
-
-        return \in_array(self::chordOf($msg), $tokens, true);
+        return \in_array(self::chordOf($msg), $chords, true);
     }
 
     /**

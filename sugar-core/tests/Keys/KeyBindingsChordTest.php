@@ -152,6 +152,40 @@ final class KeyBindingsChordTest extends TestCase
         self::assertFalse($b->matches(new KeyMsg(KeyType::Tab), 'prev'));
     }
 
+    public function testSpaceRuneAndShiftOverALetterMeetTheBareChord(): void
+    {
+        $b = KeyBindings::new()->bind('hard', 'space')->bind('a2', 'a');
+
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, ' '), 'hard'), "a Char rune ' ' spells space");
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, 'A', shift: true), 'a2'), 'Shift over a letter folds');
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, 'A'), 'a2'));
+    }
+
+    public function testChordsMatchIsTheRuleMatchesApplies(): void
+    {
+        $b = KeyBindings::new()->bind('hard', 'space')->bind('a2', 'a')->bind('save', 'ctrl+s');
+        $messages = [
+            new KeyMsg(KeyType::Char, ' '),
+            new KeyMsg(KeyType::Space, ' '),
+            new KeyMsg(KeyType::Char, 'A', shift: true),
+            new KeyMsg(KeyType::Char, 'a'),
+            new KeyMsg(KeyType::Char, 's', ctrl: true),
+            new KeyMsg(KeyType::Char, 's'),
+            new KeyReleaseMsg(KeyType::Char, ' '),
+            new WindowSizeMsg(80, 24),
+        ];
+        foreach ($b->actions() as $id) {
+            foreach ($messages as $i => $msg) {
+                self::assertSame(
+                    $b->matches($msg, $id),
+                    KeyBindings::chordsMatch($msg, $b->tokens($id)),
+                    "message #$i against $id",
+                );
+            }
+        }
+        self::assertFalse(KeyBindings::chordsMatch(new KeyMsg(KeyType::Char, 'a'), []));
+    }
+
     public function testMatchesAnswersFalseForNonKeyMessagesAndReleases(): void
     {
         $b = KeyBindings::new()->bind('quit', ['q', 'ctrl+c']);

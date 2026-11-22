@@ -6,6 +6,9 @@ namespace SugarCraft\Widgets\Tests\Key;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Keys\KeyBindings;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyReleaseMsg;
 use SugarCraft\Widgets\Key\Binding;
 use SugarCraft\Widgets\Key\KeyMap;
 use SugarCraft\Widgets\Key\KeyView;
@@ -127,5 +130,47 @@ final class KeyViewTest extends TestCase
         $remapped = $view->withBindings(self::registry()->withOverride('quit', 'ctrl+q'));
         self::assertSame('ctrl+q', $remapped->binding('quit')->help->key);
         self::assertSame('q ctrl+c', $view->binding('quit')->help->key);
+    }
+
+    public function testGeneratedBindingsMatchExactlyAsTheRegistryDoes(): void
+    {
+        $kb = KeyBindings::new()
+            ->bind('hard', 'space')
+            ->bind('a2', 'a')
+            ->bind('save', 'ctrl+s')
+            ->bind('prev', 'shift+tab');
+        $view = KeyView::new($kb);
+        $messages = [
+            'char space'  => new KeyMsg(KeyType::Char, ' '),
+            'named space' => new KeyMsg(KeyType::Space, ' '),
+            'shift+A'     => new KeyMsg(KeyType::Char, 'A', shift: true),
+            'caps A'      => new KeyMsg(KeyType::Char, 'A'),
+            'a'           => new KeyMsg(KeyType::Char, 'a'),
+            'alt+a'       => new KeyMsg(KeyType::Char, 'a', alt: true),
+            'ctrl+s'      => new KeyMsg(KeyType::Char, 's', ctrl: true),
+            'shift+tab'   => new KeyMsg(KeyType::Tab, shift: true),
+            'tab'         => new KeyMsg(KeyType::Tab),
+            'release'     => new KeyReleaseMsg(KeyType::Char, ' '),
+        ];
+        foreach ($kb->actions() as $id) {
+            foreach ($messages as $name => $msg) {
+                self::assertSame($kb->matches($msg, $id), $view->binding($id)->matches($msg), "$name against $id");
+            }
+        }
+
+        $short = $view->shortHelp();
+        self::assertTrue($short[0]->matches(new KeyMsg(KeyType::Char, ' ')), "space fires on a Char rune ' '");
+        self::assertTrue($short[1]->matches(new KeyMsg(KeyType::Char, 'A', shift: true)), 'a fires on Shift+A');
+    }
+
+    public function testGeneratedBindingStaysChordMatchedThroughItsWithers(): void
+    {
+        $b = KeyView::new(KeyBindings::new()->bind('hard', 'space'))->binding('hard');
+        $space = new KeyMsg(KeyType::Char, ' ');
+
+        self::assertTrue($b->withHelp('␣', 'drop')->matches($space));
+        self::assertTrue($b->disable()->withEnabled(true)->matches($space));
+        self::assertTrue($b->withKeys(['a', 'space'])->matches(new KeyMsg(KeyType::Char, 'A', shift: true)));
+        self::assertFalse($b->unbind()->matches($space));
     }
 }

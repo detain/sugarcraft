@@ -131,4 +131,35 @@ final class BindingTest extends TestCase
         $c = Binding::new(keys: ['ctrl+c'], help: new Help('ctrl+c', 'quit'));
         $this->assertTrue($c->matches(new KeyMsg(KeyType::Char, 'c', ctrl: true)));
     }
+
+    public function testChordsFactoryUsesTheRegistryRule(): void
+    {
+        $b = Binding::chords(['Space', 'esc', 'a'], new Help('␣', 'drop'));
+
+        self::assertSame(['space', 'escape', 'a'], $b->keys);
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, ' ')));
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, 'A', shift: true)));
+        self::assertFalse($b->matches(new KeyMsg(KeyType::Char, 'a', ctrl: true)));
+        self::assertFalse($b->disable()->matches(new KeyMsg(KeyType::Char, ' ')));
+    }
+
+    public function testNewKeepsTheUpstreamStringRule(): void
+    {
+        $b = Binding::new(['a']);
+
+        self::assertTrue($b->matches(new KeyMsg(KeyType::Char, 'a')));
+        self::assertFalse($b->matches(new KeyMsg(KeyType::Char, 'A', shift: true)));
+    }
+
+    public function testChordsFactoryRejectsWhatTheRegistryRejects(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Binding::chords(['shift+a']);
+    }
+
+    public function testChordsFactoryRejectsANonStringKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Binding::chords([42]);
+    }
 }

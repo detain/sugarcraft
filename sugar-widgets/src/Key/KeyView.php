@@ -22,7 +22,10 @@ use SugarCraft\Widgets\Lang;
  * none was given (still derived, never invented). An action with no chords
  * is a disabled binding, which the footer skips unless `withShowDisabled()`
  * asks to document it. Dispatch stays on `KeyBindings::matches()`; these
- * bindings exist to be rendered.
+ * bindings exist to be rendered, but a caller that does match through one
+ * gets the registry's answer, because each is built by
+ * `Binding::chords()` and so calls the registry's own matching rule (a
+ * Char rune `' '` meets `space`, Shift over a letter meets the bare letter).
  *
  * ```php
  * $keys = KeyBindings::new()
@@ -123,14 +126,18 @@ final class KeyView implements KeyMap
 
     /**
      * The generated binding for one action id.
+     *
+     * Its matches() answers every key press exactly as
+     * `KeyBindings::matches($msg, $id)` does, through the one rule both
+     * share (`Binding::chords()`), never through `KeyMsg::string()`.
      */
     public function binding(string $id): Binding
     {
         $chords = $this->bindings->tokens($id);
         $desc = $this->bindings->help($id);
 
-        return Binding::new(
-            keys: $chords,
+        return Binding::chords(
+            chords: $chords,
             help: new Help($this->bindings->label($id, $this->keySeparator), $desc !== '' ? $desc : $id),
             disabled: $chords === [],
         );

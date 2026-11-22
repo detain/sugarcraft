@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Key;
 
+use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Widgets\Lang;
@@ -52,6 +53,14 @@ final class Binding
     public readonly array $keys;
 
     /**
+     * True only on a binding built by {@see chords()}: matches() then asks
+     * sugar-core's KeyBindings rule instead of comparing KeyMsg::string().
+     * Set once, inside chords(), before the instance escapes; every wither
+     * carries it through {@see mutate()}.
+     */
+    private bool $chordMatched = false;
+
+    /**
      * @deprecated Prefer {@see self::new()} — the house factory spells the
      *     same shape. Kept public (BC); removal at 2.0.
      *
@@ -95,10 +104,52 @@ final class Binding
         return new self($keys, $help, true);
     }
 
+    /**
+     * A binding over sugar-core KeyBindings chords, matched by the
+     * registry's own rule.
+     *
+     * {@see KeyView} builds its help bindings here, so a Binding taken from
+     * the help footer answers a key press exactly as
+     * `KeyBindings::matches()` does for the same chords: a Char rune `' '`
+     * meets `space`, Shift over a letter meets the bare letter, and a key
+     * release or auto-repeat meets nothing. A binding from {@see new()}
+     * keeps the upstream rule (the key string must equal
+     * {@see KeyMsg::string()}). Each chord is parsed by
+     * `KeyBindings::parseChord()`, so a spelling the registry would refuse
+     * (`shift+a`, `ctrl+ctrl+s`) throws here too; {@see withKeys()} on the
+     * result parses the same way.
+     *
+     * @internal built by KeyView; bind keys through KeyBindings, not here.
+     *
+     * @param list<string> $chords
+     */
+    public static function chords(array $chords, Help $help = new Help(), bool $disabled = false): self
+    {
+        $canonical = [];
+        foreach ($chords as $chord) {
+            if (!\is_string($chord)) {
+                throw new \InvalidArgumentException(
+                    Lang::t('key.bad_binding_type', ['key' => \get_debug_type($chord)]),
+                );
+            }
+            $parsed = KeyBindings::parseChord($chord);
+            if (!\in_array($parsed, $canonical, true)) {
+                $canonical[] = $parsed;
+            }
+        }
+        $binding = new self($canonical, $help, $disabled);
+        $binding->chordMatched = true;
+
+        return $binding;
+    }
+
     public function matches(KeyMsg $msg): bool
     {
         if ($this->disabled) {
             return false;
+        }
+        if ($this->chordMatched) {
+            return KeyBindings::chordsMatch($msg, $this->keys);
         }
         return \in_array($msg->string(), $this->keys, true);
     }
@@ -126,7 +177,7 @@ final class Binding
      */
     public function withKeys(array $keys): self
     {
-        return new self($keys, $this->help, $this->disabled);
+        return $this->mutate(['keys' => $keys]);
     }
 
     /**
@@ -134,7 +185,7 @@ final class Binding
      */
     public function withHelp(string $key, string $desc): self
     {
-        return new self($this->keys, new Help($key, $desc), $this->disabled);
+        return $this->mutate(['help' => new Help($key, $desc)]);
     }
 
     /**
@@ -143,7 +194,7 @@ final class Binding
      */
     public function disable(bool $disabled = true): self
     {
-        return new self($this->keys, $this->help, $disabled);
+        return $this->mutate(['disabled' => $disabled]);
     }
 
     /**
@@ -151,7 +202,7 @@ final class Binding
      */
     public function withEnabled(bool $on): self
     {
-        return new self($this->keys, $this->help, !$on);
+        return $this->mutate(['disabled' => !$on]);
     }
 
     /**
@@ -207,7 +258,25 @@ final class Binding
      */
     public function unbind(): self
     {
-        return new self([], $this->help, $this->disabled);
+        return $this->mutate(['keys' => []]);
+    }
+
+    /**
+     * A new binding with $changes applied, built the way this one was: a
+     * {@see chords()} binding stays chord-matched and parses its keys as
+     * chords, any other binding runs the upstream grammar.
+     *
+     * @param array{keys?: array<array-key, mixed>, help?: Help, disabled?: bool} $changes
+     */
+    private function mutate(array $changes): self
+    {
+        $keys = $changes['keys'] ?? $this->keys;
+        $help = $changes['help'] ?? $this->help;
+        $disabled = $changes['disabled'] ?? $this->disabled;
+
+        return $this->chordMatched
+            ? self::chords($keys, $help, $disabled)
+            : new self($keys, $help, $disabled);
     }
 
     // ─── ingress: normalize → validate → dedupe ──────────────────────
