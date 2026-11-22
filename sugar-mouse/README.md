@@ -341,7 +341,17 @@ rules; without it (or when `grapheme_extract()` returns `''` mid-sequence)
 `Grapheme` asks PCRE's extended grapheme cluster matcher (`\X`, always
 compiled into PHP) over a window of whole code points, so ZWJ emoji
 families, regional-indicator flags and an accent on a Latin base still
-advance as ONE cluster. The window starts at 32 code points and doubles while
+come back as ONE cluster. That fixes only the cluster *boundary*: each
+cluster's cell width comes from sugar-core's `Width::string()`, which without
+`ext-intl` splits per code point and sums the parts. Measured on PHP 8.3.37
+(ICU 74.2 versus `disable_functions=grapheme_extract`), a ZWJ family
+(U+1F468 U+200D U+1F469 U+200D U+1F467) is 2 cells with `ext-intl` and 6
+without, a skin-tone emoji (U+1F44D U+1F3FD) 2 and 4, क्ष (below) 1 and 2,
+U+0600 U+1F468 1 and 3, and U+0600 U+4E00 1 and 3; a flag pair (2) and
+`e` + U+0301 (1) measure the same on both. So a zone after a family emoji
+lands four columns further right on a host without `ext-intl`. That gap is
+sugar-core's per-code-point width fallback, not `Grapheme`, and it adds to
+the boundary splits below. The window starts at 32 code points and doubles while
 the cluster fills it, up to 4096; only a cluster longer than that (a
 pathological combining run) is cut there, where ICU would take it whole. Only bytes that are not valid UTF-8 fall back to one
 lead-byte-sized unit. `\X` approximates UAX #29 rather than implementing it:
@@ -356,7 +366,8 @@ instead of one, and a zone after it lands that many columns further right
 (two after U+1F468, one after U+2764). The trigger is the
 Extended_Pictographic property, not display width: a Prepend before a CJK
 ideograph, an Indic or Latin letter, or a regional indicator stays one
-cluster on both paths. ICU and PCRE also track
+cluster on both paths (its width can still differ, as measured above for
+U+4E00). ICU and PCRE also track
 their own Unicode versions, so a code point newer than one of them can
 cluster differently host to host. Layouts whose zones must land on the same
 column on every host, including Indic text and brand-new emoji, should

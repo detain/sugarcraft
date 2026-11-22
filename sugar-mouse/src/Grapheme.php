@@ -18,11 +18,25 @@ namespace SugarCraft\Mouse;
  * Without it, {@see nextWithoutIntl()} asks PCRE's extended grapheme cluster
  * matcher (`\X`, always compiled into PHP) over a window of whole code points
  * that grows while the cluster fills it (capped at {@see MAX_WINDOW} code
- * points), so a host without ext-intl still measures per cluster instead of
- * falling back to per code point. Only bytes that are not valid UTF-8 degrade
- * to a single lead-byte-sized unit — the same posture the scanner always had
- * for them; a valid cluster followed by such bytes still measures as one
- * cluster.
+ * points), so a host without ext-intl still finds cluster BOUNDARIES per
+ * cluster instead of per code point. Only bytes that are not valid UTF-8
+ * degrade to a single lead-byte-sized unit — the same posture the scanner
+ * always had for them; a valid cluster followed by such bytes still comes
+ * back as one cluster.
+ *
+ * The boundary is all this class decides. The cell WIDTH of each cluster
+ * comes from sugar-core's {@see \SugarCraft\Core\Util\Width::string()},
+ * and without ext-intl that function splits per code point and sums the
+ * parts, so a cluster this fallback keeps whole can still measure wider than
+ * on an ext-intl host. Measured on PHP 8.3.37 (ICU 74.2 versus
+ * `disable_functions=grapheme_extract`): a ZWJ family (U+1F468 U+200D
+ * U+1F469 U+200D U+1F467) is 2 cells with ext-intl and 6 without, a
+ * skin-tone emoji (U+1F44D U+1F3FD) 2 and 4, the Indic conjunct below 1 and
+ * 2, U+0600 U+1F468 1 and 3, and U+0600 U+4E00 1 and 3; a flag pair (2) and
+ * "e" + U+0301 (1) measure the same on both. Every zone to the right of such
+ * a glyph lands that many columns further right — four after a family
+ * emoji. That width gap is sugar-core's per-code-point fallback, not this
+ * class, and it adds to the boundary splits listed next.
  *
  * The fallback is an approximation of UAX #29, not an implementation of it.
  * `\X` follows PCRE2's own cluster rules, which match ICU on the inputs
@@ -42,8 +56,9 @@ namespace SugarCraft\Mouse;
  * U+2764. The trigger is the Extended_Pictographic property, not display
  * width: a Prepend before a CJK ideograph (U+4E00), an Indic letter
  * (U+0915), a Latin letter (U+00E9) or a regional indicator (U+1F1F8) stays
- * one cluster on both paths. A layout whose zones must land on the same
- * column on every host should require ext-intl.
+ * one cluster on both paths (though its width still differs, as measured
+ * above for U+4E00). A layout whose zones must land on the same column on
+ * every host should require ext-intl.
  */
 final class Grapheme
 {

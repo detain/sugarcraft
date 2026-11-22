@@ -800,8 +800,12 @@ final class Scan
      * regional indicator from a combining mark after it, and a Prepend code
      * point from an Extended_Pictographic one after it (the emoji's own
      * width more without ext-intl), and a code point newer than either
-     * library's Unicode tables can cluster differently too. {@see Grapheme} lists the measured cases; the README's Scan rules
-     * carry the consumer-facing version of this note.
+     * library's Unicode tables can cluster differently too. The cells come
+     * from {@see Width::string()}, which without ext-intl sums per code
+     * point even over a cluster PCRE kept whole: a ZWJ family is 6 cells
+     * instead of 2, a skin-tone emoji 4 instead of 2. {@see Grapheme} lists
+     * the measured cases; the README's Scan rules carry the consumer-facing
+     * version of this note.
      *
      * @return array{0:int,1:int} [bytes, cells]
      */
