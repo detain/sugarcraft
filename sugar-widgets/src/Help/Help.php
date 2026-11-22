@@ -283,9 +283,11 @@ final class Help
     /**
      * Render the multi-column full help block from `KeyMap::fullHelp()`.
      * Given a {@see KeyBindings} registry, every row is generated from it:
-     * one row per action, the key column from `KeyBindings::label()`, the
-     * description from `KeyBindings::help()` (one column; wrap the registry
-     * in {@see KeyView} to choose a layout).
+     * one row per bound action, the key column from `KeyBindings::label()`,
+     * the description from `KeyBindings::help()` (one column; wrap the
+     * registry in {@see KeyView} to choose a layout). An action with no
+     * chords is a disabled binding and is left out unless
+     * {@see withShowDisabled()} is set.
      */
     public function fullView(KeyMap|KeyBindings $map): string
     {

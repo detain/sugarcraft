@@ -216,6 +216,30 @@ final class KeyBindingsFromFileTest extends TestCase
         KeyBindings::fromFile($parent . '/keys.json', self::base());
     }
 
+    public function testAFileBehindASymlinkLoopThrowsInsteadOfVanishing(): void
+    {
+        symlink($this->dir . '/loop/sub', $this->dir . '/loop');
+        symlink($this->dir . '/pong', $this->dir . '/ping');
+        symlink($this->dir . '/ping', $this->dir . '/pong');
+
+        foreach ([$this->dir . '/loop/sub/keys.json', $this->dir . '/ping/keys.json'] as $slot) {
+            try {
+                KeyBindings::fromFile($slot, self::base());
+                self::fail('a slot behind a symlink loop must not read as a missing file');
+            } catch (\RuntimeException $e) {
+                self::assertStringContainsString($slot, $e->getMessage());
+            }
+        }
+    }
+
+    public function testAFileBehindADanglingSymlinkIsStillNoOverrides(): void
+    {
+        symlink($this->dir . '/gone', $this->dir . '/config');
+        $base = self::base();
+
+        self::assertSame($base, KeyBindings::fromFile($this->dir . '/config/keys.json', $base));
+    }
+
     public function testOversizedFileIsRefusedBeforeParsing(): void
     {
         $path = $this->write('keys.json', '{"quit": ["q"]}' . str_repeat(' ', 1048576));

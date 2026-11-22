@@ -35,10 +35,12 @@ declare(strict_types=1);
  * Shift. They are now chord-exact, so a bare `left` no longer fires on
  * Shift+Left, a bare `c` no longer fires on Alt+C, and a bare `space` no
  * longer fires on Shift+Space. A caller that relied on the fold must bind the
- * chord or fall back to the bare token itself. candy-tetris, the only
- * in-monorepo caller of matches() and actionFor(), lands its fallback in the
- * same change (Bindings::actuates() answers Shift over a named key with the
- * bare token), and its suite is the gate for that compensation.
+ * chord or fall back to the bare token itself. candy-tetris, the caller of
+ * matches() and actionFor() that predates the change, lands its fallback in
+ * the same change (Bindings::actuates() answers Shift over a named key with
+ * the bare token), and its suite is the gate for that compensation.
+ * sugar-widgets' HelpOverlay, a new actionFor() caller, applies the same
+ * Shift fallback to its scroll keys.
  *
  * Legacy-terminal gap: a few Ctrl+letter chords share their byte with a named
  * key, and InputReader decodes the named key with ctrl unset. Ctrl+H (0x08)
@@ -229,7 +231,8 @@ final class KeyBindings
      * vocabulary, so unlike {@see fromMap()} the file may only rebind ids
      * the base already holds: a misspelled action name throws instead of
      * loading as a new action nothing dispatches on. Anything else wrong — a slot hidden
-     * behind an unsearchable directory or a non-directory parent, a slot
+     * behind an unsearchable directory, a non-directory parent or a
+     * symlink loop, a slot
      * that is not a plain file (symlink, FIFO, socket: refused by lstat,
      * never followed or opened), an oversized file, malformed JSON, a bad shape,
      * an action id a non-empty base does not declare, or a token
@@ -674,16 +677,28 @@ final class KeyBindings
      * absent when the nearest ancestor that exists is a searchable
      * directory. An ancestor that is a plain file (ENOTDIR) or a directory
      * without search permission (EACCES) means the slot is not "missing",
-     * and the caller throws.
+     * and the caller throws. A symlink on the way that stat() cannot
+     * resolve is followed by hand within the kernel's 40-hop budget: a
+     * dangling link ends in an absent target and counts as absent, while a
+     * link loop (ELOOP) runs out of hops and throws.
      */
-    private static function slotIsAbsent(string $path): bool
+    private static function slotIsAbsent(string $path, int $hops = 40): bool
     {
+        $link = @readlink($path);
+        if ($link !== false) {
+            if ($hops === 0) {
+                return false;
+            }
+            $target = str_starts_with($link, '/') ? $link : dirname($path) . '/' . $link;
+
+            return @stat($target) === false && self::slotIsAbsent($target, $hops - 1);
+        }
         $dir = dirname($path);
         if ($dir === $path) {
             return false;
         }
         if (@stat($dir) === false) {
-            return self::slotIsAbsent($dir);
+            return self::slotIsAbsent($dir, $hops);
         }
 
         return is_dir($dir) && is_executable($dir);

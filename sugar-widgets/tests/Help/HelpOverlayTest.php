@@ -159,6 +159,25 @@ final class HelpOverlayTest extends TestCase
         }
     }
 
+    public function testShiftHeldOverANamedKeyStillNavigates(): void
+    {
+        [$o] = self::overlay(2)->update(new KeyMsg(KeyType::Down, shift: true));
+        self::assertSame(1, $o->offset, 'Shift+Down scrolls like Down');
+
+        [$o] = $o->update(new KeyMsg(KeyType::PageDown, shift: true));
+        self::assertSame(3, $o->offset, 'Shift+PageDown pages like PageDown');
+
+        [$o] = $o->update(new KeyMsg(KeyType::Up, shift: true));
+        self::assertSame(2, $o->offset, 'Shift+Up scrolls like Up');
+
+        [$same] = $o->update(new KeyMsg(KeyType::Down, shift: true, ctrl: true));
+        self::assertSame($o, $same, 'Ctrl+Shift+Down is not folded');
+
+        $remapped = $o->withKeys(HelpOverlay::defaultKeys()->withOverride('top', 'shift+down'));
+        [$o] = $remapped->update(new KeyMsg(KeyType::Down, shift: true));
+        self::assertSame(0, $o->offset, 'an exact shift+ binding wins over the fallback');
+    }
+
     public function testNavigationIsRemappableThroughKeyBindings(): void
     {
         $keys = HelpOverlay::defaultKeys()->withOverride('scroll-down', 'ctrl+n');

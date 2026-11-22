@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Widgets\Help;
 
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyReleaseMsg;
+use SugarCraft\Core\Msg\KeyRepeatMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Widgets\Key\KeyMap;
@@ -106,7 +110,7 @@ final class HelpOverlay implements Model
             };
         }
 
-        return match ($this->keys->actionFor($msg)) {
+        return match ($this->actionFor($msg)) {
             'scroll-up'   => [$this->scrollBy(-1), null],
             'scroll-down' => [$this->scrollBy(1), null],
             'page-up'     => [$this->scrollBy(-$this->height), null],
@@ -116,6 +120,40 @@ final class HelpOverlay implements Model
             'close'       => [$this->withOpen(false), Cmd::send(new HelpOverlayClosedMsg())],
             default       => [$this, null],
         };
+    }
+
+    /**
+     * KeyBindings matching is chord-exact, so Shift held over a named key
+     * (the decoder reports Shift+Down as Down with shift set) would miss a
+     * bare `down`. As in candy-tetris, it falls back to the bare token, but
+     * only when no action binds that exact shift+ chord, so a remap of
+     * `shift+down` keeps its own key. Printable keys and space keep the
+     * exact match.
+     */
+    private function actionFor(Msg $msg): ?string
+    {
+        $action = $this->keys->actionFor($msg);
+        if ($action !== null
+            || !$msg instanceof KeyMsg
+            || $msg instanceof KeyReleaseMsg
+            || $msg instanceof KeyRepeatMsg
+            || !$msg->shift
+            || $msg->ctrl
+            || $msg->alt
+            || $msg->type === KeyType::Char
+            || $msg->type === KeyType::Space
+        ) {
+            return $action;
+        }
+
+        $bare = KeyBindings::tokenOf($msg);
+        foreach ($this->keys->actions() as $id) {
+            if (\in_array($bare, $this->keys->tokens($id), true)) {
+                return $id;
+            }
+        }
+
+        return null;
     }
 
     /**
