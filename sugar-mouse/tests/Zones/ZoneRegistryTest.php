@@ -43,6 +43,17 @@ final class ZoneRegistryTest extends TestCase
         self::assertSame('7-', $registry->newPrefix()->prefix(), 'a non-numeric prefix leaves the counter alone');
     }
 
+    public function testAnUnreachablyLargeNumericPrefixLeavesTheAutoCounterUsable(): void
+    {
+        $registry = ZoneRegistry::new();
+        $registry->newPrefix('2-');
+
+        self::assertSame('99999999999999999999-', $registry->newPrefix('99999999999999999999-')->prefix());
+        self::assertSame('3-', $registry->newPrefix()->prefix(), 'the auto counter neither overflows nor jumps');
+        self::assertSame('999999999999999999-', $registry->newPrefix('999999999999999999-')->prefix());
+        self::assertSame('1000000000000000000-', $registry->newPrefix()->prefix(), 'an 18-digit prefix is still reserved');
+    }
+
     public function testDefaultManagerIsPerRegistryAndLazilyRebuilt(): void
     {
         $a = ZoneRegistry::new();

@@ -80,6 +80,29 @@ final class GraphemeTest extends TestCase
     }
 
     /**
+     * A multi-byte lead whose continuation bytes are missing is only its
+     * maximal subpart (ICU's unit too): it never swallows a following
+     * newline, ESC or sentinel lead.
+     */
+    public function testStrayLeadDoesNotSwallowTheBytesAfterIt(): void
+    {
+        $cases = [
+            "\xe4\nabc"                              => "\xe4",
+            "\xe4\x1b[1mX"                           => "\xe4",
+            "\xe4" . Mark::zone('tab:1', 'X')        => "\xe4",
+            "\xe6\x97\n"                             => "\xe6\x97",
+            "\xed\xa0\x80x"                          => "\xed",
+            "\xf4\x90\x80\x80"                       => "\xf4",
+        ];
+        foreach ($cases as $subject => $expected) {
+            self::assertSame($expected, Grapheme::nextWithoutIntl($subject, 0), bin2hex($subject));
+            if (function_exists('grapheme_extract')) {
+                self::assertSame(grapheme_extract($subject, 1, GRAPHEME_EXTR_COUNT, 0), $expected, 'ICU agrees: ' . bin2hex($subject));
+            }
+        }
+    }
+
+    /**
      * An invalid byte later in the fallback window must not cut the valid
      * cluster before it down to its lead unit: hosts with and without
      * ext-intl measure the same bytes the same way.

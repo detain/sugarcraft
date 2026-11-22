@@ -121,16 +121,38 @@ final class Grapheme
         return substr($window, 0, $end);
     }
 
-    /** Byte length of the UTF-8 unit whose lead byte sits at $i (1 for a stray byte). */
+    /**
+     * Byte length of the UTF-8 unit whose lead byte sits at $i: the whole
+     * scalar when it is well formed, else the lead plus only those following
+     * bytes that could still continue it (the Unicode "maximal subpart", which
+     * is also ICU's unit), so a stray lead never swallows a newline, an ESC or
+     * a sentinel lead after it. A byte that cannot start a scalar is 1.
+     */
     private static function scalarLength(string $s, int $i): int
     {
         $b = ord($s[$i]);
-        return match (true) {
-            ($b & 0x80) === 0    => 1,
-            ($b & 0xe0) === 0xc0 => 2,
-            ($b & 0xf0) === 0xe0 => 3,
-            ($b & 0xf8) === 0xf0 => 4,
-            default              => 1,
+        // [continuation bytes needed, allowed range of the FIRST one]
+        // (Unicode Table 3-7: E0/F0 bar overlongs, ED surrogates, F4 > U+10FFFF).
+        [$need, $lo, $hi] = match (true) {
+            $b < 0x80               => [0, 0x80, 0xbf],
+            $b >= 0xc2 && $b <= 0xdf => [1, 0x80, 0xbf],
+            $b === 0xe0             => [2, 0xa0, 0xbf],
+            $b === 0xed             => [2, 0x80, 0x9f],
+            $b >= 0xe1 && $b <= 0xef => [2, 0x80, 0xbf],
+            $b === 0xf0             => [3, 0x90, 0xbf],
+            $b >= 0xf1 && $b <= 0xf3 => [3, 0x80, 0xbf],
+            $b === 0xf4             => [3, 0x80, 0x8f],
+            default                 => [0, 0x80, 0xbf],
         };
+        $len = strlen($s);
+        $unit = 1;
+        for ($k = 1; $k <= $need && $i + $k < $len; $k++) {
+            $c = ord($s[$i + $k]);
+            if ($c < ($k === 1 ? $lo : 0x80) || $c > ($k === 1 ? $hi : 0xbf)) {
+                break;
+            }
+            $unit++;
+        }
+        return $unit;
     }
 }

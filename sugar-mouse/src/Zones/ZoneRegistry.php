@@ -69,7 +69,11 @@ final class ZoneRegistry
         if ($prefix === '') {
             return Manager::newWithIdPrefix((string) (++$this->prefixCounter) . '-');
         }
-        if (preg_match('/^(\d+)-$/', $prefix, $reserved) === 1) {
+        // A run of more than 18 digits is past any value the auto counter can
+        // reach, so it needs no reservation; claiming it would push the
+        // counter to PHP_INT_MAX (the (int) cast saturates) and make the next
+        // auto increment overflow.
+        if (preg_match('/^(\d{1,18})-$/', $prefix, $reserved) === 1) {
             $this->prefixCounter = max($this->prefixCounter, (int) $reserved[1]);
         }
         return Manager::newWithIdPrefix($prefix);

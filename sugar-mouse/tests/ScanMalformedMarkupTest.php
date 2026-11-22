@@ -388,6 +388,25 @@ final class ScanMalformedMarkupTest extends TestCase
         self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'a sixel with CRLF payload stays zero-width');
     }
 
+    // ─── invalid UTF-8 ──────────────────────────────────────────────────────
+
+    /**
+     * A stray multi-byte lead is one zero-width unit: it must not swallow the
+     * U+E000 sentinel lead of a zone tag, a newline or an ESC after it.
+     */
+    public function testStrayUtf8LeadSwallowsNoFollowingTagNewlineOrEscape(): void
+    {
+        $tag = Scanner::new()->scan("\xe4" . Mark::zone('tab:1', 'X'))->get('tab:1');
+        self::assertNotNull($tag, 'the OPEN tag after the stray lead survives');
+        self::assertSame([1, 1, 1, 1], self::box($tag));
+
+        $zones = Scan::parse("\xe4\nab" . Mark::zone('z', 'Q'));
+        self::assertSame([3, 2, 3, 2], self::box($zones['z']), 'the newline still advances the row');
+
+        $zones = Scan::parse("\xe4\x1b[1mX" . Mark::zone('z', 'Q'));
+        self::assertSame([2, 1, 2, 1], self::box($zones['z']), 'the ESC still opens the SGR, so only X paints');
+    }
+
     public function testWellFormedSequencesUnchangedByResync(): void
     {
         // Benign-input guard: final-byte CSI, BEL-terminated OSC and ST-
