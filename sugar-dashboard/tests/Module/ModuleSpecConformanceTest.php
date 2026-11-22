@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Tests\Module;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Async\Await;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\BaseModule;
 use SugarCraft\Dashboard\Module\Module;
@@ -118,8 +119,13 @@ final class ModuleSpecConformanceTest extends TestCase
         $tickMsg = new TickMsg();
 
         // A tick starts the command on the loop; its output lands in the next update.
+        // The tick returns a batch of the re-armed next tick and the run, so the run
+        // is the second member, the same shape GenericModuleTest::runOf() pins.
         [$inFlight, $cmd] = $module->update($tickMsg);
-        [$nextModule] = $inFlight->update(Await::until($cmd()->promise, 15.0));
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        $this->assertCount(2, $batch->cmds, 'a tick re-arms its chain beside the run');
+        [$nextModule] = $inFlight->update(Await::until($batch->cmds[1]()->promise, 15.0));
         $view = $nextModule->view();
 
         $this->assertStringContainsString('hello world', $view);
