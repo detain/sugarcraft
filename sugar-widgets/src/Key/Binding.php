@@ -10,9 +10,18 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Widgets\Lang;
 
 /**
- * A keybinding: a list of accepted key strings (matched against
- * {@see KeyMsg::string()}), an optional {@see Help} label, and a disabled
- * flag that suppresses both matching and help display.
+ * A keybinding: a list of accepted key strings, an optional {@see Help}
+ * label, and a disabled flag that suppresses both matching and help
+ * display. Always test a press with {@see matches()}, never by comparing
+ * `$keys` to {@see KeyMsg::string()} by hand: the two construction paths
+ * match differently.
+ *
+ * A binding from {@see new()} matches when a key string equals
+ * {@see KeyMsg::string()}. A binding from {@see chords()} — the kind
+ * {@see KeyView::binding()} hands out — holds sugar-core KeyBindings
+ * chords, parsed by `KeyBindings::parseChord()` and matched by
+ * `KeyBindings::chordsMatch()`, so Shift+A (string `shift+a`) meets the
+ * chord `a`, and a spelling `parseChord()` refuses throws there.
  *
  * Key strings are NORMALIZED and VALIDATED at construction: each is
  * trimmed, lowercased, run through the alias table, and checked against
