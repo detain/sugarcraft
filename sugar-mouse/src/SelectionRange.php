@@ -166,7 +166,14 @@ final class SelectionRange
         for ($row = $this->startRow; $row <= $this->endRow; $row++) {
             [$from, $to] = $this->spanOnRow($row) ?? [1, 0];
             $plain = Ansi::strip($lines[$row - 1] ?? '');
-            $rows[] = rtrim(Width::takeAnsi(Width::dropAnsi($plain, $from - 1), $to - $from + 1), " \t");
+            $cells = $to - $from + 1;
+            // A wide glyph straddling the span's LEFT edge is dropped whole by
+            // dropAnsi(); its covered half is a cell highlight() paints blank,
+            // so it is not copied and its cell comes off the take budget, or
+            // the copy would run one cell past the span.
+            $rest = Width::dropAnsi($plain, $from - 1);
+            $lead = min($cells, max(0, Width::string($plain) - ($from - 1) - Width::string($rest)));
+            $rows[] = rtrim(Width::takeAnsi($rest, $cells - $lead), " \t");
         }
 
         while ($rows !== [] && trim((string) $rows[0]) === '') {
@@ -226,7 +233,7 @@ final class SelectionRange
             // starts on its own column and the row keeps its cell count. (On
             // the RIGHT edge takeAnsi() keeps the straddler whole and the tail's
             // dropAnsi() skips it whole, so those two already meet, the same
-            // glyph extract() copies.)
+            // glyph extract() copies; extract() skips the left straddler too.)
             $rest = Width::dropAnsi($line, $before);
             $lead = min($cells, max(0, Width::string($line) - $before - Width::string($rest)));
             $run = str_repeat(' ', $lead) . Ansi::strip(Width::takeAnsi($rest, $cells - $lead));

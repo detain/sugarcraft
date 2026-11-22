@@ -101,4 +101,33 @@ final class SelectionRangeHighlightTest extends TestCase
 
         self::assertSame($range->extract($frame), implode("\n", $covered));
     }
+
+    public function testExtractStopsAtTheSpanWhenItStartsOnAWideGlyphsSecondHalf(): void
+    {
+        // 中 spans cells 1-2. Span [2,2] covers only 中's second half, and
+        // span [2,3] covers that half plus "a" (cell 3), never "b" (cell 4).
+        self::assertSame('', SelectionRange::new(1, 2, 1, 2)->extract(['中ab']));
+        self::assertSame('a', SelectionRange::new(1, 2, 1, 3)->extract(['中ab']));
+        self::assertSame('文', SelectionRange::new(1, 2, 1, 4)->extract(['中文ab']));
+    }
+
+    public function testHighlightAndExtractCoverTheSameCellsOverWideGlyphs(): void
+    {
+        // No row carries a leading space of its own, so the only leading
+        // blanks in a painted run are the straddler halves highlight() blanks.
+        $rows = ['中文ab', 'a中b文', '日本語x'];
+
+        foreach ($rows as $row) {
+            $width = Width::string($row);
+            for ($from = 1; $from <= $width; $from++) {
+                for ($to = $from; $to <= $width; $to++) {
+                    $range = SelectionRange::new(1, $from, 1, $to);
+                    [$marked] = $range->highlight([$row], static fn (string $run): string => "\x01{$run}\x02");
+                    self::assertSame(1, preg_match("/\x01([^\x02]*)\x02/", $marked, $m));
+
+                    self::assertSame(trim($m[1]), $range->extract([$row]), "{$row} span [{$from},{$to}]");
+                }
+            }
+        }
+    }
 }
