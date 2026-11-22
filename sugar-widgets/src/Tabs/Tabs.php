@@ -299,7 +299,7 @@ final class Tabs implements Model
                 array_map(fn(array $part): string => $this->renderPieces($part[0]), $parts),
             );
             if ($this->width > 0 && Width::string($line) > $this->width) {
-                $line = Width::truncateAnsi($line, $this->clipBudget()) . $this->renderMark($this->rightMark);
+                $line = Width::truncateAnsi($line, $this->clipBudget()) . $this->clipMark();
             }
             return $line;
         }
@@ -311,7 +311,7 @@ final class Tabs implements Model
         // unmarked content, then mark only the survivors.
         if ($this->width > 0 && $this->plainWidth($parts) > $this->width) {
             [$kept, $tail] = $this->clipParts($parts, $this->clipBudget());
-            return $this->assembleMarked($kept) . $tail . $this->renderMark($this->rightMark);
+            return $this->assembleMarked($kept) . $tail . $this->clipMark();
         }
         return $this->assembleMarked($parts);
     }
@@ -533,6 +533,16 @@ final class Tabs implements Model
     private function renderMark(string $mark): string
     {
         return $this->markStyle?->render($mark) ?? $mark;
+    }
+
+    /**
+     * The right mark an overflowing line ends with, cut to the bar's width
+     * so a mark wider than the bar cannot push the frame past it (the clip
+     * budget is then 0 and the mark alone fills the bar).
+     */
+    private function clipMark(): string
+    {
+        return $this->renderMark(Width::truncateAnsi($this->rightMark, $this->width));
     }
 
     /**

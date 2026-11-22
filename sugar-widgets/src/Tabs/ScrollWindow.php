@@ -24,7 +24,8 @@ enum ScrollWindow
     /**
      * Scan from the first tab and show the first run of tabs that keeps the
      * active tab in view: the offset is the smallest one whose window still
-     * draws the active tab whole, recomputed from the active tab on every
+     * keeps the active tab's first cells in view (the active tab is drawn
+     * whole only when it fits the bar), recomputed from the active tab on every
      * change, so the same active tab always shows the same window. A stored
      * or pinned offset is ignored.
      */

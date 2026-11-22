@@ -209,6 +209,23 @@ final class TabsChromeTest extends TestCase
         $this->assertSame([[2, 5, 15]], self::spanTriples($tabs));
     }
 
+    public function testARightMarkWiderThanTheBarIsCutToTheBar(): void
+    {
+        $labels = ['Home', 'Profile', 'Settings', 'Inbox'];
+        for ($width = 1; $width <= 8; $width++) {
+            $tabs = Tabs::new($labels, $width)->withScrollMarks('[more]', '[more]');
+            $where = "width {$width}";
+
+            $this->assertLessThanOrEqual($width, Width::string(self::stripSgr($tabs->view())), $where);
+            $this->assertLessThanOrEqual(
+                $width,
+                Width::string(self::stripSgr(self::scannedMarkedView($tabs))),
+                $where,
+            );
+        }
+        $this->assertSame('[more', Tabs::new($labels, 5)->withScrollMarks('[more]', '[more]')->view());
+    }
+
     public function testChangingMarksKeepsTheActiveTabInView(): void
     {
         // At width 19 the default marks leave the window at offset 0 with
