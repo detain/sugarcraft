@@ -823,7 +823,7 @@
 <tr><td><code>filters(): ConnectionFilters</code></td><td>Get current filters.</td></tr>
 <tr><td><code>withFilters(ConnectionFilters $filters): self</code></td><td>Return a new instance with updated filters.</td></tr>
 <tr><td><code>detailTab(): string</code></td><td>Get the current detail tab.</td></tr>
-<tr><td><code>withDetailTab(string $tab): self</code></td><td>Return a new instance with the detail tab set.</td></tr>
+<tr><td><code>withDetailTab(string $tab): self</code></td><td>Return a new instance with the detail tab set. An open panel is refetched for the new tab, so the bar and the panel never disagree; a closed panel stays closed.</td></tr>
 <tr><td><code>detailTabBar(): Tabs</code></td><td>The detail-tab bar, zones attached. Its Tabs::view() carries the Mark zone markers a host scans; the page&#039;s own view() renders the same bar without them.</td></tr>
 <tr><td><code>detailLines(): ?array</code></td><td>The open detail panel&#039;s lines (the active tab&#039;s data for the selected thread), or null while the panel is closed.</td></tr>
 <tr><td><code>releaseKeys(): self</code></td><td>Blur the detail-tab bar and close its panel, so the page claims no key. App calls this when the user leaves the Admin pane: a bar left focused there would keep claiming Tab and 1-3 on the way back.</td></tr>
