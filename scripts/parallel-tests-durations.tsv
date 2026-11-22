@@ -1148,6 +1148,7 @@ candy-code/tests/Host/Commands/SkillsReloadTest.php	0.051	5
 candy-code/tests/Cli/BootstrapSubdirectoryLaunchTest.php	0.051	3
 candy-code/tests/Tools/PathJailSpillAllowTest.php	0.051	8
 candy-code/tests/Host/TurnRunnerMentionFreshnessTest.php	0.051	3
+candy-code/tests/Tui/MediaForm/FormTabsTest.php	0.050	10
 candy-code/tests/Providers/ToolCallParser/DsmlToolCallParserTest.php	0.050	39
 candy-code/tests/Cli/BootstrapProjectTrustGrantTest.php	0.050	10
 candy-code/tests/Host/UltrathinkTurnTest.php	0.050	18
