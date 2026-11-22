@@ -523,7 +523,8 @@ name the same owner for one painted frame (they used to disagree: the
 Scanner once resolved by registration order alone), and the Manager's
 lookups scan one grid bucket instead of the whole registry. The primitive
 `Scanner::scan()` replaces its whole zone set from the frame it parses;
-`Manager::scan()` merges into its registry: ids re-recorded in a new frame are replaced, and
+`Manager::scan()` merges into its registry: ids re-recorded in a new frame are replaced and
+take that frame's close order (so an equal-area tie never depends on render history), and
 ids not present are kept. The consequence: a zone whose widget stopped
 rendering stays clickable until something replaces it under the same id,
 `clear($id)` removes it, or `close()` wipes the registry. So re-scan every

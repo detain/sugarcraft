@@ -229,6 +229,35 @@ final class HitRuleTest extends TestCase
         self::assertNull($manager->zoneAt(1, 1));
     }
 
+    /**
+     * Regression: an overwrite kept a re-scanned id at its first-ever
+     * registry position, so after frame 1 (p closes first) the Manager still
+     * handed frame 2's equal-area tie to p while the Scanner, reading frame
+     * 2's close order (q first), named q.
+     */
+    public function testEqualAreaTieFollowsTheLatestScanNotRenderHistory(): void
+    {
+        // Two 2-cell zones overlapping at column 2 of row 1.
+        $pFirst = "\u{E000}p\u{E001}A\u{E000}q\u{E001}B\u{E000}/p\u{E001}C\u{E000}/q\u{E001}";
+        $qFirst = "\u{E000}q\u{E001}A\u{E000}p\u{E001}B\u{E000}/q\u{E001}C\u{E000}/p\u{E001}";
+
+        $scanner = Scanner::new()->scan($qFirst);
+        self::assertSame('q', $scanner->hit(2, 1)?->id);
+        self::assertSame(['q', 'p'], array_map(static fn (Zone $z): string => $z->id, $scanner->hitAll(2, 1)));
+
+        $manager = Manager::newUnprefixed();
+        $manager->scan($pFirst);
+        self::assertSame('p', $manager->zoneAt(2, 1)?->id);
+
+        $manager->scan($qFirst);
+        self::assertSame('q', $manager->zoneAt(2, 1)?->id);
+        self::assertSame('q', $manager->anyInBounds(self::click(2, 1))?->id);
+        self::assertSame(
+            ['q', 'p'],
+            array_map(static fn (ZonesZone $z): string => $z->id, $manager->allInBounds(self::click(2, 1))),
+        );
+    }
+
     /** @return array{0:int,1:int,2:int,3:int} */
     private static function box(?Zone $zone): array
     {

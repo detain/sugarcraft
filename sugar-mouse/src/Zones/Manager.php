@@ -240,7 +240,8 @@ final class Manager
      * (CJK-width aware via sugar-core's Width), then the discovered zones are
      * upserted into this manager's registry as {@see Zone} adapters — same id,
      * same bounds. The registry merges rather than replaces: ids seen this
-     * scan overwrite prior entries; other ids persist. Stripping goes
+     * scan replace prior entries and move to the end in this scan's close
+     * order; other ids persist ahead of them. Stripping goes
      * through {@see \SugarCraft\Mouse\Scan::strip()}, the same rule parse
      * decodes, so bounds and bytes stay in lock-step.
      *
@@ -267,6 +268,10 @@ final class Manager
             if ($this->idPrefix !== '' && !str_starts_with($id, $this->idPrefix)) {
                 continue; // foreign namespace in the same frame — strip it, don't own it
             }
+            // Re-insert rather than overwrite: an overwrite keeps the id at its
+            // FIRST-ever position, so the equal-area tie would follow render
+            // history instead of this frame's close order (Scanner's order).
+            unset($this->zones[$id]);
             $this->zones[$id] = Zone::fromMouseZone($mouseZone);
         }
 
@@ -297,7 +302,7 @@ final class Manager
 
     /**
      * Generation-diff prune helper: the registered ids that did not appear
-     * among `$scannedIds`, in insertion order.
+     * among `$scannedIds`, in registry order (latest recording last).
      *
      * Feed it the ids the current frame actually painted (ids as registered
      * on this manager — full spellings, prefix included) and `clear()` the
@@ -364,7 +369,9 @@ final class Manager
 
     /**
      * The innermost (smallest-area) recorded zone whose bounds contain
-     * `$mouse`; on equal area the first-recorded zone wins. This is THE hit
+     * `$mouse`; on equal area the zone the latest scan closed first wins
+     * (a re-scanned id takes this scan's close order, not the position of
+     * its first-ever recording). This is THE hit
      * rule, shared with the primitive {@see \SugarCraft\Mouse\Scanner::hit()}
      * through {@see ZoneGrid}, so both layers name the same owner for one
      * painted frame. This registry has no stacking concept — no priority,
@@ -393,7 +400,8 @@ final class Manager
 
     /**
      * Every zone whose bounds contain `$mouse`, ordered innermost first
-     * (ascending area; equal areas keep registration order, matching
+     * (ascending area; equal areas in registry order — the latest scan's
+     * close order for the ids it recorded — matching
      * {@see anyInBounds()}). Lets a consumer route a click to ALL owners
      * of a cell — e.g. a container and the button inside it — instead of
      * only the smallest.
