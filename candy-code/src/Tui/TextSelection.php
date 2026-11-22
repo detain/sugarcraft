@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui;
 
-use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Selection;
 use SugarCraft\Mouse\SelectionRange;
 use SugarCraft\Style\Style;
@@ -160,45 +158,21 @@ final class TextSelection
     }
 
     /**
-     * $lines with the selected cells repainted in reverse video.
+     * $lines with the selected cells repainted in $style.
      *
-     * The covered run is repainted from its PLAIN text so the highlight reads
-     * the same over every colour the transcript uses; the cells either side
-     * keep their own styling (the same head/patch/tail splice the shell's
-     * drop-target outline uses). A row shorter than its span is padded, so a
-     * selection through a blank row still shows as one continuous band.
+     * Delegates to {@see SelectionRange::highlight()}, as extract() does, so
+     * paint and copy share one cell geometry: the covered run is repainted
+     * from its PLAIN text, the cells either side keep their own styling, a
+     * row shorter than its span is padded, and a span starting on a wide
+     * glyph's second half paints that half blank instead of repeating the
+     * next glyph (the left-edge rule extract() already applies).
      *
      * @param list<string> $lines the painted frame; row R is `$lines[R - 1]`
      * @return list<string>
      */
     public function highlight(array $lines, Style $style): array
     {
-        $range = $this->range();
-
-        for ($row = $range->startRow; $row <= $range->endRow; $row++) {
-            $index = $row - 1;
-            if (!isset($lines[$index])) {
-                continue;
-            }
-
-            [$from, $to] = $range->spanOnRow($row) ?? [1, 0];
-            $cells = $to - $from + 1;
-            if ($cells <= 0) {
-                continue;
-            }
-
-            // Cells left of the span: a 1-based column $from has $from - 1 before it.
-            $before = $from - 1;
-            $line = $lines[$index];
-            $head = Width::truncateAnsi($line, $before);
-            $pad = str_repeat(' ', max(0, $before - Width::string($head)));
-            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $before), $cells));
-            $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
-
-            $lines[$index] = $head . Ansi::reset() . $pad . $style->render($run) . Ansi::reset() . Width::dropAnsi($line, $before + $cells);
-        }
-
-        return $lines;
+        return $this->range()->highlight($lines, $style->render(...));
     }
 
     /**

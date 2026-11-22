@@ -99,6 +99,20 @@ final class TextSelectionSugarMouseTest extends TestCase
         self::assertGreaterThan(2000, $checked, 'the sweep actually ran');
     }
 
+    public function testASpanStartingOnAWideGlyphsSecondHalfPaintsItBlankAndKeepsTheNextGlyphOnce(): void
+    {
+        // Row 4 is '│  日本 omega  │': 日 fills cols 4-5, 本 cols 6-7. A press and
+        // head on col 5 cover only 日's second half.
+        $sel = TextSelection::at(5, 4, [2, 5, 4, 13]);
+        self::assertNotNull($sel);
+
+        $painted = $sel->highlight(self::LINES, Style::new()->reverse());
+
+        self::assertSame('', $sel->extract(self::LINES));
+        self::assertSame('│    本 omega  │', Ansi::strip($painted[3]), 'the covered half paints blank and 本 shows once');
+        self::assertSame(Width::string(self::LINES[3]), Width::string($painted[3]), 'the row keeps its cell count');
+    }
+
     public function testRangeIsSugarMousesOwnSnapshotOfTheSameGesture(): void
     {
         $sel = TextSelection::at(9, 4, [2, 5, 4, 13])?->withHead(5, 2);
@@ -161,7 +175,8 @@ final class TextSelectionSugarMouseTest extends TestCase
     // =========================================================================
     // The pre-rewire 0-based geometry, transcribed from TextSelection as it
     // stood before it delegated to sugar-mouse, plus the one later deliberate
-    // extract fix noted in legacyExtract(). Reference only.
+    // wide-glyph left-edge fix noted in legacyExtract() and legacyHighlight().
+    // Reference only.
     // =========================================================================
 
     /**
@@ -277,7 +292,13 @@ final class TextSelectionSugarMouseTest extends TestCase
             $line = $lines[$row];
             $head = Width::truncateAnsi($line, $from);
             $pad = str_repeat(' ', max(0, $from - Width::string($head)));
-            $run = Ansi::strip(Width::takeAnsi(Width::dropAnsi($line, $from), $cells));
+            // The same left-edge rule as legacyExtract() (sugar-mouse
+            // SelectionRange::highlight()): the covered half of a wide glyph
+            // straddling the span's left edge paints blank, so the run does
+            // not repeat the glyph after it.
+            $rest = Width::dropAnsi($line, $from);
+            $lead = min($cells, max(0, Width::string($line) - $from - Width::string($rest)));
+            $run = str_repeat(' ', $lead) . Ansi::strip(Width::takeAnsi($rest, $cells - $lead));
             $run .= str_repeat(' ', max(0, $cells - Width::string($run)));
             $lines[$row] = $head . Ansi::reset() . $pad . $style->render($run) . Ansi::reset() . Width::dropAnsi($line, $from + $cells);
         }
