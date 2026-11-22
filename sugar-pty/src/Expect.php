@@ -605,10 +605,15 @@ final class Expect
      * match. Cancelling the promise detaches everything it armed and rejects
      * it with a \RuntimeException. A read error rejects it with that error.
      *
-     * Nothing polls: bytes arrive through `$loop->addReadStream()` on the
-     * master's stream, the timeout and the post-exit drain are one-shot
-     * timers, and the exit is reported by the child's `onExit()` (SIGCHLD,
-     * with that method's own fallback where SIGCHLD cannot be delivered). The
+     * The read never polls: bytes arrive through `$loop->addReadStream()` on
+     * the master's stream, and the timeout and the post-exit drain are
+     * one-shot timers. The exit is reported by the child's `onExit()`, which
+     * rides the loop's SIGCHLD and arms no periodic timer. Where SIGCHLD
+     * cannot be delivered (no ext-pcntl, a loop whose `addSignal()` throws,
+     * or the other cases `onExit()` lists), `onExit()` falls back to a
+     * periodic exit probe (about every 15 ms) for as long as the promise is
+     * pending, and settling cancels it. Without `$child` nothing periodic is
+     * armed on any loop. The
      * stream is switched to non-blocking while the promise is pending and
      * put back when it settles. One pending expectAsync() per master: a loop
      * keeps one read listener per stream, so a second call that has to read

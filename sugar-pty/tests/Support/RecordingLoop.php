@@ -24,6 +24,9 @@ final class RecordingLoop implements LoopInterface
     /** @var list<float> intervals passed to addPeriodicTimer() */
     public array $periodicTimers = [];
 
+    /** @var array<int, true> periodic timers armed and not yet cancelled, by object id */
+    private array $pendingPeriodic = [];
+
     /** @var list<int> signals passed to addSignal() and accepted */
     public array $signalsAdded = [];
 
@@ -63,13 +66,22 @@ final class RecordingLoop implements LoopInterface
     public function addPeriodicTimer($interval, $callback): TimerInterface
     {
         $this->periodicTimers[] = (float) $interval;
+        $timer = $this->inner->addPeriodicTimer($interval, $callback);
+        $this->pendingPeriodic[\spl_object_id($timer)] = true;
 
-        return $this->inner->addPeriodicTimer($interval, $callback);
+        return $timer;
     }
 
     public function cancelTimer(TimerInterface $timer): void
     {
+        unset($this->pendingPeriodic[\spl_object_id($timer)]);
         $this->inner->cancelTimer($timer);
+    }
+
+    /** How many periodic timers are armed and not yet cancelled. */
+    public function pendingPeriodicTimers(): int
+    {
+        return \count($this->pendingPeriodic);
     }
 
     public function futureTick($listener): void

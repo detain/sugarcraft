@@ -296,7 +296,10 @@ matched text (the needle, or the substring a pattern matched). It rejects with
 EOF or when `$child` exits without a match (after a 0.1 s drain of its last
 output). Bytes arrive through `$loop->addReadStream()` on the master's
 stream, the timeout is a one-shot timer, and the exit comes from the child's
-`onExit()`; no periodic timer is armed. An Expect without a loop throws
+`onExit()`, which rides the loop's SIGCHLD. No periodic timer is armed, except
+where SIGCHLD cannot be delivered (no ext-pcntl, or a loop that refuses
+signals): there `onExit()` falls back to a periodic exit probe (about every
+15 ms) while a `$child` wait is pending, cancelled when it settles. An Expect without a loop throws
 `InvalidArgumentException`, and a master with no stream (ConPTY) throws
 `RuntimeException`, both synchronously.
 
