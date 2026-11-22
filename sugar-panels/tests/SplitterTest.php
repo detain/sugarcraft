@@ -130,6 +130,20 @@ final class SplitterTest extends TestCase
         $this->assertSame([20, 60], $split->withBounds(0, 0, 80, 4)->sizes);
     }
 
+    public function testSizesSetBeforeBoundsAreFittedWhenBoundsArrive(): void
+    {
+        $before = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withSizes(30, 70);
+        $this->assertSame([], $before->sizes, 'no span yet, so nothing is fitted');
+
+        $this->assertSame([30, 70], $before->withBounds(0, 0, 100, 5)->sizes);
+        $this->assertSame([15, 35], $before->withBounds(0, 0, 50, 5)->sizes);
+        $this->assertSame([3, 7], $before->withPanes(Node::leaf('x'), Node::leaf('y'))->withBounds(0, 0, 10, 1)->sizes);
+        $this->assertSame([3, 3, 4], $before->withPanes(Node::leaf('x'), Node::leaf('y'), Node::leaf('z'))->withBounds(0, 0, 10, 1)->sizes, 'a new pane count drops the request');
+
+        $bounded = $before->withBounds(0, 0, 100, 5)->withDividerDrag(49);
+        $this->assertSame([50, 50], $bounded->withBounds(0, 0, 100, 5)->sizes, 'a fitted request is not replayed by a later withBounds()');
+    }
+
     public function testNodePaintsEachPaneAtItsSize(): void
     {
         $split = Splitter::horizontal(

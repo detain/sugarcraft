@@ -36,6 +36,8 @@ final class Splitter
     /**
      * @param list<Node> $panes
      * @param list<int>  $sizes cells per pane along the axis ([] until bounds are known)
+     * @param list<int>  $pending sizes asked for by withSizes() before bounds
+     *                            were known, fitted when withBounds() arrives
      */
     private function __construct(
         public readonly string $axis,
@@ -47,6 +49,7 @@ final class Splitter
         public readonly int $height = 0,
         public readonly int $minPaneSize = 1,
         public readonly ?int $dragging = null,
+        private readonly array $pending = [],
     ) {
     }
 
@@ -69,9 +72,16 @@ final class Splitter
     public function withPanes(Node ...$panes): self
     {
         $panes = \array_values($panes);
-        $sizes = \count($panes) === \count($this->panes) ? $this->sizes : [];
+        $same = \count($panes) === \count($this->panes);
+        $sizes = $same ? $this->sizes : [];
 
-        return $this->mutate(panes: $panes, sizes: self::fit($sizes, \count($panes), $this->span(), $this->minPaneSize), dragging: null, draggingSet: true);
+        return $this->mutate(
+            panes: $panes,
+            sizes: self::fit($sizes, \count($panes), $this->span(), $this->minPaneSize),
+            dragging: null,
+            draggingSet: true,
+            pending: $same ? $this->pending : [],
+        );
     }
 
     /**
@@ -90,7 +100,8 @@ final class Splitter
             y: $y,
             width: $width,
             height: $height,
-            sizes: self::fit($this->sizes, \count($this->panes), $span, $this->minPaneSize),
+            sizes: self::fit($this->sizes !== [] ? $this->sizes : $this->pending, \count($this->panes), $span, $this->minPaneSize),
+            pending: $span > 0 ? [] : $this->pending,
         );
     }
 
@@ -98,10 +109,17 @@ final class Splitter
      * Set the pane sizes explicitly (cells along the axis). The list is
      * fitted to the span: a short or long total is rescaled, and no pane goes
      * below the minimum while the span can hold every pane at the minimum.
+     * Called before {@see withBounds()} (no span yet), the list is kept and
+     * fitted once bounds arrive, so the call order does not matter.
      */
     public function withSizes(int ...$sizes): self
     {
-        return $this->mutate(sizes: self::fit(\array_values($sizes), \count($this->panes), $this->span(), $this->minPaneSize));
+        $sizes = \array_values($sizes);
+        if ($this->span() <= 0) {
+            return $this->mutate(pending: $sizes);
+        }
+
+        return $this->mutate(sizes: self::fit($sizes, \count($this->panes), $this->span(), $this->minPaneSize), pending: []);
     }
 
     /** Smallest size a drag may leave a pane with (clamped to at least 1). */
@@ -322,7 +340,7 @@ final class Splitter
         return $out;
     }
 
-    /** @param list<Node>|null $panes @param list<int>|null $sizes */
+    /** @param list<Node>|null $panes @param list<int>|null $sizes @param list<int>|null $pending */
     private function mutate(
         ?array $panes = null,
         ?array $sizes = null,
@@ -333,6 +351,7 @@ final class Splitter
         ?int $minPaneSize = null,
         ?int $dragging = null,
         bool $draggingSet = false,
+        ?array $pending = null,
     ): self {
         return new self(
             $this->axis,
@@ -344,6 +363,7 @@ final class Splitter
             $height ?? $this->height,
             $minPaneSize ?? $this->minPaneSize,
             $draggingSet ? $dragging : $this->dragging,
+            $pending ?? $this->pending,
         );
     }
 }
