@@ -12,6 +12,7 @@ use SugarCraft\Style\Layout;
 use SugarCraft\Style\Style;
 use SugarCraft\Files\Support\Bidi;
 use SugarCraft\Files\Support\GlyphSet;
+use SugarCraft\Widgets\Tabs\Tabs;
 
 /**
  * Pure view function for {@see Manager}. Lays out the two panes
@@ -146,15 +147,17 @@ final class Renderer
         $top = 1;
         if ($hasTabBar) {
             if ($y === 1) {
-                $col = 1;
-                foreach (self::tabCells($m, GlyphSet::current()) as $i => $cell) {
-                    $w = Width::of($cell);
-                    if ($x >= $col && $x < $col + $w) {
-                        return ['kind' => 'tab', 'tab' => $i];
-                    }
-                    $col += $w + 1;
+                // The bar starts at column 1; Tabs spans are 0-based. The
+                // bar is built without its RTL fences: U+200E advances zero
+                // columns on a real terminal (see Bidi), so the fenced and
+                // bare bars cover the same screen cells, and only the bare
+                // one measures them the way the terminal draws them.
+                $bar = self::tabBar($m, GlyphSet::current(), false);
+                $index = $bar?->tabAt($x - 1);
+                if ($index === null) {
+                    return null;
                 }
-                return null;
+                return ['kind' => 'tab', 'tab' => array_keys($m->tabs)[$index]];
             }
             $top = 2;
         }
@@ -203,28 +206,31 @@ final class Renderer
 
     private static function renderTabBar(Manager $m, GlyphSet $glyphs, bool $rtl): string
     {
-        if ($m->tabs === [] || count($m->tabs) <= 1) {
-            return '';
-        }
-        $parts = [];
-        foreach (self::tabCells($m, $glyphs) as $cell) {
-            // CF-47: each tab cell is one bidi island (CF-02's Latin paths
-            // inside bracket neutrals must not drift across neighbours in
-            // RTL paragraphs).
-            $parts[] = Bidi::isolate($cell, $rtl);
-        }
-        return implode(' ', $parts) . "\n";
+        $bar = self::tabBar($m, $glyphs, $rtl);
+        return $bar === null ? '' : $bar->view() . "\n";
     }
 
     /**
-     * The plain tab-bar cells (before the bidi island wrap). Split out of
-     * renderTabBar so the CF-55 hit-test measures the very text drawn.
+     * The tab bar as a sugar-widgets Tabs value: the one source both
+     * renderTabBar() draws and the CF-55 hit-test measures through
+     * Tabs::tabAt(). Null when no bar is drawn (no tabs, or a single tab).
      *
-     * @return list<string>
+     * The library supplies no chrome of its own here: no label padding,
+     * plain styles and a one-space divider, so the drawn bytes are the
+     * candy-files cells exactly. Each label is the whole cell, including
+     * the CF-29 index prefix and the active brackets; the brackets stay
+     * the active cue (the Tabs active style is plain).
+     *
+     * The tab order follows $m->tabs; Tabs numbers its tabs 0..n-1, so a
+     * caller maps a Tabs index back through array_keys($m->tabs).
      */
-    private static function tabCells(Manager $m, GlyphSet $glyphs): array
+    private static function tabBar(Manager $m, GlyphSet $glyphs, bool $rtl): ?Tabs
     {
-        $cells = [];
+        if ($m->tabs === [] || count($m->tabs) <= 1) {
+            return null;
+        }
+        $labels = [];
+        $active = null;
         foreach ($m->tabs as $i => $tab) {
             // cwd is filesystem data like any name — sanitize before render.
             $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20, $glyphs);
@@ -232,9 +238,20 @@ final class Renderer
             // tab bar names its own direct-switch keys, 1..9.
             $prefix = ($i + 1) . ($i === $m->tabIndex ? '[' : ' ');
             $suffix = $i === $m->tabIndex ? ']' : ' ';
-            $cells[] = "{$prefix}{$label}{$suffix}";
+            if ($i === $m->tabIndex) {
+                $active = count($labels);
+            }
+            // CF-47: each tab cell is one bidi island (CF-02's Latin paths
+            // inside bracket neutrals must not drift across neighbours in
+            // RTL paragraphs).
+            $labels[] = Bidi::isolate("{$prefix}{$label}{$suffix}", $rtl);
         }
-        return $cells;
+        $bar = Tabs::new($labels)
+            ->withLabelPadding(0, 0)
+            ->withDivider(' ')
+            ->withActiveStyle(Style::new())
+            ->withInactiveStyle(Style::new());
+        return $active === null ? $bar : $bar->withActive($active);
     }
 
     /**
