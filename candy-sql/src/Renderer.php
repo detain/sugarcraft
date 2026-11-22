@@ -12,6 +12,7 @@ use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
+use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
 use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
 use SugarCraft\Sql\App\KeyMap;
@@ -148,7 +149,6 @@ final class Renderer
 
         // Admin pane uses a left sidebar layout instead of the 3-pane browser
         if ($a->ui->pane === Pane::Admin) {
-            $admin = self::adminPane($a, $cols);
             $query = self::queryPane($a, $cols);
             $paneCount = count(AdminPane::orderedCases());
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
@@ -167,6 +167,14 @@ final class Renderer
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                     ->render(CellValue::sanitize((string) $a->ui->status));
             }
+            // The page's height budget: the frame's content rows (terminal
+            // rows minus BorderFrame's six chrome rows), less the admin box's
+            // two borders and everything painted below it. BorderFrame cuts
+            // overflow from the bottom, so a page taller than this loses its
+            // last rows (ConnectionsPage's detail panel keeps inside it).
+            $below = (substr_count($query, "\n") + 1) + 1 + substr_count($status, "\n");
+            $pageBudget = $size['rows'] - 6 - 2 - $below;
+            $admin = self::adminPane($a, $cols, $pageBudget);
             $content = $admin . "\n" . $query . "\n " . $help . $status;
             return BorderFrame::wrap($a, $content);
         }
@@ -477,13 +485,17 @@ final class Renderer
         return $sidebarLines;
     }
 
-    private static function adminPane(App $a, int $terminalCols): string
+    private static function adminPane(App $a, int $terminalCols, ?int $pageBudget = null): string
     {
         $sidebarText = implode("\n", self::adminSidebarLines($a));
 
         // Get admin page content — no frame wrapping from here
         try {
-            $pageContent = $a->adminPage()->view();
+            $page = $a->adminPage();
+            if ($page instanceof ConnectionsPage) {
+                $page = $page->withHeightBudget($pageBudget);
+            }
+            $pageContent = $page->view();
         } catch (\Throwable $e) {
             // SQL-C01 fold seam (view leg): a page that cannot paint answers
             // an honest error line instead of exiting the TUI.

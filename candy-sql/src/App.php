@@ -10,6 +10,7 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\ExceptionMsg;
@@ -526,6 +527,26 @@ final class App implements Model
     public function view(): string
     {
         return Renderer::render($this);
+    }
+
+    /**
+     * The mouse-tracking mode this frame wants: cell motion only while the
+     * Connections page is on screen (Admin pane, no help overlay), the one
+     * surface that answers clicks; off everywhere else.
+     *
+     * A terminal that reports the mouse stops native drag-selection, so
+     * tracking app-wide would cost every pane plain-drag copy of SQL and
+     * result text for a feature only the detail-tab bar uses. The binary
+     * runs App through {@see App\MouseScopedApp}, which hands this to the
+     * runtime on each frame.
+     */
+    public function frameMouseMode(): MouseMode
+    {
+        return $this->ui->pane === Pane::Admin
+            && !$this->ui->helpOverlay
+            && $this->admin->pane === AdminPane::ProcessList
+            ? MouseMode::CellMotion
+            : MouseMode::Off;
     }
 
     /**

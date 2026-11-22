@@ -271,7 +271,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
       <div class="feature"><strong>ServerVersion</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast($major, $minor = 0, $release = 0)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI colored tree; <code>toArray()</code> returns JSON-serializable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
-      <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), a sugar-widgets <code>Tabs</code> detail-tab bar (Details/Attributes/MDL, built with <code>Tabs::interactive()</code> so it publishes Mark zones for mouse clicks; <code>Enter</code> focuses it and opens a panel with the active tab's data for the selected thread, then <code>Tab</code>/<code>Shift+Tab</code>/<code>1</code>–<code>3</code> switch tabs ahead of the pane cycle and page picker, <code>Esc</code> releases them; a left click on a tab label switches too — a new row above the processlist table), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render.</span></div>
+      <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), a sugar-widgets <code>Tabs</code> detail-tab bar (Details/Attributes/MDL, built with <code>Tabs::interactive()</code> so it publishes Mark zones for mouse clicks; <code>Enter</code> focuses it and opens a panel with the active tab's data for the selected thread, then <code>Tab</code>/<code>Shift+Tab</code>/<code>1</code>–<code>3</code> switch tabs ahead of the pane cycle and page picker, <code>Esc</code> releases them; a left click on a tab label switches too, and the mouse is reported only while this page is on screen; the bar and panel are new UI — earlier releases had no detail-tab strip — and the panel stays inside the terminal height), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render.</span></div>
       <div class="feature"><strong>ConnectionFilters</strong><span>Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate (0.5–30s). All fields are readonly; paired <code>$Set</code> sentinels for nullability.</span></div>
       <div class="feature"><strong>ConnectionCounters</strong><span>Connection metrics from <code>SHOW GLOBAL STATUS</code>: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes <code>connectionUsageRatio()</code> lazily (0.0–1.0); <code>isConnectionUsageCritical()</code> returns true ≥80%.</span></div>
       <div class="feature"><strong>ConnectionDetailTabs</strong><span>Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from <code>performance_schema.threads</code>; Attributes from <code>session_connect_attrs</code>; MDL from <code>performance_schema.metadata_locks</code> with fallback to <code>information_schema.metadata_lock_info</code>. Returns <code>null</code> on permission errors (1142/1146/1227).</span></div>
@@ -527,6 +527,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>static builder(): AppBuilder</code></td><td>Create an App via a fluent builder.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>frameMouseMode(): MouseMode</code></td><td>The mouse-tracking mode this frame wants: cell motion only while the Connections page is on screen (Admin pane, no help overlay), the one surface that answers clicks; off everywhere else.</td></tr>
 <tr><td><code>adminPage(): PageBase</code></td><td>Lazily create the admin page for the currently selected admin pane.</td></tr>
 <tr><td><code>editor(): TextArea</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1347,6 +1348,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>withSelectedIndex(int $index): self</code></td><td>Select a thread by index in the current filtered list.</td></tr>
 <tr><td><code>filteredProcesslist(): array</code></td><td>Get the processlist rows with current filters applied.</td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh processlist data.</td></tr>
+<tr><td><code>withHeightBudget(?int $rows): self</code></td><td>The page with a height budget: the most rows its frame may take, or null for no limit (standalone use and tests).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -2402,6 +2404,18 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static rowsFor(Pane $pane): array</code></td><td>Rows the <code>?</code> overlay lists for a pane: the full client roster always (pane scope is spelled out in each cell), admin chords on the Admin pane only — they are meaningless elsewhere.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sql-app-mousescopedapp"><code>MouseScopedApp</code> <small>final class</small></h4>
+<p>The model bin/candy-sql runs: App with a per-frame mouse-tracking mode.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly App $app)</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): View</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-sql-app-paramprompt"><code>ParamPrompt</code> <small>final class</small></h4>

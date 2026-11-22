@@ -39,7 +39,6 @@ declare(strict_types=1);
 })();
 
 use SugarCraft\Core\I18n\T;
-use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
@@ -47,6 +46,7 @@ use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AppBuilder;
 use SugarCraft\Sql\App\ConnectionPicker;
+use SugarCraft\Sql\App\MouseScopedApp;
 use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\ConnectionStore;
@@ -151,14 +151,15 @@ try {
     }
 
     (new Program(
-        App::start($database, $flavor, $historyRecorder)->withReadOnly($readOnly),
+        // Mouse reporting is per frame, not app-wide: MouseScopedApp turns
+        // cell motion on only while the Connections page is on screen (its
+        // detail-tab bar takes clicks), so every other pane keeps the
+        // terminal's plain-drag text selection.
+        new MouseScopedApp(App::start($database, $flavor, $historyRecorder)->withReadOnly($readOnly)),
         // D-M13: bracketed paste makes the terminal wrap pasted bytes in
         // ESC[200~ / ESC[201~ so the decoder emits one PasteMsg instead of
         // spraying the paste's control bytes (ESC especially) as live keys.
-        // Cell-motion mouse reporting delivers the clicks App routes to the
-        // Connections detail-tab bar (most terminals still select text on
-        // Shift+drag while an app reports the mouse).
-        new ProgramOptions(useAltScreen: true, bracketedPaste: true, mouseMode: MouseMode::CellMotion),
+        new ProgramOptions(useAltScreen: true, bracketedPaste: true),
     ))->run();
 } catch (\Throwable $e) {
     $reason = $e->getMessage() !== '' ? $e->getMessage() : $e::class;

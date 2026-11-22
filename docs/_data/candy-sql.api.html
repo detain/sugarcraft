@@ -14,6 +14,7 @@
 <tr><td><code>static builder(): AppBuilder</code></td><td>Create an App via a fluent builder.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>frameMouseMode(): MouseMode</code></td><td>The mouse-tracking mode this frame wants: cell motion only while the Connections page is on screen (Admin pane, no help overlay), the one surface that answers clicks; off everywhere else.</td></tr>
 <tr><td><code>adminPage(): PageBase</code></td><td>Lazily create the admin page for the currently selected admin pane.</td></tr>
 <tr><td><code>editor(): TextArea</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -834,6 +835,7 @@
 <tr><td><code>withSelectedIndex(int $index): self</code></td><td>Select a thread by index in the current filtered list.</td></tr>
 <tr><td><code>filteredProcesslist(): array</code></td><td>Get the processlist rows with current filters applied.</td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh processlist data.</td></tr>
+<tr><td><code>withHeightBudget(?int $rows): self</code></td><td>The page with a height budget: the most rows its frame may take, or null for no limit (standalone use and tests).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1889,6 +1891,18 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static rowsFor(Pane $pane): array</code></td><td>Rows the <code>?</code> overlay lists for a pane: the full client roster always (pane scope is spelled out in each cell), admin chords on the Admin pane only — they are meaningless elsewhere.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-sql-app-mousescopedapp"><code>MouseScopedApp</code> <small>final class</small></h4>
+<p>The model bin/candy-sql runs: App with a per-frame mouse-tracking mode.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly App $app)</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): View</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-sql-app-paramprompt"><code>ParamPrompt</code> <small>final class</small></h4>

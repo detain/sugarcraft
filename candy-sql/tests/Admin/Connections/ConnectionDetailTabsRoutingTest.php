@@ -10,6 +10,8 @@ use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\View;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Mouse\Scan;
 use SugarCraft\Mouse\Scanner;
@@ -21,6 +23,7 @@ use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
+use SugarCraft\Sql\App\MouseScopedApp;
 use SugarCraft\Sql\App\UiState;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Lang;
@@ -435,5 +438,133 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
 
         [$a,] = $a->update(new KeyMsg(KeyType::Tab));
         $this->assertNotSame(Pane::Admin, $a->ui->pane, 'the first Tab back on Admin cycles the pane');
+    }
+
+    // ── (f) the open panel stays inside the terminal height ─────────────────
+
+    /** A server with $threads processlist rows and a full Details row. */
+    private function busyDb(int $threads): FakeDatabase
+    {
+        $db = new FakeDatabase();
+        $rows = [];
+        for ($i = 1; $i <= $threads; $i++) {
+            $rows[] = ['Id' => (string) $i, 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'thread-' . $i . '-sql'];
+        }
+        $db->setQueryResult($rows);
+        $db->setPreparedResult('TYPE AS thread_type', [[
+            'id' => '1', 'user' => 'app', 'host' => 'h', 'db' => 'shop',
+            'command' => 'Query', 'time' => '12', 'state' => 'Sending data',
+            'info' => 'SELECT * FROM big_table', 'thread_type' => 'FOREGROUND',
+            'thread_name' => 'thread/sql/one_connection',
+        ]]);
+        return $db;
+    }
+
+    private static function plain(string $view): string
+    {
+        return Scan::strip(\preg_replace('/\e\[[0-9;]*m/', '', $view) ?? '');
+    }
+
+    public function testAnOpenPanelStaysInsideThePagesHeightBudget(): void
+    {
+        $page = ConnectionsPage::new(new ServerContext($this->busyDb(8)));
+        $closed = \count(\explode("\n", $page->view()));
+
+        [$roomy] = $page->withHeightBudget($closed + 20)->update(new KeyMsg(KeyType::Enter));
+        $view = self::plain($roomy->view());
+        $this->assertStringContainsString('thread_name: thread/sql/one_connection', $view, 'room to spare: the whole panel shows');
+        $this->assertStringContainsString('thread-8-sql', $view, 'room to spare: every row shows');
+
+        // Two free rows: the panel still gets four lines (cut with an
+        // ellipsis) and the table gives up the other two rows, so the page
+        // never grows past its budget and the key hints stay on screen.
+        [$tight] = $page->withHeightBudget($closed + 2)->update(new KeyMsg(KeyType::Enter));
+        $lines = \explode("\n", self::plain($tight->view()));
+        $this->assertCount($closed + 2, $lines, 'the page fills its budget exactly');
+        $this->assertStringContainsString(Lang::t('conn.help_tabs'), (string) \end($lines), 'the key hints stay the last line');
+        $this->assertContains('   …', $lines, 'the cut panel ends in an ellipsis line');
+        $this->assertStringContainsString('thread-6-sql', \implode("\n", $lines));
+        $this->assertStringNotContainsString('thread-7-sql', \implode("\n", $lines), 'the table gives up exactly the missing rows');
+
+        $this->assertSame($page->view(), $page->withHeightBudget($closed)->view(), 'a closed panel renders the same with or without a budget');
+    }
+
+    public function testOpeningThePanelOnAShortTerminalKeepsTheTableAndHintsOnScreen(): void
+    {
+        $db = $this->busyDb(12);
+        // The page pinned into state, so its processlist is the fixture's
+        // rows rather than the async cache's (empty) first poll.
+        $a = new App(
+            ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)),
+            ui: new UiState(Pane::Admin),
+            admin: new AdminState(page: ConnectionsPage::new(new ServerContext($db))),
+        );
+
+        // The shortest terminal that shows the whole closed screen: the last
+        // thread, the page's hints, and the app help line under the query
+        // pane (a cut frame drops that line first).
+        $appHelp = Lang::t('ui.help.admin', ['count' => \count(AdminPane::orderedCases())]);
+        $rows = null;
+        for ($h = 20; $h <= 120; $h++) {
+            Renderer::setSize(200, $h);
+            $plain = self::plain($a->view());
+            if (\str_contains($plain, 'thread-12-sql') && \str_contains($plain, Lang::t('conn.help_full'))
+                && \str_contains($plain, $appHelp)) {
+                $rows = $h;
+                break;
+            }
+        }
+        $this->assertNotNull($rows, 'some terminal height fits the closed page');
+
+        [$a,] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($this->connections($a)->detailLines());
+        $plain = self::plain($a->view());
+        $this->assertStringContainsString(Lang::t('conn.help_tabs'), $plain, 'Enter must not push the key hints out of the frame');
+        $this->assertStringContainsString($appHelp, $plain, 'nor the app help line under the query pane');
+        $this->assertStringContainsString('user: app', $plain, 'the panel shows, cut to fit');
+        $this->assertStringContainsString('   …', $plain);
+
+        // With room for the whole panel nothing is cut at all.
+        Renderer::setSize(200, $rows + 12);
+        $plain = self::plain($a->view());
+        $this->assertStringContainsString('thread-12-sql', $plain);
+        $this->assertStringContainsString('thread_name: thread/sql/one_connection', $plain);
+        $this->assertStringContainsString(Lang::t('conn.help_tabs'), $plain);
+    }
+
+    // ── (g) mouse reporting is on only for the Connections page ─────────────
+
+    public function testMouseReportingIsScopedToTheConnectionsPage(): void
+    {
+        Renderer::setSize(160, 50);
+        $db = new FakeDatabase();
+        $a = new App(ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)));
+        $scoped = new MouseScopedApp($a);
+
+        $frame = $scoped->view();
+        $this->assertInstanceOf(View::class, $frame);
+        $this->assertSame(MouseMode::Off, $frame->mouseMode, 'the Tables pane keeps native drag-selection');
+        $this->assertSame($a->view(), $frame->body);
+
+        for ($i = 0; $i < 3; $i++) {
+            [$scoped,] = $scoped->update(new KeyMsg(KeyType::Tab));
+            $this->assertInstanceOf(MouseScopedApp::class, $scoped);
+            if ($scoped->app->ui->pane !== Pane::Admin) {
+                $this->assertSame(MouseMode::Off, $scoped->view()->mouseMode, "pane {$scoped->app->ui->pane->value}: no mouse reporting");
+            }
+        }
+        $this->assertSame(Pane::Admin, $scoped->app->ui->pane);
+        $this->assertSame(AdminPane::ProcessList, $scoped->app->admin->pane);
+        $this->assertSame(MouseMode::CellMotion, $scoped->view()->mouseMode, 'the Connections page takes clicks');
+
+        [$help,] = $scoped->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($help->app->ui->helpOverlay);
+        $this->assertSame(MouseMode::Off, $help->view()->mouseMode, 'the help overlay covers the bar');
+
+        $other = AdminPane::orderedCases()[1];
+        $digit = (string) (\array_search($other, AdminPane::orderedCases(), true) + 1);
+        [$picked,] = $scoped->update(new KeyMsg(KeyType::Char, $digit));
+        $this->assertSame($other, $picked->app->admin->pane);
+        $this->assertSame(MouseMode::Off, $picked->view()->mouseMode, 'another admin page keeps native drag-selection');
     }
 }

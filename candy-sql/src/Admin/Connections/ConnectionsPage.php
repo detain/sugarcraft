@@ -101,6 +101,15 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private const DETAIL_MAX_LINES = 12;
 
     /**
+     * Fewest panel lines a height-budgeted page shows when the table leaves
+     * less room than that: the table's row window shrinks to make them.
+     */
+    private const DETAIL_MIN_LINES = 4;
+
+    /** Most rows the page may paint, or null for no limit ({@see withHeightBudget()}). */
+    private ?int $heightBudget = null;
+
+    /**
      * The open detail panel: the active tab's data for the selected thread
      * as plain, sanitized lines, or null while the panel is closed.
      *
@@ -758,16 +767,72 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         $lines[] = '';
         $lines[] = $this->renderDetailTabBar();
-        if ($this->detailLines !== null) {
-            $panel = Style::new()->foreground(Color::hex('#cbd5e1'));
-            foreach ($this->detailLines as $line) {
-                $lines[] = '   ' . $panel->render($line);
-            }
+        // +1: the key-hint line under the table.
+        [$detail, $table] = $this->fitDetailPanel(\count($lines) + 1);
+        $panel = Style::new()->foreground(Color::hex('#cbd5e1'));
+        foreach ($detail as $line) {
+            $lines[] = '   ' . $panel->render($line);
         }
-        $lines[] = $this->table()->View();
+        $lines[] = $table->View();
         $lines[] = $this->renderKeyHints();
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The page with a height budget: the most rows its frame may take,
+     * or null for no limit (standalone use and tests).
+     *
+     * The App frame hard-truncates overflow from the bottom, so without a
+     * budget an open detail panel above the processlist would push the
+     * table's last rows and the key-hint line off the screen. With one,
+     * {@see fitDetailPanel()} keeps the page inside it.
+     */
+    public function withHeightBudget(?int $rows): self
+    {
+        $rows = $rows === null ? null : \max(0, $rows);
+        if ($rows === $this->heightBudget) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->heightBudget = $rows;
+        return $clone;
+    }
+
+    /**
+     * The panel lines and processlist table to paint, inside the height
+     * budget.
+     *
+     * The panel first takes the rows the table leaves free, so a table that
+     * fit before Enter still fits after it. When that slack is smaller than
+     * the panel, the panel still gets up to {@see DETAIL_MIN_LINES} (cut with
+     * an ellipsis line) and the table's row window gives up exactly that
+     * many rows, so the key-hint line and the frame stay on screen.
+     *
+     * @param int $fixed rows the page takes besides the panel and the table
+     * @return array{list<string>, Table}
+     */
+    private function fitDetailPanel(int $fixed): array
+    {
+        $table = $this->table();
+        $panel = $this->detailLines ?? [];
+        if ($panel === [] || $this->heightBudget === null) {
+            return [$panel, $table];
+        }
+
+        $room = \max(0, $this->heightBudget - $fixed);
+        $tableHeight = \substr_count($table->View(), "\n") + 1;
+        $take = \min(\count($panel), \max($room - $tableHeight, self::DETAIL_MIN_LINES), $room);
+        if ($take < \count($panel)) {
+            $panel = $take > 0 ? [...\array_slice($panel, 0, $take - 1), '…'] : [];
+        }
+
+        $over = $tableHeight + \count($panel) - $room;
+        if ($over > 0) {
+            $rows = \array_slice($this->filteredProcesslist(), 0, self::ROW_WINDOW);
+            $table = $this->buildTable(\array_slice($rows, 0, \max(0, \count($rows) - $over)));
+        }
+        return [$panel, $table];
     }
 
     /**
