@@ -69,10 +69,11 @@ use SugarCraft\Mouse\Zones\MsgZoneInBounds;
  * When the rendered tab bar exceeds {@see $width}, it is clipped to the
  * available space and scroll marks (`…` by default, see
  * {@see withScrollMarks()}) are shown on the overflow side(s) to indicate
- * hidden tabs. `width 0` means NO clip — the whole bar renders (W-35
- * dimension law; `::new()` defaults to 0 like {@see Table}, whose default
- * is 0 = auto). {@see withScrollWindow()} picks how the window follows the
- * active tab.
+ * hidden tabs; each mark is joined with a divider unless
+ * {@see withScrollMarks()} turns that separator off. `width 0` means NO
+ * clip — the whole bar renders (W-35 dimension law; `::new()` defaults to
+ * 0 like {@see Table}, whose default is 0 = auto). {@see withScrollWindow()}
+ * picks how the window follows the active tab.
  *
  * Mirrors charmbracelet/bubbles `Tabs`.
  */
@@ -141,6 +142,7 @@ final class Tabs implements Model
         public readonly ?Style $markStyle = null,
         public readonly bool $separatorAfterLeft = true,
         public readonly ScrollWindow $scrollWindow = ScrollWindow::Offset,
+        public readonly bool $separatorBeforeRight = true,
     ) {
         $labelCount = count($labels);
         if ($active < 0 || ($labelCount > 0 && $active >= $labelCount)) {
@@ -299,7 +301,15 @@ final class Tabs implements Model
                 array_map(fn(array $part): string => $this->renderPieces($part[0]), $parts),
             );
             if ($this->width > 0 && Width::string($line) > $this->width) {
-                $line = Width::truncateAnsi($line, $this->clipBudget()) . $this->clipMark();
+                $kept = Width::truncateAnsi($line, $this->clipBudget());
+                // truncateAnsi passes every escape after the cut through, so
+                // each part it cut away leaves an empty open-and-reset pair.
+                // The default keeps those bytes; the joined-right-mark frame
+                // drops them so the mark follows the last visible cell.
+                if (!$this->separatorBeforeRight) {
+                    $kept = self::dropTrailingEmptySgrPairs($kept);
+                }
+                $line = $kept . $this->clipMark();
             }
             return $line;
         }
@@ -489,9 +499,12 @@ final class Tabs implements Model
     /**
      * Whether part `$k` is drawn after a divider: every part but the first
      * is, except the first tab after a left scroll mark when
-     * {@see withScrollMarks()} turned the separator after the left mark off.
-     * The left mark is the only part that can lead with a null tab index:
-     * a window always holds at least one tab.
+     * {@see withScrollMarks()} turned the separator after the left mark off,
+     * and the right scroll mark when it turned the separator before the
+     * right mark off. A window always holds at least one tab, so a null tab
+     * index leads the parts only as the left mark and appears past the
+     * first part only as the right mark. view(), spans(), clipParts() and
+     * plainWidth() all ask here, so the draw and the pricing agree.
      *
      * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
      */
@@ -500,7 +513,26 @@ final class Tabs implements Model
         if ($k === 0) {
             return false;
         }
+        if ($parts[$k][1] === null) {
+            return $this->separatorBeforeRight;
+        }
         return $this->separatorAfterLeft || $k !== 1 || $parts[0][1] !== null;
+    }
+
+    /**
+     * Remove the empty SGR pairs (one or more opens, then a reset, with no
+     * text between) from the run of SGR sequences that ends `$line`: after
+     * a clip that run holds only the styling of parts cut away, so dropping
+     * an empty pair there changes no visible cell.
+     */
+    private static function dropTrailingEmptySgrPairs(string $line): string
+    {
+        if (preg_match('/(?:\e\[[0-9;]*m)+$/', $line, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return $line;
+        }
+        [$tail, $at] = $match[0];
+        $tail = (string) preg_replace('/(?:\e\[(?!0?m)[0-9;]*m)+\e\[0?m/', '', $tail);
+        return substr($line, 0, $at) . $tail;
     }
 
     /**
@@ -1018,12 +1050,15 @@ final class Tabs implements Model
      * width-bounded bar, and the style they are drawn in. The right mark is
      * also the one an overflowing line ends with once it is clipped. The
      * defaults ({@see SCROLL_MARK} on both sides, no style, a divider after
-     * the left mark) are the bar's frame without this call.
-     * `$separatorAfterLeft = false` draws the first visible tab right after
-     * the left mark, with no divider between them; the right mark keeps its
-     * divider. Marks are sanitized like labels; the scroll window, spans()
-     * and the hit-tests price them at their drawn width, and the window
-     * scrolls to keep the active tab in view under the new widths.
+     * the left mark and before the right mark) are the bar's frame without
+     * this call. `$separatorAfterLeft = false` draws the first visible tab
+     * right after the left mark, with no divider between them.
+     * `$separatorBeforeRight = false` draws the right mark right after the
+     * last visible tab, with no divider between them, and a clipped line
+     * then drops the empty SGR pairs the clip leaves before the mark. Marks
+     * are sanitized like labels; the scroll window, spans() and the
+     * hit-tests price them at their drawn width, and the window scrolls to
+     * keep the active tab in view under the new widths.
      *
      * @throws \InvalidArgumentException when either mark has no width after sanitizing.
      */
@@ -1032,6 +1067,7 @@ final class Tabs implements Model
         string $right,
         ?Style $markStyle = null,
         bool $separatorAfterLeft = true,
+        bool $separatorBeforeRight = true,
     ): self {
         $cleanLeft = self::sanitizeLabel($left);
         $cleanRight = self::sanitizeLabel($right);
@@ -1044,6 +1080,7 @@ final class Tabs implements Model
             markStyle: $markStyle,
             markStyleSet: true,
             separatorAfterLeft: $separatorAfterLeft,
+            separatorBeforeRight: $separatorBeforeRight,
         )->adjustScroll($this->active);
     }
 
@@ -1238,6 +1275,9 @@ final class Tabs implements Model
      * while `labelEnd <= clipBudget()`. Pricing the left mark is part of
      * the same honesty: view() joins it with a divider, so it already
      * occupies leftLeadWidth() cells before the first label starts.
+     * The divider before the right mark is never priced: with it on, the
+     * clip cuts it to fit; with it off, a tab ending by clipBudget() leaves
+     * exactly the mark's cells, so both share the same bound.
      * Under-counting any of this (too few cells for a wide right mark,
      * nothing for the left)
      * let the stored window claim a tab view() then clipped away — the
@@ -1383,6 +1423,7 @@ final class Tabs implements Model
         bool $markStyleSet = false,
         ?bool $separatorAfterLeft = null,
         ?ScrollWindow $scrollWindow = null,
+        ?bool $separatorBeforeRight = null,
     ): self {
         return new self(
             active: $active ?? $this->active,
@@ -1414,6 +1455,7 @@ final class Tabs implements Model
             markStyle: $markStyleSet ? $markStyle : $this->markStyle,
             separatorAfterLeft: $separatorAfterLeft ?? $this->separatorAfterLeft,
             scrollWindow: $scrollWindow ?? $this->scrollWindow,
+            separatorBeforeRight: $separatorBeforeRight ?? $this->separatorBeforeRight,
         );
     }
 
