@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} aktivováno',
     'rule.length_nonneg' => 'délka oddělovače musí být >= 0',
     'rule.bad_rune' => 'znak oddělovače musí zabírat právě jednu buňku',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'výška překryvu nápovědy musí být >= 1',
+    'key_view.bad_columns' => 'sloupce zobrazení kláves musí být seznamem seznamů názvů akcí',
+    'key_view.column_size_nonneg' => 'velikost sloupce zobrazení kláves musí být >= 0',
 ];

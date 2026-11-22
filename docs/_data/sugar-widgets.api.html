@@ -60,13 +60,39 @@
 <tr><td><code>fullSeparator(string $s): self</code></td><td></td></tr>
 <tr><td><code>update(Msg $msg): self</code></td><td>Pass-through update — returns <code>$this</code> for every message unchanged.</td></tr>
 <tr><td><code>updateWithBinding(Msg $msg, Binding $toggle): self</code></td><td>Variant of update() that takes the toggle binding directly — useful for KeyMaps that expose a custom toggle binding outside the canonical short/full pair. The returned instance has its <code>showAll</code> flag flipped when the message matches the binding.</td></tr>
-<tr><td><code>view(KeyMap $map): string</code></td><td>Unified entry: render short or full according to $showAll. Mirrors charmbracelet/bubbles <code>Help.View(KeyMap)</code>.</td></tr>
-<tr><td><code>shortView(KeyMap $map): string</code></td><td>Render the inline (short) help row from <code>KeyMap::shortHelp()</code>.</td></tr>
-<tr><td><code>fullView(KeyMap $map): string</code></td><td>Render the multi-column full help block from <code>KeyMap::fullHelp()</code>.</td></tr>
+<tr><td><code>view(KeyMap|KeyBindings $map): string</code></td><td>Unified entry: render short or full according to $showAll. Mirrors charmbracelet/bubbles <code>Help.View(KeyMap)</code>.</td></tr>
+<tr><td><code>shortView(KeyMap|KeyBindings $map): string</code></td><td>Render the inline (short) help row from <code>KeyMap::shortHelp()</code>.</td></tr>
+<tr><td><code>fullView(KeyMap|KeyBindings $map): string</code></td><td>Render the multi-column full help block from <code>KeyMap::fullHelp()</code>. Given a KeyBindings registry, every row is generated from it: one row per action, the key column from <code>KeyBindings::label()</code>, the description from <code>KeyBindings::help()</code> (one column; wrap the registry in KeyView to choose a layout).</td></tr>
 <tr><td><code>shortHelpView(array $bindings): string</code></td><td>Render an arbitrary list of Bindings as a short row, bypassing the KeyMap. Mirrors charmbracelet/bubbles <code>Help.ShortHelpView([]Binding)</code>.</td></tr>
 <tr><td><code>fullHelpView(array $columns): string</code></td><td>Render an arbitrary multi-column matrix of Bindings as a full block, bypassing the KeyMap. Mirrors charmbracelet/bubbles <code>Help.FullHelpView([][]Binding)</code>.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-widgets-help-helpoverlay"><code>HelpOverlay</code> <small>final class</small></h4>
+<p>The full key reference as a scrollable TEA model: the rows are Help::fullView() of the host&#039;s key map (generated from a sugar-core KeyBindings registry when one is given), clipped to $height rows and scrolled by its own bindings — arrows / <code>j</code> <code>k</code>, PageUp / PageDown / space, Home / End, and the mouse wheel.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(KeyMap|KeyBindings $keyMap, ?Help $help = null): self</code></td><td>An open overlay over $keyMap, ten rows tall, scrolled to the top.</td></tr>
+<tr><td><code>static defaultKeys(): KeyBindings</code></td><td>The overlay&#039;s navigation actions: <code>scroll-up</code>, <code>scroll-down</code>, <code>page-up</code>, <code>page-down</code>, <code>top</code>, <code>bottom</code>, <code>close</code>.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td>The visible window of the full help: at most $height rows from $offset; empty while closed.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>withKeyMap(KeyMap|KeyBindings $keyMap): self</code></td><td>Replace the key map (offset re-clamped to the new content).</td></tr>
+<tr><td><code>withHelp(Help $help): self</code></td><td>Replace the renderer (styles, gaps, width cap).</td></tr>
+<tr><td><code>withKeys(KeyBindings $keys): self</code></td><td>Remap the overlay&#039;s own navigation (see defaultKeys()).</td></tr>
+<tr><td><code>withHeight(int $rows): self</code></td><td>Visible rows; at least one.</td></tr>
+<tr><td><code>withOpen(bool $open): self</code></td><td>Open or close the overlay; opening keeps the last scroll position.</td></tr>
+<tr><td><code>scrollBy(int $rows): self</code></td><td>Move the window by $rows (negative scrolls up), clamped to the content.</td></tr>
+<tr><td><code>scrollTo(int $row): self</code></td><td>Put row $row at the top of the window, clamped to the content.</td></tr>
+<tr><td><code>lineCount(): int</code></td><td>Rows in the full help (before clipping).</td></tr>
+<tr><td><code>maxOffset(): int</code></td><td>The largest useful offset: the last row sits on the bottom edge.</td></tr>
+<tr><td><code>atTop(): bool</code></td><td></td></tr>
+<tr><td><code>atBottom(): bool</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-help-helpoverlayclosedmsg"><code>HelpOverlayClosedMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when a HelpOverlay closes itself on its close binding, so the host can drop the overlay layer and restore focus.</p>
 <h4 id="api-sugarcraft-widgets-help-styles"><code>Styles</code> <small>final class</small></h4>
 <p>Styles for Help: one slot per visible help element. All default to a no-op Style so existing snapshot tests keep passing; pass non-default styles to Help::withStyles() to customise. Mirrors charmbracelet/bubbles <code>help.Styles</code>.</p>
 <table class="api-table">
@@ -135,6 +161,22 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>shortHelp(): array</code></td><td></td></tr>
+<tr><td><code>fullHelp(): array</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-key-keyview"><code>KeyView</code> <small>final class</small></h4>
+<p>The KeyMap a sugar-core KeyBindings registry presents to the \SugarCraft\Widgets\Help\Help footer: every help row is GENERATED from the registry, so no app hand-maintains a key column that drifts from what dispatch actually answers to (AUD D11: help text was hand-written in five places). A user override folded on through <code>KeyBindings::fromFile()</code> lands in the help the moment the registry does.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(KeyBindings $bindings): self</code></td><td>House factory: a view over every action in $bindings, one column.</td></tr>
+<tr><td><code>withBindings(KeyBindings $bindings): self</code></td><td>Swap the registry (a new override layer, a locale switch).</td></tr>
+<tr><td><code>withShort(string ...$ids): self</code></td><td>Choose which actions the short row shows, in order. No ids restores the default (every action). Mirrors charmbracelet/bubbles KeyMap.ShortHelp.</td></tr>
+<tr><td><code>withColumns(array $columns): self</code></td><td>Lay the full help out explicitly: one list of action ids per column. An empty array restores the automatic layout (withColumnSize()). Mirrors charmbracelet/bubbles KeyMap.FullHelp.</td></tr>
+<tr><td><code>withColumnSize(int $rows): self</code></td><td>Automatic layout: chunk every action, in declaration order, into columns of at most $rows bindings. 0 (the default) keeps one column.</td></tr>
+<tr><td><code>withKeySeparator(string $separator): self</code></td><td>Separator between one action&#039;s chords in its help key (default <code>/</code>).</td></tr>
+<tr><td><code>binding(string $id): Binding</code></td><td>The generated binding for one action id.</td></tr>
 <tr><td><code>shortHelp(): array</code></td><td></td></tr>
 <tr><td><code>fullHelp(): array</code></td><td></td></tr>
 </tbody>

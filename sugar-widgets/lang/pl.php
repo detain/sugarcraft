@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} aktywowano',
     'rule.length_nonneg' => 'długość linii musi być >= 0',
     'rule.bad_rune' => 'znak linii musi zajmować dokładnie jedną komórkę',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'wysokość nakładki pomocy musi wynosić >= 1',
+    'key_view.bad_columns' => 'kolumny widoku klawiszy muszą być listą list nazw akcji',
+    'key_view.column_size_nonneg' => 'rozmiar kolumny widoku klawiszy musi wynosić >= 0',
 ];

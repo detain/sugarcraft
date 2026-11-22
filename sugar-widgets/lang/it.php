@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} attivato',
     'rule.length_nonneg' => 'la lunghezza del righello deve essere >= 0',
     'rule.bad_rune' => 'il carattere del righello deve occupare esattamente una cella',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'l’altezza della sovrapposizione di aiuto deve essere >= 1',
+    'key_view.bad_columns' => 'le colonne della vista tasti devono essere un elenco di elenchi di nomi di azione',
+    'key_view.column_size_nonneg' => 'la dimensione di colonna della vista tasti deve essere >= 0',
 ];

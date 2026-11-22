@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} activated',
     'rule.length_nonneg' => 'rule length must be >= 0',
     'rule.bad_rune' => 'rule rune must occupy exactly one cell',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'the help overlay height must be >= 1',
+    'key_view.bad_columns' => 'key view columns must be a list of lists of action names',
+    'key_view.column_size_nonneg' => 'key view column size must be >= 0',
 ];

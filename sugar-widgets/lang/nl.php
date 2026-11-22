@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} geactiveerd',
     'rule.length_nonneg' => 'lijnlengte moet >= 0 zijn',
     'rule.bad_rune' => 'lijnteken moet precies één cel innemen',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'de hoogte van de help-overlay moet >= 1 zijn',
+    'key_view.bad_columns' => 'kolommen van de toetsweergave moeten een lijst van lijsten met actienamen zijn',
+    'key_view.column_size_nonneg' => 'de kolomgrootte van de toetsweergave moet >= 0 zijn',
 ];

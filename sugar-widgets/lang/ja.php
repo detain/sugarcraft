@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} を実行しました',
     'rule.length_nonneg' => '罫線の長さは 0 以上である必要があります',
     'rule.bad_rune' => '罫線の文字はちょうど 1 セル幅である必要があります',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'ヘルプオーバーレイの高さは 1 以上である必要があります',
+    'key_view.bad_columns' => 'キービューの列はアクション名のリストのリストである必要があります',
+    'key_view.column_size_nonneg' => 'キービューの列サイズは 0 以上である必要があります',
 ];

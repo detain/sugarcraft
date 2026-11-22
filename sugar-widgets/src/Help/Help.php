@@ -7,6 +7,8 @@ namespace SugarCraft\Widgets\Help;
 use SugarCraft\Widgets\Lang;
 use SugarCraft\Widgets\Key\Binding;
 use SugarCraft\Widgets\Key\KeyMap;
+use SugarCraft\Widgets\Key\KeyView;
+use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\SgrState;
@@ -260,8 +262,12 @@ final class Help
     /**
      * Unified entry: render short or full according to {@see $showAll}.
      * Mirrors charmbracelet/bubbles `Help.View(KeyMap)`.
+     *
+     * A sugar-core {@see KeyBindings} registry is accepted directly and
+     * rendered through {@see KeyView}, so the help is generated from the
+     * same map dispatch reads — never a hand-maintained copy of it.
      */
-    public function view(KeyMap $map): string
+    public function view(KeyMap|KeyBindings $map): string
     {
         return $this->showAll
             ? $this->fullView($map)
@@ -269,15 +275,26 @@ final class Help
     }
 
     /** Render the inline (short) help row from `KeyMap::shortHelp()`. */
-    public function shortView(KeyMap $map): string
+    public function shortView(KeyMap|KeyBindings $map): string
     {
-        return $this->shortHelpView($map->shortHelp());
+        return $this->shortHelpView(self::keyMap($map)->shortHelp());
     }
 
-    /** Render the multi-column full help block from `KeyMap::fullHelp()`. */
-    public function fullView(KeyMap $map): string
+    /**
+     * Render the multi-column full help block from `KeyMap::fullHelp()`.
+     * Given a {@see KeyBindings} registry, every row is generated from it:
+     * one row per action, the key column from `KeyBindings::label()`, the
+     * description from `KeyBindings::help()` (one column; wrap the registry
+     * in {@see KeyView} to choose a layout).
+     */
+    public function fullView(KeyMap|KeyBindings $map): string
     {
-        return $this->fullHelpView($map->fullHelp());
+        return $this->fullHelpView(self::keyMap($map)->fullHelp());
+    }
+
+    private static function keyMap(KeyMap|KeyBindings $map): KeyMap
+    {
+        return $map instanceof KeyBindings ? KeyView::new($map) : $map;
     }
 
     /**

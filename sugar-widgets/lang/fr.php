@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} activé',
     'rule.length_nonneg' => 'la longueur de la règle doit être >= 0',
     'rule.bad_rune' => 'le caractère de la règle doit occuper exactement une cellule',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'la hauteur de la surcouche d’aide doit être >= 1',
+    'key_view.bad_columns' => 'les colonnes de la vue des touches doivent être une liste de listes de noms d’action',
+    'key_view.column_size_nonneg' => 'la taille de colonne de la vue des touches doit être >= 0',
 ];

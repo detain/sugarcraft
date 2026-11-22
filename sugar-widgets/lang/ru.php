@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} активировано',
     'rule.length_nonneg' => 'длина линии должна быть >= 0',
     'rule.bad_rune' => 'символ линии должен занимать ровно одну ячейку',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'высота оверлея справки должна быть >= 1',
+    'key_view.bad_columns' => 'столбцы представления клавиш должны быть списком списков имён действий',
+    'key_view.column_size_nonneg' => 'размер столбца представления клавиш должен быть >= 0',
 ];

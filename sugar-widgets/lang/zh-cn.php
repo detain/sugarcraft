@@ -43,4 +43,9 @@ return [
     'button.pressed' => '已触发 {label}',
     'rule.length_nonneg' => '分隔线长度必须 >= 0',
     'rule.bad_rune' => '分隔线字符必须恰好占一个单元格',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => '帮助浮层的高度必须 >= 1',
+    'key_view.bad_columns' => '按键视图的列必须是由操作名列表组成的列表',
+    'key_view.column_size_nonneg' => '按键视图的列大小必须 >= 0',
 ];

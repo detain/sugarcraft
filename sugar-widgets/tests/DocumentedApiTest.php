@@ -30,6 +30,8 @@ final class DocumentedApiTest extends TestCase
         'FilePicker'   => \SugarCraft\Forms\FilePicker\FilePicker::class,
         'Button'       => \SugarCraft\Widgets\Button\Button::class,
         'Help'         => \SugarCraft\Widgets\Help\Help::class,
+        'HelpOverlay'  => \SugarCraft\Widgets\Help\HelpOverlay::class,
+        'KeyView'      => \SugarCraft\Widgets\Key\KeyView::class,
         'ItemList'     => \SugarCraft\Forms\ItemList\ItemList::class,
         'OptionRow'    => \SugarCraft\Widgets\Menu\OptionRow::class,
         'Paginator'    => \SugarCraft\Widgets\Paginator\Paginator::class,

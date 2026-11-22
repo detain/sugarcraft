@@ -43,4 +43,9 @@ return [
     'button.pressed' => 'تم تفعيل {label}',
     'rule.length_nonneg' => 'يجب أن يكون طول الفاصل >= 0',
     'rule.bad_rune' => 'يجب أن يشغل رمز الفاصل خلية واحدة بالضبط',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'يجب أن يكون ارتفاع طبقة المساعدة >= 1',
+    'key_view.bad_columns' => 'يجب أن تكون أعمدة عرض المفاتيح قائمة من قوائم أسماء الإجراءات',
+    'key_view.column_size_nonneg' => 'يجب أن يكون حجم عمود عرض المفاتيح >= 0',
 ];

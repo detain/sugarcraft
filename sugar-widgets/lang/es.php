@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} activado',
     'rule.length_nonneg' => 'la longitud de la regla debe ser >= 0',
     'rule.bad_rune' => 'el carácter de la regla debe ocupar exactamente una celda',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'la altura de la superposición de ayuda debe ser >= 1',
+    'key_view.bad_columns' => 'las columnas de la vista de teclas deben ser una lista de listas de nombres de acción',
+    'key_view.column_size_nonneg' => 'el tamaño de columna de la vista de teclas debe ser >= 0',
 ];

@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} ativado',
     'rule.length_nonneg' => 'o comprimento da régua deve ser >= 0',
     'rule.bad_rune' => 'o caractere da régua deve ocupar exatamente uma célula',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'a altura da sobreposição de ajuda deve ser >= 1',
+    'key_view.bad_columns' => 'as colunas da visão de teclas devem ser uma lista de listas de nomes de ação',
+    'key_view.column_size_nonneg' => 'o tamanho de coluna da visão de teclas deve ser >= 0',
 ];

@@ -43,4 +43,9 @@ return [
     'button.pressed' => '{label} etkinleştirildi',
     'rule.length_nonneg' => 'çizgi uzunluğu >= 0 olmalıdır',
     'rule.bad_rune' => 'çizgi karakteri tam olarak bir hücre kaplamalıdır',
+
+    // Help/HelpOverlay.php, Key/KeyView.php
+    'help_overlay.height_positive' => 'yardım katmanının yüksekliği >= 1 olmalıdır',
+    'key_view.bad_columns' => 'tuş görünümü sütunları eylem adı listelerinden oluşan bir liste olmalıdır',
+    'key_view.column_size_nonneg' => 'tuş görünümü sütun boyutu >= 0 olmalıdır',
 ];
