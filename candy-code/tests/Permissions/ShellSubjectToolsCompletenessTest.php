@@ -21,7 +21,8 @@ use SugarCraft\Code\Permissions\ShellSubjectTools;
  *
  * Site inventory (verified at writing, 2026-10-14):
  *  1. src/Permissions/PermissionRule.php        — const init == NAMES
- *  2. src/Permissions/PermissionGate.php        — isRmRfRootOrHome calls covers()
+ *  2. src/Permissions/RmRfFloor.php             — isRmRfRootOrHome calls covers()
+ *     (moved out of PermissionGate.php at CC4-1; the gate calls it)
  *  3. src/Permissions/SessionPermissionMemo.php — grantArguments calls covers()
  *  4. src/Permissions/SafetyClassifier.php      — literals in the classifyBash arm
  *  5. src/Renderer.php                          — literals in the $isShell predicate
@@ -71,7 +72,7 @@ final class ShellSubjectToolsCompletenessTest extends TestCase
 
     public function testPermissionGateBreakerReadsTheCanonicalRoster(): void
     {
-        $body = self::rosterSiteBody('Permissions/PermissionGate.php', 'function isRmRfRootOrHome');
+        $body = self::rosterSiteBody('Permissions/RmRfFloor.php', 'function isRmRfRootOrHome');
         self::assertStringContainsString('ShellSubjectTools::covers($call->name)', $body, 'site 2 reverted to hand-copied names inside the rm-rf breaker');
         self::assertStringNotContainsString("'PtyRun'", $body, 'the breaker body must not re-spell roster literals next to the covers() call');
     }
