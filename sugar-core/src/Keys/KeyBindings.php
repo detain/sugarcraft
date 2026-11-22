@@ -30,6 +30,16 @@ declare(strict_types=1);
  * case is dropped (m26), so `shift+a` is rejected as a token rather than
  * accepted as a binding no key press could ever produce.
  *
+ * Behavior change for existing callers (P2-1): matches() and actionFor() used
+ * to fold every modifier away, so a bare token also fired under Ctrl, Alt or
+ * Shift. They are now chord-exact, so a bare `left` no longer fires on
+ * Shift+Left, a bare `c` no longer fires on Alt+C, and a bare `space` no
+ * longer fires on Shift+Space. A caller that relied on the fold must bind the
+ * chord or fall back to the bare token itself. candy-tetris, the only
+ * in-monorepo caller of matches() and actionFor(), lands its fallback in the
+ * same change (Bindings::actuates() answers Shift over a named key with the
+ * bare token), and its suite is the gate for that compensation.
+ *
  * Legacy-terminal gap: a few Ctrl+letter chords share their byte with a named
  * key, and InputReader decodes the named key with ctrl unset. Ctrl+H (0x08)
  * arrives as `backspace`, Ctrl+I (0x09) as `tab`, Ctrl+J and Ctrl+M (0x0a,
