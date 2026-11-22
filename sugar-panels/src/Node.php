@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels;
 
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Align;
@@ -51,6 +52,20 @@ final class Node
     public readonly array $margin;
     public readonly ?Align $alignH;
     public readonly ?VAlign $alignV;
+    /**
+     * Pre-built cells a leaf paints instead of text (null = the leaf paints
+     * {@see $content}). The cells already carry their own pen and width, so
+     * the renderer places them without re-parsing escape strings.
+     */
+    public readonly ?Buffer $cells;
+    /** Rows of leaf content skipped from the top before painting (0 = top). */
+    public readonly int $scrollOffset;
+    /** Whether this node's frame paints as the focus frame. */
+    public readonly bool $focused;
+    /** Border set the focus frame uses; null = {@see Border::thick()}. */
+    public readonly ?Border $focusBorderStyle;
+    /** Pen for the focus frame glyphs; null = unstyled glyphs. */
+    public readonly ?Style $focusStyle;
 
     /**
      * @param array{int,int,int,int} $margin top, right, bottom, left
@@ -73,6 +88,11 @@ final class Node
         ?Align $alignH = null,
         ?VAlign $alignV = null,
         int $flex = 0,
+        ?Buffer $cells = null,
+        int $scrollOffset = 0,
+        bool $focused = false,
+        ?Border $focusBorderStyle = null,
+        ?Style $focusStyle = null,
     ) {
         $this->kind        = $kind;
         // Every string that can reach the grid enters through this choke point
@@ -94,15 +114,29 @@ final class Node
         $this->margin      = $margin;
         $this->alignH       = $alignH;
         $this->alignV       = $alignV;
+        $this->cells            = $cells;
+        $this->scrollOffset     = $scrollOffset;
+        $this->focused          = $focused;
+        $this->focusBorderStyle = $focusBorderStyle;
+        $this->focusStyle       = $focusStyle;
     }
 
     // -------------------------------------------------------------------------
     // Factory constructors
     // -------------------------------------------------------------------------
 
-    public static function leaf(string $content = ''): self
+    /**
+     * A leaf paints either text or pre-built cells. Text is the historical
+     * door: it is sanitized at the paint boundary and word-wrapped into the
+     * region. A {@see Buffer} is placed cell for cell (each cell keeps its own
+     * pen, link and width), so a host that already renders into cells does
+     * not have to flatten them into escape strings for the panel to re-parse.
+     */
+    public static function leaf(string|Buffer $content = ''): self
     {
-        return new self(self::LEAF, $content);
+        return $content instanceof Buffer
+            ? new self(self::LEAF, '', cells: $content)
+            : new self(self::LEAF, $content);
     }
 
     public static function horizontal(Node ...$children): self
@@ -307,6 +341,51 @@ final class Node
         return $this->mutate(content: $content);
     }
 
+    /**
+     * Cells for a leaf to paint instead of its text content. While cells are
+     * set they win over {@see $content}; passing null returns the leaf to its
+     * text. Cells are placed top-left in the padded content box and clipped
+     * to it; leaf style and alignment apply to text only.
+     */
+    public function withCells(?Buffer $cells): self
+    {
+        return $this->mutate(cells: $cells, cellsSet: true);
+    }
+
+    /**
+     * Skip this many rows of leaf content from the top (text rows after word
+     * wrap, or cell rows). Negative values clamp to 0. At render time the
+     * offset also clamps to the last full page, so scrolling past the end
+     * shows the final rows instead of an empty box.
+     */
+    public function withScrollOffset(int $rows): self
+    {
+        return $this->mutate(scrollOffset: \max(0, $rows));
+    }
+
+    /**
+     * Mark this node as focused: its frame paints with the focus border set
+     * ({@see withFocusBorderStyle()}, default {@see Border::thick()}) and the
+     * focus pen ({@see withFocusStyle()}). A node whose frame is hidden has no
+     * focus frame to show. Layout is unchanged: focus never moves a cell.
+     */
+    public function withFocused(bool $focused = true): self
+    {
+        return $this->mutate(focused: $focused);
+    }
+
+    /** Border set for the focus frame; null restores {@see Border::thick()}. */
+    public function withFocusBorderStyle(?Border $border): self
+    {
+        return $this->mutate(focusBorderStyle: $border, focusBorderStyleSet: true);
+    }
+
+    /** Pen for the focus frame glyphs; null paints them unstyled. */
+    public function withFocusStyle(?Style $style): self
+    {
+        return $this->mutate(focusStyle: $style, focusStyleSet: true);
+    }
+
     // -------------------------------------------------------------------------
     // Dimension queries
     // -------------------------------------------------------------------------
@@ -464,6 +543,7 @@ final class Node
     /** Widest visible line of a leaf's content; 0 for an empty leaf. */
     private function naturalContentWidth(): int
     {
+        if ($this->cells !== null) return $this->cells->width();
         if ($this->content === '') return 0;
 
         $widest = 0;
@@ -481,6 +561,8 @@ final class Node
     /** Line count of a leaf's content, before any renderer word-wrap; 0 when empty. */
     private function naturalContentLines(): int
     {
+        if ($this->cells !== null) return $this->cells->height();
+
         return $this->content === '' ? 0 : \count(\explode("\n", $this->content));
     }
 
@@ -520,6 +602,14 @@ final class Node
         ?VAlign $alignV = null,
         bool $alignVSet = false,
         ?int $flex = null,
+        ?Buffer $cells = null,
+        bool $cellsSet = false,
+        ?int $scrollOffset = null,
+        ?bool $focused = null,
+        ?Border $focusBorderStyle = null,
+        bool $focusBorderStyleSet = false,
+        ?Style $focusStyle = null,
+        bool $focusStyleSet = false,
     ): self {
         return new self(
             $this->kind,
@@ -542,6 +632,11 @@ final class Node
             $alignHSet      ? $alignH     : $this->alignH,
             $alignVSet      ? $alignV     : $this->alignV,
             $flex           ?? $this->flex,
+            $cellsSet       ? $cells : $this->cells,
+            $scrollOffset   ?? $this->scrollOffset,
+            $focused        ?? $this->focused,
+            $focusBorderStyleSet ? $focusBorderStyle : $this->focusBorderStyle,
+            $focusStyleSet  ? $focusStyle : $this->focusStyle,
         );
     }
 }

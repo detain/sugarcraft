@@ -245,8 +245,66 @@ echo $panels->render($node, 40, 10);
 A container's `withBorderStyle()` picks the glyphs of its own frame; `withStyle()`
 colours only leaf content — a style set on a container never reaches the frame
 glyphs, they are always painted unstyled. Content styling belongs to the leaf.
-There is no focus or active-panel facet — see
-*Accessibility*.
+The one exception is the focus frame (see *Focus, scrolling and cells*).
+
+## Focus, scrolling and cells
+
+```php
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\Panels\{Node, SugarPanels};
+use SugarCraft\Style\Style;
+
+$panels = SugarPanels::new();
+
+// A focus frame: the focused node's frame paints with the focus border set
+// (Border::thick() unless withFocusBorderStyle() chose one) and focus pen.
+$log = Node::leaf(\implode("\n", \range(1, 50)))
+    ->withTitle('log')
+    ->withFocused(true)
+    ->withFocusStyle(Style::new()->bold())
+    // Skip 40 rows from the top; past the end it clamps to the last page.
+    ->withScrollOffset(40)
+    ->withGrow();
+
+// A leaf can paint pre-built cells instead of text: each cell keeps its own
+// pen, link and width, and the renderer places it without re-parsing escapes.
+$cells = Node::leaf(Buffer::fromString("\x1b[32mready\x1b[0m", 10, 1));
+
+echo $panels->render(Node::horizontal($log, $cells), 40, 8);
+```
+
+Focus never moves a cell: it changes which glyphs and pen the frame uses, so
+toggling it repaints the frame alone. A node whose frame is hidden has no
+focus frame to show.
+
+## Splitter and divider drag
+
+`Splitter` owns the sizes of a run of panes along one axis and moves the
+dividers between them from mouse messages. Positions are screen cells, so a
+host routes raw mouse coordinates straight in:
+
+```php
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\{MouseAction, MouseButton};
+use SugarCraft\Panels\{Node, Splitter, SugarPanels};
+
+$split = Splitter::horizontal(Node::leaf('files'), Node::leaf('editor'))
+    ->withBounds(0, 0, 40, 10)   // painted at column 0, row 0, 40x10
+    ->withMinPaneSize(5);
+
+// Divider 0 is the last column of pane 0 (column 19 for an even split).
+[$split] = $split->update(new MouseMsg(19, 3, MouseButton::Left, MouseAction::Press));
+[$split] = $split->update(new MouseMsg(11, 3, MouseButton::Left, MouseAction::Motion));
+[$split] = $split->update(new MouseMsg(11, 3, MouseButton::Left, MouseAction::Release));
+
+echo \implode(',', $split->sizes), "\n"; // 12,28
+echo SugarPanels::new()->render($split->node(), 40, 10);
+```
+
+`withDividerDrag($position)` is the same move without the mouse (the dragged
+divider, else the nearest one). `Splitter::vertical()` stacks the panes and
+drags by row. `node()` is an ordinary `Node` tree: the dividers are the usual
+spacing-0 separators, or the panes' own frame edges.
 
 ## API Reference
 
@@ -254,12 +312,13 @@ There is no focus or active-panel facet — see
 
 | Method | Description |
 |--------|-------------|
-| `$panels->leaf(string)` | Leaf node with string content |
+| `$panels->leaf(string\|Buffer)` | Leaf node with string content, or pre-built cells |
 | `$panels->horizontal(Node ...)` | Horizontal (row) layout |
 | `$panels->vertical(Node ...)` | Vertical (column) layout |
 | `$panels->noBorder(Node)` | Flatten a subtree: no frames, no dividers (contrast `withBorder(false)`, which hides one box's frame only) |
 | `$panels->render(Node, int $width, int $height)` | Paint one frame; throws `InvalidArgumentException` on a viewport outside the documented ranges |
 | `$panels->resetPreviousFrame()` | Drop the frame cache — next `render()` repaints full, without erasing |
+| `$panels->paintedLeaves()` | Leaves the last `render()` painted: all of them on a full frame or a layout change, only the changed ones on a same-layout frame |
 | `SugarPanels::MAX_VIEWPORT_DIMENSION` | 4096 cells — largest viewport side accepted |
 | `SugarPanels::MAX_VIEWPORT_CELLS` | 1 000 000 cells — largest viewport area accepted (printed as 1000000 in the exception message) |
 
@@ -267,7 +326,7 @@ There is no focus or active-panel facet — see
 
 | Method | Description |
 |--------|-------------|
-| `Node::leaf(string)` | Static leaf constructor |
+| `Node::leaf(string\|Buffer)` | Static leaf constructor: text, or pre-built cells (`Buffer`) |
 | `Node::horizontal(Node ...)` | Static horizontal constructor |
 | `Node::vertical(Node ...)` | Static vertical constructor |
 | `Node::noBorder(Node)` | Static no-border constructor |
@@ -286,6 +345,24 @@ There is no focus or active-panel facet — see
 | `->withMargin(int $top, ...)` | Outer margin (top/right/bottom/left) |
 | `->withAlignH(?Align)` | Horizontal text alignment (null clears) |
 | `->withAlignV(?VAlign)` | Vertical text alignment (null clears) |
+| `->withCells(?Buffer)` | Cells a leaf paints instead of its text (null returns to the text); placed top-left in the content box and clipped |
+| `->withScrollOffset(int)` | Rows of leaf content skipped from the top (text rows after wrap, or cell rows); clamps to the last full page |
+| `->withFocused(bool)` | Paint this node's frame as the focus frame |
+| `->withFocusBorderStyle(?Border)` | Border set of the focus frame (null = `Border::thick()`) |
+| `->withFocusStyle(?Style)` | Pen for the focus frame glyphs (null = unstyled) |
+
+### `Splitter`
+
+| Method | Description |
+|--------|-------------|
+| `Splitter::horizontal(Node ...)` / `Splitter::vertical(Node ...)` | Panes side by side (drag by column) / stacked (drag by row) |
+| `->withBounds(int $x, int $y, int $w, int $h)` | Where the splitter is painted, in screen cells; sizes rescale to the new span |
+| `->withSizes(int ...)` / `->withMinPaneSize(int)` | Explicit pane sizes (fitted to the span) / smallest size a drag leaves |
+| `->withPanes(Node ...)` | Replace the panes (sizes kept when the count is unchanged) |
+| `->withDividerDrag(int $position, ?int $divider = null)` | Move a divider to a screen column (row) |
+| `->update(Msg): array{Splitter, ?Closure}` | Left press on a divider grabs it, motion moves it, release lets go |
+| `->dividerAt(int $col, int $row)` / `->dividerPositions()` / `->isDragging()` | Hit test and divider positions |
+| `->node()` | The `Node` tree for the current sizes |
 
 ### `Sanitize`
 
@@ -327,12 +404,21 @@ which means a zero-gap layout can legitimately show no divider at all.
 
 ## Buffer diffing
 
-The renderer keeps the previous frame's cell grid across renders and rebuilds a
-`Buffer` from it (widths re-derived per cell, so wide graphemes and embedded SGR
-spans stay intact), computes `current->diff(previous)` (from
+The renderer keeps the previous frame's cell grid and `Buffer` across renders
+(widths derived per cell, so wide graphemes and embedded SGR spans stay intact),
+computes `current->diff(previous)` (from
 [sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)), and emits only
 the delta ANSI ops through the cellbuffer `DiffEncoder`. The current frame then
 replaces the stored one for the next render.
+
+**Dirty leaves.** Layout and paint are two passes: the layout walk records the
+frames, leaves and dividers to paint, in paint order. When a same-size frame
+lays out exactly like the previous one, only the leaves whose paint inputs
+changed (text, cells, style, frame, scroll offset, focus) are repainted, the
+dividers beside them are re-decided, and the buffer is patched at just the
+changed cells. The result is the grid a full repaint would produce, cell for
+cell; a changed layout (or a flex overflow that lands one box on another)
+repaints every leaf. `paintedLeaves()` reports which path the last frame took.
 
 **Frame protocol — every frame with at least one column is self-positioning.**
 Such a frame opens
@@ -479,11 +565,11 @@ written.
   `withSpacing(1)` draw no visible boundary, so structure is conveyed by position
   alone. If a layout's meaning depends on which box content belongs to, keep a
   visible frame or a title on it.
-- **There is no focus model.** sugar-panels paints; it has no cursor, selection or
-  active-panel concept, and there is no colour channel on the frame — borders are
-  painted unstyled, and no `withStyle()` a node carries reaches them. A host that
-  needs an "active panel" cue renders it itself (a distinct `Border` style or a
-  title is the usual recipe).
+- **Focus is a frame, not a model.** sugar-panels paints; it has no cursor or
+  selection, and it does not decide which panel is active. A host marks the
+  active panel with `withFocused(true)`: the frame switches to the focus border
+  set (`Border::thick()` by default), so the cue survives without colour, and
+  `withFocusStyle()` adds a pen on top. `withStyle()` still never reaches a frame.
 
 ## Examples
 

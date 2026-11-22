@@ -7,6 +7,7 @@ namespace SugarCraft\Panels;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Constraints\Constraint\Constraint;
@@ -132,6 +133,21 @@ final class SugarPanels
 
     /** @var list<list<string>>|null Previous frame's cell grid, kept so the diff buffer can be built lazily on frame 2 */
     private ?array $previousCells = null;
+
+    /** @var list<Cell>|null The previous buffer's cells, patched in place by a dirty-leaf frame */
+    private ?array $previousCellList = null;
+
+    /** @var list<array<string, mixed>>|null Previous frame's display list (layout ops in paint order) */
+    private ?array $previousOps = null;
+
+    /** @var array<int, array{under: list<string>, drawn: bool}> Previous frame's divider records by op index */
+    private array $previousDividers = [];
+
+    /** Whether the previous display list may be repainted leaf by leaf (see dirtySafe()) */
+    private bool $previousSafe = false;
+
+    /** Leaves painted by the last render() (see paintedLeaves()) */
+    private int $paintedLeaves = 0;
 
     /** @var int|null Previous render width for resize detection */
     private ?int $prevWidth = null;
@@ -279,17 +295,20 @@ final class SugarPanels
             );
         }
 
+        // Layout first, paint second. The layout walk only decides geometry and
+        // appends paint ops in the order the cells must be written; nothing it
+        // does depends on what is painted, so a same-size frame can compare
+        // its display list with the previous one and repaint only the leaves
+        // whose paint inputs changed (rank 35: the full grid, string and
+        // buffer used to be rebuilt for every frame).
+        $ops = [];
+        $this->renderNode($root, 0, 0, $width, $height, $ops);
+        $this->paintedLeaves = 0;
+
         // 2D cell grid: each cell holds one logical character (any byte length).
         // Storing as char-cells avoids byte/multibyte boundary corruption that
         // happens when slicing strings containing UTF-8 box-drawing glyphs.
-        $cells = \array_fill(0, $height, \array_fill(0, $width, ' '));
-        $this->renderNode($root, 0, 0, $width, $height, $cells);
-
-        $out = [];
-        foreach ($cells as $row) {
-            $out[] = \implode('', $row);
-        }
-        $fullOutput = \implode("\n", $out);
+        $blank = \array_fill(0, $height, \array_fill(0, $width, ' '));
 
         // A zero-area frame has no cell grid to diff against: sugar-cellbuffer
         // refuses a zero-dimension buffer, so storing this shape as retained
@@ -297,12 +316,11 @@ final class SugarPanels
         // Zero area therefore never enters the diff state — it paints empty and
         // leaves the renderer as if it had not been called.
         if ($width === 0 || $height === 0) {
-            $this->previousCells = null;
-            $this->previousFrame = null;
+            $this->resetPreviousFrame();
 
             // Nothing is painted, so nothing needs positioning: a zero-area
             // frame costs no protocol bytes either.
-            return $fullOutput;
+            return self::flatten($blank);
         }
 
         // 'Had state' and 'the state does not fit this viewport' are different
@@ -320,33 +338,59 @@ final class SugarPanels
         // the flat string cannot recover cell boundaries once multi-byte glyphs
         // and escape-prefixed cells have been concatenated.
         if (!$hadState || $resized) {
-            $this->previousCells = $cells;
-            $this->prevWidth = $width;
-            $this->prevHeight = $height;
+            $cells = $blank;
+            $dividers = $this->paintAll($ops, $cells);
+            $this->retain($cells, $ops, $dividers, $width, $height);
             $this->previousFrame = null;
+            $this->previousCellList = null;
 
             // A resize retires cells that the new frame cannot reach: their old
             // glyphs would otherwise sit on screen permanently.
-            return ($resized ? self::ERASE : '') . self::HOME . $fullOutput;
+            return ($resized ? self::ERASE : '') . self::HOME . self::flatten($cells);
         }
 
-        // Subsequent frames with same dimensions: materialise the previous buffer lazily
-        // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
-        // emit the delta. Reused callers thus build exactly one buffer per frame, same as
-        // before; fresh-instance callers build zero.
-        // The :288 early-return above makes previousCells non-null on every path
-        // that reaches here (it is set together with $hadState and cleared only
-        // with it), but a null-narrowing static analysis cannot follow — the
-        // assert states the invariant the runtime already guarantees.
+        // Subsequent frames with same dimensions. The early return above makes
+        // previousCells non-null on every path that reaches here (it is set
+        // together with $hadState and cleared only with it), but a
+        // null-narrowing static analysis cannot follow — the assert states the
+        // invariant the runtime already guarantees.
         \assert($this->previousCells !== null);
-        $prev = $this->previousFrame ??= $this->bufferFromGrid($this->previousCells, $width, $height);
-        $current = $this->bufferFromGrid($cells, $width, $height);
-        $ops = $current->diff($prev);
+
+        // Materialise the previous buffer lazily (exactly ONCE — cached in
+        // $previousFrame): fresh-instance callers never build one.
+        if ($this->previousFrame === null || $this->previousCellList === null) {
+            $this->previousCellList = $this->cellList($this->previousCells, $width, $height);
+            $this->previousFrame = Buffer::fromGrid($width, $height, $this->previousCellList);
+        }
+        $prev = $this->previousFrame;
+
+        if ($this->previousSafe && $this->previousOps !== null && $this->sameStructure($this->previousOps, $ops)) {
+            // Same geometry, same frames, same dividers: start from the cells
+            // on screen and repaint only the leaves whose inputs changed. The
+            // buffer is patched at exactly the changed cells instead of being
+            // rebuilt from the whole grid.
+            $cells = $this->previousCells;
+            $dividers = $this->previousDividers;
+            $changed = $this->paintDirty($this->previousOps, $ops, $cells, $dividers);
+            $list = $this->previousCellList;
+            foreach ($changed as [$cx, $cy]) {
+                $list[$cy * $width + $cx] = $this->cellFor($cells[$cy][$cx]);
+            }
+            $current = $changed === [] ? $prev : Buffer::fromGrid($width, $height, $list);
+        } else {
+            $cells = $blank;
+            $dividers = $this->paintAll($ops, $cells);
+            $list = $this->cellList($cells, $width, $height);
+            $current = Buffer::fromGrid($width, $height, $list);
+        }
+
+        $diffOps = $current->diff($prev);
+        $this->retain($cells, $ops, $dividers, $width, $height);
         $this->previousFrame = $current;
-        $this->previousCells = $cells;
+        $this->previousCellList = $list;
 
         $encoder = new DiffEncoder();
-        $delta = $encoder->encode($ops);
+        $delta = $encoder->encode($diffOps);
 
         // The encoder opens every stream with its own home anchor; this frame
         // already homes with HOME (above). Peel the redundant prologue so a
@@ -360,6 +404,341 @@ final class SugarPanels
     }
 
     /**
+     * How many leaves the last {@see render()} painted.
+     *
+     * A full frame (first render, after a resize or a reset) paints every
+     * leaf, and so does a same-size frame whose layout changed. A same-size
+     * frame with the same layout repaints only the leaves whose paint inputs
+     * (text, cells, style, frame, scroll offset, focus) changed, so a host can
+     * watch this to confirm an idle pane costs nothing per frame.
+     */
+    public function paintedLeaves(): int
+    {
+        return $this->paintedLeaves;
+    }
+
+    /** @param array<int, array<int, string>> $cells */
+    private static function flatten(array $cells): string
+    {
+        $out = [];
+        foreach ($cells as $row) {
+            $out[] = \implode('', $row);
+        }
+
+        return \implode("\n", $out);
+    }
+
+    /**
+     * @param array<int, array<int, string>>                      $cells
+     * @param list<array<string, mixed>>                          $ops
+     * @param array<int, array{under: list<string>, drawn: bool}> $dividers
+     */
+    private function retain(array $cells, array $ops, array $dividers, int $width, int $height): void
+    {
+        $structureChanged = $this->previousOps === null || !$this->sameStructure($this->previousOps, $ops);
+        // The display list is retained by value: a node is replaced by the
+        // fingerprint of what it paints, so the previous frame's nodes (and the
+        // styles and buffers they hold) are not kept alive between renders.
+        foreach ($ops as $i => $op) {
+            if (isset($op['node'])) {
+                $ops[$i]['fp'] = $op['t'] === 'leaf' ? $this->leafFingerprint($op['node']) : $this->frameFingerprint($op['node']);
+                unset($ops[$i]['node']);
+            }
+        }
+        $this->previousCells = $cells;
+        $this->previousOps = $ops;
+        $this->previousDividers = $dividers;
+        $this->prevWidth = $width;
+        $this->prevHeight = $height;
+        if ($structureChanged) {
+            $this->previousSafe = $this->dirtySafe($ops, $width, $height);
+        }
+    }
+
+    /**
+     * Paint a whole display list into a blank grid.
+     *
+     * @param list<array<string, mixed>>     $ops
+     * @param array<int, array<int, string>> $cells
+     * @return array<int, array{under: list<string>, drawn: bool}> divider records by op index
+     */
+    private function paintAll(array $ops, array &$cells): array
+    {
+        $dividers = [];
+        foreach ($ops as $i => $op) {
+            switch ($op['t']) {
+                case 'leaf':
+                    $this->paintLeaf($op['node'], $op['x'], $op['y'], $op['w'], $op['h'], $cells, $op['nf']);
+                    $this->paintedLeaves++;
+                    break;
+                case 'frame':
+                    $this->drawBorder($op['node'], $op['x'], $op['y'], $op['w'], $op['h'], $cells);
+                    break;
+                default:
+                    $dividers[$i] = $this->paintDivider($op, $cells);
+            }
+        }
+
+        return $dividers;
+    }
+
+    /**
+     * Repaint only what changed between two structurally identical display
+     * lists, starting from the previous frame's cells.
+     *
+     * A dirty leaf's region is blanked and repainted (it was blank before the
+     * leaf painted it: {@see dirtySafe()} guarantees no earlier op writes into
+     * a leaf region). Its cells become "fresh". Then every divider whose span
+     * touches a fresh cell is re-decided in display-list order from what its
+     * span would hold in a full repaint: the current value of a fresh cell,
+     * the recorded pre-divider value of any other. A divider that changes
+     * cells marks them fresh too, so an outer divider crossing an inner one is
+     * re-decided from the inner one's new result. The outcome is the grid a
+     * full repaint would produce, cell for cell.
+     *
+     * @param list<array<string, mixed>>                          $prevOps
+     * @param list<array<string, mixed>>                          $ops
+     * @param array<int, array<int, string>>                      $cells
+     * @param array<int, array{under: list<string>, drawn: bool}> $dividers
+     * @return list<array{int, int}> cells whose content differs from the previous frame
+     */
+    private function paintDirty(array $prevOps, array $ops, array &$cells, array &$dividers): array
+    {
+        $width = \count($cells[0] ?? []);
+        $fresh = [];
+        $orig  = [];
+
+        foreach ($ops as $i => $op) {
+            if ($op['t'] !== 'leaf' || $this->fingerprintsEqual($prevOps[$i]['fp'], $this->leafFingerprint($op['node']))) {
+                continue;
+            }
+            $span = $this->opCells($op, $cells);
+            foreach ($span as [$cx, $cy]) {
+                $k = $cy * $width + $cx;
+                $orig[$k] ??= $cells[$cy][$cx];
+                $cells[$cy][$cx] = ' ';
+            }
+            $this->paintLeaf($op['node'], $op['x'], $op['y'], $op['w'], $op['h'], $cells, $op['nf']);
+            $this->paintedLeaves++;
+            foreach ($span as [$cx, $cy]) {
+                $fresh[$cy * $width + $cx] = true;
+            }
+        }
+
+        if ($fresh === []) {
+            return [];
+        }
+
+        foreach ($ops as $i => $op) {
+            if ($op['t'] !== 'v' && $op['t'] !== 'h') {
+                continue;
+            }
+            $span = $this->opCells($op, $cells);
+            $touched = false;
+            foreach ($span as [$cx, $cy]) {
+                if (isset($fresh[$cy * $width + $cx])) {
+                    $touched = true;
+                    break;
+                }
+            }
+            if (!$touched) {
+                continue;
+            }
+
+            $recorded = $dividers[$i]['under'];
+            $under = [];
+            foreach ($span as $n => [$cx, $cy]) {
+                $under[] = isset($fresh[$cy * $width + $cx]) ? $cells[$cy][$cx] : $recorded[$n];
+            }
+            $drawn = $this->spanIsFree($under);
+            $glyph = $this->dividerGlyph($op);
+            foreach ($span as $n => [$cx, $cy]) {
+                $value = $drawn ? $glyph : $under[$n];
+                if ($cells[$cy][$cx] !== $value) {
+                    $k = $cy * $width + $cx;
+                    $orig[$k] ??= $cells[$cy][$cx];
+                    $cells[$cy][$cx] = $value;
+                    $fresh[$k] = true;
+                }
+            }
+            $dividers[$i] = ['under' => $under, 'drawn' => $drawn];
+        }
+
+        $changed = [];
+        foreach ($orig as $k => $before) {
+            $cx = $k % $width;
+            $cy = \intdiv($k, $width);
+            if ($cells[$cy][$cx] !== $before) {
+                $changed[] = [$cx, $cy];
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Can this display list be repainted leaf by leaf?
+     *
+     * The dirty path relies on three facts every ordinary layout has: a leaf's
+     * region is blank until the leaf paints it (no earlier op writes there),
+     * nothing painted after a leaf overwrites it except the dividers of its
+     * ancestors (which {@see paintDirty()} re-decides), and nothing painted
+     * after a divider overwrites the divider's span. Flex overflow can break
+     * them (a child pushed past its parent's box lands on a sibling); such a
+     * frame simply repaints in full.
+     *
+     * @param list<array<string, mixed>> $ops
+     */
+    private function dirtySafe(array $ops, int $width, int $height): bool
+    {
+        $rects = [];
+        foreach ($ops as $i => $op) {
+            $rects[$i] = $this->clipRect($op, $width, $height);
+        }
+
+        foreach ($ops as $i => $op) {
+            if ($op['t'] === 'frame') {
+                continue;
+            }
+            $mine = $rects[$i];
+            if ($mine[0] >= $mine[2] || $mine[1] >= $mine[3]) {
+                continue;
+            }
+            foreach ($ops as $j => $other) {
+                if ($j === $i) {
+                    continue;
+                }
+                $otherIsPaint = $other['t'] === 'leaf' || $other['t'] === 'frame';
+                $leaf = $op['t'] === 'leaf';
+                $relevant = $j < $i ? $leaf : $otherIsPaint;
+                if ($relevant && $this->paintsInto($other, $rects[$j], $mine)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Does $op (clipped to $rect) write any cell of $target? A frame writes
+     * only its perimeter, so a target inside the frame's interior is safe.
+     *
+     * @param array<string, mixed>      $op
+     * @param array{int, int, int, int} $rect
+     * @param array{int, int, int, int} $target
+     */
+    private function paintsInto(array $op, array $rect, array $target): bool
+    {
+        if ($rect[0] >= $target[2] || $target[0] >= $rect[2] || $rect[1] >= $target[3] || $target[1] >= $rect[3]) {
+            return false;
+        }
+        if ($op['t'] !== 'frame') {
+            return true;
+        }
+        if ($op['w'] < 2 || $op['h'] < 2) {
+            return false;
+        }
+
+        return !($target[0] >= $op['x'] + 1 && $target[2] <= $op['x'] + $op['w'] - 1
+            && $target[1] >= $op['y'] + 1 && $target[3] <= $op['y'] + $op['h'] - 1);
+    }
+
+    /**
+     * Same op kinds at the same places with the same frames and rules; leaves
+     * may differ only in what they paint. $a is a retained list (nodes
+     * replaced by fingerprints, see {@see retain()}); $b is a fresh one.
+     *
+     * @param list<array<string, mixed>> $a
+     * @param list<array<string, mixed>> $b
+     */
+    private function sameStructure(array $a, array $b): bool
+    {
+        if (\count($a) !== \count($b)) {
+            return false;
+        }
+        foreach ($a as $i => $op) {
+            $other = $b[$i];
+            if ($op['t'] !== $other['t'] || $op['x'] !== $other['x'] || $op['y'] !== $other['y']
+                || $op['w'] !== $other['w'] || $op['h'] !== $other['h']) {
+                return false;
+            }
+            $same = match ($op['t']) {
+                'leaf'  => $op['nf'] === $other['nf'],
+                'frame' => $this->fingerprintsEqual($op['fp'], $this->frameFingerprint($other['node'])),
+                default => $op['glyph'] === $other['glyph'],
+            };
+            if (!$same) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Everything a leaf's paint depends on, by value. The cells buffer is held
+     * weakly: once the previous frame's buffer is gone no live buffer can be
+     * the same one, so the leaf simply repaints.
+     *
+     * @return array<string, mixed>
+     */
+    private function leafFingerprint(Node $node): array
+    {
+        return [
+            'content' => $node->content,
+            'cells'   => $node->cells === null ? null : \WeakReference::create($node->cells),
+            'padding' => $node->padding,
+            'border'  => $node->border,
+            'alignH'  => $node->alignH,
+            'alignV'  => $node->alignV,
+            'scroll'  => $node->scrollOffset,
+            'style'   => $this->sgrPrefix($node->style),
+        ] + $this->frameFingerprint($node);
+    }
+
+    /**
+     * Everything a frame's paint depends on, by value.
+     *
+     * @return array<string, mixed>
+     */
+    private function frameFingerprint(Node $node): array
+    {
+        $b = $this->frameBorder($node);
+
+        return [
+            'title'  => $node->title,
+            'glyphs' => $b->topLeft . "\0" . $b->top . "\0" . $b->topRight . "\0" . $b->left . "\0"
+                . $b->right . "\0" . $b->bottomLeft . "\0" . $b->bottom . "\0" . $b->bottomRight,
+            'pen'    => $node->focused ? $this->sgrPrefix($node->focusStyle) : '',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $a
+     * @param array<string, mixed> $b
+     */
+    private function fingerprintsEqual(array $a, array $b): bool
+    {
+        foreach ($a as $key => $value) {
+            $other = $b[$key];
+            if ($value instanceof \WeakReference || $other instanceof \WeakReference) {
+                $live = $value instanceof \WeakReference ? $value->get() : null;
+                $now  = $other instanceof \WeakReference ? $other->get() : null;
+                if ($live === null || $live !== $now) {
+                    return false;
+                }
+                continue;
+            }
+            if ($value !== $other) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Render a node at the given viewport region.
      *
      * @param Node                            $node  Node to render
@@ -367,9 +746,9 @@ final class SugarPanels
      * @param int                             $y     Top offset
      * @param int                             $w     Available width
      * @param int                             $h     Available height
-     * @param array<int, array<int, string>>  $cells Mutable cell grid (modified in place)
+     * @param list<array<string, mixed>>      $ops   Display list the region's paint ops append to
      */
-    private function renderNode(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
+    private function renderNode(Node $node, int $x, int $y, int $w, int $h, array &$ops, bool $noFrames = false): void
     {
         if ($w <= 0 || $h <= 0) return;
 
@@ -383,16 +762,16 @@ final class SugarPanels
 
         switch ($node->kind) {
             case Node::LEAF:
-                $this->renderLeaf($node, $x, $y, $w, $h, $cells, $noFrames);
+                $this->renderLeaf($node, $x, $y, $w, $h, $ops, $noFrames);
                 break;
             case Node::HORIZONTAL:
-                $this->renderHorizontal($node, $x, $y, $w, $h, $cells, $noFrames);
+                $this->renderHorizontal($node, $x, $y, $w, $h, $ops, $noFrames);
                 break;
             case Node::VERTICAL:
-                $this->renderVertical($node, $x, $y, $w, $h, $cells, $noFrames);
+                $this->renderVertical($node, $x, $y, $w, $h, $ops, $noFrames);
                 break;
             case Node::NOBORDER:
-                $this->renderNoBorder($node, $x, $y, $w, $h, $cells);
+                $this->renderNoBorder($node, $x, $y, $w, $h, $ops);
                 break;
         }
     }
@@ -421,7 +800,17 @@ final class SugarPanels
         return [$w, $h];
     }
 
-    private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
+    /**
+     * Record a leaf's paint op over its capped region.
+     *
+     * Layout and paint are separate passes: the layout walk only decides
+     * geometry and appends ops, and {@see paintLeaf()} later fills the cells.
+     * Keeping the two apart is what lets a same-size frame repaint only the
+     * leaves whose paint inputs changed (see {@see paintDirty()}).
+     *
+     * @param list<array<string, mixed>> $ops
+     */
+    private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$ops, bool $noFrames = false): void
     {
         // max* caps the node's WHOLE footprint — frame and padding included.
         // That is the same frame of reference the parents use (they hand a leaf
@@ -430,6 +819,16 @@ final class SugarPanels
         // around narrower text: one setter, two meanings.
         [$w, $h] = $this->capRegion($node, $w, $h);
 
+        $ops[] = ['t' => 'leaf', 'node' => $node, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'nf' => $noFrames];
+    }
+
+    /**
+     * Paint one leaf op into the grid: frame first, then text or cells.
+     *
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
+    private function paintLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames): void
+    {
         $b = ($node->border === true && $noFrames === false) ? 1 : 0;
         $p = $node->padding;
 
@@ -462,7 +861,13 @@ final class SugarPanels
 
         if ($pcw <= 0 || $pch <= 0) return;
 
-        $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
+        if ($node->cells !== null) {
+            $this->placeCells($node->cells, $pcx, $pcy, $pcw, $pch, $node->scrollOffset, $cells);
+
+            return;
+        }
+
+        $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV, $node->scrollOffset);
     }
 
     /**
@@ -481,9 +886,9 @@ final class SugarPanels
      * @param int                            $y     Top offset
      * @param int                            $w     Available width
      * @param int                            $h     Available height
-     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     * @param list<array<string, mixed>>     $ops   Display list (appended in paint order)
      */
-    private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
+    private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$ops, bool $noFrames = false): void
     {
         $children = $node->children;
         $n = \count($children);
@@ -502,7 +907,7 @@ final class SugarPanels
         // border was reached, so the documented 'still shows its frame' promise
         // only held for children that collapse, never for an empty list.
         if ($b === 1) {
-            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+            $ops[] = ['t' => 'frame', 'node' => $node, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h];
         }
 
         if ($n === 0) return;
@@ -544,14 +949,14 @@ final class SugarPanels
                 $ow = \min($ow, $child->maxWidth + $child->marginWidth());
             }
 
-            $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells, $noFrames);
+            $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $ops, $noFrames);
 
             // Vertical separator between children, in the previous child's last
             // column when there is no gap to put it in. Skipped for a frameless
             // subtree; inside a painted column the divider itself declines to
             // overwrite whatever is already on screen — see drawVLine().
             if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
-                $this->drawVLine($node->borderStyle, $x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
+                $ops[] = ['t' => 'v', 'glyph' => "\x1b[0m" . ($node->borderStyle ?? Border::rounded())->left, 'x' => $x + $offsets[$i + 1] - 1, 'y' => $y + $b, 'w' => 1, 'h' => $availableH];
             }
         }
     }
@@ -568,9 +973,9 @@ final class SugarPanels
      * @param int                            $y     Top offset
      * @param int                            $w     Available width
      * @param int                            $h     Available height
-     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     * @param list<array<string, mixed>>     $ops   Display list (appended in paint order)
      */
-    private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
+    private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$ops, bool $noFrames = false): void
     {
         $children = $node->children;
         $n = \count($children);
@@ -587,7 +992,7 @@ final class SugarPanels
         // children area shrinks to zero — and a panel with NO children — still
         // shows its frame (see renderHorizontal()).
         if ($b === 1) {
-            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+            $ops[] = ['t' => 'frame', 'node' => $node, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h];
         }
 
         if ($n === 0) return;
@@ -630,7 +1035,7 @@ final class SugarPanels
                 $ow = \min($ow, $child->maxWidth + $child->marginWidth());
             }
 
-            $this->renderNode($child, $x + $b, $oy, $ow, $oh, $cells, $noFrames);
+            $this->renderNode($child, $x + $b, $oy, $ow, $oh, $ops, $noFrames);
 
             // Horizontal separator between stacked children, in the previous
             // child's last row — see drawVLine() for why the divider declines to
@@ -644,7 +1049,7 @@ final class SugarPanels
             // all-or-nothing dividerSpanIsFree() check still stands the seam down
             // whole wherever the wider span would run over an occupied cell.
             if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
-                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
+                $ops[] = ['t' => 'h', 'glyph' => "\x1b[0m" . ($node->borderStyle ?? Border::rounded())->top, 'x' => $x + $b, 'y' => $y + $offsets[$i + 1] - 1, 'w' => $availableW, 'h' => 1];
             }
         }
     }
@@ -658,10 +1063,10 @@ final class SugarPanels
      * promise did nothing. The child is now rendered with $noFrames, which
      * suppresses every frame and every spacing-0 divider in the subtree.
      */
-    private function renderNoBorder(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    private function renderNoBorder(Node $node, int $x, int $y, int $w, int $h, array &$ops): void
     {
         if ($node->children === []) return;
-        $this->renderNode($node->children[0], $x, $y, $w, $h, $cells, true);
+        $this->renderNode($node->children[0], $x, $y, $w, $h, $ops, true);
     }
 
     // -------------------------------------------------------------------------
@@ -674,13 +1079,17 @@ final class SugarPanels
      * @param Style|null  $style   Optional SGR style prefix (fg/bg/attrs from sugar-style)
      * @param Align|null $alignH  Horizontal text alignment
      * @param VAlign|null $alignV Vertical text alignment
+     * @param int         $scroll  Wrapped rows skipped from the top; clamped to the last full page
      */
-    private function renderContent(string $text, int $x, int $y, int $w, int $h, array &$cells, ?Style $style = null, ?Align $alignH = null, ?VAlign $alignV = null): void
+    private function renderContent(string $text, int $x, int $y, int $w, int $h, array &$cells, ?Style $style = null, ?Align $alignH = null, ?VAlign $alignV = null, int $scroll = 0): void
     {
         if ($w <= 0 || $h <= 0) return;
 
         $wrapped = $this->wordWrap($text, $w);
-        $linesToRender = \array_slice($wrapped, 0, $h);
+        // The offset clamps to the last full page: scrolling past the end shows
+        // the final rows rather than an empty box a host would have to undo.
+        $first = \min($scroll, \max(0, \count($wrapped) - $h));
+        $linesToRender = \array_slice($wrapped, $first, $h);
         $numLines = \count($linesToRender);
 
         // Compute vertical alignment top pad
@@ -698,16 +1107,7 @@ final class SugarPanels
         // Cache per Style OBJECT via the WeakMap (see $sgrPrefixCache) so repeated leaves and
         // frames that reuse the same immutable Style skip the probe render, while a freed
         // style's entry is evicted automatically and never aliases a later style.
-        $sgrPrefix = '';
-        if ($style !== null) {
-            $cached = $this->sgrPrefixCache[$style] ?? null;
-            if ($cached !== null) {
-                $sgrPrefix = $cached;
-            } else {
-                $sgrPrefix = $this->openingSgr($style->render(' '));
-                $this->sgrPrefixCache[$style] = $sgrPrefix;
-            }
-        }
+        $sgrPrefix = $this->sgrPrefix($style);
 
         foreach ($linesToRender as $lineIdx => $line) {
             $lineY = $y + $topPad + $lineIdx;
@@ -731,6 +1131,94 @@ final class SugarPanels
             $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
             $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w - $leftPad, $cells);
         }
+    }
+
+    /**
+     * The opening SGR run of a style, cached per Style object (see
+     * {@see $sgrPrefixCache}); '' for no style.
+     */
+    private function sgrPrefix(?Style $style): string
+    {
+        if ($style === null) {
+            return '';
+        }
+        $cached = $this->sgrPrefixCache[$style] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        return $this->sgrPrefixCache[$style] = $this->openingSgr($style->render(' '));
+    }
+
+    /**
+     * Place a leaf's pre-built cells into the content box.
+     *
+     * Each source cell lands at its own column: its pen and hyperlink become
+     * the escape bytes riding the glyph (closed again on the same cell, so a
+     * cell is self-contained and never bleeds into its neighbor), and a wide
+     * cell keeps its blanked continuation slot exactly as text placement does.
+     * A wide cell that would straddle the box edge is dropped and its columns
+     * padded, never split. Rows past the box are clipped; $scroll skips source
+     * rows from the top, clamped to the last full page.
+     *
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
+    private function placeCells(Buffer $source, int $x, int $y, int $w, int $h, int $scroll, array &$cells): void
+    {
+        $rows  = $source->height();
+        $cols  = $source->width();
+        $first = \min($scroll, \max(0, $rows - $h));
+        $last  = \min($rows, $first + $h);
+
+        for ($row = $first; $row < $last; $row++) {
+            $ty  = $y + $row - $first;
+            $col = 0;
+            while ($col < $cols && $col < $w) {
+                $cell  = $source->cellAt($col, $row);
+                $width = $cell->width();
+                if ($width === 0) {
+                    // An orphaned continuation (its lead sat left of column 0
+                    // or was dropped) shows nothing; keep the slot blank.
+                    $this->setChar($x + $col, $ty, ' ', $cells);
+                    $col++;
+                    continue;
+                }
+                if ($col + $width > $w) {
+                    break;
+                }
+                $this->setChar($x + $col, $ty, $this->cellPayload($cell), $cells);
+                for ($k = 1; $k < $width; $k++) {
+                    $this->setChar($x + $col + $k, $ty, '', $cells);
+                }
+                $col += $width;
+            }
+            for (; $col < $w; $col++) {
+                $this->setChar($x + $col, $ty, ' ', $cells);
+            }
+        }
+    }
+
+    /**
+     * One source cell as the grid string the painter stores: pen, link, glyph,
+     * then the closers. The glyph passes the same paint boundary text does
+     * (with ESC and LF dropped too: inside one cell neither is a separator or a
+     * sequence the cell owns), so a hostile rune cannot smuggle control bytes.
+     */
+    private function cellPayload(Cell $cell): string
+    {
+        $rune = \str_replace(["\x1b", "\n"], '', Sanitize::painted($cell->rune()));
+        if ($rune === '' || $this->strWidth($rune) <= 0) {
+            $rune = ' ';
+        }
+        $style = $cell->style();
+        $link  = $cell->link();
+        $pen   = $style !== null ? $style->toAnsi() : '';
+
+        return $pen
+            . ($link !== null ? $link->toAnsi() : '')
+            . $rune
+            . ($link !== null ? Hyperlink::CLOSE : '')
+            . ($pen !== '' ? "\x1b[0m" : '');
     }
 
     /**
@@ -1151,6 +1639,18 @@ final class SugarPanels
     // -------------------------------------------------------------------------
 
     /**
+     * The border set a node's frame paints with: the focus set while the node
+     * is focused ({@see Border::thick()} unless one was chosen), otherwise its
+     * own style ({@see Border::rounded()} unless one was chosen).
+     */
+    private function frameBorder(Node $node): Border
+    {
+        return $node->focused
+            ? ($node->focusBorderStyle ?? Border::thick())
+            : ($node->borderStyle ?? Border::rounded());
+    }
+
+    /**
      * Draw a border using the characters from the given Border object.
      * Uses Border::rounded() as default when $border is null.
      */
@@ -1158,25 +1658,31 @@ final class SugarPanels
     {
         if ($w < 2 || $h < 2) return;
 
-        $border = $node->borderStyle ?? Border::rounded();
+        $border = $this->frameBorder($node);
         $title  = $node->title;
 
+        // The focus frame is the node's own frame repainted with the focus
+        // border set and pen. Each glyph closes its own pen so the frame cells
+        // stay self-contained in the grid (the diff compares cell strings).
+        $pen = $node->focused ? $this->sgrPrefix($node->focusStyle) : '';
+        $g = static fn (string $glyph): string => $pen === '' ? $glyph : $pen . $glyph . "\x1b[0m";
+
         // Corners
-        $this->setChar($x,           $y,           $border->topLeft,     $cells);
-        $this->setChar($x + $w - 1,  $y,           $border->topRight,    $cells);
-        $this->setChar($x,           $y + $h - 1,  $border->bottomLeft,  $cells);
-        $this->setChar($x + $w - 1,  $y + $h - 1,  $border->bottomRight, $cells);
+        $this->setChar($x,           $y,           $g($border->topLeft),     $cells);
+        $this->setChar($x + $w - 1,  $y,           $g($border->topRight),    $cells);
+        $this->setChar($x,           $y + $h - 1,  $g($border->bottomLeft),  $cells);
+        $this->setChar($x + $w - 1,  $y + $h - 1,  $g($border->bottomRight), $cells);
 
         // Top/bottom edges
         for ($i = 1; $i < $w - 1; $i++) {
-            $this->setChar($x + $i, $y,           $border->top,    $cells);
-            $this->setChar($x + $i, $y + $h - 1,  $border->bottom, $cells);
+            $this->setChar($x + $i, $y,           $g($border->top),    $cells);
+            $this->setChar($x + $i, $y + $h - 1,  $g($border->bottom), $cells);
         }
 
         // Left/right edges
         for ($j = 1; $j < $h - 1; $j++) {
-            $this->setChar($x,           $y + $j, $border->left,  $cells);
-            $this->setChar($x + $w - 1,  $y + $j, $border->right, $cells);
+            $this->setChar($x,           $y + $j, $g($border->left),  $cells);
+            $this->setChar($x + $w - 1,  $y + $j, $g($border->right), $cells);
         }
 
         // Title: overlay on top border row, clipped to available interior width.
@@ -1250,70 +1756,123 @@ final class SugarPanels
     }
 
     /**
-     * Paint the vertical divider a spacing-0 horizontal layout puts between
-     * two children.
+     * Paint the divider a spacing-0 layout puts between two children: a
+     * vertical rule ('v' op) in a horizontal layout, a horizontal rule ('h')
+     * in a vertical one.
      *
-     * The divider is drawn INTO the last column of the previous child, which is
-     * the cell the renderer used to park an auto-reset when that child's line
-     * left a style open. Overwriting it silently un-does the safety net, so the
-     * divider itself carries the closing sequence: whatever the neighbour was
-     * doing, the boundary ends the span.
+     * The divider is drawn INTO the last column (row) of the previous child,
+     * which is the cell the renderer used to park an auto-reset when that
+     * child's line left a style open. Overwriting it silently un-does the
+     * safety net, so the divider itself carries the closing sequence: whatever
+     * the neighbor was doing, the boundary ends the span.
      *
      * A span with any visible glyph in it stands down as a whole. The earlier
-     * rule asked the neighbouring NODE whether it was bordered, which only
+     * rule asked the neighboring NODE whether it was bordered, which only
      * covered the direct child: in a borderless container of bordered panels the
      * divider still ran over the grandchildren's ╮/╯ corners, and a stacked
      * layout's ╰───╯ became a bare dash run. Asking the grid instead of the tree
      * is both cheaper and correct at every depth.
+     *
+     * The verdict is all-or-nothing because the divider always lands on the
+     * previous child's last row or column. Cell-by-cell it cut a rule straight
+     * through the padded tail of a neighbor's text line — half a line of ─
+     * after the word 'DASHBOARD' - which reads as a rendering defect, not as a
+     * separator.
+     *
+     * Returns what the span held before the divider (in span order) and
+     * whether it drew: {@see paintDirty()} re-decides a divider from exactly
+     * that record when a repainted leaf changes the cells under it.
+     *
+     * @param array<string, mixed>           $op
+     * @param array<int, array<int, string>> $cells
+     * @return array{under: list<string>, drawn: bool}
      */
-    private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
+    private function paintDivider(array $op, array &$cells): array
     {
-        if ($this->dividerSpanIsFree($cells, $x, $y, 1, $h) === false) {
-            return;
+        $span  = $this->opCells($op, $cells);
+        $under = [];
+        foreach ($span as [$cx, $cy]) {
+            $under[] = $cells[$cy][$cx];
         }
-        $b = $border ?? Border::rounded();
-        for ($j = 0; $j < $h; $j++) {
-            $this->setChar($x, $y + $j, "\x1b[0m" . $b->left, $cells);
+        $drawn = $this->spanIsFree($under);
+        if ($drawn) {
+            $glyph = $this->dividerGlyph($op);
+            foreach ($span as [$cx, $cy]) {
+                $cells[$cy][$cx] = $glyph;
+            }
         }
-    }
 
-    /** @see drawVLine() — the horizontal divider closes the neighbour's span too. */
-    private function drawHLine(?Border $border, int $x, int $y, int $w, array &$cells): void
-    {
-        if ($this->dividerSpanIsFree($cells, $x, $y, $w, 1) === false) {
-            return;
-        }
-        $b = $border ?? Border::rounded();
-        for ($i = 0; $i < $w; $i++) {
-            $this->setChar($x + $i, $y, "\x1b[0m" . $b->top, $cells);
-        }
+        return ['under' => $under, 'drawn' => $drawn];
     }
 
     /**
-     * Is an entire divider span still free?
+     * Is a whole divider span still free?
      *
      * "Free" means no visible glyph: a cell holding only escape bytes (a styling
      * run parked on a space) is empty as far as the screen is concerned, so the
      * divider takes it and brings its reset along.
      *
-     * The verdict is all-or-nothing because the divider always lands on the
-     * previous child's last row or column. Cell-by-cell it cut a rule straight
-     * through the padded tail of a neighbour's text line — half a line of ─
-     * after the word 'DASHBOARD' - which reads as a rendering defect, not as a
-     * separator. A span with anything visible in it stands down as a whole.
+     * @param list<string> $span
      */
-    private function dividerSpanIsFree(array $cells, int $x, int $y, int $w, int $h): bool
+    private function spanIsFree(array $span): bool
     {
-        for ($j = 0; $j < $h; $j++) {
-            for ($i = 0; $i < $w; $i++) {
-                $cell = $cells[$y + $j][$x + $i] ?? null;
-                if ($cell !== null && \trim(Ansi::strip($cell)) !== '') {
-                    return false;
-                }
+        foreach ($span as $cell) {
+            if (\trim(Ansi::strip($cell)) !== '') {
+                return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * The cell a divider op paints: its glyph carrying the closing reset (the
+     * layout walk resolves it from the container's border set).
+     *
+     * @param array<string, mixed> $op
+     */
+    private function dividerGlyph(array $op): string
+    {
+        return $op['glyph'];
+    }
+
+    /**
+     * The in-grid cells an op's rectangle covers, row-major. Cells off the
+     * grid are never painted (setChar drops them), so they take no part in a
+     * divider verdict or a dirty repaint either.
+     *
+     * @param array<string, mixed>           $op
+     * @param array<int, array<int, string>> $cells
+     * @return list<array{int, int}>
+     */
+    private function opCells(array $op, array $cells): array
+    {
+        [$x0, $y0, $x1, $y1] = $this->clipRect($op, \count($cells[0] ?? []), \count($cells));
+        $out = [];
+        for ($cy = $y0; $cy < $y1; $cy++) {
+            for ($cx = $x0; $cx < $x1; $cx++) {
+                $out[] = [$cx, $cy];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * An op's rectangle clipped to the grid, as [x0, y0, x1, y1) (empty when
+     * x0 >= x1 or y0 >= y1).
+     *
+     * @param array<string, mixed> $op
+     * @return array{int, int, int, int}
+     */
+    private function clipRect(array $op, int $gridW, int $gridH): array
+    {
+        return [
+            \max(0, $op['x']),
+            \max(0, $op['y']),
+            \min($gridW, $op['x'] + \max(0, $op['w'])),
+            \min($gridH, $op['y'] + \max(0, $op['h'])),
+        ];
     }
 
     // -------------------------------------------------------------------------
@@ -1553,20 +2112,38 @@ final class SugarPanels
      */
     private function bufferFromGrid(array $cells, int $width, int $height): Buffer
     {
+        return Buffer::fromGrid($width, $height, $this->cellList($cells, $width, $height));
+    }
+
+    /**
+     * The grid as the row-major Cell list {@see bufferFromGrid()} wraps.
+     *
+     * @param list<list<string>> $cells
+     * @return list<Cell>
+     */
+    private function cellList(array $cells, int $width, int $height): array
+    {
         /** @var list<Cell> $grid */
         $grid = [];
         for ($row = 0; $row < $height; $row++) {
             $line = $cells[$row] ?? [];
             for ($col = 0; $col < $width; $col++) {
-                $char = $line[$col] ?? ' ';
-                // '' is a wide-glyph continuation (zero visible columns); every
-                // other slot shows at least one column.
-                $cellWidth = $char === '' ? 0 : \max(1, $this->strWidth($char));
-                $grid[$row * $width + $col] = Cell::new($char, null, null, $cellWidth);
+                $grid[$row * $width + $col] = $this->cellFor($line[$col] ?? ' ');
             }
         }
 
-        return Buffer::fromGrid($width, $height, $grid);
+        return $grid;
+    }
+
+    /**
+     * One grid slot as a Cell. '' is a wide-glyph continuation (zero visible
+     * columns); every other slot shows at least one column.
+     */
+    private function cellFor(string $char): Cell
+    {
+        $cellWidth = $char === '' ? 0 : \max(1, $this->strWidth($char));
+
+        return Cell::new($char, null, null, $cellWidth);
     }
 
     /**
@@ -1592,6 +2169,10 @@ final class SugarPanels
     {
         $this->previousFrame = null;
         $this->previousCells = null;
+        $this->previousCellList = null;
+        $this->previousOps = null;
+        $this->previousDividers = [];
+        $this->previousSafe = false;
         $this->prevWidth = null;
         $this->prevHeight = null;
     }
