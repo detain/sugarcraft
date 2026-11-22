@@ -7,7 +7,7 @@ namespace SugarCraft\Pty\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Posix\PosixMasterPty;
 use SugarCraft\Pty\Posix\PosixPtySystem;
-use SugarCraft\Pty\PtyPool;
+use SugarCraft\Pty\PtyLimiter;
 
 /**
  * PTY-38: close-on-sweep for fully abandoned pool-owned POSIX pairs.
@@ -17,7 +17,7 @@ use SugarCraft\Pty\PtyPool;
  * a caller who keeps the master keeps the obligation, and a recycled
  * descriptor number is never reaped.
  */
-final class PtyPoolOrphanCloseTest extends TestCase
+final class PtyLimiterOrphanCloseTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
@@ -48,7 +48,7 @@ final class PtyPoolOrphanCloseTest extends TestCase
         $this->requireGlibc();
 
         $before = self::openPtmxFds();
-        $pool = new PtyPool(new PosixPtySystem(), maxSize: 12);
+        $pool = new PtyLimiter(new PosixPtySystem(), maxSize: 12);
 
         for ($i = 0; $i < 10; $i++) {
             $pair = $pool->acquire();
@@ -72,7 +72,7 @@ final class PtyPoolOrphanCloseTest extends TestCase
         $this->requirePtySyscalls();
         $this->requireGlibc();
 
-        $pool = new PtyPool(new PosixPtySystem(), maxSize: 4);
+        $pool = new PtyLimiter(new PosixPtySystem(), maxSize: 4);
         $pair = $pool->acquire();
         $master = $pair->master();
         $fd = $master->fd();
@@ -94,7 +94,7 @@ final class PtyPoolOrphanCloseTest extends TestCase
         $ffi = \FFI::cdef('int open(const char *path, int flags); int close(int fd);');
         $readlinkAt = static fn (int $fd): string => (string) @\readlink('/proc/self/fd/' . $fd);
 
-        $pool = new PtyPool(new PosixPtySystem(), maxSize: 4);
+        $pool = new PtyLimiter(new PosixPtySystem(), maxSize: 4);
         $pair = $pool->acquire();
         $fd = $pair->master()->fd();
 
@@ -125,7 +125,7 @@ final class PtyPoolOrphanCloseTest extends TestCase
 
         $before = self::openPtmxFds();
 
-        $pool = new PtyPool(new PosixPtySystem(), maxSize: 4);
+        $pool = new PtyLimiter(new PosixPtySystem(), maxSize: 4);
         $pair = $pool->acquire();
         unset($pair);
         $pool = null; // destruct alone must sweep and release the fd

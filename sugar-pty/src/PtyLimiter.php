@@ -15,9 +15,12 @@ use SugarCraft\Pty\Posix\PosixMasterPty;
  * scenarios (SSH servers, supervisors, test harnesses) that want a hard
  * ceiling on simultaneously-open PTY pairs.
  *
+ * Formerly named `PtyPool` (renamed in P1-8e): it pools nothing, since every
+ * `acquire()` opens a fresh pair, and only limits how many are open.
+ *
  * The FFI libc handle is already cached as a per-process static in
  * {@see Libc::lib()}, so there is no per-open cdef cost to amortize.
- * What `PtyPool` adds is back-pressure: callers cannot exceed
+ * What `PtyLimiter` adds is back-pressure: callers cannot exceed
  * {@see $maxSize} concurrent pairs, surfacing pressure as a typed
  * {@see PoolExhaustedException} instead of an unbounded /dev/ptmx
  * exhaustion at the kernel level.
@@ -56,7 +59,7 @@ use SugarCraft\Pty\Posix\PosixMasterPty;
  * arrival on Windows and deaf to the env). An explicit `$system` always
  * wins and never consults the factory.
  */
-final class PtyPool
+final class PtyLimiter
 {
     public const DEFAULT_MAX_SIZE = 50;
 
@@ -88,7 +91,7 @@ final class PtyPool
     ) {
         if ($maxSize < 1) {
             throw new \InvalidArgumentException(
-                "PtyPool maxSize must be >= 1, got {$maxSize}",
+                "PtyLimiter maxSize must be >= 1, got {$maxSize}",
             );
         }
         $this->system = $system ?? PtySystemFactory::new();

@@ -44,7 +44,7 @@ final class PoolExhaustedExceptionTest extends TestCase
     public function testMessageIsHumanReadable(): void
     {
         $e = PoolExhaustedException::atCapacity(50);
-        $this->assertStringContainsString('PtyPool', $e->getMessage());
+        $this->assertStringContainsString('PtyLimiter', $e->getMessage());
         $this->assertStringContainsString('release', $e->getMessage());
     }
 

@@ -11,35 +11,35 @@ use SugarCraft\Pty\Exception\PoolExhaustedException;
 use SugarCraft\Pty\Exception\UnsupportedPlatformException;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
-use SugarCraft\Pty\PtyPool;
+use SugarCraft\Pty\PtyLimiter;
 
 /**
- * Structural + behavioural tests for {@see PtyPool}. The exhaustion /
+ * Structural + behavioural tests for {@see PtyLimiter}. The exhaustion /
  * validation paths run unconditionally with a fake PtySystem; the
  * real-PTY round-trip skips cleanly on FFI-less / sandboxed CI.
  */
-final class PtyPoolTest extends TestCase
+final class PtyLimiterTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     public function testConstructorRejectsNonPositiveMaxSize(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new PtyPool(maxSize: 0);
+        new PtyLimiter(maxSize: 0);
     }
 
     public function testConstructorRejectsNegativeMaxSize(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new PtyPool(maxSize: -1);
+        new PtyLimiter(maxSize: -1);
     }
 
     public function testDefaultsToPosixPtySystemWhenSystemOmitted(): void
     {
-        $pool = new PtyPool();
-        $this->assertSame(PtyPool::DEFAULT_MAX_SIZE, $pool->maxSize);
+        $pool = new PtyLimiter();
+        $this->assertSame(PtyLimiter::DEFAULT_MAX_SIZE, $pool->maxSize);
         $this->assertSame(0, $pool->inFlight());
-        $this->assertSame(PtyPool::DEFAULT_MAX_SIZE, $pool->available());
+        $this->assertSame(PtyLimiter::DEFAULT_MAX_SIZE, $pool->available());
         $this->assertSame(0, $pool->totalAcquired());
     }
 
@@ -52,8 +52,8 @@ final class PtyPoolTest extends TestCase
      */
     public function testNullSystemResolvesThroughTheFactoryPlatformDefault(): void
     {
-        $system = (new \ReflectionProperty(PtyPool::class, 'system'))
-            ->getValue(new PtyPool());
+        $system = (new \ReflectionProperty(PtyLimiter::class, 'system'))
+            ->getValue(new PtyLimiter());
 
         if (PHP_OS_FAMILY === 'Windows') {
             $this->assertInstanceOf(\SugarCraft\Pty\Windows\ConPtySystem::class, $system);
@@ -68,7 +68,7 @@ final class PtyPoolTest extends TestCase
     {
         \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
         try {
-            new PtyPool();
+            new PtyLimiter();
             $this->fail('null $system must route through PtySystemFactory, which rejects unknown SUGARCRAFT_PTY_BACKEND values');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
@@ -84,7 +84,7 @@ final class PtyPoolTest extends TestCase
         }
         \putenv('SUGARCRAFT_PTY_BACKEND=conpty');
         try {
-            new PtyPool();
+            new PtyLimiter();
             $this->fail('selecting conpty through the pool ctor on a POSIX host must raise the factory refusal, not build a silent POSIX system');
         } catch (UnsupportedPlatformException $e) {
             $this->assertStringContainsString('ConPTY', $e->getMessage());
@@ -98,18 +98,18 @@ final class PtyPoolTest extends TestCase
         $fake = $this->fakeSystem(opens: 0);
         \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
         try {
-            $pool = new PtyPool(system: $fake);
+            $pool = new PtyLimiter(system: $fake);
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }
 
-        $this->assertSame($fake, (new \ReflectionProperty(PtyPool::class, 'system'))->getValue($pool));
+        $this->assertSame($fake, (new \ReflectionProperty(PtyLimiter::class, 'system'))->getValue($pool));
     }
 
     public function testAcquireThrowsAtCapacityWithFakeSystem(): void
     {
         $system = $this->fakeSystem(opens: 2);
-        $pool = new PtyPool(system: $system, maxSize: 2);
+        $pool = new PtyLimiter(system: $system, maxSize: 2);
 
         $a = $pool->acquire();
         $b = $pool->acquire();
@@ -121,7 +121,7 @@ final class PtyPoolTest extends TestCase
             $pool->acquire();
             $this->fail('third acquire should have thrown');
         } catch (PoolExhaustedException $e) {
-            $this->assertStringContainsString('PtyPool exhausted', $e->getMessage());
+            $this->assertStringContainsString('PtyLimiter exhausted', $e->getMessage());
             $this->assertStringContainsString('2 sessions', $e->getMessage());
         }
 
@@ -141,7 +141,7 @@ final class PtyPoolTest extends TestCase
     public function testReleaseIsIdempotent(): void
     {
         $system = $this->fakeSystem(opens: 1);
-        $pool = new PtyPool(system: $system, maxSize: 4);
+        $pool = new PtyLimiter(system: $system, maxSize: 4);
 
         $pair = $pool->acquire();
         $pool->release($pair);
@@ -153,7 +153,7 @@ final class PtyPoolTest extends TestCase
     public function testReleaseOfUnknownPairIsNoOp(): void
     {
         $system = $this->fakeSystem(opens: 1);
-        $pool = new PtyPool(system: $system, maxSize: 4);
+        $pool = new PtyLimiter(system: $system, maxSize: 4);
 
         $stranger = $system->open();
         $pool->release($stranger);
@@ -163,7 +163,7 @@ final class PtyPoolTest extends TestCase
     public function testTotalAcquiredMonotonicallyIncreases(): void
     {
         $system = $this->fakeSystem(opens: 5);
-        $pool = new PtyPool(system: $system, maxSize: 3);
+        $pool = new PtyLimiter(system: $system, maxSize: 3);
 
         for ($i = 0; $i < 5; $i++) {
             $p = $pool->acquire();
@@ -178,7 +178,7 @@ final class PtyPoolTest extends TestCase
     public function testDrainClosesEveryInFlightPair(): void
     {
         $system = $this->fakeSystem(opens: 3);
-        $pool = new PtyPool(system: $system, maxSize: 4);
+        $pool = new PtyLimiter(system: $system, maxSize: 4);
 
         $a = $pool->acquire();
         $b = $pool->acquire();
@@ -197,7 +197,7 @@ final class PtyPoolTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(system: new PosixPtySystem(), maxSize: 4);
+        $pool = new PtyLimiter(system: new PosixPtySystem(), maxSize: 4);
         $pair = $pool->acquire(80, 24);
 
         try {
@@ -215,7 +215,7 @@ final class PtyPoolTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(system: new PosixPtySystem(), maxSize: 2);
+        $pool = new PtyLimiter(system: new PosixPtySystem(), maxSize: 2);
         $a = $pool->acquire();
         $b = $pool->acquire();
 
@@ -238,7 +238,7 @@ final class PtyPoolTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(system: new PosixPtySystem(), maxSize: 4);
+        $pool = new PtyLimiter(system: new PosixPtySystem(), maxSize: 4);
 
         for ($i = 0; $i < 200; $i++) {
             $pair = $pool->acquire();

@@ -11,7 +11,7 @@ use React\EventLoop\Loop;
  * NOTHING MAY BE LEFT ARMED ON THE SHARED LOOP, and the census that says so
  * has to be shown alive in the same test that trusts it.
  *
- * WHY THIS IS A GUARD AND NOT A COMMENT. `PtyPoolReactLoopTest` armed a 5.0s
+ * WHY THIS IS A GUARD AND NOT A COMMENT. `PtyLimiterReactLoopTest` armed a 5.0s
  * safety cap on the shared `Loop::` facade and never cancelled it. Fifty-six
  * rounds of green said nothing, because the leak does not fail anything -- it
  * makes the NEXT `Loop::run()` in the suite return on the orphan's
@@ -53,9 +53,9 @@ use React\EventLoop\Loop;
  * matters. The nearest surviving method,
  * {@see testTheSharedLoopIsCleanByTheTimeThisFileRuns()}, is not what it
  * described: that method's own doc-block records that restoring the leak in
- * `PtyPoolReactLoopTest` left it GREEN, because that file's third test waits
+ * `PtyLimiterReactLoopTest` left it GREEN, because that file's third test waits
  * out the orphan cap and a later observer always finds a clean loop. VERIFIED
- * HERE rather than inferred: `PtyPoolReactLoopTest` declares a `tearDown()`
+ * HERE rather than inferred: `PtyLimiterReactLoopTest` declares a `tearDown()`
  * that runs `SharedLoopResidue::census()` and asserts all five axes --
  * timers, readStreams, writeStreams, signals, futureTicks -- are zero after
  * EVERY test in that class. That is the only window the leak is visible from,
@@ -113,7 +113,7 @@ final class SharedLoopResidueTest extends TestCase
 
     /**
      * THE LEAK ITSELF, pinned by driving the shared loop exactly as
-     * `PtyPoolReactLoopTest::testRapidCycleInsideLoopDoesNotLeakSignals` does
+     * `PtyLimiterReactLoopTest::testRapidCycleInsideLoopDoesNotLeakSignals` does
      * and asserting what it leaves behind.
      *
      * IT IS DRIVEN HERE RATHER THAN ASSERTED OVER THERE on purpose. A check at
@@ -169,7 +169,7 @@ final class SharedLoopResidueTest extends TestCase
      *
      * WHAT THIS SAID: "AND THE REAL CLASS LEAVES NOTHING BEHIND. This is the
      * regression proper." WHAT IS TRUE NOW: it was not the regression and it
-     * could not have been. Restoring the leak in `PtyPoolReactLoopTest` left
+     * could not have been. Restoring the leak in `PtyLimiterReactLoopTest` left
      * this test GREEN, because that file's own third test consumes the orphan
      * cap — it waits out the remaining 4.8 seconds, the cap fires, calls
      * `Loop::stop()`, and is gone — so a later observer always finds a clean

@@ -20,7 +20,7 @@ use SugarCraft\Pty\PtyException;
  * the alternative — auto-closing on GC would yank a descriptor a child
  * still legitimately owns through php://fd inheritance or setsid
  * wiring. `close()` is the contract. Pool-created pairs are the one
- * rescue: PtyPool's sweep closes masters left fully unreachable
+ * rescue: PtyLimiter's sweep closes masters left fully unreachable
  * (PTY-38). See "Abandoned masters" under Known limitations.
  */
 final class PosixMasterPty implements MasterPty
@@ -347,7 +347,7 @@ final class PosixMasterPty implements MasterPty
 
     /**
      * Close a bare master fd when no instance is left to do it — the
-     * orphan leg of PtyPool's sweep (PTY-38). The caller has already
+     * orphan leg of PtyLimiter's sweep (PTY-38). The caller has already
      * proved the descriptor still names a /dev/ptmx; the rc is
      * returned, not thrown, because an orphan sweep must never raise.
      *

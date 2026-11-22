@@ -18,7 +18,7 @@ use SugarCraft\Pty\PtyException;
  * leaks its handle set until process exit. Auto-closing on GC is the
  * worse hazard — the same reasoning that keeps it off PosixMasterPty
  * (a consumer may still hand these handles to a live child), and the
- * PtyPool sweep rescue does not reach non-POSIX handles. `close()` is
+ * PtyLimiter sweep rescue does not reach non-POSIX handles. `close()` is
  * the contract.
  *
  * ## Ownership

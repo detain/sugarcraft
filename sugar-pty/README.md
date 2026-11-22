@@ -336,7 +336,10 @@ cut every later byte is refused, in that window and in every later window handed
 threaded totals. The transcript is not validated as UTF-8: a sequence the child tore
 itself, or one split by a read that ends exactly on the cap, is kept as written.
 
-### `PtyPool` — a concurrency ceiling, not a handle cache
+### `PtyLimiter` — a concurrency ceiling, not a handle cache
+
+Formerly named `PtyPool`: it was renamed because it pools nothing —
+every `acquire()` opens a fresh pair — and only limits how many are open.
 
 `new(?PtySystem = null, int $maxSize = self::DEFAULT_MAX_SIZE)` —
 `DEFAULT_MAX_SIZE` is 50 and a `maxSize < 1` throws
@@ -961,7 +964,7 @@ private arrow-key or Ctrl-key buffering.
   the raw master fd to children (php://fd inheritance, setsid wiring),
   so a GC-triggered close would yank a descriptor a live child still
   owns: a worse hazard than the leak. The one automatic rescue is pool
-  ownership (PTY-38): `PtyPool` closes POSIX masters that are *fully*
+  ownership (PTY-38): `PtyLimiter` closes POSIX masters that are *fully*
   abandoned. Everywhere else, `close()` stays the contract.
 - **Windows ConPTY caveats.** `Windows\ConPtySystem` ships as the Windows
   backend (Windows 10 1809+, PHP 8.4+, ext-ffi), but the pseudo console is

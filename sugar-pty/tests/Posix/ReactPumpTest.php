@@ -18,7 +18,7 @@ use SugarCraft\Pty\PumpOptions;
  * everything on stop()/finish so the loop can exit.
  *
  * Every loop run is hard-bounded by a safety timer (watchdog convention
- * from PtyPoolReactLoopTest) so CI cannot hang; the elapsed-time
+ * from PtyLimiterReactLoopTest) so CI cannot hang; the elapsed-time
  * assertions double as leak detectors — a leaked read stream or timer
  * would pin the loop until the safety cap.
  *
@@ -44,7 +44,7 @@ use SugarCraft\Pty\PumpOptions;
  * immune by construction, in both shapes.
  *
  * The suite bootstrap pins the same guarantee onto the SHARED loop, but
- * that is for the tests which actually use it (PtyPoolReactLoopTest,
+ * that is for the tests which actually use it (PtyLimiterReactLoopTest,
  * SignalForwarderReactLoopTest); these files get theirs from the
  * per-test loop, not from the pin. See {@see \SugarCraft\Testing\LoopPin}
  * for the mechanism and {@see \SugarCraft\Core\Program::run()} for the

@@ -19,7 +19,7 @@ use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
  * depending on signal-dispatch ordering. This test pins the actual
  * combined behavior.
  *
- * Mirrors the watchdog convention from PtyPoolReactLoopTest — the test
+ * Mirrors the watchdog convention from PtyLimiterReactLoopTest — the test
  * is hard-bounded by the loop's own timer cap so CI cannot hang.
 
  */
@@ -46,7 +46,7 @@ final class SignalForwarderReactLoopTest extends TestCase
             SignalForwarder::reset(SIGWINCH);
         }
 
-        // Same obligation PtyPoolReactLoopTest carries: this is one of the
+        // Same obligation PtyLimiterReactLoopTest carries: this is one of the
         // two files that drives the SHARED Loop:: facade, so anything still
         // armed here hijacks the next Loop::run() in the suite — a leaked
         // one-shot ends it for the wrong reason, a leaked periodic or
@@ -58,7 +58,7 @@ final class SignalForwarderReactLoopTest extends TestCase
             ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0, 'signals' => 0, 'futureTicks' => 0],
             $residue,
             'this test left something armed on the SHARED loop: ' . SharedLoopResidue::describe()
-                . ' — see the ledger in SharedLoopResidue and PtyPoolReactLoopTest.',
+                . ' — see the ledger in SharedLoopResidue and PtyLimiterReactLoopTest.',
         );
     }
 

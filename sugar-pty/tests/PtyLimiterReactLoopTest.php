@@ -7,11 +7,11 @@ namespace SugarCraft\Pty\Tests;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Pty\Contract\PtyPair;
-use SugarCraft\Pty\PtyPool;
+use SugarCraft\Pty\PtyLimiter;
 use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
 
 /**
- * Integration test: PtyPool works inside a ReactPHP loop session without
+ * Integration test: PtyLimiter works inside a ReactPHP loop session without
  * signal double-handling.  Risk #3 from the original P6 plan — never
  * tested until now.
  *
@@ -20,7 +20,7 @@ use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
  *
  * @see https://github.com/sugarcraft/sugarcraft/blob/master/plans/leftover/phase-01-pty-quickwins/step-09-pool-react-multipump-expect.md
  */
-final class PtyPoolReactLoopTest extends TestCase
+final class PtyLimiterReactLoopTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
@@ -69,7 +69,7 @@ final class PtyPoolReactLoopTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(maxSize: 4);
+        $pool = new PtyLimiter(maxSize: 4);
         $acquired = [];
         $released = [];
 
@@ -112,7 +112,7 @@ final class PtyPoolReactLoopTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(maxSize: 8);
+        $pool = new PtyLimiter(maxSize: 8);
         $iterations = 0;
         $maxIterations = 20;
 
@@ -179,7 +179,7 @@ final class PtyPoolReactLoopTest extends TestCase
     {
         $this->requirePtySyscalls();
 
-        $pool = new PtyPool(maxSize: 6);
+        $pool = new PtyLimiter(maxSize: 6);
 
         // Stagger some acquires. The tick closures HOLD their pairs:
         // the pool tracks in-flight slots through WeakReferences, so a

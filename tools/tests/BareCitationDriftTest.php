@@ -59,7 +59,7 @@ use PHPUnit\Framework\TestCase;
  * very population, both correct, both of which a wider alphabet would red:
  * `HangWatchdogTest` cites `budgetFromEnv()`, which is a real
  * `public static function` on `tests/Support/HangWatchdog.php`; and
- * `src/PtyPool.php` cites `spl_object_id()`, which is a PHP built-in. A
+ * `src/PtyLimiter.php` cites `spl_object_id()`, which is a PHP built-in. A
  * TEST-shaped name has no such reading — a test method belongs to the file that
  * declares it, and no test file has cause to cite another file's test method by
  * bare name — so for that shape, and only that shape, "declared in this file"
@@ -281,7 +281,7 @@ final class BareCitationDriftTest extends TestCase
             . 'this guard was written for lived',
         );
         $this->assertContains(
-            $root . '/sugar-pty/src/PtyPool.php',
+            $root . '/sugar-pty/src/PtyLimiter.php',
             $files,
             'the walk no longer reaches sugar-pty/src/, so the published half of the package is '
             . 'covered by no citation guard at all',

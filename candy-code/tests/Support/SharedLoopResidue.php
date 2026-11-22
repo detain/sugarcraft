@@ -12,7 +12,7 @@ use React\EventLoop\StreamSelectLoop;
  *
  * WHY THIS EXISTS, and it is a measurement rather than a worry. Almost every
  * loop-driving test in this suite builds its own `new StreamSelectLoop()` --
- * deliberately, for isolation, as `tests/bootstrap.php` says. `PtyPoolReact-
+ * deliberately, for isolation, as `tests/bootstrap.php` says. `PtyLimiterReact-
  * LoopTest` is the one file that drives the shared `Loop::` facade, and it was
  * leaving a 5-second safety-cap timer armed on it. The cost was not slowness:
  * the NEXT `Loop::run()` in the suite returned because that orphan called

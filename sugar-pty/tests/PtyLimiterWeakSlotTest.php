@@ -9,7 +9,7 @@ use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Contract\SlavePty;
-use SugarCraft\Pty\PtyPool;
+use SugarCraft\Pty\PtyLimiter;
 
 /**
  * m3 (round lib-fixes-1103): abandoned pairs must stop pinning pool
@@ -19,7 +19,7 @@ use SugarCraft\Pty\PtyPool;
  * sweep, while a caller who keeps the master keeps the obligation —
  * release() remains the closing contract elsewhere.
  */
-final class PtyPoolWeakSlotTest extends TestCase
+final class PtyLimiterWeakSlotTest extends TestCase
 {
     /** A master fake small enough that nothing else keeps it alive. */
     public function pair(): PtyPair
@@ -70,7 +70,7 @@ final class PtyPoolWeakSlotTest extends TestCase
 
     public function testAbandonedPairFreesItsSlot(): void
     {
-        $pool = new PtyPool(system: $this->system(), maxSize: 2);
+        $pool = new PtyLimiter(system: $this->system(), maxSize: 2);
 
         // Acquire twice and drop the pairs WITHOUT releasing.
         (function () use ($pool): void {
@@ -92,7 +92,7 @@ final class PtyPoolWeakSlotTest extends TestCase
 
     public function testReleaseStillClosesHeldPair(): void
     {
-        $pool = new PtyPool(system: $this->system(), maxSize: 4);
+        $pool = new PtyLimiter(system: $this->system(), maxSize: 4);
         $pair = $pool->acquire();
         $pool->release($pair);
         $this->assertTrue($pair->master()->isClosed());
@@ -100,7 +100,7 @@ final class PtyPoolWeakSlotTest extends TestCase
 
     public function testDrainIgnoresDeadSlots(): void
     {
-        $pool = new PtyPool(system: $this->system(), maxSize: 4);
+        $pool = new PtyLimiter(system: $this->system(), maxSize: 4);
         $held = $pool->acquire();
         (static function () use ($pool): void {
             $pool->acquire(); // abandoned

@@ -14,12 +14,12 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import(['CANDY_PTY_' => 'SUGAR_PTY_'])
     \fwrite(STDERR, "warning: {$legacy} is deprecated; use the SUGAR_PTY_ prefix\n"); // @rename-keep
 }
 
-// PtyPoolReactLoopTest and SignalForwarderReactLoopTest bound their waits with
+// PtyLimiterReactLoopTest and SignalForwarderReactLoopTest bound their waits with
 // a timer armed on the shared Loop::get(), which is ExtUvLoop wherever ext-uv
 // is installed and therefore computes deadlines against a clock refreshed only
 // once per loop iteration.
 //
-// The demonstrably exposed one is PtyPoolReactLoopTest::testRapidCycleInside-
+// The demonstrably exposed one is PtyLimiterReactLoopTest::testRapidCycleInside-
 // LoopDoesNotLeakSignals. Its 5s cap is armed after the 0.01s periodic that
 // does the work, so a sooner-due handle ends the first poll and the periodic
 // gets exactly one tick before the cap stops the loop — the assertion fails on
