@@ -36,13 +36,16 @@ use SugarCraft\Widgets\Tabs\Tabs;
  * Mark zones for mouse clicks.
  *
  * The panel under the bar shows the active tab's data for the selected
- * thread ({@see ConnectionDetailTabs}). It opens on an explicit action
- * (Enter, a tab switch by key or click) and is fetched then, never from
- * view(), because each read is a synchronous server round trip; a
- * selection move while it is open refetches it, and Esc closes it. A data
- * reload (every admin poll tick) reads only when a different thread now
- * sits under the selection, and a failed read there closes the panel
- * without undoing the processlist and counter refresh.
+ * thread ({@see ConnectionDetailTabs}). Each read is a synchronous server
+ * round trip (bounded by the StatementTimeout guard, the SQL-C11 action-path
+ * trade-off), so the panel reads only on a one-shot explicit action: Enter
+ * (again on a focused bar to re-read), a tab switch by key or click, or
+ * {@see withDetailTab()}. It never reads from view(), from the repeatable
+ * navigation keys (j/k/Up/Down, f, r) or from a data reload (every admin
+ * poll tick): when one of those puts a different thread under the
+ * selection, the panel shows a no-read "press Enter to load" line for that
+ * thread instead, so a stalled server never freezes a held key or the poll.
+ * Esc closes the panel.
  *
  * The table paints a window of at most {@see ROW_WINDOW} rows (fewer when
  * the panel takes height) that always contains the selection, so the
@@ -124,7 +127,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     private ?array $detailLines = null;
 
-    /** The thread the open panel was read for (null: no thread was selected). */
+    /** The thread the open panel describes (null: no thread was selected). */
     private int|string|null $detailThreadId = null;
 
     /** Connection awaiting a kill confirmation (null = no pending kill). */
@@ -343,28 +346,41 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     }
 
     /**
-     * After a data reload: refetch an open panel only when the reload put
-     * a different thread under the selection, so a steady poll does no
-     * read. A failed read closes the panel and blurs the bar (the Esc
-     * state, which Enter reopens) instead of discarding the reload.
+     * After a selection move, filter toggle, refresh or data reload: when a
+     * different thread now sits under the selection, an open panel swaps
+     * its lines for a "press Enter to load" line naming that thread. No
+     * read happens here, because these paths repeat (a held j, every poll
+     * tick) and a synchronous read on them would freeze the TUI for the
+     * whole statement-timeout window per key. The panel, the highlight and
+     * the bar still name one thread; Enter reads it.
      */
-    private function withDetailFollowingReload(): self
+    private function withDetailFollowingSelection(): self
     {
-        if ($this->detailLines === null || $this->threadUnderSelection()?->processId === $this->detailThreadId) {
+        // A closed panel must not touch the processlist: reading it on a
+        // reload would queue the provider's probe query on every poll.
+        if ($this->detailLines === null) {
             return $this;
         }
-        try {
-            return $this->withDetailFetched();
-        } catch (\Throwable) {
-            return $this->releaseKeys();
+        $thread = $this->threadUnderSelection();
+        if ($thread?->processId === $this->detailThreadId) {
+            return $this;
         }
+        $clone = clone $this;
+        $clone->detailThreadId = $thread?->processId;
+        $clone->detailLines = $thread === null
+            ? [Lang::t('conn.none_selected')]
+            : [Lang::t('conn.detail_pending', [
+                'tab' => $this->detailBar->labels()[$this->detailBar->active()],
+                'id' => (string) $thread->processId,
+            ])];
+        return $clone;
     }
 
     /**
-     * Refetch the panel when it is open (its thread or rows may have
-     * changed). A failed read (a stalled server's StatementTimeoutException)
-     * closes the panel as {@see withDetailFollowingReload()} does, so the
-     * move, filter or refresh that asked for it still lands.
+     * Refetch the panel when it is open ({@see withDetailTab()}, an explicit
+     * one-shot call). A failed read (a stalled server's
+     * StatementTimeoutException) closes the panel and blurs the bar, so the
+     * tab change that asked for it still lands.
      */
     private function withDetailRefreshed(): self
     {
@@ -487,7 +503,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             // The rows under the selection may have moved: an open panel
             // re-reads the thread that now sits at selectedIndex, the row the
             // table highlights, when that is a different thread.
-            return [$clone->withDetailFollowingReload(), null];
+            return [$clone->withDetailFollowingSelection(), null];
         }
 
         if ($msg instanceof MouseMsg) {
@@ -513,18 +529,19 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         // j/k or Up/Down navigate the processlist selection
         if ($ch === 'j' || $type === KeyType::Down) {
-            return [$this->withNavigateDown()->withDetailRefreshed(), null];
+            return [$this->withNavigateDown()->withDetailFollowingSelection(), null];
         }
 
         if ($ch === 'k' || $type === KeyType::Up) {
-            return [$this->withNavigateUp()->withDetailRefreshed(), null];
+            return [$this->withNavigateUp()->withDetailFollowingSelection(), null];
         }
 
-        // Enter focuses the detail-tab bar and opens its panel; Esc hands
-        // the keyboard back and closes the panel. While focused, the bar's
-        // own key map drives it: Tab / Shift+Tab cycle Details → Attributes
-        // → MDL, and 1/2/3 jump (AUD §2 #19).
-        if ($type === KeyType::Enter && !$this->detailBar->focused) {
+        // Enter focuses the detail-tab bar and opens its panel (on a focused
+        // bar it re-reads the panel for the selected thread); Esc hands the
+        // keyboard back and closes the panel. While focused, the bar's own
+        // key map drives it: Tab / Shift+Tab cycle Details → Attributes →
+        // MDL, and 1/2/3 jump (AUD §2 #19).
+        if ($type === KeyType::Enter) {
             return [$this->withDetailBar($this->detailBar->focus())->withDetailFetched(), null];
         }
         if ($type === KeyType::Escape) {
@@ -538,7 +555,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         // f toggles hide-sleeping filter
         if ($ch === 'f') {
-            return [$this->withToggleHideSleeping()->withDetailRefreshed(), null];
+            return [$this->withToggleHideSleeping()->withDetailFollowingSelection(), null];
         }
 
         // r triggers async refresh
@@ -688,7 +705,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->cachedFilteredProcesslist = null;
         $clone->processlistProvider = $this->processlistProvider->refresh();
-        $clone = $clone->withDetailRefreshed();
+        $clone = $clone->withDetailFollowingSelection();
 
         // Trigger async refresh via AdminFetchStartedMsg - the App's existing
         // async machinery will re-fetch all admin data including processlist.

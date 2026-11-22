@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => '속성',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => '스레드 {id}의 {tab} 데이터가 없습니다',
+    'conn.detail_pending' => '스레드 {id}: [enter]를 눌러 {tab} 불러오기',
     'conn.vars_fail' => '서버 변수를 가져올 수 없습니다',
     'vars.load_fail' => '변수를 불러올 수 없습니다: {message}',
     'vars.unknown_error' => '알 수 없는 오류',

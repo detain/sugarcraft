@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => '属性',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => '线程 {id} 没有{tab}数据',
+    'conn.detail_pending' => '线程 {id}：按 [enter] 加载{tab}',
     'conn.vars_fail' => '无法获取服务器变量',
     'vars.load_fail' => '无法加载变量：{message}',
     'vars.unknown_error' => '未知错误',

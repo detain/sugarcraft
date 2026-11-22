@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => 'Attributen',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => 'Geen {tab}-gegevens voor thread {id}',
+    'conn.detail_pending' => 'Thread {id}: druk op [enter] om {tab} te laden',
     'conn.vars_fail' => 'Servervariabelen kunnen niet worden opgehaald',
     'vars.load_fail' => 'Variabelen kunnen niet worden geladen: {message}',
     'vars.unknown_error' => 'Onbekende fout',

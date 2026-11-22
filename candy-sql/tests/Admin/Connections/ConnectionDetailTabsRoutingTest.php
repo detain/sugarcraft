@@ -359,46 +359,57 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         }
     }
 
-    public function testAStatementTimeoutOnAnOpenPanelRefetchStillMovesFiltersAndRefreshes(): void
+    /**
+     * The repeatable keys (j/k/Up/Down, f, r) never read the server: a read
+     * there runs synchronously on the keystroke path, so a stalled server
+     * froze the TUI for the whole statement-timeout window per press. The
+     * fake throws on any prepare() from here on, so a read would escape
+     * update() and fail the test.
+     */
+    public function testTheNavigationKeysNeverReadTheServerSoAStalledServerCannotFreezeThem(): void
     {
         $db = new FakeDatabase();
         $db->setQueryResult([
             ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
             ['Id' => '8', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 2'],
         ]);
-        $open = static function () use ($db): ConnectionsPage {
-            [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
-            assert($page instanceof ConnectionsPage);
-            return $page;
-        };
-        $page = $open();
-        $this->assertNotNull($page->detailLines(), 'the panel is open on a healthy server');
+        [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
+        $this->assertInstanceOf(ConnectionsPage::class, $page);
+        $this->assertSame(['No Details data for thread 7'], $page->detailLines(), 'the panel is open on a healthy server');
 
-        // The server stalls: every refetch of the open panel times out.
+        // The server stalls: any read from here on times out in prepare().
         $db->setPrepareThrows(new StatementTimeoutException());
 
         [$down, $cmd] = $page->update(new KeyMsg(KeyType::Char, 'j'));
         $this->assertInstanceOf(ConnectionsPage::class, $down);
-        $this->assertSame(1, $down->selectedIndex(), 'j still moves the selection');
-        $this->assertNull($down->detailLines(), 'the failed read closes the panel');
-        $this->assertFalse($down->detailTabsFocused(), 'and hands the keyboard back');
         $this->assertNull($cmd);
+        $this->assertSame(1, $down->selectedIndex(), 'j moves the selection at once');
+        $this->assertSame([Lang::t('conn.detail_pending', ['tab' => 'Details', 'id' => '8'])], $down->detailLines(), 'the panel names the new thread without reading it');
+        $this->assertTrue($down->detailTabsFocused(), 'the bar keeps the keyboard');
 
         [$up] = $down->update(new KeyMsg(KeyType::Up));
-        $this->assertSame(0, $up->selectedIndex(), 'a closed panel reads nothing, so Up moves freely');
+        $this->assertSame(0, $up->selectedIndex());
+        $this->assertSame([Lang::t('conn.detail_pending', ['tab' => 'Details', 'id' => '7'])], $up->detailLines());
 
-        $db->setPrepareThrows(null);
-        $page = $open();
-        $db->setPrepareThrows(new StatementTimeoutException());
-        [$up] = $page->update(new KeyMsg(KeyType::Char, 'k'));
-        $this->assertNull($up->detailLines(), 'k on a stalled server closes the panel instead of throwing');
+        // A held key: every press lands, none reads.
+        $held = $page;
+        for ($i = 0; $i < 20; $i++) {
+            [$held] = $held->update(new KeyMsg(KeyType::Char, $i % 2 === 0 ? 'j' : 'k'));
+        }
+        $this->assertSame(0, $held->selectedIndex());
 
         [$filtered] = $page->update(new KeyMsg(KeyType::Char, 'f'));
-        $this->assertNull($filtered->detailLines(), 'f still toggles; the panel closes');
+        $this->assertSame(['No Details data for thread 7'], $filtered->detailLines(), 'f keeps the panel when the same thread stays selected');
 
         [$refreshed, $cmd] = $page->update(new KeyMsg(KeyType::Char, 'r'));
-        $this->assertNull($refreshed->detailLines(), 'r still refreshes; the panel closes');
+        $this->assertSame(['No Details data for thread 7'], $refreshed->detailLines(), 'r does not read the panel either');
         $this->assertNotNull($cmd, 'and the reload is still dispatched');
+
+        // Enter is the one-shot read for the thread the panel names.
+        $db->setPrepareThrows(null);
+        [$loaded] = $down->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 8'], $loaded->detailLines(), 'Enter on a focused bar reads the panel');
+        $this->assertTrue($loaded->detailTabsFocused());
     }
 
     // ── (d) each tab shows its own data for the selected thread ─────────────
@@ -450,7 +461,7 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $this->assertSame($closed, $plain($back->withDetailTab(ConnectionsPage::DETAIL_TAB_DETAILS)));
     }
 
-    public function testATabTheServerRefusesSaysSoInsteadOfShowingNothing(): void
+    public function testAnEmptyTabSaysSoInsteadOfShowingNothing(): void
     {
         $db = new FakeDatabase();
         $db->setQueryResult([
@@ -459,6 +470,32 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
 
         $this->assertSame(['No Details data for thread 7'], $page->detailLines());
+    }
+
+    /**
+     * A server refusal (no performance_schema SELECT right: 1142, or a
+     * missing privilege: 1227) is caught inside ConnectionDetailTabs and
+     * reads as "no data". The panel does not tell it apart from an empty
+     * answer today; this pins that it still says so and never crashes.
+     */
+    public function testARefusedTabReadShowsTheSameNoDataLineAsAnEmptyOne(): void
+    {
+        foreach ([1142, 1227] as $code) {
+            $db = new FakeDatabase();
+            $db->setQueryResult([
+                ['Id' => '7', 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'SELECT 1'],
+            ]);
+            $db->setPrepareThrows(new \PDOException('SELECT command denied to user for table threads', $code));
+
+            foreach ([[null, 'Details'], ['2', 'Attributes'], ['3', 'MDL']] as [$digit, $tab]) {
+                [$page] = ConnectionsPage::new(new ServerContext($db))->update(new KeyMsg(KeyType::Enter));
+                if ($digit !== null) {
+                    [$page] = $page->update(new KeyMsg(KeyType::Char, $digit));
+                }
+                $this->assertSame(["No {$tab} data for thread 7"], $page->detailLines(), "error {$code}, {$tab} tab");
+                $this->assertTrue($page->detailTabsFocused(), "error {$code}, {$tab} tab: the panel stays open");
+            }
+        }
     }
 
     // ── (e) leaving the Admin pane drops the bar's key claims ───────────────
@@ -650,7 +687,7 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         );
     }
 
-    public function testAReloadRefetchesTheOpenPanelForTheThreadNowUnderTheSelection(): void
+    public function testAReloadPointsTheOpenPanelAtTheThreadNowUnderTheSelectionWithoutReading(): void
     {
         $db = new FakeDatabase();
         $db->setQueryResult(self::threads(['7', '8']));
@@ -663,15 +700,21 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $db->setQueryResult(self::threads(['5', '7', '8']));
         [$reloaded, $cmd] = $page->update(new ReloadReportMsg());
         $this->assertNull($cmd);
-        $this->assertSame(['No Details data for thread 7'], $reloaded->detailLines(), 'the panel follows the reload');
+        $this->assertSame(
+            [Lang::t('conn.detail_pending', ['tab' => 'Details', 'id' => '7'])],
+            $reloaded->detailLines(),
+            'the panel follows the reload to thread 7 without a read on the poll tick',
+        );
 
-        // r swaps the provider too, so it refetches the open panel as well.
+        // r swaps the provider too, so the panel follows it the same way.
         $db->setQueryResult(self::threads(['9', '8']));
         [$refreshed] = $reloaded->update(new KeyMsg(KeyType::Char, 'r'));
-        $this->assertSame(['No Details data for thread 8'], $refreshed->detailLines());
+        $this->assertSame([Lang::t('conn.detail_pending', ['tab' => 'Details', 'id' => '8'])], $refreshed->detailLines());
+        [$loaded] = $refreshed->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 8'], $loaded->detailLines(), 'Enter reads it');
 
         // A closed panel stays closed across a reload.
-        [$closed] = $refreshed->update(new KeyMsg(KeyType::Escape));
+        [$closed] = $loaded->update(new KeyMsg(KeyType::Escape));
         [$closed] = $closed->update(new ReloadReportMsg());
         $this->assertNull($closed->detailLines());
     }
@@ -724,6 +767,8 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
             [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
         }
         $this->assertSame(7, $page->selectedIndex());
+        // Enter reads the full panel for the new thread, so it trims rows again.
+        [$page] = $page->update(new KeyMsg(KeyType::Enter));
 
         $view = $page->view();
         $this->assertCount($closed + 2, \explode("\n", $view), 'the page still fills its budget exactly');
@@ -749,7 +794,7 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $this->assertStringNotContainsString('thread-57-sql', $plain);
     }
 
-    public function testAReloadReadsThePanelOnlyForANewThreadAndSurvivesAFailedRead(): void
+    public function testAReloadNeverReadsThePanelSoAStalledServerCannotFreezeThePoll(): void
     {
         $db = new FakeDatabase();
         $db->setQueryResult(self::threads(['7', '8']));
@@ -758,22 +803,26 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         [$page] = $page->update(new KeyMsg(KeyType::Enter));
         $this->assertSame(['No Details data for thread 8'], $page->detailLines());
 
-        // Any read from here on fails with a non-PDO error.
+        // Any read from here on fails: a read on the poll path would escape update().
         $db->setPrepareThrows(new \RuntimeException('server gone'));
 
-        // A steady poll: the same thread stays under the selection, so no read.
+        // A steady poll: the same thread stays under the selection.
         [$steady] = $page->update(new ReloadReportMsg());
-        $this->assertSame(['No Details data for thread 8'], $steady->detailLines(), 'no read on an unchanged selection');
+        $this->assertSame(['No Details data for thread 8'], $steady->detailLines(), 'an unchanged selection keeps the panel');
         $this->assertTrue($steady->detailTabsFocused());
 
-        // A different thread lands under the selection: the read fails, the
-        // panel closes, and the processlist refresh is kept.
+        // A different thread lands under the selection: the panel names it,
+        // the bar keeps focus, and the processlist refresh is kept.
         $db->setQueryResult(self::threads(['5', '7', '8']));
         [$moved, $cmd] = $steady->update(new ReloadReportMsg());
         $this->assertNull($cmd);
-        $this->assertNull($moved->detailLines(), 'a failed read closes the panel instead of describing the wrong thread');
-        $this->assertFalse($moved->detailTabsFocused());
-        $this->assertCount(3, $moved->filteredProcesslist(), 'the processlist refresh survives the failed read');
+        $this->assertSame(
+            [Lang::t('conn.detail_pending', ['tab' => 'Details', 'id' => '7'])],
+            $moved->detailLines(),
+            'the panel never describes the wrong thread',
+        );
+        $this->assertTrue($moved->detailTabsFocused());
+        $this->assertCount(3, $moved->filteredProcesslist(), 'the processlist refresh lands');
 
         $db->setPrepareThrows(null);
         [$reopened] = $moved->update(new KeyMsg(KeyType::Enter));

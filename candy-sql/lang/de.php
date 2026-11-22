@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => 'Attribute',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => 'Keine {tab}-Daten für Thread {id}',
+    'conn.detail_pending' => 'Thread {id}: [enter] drücken, um {tab} zu laden',
     'conn.vars_fail' => 'Servervariablen konnten nicht abgerufen werden',
     'vars.load_fail' => 'Variablen konnten nicht geladen werden: {message}',
     'vars.unknown_error' => 'Unbekannter Fehler',

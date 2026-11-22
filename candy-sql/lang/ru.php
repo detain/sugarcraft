@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => 'Атрибуты',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => 'Нет данных {tab} для потока {id}',
+    'conn.detail_pending' => 'Поток {id}: нажмите [enter], чтобы загрузить {tab}',
     'conn.vars_fail' => 'Не удалось получить переменные сервера',
     'vars.load_fail' => 'Не удалось загрузить переменные: {message}',
     'vars.unknown_error' => 'Неизвестная ошибка',

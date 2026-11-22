@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => 'Atributos',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => 'Sin datos de {tab} para el hilo {id}',
+    'conn.detail_pending' => 'Hilo {id}: pulsa [enter] para cargar {tab}',
     'conn.vars_fail' => 'No se pudieron obtener las variables del servidor',
     'vars.load_fail' => 'No se pudieron cargar las variables: {message}',
     'vars.unknown_error' => 'Error desconocido',

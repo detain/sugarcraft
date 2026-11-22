@@ -201,6 +201,7 @@ return [
     'conn.tab_attributes' => '属性',
     'conn.tab_mdl' => 'MDL',
     'conn.detail_none' => 'スレッド {id} の{tab}データはありません',
+    'conn.detail_pending' => 'スレッド {id}: [enter] で{tab}を読み込む',
     'conn.vars_fail' => 'サーバー変数を取得できません',
     'vars.load_fail' => '変数を読み込めません: {message}',
     'vars.unknown_error' => '不明なエラー',
