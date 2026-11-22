@@ -33,25 +33,24 @@ use SugarCraft\Pty\Windows\Kernel32ConPty;
  * {@see UnsupportedPlatformException} naming `auto` as the forgiving mode —
  * the pin must never be answered with ConPTY semantics), `conpty` (forces the
  * Windows ConPTY backend; on a non-Windows host it throws
- * {@see UnsupportedPlatformException} naming the probe's reason),
- * `sidecar` / `pecl` (declared but not implemented in this release — selecting
- * either throws {@see UnsupportedPlatformException}), `auto` (same as
- * unset / default behaviour). Both hard pins refuse their contradicting
- * platform symmetrically.
+ * {@see UnsupportedPlatformException} naming the probe's reason), `auto`
+ * (same as unset / default behaviour). Any other value, including the
+ * never-implemented `sidecar` and `pecl` names that earlier releases
+ * reserved, throws \InvalidArgumentException. Both hard pins refuse their
+ * contradicting platform symmetrically.
  *
  * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
  */
 final class PtySystemFactory
 {
-    private const VALID_BACKENDS = ['posix-ffi', 'conpty', 'sidecar', 'pecl', 'auto'];
+    private const VALID_BACKENDS = ['posix-ffi', 'conpty', 'auto'];
 
     /**
      * Default factory entry point. Respects `SUGARCRAFT_PTY_BACKEND`
      * when set, otherwise falls back to platform-appropriate behaviour.
      *
-     * @throws UnsupportedPlatformException when an unreleased backend
-     *     (`sidecar`, `pecl`) is selected, or `conpty` is selected on
-     *     a host the ConPTY probe refuses.
+     * @throws UnsupportedPlatformException when a pinned backend
+     *     (`posix-ffi`, `conpty`) contradicts the host platform.
      * @throws \InvalidArgumentException    on an unrecognised value.
      */
     public static function new(): PtySystem
@@ -71,8 +70,7 @@ final class PtySystemFactory
      * values) without touching the environment or the host OS family.
      *
      * @throws UnsupportedPlatformException when the pin and the platform
-     *     contradict each other in either direction, or an unreleased
-     *     backend is selected.
+     *     contradict each other in either direction.
      * @throws \InvalidArgumentException    on an unrecognised value.
      */
     public static function resolveFor(string $backend, string $platform): PtySystem
@@ -101,10 +99,6 @@ final class PtySystemFactory
                 ?? 'the availability probe found no reason, yet this host is not Windows';
 
             throw UnsupportedPlatformException::forConPtyUnavailable($reason);
-        }
-
-        if ($backend === 'sidecar' || $backend === 'pecl') {
-            throw UnsupportedPlatformException::forDeferredBackend($backend);
         }
 
         throw new \InvalidArgumentException(\sprintf(

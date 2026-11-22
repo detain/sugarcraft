@@ -119,7 +119,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
     <tr><th scope="col">Variable</th><th scope="col">Read by</th><th scope="col">Effect</th></tr>
     </thead>
     <tbody>
-    <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>PtySystemFactory::new()</code></td><td>Backend to build: unset or <code>auto</code> (platform default), <code>posix-ffi</code> (hard pin, POSIX only), <code>conpty</code> (Windows only), <code>sidecar</code> and <code>pecl</code> (reserved, throw <code>UnsupportedPlatformException</code> in this release). Unrecognized values throw <code>InvalidArgumentException</code>.</td></tr>
+    <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>PtySystemFactory::new()</code></td><td>Backend to build: unset or <code>auto</code> (platform default), <code>posix-ffi</code> (hard pin, POSIX only), <code>conpty</code> (Windows only). Unrecognized values, including the removed <code>sidecar</code> and <code>pecl</code> names, throw <code>InvalidArgumentException</code>.</td></tr>
     <tr><td><code>SUGARCRAFT_LIBC</code></td><td><code>Libc</code></td><td>Path to the C library to bind FFI against, instead of the per-platform default (<code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS). Use it for musl, Alpine or custom sysroots.</td></tr>
     <tr><td><code>SUGARCRAFT_TERMIOS</code></td><td><code>TermiosFactory</code></td><td><code>stty</code> forces the subprocess termios backend instead of the FFI one. Any other value keeps the default.</td></tr>
     <tr><td><code>SUGAR_PTY_HANG_BUDGET</code></td><td><code>tests/Support/HangWatchdog</code></td><td>Test suite only. Seconds a single test may run before the watchdog turns a wedged test into a named failure. The built-in budget is 90 s.</td></tr>
@@ -182,7 +182,7 @@ while (!$decoder-&gt;isEof()) {
     <tr><td><em>(unset)</em> / <code>auto</code></td><td>Platform default: <code>posix-ffi</code> on POSIX, <code>conpty</code> on Windows</td></tr>
     <tr><td><code>posix-ffi</code></td><td><code>PosixPtySystem</code>, FFI into libc <code>posix_openpt</code> and friends. Selecting it on Windows throws <code>UnsupportedPlatformException</code>.</td></tr>
     <tr><td><code>conpty</code></td><td><code>Windows\ConPtySystem</code>, FFI into the kernel32 pseudo-console APIs (Windows 10 1809+, PHP 8.4+) through <code>Kernel32ConPty</code>. On other hosts it throws.</td></tr>
-    <tr><td><code>sidecar</code>, <code>pecl</code></td><td>Not implemented in this release. Both throw <code>UnsupportedPlatformException</code>.</td></tr>
+    <tr><td>anything else</td><td>Throws <code>InvalidArgumentException</code>. That includes <code>sidecar</code> and <code>pecl</code>, reserved by earlier releases and never built.</td></tr>
     </table>
     <h3 style="margin-top: 24px;">Termios backends</h3>
     <p><code>TermiosFactory</code> picks between <code>PosixTermios</code>, which uses FFI <code>tcgetattr</code>, <code>tcsetattr</code> and <code>cfmakeraw</code>, and <code>SttyTermios</code>, which shells out to <code>stty(1)</code>. <code>SUGARCRAFT_TERMIOS=stty</code> forces the second. Otherwise FFI is tried first, and any failure is logged before falling back.</p>

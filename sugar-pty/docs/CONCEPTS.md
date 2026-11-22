@@ -312,11 +312,10 @@ load-bearing for every spawn path, and not removal-scheduled.
 `PtySystemFactory::new()` reads the `SUGARCRAFT_PTY_BACKEND`
 environment variable before picking a backend. On the POSIX families
 this defaults to `posix-ffi`; on Windows the auto path resolves
-`conpty`. Setting it to `sidecar` or `pecl` causes an immediate
-`UnsupportedPlatformException` noting the backend is not
-implemented in this release. Unrecognised values throw `\InvalidArgumentException` listing
-the five valid options (`posix-ffi`, `conpty`, `sidecar`, `pecl`,
-`auto`).
+`conpty`. Unrecognised values throw `\InvalidArgumentException` listing
+the three valid options (`posix-ffi`, `conpty`, `auto`). The `sidecar`
+and `pecl` names that earlier releases reserved were never built and are
+now unrecognised too.
 
 This design keeps the door open for future backends without any
 call-site changes: application code always calls

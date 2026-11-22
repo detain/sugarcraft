@@ -52,7 +52,7 @@
     <h3 style="margin-top: 32px;">Configuration</h3>
     <table class="api-table">
       <tr><th>Env var</th><th>Values</th><th>Effect</th></tr>
-      <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>posix-ffi</code> (default), <code>auto</code>, <code>sidecar</code>, <code>pecl</code></td><td>Selects the PTY backend. <code>sidecar</code> and <code>pecl</code> throw <code>UnsupportedPlatformException</code> — deferred to phase 12.</td></tr>
+      <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>posix-ffi</code> (default), <code>auto</code>, <code>conpty</code></td><td>Selects the PTY backend. Any other value, including the removed <code>sidecar</code> and <code>pecl</code> names, throws <code>InvalidArgumentException</code>.</td></tr>
       <tr><td><code>SUGARCRAFT_LIBC</code></td><td>Path to libc shared object</td><td>Override the libc path for FFI. Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Useful for musl/Alpine or custom sysroots.</td></tr>
     </table>
 
@@ -79,7 +79,7 @@
 
     <h3 style="margin-top: 32px;">Failure modes</h3>
     <ul>
-      <li><strong><code>UnsupportedPlatformException</code></strong> — Thrown by <code>PtySystemFactory::default()</code> on Windows (v1 is POSIX-only), or when <code>SUGARCRAFT_PTY_BACKEND</code> is set to <code>sidecar</code> or <code>pecl</code> (not yet implemented).</li>
+      <li><strong><code>UnsupportedPlatformException</code></strong> — Thrown by <code>PtySystemFactory::default()</code> on Windows (v1 is POSIX-only), or when a pinned <code>SUGARCRAFT_PTY_BACKEND</code> (<code>posix-ffi</code>, <code>conpty</code>) contradicts the host platform.</li>
       <li><strong><code>InvalidArgumentException</code></strong> — Thrown when <code>SUGARCRAFT_PTY_BACKEND</code> is set to an unrecognised value.</li>
       <li><strong>FFI load failure</strong> — If <code>ext-ffi</code> is not available, or the libc path is wrong, the FFI <code>cdef()</code> call throws. Ensure <code>ext-ffi</code> is loaded and <code>SUGARCRAFT_LIBC</code> points to a valid file on non-standard systems.</li>
       <li><strong>Child deadlock</strong> — If a child process writes more than the kernel pipe buffer (~64 KiB) and the parent is not reading, the child blocks on write and the parent deadlocks waiting for the child to exit. Use non-blocking reads (<code>setBlocking(false)</code>) or <code>PosixPump</code> to avoid this.</li>

@@ -146,32 +146,29 @@ final class PtySystemFactoryTest extends TestCase
         }
     }
 
-    public function testBackendSidecarThrowsUnsupportedPlatformExceptionWithDeferredMessage(): void
+    /**
+     * P1-8e: `sidecar` and `pecl` were reserved names that only ever threw.
+     * They are no longer recognised, so they take the unknown-value path.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('removedBackendProvider')]
+    public function testRemovedBackendNamesAreUnrecognised(string $backend): void
     {
-        \putenv('SUGARCRAFT_PTY_BACKEND=sidecar');
+        \putenv('SUGARCRAFT_PTY_BACKEND=' . $backend);
         try {
             PtySystemFactory::new();
-            $this->fail('Expected UnsupportedPlatformException not thrown');
-        } catch (UnsupportedPlatformException $e) {
-            $this->assertStringContainsString('reserved for a future release', $e->getMessage());
-            $this->assertStringContainsString('sidecar', $e->getMessage());
+            $this->fail('Expected InvalidArgumentException not thrown');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString("Unknown SUGARCRAFT_PTY_BACKEND value '{$backend}'", $e->getMessage());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }
     }
 
-    public function testBackendPechThrowsUnsupportedPlatformExceptionWithDeferredMessage(): void
+    /** @return iterable<string, array{string}> */
+    public static function removedBackendProvider(): iterable
     {
-        \putenv('SUGARCRAFT_PTY_BACKEND=pecl');
-        try {
-            PtySystemFactory::new();
-            $this->fail('Expected UnsupportedPlatformException not thrown');
-        } catch (UnsupportedPlatformException $e) {
-            $this->assertStringContainsString('reserved for a future release', $e->getMessage());
-            $this->assertStringContainsString('pecl', $e->getMessage());
-        } finally {
-            \putenv('SUGARCRAFT_PTY_BACKEND');
-        }
+        yield 'sidecar' => ['sidecar'];
+        yield 'pecl' => ['pecl'];
     }
 
     public function testUnrecognisedBackendThrowsInvalidArgumentException(): void
@@ -184,9 +181,9 @@ final class PtySystemFactoryTest extends TestCase
             $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
             $this->assertStringContainsString('posix-ffi', $e->getMessage());
             $this->assertStringContainsString('conpty', $e->getMessage());
-            $this->assertStringContainsString('sidecar', $e->getMessage());
-            $this->assertStringContainsString('pecl', $e->getMessage());
             $this->assertStringContainsString('auto', $e->getMessage());
+            $this->assertStringNotContainsString('sidecar', $e->getMessage());
+            $this->assertStringNotContainsString('pecl', $e->getMessage());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }

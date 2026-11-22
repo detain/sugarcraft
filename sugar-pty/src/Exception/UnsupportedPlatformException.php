@@ -33,20 +33,6 @@ final class UnsupportedPlatformException extends PtyException
     }
 
     /**
-     * Raised when a backend that is not yet implemented is selected
-     * via `SUGARCRAFT_PTY_BACKEND`.
-     */
-    public static function forDeferredBackend(string $backend): self
-    {
-        return new self(\sprintf(
-            'SUGARCRAFT_PTY_BACKEND=%s is not implemented in v1; '
-            . 'this backend is reserved for a future release. '
-            . 'Use SUGARCRAFT_PTY_BACKEND=posix-ffi (default) for now.',
-            $backend,
-        ));
-    }
-
-    /**
      * Raised when the Windows ConPTY backend is asked for on a host where it
      * cannot work, carrying the reason the availability probe found.
      *

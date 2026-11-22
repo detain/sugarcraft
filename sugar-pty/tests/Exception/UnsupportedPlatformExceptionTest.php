@@ -55,25 +55,11 @@ final class UnsupportedPlatformExceptionTest extends TestCase
         $this->assertStringContainsString('Darwin', $e->getMessage());
     }
 
-    public function testForDeferredBackend(): void
+    public function testTheDeferredBackendFactoryIsRemoved(): void
     {
-        $e = UnsupportedPlatformException::forDeferredBackend('future-ffi');
-        $this->assertStringContainsString('future-ffi', $e->getMessage());
-        $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
-        $this->assertStringContainsString('reserved for a future release', $e->getMessage());
-        $this->assertStringContainsString('posix-ffi', $e->getMessage());
-    }
-
-    public function testForDeferredBackendSidecar(): void
-    {
-        $e = UnsupportedPlatformException::forDeferredBackend('sidecar');
-        $this->assertStringContainsString('sidecar', $e->getMessage());
-    }
-
-    public function testForDeferredBackendPech(): void
-    {
-        $e = UnsupportedPlatformException::forDeferredBackend('pecl');
-        $this->assertStringContainsString('pecl', $e->getMessage());
+        // P1-8e: the sidecar and pecl backends were declared and never
+        // built; with them gone nothing raises a "deferred backend" refusal.
+        $this->assertFalse(\method_exists(UnsupportedPlatformException::class, 'forDeferredBackend'));
     }
 
     /**
