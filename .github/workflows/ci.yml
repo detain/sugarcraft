@@ -605,32 +605,33 @@ jobs:
             exit 1
           fi
 
-      # E671 (2026-09-10): the candy-code cell shards through
-      # scripts/parallel-tests.sh instead of the 53.2-minute serial run
-      # (RT-26 re-derivation 2026-11-12: the sum of the committed durations
-      # table below) — the suite was the wall-clock critical path of every
-      # push that touches it. K equals the runner core count,
-      # capped at 4: ubuntu-latest is 2 vCPU (free tier) / 4 vCPU (paid), and
-      # MEASURED contention discipline says never oversubscribe — at 2x
-      # (K=8 on 4 cpus) the suite grew 1 wall-clock-race failure, at 4x it grew
-      # 4 across 4 files (ProcessExecutorTest lease reap, idle-ceiling and
-      # Lsp stdin-wedge; production races, tracked as a seam — never hide them
-      # by raising the timeout). CI never runs a serial baseline for durations:
-      # it shards from the committed scripts/parallel-tests-durations.tsv and
-      # the conservation gate compares the per-shard junit sum against the
-      # PINNED candy-code/tests/Config/Support/suite-figure.json. Fail-closed:
-      # a test file absent from the manifest runs in zero shards, so shard-sum
-      # tests < figure tests -> red; and the figure itself cannot rot, because
-      # ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
+      # The candy-code cell runs under ParaTest through scripts/paratest.sh
+      # (2026-11-21, paratest round 2; E671's scripts/parallel-tests.sh shards
+      # ran it before, and that script stays for local use). Serially the
+      # suite is the sum of the committed durations table below, the
+      # wall-clock critical path of every push that touches it. ParaTest
+      # hands each free worker the next file from a longest-first queue built
+      # from scripts/parallel-tests-durations.tsv, so the work evens out
+      # across workers as the run goes instead of being fixed up front, and a
+      # file the table does not list is queued first, as if slow, never
+      # dropped. K equals the runner core count, capped at 4: ubuntu-latest
+      # is 2 vCPU (free tier) / 4 vCPU (paid), and MEASURED contention
+      # discipline says never oversubscribe: at 2x (K=8 on 4 cpus) the suite
+      # grew 1 wall-clock-race failure, at 4x it grew 4 across 4 files
+      # (ProcessExecutorTest lease reap, idle-ceiling and Lsp stdin-wedge;
+      # production races, tracked as a seam; never hide them by raising the
+      # timeout). The conservation check (--against-json, run by
+      # scripts/paratest-conservation.php) compares the run's junit totals
+      # with the PINNED candy-code/tests/Config/Support/suite-figure.json, so
+      # a run that lost tests (a worker that died) goes red. The figure
+      # cannot rot: ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
       # re-derives `tests` LIVE from `phpunit --list-tests` inside this very
-      # suite at every merge. The double lock means adding tests without
-      # refreshing BOTH artifacts cannot go green. --timeout 2400 per shard:
-      # the suite outgrew 600, and that era's numbers (two shards killed at
-      # exactly 600s while still passing, 2026-10-06) are history. RT-26
-      # (2026-11-12) re-put the tuning figures from the committed durations
-      # table. THE WALL IS FLOOR-BOUND: no K ever beats the slowest single
-      # file, and the LPT K=4 MAX BUCKET is what --timeout must clear, not
-      # the average shard.
+      # suite at every merge, so adding tests without refreshing the figure
+      # cannot go green. --timeout 2400 bounds the whole run (timeout(1)
+      # around paratest). THE WALL IS FLOOR-BOUND: no K ever beats the
+      # slowest single file, and the LPT K=4 MAX BUCKET (the busiest worker
+      # when files go longest-first to whichever worker is free) is what
+      # --timeout must clear.
       # TSV-PIN tests=33162 files=2128 serial_sum=3540.7 floor=302.5 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=885.2 timeout_test=2400
       # Every value on that line is re-derived from the committed durations
       # table and suite-figure.json by tools/tests/ParallelShardTuningTest.php
@@ -657,22 +658,22 @@ jobs:
           sudo apt-get install -y -qq ripgrep
           rg --version
 
-      - name: Run tests (candy-code — sharded, E671)
+      - name: Run tests (candy-code — ParaTest)
         if: matrix.lib == 'candy-code'
         run: |
           set -euo pipefail
           CORES=$(nproc)
           K=$CORES
           if [ "$K" -gt 4 ]; then K=4; fi
-          echo "::notice::candy-code sharded at K=$K on $CORES-core ubuntu-latest (E671)"
-          OUT="${RUNNER_TEMP:-/tmp}/parallel-tests"
+          echo "::notice::candy-code under ParaTest at K=$K on $CORES-core ubuntu-latest"
+          OUT="${RUNNER_TEMP:-/tmp}/paratest"
           RC=0
-          bash scripts/parallel-tests.sh "$K" \
+          bash scripts/paratest.sh -p "$K" \
             --durations scripts/parallel-tests-durations.tsv \
             --against-json candy-code/tests/Config/Support/suite-figure.json \
-            --out "$OUT" --timeout 2400 || RC=$?
+            --out "$OUT" --print-failures --timeout 2400 || RC=$?
           if [ "$RC" -ne 0 ]; then
-            echo "sharded run failed rc=$RC (per-shard tails are printed inline by the harness)"
+            echo "ParaTest run failed rc=$RC (failure details and the conservation verdict are printed above)"
             exit "$RC"
           fi
 
@@ -1141,6 +1142,14 @@ jobs:
       # The engine is still pcov (setup-php above); only the report SHAPE
       # (K files merged) changed, and merge-clover.php refuses missing or
       # malformed shard reports fail-closed.
+      # Not on ParaTest, unlike the test job (2026-11-21, paratest round 2):
+      # ParaTest merges coverage in its parent process, which loads every
+      # worker's serialized .cov whole, and each .cov holds every covering
+      # test id per line, so the total is set by the suite, not by K.
+      # Measured at K=32: 1.74 GB of .cov, parent peak 3.17 GB RSS, and
+      # under phpunit.xml's 1G memory_limit the parent died in its coverage
+      # merge. The per-shard clovers merge-clover.php unions are small, so
+      # this path keeps the 1G guard.
       - name: Install ripgrep (candy-code)
         if: matrix.lib == 'candy-code'
         # Same void as the test job: without rg the GrepEngineDifferential

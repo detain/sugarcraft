@@ -41,10 +41,27 @@ makes the renderer probe answer your window instead of the documented
 fallbacks, and several pins assert the fallback. Plain pipes (the shape CI
 and this guide use) answer the pinned sizes.
 
-Full-suite serial runs are slow by design; the sharded runner exists so you
-never reach for them casually. The script and every path in its arguments are
-MONOREPO-ROOT relatives, so invoke both lines from the repository root, not
-from `candy-code/`:
+Full-suite serial runs are slow by design; the parallel runners exist so you
+never reach for them casually. CI's test cell runs the suite under ParaTest
+through `scripts/paratest.sh`, so that is the run to reproduce a CI test
+result with (from the repository root, since the paths are root-relative):
+
+```sh
+scripts/paratest.sh --out /tmp/pt-$$                     # K = min(suggested, nproc / 2)
+scripts/paratest.sh -p 4 --durations scripts/parallel-tests-durations.tsv \
+  --against-json candy-code/tests/Config/Support/suite-figure.json --out /tmp/pt-$$   # the CI shape
+```
+
+It queues files longest-first from the last run's junit (or the committed
+durations table), and `--against-json` fails the run when its totals differ
+from the pinned suite figure. `--help` lists the rest.
+
+CI's coverage cell uses the shard runner instead (`--clover`, the shard
+clovers merged by `scripts/merge-clover.php`): ParaTest merges coverage in its
+parent process, which needs about 3 GB for this suite. It works for local
+runs too. The script and every path in its arguments are MONOREPO-ROOT
+relatives, so invoke both lines from the repository root, not from
+`candy-code/`:
 
 ```sh
 scripts/parallel-tests.sh                       # K = min(nproc, 24), unique --out REQUIRED in practice
@@ -67,9 +84,10 @@ red:
   <junit.xml>` from `candy-code/`. The README headline carries the same
   numbers; update both from the same run.
 - `scripts/parallel-tests-durations.tsv` — one row per test file. A new test
-  file without a row runs in ZERO shards: the sharded suite simply does not
-  see it. Regenerate from a green serial baseline (`--junit <xml> --out
-  <dir>` writes a `durations.tsv` into the out directory; copy it over).
+  file without a row runs in ZERO shards: the sharded suite (CI's coverage
+  cell) simply does not see it, while ParaTest runs it first, as if slow.
+  Regenerate from a green serial baseline (`--junit <xml> --out <dir>`
+  writes a `durations.tsv` into the out directory; copy it over).
 - The README headline figure — `ReadmeSuiteFigureDriftTest` compares
   headline, artifact and live enumeration; all three must agree.
 

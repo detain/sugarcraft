@@ -5,7 +5,13 @@
 # Usage:
 #   scripts/paratest.sh [--lib <slug>] [-p <K>] [--durations <junit.xml|tsv|none>]
 #                       [--out <dir>] [--timeout <secs>] [--no-prelude]
+#                       [--against-json <suite-figure.json>] [--print-failures]
 #                       [--config-only] [-- <extra paratest args>]
+#
+#   CI's candy-code test cell runs through this script
+#   (.github/workflows/ci.yml). The coverage cell stays on
+#   scripts/parallel-tests.sh --clover + scripts/merge-clover.php: ParaTest
+#   merges coverage in its parent, which needs ~3 GB for this suite.
 #
 #   --lib         lib directory slug (default: candy-code). Needs
 #                 <slug>/vendor/bin/paratest (brianium/paratest ~7.4.9, the last
@@ -33,6 +39,14 @@
 #                 forensics), junit.xml and the result cache.
 #   --timeout     whole-run guard in seconds, via timeout(1) (default: 1800)
 #   --no-prelude  run the stock worker loop (for comparisons only)
+#   --against-json  after the run, check the junit totals against a pinned
+#                 suite-figure.json with scripts/paratest-conservation.php
+#                 (tests, assertions, failures, skipped equal; errors 0). A
+#                 miss turns an exit 0 into 1. CI passes
+#                 candy-code/tests/Config/Support/suite-figure.json.
+#   --print-failures  on a non-zero exit, print paratest.log from its first
+#                 "There was/were N ..." line (at most 4000 lines). CI keeps
+#                 no --out directory, so this is the only copy it shows.
 #   --config-only write <out>/phpunit-lpt.xml and print the K advice; run nothing
 #   --            everything after it goes to paratest verbatim
 #                 (e.g. -- --max-batch-size 1, -- --order-by=random --random-order-seed 7)
@@ -54,7 +68,8 @@
 #    LINES/COLUMNS are dropped so terminal size cannot leak in, stdin is
 #    /dev/null, and colors are off.
 #
-# Exit status is paratest's (124 when --timeout fires).
+# Exit status is paratest's (124 when --timeout fires), or 1 when paratest
+# passed and the --against-json check did not.
 set -u
 
 usage() {
@@ -73,6 +88,8 @@ OUT=""
 RUN_TIMEOUT=1800
 PRELUDE=1
 CONFIG_ONLY=0
+AGAINST_JSON=""
+PRINT_FAILURES=0
 EXTRA=()
 
 while [ $# -gt 0 ]; do
@@ -99,6 +116,14 @@ while [ $# -gt 0 ]; do
 		;;
 	--no-prelude)
 		PRELUDE=0
+		shift
+		;;
+	--against-json)
+		AGAINST_JSON=${2:?--against-json needs a file}
+		shift 2
+		;;
+	--print-failures)
+		PRINT_FAILURES=1
 		shift
 		;;
 	--config-only)
@@ -139,6 +164,14 @@ case "$K" in
 	fi
 	;;
 esac
+
+if [ -n "$AGAINST_JSON" ]; then
+	if [ ! -s "$AGAINST_JSON" ]; then
+		echo "paratest.sh: missing suite figure: $AGAINST_JSON" >&2
+		exit 2
+	fi
+	AGAINST_JSON=$(cd "$(dirname "$AGAINST_JSON")" && pwd)/$(basename "$AGAINST_JSON")
+fi
 
 OUT=${OUT:-${TMPDIR:-/tmp}/paratest-$LIB}
 mkdir -p "$OUT" || exit 1
@@ -185,6 +218,11 @@ if [ "$CONFIG_ONLY" = 1 ]; then
 	exit 0
 fi
 
+# A junit left by an earlier run in this --out would let a run that dies
+# before writing its own pass the conservation check. The default --durations
+# already moved it aside above; an explicit one has been read by now.
+rm -f "$OUT/junit.xml"
+
 PASSTHRU=()
 if [ "$PRELUDE" = 1 ]; then
 	PASSTHRU=("--passthru-php='-d' 'auto_prepend_file=$REPO/scripts/paratest-worker-prelude.php'")
@@ -205,4 +243,16 @@ END=$(date +%s.%N)
 grep -E '^(Time: |There (was|were) [0-9]+ |OK |OK, |Tests: |FAILURES!|ERRORS!|No tests executed)' "$OUT/paratest.log"
 awk -v s="$START" -v e="$END" -v st="$STATUS" -v f="$OUT/paratest.log" \
 	'BEGIN { printf "paratest.sh: exit %d, wall %.1fs, log %s\n", st, e - s, f }'
+
+if [ "$STATUS" -ne 0 ] && [ "$PRINT_FAILURES" = 1 ]; then
+	echo "== failure details (from $OUT/paratest.log) =="
+	sed -n '/^There \(was\|were\) [0-9]/,$p' "$OUT/paratest.log" | head -n 4000
+fi
+
+if [ -n "$AGAINST_JSON" ]; then
+	echo "== conservation (junit vs pinned suite figure) =="
+	if ! php "$REPO/scripts/paratest-conservation.php" "$OUT/junit.xml" "$AGAINST_JSON"; then
+		[ "$STATUS" -ne 0 ] || STATUS=1
+	fi
+fi
 exit "$STATUS"

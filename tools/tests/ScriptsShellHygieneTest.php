@@ -45,8 +45,8 @@ final class ScriptsShellHygieneTest extends TestCase
     private const ROSTER_WITH_REASON = [
         'bootstrap-org-repos.sh' => 'one-shot org provisioning; data shape guarded by ProvisioningRosterTest',
         'packagist.sh' => 'manual release helper (create/update node mirror entries)',
-        'parallel-tests.sh' => 'the candy-code shard runner; semantics guarded by the trio + RT-26 tuning pins',
-        'paratest.sh' => 'local ParaTest runner (LPT file order + worker stdin prelude); not wired into CI while paratest is not in require-dev',
+        'parallel-tests.sh' => 'the candy-code shard runner the CI coverage cell uses (and local runs); semantics guarded by the trio + RT-26 tuning pins',
+        'paratest.sh' => 'the ParaTest runner the candy-code CI test cell uses (LPT file order, worker stdin prelude, --against-json conservation); conservation guarded by ParatestConservationTest',
         'rename-remote.sh' => 'one-shot remote rename helper',
         'set-org-default-master.sh' => 'one-shot default-branch flip; data shape guarded by ProvisioningRosterTest',
         'sync-sugarcraft-local.sh' => 'manual sync-sugarcraft runner with no CI gate',
@@ -83,7 +83,7 @@ final class ScriptsShellHygieneTest extends TestCase
         $this->assertSame(
             [],
             $unparsed,
-            'These shell scripts do not parse — CI shards through parallel-tests.sh and any of '
+            'These shell scripts do not parse — CI runs candy-code through paratest.sh and parallel-tests.sh, and any of '
             . 'them can be the next step anyone runs; fix the syntax, do not exempt the file.',
         );
     }

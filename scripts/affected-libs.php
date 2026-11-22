@@ -93,6 +93,14 @@ const FORCE_ALL_FILES = [
     // widening intuition goes here so it is load-bearing, not tribal.
     'scripts/refresh-deps.php',
     'scripts/parallel-tests.sh',
+    // The ParaTest runner CI's candy-code test cell goes through, and the three
+    // scripts it calls (2026-11-21): the same reason as parallel-tests.sh,
+    // a wrong schedule, worker loop or conservation verdict only shows in
+    // that lib's leg.
+    'scripts/paratest.sh',
+    'scripts/paratest-lpt-config.php',
+    'scripts/paratest-worker-prelude.php',
+    'scripts/paratest-conservation.php',
     'tools/check-path-repos.php',
     'scripts/pin-siblings.php',
 ];
