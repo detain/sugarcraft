@@ -160,7 +160,8 @@ final class TextSelectionSugarMouseTest extends TestCase
 
     // =========================================================================
     // The pre-rewire 0-based geometry, transcribed from TextSelection as it
-    // stood before it delegated to sugar-mouse. Reference only.
+    // stood before it delegated to sugar-mouse, plus the one later deliberate
+    // fix noted in legacyExtract(). Reference only.
     // =========================================================================
 
     /**
@@ -236,7 +237,15 @@ final class TextSelectionSugarMouseTest extends TestCase
         for ($row = $startRow; $row <= $endRow; $row++) {
             [$from, $to] = self::legacySpan($sel, $row) ?? [0, -1];
             $plain = Ansi::strip($lines[$row] ?? '');
-            $rows[] = rtrim(Width::takeAnsi(Width::dropAnsi($plain, $from), $to - $from + 1), " \t");
+            $cells = $to - $from + 1;
+            // The one deliberate change since the rewire (sugar-mouse
+            // d43be6353f): a wide glyph straddling the span's left edge is
+            // dropped whole, and its covered half comes off the take budget,
+            // so a span starting on its second half no longer copies the next
+            // glyph past the span's end.
+            $rest = Width::dropAnsi($plain, $from);
+            $lead = min($cells, max(0, Width::string($plain) - $from - Width::string($rest)));
+            $rows[] = rtrim(Width::takeAnsi($rest, $cells - $lead), " \t");
         }
         while ($rows !== [] && trim((string) $rows[0]) === '') {
             array_shift($rows);
