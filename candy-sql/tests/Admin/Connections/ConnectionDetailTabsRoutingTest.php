@@ -16,9 +16,11 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Mouse\Scan;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Sql\Admin\AdminPane;
+use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
 use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 use SugarCraft\Sql\Admin\ServerContext;
+use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AdminState;
@@ -26,7 +28,9 @@ use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
 use SugarCraft\Sql\App\MouseScopedApp;
 use SugarCraft\Sql\App\UiState;
+use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Lang;
 use SugarCraft\Sql\Pane;
 use SugarCraft\Sql\Renderer;
@@ -864,5 +868,140 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $mdl = $open->withDetailTab(ConnectionsPage::DETAIL_TAB_MDL);
         $this->assertSame(ConnectionsPage::DETAIL_TAB_MDL, $mdl->detailTab());
         $this->assertSame(['No MDL data for thread 7'], $mdl->detailLines(), 'the panel follows the bar');
+    }
+
+    // ── (c) a focused bar the page does not paint claims no key ─────────────
+
+    /**
+     * PageBase::view() shows the loading screen without calling build(), so
+     * the bar is hidden: a focused bar there must not keep Tab from the
+     * pane cycle the status line advertises ('Tab:cycle'), nor the digits
+     * from the page picker.
+     */
+    public function testAFocusedBarBehindTheLoadingScreenClaimsNoKeyAndTabCyclesThePane(): void
+    {
+        $db = new FakeDatabase();
+        $loading = new AsyncCachingServerContext(new ServerContext($db, Flavor::MySQL), null, null, true);
+        [$page] = ConnectionsPage::new($loading)->update(new KeyMsg(KeyType::Enter));
+        $this->assertInstanceOf(ConnectionsPage::class, $page);
+        $this->assertTrue($page->detailTabsFocused());
+
+        $view = self::plain($page->view());
+        $this->assertStringContainsString(Lang::t('page.loading'), $view, 'the loading screen is up');
+        $this->assertStringNotContainsString('Details', $view, 'the bar is not painted');
+        $this->assertNoTabKeyClaimed($page);
+
+        $this->assertTabCyclesThePaneAndADigitPicksAPage($db, $page);
+    }
+
+    /**
+     * The error screen hides the bar the same way: a bar focused while the
+     * page was healthy stops claiming once validate() fails, and claims
+     * again once the page paints it again.
+     */
+    public function testAFocusedBarBehindTheErrorScreenClaimsNoKeyAndTabCyclesThePane(): void
+    {
+        $db = new FakeDatabase();
+        $context = new class (new ServerContext($db, Flavor::MySQL)) implements ServerContextInterface {
+            public bool $failing = false;
+
+            public function __construct(private readonly ServerContextInterface $inner) {}
+
+            public function connection(): DatabaseInterface
+            {
+                return $this->inner->connection();
+            }
+
+            public function serverVariables(): array
+            {
+                if ($this->failing) {
+                    throw new \RuntimeException('server gone');
+                }
+                return $this->inner->serverVariables();
+            }
+
+            public function statusVariables(): array
+            {
+                return $this->inner->statusVariables();
+            }
+
+            public function statusVariablesTs(): float
+            {
+                return $this->inner->statusVariablesTs();
+            }
+
+            public function plugins(): array
+            {
+                return $this->inner->plugins();
+            }
+
+            public function version(): ServerVersion
+            {
+                return $this->inner->version();
+            }
+
+            public function flavor(): Flavor
+            {
+                return $this->inner->flavor();
+            }
+
+            public function versionString(): string
+            {
+                return $this->inner->versionString();
+            }
+
+            public function password(): string
+            {
+                return $this->inner->password();
+            }
+
+            public function wasReset(): bool
+            {
+                return $this->inner->wasReset();
+            }
+
+            public function refresh(): void
+            {
+                $this->inner->refresh();
+            }
+        };
+        [$page] = ConnectionsPage::new($context)->update(new KeyMsg(KeyType::Enter));
+        $this->assertInstanceOf(ConnectionsPage::class, $page);
+        $this->assertStringContainsString('Details', self::plain($page->view()), 'the healthy page paints the bar');
+        $this->assertTrue($page->claimsKey(new KeyMsg(KeyType::Tab)), 'a painted focused bar claims Tab');
+
+        $context->failing = true;
+        $view = self::plain($page->view());
+        $this->assertStringContainsString(Lang::t('conn.vars_fail'), $view, 'the error screen is up');
+        $this->assertStringNotContainsString('Details', $view, 'the bar is not painted');
+        $this->assertTrue($page->detailTabsFocused(), 'the bar keeps its focus behind the error screen');
+        $this->assertNoTabKeyClaimed($page);
+
+        $this->assertTabCyclesThePaneAndADigitPicksAPage($db, $page);
+
+        $context->failing = false;
+        $this->assertTrue($page->claimsKey(new KeyMsg(KeyType::Tab)), 'the repainted bar claims Tab again');
+    }
+
+    private function assertNoTabKeyClaimed(ConnectionsPage $page): void
+    {
+        foreach ([new KeyMsg(KeyType::Tab), new KeyMsg(KeyType::Tab, shift: true), new KeyMsg(KeyType::Char, '2')] as $key) {
+            $this->assertFalse($page->claimsKey($key), "{$key->string()}: a hidden bar claims nothing");
+        }
+    }
+
+    private function assertTabCyclesThePaneAndADigitPicksAPage(FakeDatabase $db, ConnectionsPage $page): void
+    {
+        $a = new App(
+            ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)),
+            ui: new UiState(pane: Pane::Admin),
+            admin: new AdminState(page: $page),
+        );
+
+        [$tab,] = $a->update(new KeyMsg(KeyType::Tab));
+        $this->assertNotSame(Pane::Admin, $tab->ui->pane, 'Tab cycles the pane');
+
+        [$digit,] = $a->update(new KeyMsg(KeyType::Char, '2'));
+        $this->assertSame(AdminPane::Variables, $digit->admin->pane, 'the page picker keeps 2');
     }
 }

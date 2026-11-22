@@ -305,13 +305,24 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * While the detail-tab bar is focused the page claims the keys that
      * drive it — Tab, Shift+Tab and the digits 1-3 — so App routes them
      * here instead of cycling panes or picking an admin page. A blurred
-     * bar claims nothing.
+     * bar claims nothing, and neither does a focused bar the page does not
+     * paint: while {@see view()} shows the loading or error screen the bar
+     * is hidden, so Tab stays the pane cycle the status line advertises.
      */
     public function claimsKey(KeyMsg $msg): bool
     {
         if (!$this->detailBar->focused || $this->pendingKill !== null) {
             return false;
         }
+        if (!$this->claimableKey($msg)) {
+            return false;
+        }
+        return $this->paintsBody();
+    }
+
+    /** Tab, Shift+Tab or a detail-tab digit: the keys a focused bar binds. */
+    private function claimableKey(KeyMsg $msg): bool
+    {
         if ($msg->type === KeyType::Tab) {
             return true;
         }

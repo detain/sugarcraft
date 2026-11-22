@@ -127,17 +127,38 @@ abstract class PageBase implements Model
 
     public function view(): string
     {
-        // While the first async fetch is in flight and nothing is cached yet,
-        // show a loading screen instead of failing validate() into "Error:".
-        if ($this->context instanceof AsyncCachingServerContext
-            && $this->context->isLoading()
-            && !$this->context->hasCachedData()) {
+        if ($this->showsLoadingScreen()) {
             return $this->loadingScreen();
         }
         if (!$this->validate()) {
             return $this->errorScreen();
         }
         return $this->build();
+    }
+
+    /**
+     * Whether {@see view()} paints the page body ({@see build()}) rather
+     * than the loading or error screen.
+     *
+     * A page that claims keys for a component of its body asks this first:
+     * a component the frame does not paint must not take keys from the
+     * app (the user cannot see what they would drive).
+     */
+    protected function paintsBody(): bool
+    {
+        return !$this->showsLoadingScreen() && $this->validate();
+    }
+
+    /**
+     * While the first async fetch is in flight and nothing is cached yet,
+     * {@see view()} shows a loading screen instead of failing validate()
+     * into "Error:".
+     */
+    private function showsLoadingScreen(): bool
+    {
+        return $this->context instanceof AsyncCachingServerContext
+            && $this->context->isLoading()
+            && !$this->context->hasCachedData();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
