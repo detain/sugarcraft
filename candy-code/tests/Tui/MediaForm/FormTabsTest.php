@@ -28,6 +28,14 @@ final class FormTabsTest extends TestCase
     private const SEP = "\e[38;2;20;20;20m│\e[0m";
     private const ACTIVE = "\e[1;7m\e[38;2;112;145;245m";
     private const INACTIVE = "\e[38;2;197;201;212m";
+    private const FRAME_LEFT = "\e[38;2;112;145;245m│\e[0m ";
+    private const FRAME_RIGHT = "\e[38;2;112;145;245m│\e[0m";
+    private const FIRST_WINDOW_ZONES = [
+        [1, 2, 10, 'media:tab:0'],
+        [1, 11, 30, 'media:tab:1'],
+        [1, 31, 38, 'media:tab:2'],
+        [1, 39, 51, 'media:tab:3'],
+    ];
 
     public function testEmptyLabelsOrNoWidthDrawNothing(): void
     {
@@ -193,15 +201,6 @@ final class FormTabsTest extends TestCase
             self::assertSame(0, $down->state()->section, 'Down stays row navigation');
         });
     }
-
-    private const FRAME_LEFT = "\e[38;2;112;145;245m│\e[0m ";
-    private const FRAME_RIGHT = "\e[38;2;112;145;245m│\e[0m";
-    private const FIRST_WINDOW_ZONES = [
-        [1, 2, 10, 'media:tab:0'],
-        [1, 11, 30, 'media:tab:1'],
-        [1, 31, 38, 'media:tab:2'],
-        [1, 39, 51, 'media:tab:3'],
-    ];
 
     /**
      * @param list<string> $labels
