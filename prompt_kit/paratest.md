@@ -790,6 +790,14 @@ SugarCraft's switch is def100a6f5.
   - Seen 2026-11-21: swoole 6.2.0, enabled mid-session, aborted **every** CLI `php` started with `TMPDIR=/`
     (`std::out_of_range ... basic_string::at`). Two tests that prove the suite refuses that temp dir went red.
   - The owner wanted swoole kept on, so the fix was a **conditional skip** (§6.8).
+- A test's own `set_error_handler()` that never checks `error_reporting()` also catches diagnostics the code
+  suppressed with `@`, because PHP calls a user handler for those too, with the mask lowered. Then a `@fwrite`
+  to a child that has already exited (EPIPE) is a red whenever the child wins the race, which happens at high
+  load. Honor `@` with `if ((error_reporting() & $errno) === 0) return true;`, as PHP's display and PHPUnit's
+  handler do (dee1de3135, StatusLineCommandTest, red once at load 46).
+- `git pull` into the tree mid-round can change what the suite counts without touching its tests. On
+  candy-code, 2 new sugar-pty files added 2 assertions to each of DescriptorInheritanceGuardTest's 6 repo-wide
+  scans. Re-measure the figure after any merge, even one with no test changes.
 
 ---
 
@@ -855,7 +863,8 @@ SugarCraft's switch is def100a6f5.
 | Swoole aborts php with `TMPDIR=/` | 2 child-php tests red (exit 134) on one host | Conditional, rostered skip on a precondition probe (§6.8) | 47cad22304, 14e1084fa5 |
 | A "never hang" bound sized like a speed claim | 5.64 s against 5.0 s at load 49 | Bound against the 60 s fallback it guards against (15 s) | a352dac45f |
 | A shared cache whose builder asserts | Assertion total depends on which file ran first in the process (1,413 apart) | Builder throws instead of asserting (§7.2) | b6414ff58c |
-| Figure measured on a swoole host | Local skipped +2, assertions -7 against CI | Pin CI's shape with a `host_adjustment` note (§7.2) | d8a503b68d, d851dc3d80 |
+| Figure measured on a swoole host | Local skipped +2, assertions -7 against CI | Pin CI's shape with a `host_adjustment` note (§7.2) | d8a503b68d, d851dc3d80, 58c360851e |
+| A test's error handler that ignores `@` | EPIPE from a `@fwrite` to an exited child caught as a warning, once at load 46 | Honor `error_reporting()` in the handler (§8) | dee1de3135 |
 
 Results:
 - **candy-code:** 33,817 tests went from 407 s (ParaTest K=32, alphabetical) and 302 s (the old K=24 shards)

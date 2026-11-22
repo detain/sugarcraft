@@ -890,13 +890,30 @@ turned up four more problems, each fixed first.
 | pt-r27 | K=32 | 3 reds: 2 swoole, plus the shifted stacked-doc pin |
 | pt-r28 | K=32 | only the 2 swoole reds; assert-diff against pt-r27 empty |
 | pt-r30 | K=32, a352dac45f | **green:** 33,817 tests, 797,197 assertions, 12 skipped, wall 140.0 s |
-| pt-r31 | K=32, b6414ff58c | **green:** 33,817 tests, 794,371 assertions, 12 skipped, wall 176.6 (load 56) s |
+| pt-r31 | K=32, b6414ff58c | **green:** 33,817 tests, 794,371 assertions, 12 skipped, wall 176.6 s (load 56) |
+| pt-r32 | K=32, after the upstream pull (440966830a) | 1 red: StatusLineCommandTest's dead-reader test; 794,383 assertions |
+| pt-r33 | K=32, dee1de3135 | **green:** 33,817 tests, 794,383 assertions, 12 skipped, wall 159.2 s (load 63); assert-diff against pt-r32 empty |
 
-**The figure is pinned in CI's shape** (d851dc3d80, after d8a503b68d): **33,817 tests / 794,378 assertions, 0 failures,
-10 skipped.**
+**An upstream pull mid-refresh.**
+- **What happened:** at 20:07 a `git pull --all` in the copy, not made by this work, merged 17 upstream
+  commits (440966830a): sugar-pty's TerminationPolicy, SIGCHLD-driven `onExit` and kill-on-drop. No candy-code
+  file changed, but candy-code runs against the linked sugar-pty, so the suite was run again (pt-r32).
+- **The count moved:** DescriptorInheritanceGuardTest's 6 repo-wide scans each counted 2 more files, +12
+  assertions.
+- **A red:** StatusLineCommandTest's dead-reader test, never red in about 20 earlier full runs, failed once at
+  load 46.
+  - The test's own error handler did not check `error_reporting()`, so it caught the `@fwrite` EPIPE that
+    `run()` gets when the child (`exit 9`) exits before the payload write. That warning is silent in
+    production.
+  - A probe that lets the child exit first reproduces it every time.
+  - dee1de3135 makes the handler honor `@`, as PHP's display and PHPUnit's handler do. This is a test fix,
+    not a sugar-pty one.
+
+**The figure is pinned in CI's shape** (d8a503b68d, then d851dc3d80, then 58c360851e from pt-r33):
+**33,817 tests / 794,390 assertions, 0 failures, 10 skipped.**
 - **Why not the local counts:** CI has no swoole, so the two child arms run there. CI's `--against-json`
   compares exactly, and it did under the shard runner too, so the figure always had to match CI.
-- **The adjustment from pt-r31:** skipped 12 − 2, and assertions + 7, because the arms assert 4 + 3 when they
+- **The adjustment from pt-r33:** skipped 12 − 2, and assertions + 7, because the arms assert 4 + 3 when they
   run (pt-r22g ran them).
 - **Checked first:** SuiteSkipRosterTest's per-entry loops walk `EXPECTED`, which is the same on every host,
   so nothing else asserts once per host-dependent entry.
