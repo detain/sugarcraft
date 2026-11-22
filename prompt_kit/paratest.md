@@ -680,6 +680,29 @@ Repo-specific parts to change: the default `--lib`, the env gate on the launch l
   }
   foreach ($by as $id => $c) { if (count(array_unique($c)) > 1) { echo $id, '  ', json_encode($c), "\n"; } }
   ```
+- **A second kind of unstable count: one that moves with what ran earlier in the same process.**
+  - **Cause:** a per-process cache whose builder asserts, for example `self::assertIsString(file_get_contents($f))`
+    for every file of a source walk. The builder's assertions land on whichever test builds the cache first.
+    When a data provider builds it at suite load, they land on no test at all.
+  - **Effect:** the total depends on the runner. A serial run executes every data provider before any test,
+    ParaTest loads one file at a time per worker, and a shard runner has one process per shard. They disagree
+    by the builder's whole count.
+  - **Why assert-diff can miss it:** if the queue order always puts the same file first, every ParaTest run
+    agrees, until a durations refresh or a new shard manifest changes the order.
+  - **The candy-code case:** `EnvRosterDriftTest::realScanner()` asserted 1,413 times per build. The file
+    counted 43,204 alone and 41,791 when `HelpTest`, whose data provider builds the same cache, loaded first.
+    All 15 ParaTest runs agreed, and a serial run would not have.
+  - **How to find it:** run a suspect file alone, then together with the files that share its cache in one
+    `phpunit` process (a small config listing both), and compare per-class counts. To find suspects, grep for
+    memo sites (`??=` on a static property, `static $x`) whose builders assert.
+  - **Fix:** make the builder throw (`RuntimeException`) instead of asserting. Then it counts zero everywhere.
+- **A figure measured on a host that skips what CI runs.** When a conditional skip (§6.8) fires locally but not
+  on CI:
+  - pin CI's shape: local skipped minus n, and local assertions plus what those tests assert when they run;
+  - record the adjustment in the figure itself (a `host_adjustment` key);
+  - expect a local `--against-json` to fail by exactly that difference, and check the adjusted totals by hand.
+  - Before trusting the added count, confirm that nothing else asserts once per host-dependent item, such as a
+    roster test that loops over the conditional entries.
 - **Refresh chicken-and-egg:** the refresh script refuses a red run, but the drift test is red until the
   figure is refreshed. Resolve it like this:
   1. Set the figure's (and any README headline's) `tests` to the live `--list-tests` count.
@@ -831,6 +854,8 @@ SugarCraft's switch is def100a6f5.
 | Assertion counts that vary between runs | Exact conservation check fails at random | Assert once after a wait, not per poll or per beat (§7.2) | 3cd77b3aa6 |
 | Swoole aborts php with `TMPDIR=/` | 2 child-php tests red (exit 134) on one host | Conditional, rostered skip on a precondition probe (§6.8) | 47cad22304, 14e1084fa5 |
 | A "never hang" bound sized like a speed claim | 5.64 s against 5.0 s at load 49 | Bound against the 60 s fallback it guards against (15 s) | a352dac45f |
+| A shared cache whose builder asserts | Assertion total depends on which file ran first in the process (1,413 apart) | Builder throws instead of asserting (§7.2) | b6414ff58c |
+| Figure measured on a swoole host | Local skipped +2, assertions -7 against CI | Pin CI's shape with a `host_adjustment` note (§7.2) | d8a503b68d, d851dc3d80 |
 
 Results:
 - **candy-code:** 33,817 tests went from 407 s (ParaTest K=32, alphabetical) and 302 s (the old K=24 shards)

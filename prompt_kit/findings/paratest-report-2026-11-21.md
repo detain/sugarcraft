@@ -820,6 +820,123 @@ tests, and a suite whose shape changed without a figure refresh.
 - **Alternative (owner's call):** a `--memory-limit` override for coverage runs only. It is unverified on a
   16 GB, 4-vCPU runner.
 
+### 11.10 Round 2: the refresh
+
+The last round 2 step re-pinned what the earlier steps had moved: the drift pins, the suite figure and README
+headline, the durations table, and `ci.yml`'s TSV-PIN line. Getting a run green enough to refresh from
+turned up four more problems, each fixed first.
+
+**Drift pins (04271a0a2c).** These are the 6 drift reds every §11.9 run carried:
+- DocFigureProseDriftTest's hook arms now read the retry figure from sugar-async's `ChildPump::SELECT_RETRIES`.
+  The drain slice is StatusLineCommand's own 200 ms; ScriptHook has none.
+- `ARCHITECTURE.md` names 23 siblings, and its word map reaches twenty-five.
+- The PathGlob census reads 320,352 (568 × 564).
+- `docs/_data/candy-code.api.html` and `docs/lib/candy-code.html` were regenerated.
+
+**Assertion counts that vary between runs (3cd77b3aa6, 993b1c9765).**
+- **The problem:** an exact conservation check needs the same assertion total every run. `assert-diff.php`
+  over 6 junits of one tree found 15 tests that varied by 1-4 assertions, and run totals moved by up to 17.
+- **The cause:** asserting inside a poll loop, or once per element of a timing-dependent list.
+- **The fix:** six files now assert once after the wait (`if (...) self::fail()` inside the loop), or once over
+  the filtered list (`assertSame([], $lost)`): McpLoginForkTest, McpLoginServedTest, ProcessExecutorTest,
+  WorkflowStageResourceLockTest, TaskCallIdThreadingTest and ChildSessionCreatedOnFinishTest.
+- **Follow-up (993b1c9765):** the edit shifted the line of an accepted stacked doc-comment pair, so
+  RuntimeNoticeSinkDeliveryTest's pin moved with it.
+- **Check:** assert-diff across pt-r27 to pt-r30 prints nothing.
+
+**Assertion counts that depend on what ran first (b6414ff58c).**
+- **How it was found:** the new figure had 4,706 fewer assertions than the 2026-11-17 pin, despite 684 more
+  tests. Per-class totals across the scratchpad's junits put almost all of the gap at one round 1 commit,
+  224bb4ce31: between pt-cc-k32 and pt-cc-3d-k32, EnvRosterDriftTest lost 12,717 and HelpTest 4,239.
+- **The cause:** 224bb4ce31 builds `EnvRosterDriftTest::realScanner()` once per process, and the source walk
+  under it asserted once per file (1,410 in `src/`, 2 in `bin/`, plus the root: 1,413). Those assertions land
+  on whichever test builds the scanner first. When HelpTest's data provider builds it at suite load, they land
+  on no test at all.
+- **Measured:** EnvRosterDriftTest counted 43,204 alone, and 41,791 with HelpTest in the same process.
+- **Why no run showed it:** all 15 ParaTest runs agreed, because EnvRosterDriftTest (6.6 s) is queued before
+  HelpTest (1.5 s), and the K=4 shard manifest puts them in different shards. A serial run reads 1,413
+  lower, and a durations refresh could have flipped CI's exact compare.
+- **The fix:** the walk throws instead of asserting. The file now counts 40,378 alone and after HelpTest.
+- **Checked:** the other static `??=` caches in candy-code's tests (BuiltInToolCorpus,
+  DocFigureProseDriftTest's function spans, UiOnlyWireFilterTest) and round 2's DuplicatedTestHelper memo
+  do not assert.
+- **Manual:** §7.2 now describes this second kind of unstable count and how to find it.
+
+**Swoole (47cad22304, 14e1084fa5).**
+- **The problem:** with swoole 6.2.0 loaded for the CLI, every php started with `TMPDIR=/` aborts
+  (`std::out_of_range`, `basic_string::at`, exit 134).
+- **Proven:** the same command exits 0 with every other conf.d ini loaded.
+- **Effect:** SuiteRootRunRefusalTest's two child arms, which start php with `TMPDIR=/` to prove the guard
+  refuses it, went red. php died before the guard ran.
+- **The fix (the owner's idea):** `SuiteSkipRoster::rootTmpdirChildStarts()` probes `php -r 'exit(0);'` with
+  `TMPDIR=/` once per process. When the probe fails, both arms skip, and two conditional roster entries are
+  lifted exactly where it succeeds. The probe is also the skip gate in the test bodies, so the roster cannot
+  disagree with the skip.
+- **Follow-up (14e1084fa5):** the predicate first sat between another method's doc-comment and its
+  declaration, which RuntimeNoticeSinkDeliveryTest's stacked-doc guard caught, so it was moved.
+
+**Deadline bound (a352dac45f).**
+- **The problem:** ClaudeCodeMcpClientDeadlineTest's unanswered-handshake test took 5.64 s at load 49,
+  against a 5.0 s upper bound. Alone it takes 1.0 s, 30 of 30 runs.
+- **The fix:** the bound only has to tell the 0.5 s budget apart from the 60 s `HANDSHAKE_TIMEOUT_SECONDS`
+  that a lost budget would fall back to, so it is now 15 s. The manual's §6.7 has the rule: size a "never
+  hangs" bound against the alternative it rules out, not against a speed.
+
+**The green runs.**
+
+| Run | Shape | Result |
+|---|---|---|
+| pt-r25 | K=4, before 3cd77b3aa6 | 2 swoole reds, wall 734.8 s, total 2,737.7 s. The durations source. |
+| pt-r27 | K=32 | 3 reds: 2 swoole, plus the shifted stacked-doc pin |
+| pt-r28 | K=32 | only the 2 swoole reds; assert-diff against pt-r27 empty |
+| pt-r30 | K=32, a352dac45f | **green:** 33,817 tests, 797,197 assertions, 12 skipped, wall 140.0 s |
+| pt-r31 | K=32, b6414ff58c | **green:** 33,817 tests, 794,371 assertions, 12 skipped, wall 176.6 (load 56) s |
+
+**The figure is pinned in CI's shape** (d851dc3d80, after d8a503b68d): **33,817 tests / 794,378 assertions, 0 failures,
+10 skipped.**
+- **Why not the local counts:** CI has no swoole, so the two child arms run there. CI's `--against-json`
+  compares exactly, and it did under the shard runner too, so the figure always had to match CI.
+- **The adjustment from pt-r31:** skipped 12 − 2, and assertions + 7, because the arms assert 4 + 3 when they
+  run (pt-r22g ran them).
+- **Checked first:** SuiteSkipRosterTest's per-entry loops walk `EXPECTED`, which is the same on every host,
+  so nothing else asserts once per host-dependent entry.
+- **Recorded in the figure:** a `host_adjustment` key, and the README headline says the same.
+- **Consequence:** a local `--against-json` on a swoole host fails by exactly −7 assertions and +2 skipped.
+  The adjusted totals were checked by hand and all four match.
+
+**The refresher (ad14cbda81)** documents the ParaTest run, `bash scripts/paratest.sh --out <dir>`, whose merged
+junit has the one top-level `<testsuite>` its gate expects. The gate itself is unchanged.
+
+**The durations table and TSV-PIN (5307d8167b).**
+- **Source:** the table now comes from pt-r25 at K=4, CI's K: 2,162 files, 33,817 tests, the same file set as
+  the tree, and a KeyHelpTest row for the tuning test's mutation arm.
+- **Old pin → new pin:**
+
+  | Value | Old | New |
+  |---|---|---|
+  | `serial_sum` | 3,540.7 s | 2,737.7 s |
+  | floor | 302.5 s (KeyHelpTest) | 50.4 s (ProcessExecutorTest) |
+  | `lpt_k4_max` | 885.2 s | 684.4 s |
+
+- **Timeout:** `--timeout 2400` still clears 1.2 × the max bucket (821.3 s) and the coverage cell's 2 × (1,368.8
+  s), and stays under the serial sum.
+- **Open:** the table holds this box's per-file times. CI's runners are slower, which is what the headroom is
+  for, but no CI run of the ParaTest cell has happened yet: nothing is pushed.
+
+**Checks:** tools/tests ran 1,010 tests with only the 5 environmental reds:
+- CheckDocsAssets;
+- PrefixPolicy and ReleaseSiblingPins (the `wt-*` worktree directories);
+- RootRowsCheck ×2 (the lane-dirtied seed file).
+
+ParallelShardTuningTest and GenApiReferenceTest are green. ReadmeSuiteFigureDriftTest and
+DocFigureProseDriftTest: 107 tests OK on the final figure and headline.
+
+**Still unverified, and older than this round:**
+- whether CI's own `phar.readonly` and bwrap setup matches this box's, so that the premise and rename arms run
+  there and the jail arms skip;
+- the ToolIpcFiles::sweepOnce product finding from §11.8 (7 globs of `/tmp` per launch), which is left to the
+  owner.
+
 ---
 
 ## Sources
