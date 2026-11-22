@@ -231,15 +231,17 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     }
 
     /**
-     * Return a new instance with the detail tab set.
+     * Return a new instance with the detail tab set. An open panel is
+     * refetched for the new tab, so the bar and the panel never disagree;
+     * a closed panel stays closed.
      */
     public function withDetailTab(string $tab): self
     {
         $index = \array_search($tab, self::DETAIL_TAB_ORDER, true);
-        if ($index === false) {
+        if ($index === false || $index === $this->detailBar->active()) {
             return $this;
         }
-        return $this->withDetailBar($this->detailBar->withActive($index));
+        return $this->withDetailBar($this->detailBar->withActive($index))->withDetailRefreshed();
     }
 
     /**
@@ -436,7 +438,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
                     $this->maxConnections ?? 151,
                 );
             }
-            return [$clone, null];
+            // The rows under the selection may have moved: an open panel
+            // re-reads the thread that now sits at selectedIndex, the row the
+            // table highlights.
+            return [$clone->withDetailRefreshed(), null];
         }
 
         if ($msg instanceof MouseMsg) {
@@ -637,6 +642,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->cachedFilteredProcesslist = null;
         $clone->processlistProvider = $this->processlistProvider->refresh();
+        $clone = $clone->withDetailRefreshed();
 
         // Trigger async refresh via AdminFetchStartedMsg - the App's existing
         // async machinery will re-fetch all admin data including processlist.
@@ -954,17 +960,22 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         // SQL-P09 (adminpages-010): the SHOW FULL PROCESSLIST mirror carries
         // up to 500 rows and the pane clips everything past the frame edge;
         // building a Row (RowData wrap) per row per frame for ~480 lines no
-        // terminal can show is pure churn. The table renders no selection
-        // cursor (the page cursor drives the detail tab off the FULL
-        // filteredProcesslist(), untouched here), so a head window changes
-        // no visible byte and every interaction keeps reading the complete
-        // list — only string construction is bounded.
+        // terminal can show is pure churn. Every interaction keeps reading
+        // the complete filteredProcesslist(); only string construction is
+        // bounded.
         $tableRows = $this->buildRows(\array_slice($rows, 0, self::ROW_WINDOW));
 
+        // The highlight follows the page cursor, the row the detail panel
+        // describes. A selection outside the painted window (or past the end
+        // after a reload) shows no highlight rather than a wrong one.
+        $shown = $this->selectedIndex >= 0 && $this->selectedIndex < \count($tableRows);
         $table = Table::fromColumns($columns)
             ->withRows($tableRows)
-            ->withSelectable()
+            ->withSelectable($shown)
             ->withZebra();
+        if ($shown) {
+            $table = $table->withSelectedIndex($this->selectedIndex);
+        }
 
         if ($this->filters->skipFullInfo) {
             $table = $table->withShowFooter(false);

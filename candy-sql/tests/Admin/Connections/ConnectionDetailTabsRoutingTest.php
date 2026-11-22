@@ -19,6 +19,7 @@ use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
 use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 use SugarCraft\Sql\Admin\ServerContext;
+use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\BrowseState;
@@ -566,5 +567,89 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         [$picked,] = $scoped->update(new KeyMsg(KeyType::Char, $digit));
         $this->assertSame($other, $picked->app->admin->pane);
         $this->assertSame(MouseMode::Off, $picked->view()->mouseMode, 'another admin page keeps native drag-selection');
+    }
+
+    // ── (h) the panel, the highlight and the bar agree on one thread ───────
+
+    /** @param list<string> $ids */
+    private static function threads(array $ids): array
+    {
+        return \array_map(
+            static fn (string $id): array => ['Id' => $id, 'User' => 'app', 'Host' => 'h', 'db' => '', 'Command' => 'Query', 'Time' => '0', 'State' => '', 'Info' => 'thread-' . $id . '-sql'],
+            $ids,
+        );
+    }
+
+    public function testAReloadRefetchesTheOpenPanelForTheThreadNowUnderTheSelection(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult(self::threads(['7', '8']));
+        $page = ConnectionsPage::new(new ServerContext($db));
+        [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        [$page] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 8'], $page->detailLines());
+
+        // A row lands above the selection: index 1 now names thread 7.
+        $db->setQueryResult(self::threads(['5', '7', '8']));
+        [$reloaded, $cmd] = $page->update(new ReloadReportMsg());
+        $this->assertNull($cmd);
+        $this->assertSame(['No Details data for thread 7'], $reloaded->detailLines(), 'the panel follows the reload');
+
+        // r swaps the provider too, so it refetches the open panel as well.
+        $db->setQueryResult(self::threads(['9', '8']));
+        [$refreshed] = $reloaded->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame(['No Details data for thread 8'], $refreshed->detailLines());
+
+        // A closed panel stays closed across a reload.
+        [$closed] = $refreshed->update(new KeyMsg(KeyType::Escape));
+        [$closed] = $closed->update(new ReloadReportMsg());
+        $this->assertNull($closed->detailLines());
+    }
+
+    public function testTheTableHighlightsTheRowTheDetailPanelDescribes(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult(self::threads(['7', '8', '9']));
+        $page = ConnectionsPage::new(new ServerContext($db));
+        $highlighted = static function (ConnectionsPage $p): array {
+            $hits = [];
+            foreach (\explode("\n", $p->table()->View()) as $line) {
+                // Reverse video (SGR 7), alone or merged into a longer SGR.
+                if (\preg_match('/\e\[(?:[0-9]+;)*7(?:;[0-9]+)*m/', $line) === 1
+                    && \preg_match('/thread-(\d+)-sql/', self::plain($line), $m) === 1) {
+                    $hits[] = $m[1];
+                }
+            }
+            return \array_values(\array_unique($hits));
+        };
+
+        $this->assertSame(['7'], $highlighted($page));
+        [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        [$page] = $page->update(new KeyMsg(KeyType::Char, 'j'));
+        [$page] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 9'], $page->detailLines());
+        $this->assertSame(['9'], $highlighted($page), 'the highlight sits on the thread the panel shows');
+
+        // Rows removed under the selection: no row is highlighted, not a wrong one.
+        $db->setQueryResult(self::threads(['7']));
+        [$page] = $page->update(new ReloadReportMsg());
+        $this->assertSame([], $highlighted($page));
+    }
+
+    public function testWithDetailTabRefetchesAnOpenPanelAndLeavesAClosedOneClosed(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult(self::threads(['7']));
+        $page = ConnectionsPage::new(new ServerContext($db));
+
+        $closed = $page->withDetailTab(ConnectionsPage::DETAIL_TAB_MDL);
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_MDL, $closed->detailTab());
+        $this->assertNull($closed->detailLines());
+
+        [$open] = $page->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame(['No Details data for thread 7'], $open->detailLines());
+        $mdl = $open->withDetailTab(ConnectionsPage::DETAIL_TAB_MDL);
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_MDL, $mdl->detailTab());
+        $this->assertSame(['No MDL data for thread 7'], $mdl->detailLines(), 'the panel follows the bar');
     }
 }
