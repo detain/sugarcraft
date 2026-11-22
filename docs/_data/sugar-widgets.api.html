@@ -455,6 +455,10 @@
 </tbody>
 </table>
 <h3>SugarCraft\Widgets\Tabs</h3>
+<h4 id="api-sugarcraft-widgets-tabs-scrollwindow"><code>ScrollWindow</code> <small>enum</small></h4>
+<p>How a width-bounded Tabs bar picks the first tab of its scroll window (Tabs::withScrollWindow()).</p>
+<p>Cases: <code>Offset</code> · <code>FirstKeepingActive</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
 <h4 id="api-sugarcraft-widgets-tabs-tabclosedmsg"><code>TabClosedMsg</code> <small>final class</small></h4>
 <p>Sent (through the <code>Cmd</code> that Tabs::update(), Tabs::clickAt() or Tabs::clickZone() returns) after a closable bar closed a tab, either from a click on the tab&#039;s close affordance or from the close key.</p>
 <table class="api-table">
@@ -486,7 +490,7 @@
 <tr><td><code>update(Msg $msg): array</code></td><td>Keyboard input is handled only while focused. Zone clicks (MsgZoneInBounds) are handled whether or not the bar is focused, and never grant focus. The <code>Cmd</code> is non-null only when a tab was closed; it yields a TabClosedMsg.</td></tr>
 <tr><td><code>view(): string</code></td><td>Render the tab bar as a single line.</td></tr>
 <tr><td><code>spans(): array</code></td><td>The cells each visible tab occupies on the frame view() draws, in display order — the hit-testing surface for hosts that route clicks by column instead of by zone markup.</td></tr>
-<tr><td><code>tabAt(int $col): ?int</code></td><td>The visible tab under bar column <code>$col</code>, or null (a divider, an ellipsis, or past the end).</td></tr>
+<tr><td><code>tabAt(int $col): ?int</code></td><td>The visible tab under bar column <code>$col</code>, or null (a divider, a scroll mark, or past the end).</td></tr>
 <tr><td><code>clickAt(int $col): array</code></td><td>Apply a click at bar column <code>$col</code> (0-based, relative to the bar&#039;s first cell): a click on a tab activates it, a click on a closable tab&#039;s close affordance closes it. Not focus-gated.</td></tr>
 <tr><td><code>clickZone(string $zoneId): array</code></td><td>Apply a click on the zone named <code>$zoneId</code> — the id exactly as it appears in the frame (with the Manager prefix on a Manager bar, bare on a Mark bar). Ids minted by another bar, or naming a tab outside the visible window, leave the bar unchanged. Not focus-gated.</td></tr>
 <tr><td><code>active(): int</code></td><td>Currently active tab index (0-based).</td></tr>
@@ -510,7 +514,10 @@
 <tr><td><code>withMark(?Mark $mark): self</code></td><td>Attach a manager-free Mark so view() publishes zone markers without a Manager: each visible tab is wrapped in <code>&lt;zoneKey&gt;tab-N</code> (and <code>&lt;zoneKey&gt;close-N</code> around a close affordance), unprefixed. The host scans the frame (a sugar-mouse <code>Scanner</code>) and passes the hit zone&#039;s id to clickZone(). A Manager, when also attached, takes precedence. Null detaches.</td></tr>
 <tr><td><code>withZoneKey(string $key): self</code></td><td>Pin this bar&#039;s zone key (the per-bar prefix of its tab zone ids).</td></tr>
 <tr><td><code>withLabelPadding(int $left, int $right): self</code></td><td>Set the blank cells drawn on each side of every label (default 1 and 1: <code> Home </code>). <code>withLabelPadding(0, 0)</code> draws the bare label, for a host that frames its tabs itself. Only the label is padded: a badge and the close affordance keep their own trailing cell. Spans, tabAt(), clickAt() and the scroll window measure the padded text, so hit-tests stay on the drawn cells for any padding.</td></tr>
-<tr><td><code>withScrollOffset(int $offset): self</code></td><td>Manually set the scroll offset (first visible tab index), clamped to the tab list. Auto-scroll that keeps the active tab visible is driven internally by update() — this setter pins an explicit offset.</td></tr>
+<tr><td><code>withDividerStyle(?Style $style): self</code></td><td>Style the divider text between tabs (and a divider the width clips). Null, the default, draws it in the inactive tab style.</td></tr>
+<tr><td><code>withScrollMarks(string $left, string $right, ?Style $markStyle = null, bool $separatorAfterLeft = true): self</code></td><td>Set the marks drawn when tabs are scrolled off each side of a width-bounded bar, and the style they are drawn in. The right mark is also the one an overflowing line ends with once it is clipped. The defaults (SCROLL_MARK on both sides, no style, a divider after the left mark) are the bar&#039;s frame without this call. <code>$separatorAfterLeft = false</code> draws the first visible tab right after the left mark, with no divider between them; the right mark keeps its divider. Marks are sanitized like labels; the scroll window, spans() and the hit-tests price them at their drawn width, and the window scrolls to keep the active tab in view under the new widths.</td></tr>
+<tr><td><code>withScrollWindow(ScrollWindow $mode): self</code></td><td>Pick how the scroll window follows the active tab: ScrollWindow::Offset (the default) keeps the stored offset and slides it by the least that reveals the active tab; ScrollWindow::FirstKeepingActive scans from the first tab and shows the first run of tabs that keeps the active tab in view, and ignores withScrollOffset().</td></tr>
+<tr><td><code>withScrollOffset(int $offset): self</code></td><td>Manually set the scroll offset (first visible tab index), clamped to the tab list. Auto-scroll that keeps the active tab visible is driven internally by update() — this setter pins an explicit offset. Under ScrollWindow::FirstKeepingActive the active tab alone decides the window, so the pinned offset is not used.</td></tr>
 <tr><td><code>noWrap(): self</code></td><td>Disable wrap-around at the ends of the tab list. With wrap disabled, <code>Tab</code> clamps at the last tab and <code>Shift+Tab</code> clamps at the first tab.</td></tr>
 <tr><td><code>focus(): self</code></td><td>Take focus; companion to blur() — a pure value verb.</td></tr>
 <tr><td><code>blur(): self</code></td><td></td></tr>
