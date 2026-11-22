@@ -76,7 +76,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
-| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Setter enforcement matches the vocabulary: `withActive()` throws `tabs.bad_index` out of range (an empty bar is a no-op) and `withWidth()` rejects negatives with `tabs.neg_width`; render-time clamping stays as a defensive belt, not a silent rewriter. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then, clicks find nothing. Zone ids are scoped per bar by `zoneKey`, so bars built with `new()` on one manager never answer each other's clicks. Bars that share a template share a key, so give each bar its own `withZoneKey()` (non-empty, unique per manager; an empty key throws). `withZoneKey()` also pins ids across frame rebuilds. A click on a zone activates that tab whether or not the bar is focused, and does not grant focus (keyboard input stays focus-gated). While focused, the active tab renders underlined; blurred it renders plain — the focus state is visible in the frame bytes, and forward selection scrolls the window by the minimum that reveals the new tab (no paging) | — |
+| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Setter enforcement matches the vocabulary: `withActive()` throws `tabs.bad_index` out of range (an empty bar is a no-op) and `withWidth()` rejects negatives with `tabs.neg_width`; render-time clamping stays as a defensive belt, not a silent rewriter. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then, clicks find nothing. Zone ids are scoped per bar by `zoneKey`, so bars built with `new()` on one manager never answer each other's clicks. Bars that share a template share a key, so give each bar its own `withZoneKey()` (non-empty, unique per manager; an empty key throws). `withZoneKey()` also pins ids across frame rebuilds. A click on a zone activates that tab whether or not the bar is focused, and does not grant focus (keyboard input stays focus-gated). While focused, the active tab renders underlined; blurred it renders plain — the focus state is visible in the frame bytes, and forward selection scrolls the window by the minimum that reveals the new tab (no paging). Interactive bars: `Tabs::interactive($labels, $zones)` attaches a `Manager` or a manager-free sugar-mouse `Mark` in one call; `withBadge($i, '3')` draws a badge after a label (null removes it, `withBadgeStyle()` styles it); `withClosable()` draws a close affordance (`×`, `withCloseGlyph()` replaces it) whose click, or `ctrl+w` while focused, closes the tab and returns a `Cmd` carrying `TabClosedMsg` (index and label as they were); `closeTab($i)` and `moveTab($from, $to)` are the value verbs, and badges and the active tab follow their tab. Clicks route three ways, none focus-gated: `MsgZoneInBounds` through `update()` (Manager), `clickZone($id)` with the id a `Scanner` hit returns (Mark, ids `<zoneKey>tab-N` / `<zoneKey>close-N`), or `clickAt($col)` against `spans()`, the `TabSpan` list of each visible tab's bar-relative cells (`tabAt($col)` resolves one column) | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
@@ -89,7 +89,7 @@ The first-party widgets below decode these keys inside their own
 
 | Component | Keys |
 |---|---|
-| `Tabs` | `Tab`/`Shift+Tab` next/prev (wraps by default; `wrap:` construction flag switches to clamp), `1`–`9` direct jump to tab N; only decoded while focused — the bindings are `TabsKeyMap` defaults and the map is replaceable |
+| `Tabs` | `Tab`/`Shift+Tab` next/prev (wraps by default; `wrap:` construction flag switches to clamp), `1`–`9` direct jump to tab N, `ctrl+w` closes the active tab on a closable bar; only decoded while focused — the bindings are `TabsKeyMap` defaults and the map is replaceable |
 | `Table` | `↑`/`k`, `↓`/`j`, `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` by `max(1, height)` rows — rows only, no vim letter bindings |
 | `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump, `Home`/`End` jump (same targets), `PageUp`/`PageDown` stride the visible height (whole list at height 0) |
 | `Help` | no hardcoded key — `updateWithBinding($msg, $toggle)` flips the full view when `$msg` matches whatever `Binding` the host wires in (the bubbles convention is `?`); plain `update()` is a pass-through |
@@ -192,14 +192,14 @@ single detection point keeps every widget consistent.
 | --- | --- |
 | `Table::view()` | no columns → the empty string; columns present → header lines only, zero body rows |
 | `Tree::view()` | no roots (or all collapsed out of the window) → the empty string |
-| `Tabs::view()` | no labels → the empty string |
+| `Tabs::view()` | no labels → the empty string, or the `withPlaceholder($text)` text in the inactive style (clipped to the width) |
 | `Paginator::view()` | no pages (`perPage <= 0` or `totalItems <= 0`) → the empty string — a lone dot claiming a page that does not exist was the old bug |
 
-No surface above signals emptiness with a placeholder — an invisible
+`Tabs` is the one surface with a placeholder hook: `withPlaceholder()`
+labels an empty bar, and its default (the empty string) keeps the blank
+frame. Table, Tree and Paginator do not signal emptiness — an invisible
 empty pane is the host's to detect and label (supply your own
-placeholder row in the data, or branch before calling `view()`). A
-shared `emptyPlaceholder()` / empty-state message concept is PARKED
-behind an owner ruling (W-40/063); it is deliberately not invented here.
+placeholder row in the data, or branch before calling `view()`).
 
 ### The `0` dimension sentinel — one table, per-surface meanings
 

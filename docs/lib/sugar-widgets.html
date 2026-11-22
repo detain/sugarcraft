@@ -807,6 +807,26 @@ vendor/bin/phpunit</code></pre>
 </tbody>
 </table>
 <h3 id="sugarcraft-widgets-tabs">SugarCraft\Widgets\Tabs</h3>
+<h4 id="api-sugarcraft-widgets-tabs-tabclosedmsg"><code>TabClosedMsg</code> <small>final class</small></h4>
+<p>Sent (through the <code>Cmd</code> that Tabs::update(), Tabs::clickAt() or Tabs::clickZone() returns) after a closable bar closed a tab, either from a click on the tab&#039;s close affordance or from the close key.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(int $index, string $label, string $zoneKey): self</code></td><td>House <code>::new()</code> factory, same signature as the constructor.</td></tr>
+<tr><td><code>__construct(public readonly int $index, public readonly string $label, public readonly string $zoneKey)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-tabs-tabspan"><code>TabSpan</code> <small>final class</small></h4>
+<p>The cells one tab occupies on the rendered bar — the hit-testing half of Tabs::spans().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly int $index, public readonly int $start, public readonly int $end, public readonly ?int $closeStart = null)</code></td><td></td></tr>
+<tr><td><code>width(): int</code></td><td>Number of visible cells the tab covers.</td></tr>
+<tr><td><code>contains(int $col): bool</code></td><td>Whether bar column <code>$col</code> falls on this tab (label, badge or close affordance).</td></tr>
+<tr><td><code>onClose(int $col): bool</code></td><td>Whether bar column <code>$col</code> falls on this tab&#039;s close affordance.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-widgets-tabs-tabs"><code>Tabs</code> <small>final class</small></h4>
 <p>A tabbed panel component — switch between labelled tabs with keyboard or mouse input.</p>
 <table class="api-table">
@@ -814,11 +834,24 @@ vendor/bin/phpunit</code></pre>
 <tbody>
 <tr><td><code>init(): ?\Closure</code></td><td>Bubble-Tea Init — Tabs has no background commands.</td></tr>
 <tr><td><code>static new(array $labels = [], int $width = 0): self</code></td><td></td></tr>
-<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>static interactive(array $labels, Manager|Mark $zones, int $width = 0): self</code></td><td>A bar ready for pointer input: new() with its zones attached.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td>Keyboard input is handled only while focused. Zone clicks (MsgZoneInBounds) are handled whether or not the bar is focused, and never grant focus. The <code>Cmd</code> is non-null only when a tab was closed; it yields a TabClosedMsg.</td></tr>
 <tr><td><code>view(): string</code></td><td>Render the tab bar as a single line.</td></tr>
+<tr><td><code>spans(): array</code></td><td>The cells each visible tab occupies on the frame view() draws, in display order — the hit-testing surface for hosts that route clicks by column instead of by zone markup.</td></tr>
+<tr><td><code>tabAt(int $col): ?int</code></td><td>The visible tab under bar column <code>$col</code>, or null (a divider, an ellipsis, or past the end).</td></tr>
+<tr><td><code>clickAt(int $col): array</code></td><td>Apply a click at bar column <code>$col</code> (0-based, relative to the bar&#039;s first cell): a click on a tab activates it, a click on a closable tab&#039;s close affordance closes it. Not focus-gated.</td></tr>
+<tr><td><code>clickZone(string $zoneId): array</code></td><td>Apply a click on the zone named <code>$zoneId</code> — the id exactly as it appears in the frame (with the Manager prefix on a Manager bar, bare on a Mark bar). Ids minted by another bar, or naming a tab outside the visible window, leave the bar unchanged. Not focus-gated.</td></tr>
 <tr><td><code>active(): int</code></td><td>Currently active tab index (0-based).</td></tr>
 <tr><td><code>labels(): array</code></td><td></td></tr>
+<tr><td><code>badge(int $index): ?string</code></td><td>Badge text of tab <code>$index</code>, or null when the tab carries none.</td></tr>
 <tr><td><code>withLabels(array $labels): self</code></td><td></td></tr>
+<tr><td><code>withBadge(int $index, ?string $badge): self</code></td><td>Set the badge of tab <code>$index</code> (an unread count, a <code>!</code>, a dirty dot), rendered after the label. Null or the empty string removes it. Badge text is sanitized like labels, so it cannot forge zone markup.</td></tr>
+<tr><td><code>withBadgeStyle(?Style $style): self</code></td><td>Style for badges; null (the default) draws a badge in its tab&#039;s style.</td></tr>
+<tr><td><code>withClosable(bool $closable = true): self</code></td><td>Make every tab closable: each tab draws a close affordance after its label (and badge), a click on it closes the tab, and the keymap&#039;s <code>closeTab</code> binding (<code>ctrl+w</code>) closes the active tab while focused. Each close returns a <code>Cmd</code> carrying TabClosedMsg.</td></tr>
+<tr><td><code>withCloseGlyph(string $glyph): self</code></td><td>Replace the close-affordance glyph (default CLOSE_GLYPH).</td></tr>
+<tr><td><code>withPlaceholder(string $text): self</code></td><td>Text view() renders when the bar has no tabs (in the inactive style, clipped to the width). The empty string, the default, renders nothing. Sanitized like labels.</td></tr>
+<tr><td><code>moveTab(int $from, int $to): self</code></td><td>Move tab <code>$from</code> to position <code>$to</code>; the tabs between shift by one. The tab keeps its badge, and the active tab stays the same tab (its index follows the move). The scroll window follows the active tab.</td></tr>
+<tr><td><code>closeTab(int $index): self</code></td><td>Remove tab <code>$index</code>. Later tabs shift left with their badges. When the active tab closes, its right-hand neighbor becomes active (the left one when it was the last tab); closing another tab keeps the same tab active. Closing the only tab leaves an empty bar.</td></tr>
 <tr><td><code>withActive(int $index): self</code></td><td>Activate tab <code>$index</code>. Out-of-range indices are a programming error, not a style choice: typed throw naming the grammar-free range (the <code>tabs.bad_index</code> the vocabulary promised). An empty tab list has no selection to move — <code>$this</code> is returned. The constructor carries the same guard; render-time clamping stays as a defensive belt for hand-built instances, not a substitute for setter enforcement.</td></tr>
 <tr><td><code>withActiveStyle(Style $style): self</code></td><td></td></tr>
 <tr><td><code>withInactiveStyle(Style $style): self</code></td><td></td></tr>
@@ -826,6 +859,7 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>withKeyMap(TabsKeyMap $keyMap): self</code></td><td></td></tr>
 <tr><td><code>withWidth(int $width): self</code></td><td></td></tr>
 <tr><td><code>withZoneManager(?Manager $manager): self</code></td><td>Attach a Manager for mouse-click zone tracking.</td></tr>
+<tr><td><code>withMark(?Mark $mark): self</code></td><td>Attach a manager-free Mark so view() publishes zone markers without a Manager: each visible tab is wrapped in <code>&lt;zoneKey&gt;tab-N</code> (and <code>&lt;zoneKey&gt;close-N</code> around a close affordance), unprefixed. The host scans the frame (a sugar-mouse <code>Scanner</code>) and passes the hit zone&#039;s id to clickZone(). A Manager, when also attached, takes precedence. Null detaches.</td></tr>
 <tr><td><code>withZoneKey(string $key): self</code></td><td>Pin this bar&#039;s zone key (the per-bar prefix of its tab zone ids).</td></tr>
 <tr><td><code>withScrollOffset(int $offset): self</code></td><td>Manually set the scroll offset (first visible tab index), clamped to the tab list. Auto-scroll that keeps the active tab visible is driven internally by update() — this setter pins an explicit offset.</td></tr>
 <tr><td><code>noWrap(): self</code></td><td>Disable wrap-around at the ends of the tab list. With wrap disabled, <code>Tab</code> clamps at the last tab and <code>Shift+Tab</code> clamps at the first tab.</td></tr>
@@ -839,7 +873,7 @@ vendor/bin/phpunit</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public readonly Binding $nextTab, public readonly Binding $prevTab, public readonly array $jumpBindings)</code></td><td></td></tr>
+<tr><td><code>__construct(public readonly Binding $nextTab, public readonly Binding $prevTab, public readonly array $jumpBindings, ?Binding $closeTab = null)</code></td><td><code>$closeTab</code> is optional so maps built positionally before the close binding existed keep working; null means the default <code>ctrl+w</code>.</td></tr>
 <tr><td><code>static new(): self</code></td><td>Default keymap: Tab / Shift+Tab for navigation, 1-9 for direct jump.</td></tr>
 <tr><td><code>shortHelp(): array</code></td><td></td></tr>
 <tr><td><code>fullHelp(): array</code></td><td></td></tr>
