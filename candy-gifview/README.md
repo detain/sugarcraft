@@ -224,8 +224,8 @@ The key table is fixed in the player model; keys are not rebindable.
 The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and
 the separate `.ansi` art surface (`AnsiArt` / `ArtLibrary` / `ArtLoop`,
 which this viewer does not expose) — lives in
-[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app; the viewport is sized through sugar-core's never-throwing `Util\Tty` façade, and the direct
-[`sugarcraft/sugar-pty`](https://github.com/detain/sugarcraft/tree/master/sugar-pty) require keeps that façade's ioctl seat resolvable when this app is published standalone:
+[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app; the viewport is sized through sugar-core's never-throwing `Util\Tty` façade, whose ioctl seat in
+[`sugarcraft/sugar-pty`](https://github.com/detain/sugarcraft/tree/master/sugar-pty) arrives through sugar-core's own require. The test suite drives a real PTY pair from sugar-pty directly, so that package is also declared in `require-dev`:
 
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
