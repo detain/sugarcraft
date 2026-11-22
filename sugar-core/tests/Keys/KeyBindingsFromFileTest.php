@@ -3,11 +3,12 @@
 /**
  * sugar-core/tests/Keys/KeyBindingsFromFileTest.php
  *
- * Pins KeyBindings::fromFile(), the user-override door: a missing file is
- * the base unchanged, a good file replaces exactly the actions it names
- * (help text kept, chords canonicalized, an empty list unbinds), and every
- * malformed file — wrong inode type, oversized, bad JSON, bad shape, bad
- * chord — throws naming the path while applying nothing.
+ * Pins KeyBindings::fromFile(), the user-override door: a missing, empty or
+ * whitespace-only file is the base unchanged, a good file replaces exactly
+ * the actions it names (help text kept, chords canonicalized, an empty list
+ * unbinds), and every malformed file — wrong inode type, oversized, bad
+ * JSON, bad shape, bad chord — throws naming the path while applying
+ * nothing.
  */
 
 declare(strict_types=1);
@@ -97,6 +98,15 @@ final class KeyBindingsFromFileTest extends TestCase
         $path = $this->write('keys.json', '{"jump": ["g"]}');
 
         self::assertSame(['jump' => ['g']], KeyBindings::fromFile($path)->map());
+    }
+
+    public function testAnEmptyOrWhitespaceOnlyFileIsNoOverrides(): void
+    {
+        $base = self::base();
+
+        self::assertSame($base, KeyBindings::fromFile($this->write('empty.json', ''), $base));
+        self::assertSame($base, KeyBindings::fromFile($this->write('blank.json', " \n\t\r\n"), $base));
+        self::assertSame([], KeyBindings::fromFile($this->write('empty2.json', ''))->map());
     }
 
     public function testAnEmptyJsonArrayIsNoOverrides(): void

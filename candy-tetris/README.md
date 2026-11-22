@@ -220,7 +220,7 @@ The edges, in table form:
 | Unknown key name | The vocabulary door refuses spellings no decoder can ever emit (`"spce"` for `"space"`): a typo'd binding goes deaf with no on-screen trace, so it is a load-time error instead. Chords ride the same door: `ctrl+<name>` is valid exactly when `<name>` is. |
 | Unknown action id | Deliberately permissive: the registry is context-free, so an id the game never dispatches loads fine and stays inert. |
 | One token, two actions | Allowed (by default `space` is both `hard-drop` and `begin`): each screen dispatches in one context. |
-| Modifiers | Chords are load-bearing: a `ctrl` press actuates only the action's `ctrl+…` tokens, and a plain press only plain tokens. `Ctrl+C` quits (the shipped chord); a bare-`q` binding does NOT answer `Ctrl+Q` — the accidental companion of the plain key stays inert by that discipline. |
+| Modifiers | Chords are load-bearing: a `ctrl` press actuates only the action's `ctrl+…` tokens, and a plain press only plain tokens. One exception keeps steering under Shift: Shift over a named key other than `space` (Shift+Left, Shift+Enter) still answers the bare token (`left`, `enter`), unless an action binds that exact `shift+…` chord. Alt never falls back, and neither do Shift+Space or a shifted letter. `Ctrl+C` quits (the shipped chord); a bare-`q` binding does NOT answer `Ctrl+Q` — the accidental companion of the plain key stays inert by that discipline. |
 
 Config slots are POSIX-only: keys and scores resolve through
 `$XDG_CONFIG_HOME`/`$HOME/.config` as shown above. Where the environment

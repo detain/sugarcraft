@@ -220,6 +220,9 @@ final class KeyBindings
      * as {@see withOverride()}, and an empty list unbinds the action. A
      * missing file is "no overrides": $base comes back unchanged, so an app
      * that passes its defaults as $base can always point at its XDG slot.
+     * An empty or whitespace-only file is "no overrides" too, so a
+     * placeholder keys.json, or one truncated to zero bytes, boots on $base
+     * instead of throwing at the host.
      * With no $base the result holds only the actions the file names, and a
      * missing file yields an empty registry that matches nothing, so an app
      * with defaults must pass them. Anything else wrong — a slot that is
@@ -251,6 +254,9 @@ final class KeyBindings
         $raw = @file_get_contents($path);
         if ($raw === false) {
             throw new \RuntimeException(Lang::t('keys.file_unreadable', ['path' => $path]));
+        }
+        if (trim($raw, " \t\n\r") === '') {
+            return $base;
         }
 
         try {

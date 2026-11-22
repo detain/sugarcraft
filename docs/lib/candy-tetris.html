@@ -306,7 +306,7 @@ $game = $game->addGarbageRows(2);     // push two garbage rows from the bottom</
     <tr><td>An unknown key name, such as <code>"spce"</code></td><td>A load-time error, so a typo does not leave a binding deaf with no trace.</td></tr>
     <tr><td>An unknown action id</td><td>Loads without complaint and stays inert, because the registry does not know the screens.</td></tr>
     <tr><td>One token bound to two actions</td><td>Allowed. Each screen dispatches in one context, so <code>space</code> can be both hard drop and begin.</td></tr>
-    <tr><td>Modifiers</td><td>A <code>ctrl</code> press fires only <code>ctrl+</code> tokens, and a plain press fires only plain tokens. A bare <code>q</code> binding does not answer <code>Ctrl+Q</code>.</td></tr>
+    <tr><td>Modifiers</td><td>A <code>ctrl</code> press fires only <code>ctrl+</code> tokens, and a plain press fires only plain tokens. One exception: Shift over a named key other than <code>space</code>, such as Shift+Left or Shift+Enter, still fires the bare token unless an action binds that exact <code>shift+</code> chord. Alt never falls back. A bare <code>q</code> binding does not answer <code>Ctrl+Q</code>.</td></tr>
     </table>
     <p>The key reference <code>h</code> paints the full card over the frame, even on a floor-sized terminal, and the world freezes while the card is open. <code>docs/ACCESSIBILITY.md</code> lists the same key vocabulary for screen-reader and colour-free use.</p>
 
