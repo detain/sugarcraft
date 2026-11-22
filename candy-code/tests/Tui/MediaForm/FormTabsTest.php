@@ -111,6 +111,11 @@ final class FormTabsTest extends TestCase
                 $this->render([$labels[1]], 0, 16),
                 'with nothing to its left the guard draws the right mark alone',
             );
+            self::assertSame(
+                [self::MUTED . "‹\e[0m" . self::MUTED . "›\e[0m", []],
+                $this->render([$labels[0], $labels[1]], 1, 16),
+                'an active last tab still draws the right mark: the guard draws it unconditionally',
+            );
         });
     }
 
