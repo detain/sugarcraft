@@ -192,11 +192,10 @@ final class ChildSessionCreatedOnFinishTest extends TestCase
         $this->assertSame('parent-1', $started->parentSessionId);
         $this->assertNotNull($started->transcriptLog);
         $this->assertSame($started->transcriptLog, $finished->transcriptLog);
-        foreach ($frames as $frame) {
-            if ($frame->op === 'progress') {
-                $this->assertNull($frame->transcriptLog, 'progress beats do not repeat the path');
-            }
-        }
+        // One assertion over every progress beat: how many a run reports depends
+        // on timing, and the pinned suite figure counts assertions.
+        $repeated = array_filter($frames, static fn (SubAgentActivity $frame): bool => $frame->op === 'progress' && $frame->transcriptLog !== null);
+        $this->assertSame([], $repeated, 'progress beats do not repeat the path');
         $this->assertSame(
             ['user', 'tool_call', 'tool_result', 'assistant', 'status'],
             array_column(\SugarCraft\Code\Agents\Live\AgentTranscriptTail::readAll($started->transcriptLog), 't'),

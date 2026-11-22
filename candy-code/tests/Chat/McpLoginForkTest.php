@@ -79,7 +79,12 @@ final class McpLoginForkTest extends TestCase
             if ($msg instanceof McpLoginProgressMsg && $matches($msg)) {
                 return $msg;
             }
-            self::assertNotSame(McpLoginProgressMsg::PHASE_GONE, $msg?->phase, 'slot vanished mid-poll');
+            // fail(), not an assert: this runs once per poll, and an assertion here
+            // would make the test's assertion count depend on how many polls the
+            // child took (the pinned suite figure counts assertions exactly).
+            if ($msg?->phase === McpLoginProgressMsg::PHASE_GONE) {
+                self::fail('slot vanished mid-poll');
+            }
             usleep(50_000);
         }
         self::fail('no matching beat within ' . ($tries * 50) . 'ms');

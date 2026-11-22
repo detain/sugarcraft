@@ -1474,13 +1474,19 @@ final class ProcessExecutorTest extends TestCase
         $childBecameVisibleIn = $observedSpawnSeconds;
         $wait = max(1.0, $childBecameVisibleIn * 20);
         $deadline = microtime(true) + $wait;
+        // One assertion after the window, and fail() inside it: an assert per
+        // pass would make the assertion count depend on how many 20 ms passes
+        // fit in the window (the pinned suite figure counts assertions exactly).
         while (microtime(true) < $deadline) {
-            $this->assertFileDoesNotExist(
-                $marker,
-                'the refusal spawned a worker first, and nothing recorded it for cancel() to reap',
-            );
+            if (file_exists($marker)) {
+                $this->fail('the refusal spawned a worker first, and nothing recorded it for cancel() to reap');
+            }
             usleep(20_000);
         }
+        $this->assertFileDoesNotExist(
+            $marker,
+            'the refusal spawned a worker first, and nothing recorded it for cancel() to reap',
+        );
 
         @unlink($binary);
         @rmdir($dir);
